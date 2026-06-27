@@ -32,6 +32,7 @@ async function signOut() {
     <nav class="nav">
       <RouterLink to="/">Accueil</RouterLink>
       <RouterLink to="/referentiels" v-if="session">Référentiels</RouterLink>
+      <RouterLink to="/plan" v-if="session">Plan directeur</RouterLink>
       <RouterLink to="/login" v-if="!session">Connexion</RouterLink>
       <button v-else type="button" class="signout" @click="signOut">Déconnexion</button>
     </nav>
