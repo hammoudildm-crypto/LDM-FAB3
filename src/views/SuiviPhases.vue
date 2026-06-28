@@ -1,6 +1,8 @@
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, inject } from 'vue'
 import { supabase } from '../supabase'
+
+const peutEditer = inject('peutEditer', ref(true))
 
 const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Pelliculage', 'Conditionnement']
 const STATUTS = ['À faire', 'En cours', 'Terminé']
@@ -150,7 +152,7 @@ watch(lotId, chargerPhases)
       </section>
 
       <template v-if="lotId">
-        <section class="card">
+        <section class="card" v-if="peutEditer">
           <h2 class="card-title">{{ form.id ? 'Modifier la phase' : 'Ajouter une phase' }}</h2>
           <div class="form-grid">
             <label>Phase
@@ -203,8 +205,10 @@ watch(lotId, chargerPhases)
                   <td>{{ fmtDate(p.date_phase) }}</td>
                   <td><span class="badge" :class="classeStatut(p.statut)">{{ p.statut }}</span></td>
                   <td class="right nowrap">
-                    <button class="link" @click="modifier(p)">Modifier</button>
-                    <button class="link danger" @click="desactiver(p)">Supprimer</button>
+                    <template v-if="peutEditer">
+                      <button class="link" @click="modifier(p)">Modifier</button>
+                      <button class="link danger" @click="desactiver(p)">Supprimer</button>
+                    </template>
                   </td>
                 </tr>
                 <tr v-if="!phases.length"><td colspan="8" class="empty">Aucune phase. Ajoute-en une ci-dessus.</td></tr>
