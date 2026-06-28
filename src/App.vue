@@ -30,7 +30,7 @@ async function signOut() {
   <header class="topbar">
     <div class="brand">LDM-FAB3</div>
     <nav class="nav">
-      <RouterLink to="/">Accueil</RouterLink>
+      <RouterLink to="/">Tableau de bord</RouterLink>
       <RouterLink to="/referentiels" v-if="session">Référentiels</RouterLink>
       <RouterLink to="/plan" v-if="session">Plan directeur</RouterLink>
       <RouterLink to="/ordres" v-if="session">Ordres de fabrication</RouterLink>
@@ -61,6 +61,5 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 
 main { padding: 20px 16px; max-width: 1200px; margin: 0 auto; }
 
-/* compatibilité anciennes pages (Accueil / Connexion) */
 .error { color: #b91c1c; }
 </style>
