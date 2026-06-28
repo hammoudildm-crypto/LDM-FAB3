@@ -88,6 +88,7 @@ async function signOut() {
     </nav>
 
     <div class="right">
+      <RouterLink v-if="session" to="/compte" class="navlink">Mon compte</RouterLink>
       <span v-if="session && role" class="role-badge" :class="'r-' + role">{{ roleLabel }}</span>
       <RouterLink v-if="!session" to="/login" class="navlink">Connexion</RouterLink>
       <button v-else type="button" class="signout" @click="signOut">Déconnexion</button>
