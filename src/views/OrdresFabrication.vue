@@ -10,6 +10,9 @@ const equipements = ref([])
 const filtreStatut = ref('')
 const erreur = ref('')
 const message = ref('')
+const signatures = ref([])
+
+const sig = reactive({ open: false, mode: 'sign', ordre: null, pin: '', pin2: '', motif: '', erreur: '', busy: false })
 
 const form = reactive({
   id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
@@ -38,6 +41,9 @@ async function chargerTout() {
     .eq('actif', true).order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false })
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
+
+  const rs = await supabase.from('signatures').select('ordre_id, email, signed_at, motif').order('signed_at', { ascending: false })
+  if (!rs.error) signatures.value = rs.data
 }
 
 const lotsFiltres = computed(() =>
@@ -107,6 +113,41 @@ function exporterCSV() {
     l.equipements ? l.equipements.code : ''
   ])
   telechargerCSV('ordres_fabrication.csv', entetes, lignes)
+}
+
+function fmtDateHeure(d) { return d ? new Date(d).toLocaleString('fr-FR') : '—' }
+function signatureDe(l) { return signatures.value.find(s => s.ordre_id === l.id) || null }
+
+async function ouvrirSignature(l) {
+  Object.assign(sig, { ordre: l, pin: '', pin2: '', motif: '', erreur: '', busy: false })
+  const r = await supabase.rpc('a_un_pin')
+  sig.mode = (r.data === true) ? 'sign' : 'set'
+  sig.open = true
+}
+function fermerSignature() { sig.open = false; sig.ordre = null }
+
+async function definirPin() {
+  sig.erreur = ''
+  if (sig.pin.length < 4) { sig.erreur = 'Le code doit comporter au moins 4 caractères.'; return }
+  if (sig.pin !== sig.pin2) { sig.erreur = 'Les deux codes ne correspondent pas.'; return }
+  sig.busy = true
+  const r = await supabase.rpc('definir_pin', { p_pin: sig.pin })
+  sig.busy = false
+  if (r.error) { sig.erreur = r.error.message; return }
+  sig.mode = 'sign'; sig.pin = ''; sig.pin2 = ''
+}
+
+async function signer() {
+  sig.erreur = ''
+  if (!sig.pin) { sig.erreur = 'Saisis ton code de signature.'; return }
+  sig.busy = true
+  const r = await supabase.rpc('signer_liberation', { p_ordre_id: sig.ordre.id, p_pin: sig.pin, p_motif: sig.motif })
+  sig.busy = false
+  if (r.error) { sig.erreur = r.error.message; return }
+  const num = sig.ordre.numero_lot
+  sig.open = false; sig.ordre = null
+  message.value = 'Lot ' + num + ' libéré et signé.'
+  await chargerTout()
 }
 
 onMounted(chargerTout)
@@ -186,9 +227,13 @@ onMounted(chargerTout)
                 </td>
                 <td class="right">{{ fmt(l.quantite_theorique) }}</td>
                 <td>{{ fmtDate(l.date_lancement) }}</td>
-                <td><span class="badge" :class="classeStatut(l.statut)">{{ l.statut }}</span></td>
+                <td>
+                  <span class="badge" :class="classeStatut(l.statut)">{{ l.statut }}</span>
+                  <div v-if="l.statut === 'Libéré' && signatureDe(l)" class="sig-info">✍ {{ signatureDe(l).email }}<br>{{ fmtDateHeure(signatureDe(l).signed_at) }}</div>
+                </td>
                 <td>{{ l.equipements ? l.equipements.code : '—' }}</td>
                 <td class="right nowrap">
+                  <button v-if="l.statut === 'Terminé'" class="link release" @click="ouvrirSignature(l)">Libérer (signer)</button>
                   <button class="link" @click="modifier(l)">Modifier</button>
                   <button class="link danger" @click="desactiver(l)">Désactiver</button>
                 </td>
@@ -199,6 +244,41 @@ onMounted(chargerTout)
         </div>
       </section>
     </template>
+
+    <div v-if="sig.open" class="modal-overlay" @click.self="fermerSignature">
+      <div class="modal">
+        <template v-if="sig.mode === 'set'">
+          <h3 class="modal-title">Définir votre code de signature</h3>
+          <p class="modal-sub">Ce code confidentiel vous servira à signer électroniquement les libérations de lot. Vous le choisissez une fois ; il vous sera redemandé à chaque signature.</p>
+          <label class="modal-field">Nouveau code
+            <input v-model="sig.pin" type="password" autocomplete="new-password" placeholder="Au moins 4 caractères" />
+          </label>
+          <label class="modal-field">Confirmer le code
+            <input v-model="sig.pin2" type="password" autocomplete="new-password" @keyup.enter="definirPin" />
+          </label>
+          <p v-if="sig.erreur" class="modal-err">{{ sig.erreur }}</p>
+          <div class="modal-actions">
+            <button class="btn ghost" @click="fermerSignature">Annuler</button>
+            <button class="btn" :disabled="sig.busy" @click="definirPin">Enregistrer le code</button>
+          </div>
+        </template>
+        <template v-else>
+          <h3 class="modal-title">Signer la libération</h3>
+          <p class="modal-sub">Lot <strong>{{ sig.ordre ? sig.ordre.numero_lot : '' }}</strong>. En signant, vous attestez la libération de ce lot. L'action est tracée, horodatée et nominative.</p>
+          <label class="modal-field">Motif
+            <input v-model="sig.motif" placeholder="Libération du lot" />
+          </label>
+          <label class="modal-field">Votre code de signature
+            <input v-model="sig.pin" type="password" autocomplete="off" placeholder="••••" @keyup.enter="signer" />
+          </label>
+          <p v-if="sig.erreur" class="modal-err">{{ sig.erreur }}</p>
+          <div class="modal-actions">
+            <button class="btn ghost" @click="fermerSignature">Annuler</button>
+            <button class="btn" :disabled="sig.busy" @click="signer">Signer et libérer</button>
+          </div>
+        </template>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -256,6 +336,19 @@ table.grid tr:hover td { background: #f8fafc; }
 button.link { background: none; border: 0; color: #0f766e; font-size: 13px; font-weight: 600; cursor: pointer; padding: 2px 6px; }
 button.link:hover { text-decoration: underline; }
 button.link.danger { color: #b91c1c; }
+button.link.release { color: #166534; }
+
+.sig-info { font-size: 11px; color: #166534; margin-top: 4px; line-height: 1.3; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(15,42,51,.55); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+.modal { background: #fff; border-radius: 14px; padding: 22px; width: 100%; max-width: 420px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+.modal-title { margin: 0 0 6px; font-size: 18px; }
+.modal-sub { margin: 0 0 16px; font-size: 13px; color: #64748b; line-height: 1.45; }
+.modal-field { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; margin-bottom: 12px; }
+.modal-field input { font-size: 15px; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 400; }
+.modal-field input:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.modal-err { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 8px 10px; border-radius: 8px; font-size: 13px; margin: 0 0 12px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 
 @media (max-width: 820px) {
   .form-grid { grid-template-columns: 1fr 1fr; }
