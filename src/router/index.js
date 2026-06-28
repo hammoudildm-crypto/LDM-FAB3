@@ -10,6 +10,7 @@ import DossierLot from '../views/DossierLot.vue'
 import ChiffreAffaires from '../views/ChiffreAffaires.vue'
 import Effectifs from '../views/Effectifs.vue'
 import EnCours from '../views/EnCours.vue'
+import JournalAudit from '../views/JournalAudit.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Home },
@@ -22,6 +23,7 @@ const routes = [
   { path: '/dossier', name: 'dossier', component: DossierLot },
   { path: '/ca', name: 'ca', component: ChiffreAffaires },
   { path: '/effectifs', name: 'effectifs', component: Effectifs },
+  { path: '/audit', name: 'audit', component: JournalAudit },
   { path: '/login', name: 'login', component: Login },
 ]
 
