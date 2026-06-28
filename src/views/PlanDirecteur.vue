@@ -1,6 +1,8 @@
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, inject } from 'vue'
 import { supabase } from '../supabase'
+
+const peutEditer = inject('peutEditer', ref(true))
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 const anneeCourante = new Date().getFullYear()
@@ -103,7 +105,7 @@ watch(annee, chargerPlan)
             <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
           </select>
         </label>
-        <button class="btn" :disabled="enCours || !produits.length" @click="enregistrer">
+        <button v-if="peutEditer" class="btn" :disabled="enCours || !produits.length" @click="enregistrer">
           {{ enCours ? 'Enregistrement…' : 'Enregistrer le plan' }}
         </button>
       </div>
@@ -135,7 +137,7 @@ watch(annee, chargerPlan)
             </td>
             <td class="do">{{ p.donneurs_ordre ? p.donneurs_ordre.nom : '—' }}</td>
             <td v-for="m in 12" :key="m" class="cell">
-              <input v-model="cellules[p.id][m]" type="number" min="0" inputmode="numeric" />
+              <input v-model="cellules[p.id][m]" type="number" min="0" inputmode="numeric" :disabled="!peutEditer" />
             </td>
             <td class="right total-col strong">{{ fmt(totalLigne(p)) }}</td>
             <td class="right">{{ fmt(valeurLigne(p)) }}</td>
@@ -183,6 +185,7 @@ table.grid td { padding: 6px 8px; border-bottom: 1px solid #eef2f6; white-space:
 .cell { padding: 4px; }
 .cell input { width: 68px; font-size: 13px; padding: 6px; border: 1px solid #d8dee6; border-radius: 6px; text-align: right; color: #1b2733; }
 .cell input:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.cell input:disabled { background: #f8fafc; color: #475569; cursor: default; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
 .desig { color: #64748b; font-size: 12px; }
 .do { color: #475569; }
