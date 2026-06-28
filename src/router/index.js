@@ -9,6 +9,7 @@ import Conditionnement from '../views/Conditionnement.vue'
 import DossierLot from '../views/DossierLot.vue'
 import ChiffreAffaires from '../views/ChiffreAffaires.vue'
 import Effectifs from '../views/Effectifs.vue'
+import EnCours from '../views/EnCours.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Home },
@@ -17,6 +18,7 @@ const routes = [
   { path: '/ordres', name: 'ordres', component: OrdresFabrication },
   { path: '/suivi', name: 'suivi', component: SuiviPhases },
   { path: '/conditionnement', name: 'conditionnement', component: Conditionnement },
+  { path: '/encours', name: 'encours', component: EnCours },
   { path: '/dossier', name: 'dossier', component: DossierLot },
   { path: '/ca', name: 'ca', component: ChiffreAffaires },
   { path: '/effectifs', name: 'effectifs', component: Effectifs },
