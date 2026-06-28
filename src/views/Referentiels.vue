@@ -19,12 +19,12 @@ function resetDO() { Object.assign(formDO, { id: null, code: '', nom: '', activi
 // --- Produit ---
 const formP = reactive({
   id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-  unites_par_boite: '', taille_lot: '', duree_vie_mois: '', aql: '', pcsu: ''
+  unites_par_boite: '', poids_unitaire_mg: '', taille_lot: '', duree_vie_mois: '', aql: '', pcsu: ''
 })
 function resetP() {
   Object.assign(formP, {
     id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-    unites_par_boite: '', taille_lot: '', duree_vie_mois: '', aql: '', pcsu: ''
+    unites_par_boite: '', poids_unitaire_mg: '', taille_lot: '', duree_vie_mois: '', aql: '', pcsu: ''
   })
 }
 
@@ -90,6 +90,7 @@ async function enregistrerP() {
     forme: formP.forme || null,
     donneur_ordre_id: formP.donneur_ordre_id || null,
     unites_par_boite: toNum(formP.unites_par_boite),
+    poids_unitaire_mg: toNum(formP.poids_unitaire_mg),
     taille_lot: toNum(formP.taille_lot),
     duree_vie_mois: toNum(formP.duree_vie_mois),
     aql: formP.aql.trim() || null,
@@ -106,7 +107,7 @@ function modifierP(p) {
   Object.assign(formP, {
     id: p.id, code_pf: p.code_pf, designation: p.designation, forme: p.forme || '',
     donneur_ordre_id: p.donneur_ordre_id || '',
-    unites_par_boite: p.unites_par_boite ?? '', taille_lot: p.taille_lot ?? '',
+    unites_par_boite: p.unites_par_boite ?? '', poids_unitaire_mg: p.poids_unitaire_mg ?? '', taille_lot: p.taille_lot ?? '',
     duree_vie_mois: p.duree_vie_mois ?? '', aql: p.aql || '', pcsu: p.pcsu ?? ''
   })
 }
@@ -230,6 +231,7 @@ onMounted(chargerTout)
           </select>
         </label>
         <label>Unités / boîte<input v-model="formP.unites_par_boite" type="number" placeholder="30" /></label>
+        <label>Poids unitaire (mg)<input v-model="formP.poids_unitaire_mg" type="number" step="any" placeholder="350" /></label>
         <label>Taille de lot<input v-model="formP.taille_lot" type="number" placeholder="500000" /></label>
         <label>Durée de vie (mois)<input v-model="formP.duree_vie_mois" type="number" placeholder="36" /></label>
         <label>AQL<input v-model="formP.aql" placeholder="0.65" /></label>
@@ -244,7 +246,7 @@ onMounted(chargerTout)
           <thead>
             <tr>
               <th>Code PF</th><th>Désignation</th><th>Forme</th><th>Donneur d'ordre</th>
-              <th class="right">U/boîte</th><th class="right">Taille lot</th><th class="right">PCSU</th>
+              <th class="right">U/boîte</th><th class="right">Poids (mg)</th><th class="right">Taille lot</th><th class="right">PCSU</th>
               <th class="right">Actions</th>
             </tr>
           </thead>
@@ -255,6 +257,7 @@ onMounted(chargerTout)
               <td>{{ p.forme || '—' }}</td>
               <td>{{ p.donneurs_ordre ? p.donneurs_ordre.nom : '—' }}</td>
               <td class="right">{{ p.unites_par_boite ?? '—' }}</td>
+              <td class="right">{{ p.poids_unitaire_mg ?? '—' }}</td>
               <td class="right">{{ p.taille_lot ?? '—' }}</td>
               <td class="right">{{ p.pcsu ?? '—' }}</td>
               <td class="right nowrap">
@@ -264,7 +267,7 @@ onMounted(chargerTout)
                 </template>
               </td>
             </tr>
-            <tr v-if="!produits.length"><td colspan="8" class="empty">Aucun produit. Ajoute-en un ci-dessus.</td></tr>
+            <tr v-if="!produits.length"><td colspan="9" class="empty">Aucun produit. Ajoute-en un ci-dessus.</td></tr>
           </tbody>
         </table>
       </div>
@@ -327,72 +330,4 @@ onMounted(chargerTout)
       </div>
       <div class="table-scroll">
         <table class="grid">
-          <thead><tr><th>Code</th><th>Nom</th><th>Atelier</th><th>Type</th><th class="right">Actions</th></tr></thead>
-          <tbody>
-            <tr v-for="e in equipements" :key="e.id">
-              <td class="mono">{{ e.code }}</td>
-              <td>{{ e.nom }}</td>
-              <td>{{ atelierDe(e) ? atelierDe(e).code : '—' }}</td>
-              <td>{{ e.type || '—' }}</td>
-              <td class="right nowrap">
-                <template v-if="peutEditer">
-                  <button class="link" @click="modifierE(e)">Modifier</button>
-                  <button class="link danger" @click="desactiverE(e)">Désactiver</button>
-                </template>
-              </td>
-            </tr>
-            <tr v-if="!equipements.length"><td colspan="5" class="empty">Aucun équipement. Ajoute-en un ci-dessus.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-  </div>
-</template>
-
-<style scoped>
-.ref-page { color: #1b2733; }
-.ref-head { margin: 4px 0 20px; }
-.ref-head h1 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
-.ref-head .sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
-
-.alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 16px; }
-
-.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 22px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
-.card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.card-head h2 { margin: 0; font-size: 17px; }
-.count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
-
-.form-grid { display: grid; gap: 12px; align-items: end; padding: 14px; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 10px; margin-bottom: 16px; }
-.do-grid { grid-template-columns: 1fr 2fr 1.4fr auto; }
-.p-grid { grid-template-columns: repeat(4, 1fr) auto; }
-.a-grid { grid-template-columns: 1fr 2.4fr auto; }
-.e-grid { grid-template-columns: 1fr 1.8fr 1.6fr 1fr auto; }
-.form-grid label { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
-.form-grid input, .form-grid select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 400; }
-.form-grid input:focus, .form-grid select:focus { outline: 2px solid #0f766e; outline-offset: 0; border-color: #0f766e; }
-.form-actions { display: flex; gap: 8px; align-items: end; }
-
-.btn { background: #0f766e; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.btn:hover { background: #0c5f59; }
-.btn.ghost { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
-.btn.ghost:hover { background: #f8fafc; }
-
-.table-scroll { overflow-x: auto; }
-table.grid { width: 100%; border-collapse: collapse; font-size: 14px; }
-table.grid th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
-table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; }
-table.grid tr:hover td { background: #f8fafc; }
-.right { text-align: right; }
-.nowrap { white-space: nowrap; }
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
-.empty { color: #94a3b8; text-align: center; padding: 18px; font-style: italic; }
-
-button.link { background: none; border: 0; color: #0f766e; font-size: 13px; font-weight: 600; cursor: pointer; padding: 2px 6px; }
-button.link:hover { text-decoration: underline; }
-button.link.danger { color: #b91c1c; }
-
-@media (max-width: 820px) {
-  .do-grid, .p-grid, .a-grid, .e-grid { grid-template-columns: 1fr 1fr; }
-  .form-actions { grid-column: 1 / -1; }
-}
-</style>
+          <thead><tr><th>Code</th><th>Nom</th><th>Atelier</th><th>Type</th><th
