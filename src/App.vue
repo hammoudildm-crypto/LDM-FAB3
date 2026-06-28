@@ -35,6 +35,7 @@ async function signOut() {
       <RouterLink to="/plan" v-if="session">Plan directeur</RouterLink>
       <RouterLink to="/ordres" v-if="session">Ordres de fabrication</RouterLink>
       <RouterLink to="/suivi" v-if="session">Suivi fabrication</RouterLink>
+      <RouterLink to="/encours" v-if="session">En-cours</RouterLink>
       <RouterLink to="/conditionnement" v-if="session">Conditionnement</RouterLink>
       <RouterLink to="/dossier" v-if="session">Dossier de lot</RouterLink>
       <RouterLink to="/ca" v-if="session">Chiffre d'affaires</RouterLink>
