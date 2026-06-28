@@ -10,7 +10,7 @@ const ateliers = ref([])
 const equipements = ref([])
 const erreur = ref('')
 
-const FORMES = ['comprimé', 'gélule', 'crème', 'pommade']
+const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet']
 
 // --- Donneur d'ordre ---
 const formDO = reactive({ id: null, code: '', nom: '', activite: '' })
