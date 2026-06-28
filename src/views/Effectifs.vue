@@ -1,6 +1,8 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, inject } from 'vue'
 import { supabase } from '../supabase'
+
+const peutEditer = inject('peutEditer', ref(true))
 
 const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const anneeCourante = new Date().getFullYear()
@@ -123,7 +125,7 @@ onMounted(chargerTout)
         <div class="kpi"><div class="kpi-val">{{ effectifsFiltres.length }}</div><div class="kpi-lbl">Lignes</div></div>
       </div>
 
-      <section class="card">
+      <section class="card" v-if="peutEditer">
         <h2 class="card-title">{{ form.id ? 'Modifier l\'effectif' : 'Nouvel effectif' }}</h2>
         <div class="form-grid">
           <label>Atelier
@@ -179,8 +181,10 @@ onMounted(chargerTout)
                 <td>{{ e.equipe || '—' }}</td>
                 <td class="right strong">{{ fmt(e.effectif) }}</td>
                 <td class="right nowrap">
-                  <button class="link" @click="modifier(e)">Modifier</button>
-                  <button class="link danger" @click="desactiver(e)">Supprimer</button>
+                  <template v-if="peutEditer">
+                    <button class="link" @click="modifier(e)">Modifier</button>
+                    <button class="link danger" @click="desactiver(e)">Supprimer</button>
+                  </template>
                 </td>
               </tr>
               <tr v-if="!effectifsFiltres.length"><td colspan="5" class="empty">Aucun effectif. Enregistres-en un ci-dessus.</td></tr>
