@@ -4,15 +4,17 @@ import { supabase } from '../supabase'
 
 const donneurs = ref([])
 const produits = ref([])
+const ateliers = ref([])
+const equipements = ref([])
 const erreur = ref('')
 
 const FORMES = ['comprimé', 'gélule', 'crème', 'pommade']
 
-// --- Formulaire Donneur d'ordre ---
+// --- Donneur d'ordre ---
 const formDO = reactive({ id: null, code: '', nom: '', activite: '' })
 function resetDO() { Object.assign(formDO, { id: null, code: '', nom: '', activite: '' }) }
 
-// --- Formulaire Produit ---
+// --- Produit ---
 const formP = reactive({
   id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
   unites_par_boite: '', taille_lot: '', duree_vie_mois: '', aql: '', pcsu: ''
@@ -24,7 +26,16 @@ function resetP() {
   })
 }
 
+// --- Atelier ---
+const formA = reactive({ id: null, code: '', nom: '' })
+function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
+
+// --- Équipement ---
+const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '' })
+function resetE() { Object.assign(formE, { id: null, code: '', nom: '', atelier_id: '', type: '' }) }
+
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
+function atelierDe(e) { return ateliers.value.find(a => a.id === e.atelier_id) || null }
 
 async function chargerTout() {
   erreur.value = ''
@@ -36,6 +47,14 @@ async function chargerTout() {
     .select('*, donneurs_ordre(nom, code)').eq('actif', true).order('code_pf')
   if (rP.error) { erreur.value = rP.error.message; return }
   produits.value = rP.data
+
+  const rA = await supabase.from('ateliers').select('*').eq('actif', true).order('code')
+  if (rA.error) { erreur.value = rA.error.message; return }
+  ateliers.value = rA.data
+
+  const rE = await supabase.from('equipements').select('*').eq('actif', true).order('code')
+  if (rE.error) { erreur.value = rE.error.message; return }
+  equipements.value = rE.data
 }
 
 // --- Actions Donneur d'ordre ---
@@ -97,6 +116,48 @@ async function desactiverP(p) {
   await chargerTout()
 }
 
+// --- Actions Atelier ---
+async function enregistrerA() {
+  erreur.value = ''
+  if (!formA.code.trim() || !formA.nom.trim()) { erreur.value = 'Code et nom de l\'atelier obligatoires.'; return }
+  const payload = { code: formA.code.trim(), nom: formA.nom.trim() }
+  const res = formA.id
+    ? await supabase.from('ateliers').update(payload).eq('id', formA.id)
+    : await supabase.from('ateliers').insert(payload)
+  if (res.error) { erreur.value = res.error.message; return }
+  resetA()
+  await chargerTout()
+}
+function modifierA(a) { Object.assign(formA, { id: a.id, code: a.code, nom: a.nom }) }
+async function desactiverA(a) {
+  if (!confirm('Désactiver l\'atelier « ' + a.nom + ' » ?')) return
+  erreur.value = ''
+  const res = await supabase.from('ateliers').update({ actif: false }).eq('id', a.id)
+  if (res.error) { erreur.value = res.error.message; return }
+  await chargerTout()
+}
+
+// --- Actions Équipement ---
+async function enregistrerE() {
+  erreur.value = ''
+  if (!formE.code.trim() || !formE.nom.trim()) { erreur.value = 'Code et nom de l\'équipement obligatoires.'; return }
+  const payload = { code: formE.code.trim(), nom: formE.nom.trim(), atelier_id: formE.atelier_id || null, type: formE.type.trim() || null }
+  const res = formE.id
+    ? await supabase.from('equipements').update(payload).eq('id', formE.id)
+    : await supabase.from('equipements').insert(payload)
+  if (res.error) { erreur.value = res.error.message; return }
+  resetE()
+  await chargerTout()
+}
+function modifierE(e) { Object.assign(formE, { id: e.id, code: e.code, nom: e.nom, atelier_id: e.atelier_id || '', type: e.type || '' }) }
+async function desactiverE(e) {
+  if (!confirm('Désactiver l\'équipement « ' + e.nom + ' » ?')) return
+  erreur.value = ''
+  const res = await supabase.from('equipements').update({ actif: false }).eq('id', e.id)
+  if (res.error) { erreur.value = res.error.message; return }
+  await chargerTout()
+}
+
 onMounted(chargerTout)
 </script>
 
@@ -115,7 +176,6 @@ onMounted(chargerTout)
         <h2>Donneurs d'ordre</h2>
         <span class="count">{{ donneurs.length }}</span>
       </div>
-
       <div class="form-grid do-grid">
         <label>Code<input v-model="formDO.code" placeholder="SERVIER" /></label>
         <label>Nom<input v-model="formDO.nom" placeholder="Laboratoires Servier" /></label>
@@ -125,12 +185,9 @@ onMounted(chargerTout)
           <button v-if="formDO.id" class="btn ghost" @click="resetDO">Annuler</button>
         </div>
       </div>
-
       <div class="table-scroll">
         <table class="grid">
-          <thead>
-            <tr><th>Code</th><th>Nom</th><th>Activité</th><th class="right">Actions</th></tr>
-          </thead>
+          <thead><tr><th>Code</th><th>Nom</th><th>Activité</th><th class="right">Actions</th></tr></thead>
           <tbody>
             <tr v-for="d in donneurs" :key="d.id">
               <td class="mono">{{ d.code }}</td>
@@ -153,7 +210,6 @@ onMounted(chargerTout)
         <h2>Produits</h2>
         <span class="count">{{ produits.length }}</span>
       </div>
-
       <div class="form-grid p-grid">
         <label>Code PF<input v-model="formP.code_pf" placeholder="DIAM60" /></label>
         <label>Désignation<input v-model="formP.designation" placeholder="DIAMICRON 60 mg" /></label>
@@ -179,7 +235,6 @@ onMounted(chargerTout)
           <button v-if="formP.id" class="btn ghost" @click="resetP">Annuler</button>
         </div>
       </div>
-
       <div class="table-scroll">
         <table class="grid">
           <thead>
@@ -208,6 +263,79 @@ onMounted(chargerTout)
         </table>
       </div>
     </section>
+
+    <!-- ATELIERS -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Ateliers</h2>
+        <span class="count">{{ ateliers.length }}</span>
+      </div>
+      <div class="form-grid a-grid">
+        <label>Code<input v-model="formA.code" placeholder="COMASA" /></label>
+        <label>Nom<input v-model="formA.nom" placeholder="Atelier granulation COMASA" /></label>
+        <div class="form-actions">
+          <button class="btn" @click="enregistrerA">{{ formA.id ? 'Mettre à jour' : 'Ajouter' }}</button>
+          <button v-if="formA.id" class="btn ghost" @click="resetA">Annuler</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="grid">
+          <thead><tr><th>Code</th><th>Nom</th><th class="right">Actions</th></tr></thead>
+          <tbody>
+            <tr v-for="a in ateliers" :key="a.id">
+              <td class="mono">{{ a.code }}</td>
+              <td>{{ a.nom }}</td>
+              <td class="right nowrap">
+                <button class="link" @click="modifierA(a)">Modifier</button>
+                <button class="link danger" @click="desactiverA(a)">Désactiver</button>
+              </td>
+            </tr>
+            <tr v-if="!ateliers.length"><td colspan="3" class="empty">Aucun atelier. Ajoute-en un ci-dessus.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ÉQUIPEMENTS -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Équipements</h2>
+        <span class="count">{{ equipements.length }}</span>
+      </div>
+      <div class="form-grid e-grid">
+        <label>Code<input v-model="formE.code" placeholder="FE55" /></label>
+        <label>Nom<input v-model="formE.nom" placeholder="Presse FETTE FE55" /></label>
+        <label>Atelier
+          <select v-model="formE.atelier_id">
+            <option value="">—</option>
+            <option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.code }} — {{ a.nom }}</option>
+          </select>
+        </label>
+        <label>Type<input v-model="formE.type" placeholder="Compression" /></label>
+        <div class="form-actions">
+          <button class="btn" @click="enregistrerE">{{ formE.id ? 'Mettre à jour' : 'Ajouter' }}</button>
+          <button v-if="formE.id" class="btn ghost" @click="resetE">Annuler</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="grid">
+          <thead><tr><th>Code</th><th>Nom</th><th>Atelier</th><th>Type</th><th class="right">Actions</th></tr></thead>
+          <tbody>
+            <tr v-for="e in equipements" :key="e.id">
+              <td class="mono">{{ e.code }}</td>
+              <td>{{ e.nom }}</td>
+              <td>{{ atelierDe(e) ? atelierDe(e).code : '—' }}</td>
+              <td>{{ e.type || '—' }}</td>
+              <td class="right nowrap">
+                <button class="link" @click="modifierE(e)">Modifier</button>
+                <button class="link danger" @click="desactiverE(e)">Désactiver</button>
+              </td>
+            </tr>
+            <tr v-if="!equipements.length"><td colspan="5" class="empty">Aucun équipement. Ajoute-en un ci-dessus.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -227,6 +355,8 @@ onMounted(chargerTout)
 .form-grid { display: grid; gap: 12px; align-items: end; padding: 14px; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 10px; margin-bottom: 16px; }
 .do-grid { grid-template-columns: 1fr 2fr 1.4fr auto; }
 .p-grid { grid-template-columns: repeat(4, 1fr) auto; }
+.a-grid { grid-template-columns: 1fr 2.4fr auto; }
+.e-grid { grid-template-columns: 1fr 1.8fr 1.6fr 1fr auto; }
 .form-grid label { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
 .form-grid input, .form-grid select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 400; }
 .form-grid input:focus, .form-grid select:focus { outline: 2px solid #0f766e; outline-offset: 0; border-color: #0f766e; }
@@ -252,7 +382,7 @@ button.link:hover { text-decoration: underline; }
 button.link.danger { color: #b91c1c; }
 
 @media (max-width: 820px) {
-  .do-grid, .p-grid { grid-template-columns: 1fr 1fr; }
+  .do-grid, .p-grid, .a-grid, .e-grid { grid-template-columns: 1fr 1fr; }
   .form-actions { grid-column: 1 / -1; }
 }
 </style>
