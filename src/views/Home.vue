@@ -29,7 +29,7 @@ async function charger() {
   if (!rpp.error) planTotal.value = rpp.data.reduce((s, x) => s + Number(x.quantite_planifiee || 0), 0)
 
   const rc = await supabase.from('conditionnement')
-    .select('quantite_entree, quantite_conditionnee, ordres_fabrication(produits(unites_par_boite))')
+    .select('quantite_entree, quantite_conditionnee, ordres_fabrication(produits(unites_par_boite, poids_unitaire_mg))')
     .eq('actif', true)
   if (!rc.error) conditionnements.value = rc.data
 }
@@ -53,18 +53,23 @@ const totalBoites = computed(() => {
   return t
 })
 const rendementCndtMoyen = computed(() => {
-  let somme = 0, n = 0
+  let boites = 0, eq = 0
   for (const c of conditionnements.value) {
-    if (c.quantite_entree && Number(c.quantite_entree) > 0 && c.quantite_conditionnee != null) {
-      somme += (Number(c.quantite_conditionnee) / Number(c.quantite_entree)) * 100; n++
-    }
+    const prod = c.ordres_fabrication && c.ordres_fabrication.produits ? c.ordres_fabrication.produits : null
+    if (!prod) continue
+    const mm = Number(prod.poids_unitaire_mg || 0)
+    const upb = Number(prod.unites_par_boite || 0)
+    const kg = Number(c.quantite_entree || 0)
+    if (c.quantite_conditionnee == null || kg === 0 || mm === 0 || upb === 0) continue
+    boites += Math.floor(Number(c.quantite_conditionnee) / upb)
+    eq += (kg * 1e6) / mm / upb
   }
-  return n ? somme / n : null
+  return eq > 0 ? (boites / eq) * 100 : null
 })
 
 function pct(n, total) { return total > 0 ? (n / total) * 100 : 0 }
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
-function fmtPct(n) { return n == null ? '—' : n.toFixed(1) + ' %' }
+function fmtPct(n) { return n == null ? '—' : Number(n).toFixed(2) + ' %' }
 function classeStatut(s) {
   return { 'Planifié': 'st-plan', 'En cours': 'st-cours', 'Terminé': 'st-fini', 'Libéré': 'st-lib', 'Rejeté': 'st-rej' }[s] || 'st-plan'
 }
@@ -99,7 +104,7 @@ onMounted(async () => {
         <div class="kpi"><div class="kpi-val accent">{{ fmt(lotsEnCours) }}</div><div class="kpi-lbl">Lots en cours</div></div>
         <div class="kpi"><div class="kpi-val">{{ fmt(totalBoites) }}</div><div class="kpi-lbl">Boîtes conditionnées</div></div>
         <div class="kpi"><div class="kpi-val">{{ fmtPct(rendementCndtMoyen) }}</div><div class="kpi-lbl">Rendement cond. moyen</div></div>
-        <div class="kpi"><div class="kpi-val">{{ fmt(planTotal) }}</div><div class="kpi-lbl">Plan {{ annee }} (unités)</div></div>
+        <div class="kpi"><div class="kpi-val">{{ fmt(planTotal) }}</div><div class="kpi-lbl">Plan {{ annee }} (boîtes)</div></div>
       </div>
 
       <div class="cols">
