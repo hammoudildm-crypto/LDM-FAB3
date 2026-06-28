@@ -71,7 +71,7 @@ function rendementCond(r) {
   const boitesTheo = (Number(kg) * 1e6) / mm / upb
   return boitesTheo ? (b / boitesTheo) * 100 : null
 }
-function fmtPct(n) { return n == null ? '—' : Number(n).toFixed(1) + ' %' }
+function fmtPct(n) { return n == null ? '—' : Number(n).toFixed(2) + ' %' }
 
 async function enregistrer() {
   erreur.value = ''
