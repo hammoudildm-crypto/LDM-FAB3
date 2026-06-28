@@ -80,7 +80,7 @@ onMounted(charger)
     <p v-if="erreur" class="alert">{{ erreur }}</p>
 
     <div class="kpi-grid">
-      <div class="kpi"><div class="kpi-val accent">{{ fmt(totalEnCours) }}</div><div class="kpi-lbl">Vrac en attente (cp)</div></div>
+      <div class="kpi"><div class="kpi-val accent">{{ fmt(totalEnCours) }}</div><div class="kpi-lbl">Vrac en attente (kg)</div></div>
       <div class="kpi"><div class="kpi-val">{{ nbAttente }}</div><div class="kpi-lbl">Lots avec vrac en attente</div></div>
     </div>
 
@@ -91,7 +91,7 @@ onMounted(charger)
           <thead>
             <tr>
               <th>Lot</th><th>Produit</th><th>Statut</th>
-              <th class="right">Fabriqué (vrac)</th><th class="right">Entré en cond.</th><th class="right">En-cours</th>
+              <th class="right">Fabriqué (kg)</th><th class="right">Reçu en cond. (kg)</th><th class="right">En-cours</th>
             </tr>
           </thead>
           <tbody>
