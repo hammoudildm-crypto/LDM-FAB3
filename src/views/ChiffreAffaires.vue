@@ -56,6 +56,25 @@ function part(ca) { return caTotal.value > 0 ? (ca / caTotal.value) * 100 : 0 }
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 function fmtCA(n) { return n == null ? '—' : Number(Math.round(n)).toLocaleString('fr-FR') + ' DA' }
 
+function telechargerCSV(nom, entetes, lignes) {
+  const esc = (c) => { const s = c == null ? '' : String(c); return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+  const csv = [entetes, ...lignes].map(r => r.map(esc).join(';')).join('\n')
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob); a.download = nom; a.click()
+}
+function exporterCSV() {
+  const entetes = ['Produit', 'Désignation', 'Boîtes', 'CA (DA)', 'Part %']
+  const lignes = parProduit.value.map(x => [
+    x.code,
+    x.nom,
+    Math.round(x.boites),
+    Math.round(x.ca),
+    part(x.ca).toFixed(0)
+  ])
+  telechargerCSV('chiffre_affaires.csv', entetes, lignes)
+}
+
 onMounted(charger)
 </script>
 
@@ -83,7 +102,10 @@ onMounted(charger)
     </div>
 
     <section class="card">
-      <h2 class="card-title">CA par produit</h2>
+      <div class="card-head">
+        <h2 class="card-title">CA par produit</h2>
+        <button class="btn-exp" @click="exporterCSV" :disabled="!parProduit.length">Exporter CSV</button>
+      </div>
       <div class="table-scroll">
         <table class="grid">
           <thead>
@@ -126,6 +148,11 @@ onMounted(charger)
 .ca-head .sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
 .annee { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
 .annee select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 600; color: #1b2733; }
+.card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.card-head .card-title { margin: 0; }
+.btn-exp { margin-left: auto; font-size: 13px; padding: 7px 12px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.btn-exp:hover { background: #ecfdf5; }
+.btn-exp:disabled { opacity: .45; cursor: not-allowed; }
 
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 
