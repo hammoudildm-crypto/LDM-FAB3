@@ -1,6 +1,8 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, inject } from 'vue'
 import { supabase } from '../supabase'
+
+const peutEditer = inject('peutEditer', ref(true))
 
 const donneurs = ref([])
 const produits = ref([])
@@ -176,7 +178,7 @@ onMounted(chargerTout)
         <h2>Donneurs d'ordre</h2>
         <span class="count">{{ donneurs.length }}</span>
       </div>
-      <div class="form-grid do-grid">
+      <div class="form-grid do-grid" v-if="peutEditer">
         <label>Code<input v-model="formDO.code" placeholder="SERVIER" /></label>
         <label>Nom<input v-model="formDO.nom" placeholder="Laboratoires Servier" /></label>
         <label>Activité<input v-model="formDO.activite" placeholder="Princeps / Générique / OTC" /></label>
@@ -194,8 +196,10 @@ onMounted(chargerTout)
               <td>{{ d.nom }}</td>
               <td>{{ d.activite || '—' }}</td>
               <td class="right nowrap">
-                <button class="link" @click="modifierDO(d)">Modifier</button>
-                <button class="link danger" @click="desactiverDO(d)">Désactiver</button>
+                <template v-if="peutEditer">
+                  <button class="link" @click="modifierDO(d)">Modifier</button>
+                  <button class="link danger" @click="desactiverDO(d)">Désactiver</button>
+                </template>
               </td>
             </tr>
             <tr v-if="!donneurs.length"><td colspan="4" class="empty">Aucun donneur d'ordre. Ajoute-en un ci-dessus.</td></tr>
@@ -210,7 +214,7 @@ onMounted(chargerTout)
         <h2>Produits</h2>
         <span class="count">{{ produits.length }}</span>
       </div>
-      <div class="form-grid p-grid">
+      <div class="form-grid p-grid" v-if="peutEditer">
         <label>Code PF<input v-model="formP.code_pf" placeholder="DIAM60" /></label>
         <label>Désignation<input v-model="formP.designation" placeholder="DIAMICRON 60 mg" /></label>
         <label>Forme
@@ -254,8 +258,10 @@ onMounted(chargerTout)
               <td class="right">{{ p.taille_lot ?? '—' }}</td>
               <td class="right">{{ p.pcsu ?? '—' }}</td>
               <td class="right nowrap">
-                <button class="link" @click="modifierP(p)">Modifier</button>
-                <button class="link danger" @click="desactiverP(p)">Désactiver</button>
+                <template v-if="peutEditer">
+                  <button class="link" @click="modifierP(p)">Modifier</button>
+                  <button class="link danger" @click="desactiverP(p)">Désactiver</button>
+                </template>
               </td>
             </tr>
             <tr v-if="!produits.length"><td colspan="8" class="empty">Aucun produit. Ajoute-en un ci-dessus.</td></tr>
@@ -270,7 +276,7 @@ onMounted(chargerTout)
         <h2>Ateliers</h2>
         <span class="count">{{ ateliers.length }}</span>
       </div>
-      <div class="form-grid a-grid">
+      <div class="form-grid a-grid" v-if="peutEditer">
         <label>Code<input v-model="formA.code" placeholder="COMASA" /></label>
         <label>Nom<input v-model="formA.nom" placeholder="Atelier granulation COMASA" /></label>
         <div class="form-actions">
@@ -286,8 +292,10 @@ onMounted(chargerTout)
               <td class="mono">{{ a.code }}</td>
               <td>{{ a.nom }}</td>
               <td class="right nowrap">
-                <button class="link" @click="modifierA(a)">Modifier</button>
-                <button class="link danger" @click="desactiverA(a)">Désactiver</button>
+                <template v-if="peutEditer">
+                  <button class="link" @click="modifierA(a)">Modifier</button>
+                  <button class="link danger" @click="desactiverA(a)">Désactiver</button>
+                </template>
               </td>
             </tr>
             <tr v-if="!ateliers.length"><td colspan="3" class="empty">Aucun atelier. Ajoute-en un ci-dessus.</td></tr>
@@ -302,7 +310,7 @@ onMounted(chargerTout)
         <h2>Équipements</h2>
         <span class="count">{{ equipements.length }}</span>
       </div>
-      <div class="form-grid e-grid">
+      <div class="form-grid e-grid" v-if="peutEditer">
         <label>Code<input v-model="formE.code" placeholder="FE55" /></label>
         <label>Nom<input v-model="formE.nom" placeholder="Presse FETTE FE55" /></label>
         <label>Atelier
@@ -327,8 +335,10 @@ onMounted(chargerTout)
               <td>{{ atelierDe(e) ? atelierDe(e).code : '—' }}</td>
               <td>{{ e.type || '—' }}</td>
               <td class="right nowrap">
-                <button class="link" @click="modifierE(e)">Modifier</button>
-                <button class="link danger" @click="desactiverE(e)">Désactiver</button>
+                <template v-if="peutEditer">
+                  <button class="link" @click="modifierE(e)">Modifier</button>
+                  <button class="link danger" @click="desactiverE(e)">Désactiver</button>
+                </template>
               </td>
             </tr>
             <tr v-if="!equipements.length"><td colspan="5" class="empty">Aucun équipement. Ajoute-en un ci-dessus.</td></tr>
