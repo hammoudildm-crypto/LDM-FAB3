@@ -3,12 +3,13 @@ import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 
 const annee = new Date().getFullYear()
+const moisCourant = new Date().getMonth()
 const session = ref(null)
 const erreur = ref('')
 
 const nbProduits = ref(0)
 const lots = ref([])
-const planTotal = ref(0)
+const planData = ref([])
 const conditionnements = ref([])
 const phases = ref([])
 
@@ -27,11 +28,11 @@ async function charger() {
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
 
-  const rpp = await supabase.from('plan_production').select('quantite_planifiee').eq('annee', annee)
-  if (!rpp.error) planTotal.value = rpp.data.reduce((s, x) => s + Number(x.quantite_planifiee || 0), 0)
+  const rpp = await supabase.from('plan_production').select('quantite_planifiee, produits(pcsu)').eq('annee', annee)
+  if (!rpp.error) planData.value = rpp.data
 
   const rc = await supabase.from('conditionnement')
-    .select('ordre_id, quantite_entree, quantite_conditionnee, date_conditionnement, ordres_fabrication(produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, pcsu))')
+    .select('ordre_id, quantite_entree, quantite_conditionnee, date_conditionnement, ordres_fabrication(produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, pcsu, boites_theoriques, donneurs_ordre(nom)))')
     .eq('actif', true)
   if (!rc.error) conditionnements.value = rc.data
 
@@ -48,6 +49,11 @@ function boitesOf(c) {
   return Math.floor(Number(c.quantite_conditionnee) / upb)
 }
 function prodDe(c) { return c.ordres_fabrication && c.ordres_fabrication.produits ? c.ordres_fabrication.produits : null }
+function estCeMois(c) {
+  if (!c.date_conditionnement) return false
+  const d = new Date(c.date_conditionnement)
+  return d.getFullYear() === annee && d.getMonth() === moisCourant
+}
 
 // --- Lots ---
 const nbLots = computed(() => lots.value.length)
@@ -59,16 +65,29 @@ const lotsParStatut = computed(() => {
 })
 const lotsEnCours = computed(() => lotsParStatut.value['En cours'] || 0)
 const lotsLiberes = computed(() => lotsParStatut.value['Libéré'] || 0)
+const lotsTermines = computed(() => lotsParStatut.value['Terminé'] || 0)
+const tauxLiberation = computed(() => nbLots.value > 0 ? (lotsLiberes.value / nbLots.value) * 100 : null)
 const derniersLots = computed(() => lots.value.slice(0, 6))
+
+// --- Plan ---
+const planTotal = computed(() => planData.value.reduce((s, x) => s + Number(x.quantite_planifiee || 0), 0))
+const caPotentielPlan = computed(() => planData.value.reduce((s, x) => {
+  const pcsu = x.produits ? Number(x.produits.pcsu || 0) : 0
+  return s + Number(x.quantite_planifiee || 0) * pcsu
+}, 0))
 
 // --- Conditionnement / volumes ---
 const totalBoites = computed(() => conditionnements.value.reduce((s, c) => s + boitesOf(c), 0))
+const boitesRestantes = computed(() => Math.max(0, planTotal.value - totalBoites.value))
+const boitesCeMois = computed(() => conditionnements.value.reduce((s, c) => s + (estCeMois(c) ? boitesOf(c) : 0), 0))
 const caRealise = computed(() => {
   let t = 0
-  for (const c of conditionnements.value) {
-    const p = prodDe(c)
-    t += boitesOf(c) * (p ? Number(p.pcsu || 0) : 0)
-  }
+  for (const c of conditionnements.value) { const p = prodDe(c); t += boitesOf(c) * (p ? Number(p.pcsu || 0) : 0) }
+  return t
+})
+const caCeMois = computed(() => {
+  let t = 0
+  for (const c of conditionnements.value) { if (!estCeMois(c)) continue; const p = prodDe(c); t += boitesOf(c) * (p ? Number(p.pcsu || 0) : 0) }
   return t
 })
 const pctPlanRealise = computed(() => planTotal.value > 0 ? (totalBoites.value / planTotal.value) * 100 : null)
@@ -157,6 +176,34 @@ const topProduits = computed(() => {
   return Object.values(m).filter(x => x.boites > 0).sort((a, b) => b.ca - a.ca).slice(0, 5)
 })
 
+// --- CA par donneur d'ordre ---
+const caParDonneur = computed(() => {
+  const m = {}
+  for (const c of conditionnements.value) {
+    const p = prodDe(c)
+    const nom = p && p.donneurs_ordre ? p.donneurs_ordre.nom : '—'
+    if (!m[nom]) m[nom] = { nom, boites: 0, ca: 0 }
+    m[nom].boites += boitesOf(c)
+    m[nom].ca += boitesOf(c) * (p ? Number(p.pcsu || 0) : 0)
+  }
+  return Object.values(m).filter(x => x.boites > 0).sort((a, b) => b.ca - a.ca)
+})
+const maxCaDonneur = computed(() => Math.max(1, ...caParDonneur.value.map(d => d.ca)))
+
+// --- Réalisation du plan par produit ---
+const realisationPlan = computed(() => {
+  const m = {}
+  for (const c of conditionnements.value) {
+    const p = prodDe(c)
+    const code = p ? p.code_pf : '—'
+    if (!m[code]) m[code] = { code, nom: p ? p.designation : '—', produit: 0, cible: p ? Number(p.boites_theoriques || 0) : 0 }
+    m[code].produit += boitesOf(c)
+  }
+  return Object.values(m).filter(x => x.produit > 0)
+    .map(x => ({ ...x, pct: x.cible > 0 ? (x.produit / x.cible) * 100 : null }))
+    .sort((a, b) => b.produit - a.produit).slice(0, 8)
+})
+
 function pct(n, total) { return total > 0 ? (n / total) * 100 : 0 }
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 function fmtPct(n) { return n == null ? '—' : Number(n).toFixed(2) + ' %' }
@@ -213,6 +260,16 @@ onMounted(async () => {
         <div class="kpi"><div class="kpi-val">{{ fmt(planTotal) }}</div><div class="kpi-lbl">Plan {{ annee }} (boîtes)</div></div>
       </div>
 
+      <!-- Qualité / mois / cibles -->
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-val">{{ fmt(lotsTermines) }}</div><div class="kpi-lbl">Lots terminés</div></div>
+        <div class="kpi"><div class="kpi-val">{{ fmtPct(tauxLiberation) }}</div><div class="kpi-lbl">Taux de libération</div></div>
+        <div class="kpi"><div class="kpi-val accent">{{ fmt(boitesCeMois) }}</div><div class="kpi-lbl">Boîtes ce mois</div></div>
+        <div class="kpi"><div class="kpi-val">{{ fmtDA(caCeMois) }}</div><div class="kpi-lbl">CA ce mois</div></div>
+        <div class="kpi"><div class="kpi-val">{{ fmt(boitesRestantes) }}</div><div class="kpi-lbl">Boîtes restantes (plan)</div></div>
+        <div class="kpi"><div class="kpi-val">{{ fmtDA(caPotentielPlan) }}</div><div class="kpi-lbl">CA potentiel (plan)</div></div>
+      </div>
+
       <div class="cols">
         <section class="card">
           <h2 class="card-title">Lots par statut</h2>
@@ -263,6 +320,26 @@ onMounted(async () => {
             </tbody>
           </table>
         </section>
+
+        <section class="card">
+          <h2 class="card-title">Chiffre d'affaires par donneur d'ordre</h2>
+          <div v-for="d in caParDonneur" :key="d.nom" class="bar-row">
+            <span class="bar-lbl don">{{ d.nom }}</span>
+            <div class="bar-track"><div class="bar-fill prod" :style="{ width: (d.ca / maxCaDonneur * 100) + '%' }"></div></div>
+            <span class="bar-num xl">{{ fmtDA(d.ca) }}</span>
+          </div>
+          <p v-if="!caParDonneur.length" class="empty">Aucun conditionnement enregistré.</p>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Réalisation du plan — top produits</h2>
+          <div v-for="p in realisationPlan" :key="p.code" class="prog-row">
+            <div class="prog-head"><span class="prog-nom">{{ p.nom }}</span><span class="prog-pct">{{ fmtPct(p.pct) }}</span></div>
+            <div class="bar-track"><div class="bar-fill" :class="(p.pct != null && p.pct >= 100) ? 'st-lib' : 'prod'" :style="{ width: Math.min(100, p.pct || 0) + '%' }"></div></div>
+            <div class="prog-sub">{{ fmt(p.produit) }} / {{ p.cible ? fmt(p.cible) : '—' }} boîtes</div>
+          </div>
+          <p v-if="!realisationPlan.length" class="empty">Aucun conditionnement enregistré.</p>
+        </section>
       </div>
     </template>
   </div>
@@ -294,6 +371,7 @@ onMounted(async () => {
 .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
 .bar-lbl { width: 92px; flex-shrink: 0; }
 .bar-lbl.mois { width: 38px; font-size: 12px; font-weight: 600; color: #64748b; }
+.bar-lbl.don { width: 112px; font-size: 12px; font-weight: 600; color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-track { flex: 1; height: 10px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 999px; min-width: 2px; }
 .bar-fill.st-plan { background: #94a3b8; }
@@ -304,6 +382,7 @@ onMounted(async () => {
 .bar-fill.prod { background: #0f766e; }
 .bar-num { width: 36px; text-align: right; font-weight: 700; font-size: 14px; flex-shrink: 0; }
 .bar-num.wide { width: 64px; }
+.bar-num.xl { width: 78px; font-size: 13px; }
 
 .btn { display: inline-block; background: #0f766e; color: #fff; border: 0; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; }
 .btn:hover { background: #0c5f59; }
@@ -316,6 +395,12 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; white-space:
 .strong { font-weight: 700; color: #0f766e; }
 .rank { width: 22px; text-align: center; font-weight: 700; color: #94a3b8; }
 .empty { color: #94a3b8; font-style: italic; font-size: 13px; }
+
+.prog-row { margin-bottom: 13px; }
+.prog-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+.prog-nom { font-size: 13px; font-weight: 600; color: #1b2733; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 72%; }
+.prog-pct { font-size: 13px; font-weight: 700; color: #0f766e; flex-shrink: 0; }
+.prog-sub { font-size: 11px; color: #94a3b8; margin-top: 4px; }
 
 .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
 .st-plan { background: #f1f5f9; color: #475569; }
