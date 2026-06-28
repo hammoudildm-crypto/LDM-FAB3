@@ -1,7 +1,8 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, inject } from 'vue'
 import { supabase } from '../supabase'
 
+const peutEditer = inject('peutEditer', ref(true))
 const STATUTS = ['Planifié', 'En cours', 'Terminé', 'Libéré', 'Rejeté']
 
 const lots = ref([])
@@ -167,8 +168,8 @@ onMounted(chargerTout)
       Aucun produit dans le référentiel. Va d'abord dans <strong>Référentiels</strong> créer un produit — il en faut un pour lancer un lot.
     </div>
 
-    <template v-else>
-      <section class="card">
+   <template v-else>
+      <section class="card" v-if="peutEditer">
         <h2 class="card-title">{{ form.id ? 'Modifier le lot' : 'Nouveau lot' }}</h2>
         <div class="form-grid">
           <label>N° de lot<input v-model="form.numero_lot" placeholder="L260145" /></label>
@@ -232,10 +233,12 @@ onMounted(chargerTout)
                   <div v-if="l.statut === 'Libéré' && signatureDe(l)" class="sig-info">✍ {{ signatureDe(l).email }}<br>{{ fmtDateHeure(signatureDe(l).signed_at) }}</div>
                 </td>
                 <td>{{ l.equipements ? l.equipements.code : '—' }}</td>
-                <td class="right nowrap">
-                  <button v-if="l.statut === 'Terminé'" class="link release" @click="ouvrirSignature(l)">Libérer (signer)</button>
-                  <button class="link" @click="modifier(l)">Modifier</button>
-                  <button class="link danger" @click="desactiver(l)">Désactiver</button>
+<td class="right nowrap">
+                  <template v-if="peutEditer">
+                    <button v-if="l.statut === 'Terminé'" class="link release" @click="ouvrirSignature(l)">Libérer (signer)</button>
+                    <button class="link" @click="modifier(l)">Modifier</button>
+                    <button class="link danger" @click="desactiver(l)">Désactiver</button>
+                  </template>
                 </td>
               </tr>
               <tr v-if="!lotsFiltres.length"><td colspan="7" class="empty">Aucun lot. Crée-en un ci-dessus.</td></tr>
