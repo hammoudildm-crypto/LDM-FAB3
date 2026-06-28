@@ -84,6 +84,22 @@ async function desactiver(e) {
 function periode(e) { return (e.mois ? MOIS[e.mois - 1] + ' ' : '') + e.annee }
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 
+function telechargerCSV(nom, entetes, lignes) {
+  const esc = (c) => { const s = c == null ? '' : String(c); return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+  const csv = [entetes, ...lignes].map(r => r.map(esc).join(';')).join('\n')
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob); a.download = nom; a.click()
+}
+function exporterCSV() {
+  const entetes = ['Atelier', 'Nom atelier', 'Période', 'Équipe', 'Effectif']
+  const lignes = effectifsFiltres.value.map(e => {
+    const a = atelierDe(e)
+    return [a ? a.code : '', a ? a.nom : '', periode(e), e.equipe || '', e.effectif ?? '']
+  })
+  telechargerCSV('effectifs.csv', entetes, lignes)
+}
+
 onMounted(chargerTout)
 </script>
 
@@ -149,6 +165,7 @@ onMounted(chargerTout)
             <option :value="''">Toutes années</option>
             <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
           </select>
+          <button class="btn-exp" @click="exporterCSV" :disabled="!effectifsFiltres.length">Exporter CSV</button>
         </div>
         <div class="table-scroll">
           <table class="grid">
@@ -198,6 +215,9 @@ onMounted(chargerTout)
 .count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
 .filtre { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
 .card-head .filtre:first-of-type { margin-left: auto; }
+.btn-exp { font-size: 13px; padding: 7px 12px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.btn-exp:hover { background: #ecfdf5; }
+.btn-exp:disabled { opacity: .45; cursor: not-allowed; }
 
 .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: end; }
 .form-grid label { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
