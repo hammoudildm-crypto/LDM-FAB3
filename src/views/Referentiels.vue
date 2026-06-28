@@ -330,4 +330,72 @@ onMounted(chargerTout)
       </div>
       <div class="table-scroll">
         <table class="grid">
-          <thead><tr><th>Code</th><th>Nom</th><th>Atelier</th><th>Type</th><th
+          <thead><tr><th>Code</th><th>Nom</th><th>Atelier</th><th>Type</th><th class="right">Actions</th></tr></thead>
+          <tbody>
+            <tr v-for="e in equipements" :key="e.id">
+              <td class="mono">{{ e.code }}</td>
+              <td>{{ e.nom }}</td>
+              <td>{{ atelierDe(e) ? atelierDe(e).code : '—' }}</td>
+              <td>{{ e.type || '—' }}</td>
+              <td class="right nowrap">
+                <template v-if="peutEditer">
+                  <button class="link" @click="modifierE(e)">Modifier</button>
+                  <button class="link danger" @click="desactiverE(e)">Désactiver</button>
+                </template>
+              </td>
+            </tr>
+            <tr v-if="!equipements.length"><td colspan="5" class="empty">Aucun équipement. Ajoute-en un ci-dessus.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</template>
+
+<style scoped>
+.ref-page { color: #1b2733; }
+.ref-head { margin: 4px 0 20px; }
+.ref-head h1 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
+.ref-head .sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
+
+.alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 16px; }
+
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 22px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.card-head h2 { margin: 0; font-size: 17px; }
+.count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+
+.form-grid { display: grid; gap: 12px; align-items: end; padding: 14px; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 10px; margin-bottom: 16px; }
+.do-grid { grid-template-columns: 1fr 2fr 1.4fr auto; }
+.p-grid { grid-template-columns: repeat(4, 1fr) auto; }
+.a-grid { grid-template-columns: 1fr 2.4fr auto; }
+.e-grid { grid-template-columns: 1fr 1.8fr 1.6fr 1fr auto; }
+.form-grid label { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
+.form-grid input, .form-grid select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 400; }
+.form-grid input:focus, .form-grid select:focus { outline: 2px solid #0f766e; outline-offset: 0; border-color: #0f766e; }
+.form-actions { display: flex; gap: 8px; align-items: end; }
+
+.btn { background: #0f766e; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.btn:hover { background: #0c5f59; }
+.btn.ghost { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
+.btn.ghost:hover { background: #f8fafc; }
+
+.table-scroll { overflow-x: auto; }
+table.grid { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.grid th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; }
+table.grid tr:hover td { background: #f8fafc; }
+.right { text-align: right; }
+.nowrap { white-space: nowrap; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.empty { color: #94a3b8; text-align: center; padding: 18px; font-style: italic; }
+
+button.link { background: none; border: 0; color: #0f766e; font-size: 13px; font-weight: 600; cursor: pointer; padding: 2px 6px; }
+button.link:hover { text-decoration: underline; }
+button.link.danger { color: #b91c1c; }
+
+@media (max-width: 820px) {
+  .do-grid, .p-grid, .a-grid, .e-grid { grid-template-columns: 1fr 1fr; }
+  .form-actions { grid-column: 1 / -1; }
+}
+</style>
