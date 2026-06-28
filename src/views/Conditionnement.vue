@@ -1,6 +1,8 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, inject } from 'vue'
 import { supabase } from '../supabase'
+
+const peutEditer = inject('peutEditer', ref(true))
 
 const STATUTS = ['En cours', 'Terminé', 'Libéré']
 
@@ -119,7 +121,7 @@ onMounted(chargerTout)
     </div>
 
     <template v-else>
-      <section class="card">
+      <section class="card" v-if="peutEditer">
         <h2 class="card-title">{{ form.id ? 'Modifier le conditionnement' : 'Nouveau conditionnement' }}</h2>
         <div class="form-grid">
           <label class="wide">Lot
@@ -182,8 +184,10 @@ onMounted(chargerTout)
                 <td class="right" :class="rendement(r) != null && rendement(r) < 95 ? 'rdt-bas' : ''">{{ fmtPct(rendement(r)) }}</td>
                 <td><span class="badge" :class="classeStatut(r.statut)">{{ r.statut }}</span></td>
                 <td class="right nowrap">
-                  <button class="link" @click="modifier(r)">Modifier</button>
-                  <button class="link danger" @click="desactiver(r)">Supprimer</button>
+                  <template v-if="peutEditer">
+                    <button class="link" @click="modifier(r)">Modifier</button>
+                    <button class="link danger" @click="desactiver(r)">Supprimer</button>
+                  </template>
                 </td>
               </tr>
               <tr v-if="!recordsFiltres.length"><td colspan="10" class="empty">Aucun conditionnement. Enregistres-en un ci-dessus.</td></tr>
