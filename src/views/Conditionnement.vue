@@ -35,7 +35,7 @@ function upbLot(ordreId) {
 async function chargerTout() {
   erreur.value = ''
   const rl = await supabase.from('ordres_fabrication')
-    .select('id, numero_lot, produits(code_pf, designation, unites_par_boite)')
+    .select('id, numero_lot, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg)')
     .eq('actif', true).order('id', { ascending: false })
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -45,7 +45,7 @@ async function chargerTout() {
   equipements.value = re.data
 
   const rc = await supabase.from('conditionnement')
-    .select('*, ordres_fabrication(numero_lot, produits(code_pf, designation, unites_par_boite)), equipements(code, nom)')
+    .select('*, ordres_fabrication(numero_lot, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg)), equipements(code, nom)')
     .eq('actif', true).order('date_conditionnement', { ascending: false, nullsFirst: false }).order('id', { ascending: false })
   if (rc.error) { erreur.value = rc.error.message; return }
   records.value = rc.data
@@ -60,13 +60,18 @@ function boites(r) {
   if (r.quantite_conditionnee == null || !upb || Number(upb) === 0) return null
   return Math.floor(Number(r.quantite_conditionnee) / Number(upb))
 }
-function boitesParKg(r) {
-  const b = boites(r)
+function rendementCond(r) {
+  const prod = r.ordres_fabrication && r.ordres_fabrication.produits ? r.ordres_fabrication.produits : null
+  if (!prod) return null
+  const mm = Number(prod.poids_unitaire_mg || 0)
+  const upb = Number(prod.unites_par_boite || 0)
   const kg = r.quantite_entree
-  if (b == null || kg == null || Number(kg) === 0) return null
-  return b / Number(kg)
+  const b = boites(r)
+  if (b == null || kg == null || Number(kg) === 0 || mm === 0 || upb === 0) return null
+  const boitesTheo = (Number(kg) * 1e6) / mm / upb
+  return boitesTheo ? (b / boitesTheo) * 100 : null
 }
-function fmtRatio(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }
+function fmtPct(n) { return n == null ? '—' : Number(n).toFixed(1) + ' %' }
 
 async function enregistrer() {
   erreur.value = ''
@@ -183,7 +188,7 @@ onMounted(chargerTout)
             <thead>
               <tr>
                 <th>Lot</th><th>Produit</th><th>Date</th><th>Ligne</th>
-                <th class="right">Reçu (kg)</th><th class="right">Boîtes</th><th class="right">Boîtes/kg</th><th>Statut</th><th class="right">Actions</th>
+                <th class="right">Reçu (kg)</th><th class="right">Boîtes</th><th class="right">Rendement</th><th>Statut</th><th class="right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -194,7 +199,7 @@ onMounted(chargerTout)
                 <td>{{ r.equipements ? r.equipements.code : '—' }}</td>
                 <td class="right">{{ fmt(r.quantite_entree) }}</td>
                 <td class="right strong">{{ fmt(boites(r)) }}</td>
-                <td class="right">{{ fmtRatio(boitesParKg(r)) }}</td>
+                <td class="right" :class="rendementCond(r) != null && rendementCond(r) < 95 ? 'rdt-bas' : ''">{{ fmtPct(rendementCond(r)) }}</td>
                 <td><span class="badge" :class="classeStatut(r.statut)">{{ r.statut }}</span></td>
                 <td class="right nowrap">
                   <template v-if="peutEditer">
@@ -209,7 +214,7 @@ onMounted(chargerTout)
         </div>
       </section>
 
-      <p class="hint">Le <strong>nombre de boîtes</strong> est saisi directement. La <strong>quantité reçue (kg)</strong> alimente le stock de vrac (page En-cours). Les unités par boîte du produit (Référentiels) servent au chiffre d'affaires et au dossier de lot.</p>
+      <p class="hint">Le <strong>nombre de boîtes</strong> est saisi directement ; la colonne <strong>Rendement</strong> compare les boîtes réelles aux boîtes théoriques (calculées d'après le poids du comprimé et les kg reçus). La <strong>quantité reçue (kg)</strong> alimente le stock de vrac (page En-cours).</p>
     </template>
   </div>
 </template>
@@ -251,6 +256,7 @@ table.grid tr:hover td { background: #f8fafc; }
 .right { text-align: right; }
 .nowrap { white-space: nowrap; }
 .strong { font-weight: 700; }
+.rdt-bas { color: #b91c1c; font-weight: 700; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
 .desig { color: #475569; }
 .empty { color: #94a3b8; text-align: center; padding: 18px; font-style: italic; }
