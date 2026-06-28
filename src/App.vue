@@ -1,15 +1,23 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
 import { useRoute } from 'vue-router'
 import { supabase } from './supabase'
 
 const session = ref(null)
+const role = ref(null)
 const route = useRoute()
 const navRef = ref(null)
 const openMenu = ref(null)
 
+const estAdmin = computed(() => role.value === 'admin')
+const peutEditer = computed(() => role.value === 'admin' || role.value === 'operateur')
+provide('role', role)
+provide('peutEditer', peutEditer)
+
+const roleLabel = computed(() => ({ admin: 'Admin', operateur: 'Opérateur', lecteur: 'Lecteur' }[role.value] || ''))
+
 const PROD = ['/plan', '/ordres', '/suivi', '/encours', '/conditionnement', '/dossier']
-const PILOT = ['/ca', '/effectifs', '/audit']
+const PILOT = ['/ca', '/effectifs', '/audit', '/habilitations']
 const prodActive = computed(() => PROD.includes(route.path))
 const pilotActive = computed(() => PILOT.includes(route.path))
 
@@ -17,12 +25,19 @@ function toggleMenu(name) { openMenu.value = openMenu.value === name ? null : na
 function closeMenu() { openMenu.value = null }
 function onDocClick(e) { if (navRef.value && !navRef.value.contains(e.target)) openMenu.value = null }
 
+async function chargerRole() {
+  if (!session.value) { role.value = null; return }
+  const r = await supabase.from('profils').select('role').eq('user_id', session.value.user.id).maybeSingle()
+  role.value = r.data ? r.data.role : null
+}
+
 onMounted(async () => {
   document.addEventListener('click', onDocClick)
   const res = await supabase.auth.getSession()
   if (res.error) { console.error('getSession:', res.error.message); return }
   session.value = res.data.session
-  supabase.auth.onAuthStateChange((_event, s) => { session.value = s })
+  await chargerRole()
+  supabase.auth.onAuthStateChange(async (_event, s) => { session.value = s; await chargerRole() })
 })
 onUnmounted(() => document.removeEventListener('click', onDocClick))
 
@@ -30,6 +45,7 @@ async function signOut() {
   const res = await supabase.auth.signOut()
   if (res.error) { console.error('signOut:', res.error.message); return }
   session.value = null
+  role.value = null
 }
 </script>
 
@@ -65,12 +81,14 @@ async function signOut() {
             <RouterLink to="/ca" @click="closeMenu">Chiffre d'affaires</RouterLink>
             <RouterLink to="/effectifs" @click="closeMenu">Effectifs</RouterLink>
             <RouterLink to="/audit" @click="closeMenu">Journal d'audit</RouterLink>
+            <RouterLink v-if="estAdmin" to="/habilitations" @click="closeMenu">Habilitations</RouterLink>
           </div>
         </div>
       </template>
     </nav>
 
     <div class="right">
+      <span v-if="session && role" class="role-badge" :class="'r-' + role">{{ roleLabel }}</span>
       <RouterLink v-if="!session" to="/login" class="navlink">Connexion</RouterLink>
       <button v-else type="button" class="signout" @click="signOut">Déconnexion</button>
     </div>
@@ -88,7 +106,7 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
   background: #0f2a33; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12); position: relative; z-index: 20; }
 .brand { font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
 .nav { display: flex; gap: 20px; align-items: center; }
-.right { margin-left: auto; display: flex; align-items: center; }
+.right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
 
 .navlink { color: #cbd5e1; text-decoration: none; font-size: 14px; font-weight: 500; padding: 4px 0;
   white-space: nowrap; background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 5px; }
@@ -104,6 +122,11 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 .drop-panel a { display: block; color: #1b2733; text-decoration: none; font-size: 14px; padding: 8px 12px; border-radius: 7px; white-space: nowrap; }
 .drop-panel a:hover { background: #f1f5f9; }
 .drop-panel a.router-link-exact-active { background: #ecfdf5; color: #0f766e; font-weight: 600; }
+
+.role-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
+.r-admin { background: #2dd4bf; color: #06322c; }
+.r-operateur { background: #60a5fa; color: #0b2a5b; }
+.r-lecteur { background: #94a3b8; color: #1b2733; }
 
 .signout { background: transparent; color: #cbd5e1; border: 1px solid #33505a; padding: 5px 12px; border-radius: 7px; font-size: 13px; cursor: pointer; white-space: nowrap; }
 .signout:hover { color: #fff; border-color: #557; }
