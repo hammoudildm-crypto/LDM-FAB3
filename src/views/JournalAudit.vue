@@ -67,6 +67,25 @@ function fmtVal(v) {
 function fmtDate(d) { return d ? new Date(d).toLocaleString('fr-FR') : '—' }
 function user(e) { return e.changed_by_email || (e.changed_by ? e.changed_by.slice(0, 8) + '…' : 'système') }
 
+function telechargerCSV(nom, entetes, lignes) {
+  const esc = (c) => { const s = c == null ? '' : String(c); return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+  const csv = [entetes, ...lignes].map(r => r.map(esc).join(';')).join('\n')
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob); a.download = nom; a.click()
+}
+function exporterCSV() {
+  const entetes = ['Date / heure', 'Utilisateur', 'Table', 'Action', 'Enregistrement']
+  const lignes = entries.value.map(e => [
+    fmtDate(e.changed_at),
+    user(e),
+    labelTable(e.table_name),
+    labelAction(e.action),
+    '#' + e.record_id
+  ])
+  telechargerCSV('journal_audit.csv', entetes, lignes)
+}
+
 onMounted(charger)
 watch([filtreTable, filtreAction], charger)
 </script>
@@ -94,6 +113,7 @@ watch([filtreTable, filtreAction], charger)
           <option value="UPDATE">Modification</option>
           <option value="DELETE">Suppression</option>
         </select>
+        <button class="btn-exp" @click="exporterCSV" :disabled="!entries.length">Exporter CSV</button>
       </div>
 
       <p v-if="chargement" class="info">Chargement…</p>
@@ -166,6 +186,9 @@ watch([filtreTable, filtreAction], charger)
 .card-title { margin: 0; font-size: 17px; }
 .count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
 .filtre { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
+.btn-exp { font-size: 13px; padding: 7px 12px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.btn-exp:hover { background: #ecfdf5; }
+.btn-exp:disabled { opacity: .45; cursor: not-allowed; }
 .card-head .filtre:first-of-type { margin-left: auto; }
 
 .table-scroll { overflow-x: auto; }
