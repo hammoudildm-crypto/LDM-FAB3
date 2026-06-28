@@ -15,15 +15,22 @@ const message = ref('')
 
 const form = reactive({
   id: null, ordre_id: '', date_conditionnement: '', equipement_id: '',
-  quantite_entree: '', quantite_conditionnee: '', statut: 'En cours', commentaire: ''
+  quantite_entree: '', boites: '', statut: 'En cours', commentaire: ''
 })
 function resetForm() {
   Object.assign(form, {
     id: null, ordre_id: '', date_conditionnement: '', equipement_id: '',
-    quantite_entree: '', quantite_conditionnee: '', statut: 'En cours', commentaire: ''
+    quantite_entree: '', boites: '', statut: 'En cours', commentaire: ''
   })
 }
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
+
+// Unités / boîte du produit du lot sélectionné (sert à convertir boîtes <-> comprimés stockés)
+function upbLot(ordreId) {
+  const l = lots.value.find(x => x.id === ordreId)
+  const upb = l && l.produits ? Number(l.produits.unites_par_boite || 0) : 0
+  return upb > 0 ? upb : 0
+}
 
 async function chargerTout() {
   erreur.value = ''
@@ -48,11 +55,6 @@ const recordsFiltres = computed(() =>
   filtreStatut.value ? records.value.filter(r => r.statut === filtreStatut.value) : records.value
 )
 
-function rendement(r) {
-  const e = r.quantite_entree, s = r.quantite_conditionnee
-  if (e == null || s == null || Number(e) === 0) return null
-  return (Number(s) / Number(e)) * 100
-}
 function boites(r) {
   const upb = r.ordres_fabrication && r.ordres_fabrication.produits ? r.ordres_fabrication.produits.unites_par_boite : null
   if (r.quantite_conditionnee == null || !upb || Number(upb) === 0) return null
@@ -63,12 +65,18 @@ async function enregistrer() {
   erreur.value = ''
   message.value = ''
   if (!form.ordre_id) { erreur.value = 'Choisis un lot.'; return }
+  let qcond = null
+  if (form.boites !== '' && form.boites !== null) {
+    const upb = upbLot(form.ordre_id)
+    if (!upb) { erreur.value = 'Le produit de ce lot n\'a pas d\'unités/boîte. Renseigne-la d\'abord dans Référentiels.'; return }
+    qcond = Number(form.boites) * upb
+  }
   const payload = {
     ordre_id: form.ordre_id,
     date_conditionnement: form.date_conditionnement || null,
     equipement_id: form.equipement_id || null,
     quantite_entree: toNum(form.quantite_entree),
-    quantite_conditionnee: toNum(form.quantite_conditionnee),
+    quantite_conditionnee: qcond,
     statut: form.statut,
     commentaire: form.commentaire.trim() || null
   }
@@ -81,11 +89,12 @@ async function enregistrer() {
   await chargerTout()
 }
 function modifier(r) {
+  const upb = r.ordres_fabrication && r.ordres_fabrication.produits ? Number(r.ordres_fabrication.produits.unites_par_boite || 0) : 0
   Object.assign(form, {
     id: r.id, ordre_id: r.ordre_id || '', date_conditionnement: r.date_conditionnement || '',
     equipement_id: r.equipement_id || '', quantite_entree: r.quantite_entree ?? '',
-    quantite_conditionnee: r.quantite_conditionnee ?? '', statut: r.statut || 'En cours',
-    commentaire: r.commentaire || ''
+    boites: (r.quantite_conditionnee != null && upb > 0) ? Math.round(Number(r.quantite_conditionnee) / upb) : '',
+    statut: r.statut || 'En cours', commentaire: r.commentaire || ''
   })
 }
 async function desactiver(r) {
@@ -101,7 +110,6 @@ function classeStatut(s) {
 }
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
-function fmtPct(n) { return n == null ? '—' : n.toFixed(1) + ' %' }
 
 onMounted(chargerTout)
 </script>
@@ -110,7 +118,7 @@ onMounted(chargerTout)
   <div class="cd-page">
     <header class="cd-head">
       <h1>Conditionnement</h1>
-      <p class="sub">Mise en boîte des lots — quantités, rendement et nombre de boîtes.</p>
+      <p class="sub">Mise en boîte des lots — quantité reçue (kg) et nombre de boîtes.</p>
     </header>
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
@@ -139,8 +147,8 @@ onMounted(chargerTout)
               <option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
             </select>
           </label>
-          <label>Comprimés en entrée<input v-model="form.quantite_entree" type="number" placeholder="492000" /></label>
-          <label>Comprimés conditionnés<input v-model="form.quantite_conditionnee" type="number" placeholder="489000" /></label>
+          <label>Quantité reçue (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="245" /></label>
+          <label>Boîtes conditionnées<input v-model="form.boites" type="number" placeholder="16000" /></label>
           <label>Statut
             <select v-model="form.statut">
               <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
@@ -168,8 +176,7 @@ onMounted(chargerTout)
             <thead>
               <tr>
                 <th>Lot</th><th>Produit</th><th>Date</th><th>Ligne</th>
-                <th class="right">Entrée (cp)</th><th class="right">Conditionné (cp)</th>
-                <th class="right">Boîtes</th><th class="right">Rendement</th><th>Statut</th><th class="right">Actions</th>
+                <th class="right">Reçu (kg)</th><th class="right">Boîtes</th><th>Statut</th><th class="right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -179,9 +186,7 @@ onMounted(chargerTout)
                 <td>{{ fmtDate(r.date_conditionnement) }}</td>
                 <td>{{ r.equipements ? r.equipements.code : '—' }}</td>
                 <td class="right">{{ fmt(r.quantite_entree) }}</td>
-                <td class="right">{{ fmt(r.quantite_conditionnee) }}</td>
                 <td class="right strong">{{ fmt(boites(r)) }}</td>
-                <td class="right" :class="rendement(r) != null && rendement(r) < 95 ? 'rdt-bas' : ''">{{ fmtPct(rendement(r)) }}</td>
                 <td><span class="badge" :class="classeStatut(r.statut)">{{ r.statut }}</span></td>
                 <td class="right nowrap">
                   <template v-if="peutEditer">
@@ -190,11 +195,13 @@ onMounted(chargerTout)
                   </template>
                 </td>
               </tr>
-              <tr v-if="!recordsFiltres.length"><td colspan="10" class="empty">Aucun conditionnement. Enregistres-en un ci-dessus.</td></tr>
+              <tr v-if="!recordsFiltres.length"><td colspan="8" class="empty">Aucun conditionnement. Enregistres-en un ci-dessus.</td></tr>
             </tbody>
           </table>
         </div>
       </section>
+
+      <p class="hint">Le <strong>nombre de boîtes</strong> est saisi directement. La <strong>quantité reçue (kg)</strong> alimente le stock de vrac (page En-cours). Les unités par boîte du produit (Référentiels) servent au chiffre d'affaires et au dossier de lot.</p>
     </template>
   </div>
 </template>
@@ -239,7 +246,6 @@ table.grid tr:hover td { background: #f8fafc; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
 .desig { color: #475569; }
 .empty { color: #94a3b8; text-align: center; padding: 18px; font-style: italic; }
-.rdt-bas { color: #b91c1c; font-weight: 700; }
 
 .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
 .st-cours { background: #dbeafe; color: #1e40af; }
@@ -249,6 +255,8 @@ table.grid tr:hover td { background: #f8fafc; }
 button.link { background: none; border: 0; color: #0f766e; font-size: 13px; font-weight: 600; cursor: pointer; padding: 2px 6px; }
 button.link:hover { text-decoration: underline; }
 button.link.danger { color: #b91c1c; }
+
+.hint { color: #64748b; font-size: 13px; margin-top: 4px; }
 
 @media (max-width: 820px) {
   .form-grid { grid-template-columns: 1fr 1fr; }
