@@ -35,7 +35,7 @@ function upbLot(ordreId) {
 async function chargerTout() {
   erreur.value = ''
   const rl = await supabase.from('ordres_fabrication')
-    .select('id, numero_lot, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg)')
+    .select('id, numero_lot, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, boites_theoriques)')
     .eq('actif', true).order('id', { ascending: false })
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -45,7 +45,7 @@ async function chargerTout() {
   equipements.value = re.data
 
   const rc = await supabase.from('conditionnement')
-    .select('*, ordres_fabrication(numero_lot, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg)), equipements(code, nom)')
+    .select('*, ordres_fabrication(numero_lot, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, boites_theoriques)), equipements(code, nom)')
     .eq('actif', true).order('date_conditionnement', { ascending: false, nullsFirst: false }).order('id', { ascending: false })
   if (rc.error) { erreur.value = rc.error.message; return }
   records.value = rc.data
@@ -60,6 +60,7 @@ function boites(r) {
   if (r.quantite_conditionnee == null || !upb || Number(upb) === 0) return null
   return Math.floor(Number(r.quantite_conditionnee) / Number(upb))
 }
+// Rendement de conditionnement = boîtes obtenues / équivalent du vrac reçu (en boîtes)
 function rendementCond(r) {
   const prod = r.ordres_fabrication && r.ordres_fabrication.produits ? r.ordres_fabrication.produits : null
   if (!prod) return null
@@ -70,6 +71,15 @@ function rendementCond(r) {
   if (b == null || kg == null || Number(kg) === 0 || mm === 0 || upb === 0) return null
   const boitesTheo = (Number(kg) * 1e6) / mm / upb
   return boitesTheo ? (b / boitesTheo) * 100 : null
+}
+// Rendement global = boîtes obtenues / boîtes théoriques du produit (TTL)
+function rendementGlobal(r) {
+  const prod = r.ordres_fabrication && r.ordres_fabrication.produits ? r.ordres_fabrication.produits : null
+  if (!prod) return null
+  const theo = Number(prod.boites_theoriques || 0)
+  const b = boites(r)
+  if (b == null || theo === 0) return null
+  return (b / theo) * 100
 }
 function fmtPct(n) { return n == null ? '—' : Number(n).toFixed(2) + ' %' }
 
@@ -188,7 +198,7 @@ onMounted(chargerTout)
             <thead>
               <tr>
                 <th>Lot</th><th>Produit</th><th>Date</th><th>Ligne</th>
-                <th class="right">Reçu (kg)</th><th class="right">Boîtes</th><th class="right">Rendement</th><th>Statut</th><th class="right">Actions</th>
+                <th class="right">Reçu (kg)</th><th class="right">Boîtes</th><th class="right">Rendement</th><th class="right">Rendement global</th><th>Statut</th><th class="right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -200,6 +210,7 @@ onMounted(chargerTout)
                 <td class="right">{{ fmt(r.quantite_entree) }}</td>
                 <td class="right strong">{{ fmt(boites(r)) }}</td>
                 <td class="right" :class="rendementCond(r) != null && rendementCond(r) < 95 ? 'rdt-bas' : ''">{{ fmtPct(rendementCond(r)) }}</td>
+                <td class="right" :class="rendementGlobal(r) != null && rendementGlobal(r) < 90 ? 'rdt-bas' : ''">{{ fmtPct(rendementGlobal(r)) }}</td>
                 <td><span class="badge" :class="classeStatut(r.statut)">{{ r.statut }}</span></td>
                 <td class="right nowrap">
                   <template v-if="peutEditer">
@@ -208,13 +219,13 @@ onMounted(chargerTout)
                   </template>
                 </td>
               </tr>
-              <tr v-if="!recordsFiltres.length"><td colspan="9" class="empty">Aucun conditionnement. Enregistres-en un ci-dessus.</td></tr>
+              <tr v-if="!recordsFiltres.length"><td colspan="10" class="empty">Aucun conditionnement. Enregistres-en un ci-dessus.</td></tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      <p class="hint">Le <strong>nombre de boîtes</strong> est saisi directement ; la colonne <strong>Rendement</strong> compare les boîtes réelles aux boîtes théoriques (calculées d'après le poids du comprimé et les kg reçus). La <strong>quantité reçue (kg)</strong> alimente le stock de vrac (page En-cours).</p>
+      <p class="hint"><strong>Rendement</strong> = boîtes obtenues ÷ équivalent du vrac reçu (poids du comprimé). <strong>Rendement global</strong> = boîtes obtenues ÷ boîtes théoriques du produit (TTL). La <strong>quantité reçue (kg)</strong> alimente le stock de vrac (page En-cours).</p>
     </template>
   </div>
 </template>
