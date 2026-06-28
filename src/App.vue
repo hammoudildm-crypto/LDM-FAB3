@@ -36,6 +36,7 @@ async function signOut() {
       <RouterLink to="/ordres" v-if="session">Ordres de fabrication</RouterLink>
       <RouterLink to="/suivi" v-if="session">Suivi fabrication</RouterLink>
       <RouterLink to="/conditionnement" v-if="session">Conditionnement</RouterLink>
+      <RouterLink to="/dossier" v-if="session">Dossier de lot</RouterLink>
       <RouterLink to="/login" v-if="!session">Connexion</RouterLink>
       <button v-else type="button" class="signout" @click="signOut">Déconnexion</button>
     </nav>
@@ -49,10 +50,10 @@ async function signOut() {
 * { box-sizing: border-box; }
 body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1b2733; }
 
-.topbar { display: flex; align-items: center; gap: 18px; padding: 0 20px; height: 56px;
+.topbar { display: flex; align-items: center; gap: 16px; padding: 0 20px; height: 56px;
   background: #0f2a33; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .brand { font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
-.nav { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.nav { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
 .nav a { color: #cbd5e1; text-decoration: none; font-size: 14px; font-weight: 500; padding: 4px 0; white-space: nowrap; }
 .nav a:hover { color: #fff; }
 .nav a.router-link-active { color: #fff; border-bottom: 2px solid #2dd4bf; }
@@ -62,4 +63,9 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 main { padding: 20px 16px; max-width: 1200px; margin: 0 auto; }
 
 .error { color: #b91c1c; }
+
+@media print {
+  .topbar { display: none !important; }
+  main { padding: 0; max-width: none; }
+}
 </style>
