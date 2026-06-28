@@ -60,6 +60,13 @@ function boites(r) {
   if (r.quantite_conditionnee == null || !upb || Number(upb) === 0) return null
   return Math.floor(Number(r.quantite_conditionnee) / Number(upb))
 }
+function boitesParKg(r) {
+  const b = boites(r)
+  const kg = r.quantite_entree
+  if (b == null || kg == null || Number(kg) === 0) return null
+  return b / Number(kg)
+}
+function fmtRatio(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }
 
 async function enregistrer() {
   erreur.value = ''
@@ -176,7 +183,7 @@ onMounted(chargerTout)
             <thead>
               <tr>
                 <th>Lot</th><th>Produit</th><th>Date</th><th>Ligne</th>
-                <th class="right">Reçu (kg)</th><th class="right">Boîtes</th><th>Statut</th><th class="right">Actions</th>
+                <th class="right">Reçu (kg)</th><th class="right">Boîtes</th><th class="right">Boîtes/kg</th><th>Statut</th><th class="right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -187,6 +194,7 @@ onMounted(chargerTout)
                 <td>{{ r.equipements ? r.equipements.code : '—' }}</td>
                 <td class="right">{{ fmt(r.quantite_entree) }}</td>
                 <td class="right strong">{{ fmt(boites(r)) }}</td>
+                <td class="right">{{ fmtRatio(boitesParKg(r)) }}</td>
                 <td><span class="badge" :class="classeStatut(r.statut)">{{ r.statut }}</span></td>
                 <td class="right nowrap">
                   <template v-if="peutEditer">
@@ -195,7 +203,7 @@ onMounted(chargerTout)
                   </template>
                 </td>
               </tr>
-              <tr v-if="!recordsFiltres.length"><td colspan="8" class="empty">Aucun conditionnement. Enregistres-en un ci-dessus.</td></tr>
+              <tr v-if="!recordsFiltres.length"><td colspan="9" class="empty">Aucun conditionnement. Enregistres-en un ci-dessus.</td></tr>
             </tbody>
           </table>
         </div>
