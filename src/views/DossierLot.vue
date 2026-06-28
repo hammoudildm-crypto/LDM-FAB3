@@ -24,7 +24,7 @@ async function chargerDossier() {
   erreur.value = ''
 
   const rl = await supabase.from('ordres_fabrication')
-    .select('*, produits(code_pf, designation, forme, unites_par_boite, donneurs_ordre(nom)), equipements(code, nom)')
+    .select('*, produits(code_pf, designation, forme, unites_par_boite, poids_unitaire_mg, donneurs_ordre(nom)), equipements(code, nom)')
     .eq('id', lotId.value).single()
   if (rl.error) { erreur.value = rl.error.message; return }
   lot.value = rl.data
@@ -42,6 +42,7 @@ async function chargerDossier() {
   if (!rc.error) conditionnements.value = rc.data
 }
 
+// --- Fabrication ---
 function rdt(e, s) {
   if (e == null || s == null || Number(e) === 0) return null
   return (Number(s) / Number(e)) * 100
@@ -54,17 +55,48 @@ const rendementFab = computed(() => {
   }
   return n ? r * 100 : null
 })
-const totalConditionne = computed(() => conditionnements.value.reduce((s, c) => s + Number(c.quantite_conditionnee || 0), 0))
+
+// --- Conditionnement ---
 const upb = computed(() => lot.value && lot.value.produits ? Number(lot.value.produits.unites_par_boite || 0) : 0)
+const mm = computed(() => lot.value && lot.value.produits ? Number(lot.value.produits.poids_unitaire_mg || 0) : 0)
+const theoBoites = computed(() => lot.value ? Number(lot.value.quantite_theorique || 0) : 0)
+const totalConditionne = computed(() => conditionnements.value.reduce((s, c) => s + Number(c.quantite_conditionnee || 0), 0))
+const totalRecu = computed(() => conditionnements.value.reduce((s, c) => s + Number(c.quantite_entree || 0), 0))
 const totalBoites = computed(() => upb.value > 0 ? Math.floor(totalConditionne.value / upb.value) : null)
+
+// Boîtes d'un enregistrement
+function boitesC(c) {
+  if (c.quantite_conditionnee == null || upb.value === 0) return null
+  return Math.floor(Number(c.quantite_conditionnee) / upb.value)
+}
+// Rendement conditionnement (ligne) = boîtes obtenues / équivalent du vrac reçu
+function rdtCondC(c) {
+  const b = boitesC(c)
+  const kg = c.quantite_entree
+  if (b == null || kg == null || Number(kg) === 0 || mm.value === 0 || upb.value === 0) return null
+  const eq = (Number(kg) * 1e6) / mm.value / upb.value
+  return eq ? (b / eq) * 100 : null
+}
+// Rendement global (ligne) = boîtes obtenues / boîtes théoriques du lot
+function rdtGlobalC(c) {
+  const b = boitesC(c)
+  if (b == null || theoBoites.value === 0) return null
+  return (b / theoBoites.value) * 100
+}
+// Synthèse
+const rendementCondTotal = computed(() => {
+  const b = totalBoites.value
+  if (b == null || totalRecu.value === 0 || mm.value === 0 || upb.value === 0) return null
+  const eq = (totalRecu.value * 1e6) / mm.value / upb.value
+  return eq ? (b / eq) * 100 : null
+})
 const rendementGlobal = computed(() => {
-  const theo = lot.value ? Number(lot.value.quantite_theorique || 0) : 0
-  if (!theo) return null
-  return (totalConditionne.value / theo) * 100
+  if (totalBoites.value == null || theoBoites.value === 0) return null
+  return (totalBoites.value / theoBoites.value) * 100
 })
 
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
-function fmtPct(n) { return n == null ? '—' : n.toFixed(1) + ' %' }
+function fmtPct(n) { return n == null ? '—' : Number(n).toFixed(2) + ' %' }
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
 function eqCode(x) { return x && x.equipements ? x.equipements.code : '—' }
 function classeStatut(s) {
@@ -103,6 +135,7 @@ watch(lotId, chargerDossier)
     <p v-else-if="!lotId" class="hint-select no-print">Choisis un lot ci-dessus pour afficher son dossier.</p>
 
     <div v-else-if="lot" class="dossier">
+      <!-- IDENTIFICATION -->
       <div class="doc-title">
         <h2>Lot {{ lot.numero_lot }}</h2>
         <span class="badge" :class="classeStatut(lot.statut)">{{ lot.statut }}</span>
@@ -115,7 +148,7 @@ watch(lotId, chargerDossier)
           <div><span class="lbl">Code PF</span>{{ lot.produits ? lot.produits.code_pf : '—' }}</div>
           <div><span class="lbl">Donneur d'ordre</span>{{ lot.produits && lot.produits.donneurs_ordre ? lot.produits.donneurs_ordre.nom : '—' }}</div>
           <div><span class="lbl">Forme</span>{{ lot.produits ? (lot.produits.forme || '—') : '—' }}</div>
-          <div><span class="lbl">Quantité théorique</span>{{ fmt(lot.quantite_theorique) }}</div>
+          <div><span class="lbl">Boîtes théoriques</span>{{ fmt(lot.quantite_theorique) }}</div>
           <div><span class="lbl">Date de lancement</span>{{ fmtDate(lot.date_lancement) }}</div>
           <div><span class="lbl">Ligne principale</span>{{ lot.equipements ? (lot.equipements.code + ' — ' + lot.equipements.nom) : '—' }}</div>
           <div><span class="lbl">Unités / boîte</span>{{ lot.produits ? fmt(lot.produits.unites_par_boite) : '—' }}</div>
@@ -123,6 +156,7 @@ watch(lotId, chargerDossier)
         <div v-if="lot.commentaire" class="comment"><span class="lbl">Commentaire</span>{{ lot.commentaire }}</div>
       </section>
 
+      <!-- FABRICATION -->
       <section class="block">
         <div class="block-head">
           <h3>Fabrication par phase</h3>
@@ -130,7 +164,7 @@ watch(lotId, chargerDossier)
         </div>
         <table class="grid">
           <thead>
-            <tr><th>Phase</th><th>Ligne</th><th class="right">Entrée</th><th class="right">Sortie</th><th class="right">Rendement</th><th>Date</th><th>Statut</th></tr>
+            <tr><th>Phase</th><th>Ligne</th><th class="right">Entrée (kg)</th><th class="right">Sortie (kg)</th><th class="right">Rendement</th><th>Date</th><th>Statut</th></tr>
           </thead>
           <tbody>
             <tr v-for="p in phases" :key="p.id">
@@ -147,6 +181,7 @@ watch(lotId, chargerDossier)
         </table>
       </section>
 
+      <!-- CONDITIONNEMENT -->
       <section class="block">
         <div class="block-head">
           <h3>Conditionnement</h3>
@@ -154,28 +189,30 @@ watch(lotId, chargerDossier)
         </div>
         <table class="grid">
           <thead>
-            <tr><th>Date</th><th>Ligne</th><th class="right">Entrée (cp)</th><th class="right">Conditionné (cp)</th><th class="right">Rendement</th><th>Statut</th></tr>
+            <tr><th>Date</th><th>Ligne</th><th class="right">Reçu (kg)</th><th class="right">Boîtes</th><th class="right">Rendement</th><th class="right">Rendement global</th><th>Statut</th></tr>
           </thead>
           <tbody>
             <tr v-for="c in conditionnements" :key="c.id">
               <td>{{ fmtDate(c.date_conditionnement) }}</td>
               <td>{{ eqCode(c) }}</td>
               <td class="right">{{ fmt(c.quantite_entree) }}</td>
-              <td class="right">{{ fmt(c.quantite_conditionnee) }}</td>
-              <td class="right" :class="rdt(c.quantite_entree, c.quantite_conditionnee) != null && rdt(c.quantite_entree, c.quantite_conditionnee) < 95 ? 'rdt-bas' : ''">{{ fmtPct(rdt(c.quantite_entree, c.quantite_conditionnee)) }}</td>
+              <td class="right strong">{{ fmt(boitesC(c)) }}</td>
+              <td class="right" :class="rdtCondC(c) != null && rdtCondC(c) < 95 ? 'rdt-bas' : ''">{{ fmtPct(rdtCondC(c)) }}</td>
+              <td class="right" :class="rdtGlobalC(c) != null && rdtGlobalC(c) < 90 ? 'rdt-bas' : ''">{{ fmtPct(rdtGlobalC(c)) }}</td>
               <td><span class="badge sm" :class="classeStatut(c.statut)">{{ c.statut }}</span></td>
             </tr>
-            <tr v-if="!conditionnements.length"><td colspan="6" class="empty">Aucun conditionnement saisi pour ce lot.</td></tr>
+            <tr v-if="!conditionnements.length"><td colspan="7" class="empty">Aucun conditionnement saisi pour ce lot.</td></tr>
           </tbody>
         </table>
       </section>
 
+      <!-- SYNTHESE -->
       <section class="block synthese">
         <h3>Synthèse</h3>
         <div class="kpi-row">
-          <div class="kpi"><div class="kpi-val">{{ fmt(lot.quantite_theorique) }}</div><div class="kpi-lbl">Qté théorique (cp)</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(totalConditionne) }}</div><div class="kpi-lbl">Comprimés conditionnés</div></div>
+          <div class="kpi"><div class="kpi-val">{{ fmt(theoBoites) }}</div><div class="kpi-lbl">Boîtes théoriques</div></div>
           <div class="kpi"><div class="kpi-val">{{ fmt(totalBoites) }}</div><div class="kpi-lbl">Boîtes produites</div></div>
+          <div class="kpi"><div class="kpi-val">{{ fmtPct(rendementCondTotal) }}</div><div class="kpi-lbl">Rendement conditionnement</div></div>
           <div class="kpi"><div class="kpi-val accent">{{ fmtPct(rendementGlobal) }}</div><div class="kpi-lbl">Rendement global</div></div>
         </div>
       </section>
