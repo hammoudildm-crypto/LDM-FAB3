@@ -22,37 +22,50 @@ const conditionnements = ref([])
 const phases = ref([])
 const realisations = ref([])
 
+// Charge TOUTES les lignes par pages (Supabase limite à 1000/requête)
+async function fetchAllPaged(make) {
+  const size = 1000
+  let from = 0, all = []
+  for (;;) {
+    const r = await make().range(from, from + size - 1)
+    if (r.error) return { error: r.error, data: all }
+    all = all.concat(r.data || [])
+    if (!r.data || r.data.length < size) break
+    from += size
+  }
+  return { data: all, error: null }
+}
+
 async function charger() {
   erreur.value = ''
 
   const rp = await supabase.from('produits').select('id', { count: 'exact', head: true }).eq('actif', true)
   if (!rp.error) nbProduits.value = rp.count || 0
 
-  const rl = await supabase.from('ordres_fabrication')
+  const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
     .select('id, numero_lot, statut, date_lancement, quantite_theorique, produits(designation)')
-    .eq('actif', true).order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false })
+    .eq('actif', true).order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
 
-  const rpp = await supabase.from('plan_production').select('annee, quantite_planifiee, produits(pcsu)')
+  const rpp = await fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produits(pcsu)'))
   if (!rpp.error) planData.value = rpp.data
 
-  const rc = await supabase.from('conditionnement')
+  const rc = await fetchAllPaged(() => supabase.from('conditionnement')
     .select('ordre_id, quantite_entree, quantite_conditionnee, date_conditionnement, ordres_fabrication(produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, pcsu, boites_theoriques, donneurs_ordre(nom)))')
-    .eq('actif', true)
+    .eq('actif', true))
   if (!rc.error) conditionnements.value = rc.data
 
-  const rph = await supabase.from('suivi_phases')
+  const rph = await fetchAllPaged(() => supabase.from('suivi_phases')
     .select('ordre_id, quantite_entree, quantite_sortie, date_phase, id')
-    .eq('actif', true).order('date_phase', { ascending: true, nullsFirst: true }).order('id', { ascending: true })
+    .eq('actif', true).order('date_phase', { ascending: true, nullsFirst: true }).order('id', { ascending: true }))
   if (!rph.error) phases.value = rph.data
 
-  const rr = await supabase.from('realisations')
+  const rr = await fetchAllPaged(() => supabase.from('realisations')
     .select('annee, mois, quantite_realisee, produits(code_pf, designation, pcsu, boites_theoriques, donneurs_ordre(nom))')
-    .eq('actif', true)
+    .eq('actif', true))
   if (!rr.error) realisations.value = rr.data
 }
-
 // --- Helpers ---
 function boitesOf(c) {
   const upb = c.ordres_fabrication && c.ordres_fabrication.produits ? Number(c.ordres_fabrication.produits.unites_par_boite || 0) : 0
@@ -171,17 +184,18 @@ const rendementCondParMois = computed(() => {
   return boxes.map((b, i) => eq[i] > 0 ? (b / eq[i]) * 100 : null)
 })
 
-// --- En-cours (vrac, état courant) ---
+// --- Vrac en attente (boîtes) : lots fabriqués (Terminé) pas encore conditionnés ---
 const vracEnAttente = computed(() => {
-  const lastSortie = {}
-  for (const p of phases.value) { if (p.quantite_sortie != null) lastSortie[p.ordre_id] = Number(p.quantite_sortie) }
-  const condEntree = {}
-  for (const c of conditionnements.value) { if (c.quantite_entree != null) condEntree[c.ordre_id] = (condEntree[c.ordre_id] || 0) + Number(c.quantite_entree) }
+  const condIds = new Set()
+  for (const c of conditionnements.value) condIds.add(c.ordre_id)
   let t = 0
-  for (const k in lastSortie) { const v = lastSortie[k] - (condEntree[k] || 0); if (v > 0) t += v }
+  for (const l of lots.value) {
+    if (l.statut !== 'Terminé') continue
+    if (condIds.has(l.id)) continue
+    t += Number(l.quantite_theorique || 0)
+  }
   return t
 })
-
 // --- Production par mois (année) ---
 const prodParMois = computed(() => {
   const arr = Array(12).fill(0)
@@ -283,7 +297,7 @@ onMounted(async () => {
           <div class="kpi"><div class="kpi-val">{{ fmt(nbLots) }}</div><div class="kpi-lbl">Lots</div></div>
           <div class="kpi"><div class="kpi-val accent">{{ fmt(lotsEnCours) }}</div><div class="kpi-lbl">Lots en cours</div></div>
           <div class="kpi"><div class="kpi-val">{{ fmt(totalBoites) }}</div><div class="kpi-lbl">Boîtes réalisées {{ anneeSel }}</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(vracEnAttente) }}</div><div class="kpi-lbl">Vrac en attente (kg)</div></div>
+          <div class="kpi"><div class="kpi-val">{{ fmt(vracEnAttente) }}</div><div class="kpi-lbl">Vrac en attente (bts)</div></div>
           <div class="kpi"><div class="kpi-val accent">{{ fmt(boitesCeMois) }}</div><div class="kpi-lbl">Boîtes ce mois</div></div>
         </div>
         <div class="kpi-grid">
