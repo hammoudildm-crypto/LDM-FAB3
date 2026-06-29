@@ -28,7 +28,7 @@ async function chargerTout() {
   chargement.value = true
   erreur.value = ''
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, quantite_theorique, date_fin_fabrication, produits(code_pf, designation, unites_par_boite)')
+    .select('id, numero_lot, quantite_theorique, date_fin_fabrication, produits(code_pf, designation, unites_par_boite)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data
@@ -87,33 +87,41 @@ const anneesDispo = computed(() => {
 // Lots de l'année sélectionnée (fabrication)
 const lotsAnnee = computed(() => {
   const prod = produitParLot.value
+  const now = new Date()
   const arr = []
   for (const o of ofs.value) {
     if (!o.date_fin_fabrication) continue
     const d = new Date(o.date_fin_fabrication)
     if (d.getFullYear() !== anneeSel.value) continue
     const theo = Number(o.quantite_theorique || 0)
+    if (theo <= 0) continue
     const p = prod[o.id] || 0
-    if (theo <= 0 || p <= 0) continue
-    arr.push({ of: o, mois: d.getMonth(), prod: p, theo })
+    // Lot sans production saisie : écarté, sauf s'il vient d'être fabriqué (mois en cours -> peut être en attente de conditionnement)
+    if (p <= 0 && anneeSel.value === now.getFullYear() && d.getMonth() === now.getMonth()) continue
+    arr.push({ of: o, mois: d.getMonth(), prod: p, theo, rdt: theo > 0 ? (p / theo) * 100 : 0 })
   }
   return arr
 })
 
+// Garde-fou : lots au rendement anormalement bas (saisie incomplète) -> écartés du calcul, listés à part
+const SEUIL_ANOMALIE = 50
+const lotsValides = computed(() => lotsAnnee.value.filter(r => r.rdt >= SEUIL_ANOMALIE))
+const anomalies = computed(() => lotsAnnee.value.filter(r => r.rdt < SEUIL_ANOMALIE).sort((a, b) => a.rdt - b.rdt))
+
 const globalAnnee = computed(() => {
   let prod = 0, theo = 0
-  for (const r of lotsAnnee.value) { prod += r.prod; theo += r.theo }
+  for (const r of lotsValides.value) { prod += r.prod; theo += r.theo }
   return { prod, theo, rdt: theo > 0 ? (prod / theo) * 100 : null }
 })
 
 const rendementGlobal = computed(() => globalAnnee.value.rdt)
 const tauxDechets = computed(() => globalAnnee.value.rdt == null ? null : Math.max(0, 100 - globalAnnee.value.rdt))
-const nbLotsAnnee = computed(() => lotsAnnee.value.length)
+const nbLotsAnnee = computed(() => lotsValides.value.length)
 
 // Taux de déchets mensuel : rendement% + avarie% (= 100 - rendement) par mois
 const parMois = computed(() => {
   const a = Array.from({ length: 12 }, () => ({ prod: 0, theo: 0 }))
-  for (const r of lotsAnnee.value) { a[r.mois].prod += r.prod; a[r.mois].theo += r.theo }
+  for (const r of lotsValides.value) { a[r.mois].prod += r.prod; a[r.mois].theo += r.theo }
   return a.map(m => {
     const rdt = m.theo > 0 ? (m.prod / m.theo) * 100 : null
     return { prod: m.prod, theo: m.theo, rdt, avarie: rdt == null ? null : Math.max(0, 100 - rdt) }
@@ -123,7 +131,7 @@ const parMois = computed(() => {
 // Rendement par produit (année sélectionnée)
 const parProduit = computed(() => {
   const m = {}
-  for (const r of lotsAnnee.value) {
+  for (const r of lotsValides.value) {
     const p = r.of.produits
     const code = p ? p.code_pf : '—'
     if (!m[code]) m[code] = { code, nom: p ? p.designation : '—', prod: 0, theo: 0 }
@@ -152,7 +160,7 @@ const produitNomSel = computed(() => {
 const produitMois = computed(() => {
   if (!produitSel.value) return null
   const a = Array.from({ length: 12 }, () => ({ prod: 0, theo: 0 }))
-  for (const r of lotsAnnee.value) {
+  for (const r of lotsValides.value) {
     const p = r.of.produits
     const code = p ? p.code_pf : '—'
     if (code !== produitSel.value) continue
@@ -231,6 +239,35 @@ onMounted(chargerTout)
           <div class="kpi-lbl">Boîtes théoriques · {{ nbLotsAnnee }} lots</div>
         </div>
       </div>
+
+      <!-- Lots à vérifier (rendement anormalement bas) -->
+      <section v-if="anomalies.length" class="card warn">
+        <div class="card-head">
+          <h2 class="card-title">⚠ Lots à vérifier — {{ anneeSel }}</h2>
+          <span class="count warn-count">{{ anomalies.length }}</span>
+        </div>
+        <p class="warn-txt">Rendement &lt; {{ SEUIL_ANOMALIE }} % ou <strong>aucun comprimé saisi</strong> — généralement une saisie incomplète dans le suivi. Ces lots sont <strong>exclus</strong> des rendements ci-dessous ; vérifie le nombre de comprimés fabriqués dans leur dossier de lot. Les lots du mois en cours encore en attente de conditionnement ne sont pas listés.</p>
+        <div class="table-scroll">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Lot</th><th>Produit</th><th>Fin fab.</th>
+                <th class="ta-r">Boîtes théo.</th><th class="ta-r">Boîtes prod.</th><th class="ta-r">Rendement</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in anomalies" :key="r.of.id">
+                <td class="mono">{{ r.of.numero_lot }}</td>
+                <td><span class="mono">{{ r.of.produits ? r.of.produits.code_pf : '—' }}</span> <span class="desig">{{ r.of.produits ? r.of.produits.designation : '' }}</span></td>
+                <td>{{ new Date(r.of.date_fin_fabrication).toLocaleDateString('fr-FR') }}</td>
+                <td class="ta-r">{{ fmt(r.theo) }}</td>
+                <td class="ta-r">{{ fmt(r.prod) }}</td>
+                <td class="ta-r av-num">{{ pct2(r.rdt) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <!-- Taux de déchets mensuel -->
       <section class="card">
@@ -365,6 +402,9 @@ onMounted(chargerTout)
 .dot.av { background: #ef4444; }
 .dot.rdt { background: #0f766e; }
 .hint { font-size: 12px; color: #94a3b8; margin: 12px 0 0; }
+.card.warn { border-color: #fde68a; background: #fffbeb; }
+.warn-count { background: #fef3c7; color: #92400e; }
+.warn-txt { font-size: 13px; color: #92400e; margin: 0 0 14px; line-height: 1.5; }
 
 /* Chart mensuel — barres verticales empilées */
 .months { display: flex; gap: 8px; align-items: flex-end; padding-top: 6px; overflow-x: auto; }
