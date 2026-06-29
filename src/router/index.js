@@ -13,6 +13,7 @@ import EnCours from '../views/EnCours.vue'
 import JournalAudit from '../views/JournalAudit.vue'
 import Habilitations from '../views/Habilitations.vue'
 import MonCompte from '../views/MonCompte.vue'
+import VerificationDDL from '../views/VerificationDDL.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Home },
@@ -27,6 +28,7 @@ const routes = [
   { path: '/effectifs', name: 'effectifs', component: Effectifs },
   { path: '/audit', name: 'audit', component: JournalAudit },
   { path: '/habilitations', name: 'habilitations', component: Habilitations },
+  { path: '/verification-ddl', name: 'verification-ddl', component: VerificationDDL },
   { path: '/compte', name: 'compte', component: MonCompte },
   { path: '/login', name: 'login', component: Login },
 ]
