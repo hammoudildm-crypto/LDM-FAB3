@@ -94,7 +94,6 @@ const anneesDispo = computed(() => {
 // Lots de l'année sélectionnée (fabrication)
 const lotsAnnee = computed(() => {
   const prod = produitParLot.value
-  const now = new Date()
   const arr = []
   for (const o of ofs.value) {
     if (!o.date_fin_fabrication) continue
@@ -103,9 +102,8 @@ const lotsAnnee = computed(() => {
     const theo = Number(o.quantite_theorique || 0)
     if (theo <= 0) continue
     const p = prod[o.id] || 0
-    // Lot sans production saisie : écarté, sauf s'il vient d'être fabriqué (mois en cours -> peut être en attente de conditionnement)
-    if (p <= 0 && anneeSel.value === now.getFullYear() && d.getMonth() === now.getMonth()) continue
-    arr.push({ of: o, mois: d.getMonth(), prod: p, theo, rdt: theo > 0 ? (p / theo) * 100 : 0 })
+    if (p <= 0) continue   // lot pas encore conditionné -> non pris en compte (ni rendement, ni anomalie)
+    arr.push({ of: o, mois: d.getMonth(), prod: p, theo, rdt: (p / theo) * 100 })
   }
   return arr
 })
@@ -300,7 +298,7 @@ onMounted(chargerTout)
           <h2 class="card-title">⚠ Lots à vérifier — {{ anneeSel }}</h2>
           <span class="count warn-count">{{ anomalies.length }}</span>
         </div>
-        <p class="warn-txt">Rendement &lt; {{ SEUIL_ANOMALIE }} % ou &gt; {{ SEUIL_HAUT }} %, ou <strong>aucun comprimé saisi</strong> — saisie incomplète, ou fiche produit (poids / théorique) erronée. Ces lots sont <strong>exclus</strong> des rendements ; vérifie les comprimés fabriqués et la fiche produit. Les lots du mois en cours en attente de conditionnement ne sont pas listés.</p>
+        <p class="warn-txt">Rendement &lt; {{ SEUIL_ANOMALIE }} % ou &gt; {{ SEUIL_HAUT }} % — saisie incomplète, ou fiche produit (poids / théorique) erronée. Ces lots sont <strong>exclus</strong> des rendements ; vérifie les comprimés fabriqués et la fiche produit. Les lots <strong>pas encore conditionnés</strong> (sans boîtes) ne sont ni comptés ni listés.</p>
         <div class="table-scroll">
           <table class="grid">
             <thead>
