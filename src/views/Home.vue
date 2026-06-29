@@ -66,10 +66,11 @@ async function charger() {
     .eq('actif', true))
   if (!rr.error) realisations.value = rr.data
 }
+
 // --- Helpers ---
 function boitesOf(c) {
   const upb = c.ordres_fabrication && c.ordres_fabrication.produits ? Number(c.ordres_fabrication.produits.unites_par_boite || 0) : 0
-  if (c.quantite_conditionnee == null || Number(c.quantite_conditionnee) <= 0 || kg === 0 || mm === 0 || upb === 0) continue
+  if (c.quantite_conditionnee == null || upb === 0) return 0
   return Math.floor(Number(c.quantite_conditionnee) / upb)
 }
 function prodDe(c) { return c.ordres_fabrication && c.ordres_fabrication.produits ? c.ordres_fabrication.produits : null }
@@ -149,7 +150,7 @@ const rendementCndtMoyen = computed(() => {
     const mm = Number(p.poids_unitaire_mg || 0)
     const upb = Number(p.unites_par_boite || 0)
     const kg = Number(c.quantite_entree || 0)
-    if (c.quantite_conditionnee == null || kg === 0 || mm === 0 || upb === 0) continue
+    if (c.quantite_conditionnee == null || Number(c.quantite_conditionnee) <= 0 || kg === 0 || mm === 0 || upb === 0) continue
     boites += Math.floor(Number(c.quantite_conditionnee) / upb)
     eq += (kg * 1e6) / mm / upb
   }
@@ -192,7 +193,7 @@ const rendementCondParMois = computed(() => {
     const p = prodDe(c)
     if (!p) continue
     const mm = Number(p.poids_unitaire_mg || 0), upb = Number(p.unites_par_boite || 0), kg = Number(c.quantite_entree || 0)
-    if (c.quantite_conditionnee == null || kg === 0 || mm === 0 || upb === 0) continue
+    if (c.quantite_conditionnee == null || Number(c.quantite_conditionnee) <= 0 || kg === 0 || mm === 0 || upb === 0) continue
     const mo = new Date(c.date_conditionnement).getMonth()
     boxes[mo] += Math.floor(Number(c.quantite_conditionnee) / upb)
     eq[mo] += (kg * 1e6) / mm / upb
@@ -212,6 +213,7 @@ const vracEnAttente = computed(() => {
   }
   return t
 })
+
 // --- Production par mois (année) ---
 const prodParMois = computed(() => {
   const arr = Array(12).fill(0)
@@ -248,7 +250,7 @@ const caParDonneur = computed(() => {
 const maxCaDonneur = computed(() => Math.max(1, ...caParDonneur.value.map(d => d.ca)))
 const realisationPlan = computed(() => {
   const m = {}
- for (const r of realAnnee.value) {
+  for (const r of realAnnee.value) {
     const p = r.produits
     const code = baseCode(p ? p.code_pf : '—')
     if (!m[code]) m[code] = { code, nom: p ? p.designation : '—', produit: 0 }
@@ -256,9 +258,10 @@ const realisationPlan = computed(() => {
   }
   const plan = planParProduit.value
   return Object.values(m).filter(x => x.produit > 0)
-    .map(x => ({ ...x, cible: plan[x.code] || 0, pct: (plan[x.code] || 0) > 0 ? (x.produit / plan[x.code]) * 100 : null }))
+    .map(x => ({ ...x, cible: plan[x.code] || 0, horsPlan: (plan[x.code] || 0) === 0, pct: (plan[x.code] || 0) > 0 ? (x.produit / plan[x.code]) * 100 : null }))
     .sort((a, b) => b.produit - a.produit).slice(0, 8)
 })
+
 function pct(n, total) { return total > 0 ? (n / total) * 100 : 0 }
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 function fmtPct(n) { return n == null ? '—' : Number(n).toFixed(2) + ' %' }
@@ -330,17 +333,24 @@ onMounted(async () => {
               <div class="bar-track"><div class="bar-fill prod" :style="{ width: (v / maxMois * 100) + '%' }"></div></div>
               <span class="bar-num wide">{{ fmt(v) }}</span>
             </div>
-            <p v-if="!totalBoites" class="empty">Aucune réalisation en {{ anneeSel }}.</p>
+            <p v-if="!totalBoites" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
           </section>
 
           <section class="card">
             <h2 class="card-title">Réalisation du plan — top produits</h2>
             <div v-for="p in realisationPlan" :key="p.code" class="prog-row">
-              <div class="prog-head"><span class="prog-nom">{{ p.nom }}</span><span class="prog-pct">{{ fmtPct(p.pct) }}</span></div>
-              <div class="bar-track"><div class="bar-fill" :class="(p.pct != null && p.pct >= 100) ? 'st-lib' : 'prod'" :style="{ width: Math.min(100, p.pct || 0) + '%' }"></div></div>
-              <div class="prog-sub">{{ fmt(p.produit) }} / {{ p.cible ? fmt(p.cible) : '—' }} boîtes</div>
+              <div class="prog-head">
+                <span class="prog-nom">{{ p.nom }}</span>
+                <span v-if="p.horsPlan" class="hors-plan">Hors plan</span>
+                <span v-else class="prog-pct">{{ fmtPct(p.pct) }}</span>
+              </div>
+              <div class="bar-track"><div class="bar-fill" :class="p.horsPlan ? 'hp' : ((p.pct != null && p.pct >= 100) ? 'st-lib' : 'prod')" :style="{ width: (p.horsPlan ? 100 : Math.min(100, p.pct || 0)) + '%' }"></div></div>
+              <div class="prog-sub">
+                <template v-if="p.horsPlan">{{ fmt(p.produit) }} boîtes · non planifié</template>
+                <template v-else>{{ fmt(p.produit) }} / {{ fmt(p.cible) }} boîtes</template>
+              </div>
             </div>
-            <p v-if="!realisationPlan.length" class="empty">Aucune réalisation en {{ anneeSel }}.</p>
+            <p v-if="!realisationPlan.length" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
           </section>
 
           <section class="card span2">
@@ -413,7 +423,7 @@ onMounted(async () => {
               <div class="bar-track"><div class="bar-fill prod" :style="{ width: (d.ca / maxCaDonneur * 100) + '%' }"></div></div>
               <span class="bar-num xl">{{ fmtDA(d.ca) }}</span>
             </div>
-            <p v-if="!caParDonneur.length" class="empty">Aucune réalisation en {{ anneeSel }}.</p>
+            <p v-if="!caParDonneur.length" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
           </section>
 
           <section class="card">
@@ -426,7 +436,7 @@ onMounted(async () => {
                   <td class="right">{{ fmt(Math.round(p.boites)) }} bts</td>
                   <td class="right strong">{{ fmtDA(p.ca) }}</td>
                 </tr>
-                <tr v-if="!topProduits.length"><td colspan="4" class="empty">Aucune réalisation en {{ anneeSel }}.</td></tr>
+                <tr v-if="!topProduits.length"><td colspan="4" class="empty">Aucun conditionnement en {{ anneeSel }}.</td></tr>
               </tbody>
             </table>
           </section>
@@ -500,6 +510,8 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; white-space:
 .prog-nom { font-size: 13px; font-weight: 600; color: #1b2733; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 72%; }
 .prog-pct { font-size: 13px; font-weight: 700; color: #0f766e; flex-shrink: 0; }
 .prog-sub { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+.hors-plan { font-size: 11px; font-weight: 700; color: #92400e; background: #fef3c7; padding: 1px 8px; border-radius: 999px; flex-shrink: 0; }
+.bar-fill.hp { background: #f59e0b; }
 
 .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
 .st-plan { background: #f1f5f9; color: #475569; }
