@@ -150,7 +150,7 @@ html[data-theme="sombre"]  { --bg: #0f172a; --text: #e6edf6; --topbar: #020617; 
 body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: var(--bg); color: var(--text); }
 
 .topbar { display: flex; align-items: center; gap: 22px; padding: 0 20px; height: 56px;
-  background: var(--topbar); color: var(--topbar-text); box-shadow: 0 1px 3px rgba(0,0,0,.12); position: relative; z-index: 20; }
+  background: var(--topbar); color: var(--topbar-text); box-shadow: 0 1px 3px rgba(0,0,0,.12); position: sticky; top: 0; z-index: 30; }
 .brand { font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
 .nav { display: flex; gap: 20px; align-items: center; }
 .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
