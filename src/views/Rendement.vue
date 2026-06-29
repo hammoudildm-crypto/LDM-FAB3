@@ -272,6 +272,37 @@ const donutSegments = computed(() => {
   })
 })
 
+// Géométrie des graphiques en courbes (SVG)
+const CHART = { W: 680, H: 200, padL: 16, padR: 16, padT: 26, padB: 22 }
+function segmentsFromPoints(pts, baseY) {
+  const segs = []; let cur = []
+  for (const p of pts) { if (!p) { if (cur.length) { segs.push(cur); cur = [] } } else cur.push(p) }
+  if (cur.length) segs.push(cur)
+  return segs.map(seg => ({
+    line: seg.map((p, i) => (i ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' '),
+    area: 'M' + seg[0].x.toFixed(1) + ' ' + baseY.toFixed(1) + ' ' + seg.map(p => 'L' + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ') + ' L' + seg[seg.length - 1].x.toFixed(1) + ' ' + baseY.toFixed(1) + ' Z'
+  }))
+}
+const moisChart = computed(() => {
+  const { W, H, padL, padR, padT, padB } = CHART
+  const plotW = W - padL - padR, plotH = H - padT - padB, baseY = padT + plotH
+  const vals = parMois.value.map(m => (m.rdt == null ? null : m.avarie))
+  const maxV = Math.max(2, ...vals.filter(v => v != null)) * 1.3
+  const xi = i => padL + (plotW * i) / 11
+  const pts = vals.map((v, i) => (v == null ? null : { x: xi(i), y: padT + plotH * (1 - v / maxV), v, i }))
+  return { W, H, baseY, padL, padR, pts, segs: segmentsFromPoints(pts, baseY), xi }
+})
+const anChart = computed(() => {
+  const { W, H, padL, padR, padT, padB } = CHART
+  const plotW = W - padL - padR, plotH = H - padT - padB, baseY = padT + plotH
+  const arr = parAn.value
+  const { min, max } = trendBornes.value
+  const span = (max - min) || 1
+  const xi = i => (arr.length <= 1 ? padL + plotW / 2 : padL + (plotW * i) / (arr.length - 1))
+  const pts = arr.map((a, i) => ({ x: xi(i), y: padT + plotH * (1 - (a.rdt - min) / span), an: a.an, rdt: a.rdt }))
+  return { W, H, baseY, padL, padR, pts, segs: segmentsFromPoints(pts, baseY) }
+})
+
 // Helpers chart mensuel
 function segAvarie(m) { return m.rdt == null ? 0 : m.avarie }
 function segRdt(m) { return m.rdt == null ? 0 : Math.min(100, m.rdt) }
@@ -365,19 +396,29 @@ onMounted(chargerTout)
             <span><i class="dot rdt"></i>Rendement</span>
           </div>
         </div>
-        <div class="months">
-          <div v-for="(m, i) in parMois" :key="i" class="mcol">
-            <div class="mavarie" :class="{ none: m.rdt == null }">{{ m.rdt == null ? '0,00 %' : pct2(m.avarie) }}</div>
-            <div class="mbar">
-              <div class="seg av" :style="{ height: segAvarie(m) + '%' }"></div>
-              <div class="seg rdt" :style="{ height: segRdt(m) + '%' }">
-                <span v-if="m.rdt != null" class="seg-lbl">{{ pct2(m.rdt) }}</span>
-              </div>
-            </div>
-            <div class="mname">{{ MOIS[i] }}</div>
-          </div>
+        <div class="line-chart">
+          <svg :viewBox="`0 0 ${moisChart.W} ${moisChart.H}`" class="lc-svg" role="img">
+            <defs>
+              <linearGradient id="gradAv" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#ef4444" stop-opacity="0.25" />
+                <stop offset="100%" stop-color="#ef4444" stop-opacity="0.01" />
+              </linearGradient>
+            </defs>
+            <line :x1="moisChart.padL" :y1="moisChart.baseY" :x2="moisChart.W - moisChart.padR" :y2="moisChart.baseY" stroke="#e5e9f0" stroke-width="1" vector-effect="non-scaling-stroke" />
+            <template v-for="(seg, i) in moisChart.segs" :key="'s' + i">
+              <path :d="seg.area" fill="url(#gradAv)" />
+              <path :d="seg.line" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+            </template>
+            <g v-for="(p, idx) in moisChart.pts" :key="'p' + idx">
+              <template v-if="p">
+                <circle :cx="p.x" :cy="p.y" r="3" fill="#fff" stroke="#ef4444" stroke-width="2.5" vector-effect="non-scaling-stroke" />
+                <text :x="p.x" :y="p.y - 7" class="lc-val">{{ p.v.toFixed(1).replace('.', ',') }}</text>
+              </template>
+            </g>
+            <text v-for="(m, i) in MOIS" :key="'l' + i" :x="moisChart.xi(i)" :y="moisChart.H - 4" class="lc-xlabel">{{ m }}</text>
+          </svg>
         </div>
-        <p class="hint">Chaque barre = 100 % (rendement + avarie). Mois sans fabrication : barre vide.</p>
+        <p class="hint">Taux d'avarie (%) par mois — lots valides. Mois sans fabrication : pas de point.</p>
       </section>
 
       <!-- Rendement par phase + avarie -->
@@ -414,16 +455,27 @@ onMounted(chargerTout)
       <!-- Tendance annuelle -->
       <section class="card">
         <h2 class="card-title">Rendement de fabrication par année</h2>
-        <div class="years">
-          <div v-for="y in parAn" :key="y.an" class="ycol">
-            <div class="yval">{{ pct2(y.rdt) }}</div>
-            <div class="ybar-zone">
-              <div class="ybar" :class="{ cur: y.an === anneeSel }" :style="{ height: hauteurTrend(y.rdt) + '%' }"></div>
-            </div>
-            <div class="yname">{{ y.an }}</div>
-          </div>
+        <div class="line-chart">
+          <svg :viewBox="`0 0 ${anChart.W} ${anChart.H}`" class="lc-svg" role="img">
+            <defs>
+              <linearGradient id="gradRdt" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#0f766e" stop-opacity="0.22" />
+                <stop offset="100%" stop-color="#0f766e" stop-opacity="0.01" />
+              </linearGradient>
+            </defs>
+            <line :x1="anChart.padL" :y1="anChart.baseY" :x2="anChart.W - anChart.padR" :y2="anChart.baseY" stroke="#e5e9f0" stroke-width="1" vector-effect="non-scaling-stroke" />
+            <template v-for="(seg, i) in anChart.segs" :key="'s' + i">
+              <path :d="seg.area" fill="url(#gradRdt)" />
+              <path :d="seg.line" fill="none" stroke="#0f766e" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+            </template>
+            <g v-for="(p, idx) in anChart.pts" :key="idx">
+              <circle :cx="p.x" :cy="p.y" :r="p.an === anneeSel ? 4.5 : 3.2" :fill="p.an === anneeSel ? '#0f766e' : '#fff'" stroke="#0f766e" stroke-width="2.5" vector-effect="non-scaling-stroke" />
+              <text :x="p.x" :y="p.y - 8" class="lc-val">{{ pct2(p.rdt) }}</text>
+              <text :x="p.x" :y="anChart.H - 4" class="lc-xlabel">{{ p.an }}</text>
+            </g>
+          </svg>
         </div>
-        <p class="hint">Échelle zoomée ({{ trendBornes.min }} % → {{ trendBornes.max }} %) pour visualiser les écarts.</p>
+        <p class="hint">Tendance du rendement global par année. Échelle zoomée ({{ trendBornes.min }} % → {{ trendBornes.max }} %).</p>
       </section>
 
       <!-- Comparaison du rendement par produit sur 3 ans -->
@@ -617,6 +669,10 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .rdt-num { width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 
 .ta-c { text-align: center; }
+.line-chart { width: 100%; margin-top: 4px; }
+.lc-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.lc-xlabel { font-size: 9px; fill: #94a3b8; text-anchor: middle; }
+.lc-val { font-size: 8.5px; font-weight: 700; fill: #475569; text-anchor: middle; }
 .phase-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; align-items: start; }
 .phase-bars { display: flex; flex-direction: column; gap: 12px; }
 .phase-row { display: flex; align-items: center; gap: 12px; }
