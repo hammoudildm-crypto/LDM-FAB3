@@ -18,7 +18,7 @@ provide('peutEditer', peutEditer)
 const roleLabel = computed(() => ({ admin: 'Admin', operateur: 'Opérateur', lecteur: 'Lecteur' }[role.value] || ''))
 
 const PROD = ['/plan', '/ordres', '/suivi', '/encours', '/conditionnement', '/dossier']
-const PILOT = ['/ca', '/effectifs', '/audit', '/habilitations']
+const PILOT = ['/ca', '/effectifs', '/verification-ddl', '/audit', '/habilitations']
 const prodActive = computed(() => PROD.includes(route.path))
 const pilotActive = computed(() => PILOT.includes(route.path))
 
@@ -99,6 +99,7 @@ async function signOut() {
           <div v-show="openMenu === 'pilotage'" class="drop-panel">
             <RouterLink to="/ca" @click="closeMenu">Chiffre d'affaires</RouterLink>
             <RouterLink to="/effectifs" @click="closeMenu">Effectifs</RouterLink>
+            <RouterLink to="/verification-ddl" @click="closeMenu">Vérification DDL</RouterLink>
             <RouterLink to="/audit" @click="closeMenu">Journal d'audit</RouterLink>
             <RouterLink v-if="estAdmin" to="/habilitations" @click="closeMenu">Habilitations</RouterLink>
           </div>
@@ -210,7 +211,8 @@ html[data-theme="sombre"] .ca-page,
 html[data-theme="sombre"] .ef-page,
 html[data-theme="sombre"] .au-page,
 html[data-theme="sombre"] .hb-page,
-html[data-theme="sombre"] .mc-page { color: #e6edf6; }
+html[data-theme="sombre"] .mc-page,
+html[data-theme="sombre"] .vd-page { color: #e6edf6; }
 
 html[data-theme="sombre"] .card,
 html[data-theme="sombre"] .kpi,
