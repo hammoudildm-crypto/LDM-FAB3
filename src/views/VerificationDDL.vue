@@ -32,7 +32,7 @@ async function fetchAllPaged(make) {
 async function charger() {
   msg.value = ''
   const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, ddl_verifie, ddl_verificateur, ddl_date_verification, produits(designation, code_pf)')
+    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, ddl_verifie, ddl_verificateur, ddl_date_verification, produits(designation, code_pf)')
     .eq('actif', true)
     .order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (r.error) { msg.value = r.error.message; return }
@@ -43,7 +43,7 @@ onMounted(charger)
 const anYear = (d) => d ? new Date(d).getFullYear() : null
 
 const produits = computed(() => lots.value.filter(l =>
-  STATUTS_PRODUITS.includes(l.statut) && (anneeSel.value === 0 || anYear(l.date_lancement) === anneeSel.value)))
+  l.date_fin_fabrication && (anneeSel.value === 0 || anYear(l.date_fin_fabrication) === anneeSel.value)))
 const verifies = computed(() => produits.value.filter(l => l.ddl_verifie))
 const attente = computed(() => produits.value.filter(l => !l.ddl_verifie))
 
@@ -157,14 +157,14 @@ async function devalider(l) {
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <table v-else class="mini">
-          <thead><tr><th>Lot</th><th>Produit</th><th>Superviseur</th><th class="right">Lancé le</th><th></th></tr></thead>
+          <thead><tr><th>Lot</th><th>Produit</th><th>Superviseur</th><th class="right">Fin fab.</th><th></th></tr></thead>
           <tbody>
             <template v-for="l in attente" :key="l.id">
               <tr>
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td class="desig">{{ prodNom(l) }}</td>
                 <td>{{ l.ddl_verificateur || '—' }}</td>
-                <td class="right nowrap">{{ fmtDate(l.date_lancement) }}</td>
+                <td class="right nowrap">{{ fmtDate(l.date_fin_fabrication) }}</td>
                 <td class="right"><button v-if="peutEditer" class="link" @click="ouvrir(l)">Vérifier</button></td>
               </tr>
               <tr v-if="verifEnCours === l.id">
