@@ -27,6 +27,19 @@ function resetForm() {
 }
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
 
+async function fetchAllPaged(make) {
+  const size = 1000
+  let from = 0, all = []
+  for (;;) {
+    const r = await make().range(from, from + size - 1)
+    if (r.error) return { error: r.error, data: all }
+    all = all.concat(r.data || [])
+    if (!r.data || r.data.length < size) break
+    from += size
+  }
+  return { data: all, error: null }
+}
+
 async function chargerTout() {
   erreur.value = ''
   const rp = await supabase.from('produits').select('id, code_pf, designation').eq('actif', true).order('code_pf')
@@ -37,9 +50,9 @@ async function chargerTout() {
   if (re.error) { erreur.value = re.error.message; return }
   equipements.value = re.data
 
-  const rl = await supabase.from('ordres_fabrication')
+  const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
     .select('*, produits(code_pf, designation), equipements(code, nom)')
-    .eq('actif', true).order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false })
+    .eq('actif', true).order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
 
@@ -168,7 +181,7 @@ onMounted(chargerTout)
       Aucun produit dans le référentiel. Va d'abord dans <strong>Référentiels</strong> créer un produit — il en faut un pour lancer un lot.
     </div>
 
-   <template v-else>
+    <template v-else>
       <section class="card" v-if="peutEditer">
         <h2 class="card-title">{{ form.id ? 'Modifier le lot' : 'Nouveau lot' }}</h2>
         <div class="form-grid">
@@ -233,7 +246,7 @@ onMounted(chargerTout)
                   <div v-if="l.statut === 'Libéré' && signatureDe(l)" class="sig-info">✍ {{ signatureDe(l).email }}<br>{{ fmtDateHeure(signatureDe(l).signed_at) }}</div>
                 </td>
                 <td>{{ l.equipements ? l.equipements.code : '—' }}</td>
-<td class="right nowrap">
+                <td class="right nowrap">
                   <template v-if="peutEditer">
                     <button v-if="l.statut === 'Terminé'" class="link release" @click="ouvrirSignature(l)">Libérer (signer)</button>
                     <button class="link" @click="modifier(l)">Modifier</button>
