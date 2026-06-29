@@ -43,7 +43,7 @@ async function charger() {
   if (!rp.error) nbProduits.value = rp.count || 0
 
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, quantite_theorique, produits(designation)')
+    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, quantite_theorique, produits(designation)')
     .eq('actif', true).order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -98,15 +98,22 @@ const condAnnee = computed(() => conditionnements.value.filter(c => {
 // Réalisations de l'année sélectionnée (source : table realisations)
 const realAnnee = computed(() => realisations.value.filter(r => r.annee === anneeSel.value))
 
-// --- Lots (état courant) ---
-const nbLots = computed(() => lots.value.length)
+// --- Lots (filtrés sur l'année de référence) ---
+// Année du lot = année de fin de fabrication si dispo, sinon année de lancement
+const anLot = (l) => {
+  const d = l.date_fin_fabrication || l.date_lancement
+  return d ? new Date(d).getFullYear() : null
+}
+const lotsAnnee = computed(() => lots.value.filter(l => anLot(l) === anneeSel.value))
+const nbLots = computed(() => lotsAnnee.value.length)
 const lotsParStatut = computed(() => {
   const m = {}
   for (const s of STATUTS) m[s] = 0
-  for (const l of lots.value) { if (m[l.statut] != null) m[l.statut]++; else m[l.statut] = 1 }
+  for (const l of lotsAnnee.value) { if (m[l.statut] != null) m[l.statut]++; else m[l.statut] = 1 }
   return m
 })
-const lotsEnCours = computed(() => lotsParStatut.value['En cours'] || 0)
+// Lots en cours = OF reçu/lancé (date de lancement) ET fin de fabrication non finalisée
+const lotsEnCours = computed(() => lotsAnnee.value.filter(l => l.date_lancement && !l.date_fin_fabrication).length)
 const lotsLiberes = computed(() => lotsParStatut.value['Libéré'] || 0)
 const lotsTermines = computed(() => lotsParStatut.value['Terminé'] || 0)
 const tauxLiberation = computed(() => nbLots.value > 0 ? (lotsLiberes.value / nbLots.value) * 100 : null)
