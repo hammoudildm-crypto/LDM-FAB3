@@ -4,7 +4,7 @@ import { supabase } from '../supabase'
 
 const peutEditer = inject('peutEditer', ref(true))
 
-const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Pelliculage', 'Conditionnement']
+const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Conditionnement']
 const STATUTS = ['À faire', 'En cours', 'Terminé']
 
 const lots = ref([])
@@ -28,6 +28,24 @@ function toNum(v) { return v === '' || v === null ? null : Number(v) }
 
 const lotSelectionne = computed(() => lots.value.find(l => l.id === lotId.value) || null)
 
+// Équipements filtrés selon la phase sélectionnée (type = phase)
+const equipementsFiltres = computed(() => {
+  const f = equipements.value.filter(e => e.type === form.phase)
+  if (f.length) {
+    if (form.equipement_id && !f.some(e => e.id === form.equipement_id)) {
+      const sel = equipements.value.find(e => e.id === form.equipement_id)
+      if (sel) return [sel, ...f]
+    }
+    return f
+  }
+  return equipements.value
+})
+function onPhaseChange() {
+  if (form.equipement_id && !equipements.value.some(e => e.id === form.equipement_id && e.type === form.phase)) {
+    form.equipement_id = ''
+  }
+}
+
 async function chargerBase() {
   erreur.value = ''
   const rl = await supabase.from('ordres_fabrication')
@@ -36,7 +54,7 @@ async function chargerBase() {
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
 
-  const re = await supabase.from('equipements').select('id, code, nom').eq('actif', true).order('code')
+  const re = await supabase.from('equipements').select('id, code, nom, type').eq('actif', true).order('code')
   if (re.error) { erreur.value = re.error.message; return }
   equipements.value = re.data
 }
@@ -120,7 +138,7 @@ watch(lotId, chargerPhases)
   <div class="ph-page">
     <header class="ph-head">
       <h1>Suivi de fabrication</h1>
-      <p class="sub">Détail des phases d'un lot — quantités entrée / sortie (kg) et rendements.</p>
+      <p class="sub">Détail des phases d'un lot — quantités entrée / sortie et rendements.</p>
     </header>
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
@@ -156,14 +174,14 @@ watch(lotId, chargerPhases)
           <h2 class="card-title">{{ form.id ? 'Modifier la phase' : 'Ajouter une phase' }}</h2>
           <div class="form-grid">
             <label>Phase
-              <select v-model="form.phase">
+              <select v-model="form.phase" @change="onPhaseChange">
                 <option v-for="ph in PHASES" :key="ph" :value="ph">{{ ph }}</option>
               </select>
             </label>
-            <label>Ligne / équipement
+            <label>Ligne / équipement — {{ form.phase }}
               <select v-model="form.equipement_id">
                 <option value="">—</option>
-                <option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
+                <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
               </select>
             </label>
             <label>Quantité entrée (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="250" /></label>
