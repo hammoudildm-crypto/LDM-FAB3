@@ -69,7 +69,7 @@ async function charger() {
 // --- Helpers ---
 function boitesOf(c) {
   const upb = c.ordres_fabrication && c.ordres_fabrication.produits ? Number(c.ordres_fabrication.produits.unites_par_boite || 0) : 0
-  if (c.quantite_conditionnee == null || upb === 0) return 0
+  if (c.quantite_conditionnee == null || Number(c.quantite_conditionnee) <= 0 || kg === 0 || mm === 0 || upb === 0) continue
   return Math.floor(Number(c.quantite_conditionnee) / upb)
 }
 function prodDe(c) { return c.ordres_fabrication && c.ordres_fabrication.produits ? c.ordres_fabrication.produits : null }
@@ -179,7 +179,7 @@ const rendementGlobalMoyen = computed(() => {
   let prod = 0, theo = 0
   for (const l of lots.value) {
     const b = boxesByLot[l.id]
-    if (b == null) continue
+    if (b == null || b <= 0) continue
     const t = Number(l.quantite_theorique || 0)
     if (t <= 0) continue
     prod += b; theo += t
