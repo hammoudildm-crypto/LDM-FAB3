@@ -8,18 +8,31 @@ const condParLot = ref({})     // ordre_id -> somme entrée conditionnement
 const masquerSoldes = ref(true)
 const erreur = ref('')
 
+async function fetchAllPaged(make) {
+  const size = 1000
+  let from = 0, all = []
+  for (;;) {
+    const r = await make().range(from, from + size - 1)
+    if (r.error) return { error: r.error, data: all }
+    all = all.concat(r.data || [])
+    if (!r.data || r.data.length < size) break
+    from += size
+  }
+  return { data: all, error: null }
+}
+
 async function charger() {
   erreur.value = ''
-  const rl = await supabase.from('ordres_fabrication')
+  const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
     .select('id, numero_lot, statut, produits(code_pf, designation)')
-    .eq('actif', true).order('id', { ascending: false })
+    .eq('actif', true).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
 
-  const rp = await supabase.from('suivi_phases')
+  const rp = await fetchAllPaged(() => supabase.from('suivi_phases')
     .select('ordre_id, quantite_sortie, date_phase, id')
     .eq('actif', true)
-    .order('date_phase', { ascending: true, nullsFirst: true }).order('id', { ascending: true })
+    .order('date_phase', { ascending: true, nullsFirst: true }).order('id', { ascending: true }))
   const ph = {}
   if (!rp.error) {
     for (const p of rp.data) {
@@ -28,8 +41,8 @@ async function charger() {
   }
   phasesParLot.value = ph
 
-  const rc = await supabase.from('conditionnement')
-    .select('ordre_id, quantite_entree').eq('actif', true)
+  const rc = await fetchAllPaged(() => supabase.from('conditionnement')
+    .select('ordre_id, quantite_entree').eq('actif', true))
   const cd = {}
   if (!rc.error) {
     for (const c of rc.data) {
