@@ -1,246 +1,272 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
-import { useRoute } from 'vue-router'
-import { supabase } from './supabase'
+import { ref, computed, onMounted, inject } from 'vue'
+import { supabase } from '../supabase'
 
-const session = ref(null)
-const role = ref(null)
-const route = useRoute()
-const navRef = ref(null)
-const themeRef = ref(null)
-const openMenu = ref(null)
+const peutEditer = inject('peutEditer', ref(false))
 
-const estAdmin = computed(() => role.value === 'admin')
-const peutEditer = computed(() => role.value === 'admin' || role.value === 'operateur')
-provide('role', role)
-provide('peutEditer', peutEditer)
+const anneeCourante = new Date().getFullYear()
+const ANNEES = []
+for (let a = anneeCourante - 4; a <= anneeCourante + 1; a++) ANNEES.push(a)
+const STATUTS_PRODUITS = ['Terminé', 'Libéré'] // lots produits = sujets à vérification
+const LIMITE = 300
 
-const roleLabel = computed(() => ({ admin: 'Admin', operateur: 'Opérateur', lecteur: 'Lecteur' }[role.value] || ''))
+const lots = ref([])
+const msg = ref('')
+const anneeSel = ref(0) // 0 = toutes
+const verifEnCours = ref(null)
+const vForm = ref({ verificateur: '', date: new Date().toISOString().slice(0, 10) })
 
-const PROD = ['/plan', '/ordres', '/suivi', '/encours', '/conditionnement', '/dossier']
-const PILOT = ['/ca', '/effectifs', '/verification-ddl', '/audit', '/habilitations']
-const prodActive = computed(() => PROD.includes(route.path))
-const pilotActive = computed(() => PILOT.includes(route.path))
-
-// --- Thèmes ---
-const THEMES = [['clair', 'Clair'], ['ocean', 'Océan'], ['ardoise', 'Ardoise'], ['sombre', 'Sombre']]
-const theme = ref('clair')
-function setTheme(t) {
-  theme.value = t
-  document.documentElement.dataset.theme = t
-  try { localStorage.setItem('ldmfab-theme', t) } catch (e) { /* ignore */ }
-  closeMenu()
+async function fetchAllPaged(make) {
+  const size = 1000
+  let from = 0, all = []
+  for (;;) {
+    const r = await make().range(from, from + size - 1)
+    if (r.error) return { error: r.error, data: all }
+    all = all.concat(r.data || [])
+    if (!r.data || r.data.length < size) break
+    from += size
+  }
+  return { data: all, error: null }
 }
 
-function toggleMenu(name) { openMenu.value = openMenu.value === name ? null : name }
-function closeMenu() { openMenu.value = null }
-function onDocClick(e) {
-  const inNav = navRef.value && navRef.value.contains(e.target)
-  const inTheme = themeRef.value && themeRef.value.contains(e.target)
-  if (!inNav && !inTheme) openMenu.value = null
+async function charger() {
+  msg.value = ''
+  const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
+    .select('id, numero_lot, statut, date_lancement, ddl_verifie, ddl_verificateur, ddl_date_verification, produits(designation, code_pf)')
+    .eq('actif', true)
+    .order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
+  if (r.error) { msg.value = r.error.message; return }
+  lots.value = r.data
 }
+onMounted(charger)
 
-async function chargerRole() {
-  if (!session.value) { role.value = null; return }
-  const r = await supabase.from('profils').select('role').eq('user_id', session.value.user.id).maybeSingle()
-  role.value = r.data ? r.data.role : null
-}
+const anYear = (d) => d ? new Date(d).getFullYear() : null
 
-onMounted(async () => {
-  try {
-    const saved = localStorage.getItem('ldmfab-theme')
-    if (saved) { theme.value = saved; document.documentElement.dataset.theme = saved }
-  } catch (e) { /* ignore */ }
-  document.addEventListener('click', onDocClick)
-  const res = await supabase.auth.getSession()
-  if (res.error) { console.error('getSession:', res.error.message); return }
-  session.value = res.data.session
-  await chargerRole()
-  supabase.auth.onAuthStateChange(async (_event, s) => { session.value = s; await chargerRole() })
+const produits = computed(() => lots.value.filter(l =>
+  STATUTS_PRODUITS.includes(l.statut) && (anneeSel.value === 0 || anYear(l.date_lancement) === anneeSel.value)))
+const verifies = computed(() => produits.value.filter(l => l.ddl_verifie))
+const attente = computed(() => produits.value.filter(l => !l.ddl_verifie))
+
+const nbVerifies = computed(() => verifies.value.length)
+const nbAttente = computed(() => attente.value.length)
+const taux = computed(() => {
+  const tot = nbVerifies.value + nbAttente.value
+  return tot > 0 ? (nbVerifies.value / tot) * 100 : null
 })
-onUnmounted(() => document.removeEventListener('click', onDocClick))
 
-async function signOut() {
-  const res = await supabase.auth.signOut()
-  if (res.error) { console.error('signOut:', res.error.message); return }
-  session.value = null
-  role.value = null
+const parSuperviseur = computed(() => {
+  const m = {}
+  for (const l of produits.value) {
+    const k = l.ddl_verificateur
+    if (!k) continue
+    if (!m[k]) m[k] = { nom: k, assignes: 0, verifies: 0 }
+    m[k].assignes++
+    if (l.ddl_verifie) m[k].verifies++
+  }
+  return Object.values(m)
+    .map(x => ({ ...x, taux: x.assignes ? (x.verifies / x.assignes) * 100 : 0 }))
+    .sort((a, b) => b.assignes - a.assignes)
+})
+
+const superviseurs = computed(() => {
+  const s = new Set()
+  for (const l of lots.value) if (l.ddl_verificateur) s.add(l.ddl_verificateur)
+  return [...s].sort()
+})
+
+const verifiesAffiches = computed(() => [...verifies.value]
+  .sort((a, b) => String(b.ddl_date_verification || '').localeCompare(String(a.ddl_date_verification || '')))
+  .slice(0, LIMITE))
+
+function prodNom(l) { return l.produits?.designation || l.produits?.code_pf || '—' }
+function fmt(n) { return (n == null ? '—' : Number(n).toLocaleString('fr-FR')) }
+function fmtPct(p) { return (p == null ? '—' : p.toFixed(1) + ' %') }
+function fmtDate(d) {
+  if (!d) return '—'
+  const x = new Date(d); if (isNaN(x)) return '—'
+  return x.toLocaleDateString('fr-FR')
+}
+
+function ouvrir(l) {
+  verifEnCours.value = l.id
+  vForm.value = { verificateur: l.ddl_verificateur || '', date: new Date().toISOString().slice(0, 10) }
+  msg.value = ''
+}
+
+async function valider(l) {
+  msg.value = ''
+  if (!vForm.value.verificateur.trim()) { msg.value = 'Indique le nom du vérificateur.'; return }
+  const r = await supabase.from('ordres_fabrication').update({
+    ddl_verifie: true,
+    ddl_verificateur: vForm.value.verificateur.trim(),
+    ddl_date_verification: vForm.value.date || null
+  }).eq('id', l.id)
+  if (r.error) { msg.value = r.error.message; return }
+  verifEnCours.value = null
+  await charger()
+}
+
+async function devalider(l) {
+  if (!confirm(`Annuler la vérification du lot ${l.numero_lot} ?`)) return
+  const r = await supabase.from('ordres_fabrication').update({
+    ddl_verifie: false, ddl_verificateur: null, ddl_date_verification: null
+  }).eq('id', l.id)
+  if (r.error) { msg.value = r.error.message; return }
+  await charger()
 }
 </script>
 
 <template>
-  <header class="topbar">
-    <div class="brand">LDM-FAB3</div>
-
-    <nav class="nav" ref="navRef">
-      <RouterLink to="/" class="navlink">Tableau de bord</RouterLink>
-
-      <template v-if="session">
-        <RouterLink to="/referentiels" class="navlink">Référentiels</RouterLink>
-
-        <div class="dropdown">
-          <button class="navlink drop-toggle" :class="{ open: openMenu === 'production', active: prodActive }" @click="toggleMenu('production')">
-            Production <span class="caret">▾</span>
-          </button>
-          <div v-show="openMenu === 'production'" class="drop-panel">
-            <RouterLink to="/plan" @click="closeMenu">Plan directeur</RouterLink>
-            <RouterLink to="/ordres" @click="closeMenu">Ordres de fabrication</RouterLink>
-            <RouterLink to="/suivi" @click="closeMenu">Suivi fabrication</RouterLink>
-            <RouterLink to="/encours" @click="closeMenu">En-cours</RouterLink>
-            <RouterLink to="/conditionnement" @click="closeMenu">Conditionnement</RouterLink>
-            <RouterLink to="/dossier" @click="closeMenu">Dossier de lot</RouterLink>
-          </div>
-        </div>
-
-        <div class="dropdown">
-          <button class="navlink drop-toggle" :class="{ open: openMenu === 'pilotage', active: pilotActive }" @click="toggleMenu('pilotage')">
-            Pilotage <span class="caret">▾</span>
-          </button>
-          <div v-show="openMenu === 'pilotage'" class="drop-panel">
-            <RouterLink to="/ca" @click="closeMenu">Chiffre d'affaires</RouterLink>
-            <RouterLink to="/effectifs" @click="closeMenu">Effectifs</RouterLink>
-            <RouterLink to="/verification-ddl" @click="closeMenu">Vérification DDL</RouterLink>
-            <RouterLink to="/audit" @click="closeMenu">Journal d'audit</RouterLink>
-            <RouterLink v-if="estAdmin" to="/habilitations" @click="closeMenu">Habilitations</RouterLink>
-          </div>
-        </div>
-      </template>
-    </nav>
-
-    <div class="right">
-      <div class="dropdown" ref="themeRef">
-        <button class="navlink drop-toggle" :class="{ open: openMenu === 'theme' }" @click="toggleMenu('theme')" title="Changer de thème">
-          <span class="swatch" :class="'sw-' + theme"></span>Thème <span class="caret">▾</span>
-        </button>
-        <div v-show="openMenu === 'theme'" class="drop-panel theme-panel">
-          <button v-for="t in THEMES" :key="t[0]" class="theme-item" :class="{ sel: theme === t[0] }" @click="setTheme(t[0])">
-            <span class="swatch" :class="'sw-' + t[0]"></span>
-            <span class="theme-name">{{ t[1] }}</span>
-            <span v-if="theme === t[0]" class="chk">✓</span>
-          </button>
-        </div>
+  <div class="vd-page">
+    <div class="vd-head">
+      <div>
+        <h1>Vérification des dossiers de lot</h1>
+        <p class="sub">Suivi de la vérification des DDL de fabrication par superviseur</p>
       </div>
-
-      <RouterLink v-if="session" to="/compte" class="navlink">Mon compte</RouterLink>
-      <span v-if="session && role" class="role-badge" :class="'r-' + role">{{ roleLabel }}</span>
-      <RouterLink v-if="!session" to="/login" class="navlink">Connexion</RouterLink>
-      <button v-else type="button" class="signout" @click="signOut">Déconnexion</button>
+      <label class="annee-sel">Année
+        <select v-model.number="anneeSel">
+          <option :value="0">Toutes</option>
+          <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
+        </select>
+      </label>
     </div>
-  </header>
-  <main>
-    <RouterView />
-  </main>
+
+    <p v-if="msg" class="alert">{{ msg }}</p>
+
+    <div class="kpi-grid k3">
+      <div class="kpi"><div class="kpi-val">{{ fmt(nbVerifies) }}</div><div class="kpi-lbl">DDL vérifiés</div></div>
+      <div class="kpi"><div class="kpi-val" :class="{ warn: nbAttente > 0 }">{{ fmt(nbAttente) }}</div><div class="kpi-lbl">DDL en attente de vérification</div></div>
+      <div class="kpi"><div class="kpi-val accent">{{ fmtPct(taux) }}</div><div class="kpi-lbl">Taux de vérification</div></div>
+    </div>
+
+    <div class="cols">
+      <section class="card">
+        <h3 class="card-title">Taux de vérification par superviseur</h3>
+        <p class="hint">DDL envoyés à l'AQ ÷ DDL qui lui sont assignés</p>
+        <div v-if="!parSuperviseur.length" class="empty">Aucun DDL pour ce filtre.</div>
+        <div v-for="s in parSuperviseur" :key="s.nom" class="prog-row">
+          <div class="prog-head">
+            <span class="prog-nom">{{ s.nom }}</span>
+            <span class="prog-pct" :class="{ warn: s.taux < 100 }">{{ s.verifies }}/{{ s.assignes }} · {{ s.taux.toFixed(0) }}%</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" :class="s.taux >= 100 ? 'ok' : 'part'" :style="{ width: s.taux + '%' }"></div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
+        <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
+        <table v-else class="mini">
+          <thead><tr><th>Lot</th><th>Produit</th><th>Superviseur</th><th class="right">Lancé le</th><th></th></tr></thead>
+          <tbody>
+            <template v-for="l in attente" :key="l.id">
+              <tr>
+                <td class="mono">{{ l.numero_lot }}</td>
+                <td class="desig">{{ prodNom(l) }}</td>
+                <td>{{ l.ddl_verificateur || '—' }}</td>
+                <td class="right nowrap">{{ fmtDate(l.date_lancement) }}</td>
+                <td class="right"><button v-if="peutEditer" class="link" @click="ouvrir(l)">Vérifier</button></td>
+              </tr>
+              <tr v-if="verifEnCours === l.id">
+                <td colspan="5">
+                  <div class="verif-form">
+                    <input list="superv-list" v-model="vForm.verificateur" placeholder="Superviseur / vérificateur" />
+                    <input type="date" v-model="vForm.date" />
+                    <button class="btn sm" @click="valider(l)">Valider</button>
+                    <button class="link" @click="verifEnCours = null">Annuler</button>
+                  </div>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <section class="card span2" style="margin-top: 22px">
+      <h3 class="card-title">DDL vérifiés ({{ nbVerifies }})</h3>
+      <div v-if="!verifies.length" class="empty">Aucun DDL vérifié pour ce filtre.</div>
+      <table v-else class="mini">
+        <thead><tr><th>Lot</th><th>Produit</th><th>Superviseur</th><th class="right">Date d'envoi</th><th></th></tr></thead>
+        <tbody>
+          <tr v-for="l in verifiesAffiches" :key="l.id">
+            <td class="mono">{{ l.numero_lot }}</td>
+            <td class="desig">{{ prodNom(l) }}</td>
+            <td>{{ l.ddl_verificateur || '—' }}</td>
+            <td class="right nowrap">{{ fmtDate(l.ddl_date_verification) }}</td>
+            <td class="right"><button v-if="peutEditer" class="link danger" @click="devalider(l)">Annuler</button></td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-if="verifies.length > verifiesAffiches.length" class="empty">
+        … {{ fmt(verifies.length - verifiesAffiches.length) }} autres (affichage limité à {{ LIMITE }} ; filtre par année pour réduire).
+      </p>
+    </section>
+
+    <datalist id="superv-list">
+      <option v-for="s in superviseurs" :key="s" :value="s"></option>
+    </datalist>
+  </div>
 </template>
 
-<style>
-* { box-sizing: border-box; }
+<style scoped>
+.vd-page { color: #1b2733; }
+.vd-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
+.vd-head h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
+.sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
+.annee-sel { display: flex; flex-direction: column; font-size: 11px; font-weight: 600; color: #64748b; gap: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.annee-sel select { font-size: 14px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 600; color: #1b2733; min-width: 110px; }
 
-:root {
-  --bg: #f6f7f9;
-  --text: #1b2733;
-  --topbar: #0f2a33;
-  --topbar-text: #ffffff;
-  --topbar-muted: #cbd5e1;
-  --topbar-border: #33505a;
-  --accent-bright: #2dd4bf;
-}
-html[data-theme="ocean"]   { --bg: #eef4f9; --topbar: #0c4a6e; --topbar-muted: #bae6fd; --topbar-border: #1e6091; --accent-bright: #38bdf8; }
-html[data-theme="ardoise"] { --bg: #eceff4; --topbar: #1e293b; --topbar-muted: #cbd5e1; --topbar-border: #475569; --accent-bright: #94a3b8; }
-html[data-theme="sombre"]  { --bg: #0f172a; --text: #e6edf6; --topbar: #020617; --topbar-text: #f1f5f9; --topbar-muted: #94a3b8; --topbar-border: #334155; --accent-bright: #2dd4bf; color-scheme: dark; }
+.alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 
-body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: var(--bg); color: var(--text); }
+.kpi-grid { display: grid; gap: 14px; margin-bottom: 22px; }
+.kpi-grid.k3 { grid-template-columns: repeat(3, 1fr); }
+.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.kpi-val { font-size: 23px; font-weight: 700; letter-spacing: -0.02em; }
+.kpi-val.accent { color: #0f766e; }
+.kpi-val.warn { color: #b45309; }
+.kpi-lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
 
-.topbar { display: flex; align-items: center; gap: 22px; padding: 0 20px; height: 56px;
-  background: var(--topbar); color: var(--topbar-text); box-shadow: 0 1px 3px rgba(0,0,0,.12); position: sticky; top: 0; z-index: 30; }
-.brand { font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
-.nav { display: flex; gap: 20px; align-items: center; }
-.right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card.span2 { grid-column: 1 / -1; }
+.card-title { margin: 0 0 14px; font-size: 16px; }
 
-.navlink { color: var(--topbar-muted); text-decoration: none; font-size: 14px; font-weight: 500; padding: 4px 0;
-  white-space: nowrap; background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 5px; }
-.navlink:hover { color: var(--topbar-text); }
-.nav a.router-link-exact-active { color: var(--topbar-text); border-bottom-color: var(--accent-bright); }
-.drop-toggle.active { color: var(--topbar-text); border-bottom-color: var(--accent-bright); }
-.caret { font-size: 10px; transition: transform .15s; }
-.drop-toggle.open .caret { transform: rotate(180deg); }
+.prog-row { margin-bottom: 13px; }
+.prog-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+.prog-nom { font-size: 13px; font-weight: 600; color: #1b2733; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
+.prog-pct { font-size: 13px; font-weight: 700; color: #0f766e; flex-shrink: 0; }
+.bar-track { height: 10px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 999px; min-width: 2px; }
+.bar-fill.prod { background: #0f766e; }
+.bar-fill.ok { background: #16a34a; }
+.bar-fill.part { background: #f59e0b; }
+.prog-pct.warn { color: #b45309; }
+.hint { margin: -8px 0 14px; font-size: 12px; color: #94a3b8; }
 
-.dropdown { position: relative; }
-.drop-panel { position: absolute; top: calc(100% + 8px); left: 0; min-width: 210px; background: #fff;
-  border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 8px 24px rgba(16,24,40,.14); padding: 6px; z-index: 50; }
-.drop-panel a { display: block; color: #1b2733; text-decoration: none; font-size: 14px; padding: 8px 12px; border-radius: 7px; white-space: nowrap; }
-.drop-panel a:hover { background: #f1f5f9; }
-.drop-panel a.router-link-exact-active { background: #ecfdf5; color: #0f766e; font-weight: 600; }
+table.mini { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.mini th { text-align: left; padding: 7px 6px; border-bottom: 2px solid #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; }
+table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.desig { color: #64748b; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.right { text-align: right; }
+.nowrap { white-space: nowrap; }
+.empty { color: #94a3b8; font-style: italic; font-size: 13px; }
 
-/* Sélecteur de thème */
-.theme-panel { right: 0; left: auto; min-width: 170px; }
-.theme-item { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; cursor: pointer;
-  font-size: 14px; color: #1b2733; padding: 8px 12px; border-radius: 7px; font-family: inherit; text-align: left; }
-.theme-item:hover { background: #f1f5f9; }
-.theme-item.sel { font-weight: 600; }
-.theme-name { flex: 1; }
-.chk { color: #0f766e; font-weight: 700; }
-.swatch { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,.15); display: inline-block; }
-.sw-clair { background: #0f2a33; }
-.sw-ocean { background: #0c4a6e; }
-.sw-ardoise { background: #1e293b; }
-.sw-sombre { background: #020617; }
+.btn { display: inline-block; background: #0f766e; color: #fff; border: 0; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.btn:hover { background: #0c5f59; }
+.btn.sm { padding: 7px 14px; font-size: 13px; }
+.link { background: none; border: 0; color: #0f766e; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 6px; }
+.link:hover { text-decoration: underline; }
+.link.danger { color: #b91c1c; }
 
-.role-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
-.r-admin { background: #2dd4bf; color: #06322c; }
-.r-operateur { background: #60a5fa; color: #0b2a5b; }
-.r-lecteur { background: #94a3b8; color: #1b2733; }
+.verif-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
+.verif-form input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
+.verif-form input[list] { min-width: 230px; }
 
-.signout { background: transparent; color: var(--topbar-muted); border: 1px solid var(--topbar-border); padding: 5px 12px; border-radius: 7px; font-size: 13px; cursor: pointer; white-space: nowrap; }
-.signout:hover { color: var(--topbar-text); border-color: var(--topbar-muted); }
-
-main { padding: 20px 16px; max-width: 1200px; margin: 0 auto; }
-
-.error { color: #b91c1c; }
-
-/* ===== Mode sombre : surfaces & textes (s'applique partout via les classes communes) ===== */
-/* Texte clair sur tout le contenu (les conteneurs de page forçaient un texte foncé) */
-html[data-theme="sombre"] .dash,
-html[data-theme="sombre"] .ref-page,
-html[data-theme="sombre"] .pdp-page,
-html[data-theme="sombre"] .of-page,
-html[data-theme="sombre"] .ph-page,
-html[data-theme="sombre"] .ec-page,
-html[data-theme="sombre"] .cd-page,
-html[data-theme="sombre"] .dl-page,
-html[data-theme="sombre"] .ca-page,
-html[data-theme="sombre"] .ef-page,
-html[data-theme="sombre"] .au-page,
-html[data-theme="sombre"] .hb-page,
-html[data-theme="sombre"] .mc-page,
-html[data-theme="sombre"] .vd-page { color: #e6edf6; }
-
-html[data-theme="sombre"] .card,
-html[data-theme="sombre"] .kpi,
-html[data-theme="sombre"] .empty-card,
-html[data-theme="sombre"] .welcome { background: #161f33 !important; border-color: #2a3650 !important; box-shadow: none !important; }
-html[data-theme="sombre"] .drop-panel { background: #161f33 !important; border-color: #2a3650 !important; }
-html[data-theme="sombre"] .drop-panel a,
-html[data-theme="sombre"] .theme-item { color: #e6edf6 !important; }
-html[data-theme="sombre"] .drop-panel a:hover,
-html[data-theme="sombre"] .theme-item:hover { background: #243049 !important; }
-html[data-theme="sombre"] .form-grid { background: #0f1830 !important; border-color: #2a3650 !important; }
-html[data-theme="sombre"] .bar-track { background: #2a3650 !important; }
-html[data-theme="sombre"] .count { background: #243049 !important; color: #cbd5e1 !important; }
-html[data-theme="sombre"] input,
-html[data-theme="sombre"] select,
-html[data-theme="sombre"] textarea { background: #0f1830 !important; color: #e6edf6 !important; border-color: #2a3650 !important; }
-html[data-theme="sombre"] .btn.ghost { background: #161f33 !important; color: #cbd5e1 !important; border-color: #2a3650 !important; }
-html[data-theme="sombre"] table.grid th { color: #94a3b8 !important; border-color: #2a3650 !important; }
-html[data-theme="sombre"] table.grid td { border-color: #1f2940 !important; }
-html[data-theme="sombre"] table.grid tr:hover td { background: #1d2740 !important; }
-html[data-theme="sombre"] table.mini td { border-color: #1f2940 !important; }
-html[data-theme="sombre"] .prog-nom { color: #e6edf6 !important; }
-html[data-theme="sombre"] .doc-title { border-bottom-color: #2a3650 !important; }
-html[data-theme="sombre"] .block { border-bottom-color: #1f2940 !important; }
-html[data-theme="sombre"] .lot-info { border-top-color: #1f2940 !important; }
-
-@media print {
-  .topbar { display: none !important; }
-  main { padding: 0; max-width: none; }
+@media (max-width: 900px) {
+  .kpi-grid.k3 { grid-template-columns: 1fr; }
+  .cols { grid-template-columns: 1fr; }
+  .card.span2 { grid-column: auto; }
 }
 </style>
