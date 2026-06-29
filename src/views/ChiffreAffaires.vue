@@ -9,11 +9,24 @@ const annee = ref('')        // '' = toutes les années
 const records = ref([])
 const erreur = ref('')
 
+async function fetchAllPaged(make) {
+  const size = 1000
+  let from = 0, all = []
+  for (;;) {
+    const r = await make().range(from, from + size - 1)
+    if (r.error) return { error: r.error, data: all }
+    all = all.concat(r.data || [])
+    if (!r.data || r.data.length < size) break
+    from += size
+  }
+  return { data: all, error: null }
+}
+
 async function charger() {
   erreur.value = ''
-  const r = await supabase.from('conditionnement')
+  const r = await fetchAllPaged(() => supabase.from('conditionnement')
     .select('quantite_conditionnee, date_conditionnement, ordres_fabrication(produits(designation, code_pf, pcsu, unites_par_boite))')
-    .eq('actif', true)
+    .eq('actif', true))
   if (r.error) { erreur.value = r.error.message; return }
   records.value = r.data
 }
