@@ -107,7 +107,7 @@ async function signOut() {
       </template>
     </nav>
 
-    <div class="right">
+    <div class="topbar-right">
       <div class="dropdown" ref="themeRef">
         <button class="navlink drop-toggle" :class="{ open: openMenu === 'theme' }" @click="toggleMenu('theme')" title="Changer de thème">
           <span class="swatch" :class="'sw-' + theme"></span>Thème <span class="caret">▾</span>
@@ -154,7 +154,7 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
   background: var(--topbar); color: var(--topbar-text); box-shadow: 0 1px 3px rgba(0,0,0,.12); position: sticky; top: 0; z-index: 30; }
 .brand { font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
 .nav { display: flex; gap: 20px; align-items: center; }
-.right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
 
 .navlink { color: var(--topbar-muted); text-decoration: none; font-size: 14px; font-weight: 500; padding: 4px 0;
   white-space: nowrap; background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 5px; }
