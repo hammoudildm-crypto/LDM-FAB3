@@ -15,6 +15,7 @@ import Habilitations from '../views/Habilitations.vue'
 import MonCompte from '../views/MonCompte.vue'
 import VerificationDDL from '../views/VerificationDDL.vue'
 import RealisationPlan from '../views/RealisationPlan.vue'
+import Rendement from '../views/Rendement.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Home },
@@ -31,6 +32,7 @@ const routes = [
   { path: '/habilitations', name: 'habilitations', component: Habilitations },
   { path: '/verification-ddl', name: 'verification-ddl', component: VerificationDDL },
   { path: '/realisation-plan', name: 'realisation-plan', component: RealisationPlan },
+  { path: '/rendement', name: 'rendement', component: Rendement },
   { path: '/compte', name: 'compte', component: MonCompte },
   { path: '/login', name: 'login', component: Login },
 ]
