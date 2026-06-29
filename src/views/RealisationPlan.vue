@@ -80,7 +80,7 @@ const anticipParMois = computed(() => {
   return a
 })
 const anticipTotal = computed(() => anticipParMois.value.reduce((s, x) => s + x, 0))
-const fabParMois = computed(() => fabReelParMois.value.map((v, i) => v + anticipParMois.value[i]))
+const fabParMois = computed(() => fabReelParMois.value)
 const condParMois = computed(() => {
   const a = Array(12).fill(0)
   for (const c of condRows.value) {
@@ -116,7 +116,7 @@ const anticipCA = computed(() => {
   }
   return ca
 })
-const fabCA = computed(() => fabReelCA.value + anticipCA.value)
+const fabCA = computed(() => fabReelCA.value)
 const condCA = computed(() => {
   let ca = 0
   for (const c of condRows.value) {
@@ -149,7 +149,6 @@ const parProduit = computed(() => {
     const e = ent(p.code_pf, p.designation)
     const b = condBoites(c)
     e.cond += b; e.ca += b * num(p.pcsu)
-    if (condFabAnnee(c) === anneeSel.value - 1) e.fab += b
   }
   return Object.values(m).sort((a, b) => (b.plan - a.plan) || (b.fab - a.fab))
 })
@@ -198,7 +197,7 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
         <div class="kpi-lbl">fab. {{ anneeSel - 1 }} → cond. {{ anneeSel }} · {{ fmtDA(anticipCA) }}</div>
       </div>
     </div>
-    <p class="note">L'<strong>anticipation</strong> (fabriquée en {{ anneeSel - 1 }}, conditionnée en {{ anneeSel }}) est <strong>incluse</strong> dans la « Fabrication réalisée » et son CA.</p>
+    <p class="note"><strong>Fabrication réalisée</strong> = boîtes fabriquées dans l'année (par date de fabrication). <strong>Conditionnement réalisé</strong> = boîtes conditionnées dans l'année (par date de conditionnement). L'<strong>anticipation</strong> (fab. {{ anneeSel - 1 }} → cond. {{ anneeSel }}) est indiquée à part et <strong>non comptée</strong> dans la fabrication.</p>
 
     <section class="card">
       <div class="card-head">
