@@ -32,11 +32,24 @@ function upbLot(ordreId) {
   return upb > 0 ? upb : 0
 }
 
+async function fetchAllPaged(make) {
+  const size = 1000
+  let from = 0, all = []
+  for (;;) {
+    const r = await make().range(from, from + size - 1)
+    if (r.error) return { error: r.error, data: all }
+    all = all.concat(r.data || [])
+    if (!r.data || r.data.length < size) break
+    from += size
+  }
+  return { data: all, error: null }
+}
+
 async function chargerTout() {
   erreur.value = ''
-  const rl = await supabase.from('ordres_fabrication')
+  const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
     .select('id, numero_lot, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, boites_theoriques)')
-    .eq('actif', true).order('id', { ascending: false })
+    .eq('actif', true).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
 
@@ -44,9 +57,9 @@ async function chargerTout() {
   if (re.error) { erreur.value = re.error.message; return }
   equipements.value = re.data
 
-  const rc = await supabase.from('conditionnement')
+  const rc = await fetchAllPaged(() => supabase.from('conditionnement')
     .select('*, ordres_fabrication(numero_lot, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, boites_theoriques)), equipements(code, nom)')
-    .eq('actif', true).order('date_conditionnement', { ascending: false, nullsFirst: false }).order('id', { ascending: false })
+    .eq('actif', true).order('date_conditionnement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (rc.error) { erreur.value = rc.error.message; return }
   records.value = rc.data
 }
@@ -179,7 +192,7 @@ onMounted(chargerTout)
           <label>Ligne / équipement
             <select v-model="form.equipement_id">
               <option value="">—</option>
-             <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
+              <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
             </select>
           </label>
           <label>Quantité reçue (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="245" /></label>
