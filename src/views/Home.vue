@@ -75,6 +75,13 @@ function boitesOf(c) {
 function prodDe(c) { return c.ordres_fabrication && c.ordres_fabrication.produits ? c.ordres_fabrication.produits : null }
 function pcsuDe(c) { const p = prodDe(c); return p ? Number(p.pcsu || 0) : 0 }
 function pcsuR(r) { return r.produits ? Number(r.produits.pcsu || 0) : 0 }
+// Code de base = retire les suffixes de variante (-NT, -520, -DN, -NS) pour regrouper le même produit
+function baseCode(c) {
+  if (!c) return '—'
+  let x = String(c), prev = null
+  while (prev !== x) { prev = x; x = x.replace(/-(NT|520|DN|NS)$/, '') }
+  return x
+}
 function estCeMois(c) {
   if (!c.date_conditionnement) return false
   const d = new Date(c.date_conditionnement)
@@ -115,7 +122,7 @@ const caPotentielPlan = computed(() => planAnnee.value.reduce((s, x) => {
 const planParProduit = computed(() => {
   const m = {}
   for (const x of planAnnee.value) {
-    const code = x.produits ? x.produits.code_pf : '—'
+    const code = baseCode(x.produits ? x.produits.code_pf : '—')
     m[code] = (m[code] || 0) + Number(x.quantite_planifiee || 0)
   }
   return m
@@ -241,9 +248,9 @@ const caParDonneur = computed(() => {
 const maxCaDonneur = computed(() => Math.max(1, ...caParDonneur.value.map(d => d.ca)))
 const realisationPlan = computed(() => {
   const m = {}
-  for (const r of realAnnee.value) {
+ for (const r of realAnnee.value) {
     const p = r.produits
-    const code = p ? p.code_pf : '—'
+    const code = baseCode(p ? p.code_pf : '—')
     if (!m[code]) m[code] = { code, nom: p ? p.designation : '—', produit: 0 }
     m[code].produit += Number(r.quantite_realisee || 0)
   }
