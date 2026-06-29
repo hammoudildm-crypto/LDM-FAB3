@@ -40,7 +40,7 @@ async function chargerTout() {
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
 
-  const re = await supabase.from('equipements').select('id, code, nom').eq('actif', true).order('code')
+  const re = await supabase.from('equipements').select('id, code, nom, type').eq('actif', true).order('code')
   if (re.error) { erreur.value = re.error.message; return }
   equipements.value = re.data
 
@@ -54,6 +54,19 @@ async function chargerTout() {
 const recordsFiltres = computed(() =>
   filtreStatut.value ? records.value.filter(r => r.statut === filtreStatut.value) : records.value
 )
+
+// Seules les lignes de conditionnement (type = 'Conditionnement')
+const equipementsFiltres = computed(() => {
+  const f = equipements.value.filter(e => e.type === 'Conditionnement')
+  if (f.length) {
+    if (form.equipement_id && !f.some(e => e.id === form.equipement_id)) {
+      const sel = equipements.value.find(e => e.id === form.equipement_id)
+      if (sel) return [sel, ...f]
+    }
+    return f
+  }
+  return equipements.value
+})
 
 function boites(r) {
   const upb = r.ordres_fabrication && r.ordres_fabrication.produits ? r.ordres_fabrication.produits.unites_par_boite : null
@@ -166,7 +179,7 @@ onMounted(chargerTout)
           <label>Ligne / équipement
             <select v-model="form.equipement_id">
               <option value="">—</option>
-              <option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
+             <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
             </select>
           </label>
           <label>Quantité reçue (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="245" /></label>
