@@ -225,6 +225,15 @@ function hauteurCompare(rdt) {
   return Math.max(4, Math.min(100, ((rdt - min) / (max - min)) * 100))
 }
 
+// Filtre produit pour la comparaison 3 ans
+const produitSelCmp = ref('')
+const produitsListeCmp = computed(() =>
+  compareProduits.value.map(p => ({ code: p.code, nom: p.nom })).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+)
+const compareProduitsFiltre = computed(() =>
+  produitSelCmp.value ? compareProduits.value.filter(p => p.code === produitSelCmp.value) : compareProduits.value
+)
+
 // Helpers chart mensuel
 function segAvarie(m) { return m.rdt == null ? 0 : m.avarie }
 function segRdt(m) { return m.rdt == null ? 0 : Math.min(100, m.rdt) }
@@ -233,7 +242,7 @@ function fmt(n) { return n == null ? '—' : Math.round(Number(n)).toLocaleStrin
 function pct2(n) { return n == null ? '—' : Number(n).toFixed(2).replace('.', ',') + ' %' }
 function pct1(n) { return n == null ? '—' : Number(n).toFixed(1).replace('.', ',') + ' %' }
 
-watch(anneeSel, () => { produitSel.value = '' })
+watch(anneeSel, () => { produitSel.value = ''; produitSelCmp.value = '' })
 
 onMounted(chargerTout)
 </script>
@@ -352,8 +361,14 @@ onMounted(chargerTout)
       <section class="card">
         <div class="card-head">
           <h2 class="card-title">Comparaison du rendement par produit — 3 ans</h2>
-          <div class="legend">
-            <span v-for="(y, i) in anneesCompare" :key="y"><i class="dot" :class="'yr' + i"></i>{{ y }}</span>
+          <div class="head-tools">
+            <select v-model="produitSelCmp" class="filtre">
+              <option value="">Tous les produits ({{ produitsListeCmp.length }})</option>
+              <option v-for="p in produitsListeCmp" :key="p.code" :value="p.code">{{ p.code }} — {{ p.nom }}</option>
+            </select>
+            <div class="legend">
+              <span v-for="(y, i) in anneesCompare" :key="y"><i class="dot" :class="'yr' + i"></i>{{ y }}</span>
+            </div>
           </div>
         </div>
         <div class="table-scroll">
@@ -366,7 +381,7 @@ onMounted(chargerTout)
               </tr>
             </thead>
             <tbody>
-              <tr v-for="p in compareProduits" :key="p.code">
+              <tr v-for="p in compareProduitsFiltre" :key="p.code">
                 <td><span class="mono">{{ p.code }}</span> <span class="desig">{{ p.nom }}</span></td>
                 <td v-for="(y, i) in anneesCompare" :key="y" class="cmp-cell">
                   <template v-if="p.rdt[y] != null">
@@ -380,7 +395,7 @@ onMounted(chargerTout)
                   <span v-else class="cmp-na">—</span>
                 </td>
               </tr>
-              <tr v-if="!compareProduits.length"><td :colspan="anneesCompare.length + 2" class="empty">Pas de données sur ces 3 années.</td></tr>
+              <tr v-if="!compareProduitsFiltre.length"><td :colspan="anneesCompare.length + 2" class="empty">Pas de données sur ces 3 années.</td></tr>
             </tbody>
           </table>
         </div>
