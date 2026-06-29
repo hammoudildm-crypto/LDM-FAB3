@@ -10,6 +10,7 @@ const records = ref([])
 const lots = ref([])
 const equipements = ref([])
 const filtreStatut = ref('')
+const rechercheLot = ref('')
 const erreur = ref('')
 const message = ref('')
 
@@ -64,9 +65,22 @@ async function chargerTout() {
   records.value = rc.data
 }
 
-const recordsFiltres = computed(() =>
-  filtreStatut.value ? records.value.filter(r => r.statut === filtreStatut.value) : records.value
-)
+const recordsFiltres = computed(() => {
+  let list = records.value
+  if (filtreStatut.value) list = list.filter(r => r.statut === filtreStatut.value)
+  const q = rechercheLot.value.trim().toLowerCase()
+  if (q) {
+    list = list.filter(r => {
+      const o = r.ordres_fabrication
+      const lot = o ? String(o.numero_lot || '') : ''
+      const p = o && o.produits ? o.produits : null
+      const code = p ? String(p.code_pf || '') : ''
+      const desig = p ? String(p.designation || '') : ''
+      return lot.toLowerCase().includes(q) || code.toLowerCase().includes(q) || desig.toLowerCase().includes(q)
+    })
+  }
+  return list
+})
 
 // Seules les lignes de conditionnement (type = 'Conditionnement')
 const equipementsFiltres = computed(() => {
@@ -214,10 +228,13 @@ onMounted(chargerTout)
         <div class="card-head">
           <h2 class="card-title">Conditionnements</h2>
           <span class="count">{{ recordsFiltres.length }}</span>
-          <select v-model="filtreStatut" class="filtre">
-            <option value="">Tous les statuts</option>
-            <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
-          </select>
+          <div class="head-tools">
+            <input v-model="rechercheLot" class="recherche" type="search" placeholder="Rechercher un n° de lot…" />
+            <select v-model="filtreStatut" class="filtre">
+              <option value="">Tous les statuts</option>
+              <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
+            </select>
+          </div>
         </div>
         <div class="table-scroll">
           <table class="grid">
@@ -271,7 +288,10 @@ onMounted(chargerTout)
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .card-head .card-title { margin: 0; }
 .count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
-.filtre { margin-left: auto; font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
+.filtre { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
+.head-tools { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.recherche { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 200px; }
+.recherche:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 
 .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: end; }
 .form-grid label { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
