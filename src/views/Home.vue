@@ -48,7 +48,7 @@ async function charger() {
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
 
-  const rpp = await fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produits(pcsu)'))
+  const rpp = await fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produits(code_pf, designation, pcsu)'))
   if (!rpp.error) planData.value = rpp.data
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
@@ -111,6 +111,15 @@ const caPotentielPlan = computed(() => planAnnee.value.reduce((s, x) => {
   const pcsu = x.produits ? Number(x.produits.pcsu || 0) : 0
   return s + Number(x.quantite_planifiee || 0) * pcsu
 }, 0))
+// Plan (boîtes) par produit pour l'année sélectionnée
+const planParProduit = computed(() => {
+  const m = {}
+  for (const x of planAnnee.value) {
+    const code = x.produits ? x.produits.code_pf : '—'
+    m[code] = (m[code] || 0) + Number(x.quantite_planifiee || 0)
+  }
+  return m
+})
 
 // --- Volumes (année sélectionnée) ---
 const totalBoites = computed(() => realAnnee.value.reduce((s, r) => s + Number(r.quantite_realisee || 0), 0))
@@ -235,14 +244,14 @@ const realisationPlan = computed(() => {
   for (const r of realAnnee.value) {
     const p = r.produits
     const code = p ? p.code_pf : '—'
-    if (!m[code]) m[code] = { code, nom: p ? p.designation : '—', produit: 0, cible: p ? Number(p.boites_theoriques || 0) : 0 }
+    if (!m[code]) m[code] = { code, nom: p ? p.designation : '—', produit: 0 }
     m[code].produit += Number(r.quantite_realisee || 0)
   }
+  const plan = planParProduit.value
   return Object.values(m).filter(x => x.produit > 0)
-    .map(x => ({ ...x, pct: x.cible > 0 ? (x.produit / x.cible) * 100 : null }))
+    .map(x => ({ ...x, cible: plan[x.code] || 0, pct: (plan[x.code] || 0) > 0 ? (x.produit / plan[x.code]) * 100 : null }))
     .sort((a, b) => b.produit - a.produit).slice(0, 8)
 })
-
 function pct(n, total) { return total > 0 ? (n / total) * 100 : 0 }
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 function fmtPct(n) { return n == null ? '—' : Number(n).toFixed(2) + ' %' }
