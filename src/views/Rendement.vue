@@ -186,12 +186,52 @@ function hauteurTrend(rdt) {
   return Math.max(2, Math.min(100, ((rdt - min) / (max - min)) * 100))
 }
 
+// Comparaison du rendement par produit sur 3 années (relatives à l'année choisie)
+const anneesCompare = computed(() => [anneeSel.value - 2, anneeSel.value - 1, anneeSel.value])
+const compareProduits = computed(() => {
+  const prodBox = produitParLot.value
+  const yset = new Set(anneesCompare.value)
+  const m = {}
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    const y = new Date(o.date_fin_fabrication).getFullYear()
+    if (!yset.has(y)) continue
+    const theo = Number(o.quantite_theorique || 0)
+    if (theo <= 0) continue
+    const p = prodBox[o.id] || 0
+    if (p <= 0) continue
+    if ((p / theo) * 100 < SEUIL_ANOMALIE) continue   // garde-fou : lots anormaux exclus
+    const code = o.produits ? o.produits.code_pf : '—'
+    if (!m[code]) m[code] = { code, nom: o.produits ? o.produits.designation : '—', an: {} }
+    if (!m[code].an[y]) m[code].an[y] = { prod: 0, theo: 0 }
+    m[code].an[y].prod += p; m[code].an[y].theo += theo
+  }
+  const recent = anneeSel.value
+  return Object.values(m).map(x => {
+    const rdt = {}
+    for (const y of anneesCompare.value) {
+      const a = x.an[y]
+      rdt[y] = a && a.theo > 0 ? (a.prod / a.theo) * 100 : null
+    }
+    const dispo = anneesCompare.value.filter(y => rdt[y] != null)
+    const delta = dispo.length >= 2 ? rdt[dispo[dispo.length - 1]] - rdt[dispo[0]] : null
+    return { code: x.code, nom: x.nom, rdt, theoRecent: x.an[recent] ? x.an[recent].theo : 0, delta }
+  }).filter(x => anneesCompare.value.some(y => x.rdt[y] != null))
+    .sort((a, b) => b.theoRecent - a.theoRecent)
+})
+function hauteurCompare(rdt) {
+  if (rdt == null) return 0
+  const min = 90, max = 100
+  return Math.max(4, Math.min(100, ((rdt - min) / (max - min)) * 100))
+}
+
 // Helpers chart mensuel
 function segAvarie(m) { return m.rdt == null ? 0 : m.avarie }
 function segRdt(m) { return m.rdt == null ? 0 : Math.min(100, m.rdt) }
 
 function fmt(n) { return n == null ? '—' : Math.round(Number(n)).toLocaleString('fr-FR') }
 function pct2(n) { return n == null ? '—' : Number(n).toFixed(2).replace('.', ',') + ' %' }
+function pct1(n) { return n == null ? '—' : Number(n).toFixed(1).replace('.', ',') + ' %' }
 
 watch(anneeSel, () => { produitSel.value = '' })
 
@@ -306,6 +346,45 @@ onMounted(chargerTout)
           </div>
         </div>
         <p class="hint">Échelle zoomée ({{ trendBornes.min }} % → {{ trendBornes.max }} %) pour visualiser les écarts.</p>
+      </section>
+
+      <!-- Comparaison du rendement par produit sur 3 ans -->
+      <section class="card">
+        <div class="card-head">
+          <h2 class="card-title">Comparaison du rendement par produit — 3 ans</h2>
+          <div class="legend">
+            <span v-for="(y, i) in anneesCompare" :key="y"><i class="dot" :class="'yr' + i"></i>{{ y }}</span>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Produit</th>
+                <th v-for="y in anneesCompare" :key="y" class="ta-c">{{ y }}</th>
+                <th class="ta-r">Évolution</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in compareProduits" :key="p.code">
+                <td><span class="mono">{{ p.code }}</span> <span class="desig">{{ p.nom }}</span></td>
+                <td v-for="(y, i) in anneesCompare" :key="y" class="cmp-cell">
+                  <template v-if="p.rdt[y] != null">
+                    <div class="cmp-val">{{ pct1(p.rdt[y]) }}</div>
+                    <div class="cmp-track"><div class="cmp-fill" :class="'yr' + i" :style="{ width: hauteurCompare(p.rdt[y]) + '%' }"></div></div>
+                  </template>
+                  <span v-else class="cmp-na">—</span>
+                </td>
+                <td class="ta-r">
+                  <span v-if="p.delta != null" class="delta" :class="p.delta >= 0 ? 'up' : 'down'">{{ p.delta >= 0 ? '▲' : '▼' }} {{ Math.abs(p.delta).toFixed(1).replace('.', ',') }} pt</span>
+                  <span v-else class="cmp-na">—</span>
+                </td>
+              </tr>
+              <tr v-if="!compareProduits.length"><td :colspan="anneesCompare.length + 2" class="empty">Pas de données sur ces 3 années.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="hint">Rendement = boîtes produites ÷ théoriques (lots anormaux exclus). Barres : échelle zoomée 90 → 100 %.</p>
       </section>
 
       <!-- Rendement par produit -->
@@ -452,6 +531,21 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .rdt-fill { height: 100%; background: #0f766e; border-radius: 999px; min-width: 2px; }
 .rdt-fill.bas { background: #b91c1c; }
 .rdt-num { width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.ta-c { text-align: center; }
+.dot.yr0 { background: #cbd5e1; }
+.dot.yr1 { background: #5eead4; }
+.dot.yr2 { background: #0f766e; }
+.cmp-cell { min-width: 92px; text-align: center; vertical-align: middle; }
+.cmp-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cmp-track { height: 5px; background: #f1f5f9; border-radius: 999px; overflow: hidden; margin: 4px auto 0; max-width: 80px; }
+.cmp-fill { height: 100%; border-radius: 999px; min-width: 3px; }
+.cmp-fill.yr0 { background: #cbd5e1; }
+.cmp-fill.yr1 { background: #5eead4; }
+.cmp-fill.yr2 { background: #0f766e; }
+.cmp-na { color: #cbd5e1; }
+.delta.up { color: #15803d; font-weight: 700; }
+.delta.down { color: #b91c1c; font-weight: 700; }
 
 @media (max-width: 980px) {
   .kpi-grid.k4 { grid-template-columns: 1fr 1fr; }
