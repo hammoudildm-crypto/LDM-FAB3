@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { supabase } from '../supabase'
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
@@ -135,6 +135,35 @@ const parProduit = computed(() => {
   }).sort((a, b) => b.theo - a.theo)
 })
 
+// Filtre par produit (section rendement par produit)
+const produitSel = ref('')
+const produitsListe = computed(() =>
+  parProduit.value.map(p => ({ code: p.code, nom: p.nom }))
+    .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+)
+const parProduitFiltre = computed(() =>
+  produitSel.value ? parProduit.value.filter(p => p.code === produitSel.value) : parProduit.value
+)
+const produitNomSel = computed(() => {
+  const p = produitsListe.value.find(x => x.code === produitSel.value)
+  return p ? p.nom : ''
+})
+// Détail mensuel du produit sélectionné
+const produitMois = computed(() => {
+  if (!produitSel.value) return null
+  const a = Array.from({ length: 12 }, () => ({ prod: 0, theo: 0 }))
+  for (const r of lotsAnnee.value) {
+    const p = r.of.produits
+    const code = p ? p.code_pf : '—'
+    if (code !== produitSel.value) continue
+    a[r.mois].prod += r.prod; a[r.mois].theo += r.theo
+  }
+  return a.map(m => {
+    const rdt = m.theo > 0 ? (m.prod / m.theo) * 100 : null
+    return { prod: m.prod, theo: m.theo, rdt, avarie: rdt == null ? null : Math.max(0, 100 - rdt) }
+  })
+})
+
 // Échelle zoomée pour la tendance annuelle (min-1 .. max+0.5)
 const trendBornes = computed(() => {
   const vals = parAn.value.map(x => x.rdt).filter(v => v != null)
@@ -155,6 +184,8 @@ function segRdt(m) { return m.rdt == null ? 0 : Math.min(100, m.rdt) }
 
 function fmt(n) { return n == null ? '—' : Math.round(Number(n)).toLocaleString('fr-FR') }
 function pct2(n) { return n == null ? '—' : Number(n).toFixed(2).replace('.', ',') + ' %' }
+
+watch(anneeSel, () => { produitSel.value = '' })
 
 onMounted(chargerTout)
 </script>
@@ -244,8 +275,29 @@ onMounted(chargerTout)
       <section class="card">
         <div class="card-head">
           <h2 class="card-title">Rendement par produit — {{ anneeSel }}</h2>
-          <span class="count">{{ parProduit.length }} produits</span>
+          <div class="head-tools">
+            <select v-model="produitSel" class="filtre">
+              <option value="">Tous les produits ({{ produitsListe.length }})</option>
+              <option v-for="p in produitsListe" :key="p.code" :value="p.code">{{ p.code }} — {{ p.nom }}</option>
+            </select>
+            <span class="count">{{ parProduitFiltre.length }}</span>
+          </div>
         </div>
+
+        <div v-if="produitSel && produitMois" class="prod-detail">
+          <div class="pd-title">Détail mensuel — <strong>{{ produitNomSel }}</strong> ({{ produitSel }})</div>
+          <div class="months compact">
+            <div v-for="(m, i) in produitMois" :key="i" class="mcol">
+              <div class="mavarie" :class="{ none: m.rdt == null }">{{ m.rdt == null ? '—' : pct2(m.avarie) }}</div>
+              <div class="mbar">
+                <div class="seg av" :style="{ height: segAvarie(m) + '%' }"></div>
+                <div class="seg rdt" :style="{ height: segRdt(m) + '%' }"></div>
+              </div>
+              <div class="mname">{{ MOIS[i] }}</div>
+            </div>
+          </div>
+        </div>
+
         <div class="table-scroll">
           <table class="grid">
             <thead>
@@ -258,7 +310,7 @@ onMounted(chargerTout)
               </tr>
             </thead>
             <tbody>
-              <tr v-for="p in parProduit" :key="p.code">
+              <tr v-for="p in parProduitFiltre" :key="p.code">
                 <td><span class="mono">{{ p.code }}</span> <span class="desig">{{ p.nom }}</span></td>
                 <td class="ta-r">{{ fmt(p.theo) }}</td>
                 <td class="ta-r">{{ fmt(p.prod) }}</td>
@@ -270,7 +322,7 @@ onMounted(chargerTout)
                 </td>
                 <td class="ta-r" :class="{ 'av-num': p.avarie != null && p.avarie > 5 }">{{ pct2(p.avarie) }}</td>
               </tr>
-              <tr v-if="!parProduit.length"><td colspan="5" class="empty">Aucune fabrication en {{ anneeSel }}.</td></tr>
+              <tr v-if="!parProduitFiltre.length"><td colspan="5" class="empty">Aucune fabrication en {{ anneeSel }}.</td></tr>
             </tbody>
           </table>
         </div>
@@ -345,6 +397,15 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .desig { color: #64748b; }
 .empty { color: #94a3b8; font-style: italic; text-align: center; padding: 16px; }
 .av-num { color: #b91c1c; font-weight: 700; }
+
+.head-tools { display: flex; align-items: center; gap: 10px; }
+.filtre { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; max-width: 340px; }
+.filtre:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.prod-detail { background: #f8fafc; border: 1px solid #eef2f6; border-radius: 10px; padding: 14px 14px 16px; margin-bottom: 16px; }
+.pd-title { font-size: 13px; color: #475569; margin-bottom: 12px; }
+.months.compact .mbar { height: 120px; width: 30px; }
+.months.compact .mavarie { font-size: 10px; }
+.months.compact .mcol { min-width: 44px; }
 
 .rdt-cell { display: flex; align-items: center; gap: 10px; min-width: 200px; }
 .rdt-track { flex: 1; height: 9px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
