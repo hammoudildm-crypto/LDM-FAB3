@@ -7,6 +7,7 @@ const session = ref(null)
 const role = ref(null)
 const route = useRoute()
 const navRef = ref(null)
+const themeRef = ref(null)
 const openMenu = ref(null)
 
 const estAdmin = computed(() => role.value === 'admin')
@@ -21,9 +22,23 @@ const PILOT = ['/ca', '/effectifs', '/audit', '/habilitations']
 const prodActive = computed(() => PROD.includes(route.path))
 const pilotActive = computed(() => PILOT.includes(route.path))
 
+// --- Thèmes ---
+const THEMES = [['clair', 'Clair'], ['ocean', 'Océan'], ['ardoise', 'Ardoise'], ['sombre', 'Sombre']]
+const theme = ref('clair')
+function setTheme(t) {
+  theme.value = t
+  document.documentElement.dataset.theme = t
+  try { localStorage.setItem('ldmfab-theme', t) } catch (e) { /* ignore */ }
+  closeMenu()
+}
+
 function toggleMenu(name) { openMenu.value = openMenu.value === name ? null : name }
 function closeMenu() { openMenu.value = null }
-function onDocClick(e) { if (navRef.value && !navRef.value.contains(e.target)) openMenu.value = null }
+function onDocClick(e) {
+  const inNav = navRef.value && navRef.value.contains(e.target)
+  const inTheme = themeRef.value && themeRef.value.contains(e.target)
+  if (!inNav && !inTheme) openMenu.value = null
+}
 
 async function chargerRole() {
   if (!session.value) { role.value = null; return }
@@ -32,6 +47,10 @@ async function chargerRole() {
 }
 
 onMounted(async () => {
+  try {
+    const saved = localStorage.getItem('ldmfab-theme')
+    if (saved) { theme.value = saved; document.documentElement.dataset.theme = saved }
+  } catch (e) { /* ignore */ }
   document.addEventListener('click', onDocClick)
   const res = await supabase.auth.getSession()
   if (res.error) { console.error('getSession:', res.error.message); return }
@@ -88,6 +107,19 @@ async function signOut() {
     </nav>
 
     <div class="right">
+      <div class="dropdown" ref="themeRef">
+        <button class="navlink drop-toggle" :class="{ open: openMenu === 'theme' }" @click="toggleMenu('theme')" title="Changer de thème">
+          <span class="swatch" :class="'sw-' + theme"></span>Thème <span class="caret">▾</span>
+        </button>
+        <div v-show="openMenu === 'theme'" class="drop-panel theme-panel">
+          <button v-for="t in THEMES" :key="t[0]" class="theme-item" :class="{ sel: theme === t[0] }" @click="setTheme(t[0])">
+            <span class="swatch" :class="'sw-' + t[0]"></span>
+            <span class="theme-name">{{ t[1] }}</span>
+            <span v-if="theme === t[0]" class="chk">✓</span>
+          </button>
+        </div>
+      </div>
+
       <RouterLink v-if="session" to="/compte" class="navlink">Mon compte</RouterLink>
       <span v-if="session && role" class="role-badge" :class="'r-' + role">{{ roleLabel }}</span>
       <RouterLink v-if="!session" to="/login" class="navlink">Connexion</RouterLink>
@@ -101,19 +133,33 @@ async function signOut() {
 
 <style>
 * { box-sizing: border-box; }
-body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1b2733; }
+
+:root {
+  --bg: #f6f7f9;
+  --text: #1b2733;
+  --topbar: #0f2a33;
+  --topbar-text: #ffffff;
+  --topbar-muted: #cbd5e1;
+  --topbar-border: #33505a;
+  --accent-bright: #2dd4bf;
+}
+html[data-theme="ocean"]   { --bg: #eef4f9; --topbar: #0c4a6e; --topbar-muted: #bae6fd; --topbar-border: #1e6091; --accent-bright: #38bdf8; }
+html[data-theme="ardoise"] { --bg: #eceff4; --topbar: #1e293b; --topbar-muted: #cbd5e1; --topbar-border: #475569; --accent-bright: #94a3b8; }
+html[data-theme="sombre"]  { --bg: #0f172a; --text: #e6edf6; --topbar: #020617; --topbar-text: #f1f5f9; --topbar-muted: #94a3b8; --topbar-border: #334155; --accent-bright: #2dd4bf; color-scheme: dark; }
+
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: var(--bg); color: var(--text); }
 
 .topbar { display: flex; align-items: center; gap: 22px; padding: 0 20px; height: 56px;
-  background: #0f2a33; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12); position: relative; z-index: 20; }
+  background: var(--topbar); color: var(--topbar-text); box-shadow: 0 1px 3px rgba(0,0,0,.12); position: relative; z-index: 20; }
 .brand { font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
 .nav { display: flex; gap: 20px; align-items: center; }
 .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
 
-.navlink { color: #cbd5e1; text-decoration: none; font-size: 14px; font-weight: 500; padding: 4px 0;
+.navlink { color: var(--topbar-muted); text-decoration: none; font-size: 14px; font-weight: 500; padding: 4px 0;
   white-space: nowrap; background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 5px; }
-.navlink:hover { color: #fff; }
-.nav a.router-link-exact-active { color: #fff; border-bottom-color: #2dd4bf; }
-.drop-toggle.active { color: #fff; border-bottom-color: #2dd4bf; }
+.navlink:hover { color: var(--topbar-text); }
+.nav a.router-link-exact-active { color: var(--topbar-text); border-bottom-color: var(--accent-bright); }
+.drop-toggle.active { color: var(--topbar-text); border-bottom-color: var(--accent-bright); }
 .caret { font-size: 10px; transition: transform .15s; }
 .drop-toggle.open .caret { transform: rotate(180deg); }
 
@@ -124,17 +170,57 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 .drop-panel a:hover { background: #f1f5f9; }
 .drop-panel a.router-link-exact-active { background: #ecfdf5; color: #0f766e; font-weight: 600; }
 
+/* Sélecteur de thème */
+.theme-panel { right: 0; left: auto; min-width: 170px; }
+.theme-item { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; cursor: pointer;
+  font-size: 14px; color: #1b2733; padding: 8px 12px; border-radius: 7px; font-family: inherit; text-align: left; }
+.theme-item:hover { background: #f1f5f9; }
+.theme-item.sel { font-weight: 600; }
+.theme-name { flex: 1; }
+.chk { color: #0f766e; font-weight: 700; }
+.swatch { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,.15); display: inline-block; }
+.sw-clair { background: #0f2a33; }
+.sw-ocean { background: #0c4a6e; }
+.sw-ardoise { background: #1e293b; }
+.sw-sombre { background: #020617; }
+
 .role-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
 .r-admin { background: #2dd4bf; color: #06322c; }
 .r-operateur { background: #60a5fa; color: #0b2a5b; }
 .r-lecteur { background: #94a3b8; color: #1b2733; }
 
-.signout { background: transparent; color: #cbd5e1; border: 1px solid #33505a; padding: 5px 12px; border-radius: 7px; font-size: 13px; cursor: pointer; white-space: nowrap; }
-.signout:hover { color: #fff; border-color: #557; }
+.signout { background: transparent; color: var(--topbar-muted); border: 1px solid var(--topbar-border); padding: 5px 12px; border-radius: 7px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.signout:hover { color: var(--topbar-text); border-color: var(--topbar-muted); }
 
 main { padding: 20px 16px; max-width: 1200px; margin: 0 auto; }
 
 .error { color: #b91c1c; }
+
+/* ===== Mode sombre : surfaces & textes (s'applique partout via les classes communes) ===== */
+html[data-theme="sombre"] .card,
+html[data-theme="sombre"] .kpi,
+html[data-theme="sombre"] .empty-card,
+html[data-theme="sombre"] .welcome { background: #161f33 !important; border-color: #2a3650 !important; box-shadow: none !important; }
+html[data-theme="sombre"] .drop-panel { background: #161f33 !important; border-color: #2a3650 !important; }
+html[data-theme="sombre"] .drop-panel a,
+html[data-theme="sombre"] .theme-item { color: #e6edf6 !important; }
+html[data-theme="sombre"] .drop-panel a:hover,
+html[data-theme="sombre"] .theme-item:hover { background: #243049 !important; }
+html[data-theme="sombre"] .form-grid { background: #0f1830 !important; border-color: #2a3650 !important; }
+html[data-theme="sombre"] .bar-track { background: #2a3650 !important; }
+html[data-theme="sombre"] .count { background: #243049 !important; color: #cbd5e1 !important; }
+html[data-theme="sombre"] input,
+html[data-theme="sombre"] select,
+html[data-theme="sombre"] textarea { background: #0f1830 !important; color: #e6edf6 !important; border-color: #2a3650 !important; }
+html[data-theme="sombre"] .btn.ghost { background: #161f33 !important; color: #cbd5e1 !important; border-color: #2a3650 !important; }
+html[data-theme="sombre"] table.grid th { color: #94a3b8 !important; border-color: #2a3650 !important; }
+html[data-theme="sombre"] table.grid td { border-color: #1f2940 !important; }
+html[data-theme="sombre"] table.grid tr:hover td { background: #1d2740 !important; }
+html[data-theme="sombre"] table.mini td { border-color: #1f2940 !important; }
+html[data-theme="sombre"] .prog-nom { color: #e6edf6 !important; }
+html[data-theme="sombre"] .doc-title { border-bottom-color: #2a3650 !important; }
+html[data-theme="sombre"] .block { border-bottom-color: #1f2940 !important; }
+html[data-theme="sombre"] .lot-info { border-top-color: #1f2940 !important; }
 
 @media print {
   .topbar { display: none !important; }
