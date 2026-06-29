@@ -56,11 +56,16 @@ const taux = computed(() => {
 
 const parSuperviseur = computed(() => {
   const m = {}
-  for (const l of verifies.value) { const k = l.ddl_verificateur || '—'; m[k] = (m[k] || 0) + 1 }
-  const arr = Object.entries(m).map(([nom, n]) => ({ nom, n })).sort((a, b) => b.n - a.n)
-  const tot = arr.reduce((s, x) => s + x.n, 0) || 1
-  const max = arr.length ? arr[0].n : 1
-  return arr.map(x => ({ ...x, pct: (x.n / tot) * 100, w: (x.n / max) * 100 }))
+  for (const l of produits.value) {
+    const k = l.ddl_verificateur
+    if (!k) continue
+    if (!m[k]) m[k] = { nom: k, assignes: 0, verifies: 0 }
+    m[k].assignes++
+    if (l.ddl_verifie) m[k].verifies++
+  }
+  return Object.values(m)
+    .map(x => ({ ...x, taux: x.assignes ? (x.verifies / x.assignes) * 100 : 0 }))
+    .sort((a, b) => b.assignes - a.assignes)
 })
 
 const superviseurs = computed(() => {
@@ -84,7 +89,7 @@ function fmtDate(d) {
 
 function ouvrir(l) {
   verifEnCours.value = l.id
-  vForm.value = { verificateur: '', date: new Date().toISOString().slice(0, 10) }
+  vForm.value = { verificateur: l.ddl_verificateur || '', date: new Date().toISOString().slice(0, 10) }
   msg.value = ''
 }
 
@@ -136,14 +141,15 @@ async function devalider(l) {
 
     <div class="cols">
       <section class="card">
-        <h3 class="card-title">Vérifications par superviseur</h3>
-        <div v-if="!parSuperviseur.length" class="empty">Aucune vérification pour ce filtre.</div>
+        <h3 class="card-title">Taux de vérification par superviseur</h3>
+        <p class="hint">DDL envoyés à l'AQ ÷ DDL qui lui sont assignés</p>
+        <div v-if="!parSuperviseur.length" class="empty">Aucun DDL pour ce filtre.</div>
         <div v-for="s in parSuperviseur" :key="s.nom" class="prog-row">
           <div class="prog-head">
             <span class="prog-nom">{{ s.nom }}</span>
-            <span class="prog-pct">{{ s.n }} · {{ s.pct.toFixed(0) }}%</span>
+            <span class="prog-pct" :class="{ warn: s.taux < 100 }">{{ s.verifies }}/{{ s.assignes }} · {{ s.taux.toFixed(0) }}%</span>
           </div>
-          <div class="bar-track"><div class="bar-fill prod" :style="{ width: s.w + '%' }"></div></div>
+          <div class="bar-track"><div class="bar-fill" :class="s.taux >= 100 ? 'ok' : 'part'" :style="{ width: s.taux + '%' }"></div></div>
         </div>
       </section>
 
@@ -151,18 +157,20 @@ async function devalider(l) {
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <table v-else class="mini">
+          <thead><tr><th>Lot</th><th>Produit</th><th>Superviseur</th><th class="right">Lancé le</th><th></th></tr></thead>
           <tbody>
             <template v-for="l in attente" :key="l.id">
               <tr>
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td class="desig">{{ prodNom(l) }}</td>
+                <td>{{ l.ddl_verificateur || '—' }}</td>
                 <td class="right nowrap">{{ fmtDate(l.date_lancement) }}</td>
                 <td class="right"><button v-if="peutEditer" class="link" @click="ouvrir(l)">Vérifier</button></td>
               </tr>
               <tr v-if="verifEnCours === l.id">
-                <td colspan="4">
+                <td colspan="5">
                   <div class="verif-form">
-                    <input list="superv-list" v-model="vForm.verificateur" placeholder="Vérificateur (superviseur)" />
+                    <input list="superv-list" v-model="vForm.verificateur" placeholder="Superviseur / vérificateur" />
                     <input type="date" v-model="vForm.date" />
                     <button class="btn sm" @click="valider(l)">Valider</button>
                     <button class="link" @click="verifEnCours = null">Annuler</button>
@@ -179,7 +187,7 @@ async function devalider(l) {
       <h3 class="card-title">DDL vérifiés ({{ nbVerifies }})</h3>
       <div v-if="!verifies.length" class="empty">Aucun DDL vérifié pour ce filtre.</div>
       <table v-else class="mini">
-        <thead><tr><th>Lot</th><th>Produit</th><th>Vérificateur</th><th class="right">Date</th><th></th></tr></thead>
+        <thead><tr><th>Lot</th><th>Produit</th><th>Superviseur</th><th class="right">Date d'envoi</th><th></th></tr></thead>
         <tbody>
           <tr v-for="l in verifiesAffiches" :key="l.id">
             <td class="mono">{{ l.numero_lot }}</td>
@@ -231,6 +239,10 @@ async function devalider(l) {
 .bar-track { height: 10px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 999px; min-width: 2px; }
 .bar-fill.prod { background: #0f766e; }
+.bar-fill.ok { background: #16a34a; }
+.bar-fill.part { background: #f59e0b; }
+.prog-pct.warn { color: #b45309; }
+.hint { margin: -8px 0 14px; font-size: 12px; color: #94a3b8; }
 
 table.mini { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.mini th { text-align: left; padding: 7px 6px; border-bottom: 2px solid #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; }
