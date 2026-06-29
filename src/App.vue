@@ -197,6 +197,21 @@ main { padding: 20px 16px; max-width: 1200px; margin: 0 auto; }
 .error { color: #b91c1c; }
 
 /* ===== Mode sombre : surfaces & textes (s'applique partout via les classes communes) ===== */
+/* Texte clair sur tout le contenu (les conteneurs de page forçaient un texte foncé) */
+html[data-theme="sombre"] .dash,
+html[data-theme="sombre"] .ref-page,
+html[data-theme="sombre"] .pdp-page,
+html[data-theme="sombre"] .of-page,
+html[data-theme="sombre"] .ph-page,
+html[data-theme="sombre"] .ec-page,
+html[data-theme="sombre"] .cd-page,
+html[data-theme="sombre"] .dl-page,
+html[data-theme="sombre"] .ca-page,
+html[data-theme="sombre"] .ef-page,
+html[data-theme="sombre"] .au-page,
+html[data-theme="sombre"] .hb-page,
+html[data-theme="sombre"] .mc-page { color: #e6edf6; }
+
 html[data-theme="sombre"] .card,
 html[data-theme="sombre"] .kpi,
 html[data-theme="sombre"] .empty-card,
