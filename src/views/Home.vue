@@ -20,6 +20,7 @@ const lots = ref([])
 const planData = ref([])
 const conditionnements = ref([])
 const phases = ref([])
+const realisations = ref([])
 
 async function charger() {
   erreur.value = ''
@@ -45,6 +46,11 @@ async function charger() {
     .select('ordre_id, quantite_entree, quantite_sortie, date_phase, id')
     .eq('actif', true).order('date_phase', { ascending: true, nullsFirst: true }).order('id', { ascending: true })
   if (!rph.error) phases.value = rph.data
+
+  const rr = await supabase.from('realisations')
+    .select('annee, mois, quantite_realisee, produits(code_pf, designation, pcsu, boites_theoriques, donneurs_ordre(nom))')
+    .eq('actif', true)
+  if (!rr.error) realisations.value = rr.data
 }
 
 // --- Helpers ---
@@ -55,6 +61,7 @@ function boitesOf(c) {
 }
 function prodDe(c) { return c.ordres_fabrication && c.ordres_fabrication.produits ? c.ordres_fabrication.produits : null }
 function pcsuDe(c) { const p = prodDe(c); return p ? Number(p.pcsu || 0) : 0 }
+function pcsuR(r) { return r.produits ? Number(r.produits.pcsu || 0) : 0 }
 function estCeMois(c) {
   if (!c.date_conditionnement) return false
   const d = new Date(c.date_conditionnement)
@@ -66,6 +73,9 @@ const condAnnee = computed(() => conditionnements.value.filter(c => {
   if (!c.date_conditionnement) return false
   return new Date(c.date_conditionnement).getFullYear() === anneeSel.value
 }))
+
+// Réalisations de l'année sélectionnée (source : table realisations)
+const realAnnee = computed(() => realisations.value.filter(r => r.annee === anneeSel.value))
 
 // --- Lots (état courant) ---
 const nbLots = computed(() => lots.value.length)
@@ -90,13 +100,13 @@ const caPotentielPlan = computed(() => planAnnee.value.reduce((s, x) => {
 }, 0))
 
 // --- Volumes (année sélectionnée) ---
-const totalBoites = computed(() => condAnnee.value.reduce((s, c) => s + boitesOf(c), 0))
+const totalBoites = computed(() => realAnnee.value.reduce((s, r) => s + Number(r.quantite_realisee || 0), 0))
 const boitesRestantes = computed(() => Math.max(0, planTotal.value - totalBoites.value))
-const boitesCeMois = computed(() => conditionnements.value.reduce((s, c) => s + (estCeMois(c) ? boitesOf(c) : 0), 0))
+const boitesCeMois = computed(() => realisations.value.filter(r => r.annee === anneeCourante && r.mois === moisCourant + 1).reduce((s, r) => s + Number(r.quantite_realisee || 0), 0))
 
 // --- Finance (année sélectionnée) ---
-const caRealise = computed(() => condAnnee.value.reduce((s, c) => s + boitesOf(c) * pcsuDe(c), 0))
-const caCeMois = computed(() => conditionnements.value.reduce((s, c) => s + (estCeMois(c) ? boitesOf(c) * pcsuDe(c) : 0), 0))
+const caRealise = computed(() => realAnnee.value.reduce((s, r) => s + Number(r.quantite_realisee || 0) * pcsuR(r), 0))
+const caCeMois = computed(() => realisations.value.filter(r => r.annee === anneeCourante && r.mois === moisCourant + 1).reduce((s, r) => s + Number(r.quantite_realisee || 0) * pcsuR(r), 0))
 const tauxRealisationCA = computed(() => caPotentielPlan.value > 0 ? (caRealise.value / caPotentielPlan.value) * 100 : null)
 const prixMoyenBoite = computed(() => totalBoites.value > 0 ? caRealise.value / totalBoites.value : null)
 const pctPlanRealise = computed(() => planTotal.value > 0 ? (totalBoites.value / planTotal.value) * 100 : null)
@@ -175,7 +185,7 @@ const vracEnAttente = computed(() => {
 // --- Production par mois (année) ---
 const prodParMois = computed(() => {
   const arr = Array(12).fill(0)
-  for (const c of condAnnee.value) arr[new Date(c.date_conditionnement).getMonth()] += boitesOf(c)
+  for (const r of realAnnee.value) arr[r.mois - 1] += Number(r.quantite_realisee || 0)
   return arr
 })
 const maxMois = computed(() => Math.max(1, ...prodParMois.value))
@@ -183,34 +193,36 @@ const maxMois = computed(() => Math.max(1, ...prodParMois.value))
 // --- Top produits / donneurs / réalisation (année) ---
 const topProduits = computed(() => {
   const m = {}
-  for (const c of condAnnee.value) {
-    const p = prodDe(c)
+  for (const r of realAnnee.value) {
+    const p = r.produits
     const cle = p ? p.code_pf : '—'
     if (!m[cle]) m[cle] = { nom: p ? p.designation : '(produit inconnu)', boites: 0, ca: 0 }
-    m[cle].boites += boitesOf(c)
-    m[cle].ca += boitesOf(c) * pcsuDe(c)
+    const b = Number(r.quantite_realisee || 0)
+    m[cle].boites += b
+    m[cle].ca += b * pcsuR(r)
   }
   return Object.values(m).filter(x => x.boites > 0).sort((a, b) => b.ca - a.ca).slice(0, 5)
 })
 const caParDonneur = computed(() => {
   const m = {}
-  for (const c of condAnnee.value) {
-    const p = prodDe(c)
+  for (const r of realAnnee.value) {
+    const p = r.produits
     const nom = p && p.donneurs_ordre ? p.donneurs_ordre.nom : '—'
     if (!m[nom]) m[nom] = { nom, boites: 0, ca: 0 }
-    m[nom].boites += boitesOf(c)
-    m[nom].ca += boitesOf(c) * pcsuDe(c)
+    const b = Number(r.quantite_realisee || 0)
+    m[nom].boites += b
+    m[nom].ca += b * pcsuR(r)
   }
   return Object.values(m).filter(x => x.boites > 0).sort((a, b) => b.ca - a.ca)
 })
 const maxCaDonneur = computed(() => Math.max(1, ...caParDonneur.value.map(d => d.ca)))
 const realisationPlan = computed(() => {
   const m = {}
-  for (const c of condAnnee.value) {
-    const p = prodDe(c)
+  for (const r of realAnnee.value) {
+    const p = r.produits
     const code = p ? p.code_pf : '—'
     if (!m[code]) m[code] = { code, nom: p ? p.designation : '—', produit: 0, cible: p ? Number(p.boites_theoriques || 0) : 0 }
-    m[code].produit += boitesOf(c)
+    m[code].produit += Number(r.quantite_realisee || 0)
   }
   return Object.values(m).filter(x => x.produit > 0)
     .map(x => ({ ...x, pct: x.cible > 0 ? (x.produit / x.cible) * 100 : null }))
@@ -236,242 +248,3 @@ onMounted(async () => {
   if (session.value) await charger()
 })
 </script>
-
-<template>
-  <div class="dash">
-    <header class="dash-head">
-      <div>
-        <h1>Tableau de bord</h1>
-        <p class="sub">Vue d'ensemble de la production — LDM-FAB3</p>
-      </div>
-      <label v-if="session" class="annee-sel">Année de référence
-        <select v-model.number="anneeSel">
-          <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
-        </select>
-      </label>
-    </header>
-
-    <div v-if="!session" class="welcome">
-      <h2>Bienvenue sur LDM-FAB3</h2>
-      <p>Connecte-toi pour accéder au tableau de bord et aux modules de production.</p>
-      <RouterLink to="/login" class="btn">Se connecter</RouterLink>
-    </div>
-
-    <template v-else>
-      <p v-if="erreur" class="alert">{{ erreur }}</p>
-
-      <nav class="tabs">
-        <button v-for="o in ONGLETS" :key="o[0]" class="tab" :class="{ active: ongletActif === o[0] }" @click="ongletActif = o[0]">{{ o[1] }}</button>
-      </nav>
-
-      <!-- ====================== PRODUCTION ====================== -->
-      <div v-show="ongletActif === 'production'">
-        <div class="kpi-grid">
-          <div class="kpi"><div class="kpi-val">{{ fmt(nbProduits) }}</div><div class="kpi-lbl">Produits actifs</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(nbLots) }}</div><div class="kpi-lbl">Lots</div></div>
-          <div class="kpi"><div class="kpi-val accent">{{ fmt(lotsEnCours) }}</div><div class="kpi-lbl">Lots en cours</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(totalBoites) }}</div><div class="kpi-lbl">Boîtes conditionnées {{ anneeSel }}</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(vracEnAttente) }}</div><div class="kpi-lbl">Vrac en attente (kg)</div></div>
-          <div class="kpi"><div class="kpi-val accent">{{ fmt(boitesCeMois) }}</div><div class="kpi-lbl">Boîtes ce mois</div></div>
-        </div>
-        <div class="kpi-grid">
-          <div class="kpi"><div class="kpi-val">{{ fmt(planTotal) }}</div><div class="kpi-lbl">Plan {{ anneeSel }} (boîtes)</div></div>
-          <div class="kpi"><div class="kpi-val accent">{{ fmtPct(pctPlanRealise) }}</div><div class="kpi-lbl">Plan {{ anneeSel }} réalisé</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(boitesRestantes) }}</div><div class="kpi-lbl">Boîtes restantes (plan)</div></div>
-        </div>
-
-        <div class="cols">
-          <section class="card">
-            <h2 class="card-title">Production {{ anneeSel }} par mois (boîtes)</h2>
-            <div v-for="(v, i) in prodParMois" :key="i" class="bar-row">
-              <span class="bar-lbl mois">{{ MOIS[i] }}</span>
-              <div class="bar-track"><div class="bar-fill prod" :style="{ width: (v / maxMois * 100) + '%' }"></div></div>
-              <span class="bar-num wide">{{ fmt(v) }}</span>
-            </div>
-            <p v-if="!totalBoites" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
-          </section>
-
-          <section class="card">
-            <h2 class="card-title">Réalisation du plan — top produits</h2>
-            <div v-for="p in realisationPlan" :key="p.code" class="prog-row">
-              <div class="prog-head"><span class="prog-nom">{{ p.nom }}</span><span class="prog-pct">{{ fmtPct(p.pct) }}</span></div>
-              <div class="bar-track"><div class="bar-fill" :class="(p.pct != null && p.pct >= 100) ? 'st-lib' : 'prod'" :style="{ width: Math.min(100, p.pct || 0) + '%' }"></div></div>
-              <div class="prog-sub">{{ fmt(p.produit) }} / {{ p.cible ? fmt(p.cible) : '—' }} boîtes</div>
-            </div>
-            <p v-if="!realisationPlan.length" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
-          </section>
-
-          <section class="card span2">
-            <h2 class="card-title">Derniers lots</h2>
-            <table class="mini">
-              <tbody>
-                <tr v-for="l in derniersLots" :key="l.id">
-                  <td class="mono">{{ l.numero_lot }}</td>
-                  <td class="desig">{{ l.produits ? l.produits.designation : '—' }}</td>
-                  <td>{{ fmtDate(l.date_lancement) }}</td>
-                  <td><span class="badge" :class="classeStatut(l.statut)">{{ l.statut }}</span></td>
-                </tr>
-                <tr v-if="!derniersLots.length"><td colspan="4" class="empty">Aucun lot.</td></tr>
-              </tbody>
-            </table>
-          </section>
-        </div>
-      </div>
-
-      <!-- ====================== QUALITÉ ====================== -->
-      <div v-show="ongletActif === 'qualite'">
-        <div class="kpi-grid">
-          <div class="kpi"><div class="kpi-val">{{ fmt(lotsTermines) }}</div><div class="kpi-lbl">Lots terminés</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(lotsLiberes) }}</div><div class="kpi-lbl">Lots libérés</div></div>
-          <div class="kpi"><div class="kpi-val accent">{{ fmtPct(tauxLiberation) }}</div><div class="kpi-lbl">Taux de libération</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmtPct(rendementFabMoyen) }}</div><div class="kpi-lbl">Rendement fab. moyen</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmtPct(rendementCndtMoyen) }}</div><div class="kpi-lbl">Rendement cond. moyen</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmtPct(rendementGlobalMoyen) }}</div><div class="kpi-lbl">Rendement global moyen</div></div>
-        </div>
-
-        <div class="cols">
-          <section class="card">
-            <h2 class="card-title">Lots par statut</h2>
-            <div v-for="s in STATUTS" :key="s" class="bar-row">
-              <span class="bar-lbl"><span class="badge" :class="classeStatut(s)">{{ s }}</span></span>
-              <div class="bar-track"><div class="bar-fill" :class="classeStatut(s)" :style="{ width: pct(lotsParStatut[s], nbLots) + '%' }"></div></div>
-              <span class="bar-num">{{ lotsParStatut[s] }}</span>
-            </div>
-            <p v-if="!nbLots" class="empty">Aucun lot pour l'instant.</p>
-          </section>
-
-          <section class="card">
-            <h2 class="card-title">Rendement cond. par mois — {{ anneeSel }}</h2>
-            <div v-for="(v, i) in rendementCondParMois" :key="i" class="bar-row">
-              <span class="bar-lbl mois">{{ MOIS[i] }}</span>
-              <div class="bar-track"><div class="bar-fill" :class="(v != null && v < 95) ? 'st-rej' : 'prod'" :style="{ width: Math.min(100, v || 0) + '%' }"></div></div>
-              <span class="bar-num xl">{{ fmtPct(v) }}</span>
-            </div>
-            <p v-if="rendementCondParMois.every(v => v == null)" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
-          </section>
-        </div>
-      </div>
-
-      <!-- ====================== FINANCE ====================== -->
-      <div v-show="ongletActif === 'finance'">
-        <div class="kpi-grid">
-          <div class="kpi"><div class="kpi-val accent">{{ fmtDA(caRealise) }}</div><div class="kpi-lbl">CA réalisé {{ anneeSel }}</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmtDA(caCeMois) }}</div><div class="kpi-lbl">CA ce mois</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmtDA(caPotentielPlan) }}</div><div class="kpi-lbl">CA potentiel (plan {{ anneeSel }})</div></div>
-          <div class="kpi"><div class="kpi-val accent">{{ fmtPct(tauxRealisationCA) }}</div><div class="kpi-lbl">Réalisation CA</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmtDA(prixMoyenBoite) }}</div><div class="kpi-lbl">Prix moyen / boîte</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(totalBoites) }}</div><div class="kpi-lbl">Boîtes conditionnées {{ anneeSel }}</div></div>
-        </div>
-
-        <div class="cols">
-          <section class="card">
-            <h2 class="card-title">Chiffre d'affaires par donneur d'ordre</h2>
-            <div v-for="d in caParDonneur" :key="d.nom" class="bar-row">
-              <span class="bar-lbl don">{{ d.nom }}</span>
-              <div class="bar-track"><div class="bar-fill prod" :style="{ width: (d.ca / maxCaDonneur * 100) + '%' }"></div></div>
-              <span class="bar-num xl">{{ fmtDA(d.ca) }}</span>
-            </div>
-            <p v-if="!caParDonneur.length" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
-          </section>
-
-          <section class="card">
-            <h2 class="card-title">Top produits — chiffre d'affaires</h2>
-            <table class="mini">
-              <tbody>
-                <tr v-for="(p, i) in topProduits" :key="i">
-                  <td class="rank">{{ i + 1 }}</td>
-                  <td class="desig">{{ p.nom }}</td>
-                  <td class="right">{{ fmt(Math.round(p.boites)) }} bts</td>
-                  <td class="right strong">{{ fmtDA(p.ca) }}</td>
-                </tr>
-                <tr v-if="!topProduits.length"><td colspan="4" class="empty">Aucun conditionnement en {{ anneeSel }}.</td></tr>
-              </tbody>
-            </table>
-          </section>
-        </div>
-      </div>
-    </template>
-  </div>
-</template>
-
-<style scoped>
-.dash { color: #1b2733; }
-.dash-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
-.dash-head h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
-.dash-head .sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
-.annee-sel { display: flex; flex-direction: column; font-size: 11px; font-weight: 600; color: #64748b; gap: 4px; text-transform: uppercase; letter-spacing: .03em; }
-.annee-sel select { font-size: 14px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 600; color: #1b2733; min-width: 110px; }
-
-.welcome { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 40px; text-align: center; }
-.welcome h2 { margin: 0 0 8px; font-size: 22px; }
-.welcome p { color: #64748b; margin: 0 0 18px; }
-
-.alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
-
-.tabs { display: flex; gap: 4px; border-bottom: 2px solid #e2e8f0; margin-bottom: 20px; }
-.tab { background: none; border: 0; padding: 10px 18px; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
-.tab:hover { color: #0f766e; }
-.tab.active { color: #0f766e; border-bottom-color: #0f766e; }
-
-.kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 14px; }
-.kpi-grid:last-of-type { margin-bottom: 22px; }
-.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
-.kpi-val { font-size: 23px; font-weight: 700; letter-spacing: -0.02em; }
-.kpi-val.accent { color: #0f766e; }
-.kpi-lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
-
-.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
-.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
-.card.span2 { grid-column: 1 / -1; }
-.card-title { margin: 0 0 14px; font-size: 16px; }
-
-.bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
-.bar-lbl { width: 92px; flex-shrink: 0; }
-.bar-lbl.mois { width: 38px; font-size: 12px; font-weight: 600; color: #64748b; }
-.bar-lbl.don { width: 112px; font-size: 12px; font-weight: 600; color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bar-track { flex: 1; height: 10px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 999px; min-width: 2px; }
-.bar-fill.st-plan { background: #94a3b8; }
-.bar-fill.st-cours { background: #3b82f6; }
-.bar-fill.st-fini { background: #14b8a6; }
-.bar-fill.st-lib { background: #22c55e; }
-.bar-fill.st-rej { background: #ef4444; }
-.bar-fill.prod { background: #0f766e; }
-.bar-num { width: 36px; text-align: right; font-weight: 700; font-size: 14px; flex-shrink: 0; }
-.bar-num.wide { width: 64px; }
-.bar-num.xl { width: 78px; font-size: 13px; }
-
-.btn { display: inline-block; background: #0f766e; color: #fff; border: 0; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; }
-.btn:hover { background: #0c5f59; }
-
-table.mini { width: 100%; border-collapse: collapse; font-size: 13px; }
-table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
-.desig { color: #64748b; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
-.right { text-align: right; }
-.strong { font-weight: 700; color: #0f766e; }
-.rank { width: 22px; text-align: center; font-weight: 700; color: #94a3b8; }
-.empty { color: #94a3b8; font-style: italic; font-size: 13px; }
-
-.prog-row { margin-bottom: 13px; }
-.prog-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 5px; }
-.prog-nom { font-size: 13px; font-weight: 600; color: #1b2733; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 72%; }
-.prog-pct { font-size: 13px; font-weight: 700; color: #0f766e; flex-shrink: 0; }
-.prog-sub { font-size: 11px; color: #94a3b8; margin-top: 4px; }
-
-.badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-.st-plan { background: #f1f5f9; color: #475569; }
-.st-cours { background: #dbeafe; color: #1e40af; }
-.st-fini { background: #ccfbf1; color: #0f766e; }
-.st-lib { background: #dcfce7; color: #166534; }
-.st-rej { background: #fee2e2; color: #b91c1c; }
-
-@media (max-width: 900px) {
-  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
-  .cols { grid-template-columns: 1fr; }
-  .card.span2 { grid-column: auto; }
-}
-@media (max-width: 560px) {
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-}
-</style>
