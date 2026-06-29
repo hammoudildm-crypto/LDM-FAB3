@@ -11,6 +11,12 @@ const chargement = ref(true)
 
 const anneeSel = ref(new Date().getFullYear())
 
+// Garde-fou : un lot n'est pris en compte que si son rendement reste dans une bande plausible.
+// Hors bande -> saisie incomplète (trop bas) ou fiche poids/théorique erronée (trop haut) -> écarté + signalé.
+const SEUIL_ANOMALIE = 50   // borne basse (%)
+const SEUIL_HAUT = 110      // borne haute (%)
+function rdtValide(rdt) { return rdt != null && rdt >= SEUIL_ANOMALIE && rdt <= SEUIL_HAUT }
+
 async function fetchAllPaged(make) {
   const size = 1000
   let from = 0, all = []
@@ -69,6 +75,7 @@ const parAn = computed(() => {
     const theo = Number(o.quantite_theorique || 0)
     const p = prod[o.id] || 0
     if (theo <= 0 || p <= 0) continue
+    if (!rdtValide((p / theo) * 100)) continue
     const y = new Date(o.date_fin_fabrication).getFullYear()
     if (!m[y]) m[y] = { prod: 0, theo: 0 }
     m[y].prod += p; m[y].theo += theo
@@ -103,10 +110,8 @@ const lotsAnnee = computed(() => {
   return arr
 })
 
-// Garde-fou : lots au rendement anormalement bas (saisie incomplète) -> écartés du calcul, listés à part
-const SEUIL_ANOMALIE = 50
-const lotsValides = computed(() => lotsAnnee.value.filter(r => r.rdt >= SEUIL_ANOMALIE))
-const anomalies = computed(() => lotsAnnee.value.filter(r => r.rdt < SEUIL_ANOMALIE).sort((a, b) => a.rdt - b.rdt))
+const lotsValides = computed(() => lotsAnnee.value.filter(r => rdtValide(r.rdt)))
+const anomalies = computed(() => lotsAnnee.value.filter(r => !rdtValide(r.rdt)).sort((a, b) => a.rdt - b.rdt))
 
 const globalAnnee = computed(() => {
   let prod = 0, theo = 0
@@ -200,7 +205,7 @@ const compareProduits = computed(() => {
     if (theo <= 0) continue
     const p = prodBox[o.id] || 0
     if (p <= 0) continue
-    if ((p / theo) * 100 < SEUIL_ANOMALIE) continue   // garde-fou : lots anormaux exclus
+    if (!rdtValide((p / theo) * 100)) continue   // garde-fou : lots anormaux exclus
     const code = o.produits ? o.produits.code_pf : '—'
     if (!m[code]) m[code] = { code, nom: o.produits ? o.produits.designation : '—', an: {} }
     if (!m[code].an[y]) m[code].an[y] = { prod: 0, theo: 0 }
@@ -295,7 +300,7 @@ onMounted(chargerTout)
           <h2 class="card-title">⚠ Lots à vérifier — {{ anneeSel }}</h2>
           <span class="count warn-count">{{ anomalies.length }}</span>
         </div>
-        <p class="warn-txt">Rendement &lt; {{ SEUIL_ANOMALIE }} % ou <strong>aucun comprimé saisi</strong> — généralement une saisie incomplète dans le suivi. Ces lots sont <strong>exclus</strong> des rendements ci-dessous ; vérifie le nombre de comprimés fabriqués dans leur dossier de lot. Les lots du mois en cours encore en attente de conditionnement ne sont pas listés.</p>
+        <p class="warn-txt">Rendement &lt; {{ SEUIL_ANOMALIE }} % ou &gt; {{ SEUIL_HAUT }} %, ou <strong>aucun comprimé saisi</strong> — saisie incomplète, ou fiche produit (poids / théorique) erronée. Ces lots sont <strong>exclus</strong> des rendements ; vérifie les comprimés fabriqués et la fiche produit. Les lots du mois en cours en attente de conditionnement ne sont pas listés.</p>
         <div class="table-scroll">
           <table class="grid">
             <thead>
