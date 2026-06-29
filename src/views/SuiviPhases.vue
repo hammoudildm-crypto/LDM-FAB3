@@ -46,11 +46,24 @@ function onPhaseChange() {
   }
 }
 
+async function fetchAllPaged(make) {
+  const size = 1000
+  let from = 0, all = []
+  for (;;) {
+    const r = await make().range(from, from + size - 1)
+    if (r.error) return { error: r.error, data: all }
+    all = all.concat(r.data || [])
+    if (!r.data || r.data.length < size) break
+    from += size
+  }
+  return { data: all, error: null }
+}
+
 async function chargerBase() {
   erreur.value = ''
-  const rl = await supabase.from('ordres_fabrication')
+  const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
     .select('id, numero_lot, quantite_theorique, statut, produits(code_pf, designation)')
-    .eq('actif', true).order('id', { ascending: false })
+    .eq('actif', true).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
 
