@@ -39,7 +39,7 @@ async function charger() {
   realRows.value = rr.data
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
-    .select('quantite_conditionnee, date_conditionnement, ordres_fabrication(produits(code_pf, designation, pcsu, unites_par_boite))')
+    .select('quantite_conditionnee, date_conditionnement, ordres_fabrication(date_fin_fabrication, produits(code_pf, designation, pcsu, unites_par_boite))')
     .eq('actif', true))
   if (rc.error) { msg.value = rc.error.message; return }
   condRows.value = rc.data
@@ -60,11 +60,27 @@ const planParMois = computed(() => {
   for (const r of planRows.value) if (Number(r.annee) === anneeSel.value && r.mois >= 1 && r.mois <= 12) a[r.mois - 1] += num(r.quantite_planifiee)
   return a
 })
-const fabParMois = computed(() => {
+const fabReelParMois = computed(() => {
   const a = Array(12).fill(0)
   for (const r of realRows.value) if (Number(r.annee) === anneeSel.value && r.mois >= 1 && r.mois <= 12) a[r.mois - 1] += num(r.quantite_realisee)
   return a
 })
+// Anticipation : fabriqué en N-1, conditionné en N -> crédité à la fabrication de N (au mois de conditionnement)
+const condFabAnnee = (c) => {
+  const o = c.ordres_fabrication
+  return o && o.date_fin_fabrication ? new Date(o.date_fin_fabrication).getFullYear() : null
+}
+const anticipParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const c of condRows.value) {
+    if (!c.date_conditionnement) continue
+    const d = new Date(c.date_conditionnement)
+    if (d.getFullYear() === anneeSel.value && condFabAnnee(c) === anneeSel.value - 1) a[d.getMonth()] += condBoites(c)
+  }
+  return a
+})
+const anticipTotal = computed(() => anticipParMois.value.reduce((s, x) => s + x, 0))
+const fabParMois = computed(() => fabReelParMois.value.map((v, i) => v + anticipParMois.value[i]))
 const condParMois = computed(() => {
   const a = Array(12).fill(0)
   for (const c of condRows.value) {
@@ -85,11 +101,22 @@ const planCA = computed(() => {
   for (const r of planRows.value) if (Number(r.annee) === anneeSel.value) ca += num(r.quantite_planifiee) * num(r.produits && r.produits.pcsu)
   return ca
 })
-const fabCA = computed(() => {
+const fabReelCA = computed(() => {
   let ca = 0
   for (const r of realRows.value) if (Number(r.annee) === anneeSel.value) ca += num(r.quantite_realisee) * num(r.produits && r.produits.pcsu)
   return ca
 })
+const anticipCA = computed(() => {
+  let ca = 0
+  for (const c of condRows.value) {
+    if (!c.date_conditionnement || new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
+    if (condFabAnnee(c) !== anneeSel.value - 1) continue
+    const p = c.ordres_fabrication && c.ordres_fabrication.produits ? c.ordres_fabrication.produits : null
+    ca += condBoites(c) * num(p && p.pcsu)
+  }
+  return ca
+})
+const fabCA = computed(() => fabReelCA.value + anticipCA.value)
 const condCA = computed(() => {
   let ca = 0
   for (const c of condRows.value) {
@@ -122,6 +149,7 @@ const parProduit = computed(() => {
     const e = ent(p.code_pf, p.designation)
     const b = condBoites(c)
     e.cond += b; e.ca += b * num(p.pcsu)
+    if (condFabAnnee(c) === anneeSel.value - 1) e.fab += b
   }
   return Object.values(m).sort((a, b) => (b.plan - a.plan) || (b.fab - a.fab))
 })
@@ -148,11 +176,11 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 
     <p v-if="msg" class="alert">{{ msg }}</p>
 
-    <div class="kpi-grid k3">
+    <div class="kpi-grid k4">
       <div class="kpi">
         <div class="kpi-tag plan-tag">Plan</div>
         <div class="kpi-val">{{ fmt(planTotal) }}</div>
-        <div class="kpi-lbl">boîtes planifiées · {{ fmtDA(planCA) }}</div>
+        <div class="kpi-lbl">boîtes · {{ fmtDA(planCA) }}</div>
       </div>
       <div class="kpi">
         <div class="kpi-tag fab-tag">Fabrication réalisée</div>
@@ -164,7 +192,13 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
         <div class="kpi-val">{{ fmt(condTotal) }}</div>
         <div class="kpi-lbl">{{ fmtPct(pctCond) }} du plan · {{ fmtDA(condCA) }}</div>
       </div>
+      <div class="kpi">
+        <div class="kpi-tag antic-tag">Anticipation N-1</div>
+        <div class="kpi-val">{{ fmt(anticipTotal) }}</div>
+        <div class="kpi-lbl">fab. {{ anneeSel - 1 }} → cond. {{ anneeSel }} · {{ fmtDA(anticipCA) }}</div>
+      </div>
     </div>
+    <p class="note">L'<strong>anticipation</strong> (fabriquée en {{ anneeSel - 1 }}, conditionnée en {{ anneeSel }}) est <strong>incluse</strong> dans la « Fabrication réalisée » et son CA.</p>
 
     <section class="card">
       <div class="card-head">
@@ -227,13 +261,16 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 
 .kpi-grid { display: grid; gap: 14px; margin-bottom: 22px; }
 .kpi-grid.k3 { grid-template-columns: repeat(3, 1fr); }
+.kpi-grid.k4 { grid-template-columns: repeat(4, 1fr); }
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .kpi-tag { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 3px 8px; border-radius: 999px; margin-bottom: 8px; }
 .plan-tag { background: #f1f5f9; color: #475569; }
 .fab-tag { background: #ccfbf1; color: #0f766e; }
 .cond-tag { background: #dbeafe; color: #1d4ed8; }
+.antic-tag { background: #fef3c7; color: #92400e; }
 .kpi-val { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
 .kpi-lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
+.note { font-size: 12px; color: #475569; margin: -12px 0 22px; background: #fffbeb; border: 1px solid #fde68a; padding: 8px 12px; border-radius: 8px; }
 
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -267,8 +304,11 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .strong { font-weight: 700; }
 .empty { color: #94a3b8; font-style: italic; font-size: 13px; }
 
+@media (max-width: 980px) {
+  .kpi-grid.k4 { grid-template-columns: 1fr 1fr; }
+}
 @media (max-width: 760px) {
-  .kpi-grid.k3 { grid-template-columns: 1fr; }
+  .kpi-grid.k3, .kpi-grid.k4 { grid-template-columns: 1fr; }
   .serie-val { width: 70px; }
 }
 </style>
