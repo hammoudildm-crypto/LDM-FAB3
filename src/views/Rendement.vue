@@ -34,7 +34,7 @@ async function chargerTout() {
   chargement.value = true
   erreur.value = ''
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, quantite_theorique, date_fin_fabrication, produits(code_pf, designation, unites_par_boite)')
+    .select('id, numero_lot, quantite_theorique, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, unites_par_boite)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data
@@ -237,6 +237,41 @@ const compareProduitsFiltre = computed(() =>
   produitSelCmp.value ? compareProduits.value.filter(p => p.code === produitSelCmp.value) : compareProduits.value
 )
 
+// Rendement par phase + avarie (année sélectionnée, lots valides, pondéré par boîtes théoriques)
+const PHASES = [
+  { key: 'rdt_granulation', nom: 'Granulation' },
+  { key: 'rdt_melange', nom: 'Mélange' },
+  { key: 'rdt_compression', nom: 'Compression' },
+  { key: 'rdt_pelliculage', nom: 'Pelliculage' }
+]
+const PHASE_COLORS = ['#0f766e', '#2563eb', '#f59e0b', '#8b5cf6']
+const rendementPhases = computed(() =>
+  PHASES.map((ph, i) => {
+    let wy = 0, w = 0, loss = 0
+    for (const r of lotsValides.value) {
+      const y = Number(r.of[ph.key])
+      if (!y || y <= 0 || y > 1.5) continue
+      wy += y * r.theo; w += r.theo
+      loss += Math.max(0, 1 - y) * r.theo
+    }
+    const rdt = w > 0 ? (wy / w) * 100 : null
+    return { nom: ph.nom, couleur: PHASE_COLORS[i], rdt, avarie: rdt == null ? null : Math.max(0, 100 - rdt), loss }
+  }).filter(x => x.rdt != null)
+)
+const avarieTotale = computed(() => rendementPhases.value.reduce((s, p) => s + p.loss, 0))
+const avariePhases = computed(() => {
+  const tot = avarieTotale.value
+  return rendementPhases.value.map(p => ({ ...p, part: tot > 0 ? (p.loss / tot) * 100 : 0 }))
+})
+const donutSegments = computed(() => {
+  let cum = 0
+  return avariePhases.value.filter(p => p.part > 0).map(p => {
+    const seg = { couleur: p.couleur, dash: `${p.part.toFixed(2)} ${(100 - p.part).toFixed(2)}`, offset: (25 - cum).toFixed(2), nom: p.nom, part: p.part }
+    cum += p.part
+    return seg
+  })
+})
+
 // Helpers chart mensuel
 function segAvarie(m) { return m.rdt == null ? 0 : m.avarie }
 function segRdt(m) { return m.rdt == null ? 0 : Math.min(100, m.rdt) }
@@ -343,6 +378,37 @@ onMounted(chargerTout)
           </div>
         </div>
         <p class="hint">Chaque barre = 100 % (rendement + avarie). Mois sans fabrication : barre vide.</p>
+      </section>
+
+      <!-- Rendement par phase + avarie -->
+      <section v-if="rendementPhases.length" class="card">
+        <h2 class="card-title">Rendement par phase — {{ anneeSel }}</h2>
+        <div class="phase-grid">
+          <div class="phase-bars">
+            <div v-for="ph in rendementPhases" :key="ph.nom" class="phase-row">
+              <span class="phase-nom">{{ ph.nom }}</span>
+              <div class="phase-track"><div class="phase-fill" :style="{ width: Math.max(2, Math.min(100, (ph.rdt - 90) / 10 * 100)) + '%', background: ph.couleur }"></div></div>
+              <span class="phase-val">{{ pct2(ph.rdt) }}</span>
+            </div>
+            <p class="hint">Rendement moyen pondéré par boîtes théoriques (lots valides). Échelle 90 → 100 %.</p>
+          </div>
+          <div class="donut-zone">
+            <div class="donut-title">Avarie par phase</div>
+            <div class="donut-wrap">
+              <svg viewBox="0 0 42 42" class="donut">
+                <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#f1f5f9" stroke-width="5" />
+                <circle v-for="(seg, i) in donutSegments" :key="i" cx="21" cy="21" r="15.915" fill="transparent"
+                  :stroke="seg.couleur" stroke-width="5" :stroke-dasharray="seg.dash" :stroke-dashoffset="seg.offset" stroke-linecap="butt" />
+                <text x="21" y="20.5" class="donut-c1">{{ pct2(tauxDechets) }}</text>
+                <text x="21" y="24.5" class="donut-c2">avarie globale</text>
+              </svg>
+            </div>
+            <div class="donut-legend">
+              <span v-for="p in avariePhases.filter(x => x.part > 0)" :key="p.nom"><i class="dot" :style="{ background: p.couleur }"></i>{{ p.nom }} {{ p.part.toFixed(1) }}%</span>
+            </div>
+          </div>
+        </div>
+        <p class="hint">Le donut montre la <strong>part de la perte totale</strong> attribuable à chaque phase (perte = (1 − rendement) × quantité). Calcul réel à partir des Y% du suivi — peut différer du tableau Excel.</p>
       </section>
 
       <!-- Tendance annuelle -->
@@ -551,6 +617,22 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .rdt-num { width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 
 .ta-c { text-align: center; }
+.phase-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; align-items: start; }
+.phase-bars { display: flex; flex-direction: column; gap: 12px; }
+.phase-row { display: flex; align-items: center; gap: 12px; }
+.phase-nom { width: 110px; font-size: 13px; font-weight: 600; color: #334155; }
+.phase-track { flex: 1; height: 12px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.phase-fill { height: 100%; border-radius: 999px; min-width: 3px; }
+.phase-val { width: 66px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13px; }
+.donut-zone { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.donut-title { font-size: 13px; font-weight: 600; color: #475569; }
+.donut-wrap { width: 180px; }
+.donut { width: 100%; height: auto; transform: rotate(0deg); }
+.donut-c1 { font-size: 6px; font-weight: 700; fill: #b91c1c; text-anchor: middle; }
+.donut-c2 { font-size: 2.6px; fill: #94a3b8; text-anchor: middle; }
+.donut-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: center; font-size: 12px; color: #475569; }
+.donut-legend span { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 860px) { .phase-grid { grid-template-columns: 1fr; } }
 .dot.yr0 { background: #cbd5e1; }
 .dot.yr1 { background: #5eead4; }
 .dot.yr2 { background: #0f766e; }
