@@ -8,6 +8,7 @@ const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 
 const STATUTS = ['À faire', 'En cours', 'Terminé']
 
 const lots = ref([])
+const rechercheLot = ref('')
 const equipements = ref([])
 const lotId = ref('')
 const phases = ref([])
@@ -27,6 +28,16 @@ function resetForm() {
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
 
 const lotSelectionne = computed(() => lots.value.find(l => l.id === lotId.value) || null)
+const lotsFiltres = computed(() => {
+  const q = rechercheLot.value.trim().toLowerCase()
+  if (!q) return lots.value
+  return lots.value.filter(l => {
+    const p = l.produits
+    const code = p ? String(p.code_pf || '') : ''
+    const desig = p ? String(p.designation || '') : ''
+    return code.toLowerCase().includes(q) || desig.toLowerCase().includes(q) || String(l.numero_lot || '').toLowerCase().includes(q)
+  })
+})
 
 // Équipements filtrés selon la phase sélectionnée (type = phase)
 const equipementsFiltres = computed(() => {
@@ -163,13 +174,17 @@ watch(lotId, chargerPhases)
 
     <template v-else>
       <section class="card">
-        <label class="lot-select">Lot
+        <label class="lot-select">Recherche produit / lot
+          <input v-model="rechercheLot" type="search" class="lot-search" placeholder="Code produit, désignation ou n° de lot…" />
+        </label>
+        <label class="lot-select">Lot <span class="lot-count">{{ lotsFiltres.length }}</span>
           <select v-model="lotId">
             <option value="">— Choisir un lot —</option>
-            <option v-for="l in lots" :key="l.id" :value="l.id">
-              {{ l.numero_lot }} · {{ l.produits ? l.produits.designation : '' }}
+            <option v-for="l in lotsFiltres" :key="l.id" :value="l.id">
+              {{ l.numero_lot }} · {{ l.produits ? l.produits.code_pf + ' ' + l.produits.designation : '' }}
             </option>
           </select>
+          <span v-if="rechercheLot && !lotsFiltres.length" class="lot-vide">Aucun lot ne correspond à « {{ rechercheLot }} ».</span>
         </label>
 
         <div v-if="lotSelectionne" class="lot-info">
@@ -273,6 +288,11 @@ watch(lotId, chargerPhases)
 .lot-select { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; max-width: 520px; }
 .lot-select select { font-size: 14px; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 500; color: #1b2733; }
 .lot-select select:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.lot-select { margin-bottom: 12px; }
+.lot-search { font-size: 14px; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 500; color: #1b2733; }
+.lot-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.lot-count { display: inline-block; background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
+.lot-vide { font-size: 12px; color: #b45309; font-weight: 500; }
 
 .lot-info { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #eef2f6; font-size: 14px; }
 .lot-info .lbl { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; margin-bottom: 2px; }
