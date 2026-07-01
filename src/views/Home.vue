@@ -319,15 +319,13 @@ onMounted(async () => {
 
       <!-- ====================== PRODUCTION ====================== -->
       <div v-show="ongletActif === 'production'">
-        <div class="kpi-grid">
+        <div class="kpi-grid kpi-9">
           <div class="kpi"><div class="kpi-val">{{ fmt(nbProduits) }}</div><div class="kpi-lbl">Produits actifs</div></div>
           <div class="kpi"><div class="kpi-val">{{ fmt(nbLots) }}</div><div class="kpi-lbl">Lots</div></div>
           <div class="kpi"><div class="kpi-val accent">{{ fmt(lotsEnCours) }}</div><div class="kpi-lbl">Lots en cours</div></div>
           <div class="kpi"><div class="kpi-val">{{ fmt(totalBoites) }}</div><div class="kpi-lbl">Boîtes réalisées {{ anneeSel }}</div></div>
           <div class="kpi"><div class="kpi-val">{{ fmt(vracEnAttente) }}</div><div class="kpi-lbl">Vrac en attente (bts)</div></div>
           <div class="kpi"><div class="kpi-val accent">{{ fmt(boitesCeMois) }}</div><div class="kpi-lbl">Boîtes ce mois</div></div>
-        </div>
-        <div class="kpi-grid">
           <div class="kpi"><div class="kpi-val">{{ fmt(planTotal) }}</div><div class="kpi-lbl">Plan {{ anneeSel }} (boîtes)</div></div>
           <div class="kpi"><div class="kpi-val accent">{{ fmtPct(pctPlanRealise) }}</div><div class="kpi-lbl">Plan {{ anneeSel }} réalisé</div></div>
           <div class="kpi"><div class="kpi-val">{{ fmt(boitesRestantes) }}</div><div class="kpi-lbl">Boîtes restantes (plan)</div></div>
@@ -474,6 +472,10 @@ onMounted(async () => {
 .tab.active { color: #0f766e; border-bottom-color: #0f766e; }
 
 .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 14px; }
+.kpi-9 { grid-template-columns: repeat(9, minmax(0, 1fr)) !important; }
+.kpi-9 .kpi { padding: 9px 11px !important; }
+.kpi-9 .kpi-val { font-size: 16px !important; }
+@media (max-width: 1200px) { .kpi-9 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; } }
 .kpi-grid:last-of-type { margin-bottom: 22px; }
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .kpi-val { font-size: 23px; font-weight: 700; letter-spacing: -0.02em; }
