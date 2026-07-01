@@ -11,6 +11,7 @@ const lots = ref([])
 const equipements = ref([])
 const filtreStatut = ref('')
 const rechercheLot = ref('')
+const rechercheLotForm = ref('')
 const erreur = ref('')
 const message = ref('')
 
@@ -27,6 +28,16 @@ function resetForm() {
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
 
 // Unités / boîte du produit du lot sélectionné (sert à convertir boîtes <-> comprimés stockés)
+const lotsFiltresForm = computed(() => {
+  const q = rechercheLotForm.value.trim().toLowerCase()
+  if (!q) return lots.value
+  return lots.value.filter(l => {
+    const p = l.produits
+    const code = p ? String(p.code_pf || '') : ''
+    const desig = p ? String(p.designation || '') : ''
+    return code.toLowerCase().includes(q) || desig.toLowerCase().includes(q) || String(l.numero_lot || '').toLowerCase().includes(q)
+  })
+})
 function upbLot(ordreId) {
   const l = lots.value.find(x => x.id === ordreId)
   const upb = l && l.produits ? Number(l.produits.unites_par_boite || 0) : 0
@@ -194,11 +205,12 @@ onMounted(chargerTout)
       <section class="card" v-if="peutEditer">
         <h2 class="card-title">{{ form.id ? 'Modifier le conditionnement' : 'Nouveau conditionnement' }}</h2>
         <div class="form-grid">
-          <label class="wide">Lot
-            <select v-model="form.ordre_id">
+          <label class="wide">Lot <span class="lot-count">{{ lotsFiltresForm.length }}</span>
+            <input v-model="rechercheLotForm" type="search" class="lot-search" placeholder="Rechercher un lot (code, désignation, n° lot)…" />
+            <select v-model="form.ordre_id" size="1">
               <option value="">—</option>
-              <option v-for="l in lots" :key="l.id" :value="l.id">
-                {{ l.numero_lot }} · {{ l.produits ? l.produits.designation : '' }}
+              <option v-for="l in lotsFiltresForm" :key="l.id" :value="l.id">
+                {{ l.numero_lot }} · {{ l.produits ? l.produits.code_pf + ' ' + l.produits.designation : '' }}
               </option>
             </select>
           </label>
@@ -333,4 +345,7 @@ button.link.danger { color: #b91c1c; }
   .form-grid { grid-template-columns: 1fr 1fr; }
   .form-grid .wide { grid-column: span 2; }
 }
+.lot-search { font-size: 14px; padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; margin-bottom: 6px; width: 100%; box-sizing: border-box; }
+.lot-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.lot-count { display: inline-block; background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
 </style>
