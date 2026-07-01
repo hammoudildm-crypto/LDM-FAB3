@@ -501,6 +501,8 @@ onMounted(chargerTout)
         </div>
       </section>
 
+      <!-- Graphes en 3 colonnes -->
+      <div class="charts-3col">
       <!-- Taux de déchets mensuel -->
       <section class="card">
         <div class="card-head">
@@ -613,6 +615,7 @@ onMounted(chargerTout)
         </div>
         <p class="hint">Rendement global par année — Fabrication (teal) vs Conditionnement (bleu). Échelle {{ anChart.min }} % → {{ anChart.max }} %.</p>
       </section>
+      </div><!-- /charts-3col -->
 
       <!-- Comparaison du rendement par produit sur 3 ans -->
       <section class="card">
@@ -818,6 +821,12 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .rdt-num { width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 
 .ta-c { text-align: center; }
+.charts-3col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 22px; align-items: start; }
+.charts-3col > .card { margin-bottom: 0; }
+.charts-3col .phase-grid { grid-template-columns: 1fr; gap: 14px; }
+.charts-3col .donut-wrap { width: 150px; }
+@media (max-width: 1100px) { .charts-3col { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 720px) { .charts-3col { grid-template-columns: 1fr; } }
 .line-chart { width: 100%; margin-top: 4px; }
 .lc-svg { width: 100%; height: auto; display: block; overflow: visible; }
 .lc-xlabel { font-size: 9px; fill: #94a3b8; text-anchor: middle; }
