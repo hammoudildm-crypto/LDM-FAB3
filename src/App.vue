@@ -9,6 +9,7 @@ const route = useRoute()
 const navRef = ref(null)
 const themeRef = ref(null)
 const openMenu = ref(null)
+const refreshTick = ref(0)
 
 const estAdmin = computed(() => role.value === 'admin')
 const peutEditer = computed(() => role.value === 'admin' || role.value === 'operateur')
@@ -125,6 +126,7 @@ async function signOut() {
         <button class="zoom-val" @click="setZoom(100)" title="Réinitialiser à 100 %">{{ zoom }}%</button>
         <button class="zoom-btn" @click="changeZoom(10)" :disabled="zoom >= 150" title="Agrandir">+</button>
       </div>
+      <button class="zoom-btn" @click="refreshTick++" title="Actualiser les données de la page" style="margin-left:4px">⟳</button>
       <div class="dropdown" ref="themeRef">
         <button class="navlink drop-toggle" :class="{ open: openMenu === 'theme' }" @click="toggleMenu('theme')" title="Changer de thème">
           <span class="swatch" :class="'sw-' + theme"></span>Thème <span class="caret">▾</span>
@@ -145,7 +147,7 @@ async function signOut() {
     </div>
   </header>
   <main :style="{ zoom: zoom / 100 }">
-    <RouterView />
+    <RouterView :key="route.fullPath + '::' + refreshTick" />
   </main>
 </template>
 
