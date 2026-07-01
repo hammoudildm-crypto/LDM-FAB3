@@ -10,6 +10,10 @@ const lots = ref([])
 const produits = ref([])
 const equipements = ref([])
 const filtreStatut = ref('')
+const rechercheLot = ref('')
+const anneeF = ref(0)
+const moisF = ref(0)
+const LIMITE = 300
 const erreur = ref('')
 const message = ref('')
 const signatures = ref([])
@@ -19,12 +23,12 @@ const sig = reactive({ open: false, mode: 'sign', ordre: null, pin: '', pin2: ''
 
 const form = reactive({
   id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
-  date_lancement: '', statut: 'Planifié', equipement_id: '', commentaire: ''
+  date_lancement: '', date_fin_fabrication: '', statut: 'Planifié', equipement_id: '', commentaire: ''
 })
 function resetForm() {
   Object.assign(form, {
     id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
-    date_lancement: '', statut: 'Planifié', equipement_id: '', commentaire: ''
+    date_lancement: '', date_fin_fabrication: '', statut: 'Planifié', equipement_id: '', commentaire: ''
   })
 }
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
@@ -62,19 +66,52 @@ async function chargerTout() {
   if (!rs.error) signatures.value = rs.data
 }
 
-const lotsFiltres = computed(() =>
-  filtreStatut.value ? lots.value.filter(l => l.statut === filtreStatut.value) : lots.value
-)
+const MOIS = [
+  { v: 1, l: 'Janvier' }, { v: 2, l: 'Février' }, { v: 3, l: 'Mars' },
+  { v: 4, l: 'Avril' }, { v: 5, l: 'Mai' }, { v: 6, l: 'Juin' },
+  { v: 7, l: 'Juillet' }, { v: 8, l: 'Août' }, { v: 9, l: 'Septembre' },
+  { v: 10, l: 'Octobre' }, { v: 11, l: 'Novembre' }, { v: 12, l: 'Décembre' }
+]
+function refDateLot(l) { return l.date_lancement || l.date_fin_fabrication }
+const anneesLot = computed(() => {
+  const set = new Set()
+  for (const l of lots.value) { const d = refDateLot(l); if (d) set.add(new Date(d).getFullYear()) }
+  return [...set].sort((a, b) => b - a)
+})
+const lotsFiltres = computed(() => {
+  const q = rechercheLot.value.trim().toLowerCase()
+  return lots.value.filter(l => {
+    if (filtreStatut.value && l.statut !== filtreStatut.value) return false
+    const d = refDateLot(l)
+    if (anneeF.value && (!d || new Date(d).getFullYear() !== anneeF.value)) return false
+    if (moisF.value && (!d || (new Date(d).getMonth() + 1) !== moisF.value)) return false
+    if (q) {
+      const pr = l.produits
+      const code = pr ? String(pr.code_pf || '') : ''
+      const desig = pr ? String(pr.designation || '') : ''
+      if (!(String(l.numero_lot || '').toLowerCase().includes(q) || code.toLowerCase().includes(q) || desig.toLowerCase().includes(q))) return false
+    }
+    return true
+  })
+})
+const lotsAffiches = computed(() => lotsFiltres.value.slice(0, LIMITE))
 
 async function enregistrer() {
   erreur.value = ''
   message.value = ''
   if (!form.numero_lot.trim() || !form.produit_id) { erreur.value = 'Numéro de lot et produit obligatoires.'; return }
+  // Fin de fabrication : auto-datée quand le lot passe à Terminé/Libéré -> alimente la file DDL
+  let dateFin = form.date_fin_fabrication || null
+  if (!dateFin && (form.statut === 'Terminé' || form.statut === 'Libéré')) {
+    dateFin = new Date().toISOString().slice(0, 10)
+    form.date_fin_fabrication = dateFin
+  }
   const payload = {
     numero_lot: form.numero_lot.trim(),
     produit_id: form.produit_id,
     quantite_theorique: toNum(form.quantite_theorique),
     date_lancement: form.date_lancement || null,
+    date_fin_fabrication: dateFin,
     statut: form.statut,
     equipement_id: form.equipement_id || null,
     commentaire: form.commentaire.trim() || null
@@ -91,6 +128,7 @@ function modifier(l) {
   Object.assign(form, {
     id: l.id, numero_lot: l.numero_lot, produit_id: l.produit_id || '',
     quantite_theorique: l.quantite_theorique ?? '', date_lancement: l.date_lancement || '',
+    date_fin_fabrication: l.date_fin_fabrication || '',
     statut: l.statut || 'Planifié', equipement_id: l.equipement_id || '', commentaire: l.commentaire || ''
   })
 }
@@ -208,6 +246,7 @@ onMounted(async () => {
           </label>
           <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" /></label>
           <label>Date de lancement<input v-model="form.date_lancement" type="date" /></label>
+          <label>Date fin fabrication<input v-model="form.date_fin_fabrication" type="date" /></label>
           <label>Statut
             <select v-model="form.statut">
               <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
@@ -231,10 +270,21 @@ onMounted(async () => {
         <div class="card-head">
           <h2 class="card-title">Lots</h2>
           <span class="count">{{ lotsFiltres.length }}</span>
-          <select v-model="filtreStatut" class="filtre">
-            <option value="">Tous les statuts</option>
-            <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
-          </select>
+          <div class="head-tools">
+            <input v-model="rechercheLot" type="search" class="recherche" placeholder="Rechercher (n° lot, code, désignation)…" />
+            <select v-model.number="anneeF" class="filtre2">
+              <option :value="0">Toutes années</option>
+              <option v-for="a in anneesLot" :key="a" :value="a">{{ a }}</option>
+            </select>
+            <select v-model.number="moisF" class="filtre2">
+              <option :value="0">Tous les mois</option>
+              <option v-for="m in MOIS" :key="m.v" :value="m.v">{{ m.l }}</option>
+            </select>
+            <select v-model="filtreStatut" class="filtre2">
+              <option value="">Tous les statuts</option>
+              <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
+            </select>
+          </div>
           <button class="btn-exp" @click="exporterCSV" :disabled="!lotsFiltres.length">Exporter CSV</button>
         </div>
 
@@ -247,7 +297,7 @@ onMounted(async () => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="l in lotsFiltres" :key="l.id">
+              <tr v-for="l in lotsAffiches" :key="l.id">
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td>
                   <span class="mono">{{ l.produits ? l.produits.code_pf : '—' }}</span>
@@ -268,7 +318,8 @@ onMounted(async () => {
                   </template>
                 </td>
               </tr>
-              <tr v-if="!lotsFiltres.length"><td colspan="7" class="empty">Aucun lot. Crée-en un ci-dessus.</td></tr>
+              <tr v-if="!lotsFiltres.length"><td colspan="7" class="empty">Aucun lot ne correspond aux filtres.</td></tr>
+              <tr v-else-if="lotsFiltres.length > LIMITE"><td colspan="7" class="cap-note">… {{ lotsFiltres.length - LIMITE }} autres lots masqués — affine les filtres (l'export CSV reste complet).</td></tr>
             </tbody>
           </table>
         </div>
@@ -384,4 +435,9 @@ button.link.release { color: #166534; }
   .form-grid { grid-template-columns: 1fr 1fr; }
   .form-grid .wide { grid-column: span 2; }
 }
+.head-tools { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.recherche { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 220px; }
+.recherche:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.filtre2 { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
+.cap-note { color: #94a3b8; font-size: 12px; padding: 8px 10px; }
 </style>
