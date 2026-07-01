@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { supabase } from '../supabase'
+import { ICONS, TINTS } from '../icons.js'
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
@@ -338,22 +339,22 @@ onMounted(chargerTout)
       <div class="kpi-grid k4">
         <div class="kpi">
           <span class="kpi-tag rdt-tag">Rendement</span>
-          <div class="kpi-val accent">{{ pct2(rendementGlobal) }}</div>
+          <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><div class="kpi-val accent">{{ pct2(rendementGlobal) }}</div></div>
           <div class="kpi-lbl">Rendement global {{ anneeSel }}</div>
         </div>
         <div class="kpi">
           <span class="kpi-tag av-tag">Avarie</span>
-          <div class="kpi-val danger">{{ pct2(tauxDechets) }}</div>
+          <div class="kpi-top"><span class="kpi-ic" :style="TINTS.red"><svg viewBox="0 0 24 24" v-html="ICONS.trash"></svg></span><div class="kpi-val danger">{{ pct2(tauxDechets) }}</div></div>
           <div class="kpi-lbl">Taux de déchets {{ anneeSel }}</div>
         </div>
         <div class="kpi">
           <span class="kpi-tag prod-tag">Production</span>
-          <div class="kpi-val">{{ fmt(globalAnnee.prod) }}</div>
+          <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(globalAnnee.prod) }}</div></div>
           <div class="kpi-lbl">Boîtes produites</div>
         </div>
         <div class="kpi">
           <span class="kpi-tag theo-tag">Théorique</span>
-          <div class="kpi-val">{{ fmt(globalAnnee.theo) }}</div>
+          <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(globalAnnee.theo) }}</div></div>
           <div class="kpi-lbl">Boîtes théoriques · {{ nbLotsAnnee }} lots</div>
         </div>
       </div>
