@@ -244,6 +244,20 @@ const structCond = computed(() => {
   return { prod, theo, n, rdt, avarie: rdt == null ? null : Math.max(0, 100 - rdt) }
 })
 
+// Rendement de fabrication par mois (boîtes fabriquées ÷ théoriques, mois de fin de fab)
+const rendementFabParMois = computed(() => {
+  const prod = Array(12).fill(0), theo = Array(12).fill(0)
+  for (const l of lotsAnnee.value) {
+    const p = Number(l.boites_fabriquees || 0), t = Number(l.quantite_theorique || 0)
+    if (p <= 0 || t <= 0) continue
+    const r = (p / t) * 100
+    if (r < RDT_MIN || r > RDT_MAX) continue
+    const mo = new Date(l.date_fin_fabrication || l.date_lancement).getMonth()
+    prod[mo] += p; theo[mo] += t
+  }
+  return prod.map((v, i) => theo[i] > 0 ? (v / theo[i]) * 100 : null)
+})
+
 // --- Vrac en attente (boîtes) : lots fabriqués (Terminé) pas encore conditionnés ---
 // Base = boîtes réellement fabriquées (classeur) ; repli théorique si absent.
 const vracEnAttente = computed(() => {
@@ -490,13 +504,13 @@ onMounted(async () => {
 
         <div class="cols">
           <section class="card">
-            <h2 class="card-title">Lots par statut</h2>
-            <div v-for="s in STATUTS" :key="s" class="bar-row">
-              <span class="bar-lbl"><span class="badge" :class="classeStatut(s)">{{ s }}</span></span>
-              <div class="bar-track"><div class="bar-fill" :class="classeStatut(s)" :style="{ width: pct(lotsParStatut[s], nbLots) + '%' }"></div></div>
-              <span class="bar-num">{{ lotsParStatut[s] }}</span>
+            <h2 class="card-title">Rendement fabrication par mois — {{ anneeSel }}</h2>
+            <div v-for="(v, i) in rendementFabParMois" :key="i" class="bar-row">
+              <span class="bar-lbl mois">{{ MOIS[i] }}</span>
+              <div class="bar-track"><div class="bar-fill" :class="(v != null && v < 95) ? 'st-rej' : 'prod'" :style="{ width: Math.min(100, v || 0) + '%' }"></div></div>
+              <span class="bar-num xl">{{ fmtPct(v) }}</span>
             </div>
-            <p v-if="!nbLots" class="empty">Aucun lot pour l'instant.</p>
+            <p v-if="rendementFabParMois.every(v => v == null)" class="empty">Aucune fabrication en {{ anneeSel }}.</p>
           </section>
 
           <section class="card">
@@ -509,6 +523,16 @@ onMounted(async () => {
             <p v-if="rendementCondParMois.every(v => v == null)" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
           </section>
         </div>
+
+        <section class="card">
+          <h2 class="card-title">Lots par statut</h2>
+          <div v-for="s in STATUTS" :key="s" class="bar-row">
+            <span class="bar-lbl"><span class="badge" :class="classeStatut(s)">{{ s }}</span></span>
+            <div class="bar-track"><div class="bar-fill" :class="classeStatut(s)" :style="{ width: pct(lotsParStatut[s], nbLots) + '%' }"></div></div>
+            <span class="bar-num">{{ lotsParStatut[s] }}</span>
+          </div>
+          <p v-if="!nbLots" class="empty">Aucun lot pour l'instant.</p>
+        </section>
       </div>
 
       <!-- ====================== FINANCE ====================== -->
