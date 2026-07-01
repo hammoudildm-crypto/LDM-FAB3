@@ -12,6 +12,7 @@ const anneeSel = ref(anneeCourante)
 const planRows = ref([])
 const realRows = ref([])
 const condRows = ref([])
+const ofs = ref([])
 const msg = ref('')
 
 async function fetchAllPaged(make) {
@@ -44,6 +45,12 @@ async function charger() {
     .eq('actif', true))
   if (rc.error) { msg.value = rc.error.message; return }
   condRows.value = rc.data
+
+  const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication')
+    .select('boites_fabriquees, date_fin_fabrication, produits(code_pf, designation, pcsu)')
+    .eq('actif', true))
+  if (ro.error) { msg.value = ro.error.message; return }
+  ofs.value = ro.data
 }
 onMounted(charger)
 
@@ -63,7 +70,12 @@ const planParMois = computed(() => {
 })
 const fabReelParMois = computed(() => {
   const a = Array(12).fill(0)
-  for (const r of realRows.value) if (Number(r.annee) === anneeSel.value && r.mois >= 1 && r.mois <= 12) a[r.mois - 1] += num(r.quantite_realisee)
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    const d = new Date(o.date_fin_fabrication)
+    if (d.getFullYear() !== anneeSel.value) continue
+    a[d.getMonth()] += num(o.boites_fabriquees)
+  }
   return a
 })
 // Anticipation : fabriqué en N-1, conditionné en N -> crédité à la fabrication de N (au mois de conditionnement)
@@ -104,7 +116,10 @@ const planCA = computed(() => {
 })
 const fabReelCA = computed(() => {
   let ca = 0
-  for (const r of realRows.value) if (Number(r.annee) === anneeSel.value) ca += num(r.quantite_realisee) * num(r.produits && r.produits.pcsu)
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication || new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+    ca += num(o.boites_fabriquees) * num(o.produits && o.produits.pcsu)
+  }
   return ca
 })
 const anticipCA = computed(() => {
@@ -142,7 +157,10 @@ const parProduit = computed(() => {
   const m = {}
   const ent = (code, nom) => { if (!m[code]) m[code] = { code, nom, plan: 0, fab: 0, cond: 0, ca: 0 }; return m[code] }
   for (const r of planRows.value) if (Number(r.annee) === anneeSel.value && r.produits) ent(r.produits.code_pf, r.produits.designation).plan += num(r.quantite_planifiee)
-  for (const r of realRows.value) if (Number(r.annee) === anneeSel.value && r.produits) ent(r.produits.code_pf, r.produits.designation).fab += num(r.quantite_realisee)
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication || new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+    if (o.produits) ent(o.produits.code_pf, o.produits.designation).fab += num(o.boites_fabriquees)
+  }
   for (const c of condRows.value) {
     if (!c.date_conditionnement || new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
     const p = c.ordres_fabrication && c.ordres_fabrication.produits ? c.ordres_fabrication.produits : null
