@@ -17,12 +17,12 @@ const message = ref('')
 
 const form = reactive({
   id: null, phase: 'Pesée', equipement_id: '', quantite_entree: '',
-  quantite_sortie: '', date_phase: '', statut: 'Terminé', commentaire: ''
+  quantite_sortie: '', date_debut: '', date_phase: '', statut: 'Terminé', commentaire: ''
 })
 function resetForm() {
   Object.assign(form, {
     id: null, phase: 'Pesée', equipement_id: '', quantite_entree: '',
-    quantite_sortie: '', date_phase: '', statut: 'Terminé', commentaire: ''
+    quantite_sortie: '', date_debut: '', date_phase: '', statut: 'Terminé', commentaire: ''
   })
 }
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
@@ -120,6 +120,7 @@ async function enregistrer() {
     equipement_id: form.equipement_id || null,
     quantite_entree: toNum(form.quantite_entree),
     quantite_sortie: toNum(form.quantite_sortie),
+    date_debut: form.date_debut || null,
     date_phase: form.date_phase || null,
     statut: form.statut,
     commentaire: form.commentaire.trim() || null
@@ -136,7 +137,7 @@ function modifier(p) {
   Object.assign(form, {
     id: p.id, phase: p.phase, equipement_id: p.equipement_id || '',
     quantite_entree: p.quantite_entree ?? '', quantite_sortie: p.quantite_sortie ?? '',
-    date_phase: p.date_phase || '', statut: p.statut || 'Terminé', commentaire: p.commentaire || ''
+    date_debut: p.date_debut || '', date_phase: p.date_phase || '', statut: p.statut || 'Terminé', commentaire: p.commentaire || ''
   })
 }
 async function desactiver(p) {
@@ -214,7 +215,8 @@ watch(lotId, chargerPhases)
             </label>
             <label>Quantité entrée (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="250" /></label>
             <label>Quantité sortie (kg)<input v-model="form.quantite_sortie" type="number" step="any" placeholder="245" /></label>
-            <label>Date<input v-model="form.date_phase" type="date" /></label>
+            <label>Date début<input v-model="form.date_debut" type="date" /></label>
+            <label>Date fin<input v-model="form.date_phase" type="date" /></label>
             <label>Statut
               <select v-model="form.statut">
                 <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
@@ -238,7 +240,7 @@ watch(lotId, chargerPhases)
               <thead>
                 <tr>
                   <th>Phase</th><th>Ligne</th><th class="right">Entrée (kg)</th><th class="right">Sortie (kg)</th>
-                  <th class="right">Rendement</th><th>Date</th><th>Statut</th><th class="right">Actions</th>
+                  <th class="right">Rendement</th><th>Début</th><th>Fin</th><th>Statut</th><th class="right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -248,6 +250,7 @@ watch(lotId, chargerPhases)
                   <td class="right">{{ fmt(p.quantite_entree) }}</td>
                   <td class="right">{{ fmt(p.quantite_sortie) }}</td>
                   <td class="right" :class="rendement(p) != null && rendement(p) < 95 ? 'rdt-bas' : ''">{{ fmtPct(rendement(p)) }}</td>
+                  <td>{{ fmtDate(p.date_debut) }}</td>
                   <td>{{ fmtDate(p.date_phase) }}</td>
                   <td><span class="badge" :class="classeStatut(p.statut)">{{ p.statut }}</span></td>
                   <td class="right nowrap">
