@@ -270,7 +270,7 @@ html[data-theme="sombre"] .lot-info { border-top-color: #1f2940 !important; }
 /* ===== Mode compact — densité maximale (s'applique à toutes les pages) ===== */
 .card { padding: 12px 15px !important; margin-bottom: 12px !important; }
 .kpi { padding: 11px 14px !important; }
-.kpi-val { font-size: 20px !important; line-height: 1.1 !important; }
+.kpi-val { font-size: 18px !important; line-height: 1.15 !important; white-space: nowrap !important; }
 .kpi-grid { gap: 9px !important; }
 .grid th, .grid td { padding: 5px 8px !important; }
 .grid th { font-size: 11px !important; }
