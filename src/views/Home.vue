@@ -138,14 +138,22 @@ const planParProduit = computed(() => {
   return m
 })
 
-// --- Volumes (année sélectionnée) ---
-const totalBoites = computed(() => realAnnee.value.reduce((s, r) => s + Number(r.quantite_realisee || 0), 0))
+// --- Volumes (année sélectionnée) — source : module conditionnement (C) ---
+const totalBoites = computed(() => condAnnee.value.reduce((s, c) => s + boitesOf(c), 0))
 const boitesRestantes = computed(() => Math.max(0, planTotal.value - totalBoites.value))
-const boitesCeMois = computed(() => realisations.value.filter(r => r.annee === anneeCourante && r.mois === moisCourant + 1).reduce((s, r) => s + Number(r.quantite_realisee || 0), 0))
+const boitesCeMois = computed(() => conditionnements.value.filter(c => {
+  if (!c.date_conditionnement) return false
+  const d = new Date(c.date_conditionnement)
+  return d.getFullYear() === anneeCourante && d.getMonth() === moisCourant
+}).reduce((s, c) => s + boitesOf(c), 0))
 
 // --- Finance (année sélectionnée) ---
-const caRealise = computed(() => realAnnee.value.reduce((s, r) => s + Number(r.quantite_realisee || 0) * pcsuR(r), 0))
-const caCeMois = computed(() => realisations.value.filter(r => r.annee === anneeCourante && r.mois === moisCourant + 1).reduce((s, r) => s + Number(r.quantite_realisee || 0) * pcsuR(r), 0))
+const caRealise = computed(() => condAnnee.value.reduce((s, c) => s + boitesOf(c) * pcsuDe(c), 0))
+const caCeMois = computed(() => conditionnements.value.filter(c => {
+  if (!c.date_conditionnement) return false
+  const d = new Date(c.date_conditionnement)
+  return d.getFullYear() === anneeCourante && d.getMonth() === moisCourant
+}).reduce((s, c) => s + boitesOf(c) * pcsuDe(c), 0))
 const tauxRealisationCA = computed(() => caPotentielPlan.value > 0 ? (caRealise.value / caPotentielPlan.value) * 100 : null)
 const prixMoyenBoite = computed(() => totalBoites.value > 0 ? caRealise.value / totalBoites.value : null)
 const pctPlanRealise = computed(() => planTotal.value > 0 ? (totalBoites.value / planTotal.value) * 100 : null)
@@ -299,47 +307,47 @@ const fabRealisee = computed(() => {
 const pctPlanFab = computed(() => planTotal.value > 0 ? (fabRealisee.value / planTotal.value) * 100 : null)
 const boitesRestantesFab = computed(() => Math.max(0, planTotal.value - fabRealisee.value))
 
-// --- Production par mois (année) ---
+// --- Conditionnement par mois (année) ---
 const prodParMois = computed(() => {
   const arr = Array(12).fill(0)
-  for (const r of realAnnee.value) arr[r.mois - 1] += Number(r.quantite_realisee || 0)
+  for (const c of condAnnee.value) arr[new Date(c.date_conditionnement).getMonth()] += boitesOf(c)
   return arr
 })
 const maxMois = computed(() => Math.max(1, ...prodParMois.value))
 
-// --- Top produits / donneurs / réalisation (année) ---
+// --- Top produits / donneurs / réalisation (année) — source : conditionnement ---
 const topProduits = computed(() => {
   const m = {}
-  for (const r of realAnnee.value) {
-    const p = r.produits
+  for (const c of condAnnee.value) {
+    const p = prodDe(c)
     const cle = p ? p.code_pf : '—'
     if (!m[cle]) m[cle] = { nom: p ? p.designation : '(produit inconnu)', boites: 0, ca: 0 }
-    const b = Number(r.quantite_realisee || 0)
+    const b = boitesOf(c)
     m[cle].boites += b
-    m[cle].ca += b * pcsuR(r)
+    m[cle].ca += b * pcsuDe(c)
   }
   return Object.values(m).filter(x => x.boites > 0).sort((a, b) => b.ca - a.ca).slice(0, 5)
 })
 const caParDonneur = computed(() => {
   const m = {}
-  for (const r of realAnnee.value) {
-    const p = r.produits
+  for (const c of condAnnee.value) {
+    const p = prodDe(c)
     const nom = p && p.donneurs_ordre ? p.donneurs_ordre.nom : '—'
     if (!m[nom]) m[nom] = { nom, boites: 0, ca: 0 }
-    const b = Number(r.quantite_realisee || 0)
+    const b = boitesOf(c)
     m[nom].boites += b
-    m[nom].ca += b * pcsuR(r)
+    m[nom].ca += b * pcsuDe(c)
   }
   return Object.values(m).filter(x => x.boites > 0).sort((a, b) => b.ca - a.ca)
 })
 const maxCaDonneur = computed(() => Math.max(1, ...caParDonneur.value.map(d => d.ca)))
 const realisationPlan = computed(() => {
   const m = {}
-  for (const r of realAnnee.value) {
-    const p = r.produits
+  for (const c of condAnnee.value) {
+    const p = prodDe(c)
     const code = baseCode(p ? p.code_pf : '—')
     if (!m[code]) m[code] = { code, nom: p ? p.designation : '—', produit: 0 }
-    m[code].produit += Number(r.quantite_realisee || 0)
+    m[code].produit += boitesOf(c)
   }
   const plan = planParProduit.value
   return Object.values(m).filter(x => x.produit > 0)
@@ -440,7 +448,7 @@ onMounted(async () => {
 
         <div class="cols">
           <section class="card">
-            <h2 class="card-title">Production {{ anneeSel }} par mois (boîtes)</h2>
+            <h2 class="card-title">Conditionnement {{ anneeSel }} par mois (boîtes)</h2>
             <div v-for="(v, i) in prodParMois" :key="i" class="bar-row">
               <span class="bar-lbl mois">{{ MOIS[i] }}</span>
               <div class="bar-track"><div class="bar-fill prod" :style="{ width: (v / maxMois * 100) + '%' }"></div></div>
