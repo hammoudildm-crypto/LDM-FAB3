@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, inject } from 'vue'
 import { supabase } from '../supabase'
+import { ICONS, TINTS } from '../icons.js'
 
 const peutEditer = inject('peutEditer', ref(true))
 
@@ -121,8 +122,8 @@ onMounted(chargerTout)
 
     <template v-else>
       <div class="kpi-grid">
-        <div class="kpi"><div class="kpi-val accent">{{ fmt(totalEffectif) }}</div><div class="kpi-lbl">Effectif total (filtré)</div></div>
-        <div class="kpi"><div class="kpi-val">{{ effectifsFiltres.length }}</div><div class="kpi-lbl">Lignes</div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.users"></svg></span><div class="kpi-val accent">{{ fmt(totalEffectif) }}</div></div><div class="kpi-lbl">Effectif total (filtré)</div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.hash"></svg></span><div class="kpi-val">{{ effectifsFiltres.length }}</div></div><div class="kpi-lbl">Lignes</div></div>
       </div>
 
       <section class="card" v-if="peutEditer">
