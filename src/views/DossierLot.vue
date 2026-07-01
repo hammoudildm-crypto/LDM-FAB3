@@ -6,9 +6,12 @@ import { ICONS, TINTS } from '../icons.js'
 const lots = ref([])
 const lotId = ref('')
 const rechercheLot = ref('')
+const anneeF = ref(0)
+const moisF = ref(0)
 const lot = ref(null)
 const phases = ref([])
 const conditionnements = ref([])
+const showCond = ref(false)
 const erreur = ref('')
 
 async function fetchAllPaged(make) {
@@ -27,7 +30,7 @@ async function fetchAllPaged(make) {
 async function chargerLots() {
   erreur.value = ''
   const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, produits(code_pf, designation)')
+    .select('id, numero_lot, date_lancement, date_fin_fabrication, produits(code_pf, designation)')
     .eq('actif', true).order('id', { ascending: false }))
   if (r.error) { erreur.value = r.error.message; return }
   lots.value = r.data
@@ -150,14 +153,34 @@ function classeStatut(s) {
 function imprimer() { window.print() }
 
 onMounted(chargerLots)
+const MOIS = [
+  { v: 1, l: 'Janvier' }, { v: 2, l: 'Février' }, { v: 3, l: 'Mars' },
+  { v: 4, l: 'Avril' }, { v: 5, l: 'Mai' }, { v: 6, l: 'Juin' },
+  { v: 7, l: 'Juillet' }, { v: 8, l: 'Août' }, { v: 9, l: 'Septembre' },
+  { v: 10, l: 'Octobre' }, { v: 11, l: 'Novembre' }, { v: 12, l: 'Décembre' }
+]
+function refDateLot(l) {
+  const d = l.date_lancement || l.date_fin_fabrication
+  return d ? new Date(d) : null
+}
+const anneesLot = computed(() => {
+  const set = new Set()
+  for (const l of lots.value) { const d = refDateLot(l); if (d) set.add(d.getFullYear()) }
+  return [...set].sort((a, b) => b - a)
+})
 const lotsFiltres = computed(() => {
   const q = rechercheLot.value.trim().toLowerCase()
-  if (!q) return lots.value
   return lots.value.filter(l => {
-    const p = l.produits
-    const code = p ? String(p.code_pf || '') : ''
-    const desig = p ? String(p.designation || '') : ''
-    return code.toLowerCase().includes(q) || desig.toLowerCase().includes(q) || String(l.numero_lot || '').toLowerCase().includes(q)
+    const d = refDateLot(l)
+    if (anneeF.value && (!d || d.getFullYear() !== anneeF.value)) return false
+    if (moisF.value && (!d || (d.getMonth() + 1) !== moisF.value)) return false
+    if (q) {
+      const p = l.produits
+      const code = p ? String(p.code_pf || '') : ''
+      const desig = p ? String(p.designation || '') : ''
+      if (!(code.toLowerCase().includes(q) || desig.toLowerCase().includes(q) || String(l.numero_lot || '').toLowerCase().includes(q))) return false
+    }
+    return true
   })
 })
 watch(lotId, chargerDossier)
@@ -173,6 +196,16 @@ watch(lotId, chargerDossier)
       <div class="controls">
         <div class="lot-picker">
           <input v-model="rechercheLot" type="search" class="lot-search" placeholder="Rechercher (code, désignation, n° lot)…" />
+          <div class="lot-filters">
+            <select v-model.number="anneeF" title="Filtrer par année">
+              <option :value="0">Toutes années</option>
+              <option v-for="a in anneesLot" :key="a" :value="a">{{ a }}</option>
+            </select>
+            <select v-model.number="moisF" title="Filtrer par mois">
+              <option :value="0">Tous les mois</option>
+              <option v-for="m in MOIS" :key="m.v" :value="m.v">{{ m.l }}</option>
+            </select>
+          </div>
           <select v-model="lotId">
             <option value="">— Choisir un lot — ({{ lotsFiltres.length }})</option>
             <option v-for="l in lotsFiltres" :key="l.id" :value="l.id">
@@ -243,9 +276,15 @@ watch(lotId, chargerDossier)
       <section class="block">
         <div class="block-head">
           <h3>Conditionnement</h3>
-          <span v-if="totalBoites != null" class="rdt-tag">Total : <strong>{{ fmt(totalBoites) }} boîtes</strong></span>
+          <div class="ch-right">
+            <span v-if="totalBoites != null" class="rdt-tag">Total : <strong>{{ fmt(totalBoites) }} boîtes</strong></span>
+            <button v-if="conditionnements.length" class="btn-toggle no-print" @click="showCond = !showCond">
+              {{ showCond ? '▲ Masquer' : '▼ Afficher' }} les lignes ({{ conditionnements.length }})
+            </button>
+          </div>
         </div>
-        <table class="grid">
+        <p v-if="!conditionnements.length" class="empty-inline">Aucun conditionnement saisi pour ce lot.</p>
+        <table v-else v-show="showCond" class="grid cond-grid">
           <thead>
             <tr><th>Date</th><th>Ligne</th><th class="right">Reçu (kg)</th><th class="right">Boîtes</th><th class="right">Rendement</th><th class="right">Rendement global</th><th>Statut</th></tr>
           </thead>
@@ -259,7 +298,6 @@ watch(lotId, chargerDossier)
               <td class="right" :class="rdtGlobalC(c) != null && rdtGlobalC(c) < 90 ? 'rdt-bas' : ''">{{ fmtPct(rdtGlobalC(c)) }}</td>
               <td><span class="badge sm" :class="classeStatut(c.statut)">{{ c.statut }}</span></td>
             </tr>
-            <tr v-if="!conditionnements.length"><td colspan="7" class="empty">Aucun conditionnement saisi pour ce lot.</td></tr>
           </tbody>
         </table>
       </section>
@@ -380,4 +418,11 @@ table.grid td { padding: 8px 9px; border-bottom: 1px solid #eef2f6; white-space:
 .bilan-lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
 .bilan-op { display: flex; align-items: center; font-size: 22px; font-weight: 700; color: #cbd5e1; }
 .bilan-note { font-size: 12px; color: #94a3b8; margin: 12px 0 0; line-height: 1.5; }
+.ch-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.btn-toggle { background: #fff; border: 1px solid #cbd5e1; color: #0f766e; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.btn-toggle:hover { background: #f0fdfa; border-color: #0f766e; }
+.empty-inline { color: #94a3b8; font-size: 13px; margin: 4px 0 0; }
+@media print { .cond-grid { display: table !important; } }
+.lot-filters { display: flex; gap: 6px; }
+.lot-filters select { min-width: 0; flex: 1; font-size: 13px; padding: 8px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 500; }
 </style>
