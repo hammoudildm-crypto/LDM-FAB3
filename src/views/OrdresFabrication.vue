@@ -1,5 +1,6 @@
 <script setup>
-import { ref, reactive, computed, onMounted, inject } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, inject } from 'vue'
+import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
 
 const peutEditer = inject('peutEditer', ref(true))
@@ -12,6 +13,7 @@ const filtreStatut = ref('')
 const erreur = ref('')
 const message = ref('')
 const signatures = ref([])
+const formCard = ref(null)
 
 const sig = reactive({ open: false, mode: 'sign', ordre: null, pin: '', pin2: '', motif: '', erreur: '', busy: false })
 
@@ -164,7 +166,19 @@ async function signer() {
   await chargerTout()
 }
 
-onMounted(chargerTout)
+const route = useRoute()
+onMounted(async () => {
+  await chargerTout()
+  const id = route.query.edit
+  if (id) {
+    const l = lots.value.find(x => String(x.id) === String(id))
+    if (l) {
+      modifier(l)
+      await nextTick()
+      if (formCard.value) formCard.value.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+})
 </script>
 
 <template>
@@ -182,7 +196,7 @@ onMounted(chargerTout)
     </div>
 
     <template v-else>
-      <section class="card" v-if="peutEditer">
+      <section class="card" v-if="peutEditer" ref="formCard">
         <h2 class="card-title">{{ form.id ? 'Modifier le lot' : 'Nouveau lot' }}</h2>
         <div class="form-grid">
           <label>N° de lot<input v-model="form.numero_lot" placeholder="L260145" /></label>
