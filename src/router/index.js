@@ -17,6 +17,7 @@ import VerificationDDL from '../views/VerificationDDL.vue'
 import RealisationPlan from '../views/RealisationPlan.vue'
 import Rendement from '../views/Rendement.vue'
 import DisponibiliteEquipements from '../views/DisponibiliteEquipements.vue'
+import AvancementLots from '../views/AvancementLots.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Home },
@@ -35,6 +36,7 @@ const routes = [
   { path: '/realisation-plan', name: 'realisation-plan', component: RealisationPlan },
   { path: '/rendement', name: 'rendement', component: Rendement },
   { path: '/dispo-equipements', name: 'dispo-equipements', component: DisponibiliteEquipements },
+  { path: '/avancement', name: 'avancement', component: AvancementLots },
   { path: '/compte', name: 'compte', component: MonCompte },
   { path: '/login', name: 'login', component: Login },
 ]
