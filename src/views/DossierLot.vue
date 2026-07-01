@@ -4,6 +4,7 @@ import { supabase } from '../supabase'
 
 const lots = ref([])
 const lotId = ref('')
+const rechercheLot = ref('')
 const lot = ref(null)
 const phases = ref([])
 const conditionnements = ref([])
@@ -25,7 +26,7 @@ async function fetchAllPaged(make) {
 async function chargerLots() {
   erreur.value = ''
   const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, produits(designation)')
+    .select('id, numero_lot, produits(code_pf, designation)')
     .eq('actif', true).order('id', { ascending: false }))
   if (r.error) { erreur.value = r.error.message; return }
   lots.value = r.data
@@ -118,6 +119,16 @@ function classeStatut(s) {
 function imprimer() { window.print() }
 
 onMounted(chargerLots)
+const lotsFiltres = computed(() => {
+  const q = rechercheLot.value.trim().toLowerCase()
+  if (!q) return lots.value
+  return lots.value.filter(l => {
+    const p = l.produits
+    const code = p ? String(p.code_pf || '') : ''
+    const desig = p ? String(p.designation || '') : ''
+    return code.toLowerCase().includes(q) || desig.toLowerCase().includes(q) || String(l.numero_lot || '').toLowerCase().includes(q)
+  })
+})
 watch(lotId, chargerDossier)
 </script>
 
@@ -129,12 +140,15 @@ watch(lotId, chargerDossier)
         <p class="sub">Fiche récapitulative : identification, fabrication et conditionnement d'un lot.</p>
       </div>
       <div class="controls">
-        <select v-model="lotId">
-          <option value="">— Choisir un lot —</option>
-          <option v-for="l in lots" :key="l.id" :value="l.id">
-            {{ l.numero_lot }} · {{ l.produits ? l.produits.designation : '' }}
-          </option>
-        </select>
+        <div class="lot-picker">
+          <input v-model="rechercheLot" type="search" class="lot-search" placeholder="Rechercher (code, désignation, n° lot)…" />
+          <select v-model="lotId">
+            <option value="">— Choisir un lot — ({{ lotsFiltres.length }})</option>
+            <option v-for="l in lotsFiltres" :key="l.id" :value="l.id">
+              {{ l.numero_lot }} · {{ l.produits ? l.produits.code_pf + ' ' + l.produits.designation : '' }}
+            </option>
+          </select>
+        </div>
         <button v-if="lot" class="btn" @click="imprimer">Imprimer</button>
       </div>
     </header>
@@ -295,4 +309,7 @@ table.grid td { padding: 8px 9px; border-bottom: 1px solid #eef2f6; white-space:
   .no-print { display: none !important; }
   .dossier { border: 0; box-shadow: none; padding: 0; }
 }
+.lot-picker { display: flex; flex-direction: column; gap: 6px; min-width: 320px; }
+.lot-search { font-size: 14px; padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; width: 100%; box-sizing: border-box; }
+.lot-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 </style>
