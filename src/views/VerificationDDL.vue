@@ -4,6 +4,8 @@ import { supabase } from '../supabase'
 import { ICONS, TINTS } from '../icons.js'
 
 const peutEditer = inject('peutEditer', ref(false))
+const role = inject('role', ref(null))
+const estAdmin = computed(() => role.value === 'admin')
 
 const anneeCourante = new Date().getFullYear()
 const ANNEES = []
@@ -130,7 +132,8 @@ function exporterHistoriqueCSV() {
 
 function ouvrir(l) {
   verifEnCours.value = l.id
-  vForm.value = { verificateur: l.ddl_verificateur || '', date: new Date().toISOString().slice(0, 10) }
+  const d = l.ddl_date_verification ? String(l.ddl_date_verification).slice(0, 10) : new Date().toISOString().slice(0, 10)
+  vForm.value = { verificateur: l.ddl_verificateur || '', date: d }
   superviseurChoix.value = l.ddl_verificateur || ''
   nouveauSuperviseur.value = ''
   msg.value = ''
@@ -247,13 +250,33 @@ async function devalider(l) {
       <table v-else class="mini">
         <thead><tr><th>Lot</th><th>Produit</th><th>Superviseur</th><th class="right">Date d'envoi</th><th></th></tr></thead>
         <tbody>
-          <tr v-for="l in verifiesAffiches" :key="l.id">
-            <td class="mono">{{ l.numero_lot }}</td>
-            <td class="desig">{{ prodNom(l) }}</td>
-            <td>{{ l.ddl_verificateur || '—' }}</td>
-            <td class="right nowrap">{{ fmtDate(l.ddl_date_verification) }}</td>
-            <td class="right"><button v-if="peutEditer" class="link danger" @click="devalider(l)">Annuler</button></td>
-          </tr>
+          <template v-for="l in verifiesAffiches" :key="l.id">
+            <tr>
+              <td class="mono">{{ l.numero_lot }}</td>
+              <td class="desig">{{ prodNom(l) }}</td>
+              <td>{{ l.ddl_verificateur || '—' }}</td>
+              <td class="right nowrap">{{ fmtDate(l.ddl_date_verification) }}</td>
+              <td class="right nowrap">
+                <button v-if="estAdmin" class="link" @click="ouvrir(l)">Modifier</button>
+                <button v-if="peutEditer" class="link danger" @click="devalider(l)">Annuler</button>
+              </td>
+            </tr>
+            <tr v-if="verifEnCours === l.id">
+              <td colspan="5">
+                <div class="verif-form">
+                  <select v-model="superviseurChoix" class="sv-sel">
+                    <option value="">— Choisir un superviseur —</option>
+                    <option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option>
+                    <option value="__autre__">＋ Autre (saisir un nom)…</option>
+                  </select>
+                  <input v-if="superviseurChoix === '__autre__'" list="superv-list" v-model="nouveauSuperviseur" placeholder="Nom du superviseur" />
+                  <input type="date" v-model="vForm.date" />
+                  <button class="btn sm" @click="valider(l)">Enregistrer</button>
+                  <button class="link" @click="verifEnCours = null">Annuler</button>
+                </div>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
       <p v-if="verifiesFiltres.length > verifiesAffiches.length" class="empty">
