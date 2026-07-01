@@ -266,4 +266,17 @@ html[data-theme="sombre"] .lot-info { border-top-color: #1f2940 !important; }
 .zoom-btn:disabled { opacity: 0.35; cursor: default; }
 .zoom-val { min-width: 44px; font-size: 12px; font-weight: 600; padding: 4px 4px; }
 .zoom-val:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
+/* ===== Mode compact — densité maximale (s'applique à toutes les pages) ===== */
+.card { padding: 12px 15px !important; margin-bottom: 12px !important; }
+.kpi { padding: 11px 14px !important; }
+.kpi-val { font-size: 20px !important; line-height: 1.1 !important; }
+.kpi-grid { gap: 9px !important; }
+.grid th, .grid td { padding: 5px 8px !important; }
+.grid th { font-size: 11px !important; }
+.card-title { margin: 0 0 9px !important; font-size: 15px !important; }
+.card-head { margin-bottom: 9px !important; }
+h1 { font-size: 20px !important; }
+h2 { font-size: 17px !important; }
+.sub { margin-top: 3px !important; font-size: 13px !important; }
 </style>
