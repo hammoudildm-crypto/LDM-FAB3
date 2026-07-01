@@ -44,7 +44,7 @@ async function charger() {
   if (!rp.error) nbProduits.value = rp.count || 0
 
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, quantite_theorique, produits(designation, unites_par_boite, poids_unitaire_mg, gamme)')
+    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, quantite_theorique, boites_fabriquees, produits(designation)')
     .eq('actif', true).order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -58,7 +58,7 @@ async function charger() {
   if (!rc.error) conditionnements.value = rc.data
 
   const rph = await fetchAllPaged(() => supabase.from('suivi_phases')
-    .select('ordre_id, phase, quantite_entree, quantite_sortie, date_phase, id')
+    .select('ordre_id, quantite_entree, quantite_sortie, date_phase, id')
     .eq('actif', true).order('date_phase', { ascending: true, nullsFirst: true }).order('id', { ascending: true }))
   if (!rph.error) phases.value = rph.data
 
@@ -211,36 +211,7 @@ const rendementCondParMois = computed(() => {
 })
 
 // --- Vrac en attente (boîtes) : lots fabriqués (Terminé) pas encore conditionnés ---
-// Boîtes vrac = sortie (kg) de la phase FINALE (selon la gamme) -> comprimés -> boîtes
-const CANON_PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
-function phaseFinaleGamme(g) {
-  if (!Array.isArray(g) || !g.length) return null
-  for (let i = CANON_PHASES.length - 1; i >= 0; i--) if (g.includes(CANON_PHASES[i])) return CANON_PHASES[i]
-  return null
-}
-const phasesNomByLot = computed(() => {
-  const m = {}
-  for (const p of phases.value) {
-    if (!m[p.ordre_id]) m[p.ordre_id] = {}
-    const cur = m[p.ordre_id][p.phase]
-    if (!cur || (p.quantite_sortie != null && cur.quantite_sortie == null)) m[p.ordre_id][p.phase] = p
-  }
-  return m
-})
-function boitesVracLot(l) {
-  const p = l.produits
-  if (!p) return 0
-  const mm = Number(p.poids_unitaire_mg || 0), upb = Number(p.unites_par_boite || 0)
-  if (mm <= 0 || upb <= 0) return 0
-  const recs = phasesNomByLot.value[l.id] || {}
-  let phFin = phaseFinaleGamme(p.gamme)
-  if (!phFin) {
-    for (let i = CANON_PHASES.length - 1; i >= 0; i--) { const r = recs[CANON_PHASES[i]]; if (r && r.quantite_sortie != null) { phFin = CANON_PHASES[i]; break } }
-  }
-  const rec = phFin ? recs[phFin] : null
-  if (!rec || rec.quantite_sortie == null) return 0
-  return Math.floor(Number(rec.quantite_sortie) * 1e6 / mm / upb)
-}
+// Base = boîtes réellement fabriquées (classeur) ; repli théorique si absent.
 const vracEnAttente = computed(() => {
   const condIds = new Set()
   for (const c of conditionnements.value) condIds.add(c.ordre_id)
@@ -248,15 +219,20 @@ const vracEnAttente = computed(() => {
   for (const l of lots.value) {
     if (l.statut !== 'Terminé') continue
     if (condIds.has(l.id)) continue
-    t += boitesVracLot(l)
+    t += l.boites_fabriquees != null ? Number(l.boites_fabriquees) : Number(l.quantite_theorique || 0)
   }
   return t
 })
 
-// --- Fabrication réalisée (boîtes) = vrac réel des phases finales, année sélectionnée ---
+// --- Fabrication réalisée (boîtes) = quantités réellement fabriquées ---
+// boites_fabriquees provient du classeur (cps/kg réels). Repli théorique pour
+// les lots récents pas encore dans le classeur mais dont la fab est terminée.
 const fabRealisee = computed(() => {
   let t = 0
-  for (const l of lotsAnnee.value) t += boitesVracLot(l)
+  for (const l of lotsAnnee.value) {
+    if (l.boites_fabriquees != null) { t += Number(l.boites_fabriquees); continue }
+    if (l.date_fin_fabrication || l.statut === 'Terminé' || l.statut === 'Libéré') t += Number(l.quantite_theorique || 0)
+  }
   return t
 })
 const pctPlanFab = computed(() => planTotal.value > 0 ? (fabRealisee.value / planTotal.value) * 100 : null)
