@@ -272,6 +272,11 @@ const realisationPlan = computed(() => {
 
 function pct(n, total) { return total > 0 ? (n / total) * 100 : 0 }
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
+function fmtC(n) {
+  if (n == null || isNaN(n)) return '—'
+  if (Math.abs(n) >= 1000) return Number(n).toLocaleString('fr-FR', { notation: 'compact', maximumSignificantDigits: 2 })
+  return Number(n).toLocaleString('fr-FR')
+}
 function fmtPct(n) { return n == null ? '—' : Number(n).toFixed(2) + ' %' }
 function fmtDA(n) {
   if (n == null) return '—'
@@ -322,15 +327,15 @@ onMounted(async () => {
       <!-- ====================== PRODUCTION ====================== -->
       <div v-show="ongletActif === 'production'">
         <div class="kpi-grid kpi-9">
-          <div class="kpi"><div class="kpi-val">{{ fmt(nbProduits) }}</div><div class="kpi-lbl">Produits actifs</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(nbLots) }}</div><div class="kpi-lbl">Lots</div></div>
-          <div class="kpi"><div class="kpi-val accent">{{ fmt(lotsEnCours) }}</div><div class="kpi-lbl">Lots en cours</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(totalBoites) }}</div><div class="kpi-lbl">Boîtes réalisées {{ anneeSel }}</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(vracEnAttente) }}</div><div class="kpi-lbl">Vrac en attente (bts)</div></div>
-          <div class="kpi"><div class="kpi-val accent">{{ fmt(boitesCeMois) }}</div><div class="kpi-lbl">Boîtes ce mois</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(planTotal) }}</div><div class="kpi-lbl">Plan {{ anneeSel }} (boîtes)</div></div>
+          <div class="kpi"><div class="kpi-val">{{ fmtC(nbProduits) }}</div><div class="kpi-lbl">Produits actifs</div></div>
+          <div class="kpi"><div class="kpi-val">{{ fmtC(nbLots) }}</div><div class="kpi-lbl">Lots</div></div>
+          <div class="kpi"><div class="kpi-val accent">{{ fmtC(lotsEnCours) }}</div><div class="kpi-lbl">Lots en cours</div></div>
+          <div class="kpi"><div class="kpi-val">{{ fmtC(totalBoites) }}</div><div class="kpi-lbl">Boîtes réalisées {{ anneeSel }}</div></div>
+          <div class="kpi"><div class="kpi-val">{{ fmtC(vracEnAttente) }}</div><div class="kpi-lbl">Vrac en attente (bts)</div></div>
+          <div class="kpi"><div class="kpi-val accent">{{ fmtC(boitesCeMois) }}</div><div class="kpi-lbl">Boîtes ce mois</div></div>
+          <div class="kpi"><div class="kpi-val">{{ fmtC(planTotal) }}</div><div class="kpi-lbl">Plan {{ anneeSel }} (boîtes)</div></div>
           <div class="kpi"><div class="kpi-val accent">{{ fmtPct(pctPlanRealise) }}</div><div class="kpi-lbl">Plan {{ anneeSel }} réalisé</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(boitesRestantes) }}</div><div class="kpi-lbl">Boîtes restantes (plan)</div></div>
+          <div class="kpi"><div class="kpi-val">{{ fmtC(boitesRestantes) }}</div><div class="kpi-lbl">Boîtes restantes (plan)</div></div>
         </div>
 
         <div class="cols">
@@ -480,7 +485,7 @@ onMounted(async () => {
 .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 14px; }
 .kpi-9 { grid-template-columns: repeat(9, minmax(0, 1fr)) !important; margin-bottom: 12px !important; }
 .kpi-9 .kpi { padding: 8px 10px !important; }
-.kpi-9 .kpi-val { font-size: 16px !important; }
+.kpi-9 .kpi-val { font-size: 20px !important; }
 .kpi-9 .kpi-lbl { margin-top: 2px !important; }
 @media (max-width: 1200px) { .kpi-9 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; } }
 .kpi-grid:last-of-type { margin-bottom: 22px; }
