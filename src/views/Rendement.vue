@@ -40,7 +40,7 @@ async function chargerTout() {
   chargement.value = true
   erreur.value = ''
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, quantite_theorique, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, unites_par_boite)')
+    .select('id, numero_lot, quantite_theorique, boites_fabriquees, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, unites_par_boite)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data
@@ -126,6 +126,31 @@ const globalAnnee = computed(() => {
 const rendementGlobal = computed(() => globalAnnee.value.rdt)
 const tauxDechets = computed(() => globalAnnee.value.rdt == null ? null : Math.max(0, 100 - globalAnnee.value.rdt))
 const nbLotsAnnee = computed(() => lotsValides.value.length)
+
+// --- Structure FABRICATION : boîtes fabriquées / boîtes théoriques ---
+// Utilise boites_fabriquees (quantités réelles du classeur). Un lot pas encore
+// fabriqué (sans boites_fabriquees) n'est pas compté.
+const lotsAnneeFab = computed(() => {
+  const arr = []
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    if (new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+    const theo = Number(o.quantite_theorique || 0)
+    const p = Number(o.boites_fabriquees || 0)
+    if (theo <= 0 || p <= 0) continue
+    arr.push({ of: o, prod: p, theo, rdt: (p / theo) * 100 })
+  }
+  return arr
+})
+const lotsValidesFab = computed(() => lotsAnneeFab.value.filter(r => rdtValide(r.rdt)))
+const globalAnneeFab = computed(() => {
+  let prod = 0, theo = 0
+  for (const r of lotsValidesFab.value) { prod += r.prod; theo += r.theo }
+  return { prod, theo, rdt: theo > 0 ? (prod / theo) * 100 : null }
+})
+const rendementFab = computed(() => globalAnneeFab.value.rdt)
+const avarieFab = computed(() => globalAnneeFab.value.rdt == null ? null : Math.max(0, 100 - globalAnneeFab.value.rdt))
+const nbLotsFab = computed(() => lotsValidesFab.value.length)
 
 // Taux de déchets mensuel : rendement% + avarie% (= 100 - rendement) par mois
 const parMois = computed(() => {
@@ -327,7 +352,7 @@ onMounted(chargerTout)
     <header class="rdt-head">
       <div>
         <h1>Rendement quantitatif</h1>
-        <p class="sub">Boîtes produites ÷ boîtes théoriques, et taux de déchets (avarie) — par mois et par produit.</p>
+        <p class="sub">Fabrication et conditionnement suivis avec les mêmes KPI : rendement, avarie, boîtes produites et théoriques — par mois et par produit.</p>
       </div>
       <label class="annee-sel">Année de fabrication
         <select v-model.number="anneeSel">
@@ -340,29 +365,58 @@ onMounted(chargerTout)
     <p v-if="chargement" class="loading">Chargement des données…</p>
 
     <template v-else>
-      <!-- KPIs -->
-      <div class="kpi-grid k4">
-        <div class="kpi">
-          <span class="kpi-tag rdt-tag">Rendement</span>
-          <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><div class="kpi-val accent">{{ pct2(rendementGlobal) }}</div></div>
-          <div class="kpi-lbl">Rendement global {{ anneeSel }}</div>
+      <!-- Deux structures : Fabrication & Conditionnement (mêmes KPI) -->
+      <section class="struct">
+        <h2 class="struct-title"><span class="struct-badge fab">Fabrication</span><span class="struct-desc">boîtes fabriquées ÷ boîtes théoriques</span></h2>
+        <div class="kpi-grid k4">
+          <div class="kpi">
+            <span class="kpi-tag rdt-tag">Rendement</span>
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><div class="kpi-val accent">{{ pct2(rendementFab) }}</div></div>
+            <div class="kpi-lbl">Rendement fabrication {{ anneeSel }}</div>
+          </div>
+          <div class="kpi">
+            <span class="kpi-tag av-tag">Avarie</span>
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.red"><svg viewBox="0 0 24 24" v-html="ICONS.trash"></svg></span><div class="kpi-val danger">{{ pct2(avarieFab) }}</div></div>
+            <div class="kpi-lbl">Taux de déchets {{ anneeSel }}</div>
+          </div>
+          <div class="kpi">
+            <span class="kpi-tag prod-tag">Production</span>
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(globalAnneeFab.prod) }}</div></div>
+            <div class="kpi-lbl">Boîtes fabriquées</div>
+          </div>
+          <div class="kpi">
+            <span class="kpi-tag theo-tag">Théorique</span>
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(globalAnneeFab.theo) }}</div></div>
+            <div class="kpi-lbl">Boîtes théoriques · {{ nbLotsFab }} lots</div>
+          </div>
         </div>
-        <div class="kpi">
-          <span class="kpi-tag av-tag">Avarie</span>
-          <div class="kpi-top"><span class="kpi-ic" :style="TINTS.red"><svg viewBox="0 0 24 24" v-html="ICONS.trash"></svg></span><div class="kpi-val danger">{{ pct2(tauxDechets) }}</div></div>
-          <div class="kpi-lbl">Taux de déchets {{ anneeSel }}</div>
+      </section>
+
+      <section class="struct">
+        <h2 class="struct-title"><span class="struct-badge cond">Conditionnement</span><span class="struct-desc">boîtes conditionnées ÷ boîtes théoriques</span></h2>
+        <div class="kpi-grid k4">
+          <div class="kpi">
+            <span class="kpi-tag rdt-tag">Rendement</span>
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><div class="kpi-val accent">{{ pct2(rendementGlobal) }}</div></div>
+            <div class="kpi-lbl">Rendement conditionnement {{ anneeSel }}</div>
+          </div>
+          <div class="kpi">
+            <span class="kpi-tag av-tag">Avarie</span>
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.red"><svg viewBox="0 0 24 24" v-html="ICONS.trash"></svg></span><div class="kpi-val danger">{{ pct2(tauxDechets) }}</div></div>
+            <div class="kpi-lbl">Taux de déchets {{ anneeSel }}</div>
+          </div>
+          <div class="kpi">
+            <span class="kpi-tag prod-tag">Production</span>
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(globalAnnee.prod) }}</div></div>
+            <div class="kpi-lbl">Boîtes conditionnées</div>
+          </div>
+          <div class="kpi">
+            <span class="kpi-tag theo-tag">Théorique</span>
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(globalAnnee.theo) }}</div></div>
+            <div class="kpi-lbl">Boîtes théoriques · {{ nbLotsAnnee }} lots</div>
+          </div>
         </div>
-        <div class="kpi">
-          <span class="kpi-tag prod-tag">Production</span>
-          <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(globalAnnee.prod) }}</div></div>
-          <div class="kpi-lbl">Boîtes produites</div>
-        </div>
-        <div class="kpi">
-          <span class="kpi-tag theo-tag">Théorique</span>
-          <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(globalAnnee.theo) }}</div></div>
-          <div class="kpi-lbl">Boîtes théoriques · {{ nbLotsAnnee }} lots</div>
-        </div>
-      </div>
+      </section>
 
       <!-- Lots à vérifier (rendement anormalement bas) -->
       <section v-if="anomalies.length" class="card warn">
@@ -602,6 +656,12 @@ onMounted(chargerTout)
 
 .kpi-grid { display: grid; gap: 14px; margin-bottom: 22px; }
 .kpi-grid.k4 { grid-template-columns: repeat(4, 1fr); }
+.struct { margin-bottom: 8px; }
+.struct-title { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font-size: 15px; }
+.struct-badge { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 4px 12px; border-radius: 999px; color: #fff; }
+.struct-badge.fab { background: #0f766e; }
+.struct-badge.cond { background: #2563eb; }
+.struct-desc { font-size: 13px; font-weight: 500; color: #64748b; }
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .kpi-tag { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 3px 8px; border-radius: 999px; margin-bottom: 8px; }
 .rdt-tag { background: #ccfbf1; color: #0f766e; }
