@@ -6,6 +6,9 @@ const lots = ref([])
 const phasesParLot = ref({})   // ordre_id -> dernière sortie (vrac fabriqué)
 const condParLot = ref({})     // ordre_id -> somme entrée conditionnement
 const masquerSoldes = ref(true)
+const recherche = ref('')
+const filtreStatut = ref('')
+const STATUTS = ['Planifié', 'En cours', 'Terminé', 'Libéré', 'Rejeté']
 const erreur = ref('')
 
 async function fetchAllPaged(make) {
@@ -60,11 +63,20 @@ function enCours(l) {
   return f - entreCond(l)
 }
 
-const lignes = computed(() =>
-  lots.value
+const lignes = computed(() => {
+  const q = recherche.value.trim().toLowerCase()
+  return lots.value
     .map(l => ({ lot: l, fab: fabrique(l), cond: entreCond(l), enc: enCours(l) }))
     .filter(x => !masquerSoldes.value || x.enc == null || x.enc > 0)
-)
+    .filter(x => !filtreStatut.value || x.lot.statut === filtreStatut.value)
+    .filter(x => {
+      if (!q) return true
+      const p = x.lot.produits
+      const code = p ? String(p.code_pf || '') : ''
+      const desig = p ? String(p.designation || '') : ''
+      return String(x.lot.numero_lot || '').toLowerCase().includes(q) || code.toLowerCase().includes(q) || desig.toLowerCase().includes(q)
+    })
+})
 const totalEnCours = computed(() => lignes.value.reduce((s, x) => s + (x.enc != null && x.enc > 0 ? x.enc : 0), 0))
 const nbAttente = computed(() => lignes.value.filter(x => x.enc != null && x.enc > 0).length)
 
@@ -98,7 +110,16 @@ onMounted(charger)
     </div>
 
     <section class="card">
-      <h2 class="card-title">Par lot</h2>
+      <div class="card-head">
+        <h2 class="card-title">Par lot <span class="count">{{ lignes.length }}</span></h2>
+        <div class="head-tools">
+          <input v-model="recherche" type="search" class="recherche" placeholder="Rechercher (lot, code, désignation)…" />
+          <select v-model="filtreStatut" class="filtre">
+            <option value="">Tous les statuts</option>
+            <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
+          </select>
+        </div>
+      </div>
       <div class="table-scroll">
         <table class="grid">
           <thead>
@@ -172,4 +193,11 @@ table.grid tr:hover td { background: #f8fafc; }
 @media (max-width: 700px) {
   .kpi-grid { grid-template-columns: 1fr 1fr; }
 }
+.card-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.card-head .card-title { margin: 0; }
+.count { display: inline-block; background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
+.head-tools { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.recherche { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 240px; }
+.recherche:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.filtre { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
 </style>
