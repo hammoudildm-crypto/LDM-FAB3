@@ -73,7 +73,7 @@ async function fetchAllPaged(make) {
 async function chargerBase() {
   erreur.value = ''
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, quantite_theorique, statut, produits(code_pf, designation, gamme)')
+    .select('id, numero_lot, quantite_theorique, statut, produits(code_pf, designation, gamme, poids_unitaire_mg, unites_par_boite)')
     .eq('actif', true).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -146,10 +146,16 @@ async function enregistrer() {
     const maj = { date_fin_fabrication: form.date_phase || new Date().toISOString().slice(0, 10) }
     const st = lotSelectionne.value ? lotSelectionne.value.statut : null
     if (st !== 'Libéré' && st !== 'Rejeté') maj.statut = 'Terminé'
+    // Tranche « live » : boîtes fabriquées = sortie finale (kg) -> comprimés -> boîtes
+    const pr = lotSelectionne.value ? lotSelectionne.value.produits : null
+    const mm = pr ? Number(pr.poids_unitaire_mg || 0) : 0
+    const upb = pr ? Number(pr.unites_par_boite || 0) : 0
+    const kg = toNum(form.quantite_sortie)
+    if (kg && mm > 0 && upb > 0) maj.boites_fabriquees = Math.floor(kg * 1e6 / mm / upb)
     const ru = await supabase.from('ordres_fabrication').update(maj).eq('id', lotId.value)
     if (!ru.error) { finDeFab = true; await chargerBase() }
   }
-  message.value = (form.id ? 'Phase mise à jour.' : 'Phase ajoutée.') + (finDeFab ? ' Fin de fabrication : lot daté et passé à « Terminé » → il entre dans la file DDL.' : '')
+  message.value = (form.id ? 'Phase mise à jour.' : 'Phase ajoutée.') + (finDeFab ? ' Fin de fabrication : lot daté, boîtes fabriquées calculées (sortie kg), passé à « Terminé » → il entre dans la file DDL.' : '')
   resetForm()
   await chargerPhases()
 }
