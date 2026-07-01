@@ -18,7 +18,7 @@ provide('peutEditer', peutEditer)
 const roleLabel = computed(() => ({ admin: 'Admin', operateur: 'Opérateur', lecteur: 'Lecteur' }[role.value] || ''))
 
 const PROD = ['/plan', '/ordres', '/suivi', '/encours', '/conditionnement', '/dossier']
-const PILOT = ['/ca', '/realisation-plan', '/rendement', '/effectifs', '/verification-ddl', '/audit', '/habilitations']
+const PILOT = ['/ca', '/realisation-plan', '/rendement', '/dispo-equipements', '/effectifs', '/verification-ddl', '/audit', '/habilitations']
 const prodActive = computed(() => PROD.includes(route.path))
 const pilotActive = computed(() => PILOT.includes(route.path))
 
@@ -108,6 +108,7 @@ async function signOut() {
             <RouterLink to="/ca" @click="closeMenu">Chiffre d'affaires</RouterLink>
             <RouterLink to="/realisation-plan" @click="closeMenu">Réalisation vs Plan</RouterLink>
             <RouterLink to="/rendement" @click="closeMenu">Rendement</RouterLink>
+            <RouterLink to="/dispo-equipements" @click="closeMenu">Disponibilité par équipement</RouterLink>
             <RouterLink to="/effectifs" @click="closeMenu">Effectifs</RouterLink>
             <RouterLink to="/verification-ddl" @click="closeMenu">Vérification DDL</RouterLink>
             <RouterLink to="/audit" @click="closeMenu">Journal d'audit</RouterLink>
