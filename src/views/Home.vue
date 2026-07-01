@@ -210,6 +210,40 @@ const rendementCondParMois = computed(() => {
   return boxes.map((b, i) => eq[i] > 0 ? (b / eq[i]) * 100 : null)
 })
 
+// --- Deux structures Qualité : rendement/avarie = boîtes ÷ théorique ---
+// Base = année de fabrication (comme la page Rendement), bande valide 50-110 %.
+const RDT_MIN = 50, RDT_MAX = 110
+const condBoxByLot = computed(() => {
+  const m = {}
+  for (const c of conditionnements.value) m[c.ordre_id] = (m[c.ordre_id] || 0) + boitesOf(c)
+  return m
+})
+const structFab = computed(() => {
+  let prod = 0, theo = 0, n = 0
+  for (const l of lotsAnnee.value) {
+    const p = Number(l.boites_fabriquees || 0), t = Number(l.quantite_theorique || 0)
+    if (p <= 0 || t <= 0) continue
+    const r = (p / t) * 100
+    if (r < RDT_MIN || r > RDT_MAX) continue
+    prod += p; theo += t; n++
+  }
+  const rdt = theo > 0 ? (prod / theo) * 100 : null
+  return { prod, theo, n, rdt, avarie: rdt == null ? null : Math.max(0, 100 - rdt) }
+})
+const structCond = computed(() => {
+  const byLot = condBoxByLot.value
+  let prod = 0, theo = 0, n = 0
+  for (const l of lotsAnnee.value) {
+    const b = byLot[l.id] || 0, t = Number(l.quantite_theorique || 0)
+    if (b <= 0 || t <= 0) continue
+    const r = (b / t) * 100
+    if (r < RDT_MIN || r > RDT_MAX) continue
+    prod += b; theo += t; n++
+  }
+  const rdt = theo > 0 ? (prod / theo) * 100 : null
+  return { prod, theo, n, rdt, avarie: rdt == null ? null : Math.max(0, 100 - rdt) }
+})
+
 // --- Vrac en attente (boîtes) : lots fabriqués (Terminé) pas encore conditionnés ---
 // Base = boîtes réellement fabriquées (classeur) ; repli théorique si absent.
 const vracEnAttente = computed(() => {
@@ -322,9 +356,6 @@ const kpisQualite = computed(() => [
   { v: fmt(lotsTermines.value),           l: 'Lots terminés',         tint: TINTS.blue,    ic: ICONS.package },
   { v: fmt(lotsLiberes.value),            l: 'Lots libérés',          tint: TINTS.green,   ic: ICONS.check },
   { v: fmtPct(tauxLiberation.value),      l: 'Taux de libération',    tint: TINTS.emerald, ic: ICONS.percent },
-  { v: fmtPct(rendementFabMoyen.value),   l: 'Rendement fab. moyen',  tint: TINTS.teal,    ic: ICONS.gauge },
-  { v: fmtPct(rendementCndtMoyen.value),  l: 'Rendement cond. moyen', tint: TINTS.cyan,    ic: ICONS.gauge },
-  { v: fmtPct(rendementGlobalMoyen.value),l: 'Rendement global moyen',tint: TINTS.indigo,  ic: ICONS.gauge },
 ])
 const kpisFinance = computed(() => [
   { v: fmtDA(caRealise.value),          l: 'CA réalisé ' + anneeSel.value,               tint: TINTS.emerald, ic: ICONS.money },
@@ -430,7 +461,24 @@ onMounted(async () => {
 
       <!-- ====================== QUALITÉ ====================== -->
       <div v-show="ongletActif === 'qualite'">
-        <div class="kpi-grid">
+        <!-- Deux structures : Fabrication & Conditionnement (mêmes KPI) -->
+        <h3 class="struct-h"><span class="struct-b fab">Fabrication</span><span class="struct-d">boîtes fabriquées ÷ théoriques · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k4">
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val accent">{{ fmtPct(structFab.rdt) }}</span></div><div class="kpi-lbl">Rendement</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.red"><svg viewBox="0 0 24 24" v-html="ICONS.trash"></svg></span><span class="kpi-val">{{ fmtPct(structFab.avarie) }}</span></div><div class="kpi-lbl">Avarie</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val">{{ fmt(structFab.prod) }}</span></div><div class="kpi-lbl">Boîtes fabriquées</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val">{{ fmt(structFab.theo) }}</span></div><div class="kpi-lbl">Théoriques · {{ structFab.n }} lots</div></div>
+        </div>
+        <h3 class="struct-h"><span class="struct-b cond">Conditionnement</span><span class="struct-d">boîtes conditionnées ÷ théoriques · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k4">
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val accent">{{ fmtPct(structCond.rdt) }}</span></div><div class="kpi-lbl">Rendement</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.red"><svg viewBox="0 0 24 24" v-html="ICONS.trash"></svg></span><span class="kpi-val">{{ fmtPct(structCond.avarie) }}</span></div><div class="kpi-lbl">Avarie</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val">{{ fmt(structCond.prod) }}</span></div><div class="kpi-lbl">Boîtes conditionnées</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val">{{ fmt(structCond.theo) }}</span></div><div class="kpi-lbl">Théoriques · {{ structCond.n }} lots</div></div>
+        </div>
+
+        <!-- Indicateurs qualité -->
+        <div class="kpi-grid k3">
           <div class="kpi" v-for="(k, i) in kpisQualite" :key="i">
             <div class="kpi-top">
               <span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span>
@@ -531,6 +579,15 @@ onMounted(async () => {
 
 .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 14px; }
 .kpi-grid:last-of-type { margin-bottom: 22px; }
+.kpi-grid.k4 { grid-template-columns: repeat(4, 1fr); }
+.kpi-grid.k3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 900px) { .kpi-grid.k4, .kpi-grid.k3 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .kpi-grid.k4, .kpi-grid.k3 { grid-template-columns: 1fr; } }
+.struct-h { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; font-size: 14px; font-weight: 600; }
+.struct-b { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 4px 12px; border-radius: 999px; color: #fff; }
+.struct-b.fab { background: #0f766e; }
+.struct-b.cond { background: #2563eb; }
+.struct-d { font-size: 13px; font-weight: 500; color: #64748b; }
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .kpi-val { font-size: 23px; font-weight: 700; letter-spacing: -0.02em; }
 .kpi-val.accent { color: #0f766e; }
