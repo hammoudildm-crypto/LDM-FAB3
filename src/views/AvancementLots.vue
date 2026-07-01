@@ -15,6 +15,7 @@ const recherche = ref('')
 const filtre = ref('production') // production | tous | termines
 const filtrePhase = ref('')
 const filtreProduit = ref('')
+const conds = ref([])
 
 async function fetchAllPaged(make) {
   const size = 1000
@@ -45,6 +46,11 @@ async function charger() {
   if (rp.error) { erreur.value = rp.error.message; chargement.value = false; return }
   phases.value = rp.data || []
 
+  const rc = await fetchAllPaged(() => supabase.from('conditionnement')
+    .select('ordre_id').eq('actif', true))
+  if (rc.error) { erreur.value = rc.error.message; chargement.value = false; return }
+  conds.value = rc.data || []
+
   chargement.value = false
 }
 
@@ -60,35 +66,39 @@ const phasesByLot = computed(() => {
   return m
 })
 
+// Lots avec un enregistrement de conditionnement -> étape Conditionnement validée automatiquement
+const ordresConditionnes = computed(() => {
+  const s = new Set()
+  for (const c of conds.value) s.add(c.ordre_id)
+  return s
+})
+
 // Analyse d'un lot : états des 8 étapes + étape courante + progression
 function analyse(lot) {
   const recs = phasesByLot.value[lot.id] || {}
+  const conditionne = ordresConditionnes.value.has(lot.id)
   const nodes = PHASES.map((ph, i) => {
     const r = recs[ph]
     let state = 'pending'
     if (r) state = r.statut === 'Terminé' ? 'done' : 'current'
+    if (ph === 'Conditionnement' && conditionne) state = 'done'  // validé par le module Conditionnement
     return { phase: ph, court: COURT[i], state, rec: r || null }
   })
-  const nbRec = nodes.filter(n => n.rec).length
+  const nbRec = nodes.filter(n => n.rec).length   // phases de fabrication saisies (le conditionnement n'est plus saisi ici)
   const done = nodes.filter(n => n.state === 'done').length
   const termine = done === PHASES.length
 
-  let currentIdx = nodes.findIndex(n => n.state === 'current')
-  if (currentIdx === -1 && !termine) {
-    let lastDone = -1
-    nodes.forEach((n, i) => { if (n.state === 'done') lastDone = i })
-    currentIdx = lastDone + 1
-    if (currentIdx < PHASES.length) nodes[currentIdx].state = 'next'
-  }
-
-  let label
+  // Étape courante = première phase non terminée.
+  const currentIdx = nodes.findIndex(n => n.state !== 'done')
+  let currentPhase = null, label
   if (termine) label = 'Terminé'
   else if (nbRec === 0) label = 'Non démarré'
-  else if (currentIdx >= 0 && currentIdx < PHASES.length)
-    label = (nodes[currentIdx].state === 'current' ? 'En cours : ' : 'Prochaine : ') + PHASES[currentIdx]
-  else label = 'Terminé'
+  else if (currentIdx >= 0) {
+    currentPhase = PHASES[currentIdx]
+    if (nodes[currentIdx].state === 'current') label = 'En cours : ' + currentPhase
+    else { nodes[currentIdx].state = 'next'; label = 'Prochaine : ' + currentPhase }
+  } else label = 'Terminé'
 
-  const currentPhase = (!termine && currentIdx >= 0 && currentIdx < PHASES.length) ? PHASES[currentIdx] : null
   return { nodes, currentIdx, currentPhase, done, nbRec, termine, label, progress: Math.round(done / PHASES.length * 100) }
 }
 
