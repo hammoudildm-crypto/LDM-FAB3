@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted, inject } from 'vue'
+import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
 
 const peutEditer = inject('peutEditer', ref(true))
@@ -200,7 +201,12 @@ function classeStatut(s) {
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 
-onMounted(chargerTout)
+const route = useRoute()
+onMounted(async () => {
+  await chargerTout()
+  const q = route.query.lot
+  if (q) { rechercheLot.value = String(q); showList.value = true }
+})
 </script>
 
 <template>
