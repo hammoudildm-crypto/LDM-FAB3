@@ -18,6 +18,9 @@ const verifEnCours = ref(null)
 const vForm = ref({ verificateur: '', date: new Date().toISOString().slice(0, 10) })
 const superviseurChoix = ref('')
 const nouveauSuperviseur = ref('')
+const histRecherche = ref('')
+const histDu = ref('')
+const histAu = ref('')
 
 async function fetchAllPaged(make) {
   const size = 1000
@@ -77,7 +80,24 @@ const superviseurs = computed(() => {
   return [...s].sort()
 })
 
-const verifiesAffiches = computed(() => [...verifies.value]
+const verifiesFiltres = computed(() => {
+  const q = histRecherche.value.trim().toLowerCase()
+  const du = histDu.value, au = histAu.value
+  return verifies.value.filter(l => {
+    const d = l.ddl_date_verification ? String(l.ddl_date_verification).slice(0, 10) : ''
+    if (du && (!d || d < du)) return false
+    if (au && (!d || d > au)) return false
+    if (q) {
+      const lot = String(l.numero_lot || '').toLowerCase()
+      const sup = String(l.ddl_verificateur || '').toLowerCase()
+      const nom = prodNom(l).toLowerCase()
+      const code = (l.produits && l.produits.code_pf ? l.produits.code_pf : '').toLowerCase()
+      if (!(lot.includes(q) || sup.includes(q) || nom.includes(q) || code.includes(q))) return false
+    }
+    return true
+  })
+})
+const verifiesAffiches = computed(() => [...verifiesFiltres.value]
   .sort((a, b) => String(b.ddl_date_verification || '').localeCompare(String(a.ddl_date_verification || '')))
   .slice(0, LIMITE))
 
@@ -88,6 +108,24 @@ function fmtDate(d) {
   if (!d) return '—'
   const x = new Date(d); if (isNaN(x)) return '—'
   return x.toLocaleDateString('fr-FR')
+}
+function exporterHistoriqueCSV() {
+  const list = [...verifiesFiltres.value].sort((a, b) =>
+    String(b.ddl_date_verification || '').localeCompare(String(a.ddl_date_verification || '')))
+  const rows = [['Lot', 'Code produit', 'Produit', 'Superviseur', 'Date vérification']]
+  for (const l of list) rows.push([
+    l.numero_lot || '', (l.produits && l.produits.code_pf) || '', prodNom(l),
+    l.ddl_verificateur || '', fmtDate(l.ddl_date_verification)
+  ])
+  const csv = rows.map(r => r.map(c => {
+    const v = String(c == null ? '' : c)
+    return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+  }).join(';')).join('\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = 'historique_ddl_' + new Date().toISOString().slice(0, 10) + '.csv'
+  a.click(); URL.revokeObjectURL(url)
 }
 
 function ouvrir(l) {
@@ -195,8 +233,17 @@ async function devalider(l) {
     </div>
 
     <section class="card span2" style="margin-top: 22px">
-      <h3 class="card-title">DDL vérifiés ({{ nbVerifies }})</h3>
-      <div v-if="!verifies.length" class="empty">Aucun DDL vérifié pour ce filtre.</div>
+      <div class="hist-head">
+        <h3 class="card-title">DDL vérifiés</h3>
+        <span class="hist-count">{{ verifiesFiltres.length }}</span>
+        <div class="hist-tools">
+          <input v-model="histRecherche" type="search" class="hist-search" placeholder="Rechercher (lot, produit, superviseur)…" />
+          <label class="dlab">Du <input type="date" v-model="histDu" /></label>
+          <label class="dlab">Au <input type="date" v-model="histAu" /></label>
+          <button class="hist-exp" @click="exporterHistoriqueCSV" :disabled="!verifiesFiltres.length">Exporter CSV</button>
+        </div>
+      </div>
+      <div v-if="!verifiesFiltres.length" class="empty">Aucun DDL vérifié pour ces critères.</div>
       <table v-else class="mini">
         <thead><tr><th>Lot</th><th>Produit</th><th>Superviseur</th><th class="right">Date d'envoi</th><th></th></tr></thead>
         <tbody>
@@ -209,8 +256,8 @@ async function devalider(l) {
           </tr>
         </tbody>
       </table>
-      <p v-if="verifies.length > verifiesAffiches.length" class="empty">
-        … {{ fmt(verifies.length - verifiesAffiches.length) }} autres (affichage limité à {{ LIMITE }} ; filtre par année pour réduire).
+      <p v-if="verifiesFiltres.length > verifiesAffiches.length" class="empty">
+        … {{ fmt(verifiesFiltres.length - verifiesAffiches.length) }} autres (affichage limité à {{ LIMITE }} ; affine la recherche ou les dates).
       </p>
     </section>
 
@@ -281,4 +328,15 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
   .card.span2 { grid-column: auto; }
 }
 .verif-form select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 230px; }
+.hist-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.hist-head .card-title { margin: 0; }
+.hist-count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+.hist-tools { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.hist-search { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 220px; }
+.hist-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.dlab { font-size: 12px; color: #64748b; display: inline-flex; align-items: center; gap: 5px; }
+.dlab input { font-size: 13px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
+.hist-exp { font-size: 13px; padding: 7px 12px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.hist-exp:hover { background: #ecfdf5; }
+.hist-exp:disabled { opacity: .45; cursor: not-allowed; }
 </style>
