@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
+import { ICONS, TINTS } from '../icons.js'
 
 const anneeCourante = new Date().getFullYear()
 const ANNEES = [anneeCourante - 1, anneeCourante, anneeCourante + 1]
@@ -109,9 +110,9 @@ onMounted(charger)
     <p v-if="erreur" class="alert">{{ erreur }}</p>
 
     <div class="kpi-grid">
-      <div class="kpi"><div class="kpi-val accent">{{ fmtCA(caTotal) }}</div><div class="kpi-lbl">CA total{{ annee ? ' ' + annee : '' }}</div></div>
-      <div class="kpi"><div class="kpi-val">{{ fmt(boitesTotal) }}</div><div class="kpi-lbl">Boîtes valorisées</div></div>
-      <div class="kpi"><div class="kpi-val">{{ parProduit.length }}</div><div class="kpi-lbl">Produits</div></div>
+      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.money"></svg></span><div class="kpi-val accent">{{ fmtCA(caTotal) }}</div></div><div class="kpi-lbl">CA total{{ annee ? ' ' + annee : '' }}</div></div>
+      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(boitesTotal) }}</div></div><div class="kpi-lbl">Boîtes valorisées</div></div>
+      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.pill"></svg></span><div class="kpi-val">{{ parProduit.length }}</div></div><div class="kpi-lbl">Produits</div></div>
     </div>
 
     <section class="card">
