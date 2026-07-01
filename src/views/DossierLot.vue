@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { supabase } from '../supabase'
+import { ICONS, TINTS } from '../icons.js'
 
 const lots = ref([])
 const lotId = ref('')
@@ -237,10 +238,10 @@ watch(lotId, chargerDossier)
       <section class="block synthese">
         <h3>Synthèse</h3>
         <div class="kpi-row">
-          <div class="kpi"><div class="kpi-val">{{ fmt(theoBoites) }}</div><div class="kpi-lbl">Boîtes théoriques</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmt(totalBoites) }}</div><div class="kpi-lbl">Boîtes produites</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmtPct(rendementCondTotal) }}</div><div class="kpi-lbl">Rendement conditionnement</div></div>
-          <div class="kpi"><div class="kpi-val accent">{{ fmtPct(rendementGlobal) }}</div><div class="kpi-lbl">Rendement global</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(theoBoites) }}</div></div><div class="kpi-lbl">Boîtes théoriques</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(totalBoites) }}</div></div><div class="kpi-lbl">Boîtes produites</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><div class="kpi-val">{{ fmtPct(rendementCondTotal) }}</div></div><div class="kpi-lbl">Rendement conditionnement</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><div class="kpi-val accent">{{ fmtPct(rendementGlobal) }}</div></div><div class="kpi-lbl">Rendement global</div></div>
         </div>
       </section>
     </div>
