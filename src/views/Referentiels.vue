@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, inject } from 'vue'
+import { ref, reactive, computed, onMounted, inject } from 'vue'
 import { supabase } from '../supabase'
 
 const peutEditer = inject('peutEditer', ref(true))
@@ -11,6 +11,22 @@ const equipements = ref([])
 const erreur = ref('')
 
 const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet']
+const rechercheP = ref('')
+const filtreDonneurP = ref('')
+const filtreFormeP = ref('')
+const produitsFiltres = computed(() => {
+  const q = rechercheP.value.trim().toLowerCase()
+  return produits.value.filter(p => {
+    if (filtreDonneurP.value && String(p.donneur_ordre_id) !== String(filtreDonneurP.value)) return false
+    if (filtreFormeP.value && (p.forme || '') !== filtreFormeP.value) return false
+    if (q) {
+      const code = String(p.code_pf || '').toLowerCase()
+      const desig = String(p.designation || '').toLowerCase()
+      if (!(code.includes(q) || desig.includes(q))) return false
+    }
+    return true
+  })
+})
 
 // --- Donneur d'ordre ---
 const formDO = reactive({ id: null, code: '', nom: '', activite: '' })
@@ -327,6 +343,18 @@ onMounted(chargerTout)
           <button v-if="formP.id" class="btn ghost" @click="resetP">Annuler</button>
         </div>
       </div>
+      <div class="p-filters">
+        <input v-model="rechercheP" type="search" class="p-search" placeholder="Rechercher (code, désignation)…" />
+        <select v-model="filtreDonneurP" class="p-filtre">
+          <option value="">Tous les donneurs d'ordre</option>
+          <option v-for="d in donneurs" :key="d.id" :value="d.id">{{ d.nom }}</option>
+        </select>
+        <select v-model="filtreFormeP" class="p-filtre">
+          <option value="">Toutes les formes</option>
+          <option v-for="f in FORMES" :key="f" :value="f">{{ f }}</option>
+        </select>
+        <span class="p-count">{{ produitsFiltres.length }} / {{ produits.length }}</span>
+      </div>
       <div class="table-scroll">
         <table class="grid">
           <thead>
@@ -337,7 +365,7 @@ onMounted(chargerTout)
             </tr>
           </thead>
           <tbody>
-            <tr v-for="p in produits" :key="p.id">
+            <tr v-for="p in produitsFiltres" :key="p.id">
               <td class="mono">{{ p.code_pf }}</td>
               <td>{{ p.designation }}</td>
               <td>{{ p.forme || '—' }}</td>
@@ -353,7 +381,7 @@ onMounted(chargerTout)
                 </template>
               </td>
             </tr>
-            <tr v-if="!produits.length"><td colspan="9" class="empty">Aucun produit. Ajoute-en un ci-dessus.</td></tr>
+            <tr v-if="!produitsFiltres.length"><td colspan="9" class="empty">Aucun produit ne correspond aux filtres.</td></tr>
           </tbody>
         </table>
       </div>
@@ -411,4 +439,9 @@ button.link.danger { color: #b91c1c; }
 .card-head.clickable { cursor: pointer; user-select: none; }
 .card-head.clickable:hover h2 { color: #0f766e; }
 .chevron { margin-left: auto; font-size: 14px; color: #64748b; padding-left: 8px; }
+.p-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.p-search { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 240px; }
+.p-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.p-filtre { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
+.p-count { font-size: 12px; font-weight: 600; color: #475569; background: #f1f5f9; padding: 4px 10px; border-radius: 999px; margin-left: auto; }
 </style>
