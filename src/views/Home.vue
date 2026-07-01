@@ -305,18 +305,18 @@ function classeStatut(s) {
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
 
 const kpisProd = computed(() => [
-  { v: fmtC(nbProduits.value),          l: 'Produits actifs',                      tint: TINTS.teal,    ic: ICONS.pill },
-  { v: fmtC(nbLots.value),              l: 'Lots',                                 tint: TINTS.blue,    ic: ICONS.box },
-  { v: fmtC(lotsEnCours.value),         l: 'Lots en cours',                        tint: TINTS.amber,   ic: ICONS.clock },
-  { v: fmtC(fabRealisee.value),         l: 'Fabrication réalisée (bts)',           tint: TINTS.blue,    ic: ICONS.factory },
-  { v: fmtC(totalBoites.value),         l: 'Conditionnement réalisé (bts)',        tint: TINTS.green,   ic: ICONS.check },
-  { v: fmtC(vracEnAttente.value),       l: 'Vrac en attente (bts)',                tint: TINTS.orange,  ic: ICONS.hourglass },
-  { v: fmtC(planTotal.value),           l: 'Plan ' + anneeSel.value + ' (boîtes)', tint: TINTS.indigo,  ic: ICONS.target },
+  { v: fmt(nbProduits.value),          l: 'Produits actifs',                      tint: TINTS.teal,    ic: ICONS.pill },
+  { v: fmt(nbLots.value),              l: 'Lots',                                 tint: TINTS.blue,    ic: ICONS.box },
+  { v: fmt(lotsEnCours.value),         l: 'Lots en cours',                        tint: TINTS.amber,   ic: ICONS.clock },
+  { v: fmt(fabRealisee.value),         l: 'Fabrication réalisée (bts)',           tint: TINTS.blue,    ic: ICONS.factory },
+  { v: fmt(totalBoites.value),         l: 'Conditionnement réalisé (bts)',        tint: TINTS.green,   ic: ICONS.check },
+  { v: fmt(vracEnAttente.value),       l: 'Vrac en attente (bts)',                tint: TINTS.orange,  ic: ICONS.hourglass },
+  { v: fmt(planTotal.value),           l: 'Plan ' + anneeSel.value + ' (boîtes)', tint: TINTS.indigo,  ic: ICONS.target },
   { v: fmtPct(pctPlanFab.value),        l: 'Plan fab. réalisé',                    tint: TINTS.cyan,    ic: ICONS.percent },
   { v: fmtPct(pctPlanRealise.value),    l: 'Plan cond. réalisé',                   tint: TINTS.emerald, ic: ICONS.percent },
-  { v: fmtC(boitesRestantesFab.value),  l: 'Restantes fab. (plan)',                tint: TINTS.violet,  ic: ICONS.layers },
-  { v: fmtC(boitesRestantes.value),     l: 'Restantes cond. (plan)',               tint: TINTS.rose,    ic: ICONS.layers },
-  { v: fmtC(boitesCeMois.value),        l: 'Boîtes conditionnées ce mois',         tint: TINTS.slate,   ic: ICONS.calendar },
+  { v: fmt(boitesRestantesFab.value),  l: 'Restantes fab. (plan)',                tint: TINTS.violet,  ic: ICONS.layers },
+  { v: fmt(boitesRestantes.value),     l: 'Restantes cond. (plan)',               tint: TINTS.rose,    ic: ICONS.layers },
+  { v: fmt(boitesCeMois.value),        l: 'Boîtes conditionnées ce mois',         tint: TINTS.slate,   ic: ICONS.calendar },
 ])
 const kpisQualite = computed(() => [
   { v: fmt(lotsTermines.value),           l: 'Lots terminés',         tint: TINTS.blue,    ic: ICONS.package },
