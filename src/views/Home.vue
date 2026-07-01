@@ -355,7 +355,7 @@ onMounted(async () => {
       <div class="tab-content">
       <!-- ====================== PRODUCTION ====================== -->
       <div v-show="ongletActif === 'production'">
-        <div class="kpi-grid kpi-9">
+        <div class="kpi-grid">
           <div class="kpi" v-for="(k, i) in kpisProd" :key="i">
             <div class="kpi-top">
               <span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span>
@@ -512,11 +512,6 @@ onMounted(async () => {
 .tab-content { flex: 1; min-width: 0; }
 
 .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 14px; }
-.kpi-9 { grid-template-columns: repeat(9, minmax(0, 1fr)) !important; margin-bottom: 12px !important; }
-.kpi-9 .kpi { padding: 8px 10px !important; }
-.kpi-9 .kpi-val { font-size: 18px !important; }
-.kpi-9 .kpi-lbl { margin-top: 2px !important; }
-@media (max-width: 1200px) { .kpi-9 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; } }
 .kpi-grid:last-of-type { margin-bottom: 22px; }
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .kpi-val { font-size: 23px; font-weight: 700; letter-spacing: -0.02em; }
