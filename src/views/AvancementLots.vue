@@ -13,6 +13,8 @@ const erreur = ref('')
 const chargement = ref(true)
 const recherche = ref('')
 const filtre = ref('production') // production | tous | termines
+const filtrePhase = ref('')
+const filtreProduit = ref('')
 
 async function fetchAllPaged(make) {
   const size = 1000
@@ -86,12 +88,22 @@ function analyse(lot) {
     label = (nodes[currentIdx].state === 'current' ? 'En cours : ' : 'Prochaine : ') + PHASES[currentIdx]
   else label = 'Terminé'
 
-  return { nodes, currentIdx, done, nbRec, termine, label, progress: Math.round(done / PHASES.length * 100) }
+  const currentPhase = (!termine && currentIdx >= 0 && currentIdx < PHASES.length) ? PHASES[currentIdx] : null
+  return { nodes, currentIdx, currentPhase, done, nbRec, termine, label, progress: Math.round(done / PHASES.length * 100) }
 }
 
 const lotsAnalyses = computed(() =>
   lots.value.map(l => ({ lot: l, a: analyse(l) }))
 )
+
+const produitsListe = computed(() => {
+  const m = {}
+  for (const x of lotsAnalyses.value) {
+    const p = x.lot.produits
+    if (x.a.nbRec > 0 && p && !m[p.code_pf]) m[p.code_pf] = p.designation || p.code_pf
+  }
+  return Object.entries(m).map(([code, desig]) => ({ code, desig })).sort((a, b) => a.desig.localeCompare(b.desig))
+})
 
 const filtres = computed(() => {
   const q = recherche.value.trim().toLowerCase()
@@ -99,6 +111,8 @@ const filtres = computed(() => {
     if (filtre.value === 'production' && (a.termine || a.nbRec === 0)) return false
     if (filtre.value === 'termines' && !a.termine) return false
     if (filtre.value === 'tous' && a.nbRec === 0) return false
+    if (filtrePhase.value && a.currentPhase !== filtrePhase.value) return false
+    if (filtreProduit.value && !(lot.produits && lot.produits.code_pf === filtreProduit.value)) return false
     if (!q) return true
     const p = lot.produits
     return (lot.numero_lot || '').toLowerCase().includes(q)
@@ -166,9 +180,9 @@ onMounted(async () => {
       </div>
 
       <div class="card">
-        <div class="card-title">Répartition des lots en production par étape</div>
+        <div class="card-title">Répartition des lots en production par étape <span class="hint">— cliquer une étape pour filtrer</span></div>
         <div class="rep">
-          <div v-for="e in parEtape" :key="e.phase" class="rep-row">
+          <div v-for="e in parEtape" :key="e.phase" class="rep-row" :class="{ sel: filtrePhase === e.phase }" @click="filtrePhase = filtrePhase === e.phase ? '' : e.phase">
             <span class="rep-lbl">{{ e.phase }}</span>
             <span class="rep-bar"><span class="rep-fill" :style="{ width: e.pct + '%' }"></span></span>
             <span class="rep-n">{{ e.n }}</span>
@@ -178,11 +192,20 @@ onMounted(async () => {
 
       <div class="filters">
         <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
+        <select v-model="filtrePhase" class="sel">
+          <option value="">Toutes les étapes</option>
+          <option v-for="ph in PHASES" :key="ph" :value="ph">{{ ph }}</option>
+        </select>
+        <select v-model="filtreProduit" class="sel">
+          <option value="">Tous les produits</option>
+          <option v-for="p in produitsListe" :key="p.code" :value="p.code">{{ p.code }} — {{ p.desig }}</option>
+        </select>
         <div class="segs">
           <button :class="{ on: filtre === 'production' }" @click="filtre = 'production'">En production</button>
           <button :class="{ on: filtre === 'tous' }" @click="filtre = 'tous'">Tous les suivis</button>
           <button :class="{ on: filtre === 'termines' }" @click="filtre = 'termines'">Terminés</button>
         </div>
+        <button v-if="recherche || filtrePhase || filtreProduit || filtre !== 'production'" class="reset" @click="recherche = ''; filtrePhase = ''; filtreProduit = ''; filtre = 'production'">Réinitialiser</button>
       </div>
 
       <p v-if="filtres.length === 0" class="muted">Aucun lot ne correspond. Les lots apparaissent ici dès qu'au moins une phase est saisie dans <strong>Suivi des phases</strong>.</p>
@@ -232,14 +255,20 @@ onMounted(async () => {
 .card-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
 
 .rep { display: flex; flex-direction: column; gap: 6px; }
-.rep-row { display: grid; grid-template-columns: 130px 1fr 34px; align-items: center; gap: 10px; }
+.rep-row { display: grid; grid-template-columns: 130px 1fr 34px; align-items: center; gap: 10px; cursor: pointer; padding: 3px 6px; margin: 0 -6px; border-radius: 6px; }
+.rep-row:hover { background: #f8fafc; }
+.rep-row.sel { background: #f0fdfa; }
+.rep-row.sel .rep-lbl { color: #0f766e; font-weight: 600; }
 .rep-lbl { font-size: 12px; color: #475569; }
 .rep-bar { height: 10px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
 .rep-fill { display: block; height: 100%; background: #0f766e; border-radius: 999px; }
 .rep-n { font-size: 13px; font-weight: 600; text-align: right; color: #0f172a; }
 
 .filters { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
-.filters input { flex: 1; min-width: 220px; max-width: 400px; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+.filters input { flex: 1; min-width: 200px; max-width: 340px; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+.sel { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; background: #fff; max-width: 230px; }
+.reset { background: none; border: 0; color: #64748b; font-size: 13px; cursor: pointer; text-decoration: underline; }
+.hint { font-size: 12px; font-weight: 400; color: #94a3b8; }
 .segs { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
 .segs button { border: 0; background: #fff; padding: 8px 14px; font-size: 13px; color: #475569; cursor: pointer; border-left: 1px solid #e2e8f0; }
 .segs button:first-child { border-left: 0; }
