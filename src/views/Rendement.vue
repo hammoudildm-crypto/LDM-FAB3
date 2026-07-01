@@ -501,9 +501,7 @@ onMounted(chargerTout)
         </div>
       </section>
 
-      <!-- Graphes en 3 colonnes -->
-      <div class="charts-3col">
-      <!-- Taux de déchets mensuel -->
+      <!-- Taux de déchets mensuel (pleine largeur) -->
       <section class="card">
         <div class="card-head">
           <h2 class="card-title">Taux de déchets mensuel — {{ anneeSel }}</h2>
@@ -546,6 +544,8 @@ onMounted(chargerTout)
         <p class="hint">Taux d'avarie (%) par mois — Fabrication (teal) et Conditionnement (rouge). Mois sans données : pas de point.</p>
       </section>
 
+      <!-- Graphes en 2 colonnes -->
+      <div class="charts-2col">
       <!-- Rendement par phase + avarie -->
       <section v-if="rendementPhases.length" class="card">
         <h2 class="card-title">Rendement par phase — {{ anneeSel }}</h2>
@@ -615,7 +615,7 @@ onMounted(chargerTout)
         </div>
         <p class="hint">Rendement global par année — Fabrication (teal) vs Conditionnement (bleu). Échelle {{ anChart.min }} % → {{ anChart.max }} %.</p>
       </section>
-      </div><!-- /charts-3col -->
+      </div><!-- /charts-2col -->
 
       <!-- Comparaison du rendement par produit sur 3 ans -->
       <section class="card">
@@ -821,12 +821,11 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .rdt-num { width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 
 .ta-c { text-align: center; }
-.charts-3col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 22px; align-items: start; }
-.charts-3col > .card { margin-bottom: 0; }
-.charts-3col .phase-grid { grid-template-columns: 1fr; gap: 14px; }
-.charts-3col .donut-wrap { width: 150px; }
-@media (max-width: 1100px) { .charts-3col { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 720px) { .charts-3col { grid-template-columns: 1fr; } }
+.charts-2col { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 22px; align-items: start; }
+.charts-2col > .card { margin-bottom: 0; }
+.charts-2col .phase-grid { grid-template-columns: 1fr; gap: 14px; }
+.charts-2col .donut-wrap { width: 160px; }
+@media (max-width: 820px) { .charts-2col { grid-template-columns: 1fr; } }
 .line-chart { width: 100%; margin-top: 4px; }
 .lc-svg { width: 100%; height: auto; display: block; overflow: visible; }
 .lc-xlabel { font-size: 9px; fill: #94a3b8; text-anchor: middle; }
