@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
+import { ICONS, TINTS } from '../icons.js'
 
 const lots = ref([])
 const phasesParLot = ref({})   // ordre_id -> dernière sortie (vrac fabriqué)
@@ -105,8 +106,8 @@ onMounted(charger)
     <p v-if="erreur" class="alert">{{ erreur }}</p>
 
     <div class="kpi-grid">
-      <div class="kpi"><div class="kpi-val accent">{{ fmt(totalEnCours) }}</div><div class="kpi-lbl">Vrac en attente (kg)</div></div>
-      <div class="kpi"><div class="kpi-val">{{ nbAttente }}</div><div class="kpi-lbl">Lots avec vrac en attente</div></div>
+      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.orange"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span><div class="kpi-val accent">{{ fmt(totalEnCours) }}</div></div><div class="kpi-lbl">Vrac en attente (kg)</div></div>
+      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.layers"></svg></span><div class="kpi-val">{{ nbAttente }}</div></div><div class="kpi-lbl">Lots avec vrac en attente</div></div>
     </div>
 
     <section class="card">
