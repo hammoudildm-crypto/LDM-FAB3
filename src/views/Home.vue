@@ -44,7 +44,7 @@ async function charger() {
   if (!rp.error) nbProduits.value = rp.count || 0
 
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, quantite_theorique, boites_fabriquees, produits(designation)')
+    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, quantite_theorique, boites_fabriquees, produits(designation, pcsu)')
     .eq('actif', true).order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -149,6 +149,19 @@ const caCeMois = computed(() => realisations.value.filter(r => r.annee === annee
 const tauxRealisationCA = computed(() => caPotentielPlan.value > 0 ? (caRealise.value / caPotentielPlan.value) * 100 : null)
 const prixMoyenBoite = computed(() => totalBoites.value > 0 ? caRealise.value / totalBoites.value : null)
 const pctPlanRealise = computed(() => planTotal.value > 0 ? (totalBoites.value / planTotal.value) * 100 : null)
+
+// --- CA par structure : Fabrication (boîtes fabriquées × PCSU) vs Conditionnement (CA réalisé) ---
+const caFabrication = computed(() => {
+  let s = 0
+  for (const l of lotsAnnee.value) {
+    const pcsu = l.produits ? Number(l.produits.pcsu || 0) : 0
+    s += Number(l.boites_fabriquees || 0) * pcsu
+  }
+  return s
+})
+const pctCaFab = computed(() => caPotentielPlan.value > 0 ? (caFabrication.value / caPotentielPlan.value) * 100 : null)
+const caResteFab = computed(() => Math.max(0, caPotentielPlan.value - caFabrication.value))
+const caResteCond = computed(() => Math.max(0, caPotentielPlan.value - caRealise.value))
 
 // --- Rendements ---
 const rendementCndtMoyen = computed(() => {
@@ -372,12 +385,9 @@ const kpisQualite = computed(() => [
   { v: fmtPct(tauxLiberation.value),      l: 'Taux de libération',    tint: TINTS.emerald, ic: ICONS.percent },
 ])
 const kpisFinance = computed(() => [
-  { v: fmtDA(caRealise.value),          l: 'CA réalisé ' + anneeSel.value,               tint: TINTS.emerald, ic: ICONS.money },
   { v: fmtDA(caCeMois.value),           l: 'CA ce mois',                                 tint: TINTS.green,   ic: ICONS.calendar },
   { v: fmtDA(caPotentielPlan.value),    l: 'CA potentiel (plan ' + anneeSel.value + ')', tint: TINTS.indigo,  ic: ICONS.target },
-  { v: fmtPct(tauxRealisationCA.value), l: 'Réalisation CA',                             tint: TINTS.teal,    ic: ICONS.percent },
   { v: fmtDA(prixMoyenBoite.value),     l: 'Prix moyen / boîte',                         tint: TINTS.amber,   ic: ICONS.coins },
-  { v: fmt(totalBoites.value),          l: 'Boîtes réalisées ' + anneeSel.value,         tint: TINTS.blue,    ic: ICONS.box },
 ])
 
 onMounted(async () => {
@@ -537,7 +547,22 @@ onMounted(async () => {
 
       <!-- ====================== FINANCE ====================== -->
       <div v-show="ongletActif === 'finance'">
-        <div class="kpi-grid">
+        <!-- Deux structures : valeur Fabrication & Conditionnement -->
+        <h3 class="struct-h"><span class="struct-b fab">Fabrication</span><span class="struct-d">valeur produite (boîtes fabriquées × PCSU) · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k3">
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.money"></svg></span><span class="kpi-val accent">{{ fmtDA(caFabrication) }}</span></div><div class="kpi-lbl">CA fabrication</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><span class="kpi-val">{{ fmtPct(pctCaFab) }}</span></div><div class="kpi-lbl">% du plan CA</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.violet"><svg viewBox="0 0 24 24" v-html="ICONS.layers"></svg></span><span class="kpi-val">{{ fmtDA(caResteFab) }}</span></div><div class="kpi-lbl">Reste / plan</div></div>
+        </div>
+        <h3 class="struct-h"><span class="struct-b cond">Conditionnement</span><span class="struct-d">CA réalisé (boîtes conditionnées × PCSU) · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k3">
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.money"></svg></span><span class="kpi-val accent">{{ fmtDA(caRealise) }}</span></div><div class="kpi-lbl">CA conditionnement</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><span class="kpi-val">{{ fmtPct(tauxRealisationCA) }}</span></div><div class="kpi-lbl">% du plan CA</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.violet"><svg viewBox="0 0 24 24" v-html="ICONS.layers"></svg></span><span class="kpi-val">{{ fmtDA(caResteCond) }}</span></div><div class="kpi-lbl">Reste / plan</div></div>
+        </div>
+
+        <!-- Indicateurs financiers généraux -->
+        <div class="kpi-grid k3">
           <div class="kpi" v-for="(k, i) in kpisFinance" :key="i">
             <div class="kpi-top">
               <span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span>
