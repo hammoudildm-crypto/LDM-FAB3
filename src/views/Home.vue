@@ -514,7 +514,7 @@ onMounted(async () => {
 .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 14px; }
 .kpi-9 { grid-template-columns: repeat(9, minmax(0, 1fr)) !important; margin-bottom: 12px !important; }
 .kpi-9 .kpi { padding: 8px 10px !important; }
-.kpi-9 .kpi-val { font-size: 20px !important; }
+.kpi-9 .kpi-val { font-size: 18px !important; }
 .kpi-9 .kpi-lbl { margin-top: 2px !important; }
 @media (max-width: 1200px) { .kpi-9 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; } }
 .kpi-grid:last-of-type { margin-bottom: 22px; }
