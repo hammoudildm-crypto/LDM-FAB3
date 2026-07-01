@@ -313,10 +313,12 @@ onMounted(async () => {
     <template v-else>
       <p v-if="erreur" class="alert">{{ erreur }}</p>
 
+      <div class="dash-body">
       <nav class="tabs">
         <button v-for="o in ONGLETS" :key="o[0]" class="tab" :class="{ active: ongletActif === o[0] }" @click="ongletActif = o[0]">{{ o[1] }}</button>
       </nav>
 
+      <div class="tab-content">
       <!-- ====================== PRODUCTION ====================== -->
       <div v-show="ongletActif === 'production'">
         <div class="kpi-grid kpi-9">
@@ -448,6 +450,8 @@ onMounted(async () => {
           </section>
         </div>
       </div>
+      </div>
+      </div>
     </template>
   </div>
 </template>
@@ -466,10 +470,12 @@ onMounted(async () => {
 
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 
-.tabs { display: flex; gap: 4px; border-bottom: 2px solid #e2e8f0; margin-bottom: 12px; }
-.tab { background: none; border: 0; padding: 10px 18px; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
-.tab:hover { color: #0f766e; }
-.tab.active { color: #0f766e; border-bottom-color: #0f766e; }
+.dash-body { display: flex; gap: 18px; align-items: flex-start; }
+.tabs { display: flex; flex-direction: column; gap: 2px; margin-bottom: 0; flex-shrink: 0; min-width: 132px; }
+.tab { background: none; border: 0; text-align: left; padding: 9px 14px; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer; border-left: 3px solid transparent; border-radius: 0 7px 7px 0; }
+.tab:hover { color: #0f766e; background: #f8fafc; }
+.tab.active { color: #0f766e; border-left-color: #0f766e; background: #f0fdfa; }
+.tab-content { flex: 1; min-width: 0; }
 
 .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 14px; }
 .kpi-9 { grid-template-columns: repeat(9, minmax(0, 1fr)) !important; margin-bottom: 12px !important; }
@@ -535,6 +541,10 @@ table.mini td { padding: 3px 6px; border-bottom: 1px solid #eef2f6; white-space:
   .kpi-grid { grid-template-columns: repeat(3, 1fr); }
   .cols { grid-template-columns: 1fr; }
   .card.span2 { grid-column: auto; }
+  .dash-body { flex-direction: column; gap: 10px; }
+  .tabs { flex-direction: row; min-width: 0; border-bottom: 2px solid #e2e8f0; }
+  .tab { border-left: 0; border-bottom: 3px solid transparent; border-radius: 0; margin-bottom: -2px; }
+  .tab.active { border-left-color: transparent; border-bottom-color: #0f766e; }
 }
 @media (max-width: 560px) {
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
