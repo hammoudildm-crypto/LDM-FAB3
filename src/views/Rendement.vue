@@ -134,11 +134,12 @@ const lotsAnneeFab = computed(() => {
   const arr = []
   for (const o of ofs.value) {
     if (!o.date_fin_fabrication) continue
-    if (new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+    const d = new Date(o.date_fin_fabrication)
+    if (d.getFullYear() !== anneeSel.value) continue
     const theo = Number(o.quantite_theorique || 0)
     const p = Number(o.boites_fabriquees || 0)
     if (theo <= 0 || p <= 0) continue
-    arr.push({ of: o, prod: p, theo, rdt: (p / theo) * 100 })
+    arr.push({ of: o, mois: d.getMonth(), prod: p, theo, rdt: (p / theo) * 100 })
   }
   return arr
 })
@@ -151,6 +152,30 @@ const globalAnneeFab = computed(() => {
 const rendementFab = computed(() => globalAnneeFab.value.rdt)
 const avarieFab = computed(() => globalAnneeFab.value.rdt == null ? null : Math.max(0, 100 - globalAnneeFab.value.rdt))
 const nbLotsFab = computed(() => lotsValidesFab.value.length)
+
+// Fabrication : par mois (rendement/avarie) et par année (tendance)
+const parMoisFab = computed(() => {
+  const a = Array.from({ length: 12 }, () => ({ prod: 0, theo: 0 }))
+  for (const r of lotsValidesFab.value) { a[r.mois].prod += r.prod; a[r.mois].theo += r.theo }
+  return a.map(m => {
+    const rdt = m.theo > 0 ? (m.prod / m.theo) * 100 : null
+    return { prod: m.prod, theo: m.theo, rdt, avarie: rdt == null ? null : Math.max(0, 100 - rdt) }
+  })
+})
+const parAnFab = computed(() => {
+  const m = {}
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    const theo = Number(o.quantite_theorique || 0)
+    const p = Number(o.boites_fabriquees || 0)
+    if (theo <= 0 || p <= 0) continue
+    if (!rdtValide((p / theo) * 100)) continue
+    const y = new Date(o.date_fin_fabrication).getFullYear()
+    if (!m[y]) m[y] = { prod: 0, theo: 0 }
+    m[y].prod += p; m[y].theo += theo
+  }
+  return Object.keys(m).map(y => ({ an: +y, rdt: m[y].theo > 0 ? (m[y].prod / m[y].theo) * 100 : null })).sort((a, b) => a.an - b.an)
+})
 
 // Taux de déchets mensuel : rendement% + avarie% (= 100 - rendement) par mois
 const parMois = computed(() => {
@@ -177,14 +202,31 @@ const parProduit = computed(() => {
   }).sort((a, b) => b.theo - a.theo)
 })
 
+// Rendement par produit combiné : Fabrication + Conditionnement (année sélectionnée)
+const parProduitCombine = computed(() => {
+  const m = {}
+  const ligne = (p) => {
+    const code = p ? p.code_pf : '—'
+    if (!m[code]) m[code] = { code, nom: p ? p.designation : '—', fabProd: 0, fabTheo: 0, condProd: 0, condTheo: 0 }
+    return m[code]
+  }
+  for (const r of lotsValidesFab.value) { const x = ligne(r.of.produits); x.fabProd += r.prod; x.fabTheo += r.theo }
+  for (const r of lotsValides.value) { const x = ligne(r.of.produits); x.condProd += r.prod; x.condTheo += r.theo }
+  return Object.values(m).map(x => ({
+    ...x,
+    rdtFab: x.fabTheo > 0 ? (x.fabProd / x.fabTheo) * 100 : null,
+    rdtCond: x.condTheo > 0 ? (x.condProd / x.condTheo) * 100 : null
+  })).sort((a, b) => (b.fabTheo + b.condTheo) - (a.fabTheo + a.condTheo))
+})
+
 // Filtre par produit (section rendement par produit)
 const produitSel = ref('')
 const produitsListe = computed(() =>
-  parProduit.value.map(p => ({ code: p.code, nom: p.nom }))
+  parProduitCombine.value.map(p => ({ code: p.code, nom: p.nom }))
     .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
 )
-const parProduitFiltre = computed(() =>
-  produitSel.value ? parProduit.value.filter(p => p.code === produitSel.value) : parProduit.value
+const parProduitCombineFiltre = computed(() =>
+  produitSel.value ? parProduitCombine.value.filter(p => p.code === produitSel.value) : parProduitCombine.value
 )
 const produitNomSel = computed(() => {
   const p = produitsListe.value.find(x => x.code === produitSel.value)
@@ -317,21 +359,32 @@ function segmentsFromPoints(pts, baseY) {
 const moisChart = computed(() => {
   const { W, H, padL, padR, padT, padB } = CHART
   const plotW = W - padL - padR, plotH = H - padT - padB, baseY = padT + plotH
-  const vals = parMois.value.map(m => (m.rdt == null ? null : m.avarie))
-  const maxV = Math.max(2, ...vals.filter(v => v != null)) * 1.3
+  const valsC = parMois.value.map(m => (m.rdt == null ? null : m.avarie))
+  const valsF = parMoisFab.value.map(m => (m.rdt == null ? null : m.avarie))
+  const maxV = Math.max(2, ...[...valsC, ...valsF].filter(v => v != null)) * 1.3
   const xi = i => padL + (plotW * i) / 11
-  const pts = vals.map((v, i) => (v == null ? null : { x: xi(i), y: padT + plotH * (1 - v / maxV), v, i }))
-  return { W, H, baseY, padL, padR, pts, segs: segmentsFromPoints(pts, baseY), xi }
+  const toPts = vals => vals.map((v, i) => (v == null ? null : { x: xi(i), y: padT + plotH * (1 - v / maxV), v, i }))
+  const ptsC = toPts(valsC), ptsF = toPts(valsF)
+  return { W, H, baseY, padL, padR, xi,
+    ptsC, segsC: segmentsFromPoints(ptsC, baseY),
+    ptsF, segsF: segmentsFromPoints(ptsF, baseY) }
 })
 const anChart = computed(() => {
   const { W, H, padL, padR, padT, padB } = CHART
   const plotW = W - padL - padR, plotH = H - padT - padB, baseY = padT + plotH
-  const arr = parAn.value
-  const { min, max } = trendBornes.value
+  const rc = Object.fromEntries(parAn.value.map(a => [a.an, a.rdt]))
+  const rf = Object.fromEntries(parAnFab.value.map(a => [a.an, a.rdt]))
+  const years = Array.from(new Set([...Object.keys(rc), ...Object.keys(rf)].map(Number))).sort((a, b) => a - b)
+  const allR = [...Object.values(rc), ...Object.values(rf)].filter(v => v != null)
+  const min = allR.length ? Math.floor(Math.min(...allR)) - 1 : 90
+  const max = allR.length ? Math.ceil(Math.max(...allR)) + 0.5 : 100
   const span = (max - min) || 1
-  const xi = i => (arr.length <= 1 ? padL + plotW / 2 : padL + (plotW * i) / (arr.length - 1))
-  const pts = arr.map((a, i) => ({ x: xi(i), y: padT + plotH * (1 - (a.rdt - min) / span), an: a.an, rdt: a.rdt }))
-  return { W, H, baseY, padL, padR, pts, segs: segmentsFromPoints(pts, baseY) }
+  const xi = i => (years.length <= 1 ? padL + plotW / 2 : padL + (plotW * i) / (years.length - 1))
+  const toPts = map => years.map((y, i) => (map[y] == null ? null : { x: xi(i), y: padT + plotH * (1 - (map[y] - min) / span), an: y, rdt: map[y] }))
+  const ptsC = toPts(rc), ptsF = toPts(rf)
+  return { W, H, baseY, padL, padR, min, max, years, xi,
+    ptsC, segsC: segmentsFromPoints(ptsC, baseY),
+    ptsF, segsF: segmentsFromPoints(ptsF, baseY) }
 })
 
 // Helpers chart mensuel
@@ -453,33 +506,42 @@ onMounted(chargerTout)
         <div class="card-head">
           <h2 class="card-title">Taux de déchets mensuel — {{ anneeSel }}</h2>
           <div class="legend">
-            <span><i class="dot av"></i>Avarie</span>
-            <span><i class="dot rdt"></i>Rendement</span>
+            <span><i class="dot" style="background:#0f766e"></i>Avarie fabrication</span>
+            <span><i class="dot av"></i>Avarie conditionnement</span>
           </div>
         </div>
         <div class="line-chart">
           <svg :viewBox="`0 0 ${moisChart.W} ${moisChart.H}`" class="lc-svg" role="img">
             <defs>
               <linearGradient id="gradAv" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#ef4444" stop-opacity="0.25" />
+                <stop offset="0%" stop-color="#ef4444" stop-opacity="0.20" />
                 <stop offset="100%" stop-color="#ef4444" stop-opacity="0.01" />
+              </linearGradient>
+              <linearGradient id="gradAvF" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#0f766e" stop-opacity="0.18" />
+                <stop offset="100%" stop-color="#0f766e" stop-opacity="0.01" />
               </linearGradient>
             </defs>
             <line :x1="moisChart.padL" :y1="moisChart.baseY" :x2="moisChart.W - moisChart.padR" :y2="moisChart.baseY" stroke="#e5e9f0" stroke-width="1" vector-effect="non-scaling-stroke" />
-            <template v-for="(seg, i) in moisChart.segs" :key="'s' + i">
+            <template v-for="(seg, i) in moisChart.segsC" :key="'sc' + i">
               <path :d="seg.area" fill="url(#gradAv)" />
               <path :d="seg.line" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
             </template>
-            <g v-for="(p, idx) in moisChart.pts" :key="'p' + idx">
+            <g v-for="(p, idx) in moisChart.ptsC" :key="'pc' + idx"><circle v-if="p" :cx="p.x" :cy="p.y" r="2.8" fill="#fff" stroke="#ef4444" stroke-width="2.5" vector-effect="non-scaling-stroke" /></g>
+            <template v-for="(seg, i) in moisChart.segsF" :key="'sf' + i">
+              <path :d="seg.area" fill="url(#gradAvF)" />
+              <path :d="seg.line" fill="none" stroke="#0f766e" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+            </template>
+            <g v-for="(p, idx) in moisChart.ptsF" :key="'pf' + idx">
               <template v-if="p">
-                <circle :cx="p.x" :cy="p.y" r="3" fill="#fff" stroke="#ef4444" stroke-width="2.5" vector-effect="non-scaling-stroke" />
+                <circle :cx="p.x" :cy="p.y" r="2.8" fill="#fff" stroke="#0f766e" stroke-width="2.5" vector-effect="non-scaling-stroke" />
                 <text :x="p.x" :y="p.y - 7" class="lc-val">{{ p.v.toFixed(1).replace('.', ',') }}</text>
               </template>
             </g>
             <text v-for="(m, i) in MOIS" :key="'l' + i" :x="moisChart.xi(i)" :y="moisChart.H - 4" class="lc-xlabel">{{ m }}</text>
           </svg>
         </div>
-        <p class="hint">Taux d'avarie (%) par mois — lots valides. Mois sans fabrication : pas de point.</p>
+        <p class="hint">Taux d'avarie (%) par mois — Fabrication (teal) et Conditionnement (rouge). Mois sans données : pas de point.</p>
       </section>
 
       <!-- Rendement par phase + avarie -->
@@ -515,28 +577,41 @@ onMounted(chargerTout)
 
       <!-- Tendance annuelle -->
       <section class="card">
-        <h2 class="card-title">Rendement de fabrication par année</h2>
+        <div class="card-head">
+          <h2 class="card-title">Rendement par année — Fabrication vs Conditionnement</h2>
+          <div class="legend">
+            <span><i class="dot" style="background:#0f766e"></i>Fabrication</span>
+            <span><i class="dot" style="background:#2563eb"></i>Conditionnement</span>
+          </div>
+        </div>
         <div class="line-chart">
           <svg :viewBox="`0 0 ${anChart.W} ${anChart.H}`" class="lc-svg" role="img">
             <defs>
               <linearGradient id="gradRdt" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#0f766e" stop-opacity="0.22" />
+                <stop offset="0%" stop-color="#0f766e" stop-opacity="0.20" />
                 <stop offset="100%" stop-color="#0f766e" stop-opacity="0.01" />
               </linearGradient>
             </defs>
             <line :x1="anChart.padL" :y1="anChart.baseY" :x2="anChart.W - anChart.padR" :y2="anChart.baseY" stroke="#e5e9f0" stroke-width="1" vector-effect="non-scaling-stroke" />
-            <template v-for="(seg, i) in anChart.segs" :key="'s' + i">
+            <template v-for="(seg, i) in anChart.segsC" :key="'sc' + i">
+              <path :d="seg.line" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+            </template>
+            <g v-for="(p, idx) in anChart.ptsC" :key="'pc' + idx"><template v-if="p">
+              <circle :cx="p.x" :cy="p.y" r="3.2" fill="#fff" stroke="#2563eb" stroke-width="2.5" vector-effect="non-scaling-stroke" />
+              <text :x="p.x" :y="p.y + 14" class="lc-val" fill="#2563eb">{{ pct2(p.rdt) }}</text>
+            </template></g>
+            <template v-for="(seg, i) in anChart.segsF" :key="'sf' + i">
               <path :d="seg.area" fill="url(#gradRdt)" />
               <path :d="seg.line" fill="none" stroke="#0f766e" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
             </template>
-            <g v-for="(p, idx) in anChart.pts" :key="idx">
+            <g v-for="(p, idx) in anChart.ptsF" :key="'pf' + idx"><template v-if="p">
               <circle :cx="p.x" :cy="p.y" :r="p.an === anneeSel ? 4.5 : 3.2" :fill="p.an === anneeSel ? '#0f766e' : '#fff'" stroke="#0f766e" stroke-width="2.5" vector-effect="non-scaling-stroke" />
               <text :x="p.x" :y="p.y - 8" class="lc-val">{{ pct2(p.rdt) }}</text>
-              <text :x="p.x" :y="anChart.H - 4" class="lc-xlabel">{{ p.an }}</text>
-            </g>
+            </template></g>
+            <text v-for="(y, i) in anChart.years" :key="'yl' + i" :x="anChart.xi(i)" :y="anChart.H - 4" class="lc-xlabel">{{ y }}</text>
           </svg>
         </div>
-        <p class="hint">Tendance du rendement global par année. Échelle zoomée ({{ trendBornes.min }} % → {{ trendBornes.max }} %).</p>
+        <p class="hint">Rendement global par année — Fabrication (teal) vs Conditionnement (bleu). Échelle {{ anChart.min }} % → {{ anChart.max }} %.</p>
       </section>
 
       <!-- Comparaison du rendement par produit sur 3 ans -->
@@ -593,7 +668,7 @@ onMounted(chargerTout)
               <option value="">Tous les produits ({{ produitsListe.length }})</option>
               <option v-for="p in produitsListe" :key="p.code" :value="p.code">{{ p.code }} — {{ p.nom }}</option>
             </select>
-            <span class="count">{{ parProduitFiltre.length }}</span>
+            <span class="count">{{ parProduitCombineFiltre.length }}</span>
           </div>
         </div>
 
@@ -616,26 +691,31 @@ onMounted(chargerTout)
             <thead>
               <tr>
                 <th>Produit</th>
-                <th class="ta-r">Boîtes théo.</th>
-                <th class="ta-r">Boîtes prod.</th>
-                <th>Rendement</th>
-                <th class="ta-r">Avarie</th>
+                <th class="ta-r">Boîtes fab.</th>
+                <th>Rendement fab.</th>
+                <th class="ta-r">Boîtes cond.</th>
+                <th>Rendement cond.</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="p in parProduitFiltre" :key="p.code">
+              <tr v-for="p in parProduitCombineFiltre" :key="p.code">
                 <td><span class="mono">{{ p.code }}</span> <span class="desig">{{ p.nom }}</span></td>
-                <td class="ta-r">{{ fmt(p.theo) }}</td>
-                <td class="ta-r">{{ fmt(p.prod) }}</td>
+                <td class="ta-r">{{ p.fabProd ? fmt(p.fabProd) : '—' }}</td>
                 <td>
                   <div class="rdt-cell">
-                    <div class="rdt-track"><div class="rdt-fill" :class="{ bas: p.rdt != null && p.rdt < 95 }" :style="{ width: Math.min(100, p.rdt || 0) + '%' }"></div></div>
-                    <span class="rdt-num">{{ pct2(p.rdt) }}</span>
+                    <div class="rdt-track"><div class="rdt-fill fab" :class="{ bas: p.rdtFab != null && p.rdtFab < 95 }" :style="{ width: Math.min(100, p.rdtFab || 0) + '%' }"></div></div>
+                    <span class="rdt-num">{{ pct2(p.rdtFab) }}</span>
                   </div>
                 </td>
-                <td class="ta-r" :class="{ 'av-num': p.avarie != null && p.avarie > 5 }">{{ pct2(p.avarie) }}</td>
+                <td class="ta-r">{{ p.condProd ? fmt(p.condProd) : '—' }}</td>
+                <td>
+                  <div class="rdt-cell">
+                    <div class="rdt-track"><div class="rdt-fill cond" :class="{ bas: p.rdtCond != null && p.rdtCond < 95 }" :style="{ width: Math.min(100, p.rdtCond || 0) + '%' }"></div></div>
+                    <span class="rdt-num">{{ pct2(p.rdtCond) }}</span>
+                  </div>
+                </td>
               </tr>
-              <tr v-if="!parProduitFiltre.length"><td colspan="5" class="empty">Aucune fabrication en {{ anneeSel }}.</td></tr>
+              <tr v-if="!parProduitCombineFiltre.length"><td colspan="5" class="empty">Aucune donnée en {{ anneeSel }}.</td></tr>
             </tbody>
           </table>
         </div>
@@ -732,6 +812,8 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .rdt-cell { display: flex; align-items: center; gap: 10px; min-width: 200px; }
 .rdt-track { flex: 1; height: 9px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
 .rdt-fill { height: 100%; background: #0f766e; border-radius: 999px; min-width: 2px; }
+.rdt-fill.fab { background: #0f766e; }
+.rdt-fill.cond { background: #2563eb; }
 .rdt-fill.bas { background: #b91c1c; }
 .rdt-num { width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 
