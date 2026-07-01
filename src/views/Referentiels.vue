@@ -12,6 +12,12 @@ const equipements = ref([])
 const erreur = ref('')
 
 const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet']
+const GAMME_PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+function phaseFinaleP(g) {
+  if (!Array.isArray(g) || !g.length) return null
+  for (let i = GAMME_PHASES.length - 1; i >= 0; i--) if (g.includes(GAMME_PHASES[i])) return GAMME_PHASES[i]
+  return null
+}
 const rechercheP = ref('')
 const filtreDonneurP = ref('')
 const filtreFormeP = ref('')
@@ -36,12 +42,12 @@ function resetDO() { Object.assign(formDO, { id: null, code: '', nom: '', activi
 // --- Produit ---
 const formP = reactive({
   id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-  unites_par_boite: '', poids_unitaire_mg: '', taille_lot: '', duree_vie_mois: '', aql: '', pcsu: ''
+  unites_par_boite: '', poids_unitaire_mg: '', taille_lot: '', duree_vie_mois: '', aql: '', pcsu: '', gamme: []
 })
 function resetP() {
   Object.assign(formP, {
     id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-    unites_par_boite: '', poids_unitaire_mg: '', taille_lot: '', duree_vie_mois: '', aql: '', pcsu: ''
+    unites_par_boite: '', poids_unitaire_mg: '', taille_lot: '', duree_vie_mois: '', aql: '', pcsu: '', gamme: []
   })
 }
 
@@ -112,7 +118,8 @@ async function enregistrerP() {
     taille_lot: toNum(formP.taille_lot),
     duree_vie_mois: toNum(formP.duree_vie_mois),
     aql: formP.aql.trim() || null,
-    pcsu: toNum(formP.pcsu)
+    pcsu: toNum(formP.pcsu),
+    gamme: Array.isArray(formP.gamme) ? formP.gamme : []
   }
   const res = formP.id
     ? await supabase.from('produits').update(payload).eq('id', formP.id)
@@ -126,7 +133,8 @@ function modifierP(p) {
     id: p.id, code_pf: p.code_pf, designation: p.designation, forme: p.forme || '',
     donneur_ordre_id: p.donneur_ordre_id || '',
     unites_par_boite: p.unites_par_boite ?? '', poids_unitaire_mg: p.poids_unitaire_mg ?? '', taille_lot: p.taille_lot ?? '',
-    duree_vie_mois: p.duree_vie_mois ?? '', aql: p.aql || '', pcsu: p.pcsu ?? ''
+    duree_vie_mois: p.duree_vie_mois ?? '', aql: p.aql || '', pcsu: p.pcsu ?? '',
+    gamme: Array.isArray(p.gamme) ? [...p.gamme] : []
   })
 }
 async function desactiverP(p) {
@@ -344,6 +352,14 @@ onMounted(async () => {
         <label>Durée de vie (mois)<input v-model="formP.duree_vie_mois" type="number" placeholder="36" /></label>
         <label>AQL<input v-model="formP.aql" placeholder="0.65" /></label>
         <label>PCSU<input v-model="formP.pcsu" type="number" step="any" placeholder="12.50" /></label>
+        <label class="gamme-field">Gamme de process
+          <div class="gamme-checks">
+            <label v-for="ph in GAMME_PHASES" :key="ph" class="gamme-chk">
+              <input type="checkbox" :value="ph" v-model="formP.gamme" /> {{ ph }}
+            </label>
+          </div>
+          <span class="gamme-hint">Coche les phases réellement effectuées. La dernière cochée = fin de fabrication.</span>
+        </label>
         <div class="form-actions">
           <button class="btn" @click="enregistrerP">{{ formP.id ? 'Mettre à jour' : 'Ajouter' }}</button>
           <button v-if="formP.id" class="btn ghost" @click="resetP">Annuler</button>
@@ -367,6 +383,7 @@ onMounted(async () => {
             <tr>
               <th>Code PF</th><th>Désignation</th><th>Forme</th><th>Donneur d'ordre</th>
               <th class="right">U/boîte</th><th class="right">Poids (mg)</th><th class="right">Taille lot</th><th class="right">PCSU</th>
+              <th>Phase finale</th>
               <th class="right">Actions</th>
             </tr>
           </thead>
@@ -380,6 +397,7 @@ onMounted(async () => {
               <td class="right">{{ p.poids_unitaire_mg ?? '—' }}</td>
               <td class="right">{{ p.taille_lot ?? '—' }}</td>
               <td class="right">{{ p.pcsu ?? '—' }}</td>
+              <td><span v-if="phaseFinaleP(p.gamme)" class="gamme-badge">{{ phaseFinaleP(p.gamme) }}</span><span v-else class="gamme-none">non définie</span></td>
               <td class="right nowrap">
                 <template v-if="peutEditer">
                   <button class="link" @click="modifierP(p)">Modifier</button>
@@ -387,7 +405,7 @@ onMounted(async () => {
                 </template>
               </td>
             </tr>
-            <tr v-if="!produitsFiltres.length"><td colspan="9" class="empty">Aucun produit ne correspond aux filtres.</td></tr>
+            <tr v-if="!produitsFiltres.length"><td colspan="10" class="empty">Aucun produit ne correspond aux filtres.</td></tr>
           </tbody>
         </table>
       </div>
@@ -450,4 +468,11 @@ button.link.danger { color: #b91c1c; }
 .p-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .p-filtre { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
 .p-count { font-size: 12px; font-weight: 600; color: #475569; background: #f1f5f9; padding: 4px 10px; border-radius: 999px; margin-left: auto; }
+.gamme-field { grid-column: 1 / -1; }
+.gamme-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 4px; }
+.gamme-chk { display: inline-flex; align-items: center; gap: 5px; font-weight: 400; font-size: 13px; color: #334155; }
+.gamme-chk input { width: auto; margin: 0; }
+.gamme-hint { display: block; font-size: 11px; color: #94a3b8; margin-top: 5px; }
+.gamme-badge { background: #ccfbf1; color: #0f766e; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.gamme-none { color: #cbd5e1; font-size: 12px; }
 </style>
