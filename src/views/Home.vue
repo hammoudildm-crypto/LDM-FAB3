@@ -253,6 +253,15 @@ const vracEnAttente = computed(() => {
   return t
 })
 
+// --- Fabrication réalisée (boîtes) = vrac réel des phases finales, année sélectionnée ---
+const fabRealisee = computed(() => {
+  let t = 0
+  for (const l of lotsAnnee.value) t += boitesVracLot(l)
+  return t
+})
+const pctPlanFab = computed(() => planTotal.value > 0 ? (fabRealisee.value / planTotal.value) * 100 : null)
+const boitesRestantesFab = computed(() => Math.max(0, planTotal.value - fabRealisee.value))
+
 // --- Production par mois (année) ---
 const prodParMois = computed(() => {
   const arr = Array(12).fill(0)
@@ -320,15 +329,18 @@ function classeStatut(s) {
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
 
 const kpisProd = computed(() => [
-  { v: fmtC(nbProduits.value),       l: 'Produits actifs',                      tint: TINTS.teal,    ic: ICONS.pill },
-  { v: fmtC(nbLots.value),           l: 'Lots',                                 tint: TINTS.blue,    ic: ICONS.box },
-  { v: fmtC(lotsEnCours.value),      l: 'Lots en cours',                        tint: TINTS.amber,   ic: ICONS.clock },
-  { v: fmtC(totalBoites.value),      l: 'Boîtes réalisées ' + anneeSel.value,   tint: TINTS.green,   ic: ICONS.check },
-  { v: fmtC(vracEnAttente.value),    l: 'Vrac en attente (bts)',                tint: TINTS.orange,  ic: ICONS.hourglass },
-  { v: fmtC(boitesCeMois.value),     l: 'Boîtes ce mois',                       tint: TINTS.violet,  ic: ICONS.calendar },
-  { v: fmtC(planTotal.value),        l: 'Plan ' + anneeSel.value + ' (boîtes)', tint: TINTS.indigo,  ic: ICONS.target },
-  { v: fmtPct(pctPlanRealise.value), l: 'Plan ' + anneeSel.value + ' réalisé',  tint: TINTS.emerald, ic: ICONS.percent },
-  { v: fmtC(boitesRestantes.value),  l: 'Boîtes restantes (plan)',              tint: TINTS.rose,    ic: ICONS.layers },
+  { v: fmtC(nbProduits.value),          l: 'Produits actifs',                      tint: TINTS.teal,    ic: ICONS.pill },
+  { v: fmtC(nbLots.value),              l: 'Lots',                                 tint: TINTS.blue,    ic: ICONS.box },
+  { v: fmtC(lotsEnCours.value),         l: 'Lots en cours',                        tint: TINTS.amber,   ic: ICONS.clock },
+  { v: fmtC(fabRealisee.value),         l: 'Fabrication réalisée (bts)',           tint: TINTS.blue,    ic: ICONS.factory },
+  { v: fmtC(totalBoites.value),         l: 'Conditionnement réalisé (bts)',        tint: TINTS.green,   ic: ICONS.check },
+  { v: fmtC(vracEnAttente.value),       l: 'Vrac en attente (bts)',                tint: TINTS.orange,  ic: ICONS.hourglass },
+  { v: fmtC(planTotal.value),           l: 'Plan ' + anneeSel.value + ' (boîtes)', tint: TINTS.indigo,  ic: ICONS.target },
+  { v: fmtPct(pctPlanFab.value),        l: 'Plan fab. réalisé',                    tint: TINTS.cyan,    ic: ICONS.percent },
+  { v: fmtPct(pctPlanRealise.value),    l: 'Plan cond. réalisé',                   tint: TINTS.emerald, ic: ICONS.percent },
+  { v: fmtC(boitesRestantesFab.value),  l: 'Restantes fab. (plan)',                tint: TINTS.violet,  ic: ICONS.layers },
+  { v: fmtC(boitesRestantes.value),     l: 'Restantes cond. (plan)',               tint: TINTS.rose,    ic: ICONS.layers },
+  { v: fmtC(boitesCeMois.value),        l: 'Boîtes conditionnées ce mois',         tint: TINTS.slate,   ic: ICONS.calendar },
 ])
 const kpisQualite = computed(() => [
   { v: fmt(lotsTermines.value),           l: 'Lots terminés',         tint: TINTS.blue,    ic: ICONS.package },
