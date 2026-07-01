@@ -12,6 +12,7 @@ const equipements = ref([])
 const filtreStatut = ref('')
 const anneeF = ref(0)
 const moisF = ref(0)
+const showList = ref(false)
 const rechercheLot = ref('')
 const rechercheLotForm = ref('')
 const erreur = ref('')
@@ -269,9 +270,12 @@ onMounted(chargerTout)
               <option value="">Tous les statuts</option>
               <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
             </select>
+            <button class="btn-toggle" @click="showList = !showList">
+              {{ showList ? '▲ Masquer' : '▼ Afficher' }} les lignes
+            </button>
           </div>
         </div>
-        <div class="table-scroll">
+        <div v-if="showList" class="table-scroll">
           <table class="grid">
             <thead>
               <tr>
@@ -301,6 +305,7 @@ onMounted(chargerTout)
             </tbody>
           </table>
         </div>
+        <p v-if="!showList" class="masque-hint">{{ recordsFiltres.length }} conditionnement(s) — clique sur « Afficher les lignes » pour voir le détail.</p>
       </section>
 
       <p class="hint"><strong>Rendement</strong> = boîtes obtenues ÷ équivalent du vrac reçu (poids du comprimé). <strong>Rendement global</strong> = boîtes obtenues ÷ boîtes théoriques du produit (TTL). La <strong>quantité reçue (kg)</strong> alimente le stock de vrac (page En-cours).</p>
@@ -371,4 +376,7 @@ button.link.danger { color: #b91c1c; }
 .lot-search { font-size: 14px; padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; margin-bottom: 6px; width: 100%; box-sizing: border-box; }
 .lot-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .lot-count { display: inline-block; background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
+.btn-toggle { background: #fff; border: 1px solid #cbd5e1; color: #0f766e; font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.btn-toggle:hover { background: #f0fdfa; border-color: #0f766e; }
+.masque-hint { color: #94a3b8; font-size: 13px; margin: 4px 2px; }
 </style>
