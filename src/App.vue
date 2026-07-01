@@ -25,6 +25,12 @@ const pilotActive = computed(() => PILOT.includes(route.path))
 // --- Thèmes ---
 const THEMES = [['clair', 'Clair'], ['ocean', 'Océan'], ['ardoise', 'Ardoise'], ['sombre', 'Sombre']]
 const theme = ref('clair')
+const zoom = ref(100)
+function setZoom(z) {
+  zoom.value = Math.max(70, Math.min(150, z))
+  try { localStorage.setItem('ldmfab-zoom', String(zoom.value)) } catch (e) { /* ignore */ }
+}
+function changeZoom(d) { setZoom(zoom.value + d) }
 function setTheme(t) {
   theme.value = t
   document.documentElement.dataset.theme = t
@@ -50,6 +56,8 @@ onMounted(async () => {
   try {
     const saved = localStorage.getItem('ldmfab-theme')
     if (saved) { theme.value = saved; document.documentElement.dataset.theme = saved }
+    const sz = parseInt(localStorage.getItem('ldmfab-zoom') || '', 10)
+    if (sz) zoom.value = Math.max(70, Math.min(150, sz))
   } catch (e) { /* ignore */ }
   document.addEventListener('click', onDocClick)
   const res = await supabase.auth.getSession()
@@ -110,6 +118,11 @@ async function signOut() {
     </nav>
 
     <div class="topbar-right">
+      <div class="zoom-ctl" title="Zoom des pages">
+        <button class="zoom-btn" @click="changeZoom(-10)" :disabled="zoom <= 70" title="Réduire">−</button>
+        <button class="zoom-val" @click="setZoom(100)" title="Réinitialiser à 100 %">{{ zoom }}%</button>
+        <button class="zoom-btn" @click="changeZoom(10)" :disabled="zoom >= 150" title="Agrandir">+</button>
+      </div>
       <div class="dropdown" ref="themeRef">
         <button class="navlink drop-toggle" :class="{ open: openMenu === 'theme' }" @click="toggleMenu('theme')" title="Changer de thème">
           <span class="swatch" :class="'sw-' + theme"></span>Thème <span class="caret">▾</span>
@@ -129,7 +142,7 @@ async function signOut() {
       <button v-else type="button" class="signout" @click="signOut">Déconnexion</button>
     </div>
   </header>
-  <main>
+  <main :style="{ zoom: zoom / 100 }">
     <RouterView />
   </main>
 </template>
@@ -246,4 +259,11 @@ html[data-theme="sombre"] .lot-info { border-top-color: #1f2940 !important; }
   .topbar { display: none !important; }
   main { padding: 0; max-width: none; }
 }
+.zoom-ctl { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--topbar-border); border-radius: 8px; padding: 2px; margin-right: 4px; }
+.zoom-btn, .zoom-val { background: transparent; border: none; color: var(--topbar-muted); cursor: pointer; font-family: inherit; border-radius: 6px; }
+.zoom-btn { width: 24px; height: 24px; font-size: 17px; line-height: 1; display: flex; align-items: center; justify-content: center; }
+.zoom-btn:hover:not(:disabled) { background: rgba(255,255,255,0.14); color: #fff; }
+.zoom-btn:disabled { opacity: 0.35; cursor: default; }
+.zoom-val { min-width: 44px; font-size: 12px; font-weight: 600; padding: 4px 4px; }
+.zoom-val:hover { background: rgba(255,255,255,0.14); color: #fff; }
 </style>
