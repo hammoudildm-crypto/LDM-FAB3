@@ -10,6 +10,8 @@ const records = ref([])
 const lots = ref([])
 const equipements = ref([])
 const filtreStatut = ref('')
+const anneeF = ref(0)
+const moisF = ref(0)
 const rechercheLot = ref('')
 const rechercheLotForm = ref('')
 const erreur = ref('')
@@ -76,9 +78,22 @@ async function chargerTout() {
   records.value = rc.data
 }
 
+const MOIS = [
+  { v: 1, l: 'Janvier' }, { v: 2, l: 'Février' }, { v: 3, l: 'Mars' },
+  { v: 4, l: 'Avril' }, { v: 5, l: 'Mai' }, { v: 6, l: 'Juin' },
+  { v: 7, l: 'Juillet' }, { v: 8, l: 'Août' }, { v: 9, l: 'Septembre' },
+  { v: 10, l: 'Octobre' }, { v: 11, l: 'Novembre' }, { v: 12, l: 'Décembre' }
+]
+const anneesCond = computed(() => {
+  const set = new Set()
+  for (const r of records.value) { if (r.date_conditionnement) set.add(new Date(r.date_conditionnement).getFullYear()) }
+  return [...set].sort((a, b) => b - a)
+})
 const recordsFiltres = computed(() => {
   let list = records.value
   if (filtreStatut.value) list = list.filter(r => r.statut === filtreStatut.value)
+  if (anneeF.value) list = list.filter(r => { const d = r.date_conditionnement ? new Date(r.date_conditionnement) : null; return d && d.getFullYear() === anneeF.value })
+  if (moisF.value) list = list.filter(r => { const d = r.date_conditionnement ? new Date(r.date_conditionnement) : null; return d && (d.getMonth() + 1) === moisF.value })
   const q = rechercheLot.value.trim().toLowerCase()
   if (q) {
     list = list.filter(r => {
@@ -242,6 +257,14 @@ onMounted(chargerTout)
           <span class="count">{{ recordsFiltres.length }}</span>
           <div class="head-tools">
             <input v-model="rechercheLot" class="recherche" type="search" placeholder="Rechercher un n° de lot…" />
+            <select v-model.number="anneeF" class="filtre">
+              <option :value="0">Toutes années</option>
+              <option v-for="a in anneesCond" :key="a" :value="a">{{ a }}</option>
+            </select>
+            <select v-model.number="moisF" class="filtre">
+              <option :value="0">Tous les mois</option>
+              <option v-for="m in MOIS" :key="m.v" :value="m.v">{{ m.l }}</option>
+            </select>
             <select v-model="filtreStatut" class="filtre">
               <option value="">Tous les statuts</option>
               <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
