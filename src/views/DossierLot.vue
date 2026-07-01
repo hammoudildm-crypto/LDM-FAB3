@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
 import { ICONS, TINTS } from '../icons.js'
 
@@ -152,7 +153,12 @@ function classeStatut(s) {
 }
 function imprimer() { window.print() }
 
-onMounted(chargerLots)
+const route = useRoute()
+onMounted(async () => {
+  await chargerLots()
+  const q = route.query.lot
+  if (q != null && q !== '') lotId.value = isNaN(Number(q)) ? q : Number(q)
+})
 const MOIS = [
   { v: 1, l: 'Janvier' }, { v: 2, l: 'Février' }, { v: 3, l: 'Mars' },
   { v: 4, l: 'Avril' }, { v: 5, l: 'Mai' }, { v: 6, l: 'Juin' },
