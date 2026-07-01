@@ -14,6 +14,7 @@ const rechercheLot = ref('')
 const anneeF = ref(0)
 const moisF = ref(0)
 const LIMITE = 300
+const rechProduit = ref('')
 const erreur = ref('')
 const message = ref('')
 const signatures = ref([])
@@ -95,6 +96,12 @@ const lotsFiltres = computed(() => {
   })
 })
 const lotsAffiches = computed(() => lotsFiltres.value.slice(0, LIMITE))
+const produitsForm = computed(() => {
+  const q = rechProduit.value.trim().toLowerCase()
+  if (!q) return produits.value
+  return produits.value.filter(pr =>
+    String(pr.code_pf || '').toLowerCase().includes(q) || String(pr.designation || '').toLowerCase().includes(q))
+})
 
 async function enregistrer() {
   erreur.value = ''
@@ -239,9 +246,10 @@ onMounted(async () => {
         <div class="form-grid">
           <label>N° de lot<input v-model="form.numero_lot" placeholder="L260145" /></label>
           <label class="wide">Produit
+            <input v-model="rechProduit" type="search" class="prod-search" placeholder="Filtrer par code ou désignation…" />
             <select v-model="form.produit_id">
-              <option value="">—</option>
-              <option v-for="p in produits" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
+              <option value="">— Choisir un produit — ({{ produitsForm.length }})</option>
+              <option v-for="p in produitsForm" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
             </select>
           </label>
           <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" /></label>
@@ -440,4 +448,6 @@ button.link.release { color: #166534; }
 .recherche:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .filtre2 { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
 .cap-note { color: #94a3b8; font-size: 12px; padding: 8px 10px; }
+.prod-search { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; width: 100%; box-sizing: border-box; margin-bottom: 5px; }
+.prod-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 </style>
