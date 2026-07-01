@@ -34,6 +34,7 @@ function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
 
 // --- Équipement ---
 const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '' })
+const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false })
 function resetE() { Object.assign(formE, { id: null, code: '', nom: '', atelier_id: '', type: '' }) }
 
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
@@ -175,10 +176,12 @@ onMounted(chargerTout)
 
     <!-- DONNEURS D'ORDRE -->
     <section class="card">
-      <div class="card-head">
+      <div class="card-head clickable" @click="ouvert.donneurs = !ouvert.donneurs">
         <h2>Donneurs d'ordre</h2>
         <span class="count">{{ donneurs.length }}</span>
+        <span class="chevron">{{ ouvert.donneurs ? '▾' : '▸' }}</span>
       </div>
+      <div v-show="ouvert.donneurs">
       <div class="form-grid do-grid" v-if="peutEditer">
         <label>Code<input v-model="formDO.code" placeholder="SERVIER" /></label>
         <label>Nom<input v-model="formDO.nom" placeholder="Laboratoires Servier" /></label>
@@ -207,14 +210,97 @@ onMounted(chargerTout)
           </tbody>
         </table>
       </div>
+      </div>
     </section>
 
-    <!-- PRODUITS -->
     <section class="card">
-      <div class="card-head">
+      <div class="card-head clickable" @click="ouvert.ateliers = !ouvert.ateliers">
+        <h2>Ateliers</h2>
+        <span class="count">{{ ateliers.length }}</span>
+        <span class="chevron">{{ ouvert.ateliers ? '▾' : '▸' }}</span>
+      </div>
+      <div v-show="ouvert.ateliers">
+      <div class="form-grid a-grid" v-if="peutEditer">
+        <label>Code<input v-model="formA.code" placeholder="COMASA" /></label>
+        <label>Nom<input v-model="formA.nom" placeholder="Atelier granulation COMASA" /></label>
+        <div class="form-actions">
+          <button class="btn" @click="enregistrerA">{{ formA.id ? 'Mettre à jour' : 'Ajouter' }}</button>
+          <button v-if="formA.id" class="btn ghost" @click="resetA">Annuler</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="grid">
+          <thead><tr><th>Code</th><th>Nom</th><th class="right">Actions</th></tr></thead>
+          <tbody>
+            <tr v-for="a in ateliers" :key="a.id">
+              <td class="mono">{{ a.code }}</td>
+              <td>{{ a.nom }}</td>
+              <td class="right nowrap">
+                <template v-if="peutEditer">
+                  <button class="link" @click="modifierA(a)">Modifier</button>
+                  <button class="link danger" @click="desactiverA(a)">Désactiver</button>
+                </template>
+              </td>
+            </tr>
+            <tr v-if="!ateliers.length"><td colspan="3" class="empty">Aucun atelier. Ajoute-en un ci-dessus.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head clickable" @click="ouvert.equipements = !ouvert.equipements">
+        <h2>Équipements</h2>
+        <span class="count">{{ equipements.length }}</span>
+        <span class="chevron">{{ ouvert.equipements ? '▾' : '▸' }}</span>
+      </div>
+      <div v-show="ouvert.equipements">
+      <div class="form-grid e-grid" v-if="peutEditer">
+        <label>Code<input v-model="formE.code" placeholder="FE55" /></label>
+        <label>Nom<input v-model="formE.nom" placeholder="Presse FETTE FE55" /></label>
+        <label>Atelier
+          <select v-model="formE.atelier_id">
+            <option value="">—</option>
+            <option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.code }} — {{ a.nom }}</option>
+          </select>
+        </label>
+        <label>Type<input v-model="formE.type" placeholder="Compression" /></label>
+        <div class="form-actions">
+          <button class="btn" @click="enregistrerE">{{ formE.id ? 'Mettre à jour' : 'Ajouter' }}</button>
+          <button v-if="formE.id" class="btn ghost" @click="resetE">Annuler</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="grid">
+          <thead><tr><th>Code</th><th>Nom</th><th>Atelier</th><th>Type</th><th class="right">Actions</th></tr></thead>
+          <tbody>
+            <tr v-for="e in equipements" :key="e.id">
+              <td class="mono">{{ e.code }}</td>
+              <td>{{ e.nom }}</td>
+              <td>{{ atelierDe(e) ? atelierDe(e).code : '—' }}</td>
+              <td>{{ e.type || '—' }}</td>
+              <td class="right nowrap">
+                <template v-if="peutEditer">
+                  <button class="link" @click="modifierE(e)">Modifier</button>
+                  <button class="link danger" @click="desactiverE(e)">Désactiver</button>
+                </template>
+              </td>
+            </tr>
+            <tr v-if="!equipements.length"><td colspan="5" class="empty">Aucun équipement. Ajoute-en un ci-dessus.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head clickable" @click="ouvert.produits = !ouvert.produits">
         <h2>Produits</h2>
         <span class="count">{{ produits.length }}</span>
+        <span class="chevron">{{ ouvert.produits ? '▾' : '▸' }}</span>
       </div>
+      <div v-show="ouvert.produits">
       <div class="form-grid p-grid" v-if="peutEditer">
         <label>Code PF<input v-model="formP.code_pf" placeholder="DIAM60" /></label>
         <label>Désignation<input v-model="formP.designation" placeholder="DIAMICRON 60 mg" /></label>
@@ -271,82 +357,6 @@ onMounted(chargerTout)
           </tbody>
         </table>
       </div>
-    </section>
-
-    <!-- ATELIERS -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Ateliers</h2>
-        <span class="count">{{ ateliers.length }}</span>
-      </div>
-      <div class="form-grid a-grid" v-if="peutEditer">
-        <label>Code<input v-model="formA.code" placeholder="COMASA" /></label>
-        <label>Nom<input v-model="formA.nom" placeholder="Atelier granulation COMASA" /></label>
-        <div class="form-actions">
-          <button class="btn" @click="enregistrerA">{{ formA.id ? 'Mettre à jour' : 'Ajouter' }}</button>
-          <button v-if="formA.id" class="btn ghost" @click="resetA">Annuler</button>
-        </div>
-      </div>
-      <div class="table-scroll">
-        <table class="grid">
-          <thead><tr><th>Code</th><th>Nom</th><th class="right">Actions</th></tr></thead>
-          <tbody>
-            <tr v-for="a in ateliers" :key="a.id">
-              <td class="mono">{{ a.code }}</td>
-              <td>{{ a.nom }}</td>
-              <td class="right nowrap">
-                <template v-if="peutEditer">
-                  <button class="link" @click="modifierA(a)">Modifier</button>
-                  <button class="link danger" @click="desactiverA(a)">Désactiver</button>
-                </template>
-              </td>
-            </tr>
-            <tr v-if="!ateliers.length"><td colspan="3" class="empty">Aucun atelier. Ajoute-en un ci-dessus.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- ÉQUIPEMENTS -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Équipements</h2>
-        <span class="count">{{ equipements.length }}</span>
-      </div>
-      <div class="form-grid e-grid" v-if="peutEditer">
-        <label>Code<input v-model="formE.code" placeholder="FE55" /></label>
-        <label>Nom<input v-model="formE.nom" placeholder="Presse FETTE FE55" /></label>
-        <label>Atelier
-          <select v-model="formE.atelier_id">
-            <option value="">—</option>
-            <option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.code }} — {{ a.nom }}</option>
-          </select>
-        </label>
-        <label>Type<input v-model="formE.type" placeholder="Compression" /></label>
-        <div class="form-actions">
-          <button class="btn" @click="enregistrerE">{{ formE.id ? 'Mettre à jour' : 'Ajouter' }}</button>
-          <button v-if="formE.id" class="btn ghost" @click="resetE">Annuler</button>
-        </div>
-      </div>
-      <div class="table-scroll">
-        <table class="grid">
-          <thead><tr><th>Code</th><th>Nom</th><th>Atelier</th><th>Type</th><th class="right">Actions</th></tr></thead>
-          <tbody>
-            <tr v-for="e in equipements" :key="e.id">
-              <td class="mono">{{ e.code }}</td>
-              <td>{{ e.nom }}</td>
-              <td>{{ atelierDe(e) ? atelierDe(e).code : '—' }}</td>
-              <td>{{ e.type || '—' }}</td>
-              <td class="right nowrap">
-                <template v-if="peutEditer">
-                  <button class="link" @click="modifierE(e)">Modifier</button>
-                  <button class="link danger" @click="desactiverE(e)">Désactiver</button>
-                </template>
-              </td>
-            </tr>
-            <tr v-if="!equipements.length"><td colspan="5" class="empty">Aucun équipement. Ajoute-en un ci-dessus.</td></tr>
-          </tbody>
-        </table>
       </div>
     </section>
   </div>
@@ -398,4 +408,7 @@ button.link.danger { color: #b91c1c; }
   .do-grid, .p-grid, .a-grid, .e-grid { grid-template-columns: 1fr 1fr; }
   .form-actions { grid-column: 1 / -1; }
 }
+.card-head.clickable { cursor: pointer; user-select: none; }
+.card-head.clickable:hover h2 { color: #0f766e; }
+.chevron { margin-left: auto; font-size: 14px; color: #64748b; padding-left: 8px; }
 </style>
