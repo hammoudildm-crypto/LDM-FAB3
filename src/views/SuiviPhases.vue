@@ -4,7 +4,7 @@ import { supabase } from '../supabase'
 
 const peutEditer = inject('peutEditer', ref(true))
 
-const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Conditionnement']
+const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
 const STATUTS = ['À faire', 'En cours', 'Terminé']
 
 const lots = ref([])
