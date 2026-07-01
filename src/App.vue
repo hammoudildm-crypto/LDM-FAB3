@@ -25,7 +25,7 @@ const pilotActive = computed(() => PILOT.includes(route.path))
 // --- Thèmes ---
 const THEMES = [['clair', 'Clair'], ['ocean', 'Océan'], ['ardoise', 'Ardoise'], ['sombre', 'Sombre']]
 const theme = ref('clair')
-const zoom = ref(100)
+const zoom = ref(90)
 function setZoom(z) {
   zoom.value = Math.max(70, Math.min(150, z))
   try { localStorage.setItem('ldmfab-zoom', String(zoom.value)) } catch (e) { /* ignore */ }
@@ -208,7 +208,7 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 .signout { background: transparent; color: var(--topbar-muted); border: 1px solid var(--topbar-border); padding: 5px 12px; border-radius: 7px; font-size: 13px; cursor: pointer; white-space: nowrap; }
 .signout:hover { color: var(--topbar-text); border-color: var(--topbar-muted); }
 
-main { padding: 20px 16px; max-width: 1200px; margin: 0 auto; }
+main { padding: 12px 20px; max-width: 1560px; margin: 0 auto; }
 
 .error { color: #b91c1c; }
 
