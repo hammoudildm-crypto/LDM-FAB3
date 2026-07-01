@@ -35,7 +35,7 @@ async function charger() {
   erreur.value = ''
 
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, produits(code_pf, designation)')
+    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, produits(code_pf, designation, gamme)')
     .eq('actif', true))
   if (rl.error) { erreur.value = rl.error.message; chargement.value = false; return }
   lots.value = rl.data || []
@@ -73,33 +73,46 @@ const ordresConditionnes = computed(() => {
   return s
 })
 
-// Analyse d'un lot : états des 8 étapes + étape courante + progression
+// Étiquettes courtes par nom de phase
+const COURT_MAP = {
+  'Pesée': 'Pesée', 'Granulation': 'Gran.', 'Séchage': 'Séch.', 'Mélange': 'Mél.',
+  'Compression': 'Comp.', 'Remplissage Gélules': 'Rempl.', 'Pelliculage': 'Pell.', 'Conditionnement': 'Cond.'
+}
+const CANON = PHASES.slice(0, 7)  // 7 phases de fabrication (sans Conditionnement)
+// Route réelle du lot = gamme du produit (ordre canonique) + Conditionnement ; repli = toutes les phases
+function routeLot(lot) {
+  const g = lot.produits && Array.isArray(lot.produits.gamme) ? lot.produits.gamme : null
+  const fab = (g && g.length) ? CANON.filter(ph => g.includes(ph)) : CANON
+  return [...fab, 'Conditionnement']
+}
+
+// Analyse d'un lot selon SA gamme : états des étapes + étape courante + progression
 function analyse(lot) {
   const recs = phasesByLot.value[lot.id] || {}
   const conditionne = ordresConditionnes.value.has(lot.id)
-  const nodes = PHASES.map((ph, i) => {
+  const route = routeLot(lot)
+  const nodes = route.map((ph) => {
     const r = recs[ph]
     let state = 'pending'
     if (r) state = r.statut === 'Terminé' ? 'done' : 'current'
     if (ph === 'Conditionnement' && conditionne) state = 'done'  // validé par le module Conditionnement
-    return { phase: ph, court: COURT[i], state, rec: r || null }
+    return { phase: ph, court: COURT_MAP[ph] || ph, state, rec: r || null }
   })
-  const nbRec = nodes.filter(n => n.rec).length   // phases de fabrication saisies (le conditionnement n'est plus saisi ici)
+  const nbRec = nodes.filter(n => n.rec).length
   const done = nodes.filter(n => n.state === 'done').length
-  const termine = done === PHASES.length
+  const termine = done === route.length
 
-  // Étape courante = première phase non terminée.
   const currentIdx = nodes.findIndex(n => n.state !== 'done')
   let currentPhase = null, label
   if (termine) label = 'Terminé'
   else if (nbRec === 0) label = 'Non démarré'
   else if (currentIdx >= 0) {
-    currentPhase = PHASES[currentIdx]
+    currentPhase = route[currentIdx]
     if (nodes[currentIdx].state === 'current') label = 'En cours : ' + currentPhase
     else { nodes[currentIdx].state = 'next'; label = 'Prochaine : ' + currentPhase }
   } else label = 'Terminé'
 
-  return { nodes, currentIdx, currentPhase, done, nbRec, termine, label, progress: Math.round(done / PHASES.length * 100) }
+  return { nodes, currentIdx, currentPhase, done, nbRec, termine, label, progress: Math.round(done / route.length * 100) }
 }
 
 const lotsAnalyses = computed(() =>
@@ -138,12 +151,13 @@ const nbSuivis = computed(() => lotsAnalyses.value.filter(x => x.a.nbRec > 0).le
 
 // Répartition des lots en production par étape courante
 const parEtape = computed(() => {
-  const c = PHASES.map(ph => ({ phase: ph, n: 0 }))
+  const counts = {}
+  for (const ph of PHASES) counts[ph] = 0
   for (const x of lotsAnalyses.value) {
     if (x.a.termine || x.a.nbRec === 0) continue
-    const i = x.a.currentIdx
-    if (i >= 0 && i < PHASES.length) c[i].n++
+    if (x.a.currentPhase) counts[x.a.currentPhase]++
   }
+  const c = PHASES.map(ph => ({ phase: ph, n: counts[ph] || 0 }))
   const max = Math.max(1, ...c.map(x => x.n))
   return c.map(x => ({ ...x, pct: Math.round(x.n / max * 100) }))
 })
