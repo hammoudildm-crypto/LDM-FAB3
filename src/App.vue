@@ -279,4 +279,9 @@ html[data-theme="sombre"] .lot-info { border-top-color: #1f2940 !important; }
 h1 { font-size: 20px !important; }
 h2 { font-size: 17px !important; }
 .sub { margin-top: 3px !important; font-size: 13px !important; }
+
+/* ===== Badges d'icônes des KPI (toutes les pages) ===== */
+.kpi-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.kpi-ic { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.kpi-ic svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 </style>
