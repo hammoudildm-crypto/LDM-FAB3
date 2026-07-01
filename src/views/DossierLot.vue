@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import { ICONS, TINTS } from '../icons.js'
 
@@ -154,6 +154,10 @@ function classeStatut(s) {
 function imprimer() { window.print() }
 
 const route = useRoute()
+const router = useRouter()
+function corrigerOrdre() { if (lot.value) router.push({ path: '/ordres', query: { edit: lot.value.id } }) }
+function corrigerCond() { if (lot.value) router.push({ path: '/conditionnement', query: { lot: lot.value.numero_lot } }) }
+function corrigerProduit() { if (lot.value && lot.value.produits) router.push({ path: '/referentiels', query: { produit: lot.value.produits.code_pf } }) }
 onMounted(async () => {
   await chargerLots()
   const q = route.query.lot
@@ -236,6 +240,12 @@ watch(lotId, chargerDossier)
       <div class="doc-title">
         <h2>Lot {{ lot.numero_lot }}</h2>
         <span class="badge" :class="classeStatut(lot.statut)">{{ lot.statut }}</span>
+      </div>
+      <div class="corr-bar no-print">
+        <span class="corr-lbl">Corriger :</span>
+        <button class="corr-btn" @click="corrigerOrdre">✎ Ordre de fabrication</button>
+        <button class="corr-btn" @click="corrigerCond">✎ Conditionnement</button>
+        <button v-if="lot.produits" class="corr-btn" @click="corrigerProduit">✎ Fiche produit</button>
       </div>
 
       <section class="block">
@@ -431,4 +441,8 @@ table.grid td { padding: 8px 9px; border-bottom: 1px solid #eef2f6; white-space:
 @media print { .cond-grid { display: table !important; } }
 .lot-filters { display: flex; gap: 6px; }
 .lot-filters select { min-width: 0; flex: 1; font-size: 13px; padding: 8px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 500; }
+.corr-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+.corr-lbl { font-size: 12px; color: #64748b; font-weight: 600; }
+.corr-btn { background: #fff; border: 1px solid #cbd5e1; color: #0f766e; font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 7px; cursor: pointer; }
+.corr-btn:hover { background: #f0fdfa; border-color: #0f766e; }
 </style>
