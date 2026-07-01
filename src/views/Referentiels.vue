@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted, inject } from 'vue'
+import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
 
 const peutEditer = inject('peutEditer', ref(true))
@@ -178,7 +179,12 @@ async function desactiverE(e) {
   await chargerTout()
 }
 
-onMounted(chargerTout)
+const route = useRoute()
+onMounted(async () => {
+  await chargerTout()
+  const q = route.query.produit
+  if (q) { ouvert.produits = true; rechercheP.value = String(q) }
+})
 </script>
 
 <template>
