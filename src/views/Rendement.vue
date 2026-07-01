@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import { ICONS, TINTS } from '../icons.js'
 
@@ -9,6 +10,10 @@ const ofs = ref([])
 const conds = ref([])
 const erreur = ref('')
 const chargement = ref(true)
+const router = useRouter()
+function ouvrirDossier(ordreId) {
+  router.push({ path: '/dossier', query: { lot: ordreId } })
+}
 
 const anneeSel = ref(new Date().getFullYear())
 
@@ -366,6 +371,7 @@ onMounted(chargerTout)
           <span class="count warn-count">{{ anomalies.length }}</span>
         </div>
         <p class="warn-txt">Rendement &lt; {{ SEUIL_ANOMALIE }} % ou &gt; {{ SEUIL_HAUT }} % — saisie incomplète, ou fiche produit (poids / théorique) erronée. Ces lots sont <strong>exclus</strong> des rendements ; vérifie les comprimés fabriqués et la fiche produit. Les lots <strong>pas encore conditionnés</strong> (sans boîtes) ne sont ni comptés ni listés.</p>
+        <p class="warn-hint">👉 Clique sur une ligne pour ouvrir le <strong>dossier du lot</strong> et corriger la saisie ou la fiche produit.</p>
         <div class="table-scroll">
           <table class="grid">
             <thead>
@@ -375,7 +381,7 @@ onMounted(chargerTout)
               </tr>
             </thead>
             <tbody>
-              <tr v-for="r in anomalies" :key="r.of.id">
+              <tr v-for="r in anomalies" :key="r.of.id" class="row-link" @click="ouvrirDossier(r.of.id)" title="Ouvrir le dossier du lot">
                 <td class="mono">{{ r.of.numero_lot }}</td>
                 <td><span class="mono">{{ r.of.produits ? r.of.produits.code_pf : '—' }}</span> <span class="desig">{{ r.of.produits ? r.of.produits.designation : '' }}</span></td>
                 <td>{{ new Date(r.of.date_fin_fabrication).toLocaleDateString('fr-FR') }}</td>
@@ -710,4 +716,9 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 @media (max-width: 760px) {
   .kpi-grid.k4 { grid-template-columns: 1fr; }
 }
+.warn-hint { font-size: 12px; color: #92400e; margin: 0 0 10px; font-weight: 600; }
+.row-link { cursor: pointer; }
+.row-link:hover td { background: #fef3c7; }
+.row-link .mono { color: #0f766e; }
+.row-link:hover .mono { text-decoration: underline; }
 </style>
