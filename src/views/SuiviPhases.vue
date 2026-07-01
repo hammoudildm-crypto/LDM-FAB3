@@ -73,7 +73,7 @@ async function fetchAllPaged(make) {
 async function chargerBase() {
   erreur.value = ''
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, quantite_theorique, statut, produits(code_pf, designation)')
+    .select('id, numero_lot, quantite_theorique, statut, produits(code_pf, designation, gamme)')
     .eq('actif', true).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -110,6 +110,12 @@ const rendementGlobal = computed(() => {
   return compte ? r * 100 : null
 })
 
+function phaseFinaleGamme(g) {
+  if (!Array.isArray(g) || !g.length) return null
+  for (let i = PHASES.length - 1; i >= 0; i--) if (g.includes(PHASES[i])) return PHASES[i]
+  return null
+}
+
 async function enregistrer() {
   erreur.value = ''
   message.value = ''
@@ -129,7 +135,21 @@ async function enregistrer() {
     ? await supabase.from('suivi_phases').update(payload).eq('id', form.id)
     : await supabase.from('suivi_phases').insert(payload)
   if (res.error) { erreur.value = res.error.message; return }
-  message.value = form.id ? 'Phase mise à jour.' : 'Phase ajoutée.'
+  // Clôture de la VRAIE phase finale (gamme du produit) -> date fin fab + statut Terminé
+  let finDeFab = false
+  const gamme = lotSelectionne.value && lotSelectionne.value.produits ? lotSelectionne.value.produits.gamme : null
+  const phaseFin = phaseFinaleGamme(gamme)
+  const estPhaseFinale = phaseFin
+    ? form.phase === phaseFin
+    : ['Compression', 'Remplissage Gélules', 'Pelliculage'].includes(form.phase)  // repli si gamme non définie
+  if (estPhaseFinale && form.statut === 'Terminé') {
+    const maj = { date_fin_fabrication: form.date_phase || new Date().toISOString().slice(0, 10) }
+    const st = lotSelectionne.value ? lotSelectionne.value.statut : null
+    if (st !== 'Libéré' && st !== 'Rejeté') maj.statut = 'Terminé'
+    const ru = await supabase.from('ordres_fabrication').update(maj).eq('id', lotId.value)
+    if (!ru.error) { finDeFab = true; await chargerBase() }
+  }
+  message.value = (form.id ? 'Phase mise à jour.' : 'Phase ajoutée.') + (finDeFab ? ' Fin de fabrication : lot daté et passé à « Terminé » → il entre dans la file DDL.' : '')
   resetForm()
   await chargerPhases()
 }
