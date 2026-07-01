@@ -79,6 +79,36 @@ const totalConditionne = computed(() => conditionnements.value.reduce((s, c) => 
 const totalRecu = computed(() => conditionnements.value.reduce((s, c) => s + Number(c.quantite_entree || 0), 0))
 const totalBoites = computed(() => upb.value > 0 ? Math.floor(totalConditionne.value / upb.value) : null)
 
+// --- Bilan boîtes : vrac (fin fabrication) -> produit fini (conditionnement) ---
+// Dernière phase de fabrication = la plus avancée saisie (Pelliculage > Remplissage > Compression)
+const ORDRE_FAB = { 'Compression': 5, 'Remplissage Gélules': 6, 'Pelliculage': 7 }
+const phaseVrac = computed(() => {
+  let best = null, bestO = -1
+  for (const ph of phases.value) {
+    const o = ORDRE_FAB[ph.phase]
+    if (o != null && ph.quantite_sortie != null && o > bestO) { best = ph; bestO = o }
+  }
+  return best
+})
+// kg -> mg (×1 000 000) -> unités (÷ poids unitaire) -> boîtes (÷ unités par boîte)
+const comprimesVrac = computed(() => {
+  const ph = phaseVrac.value
+  if (!ph || mm.value <= 0) return null
+  return Number(ph.quantite_sortie) * 1e6 / mm.value
+})
+const boitesVrac = computed(() => {
+  if (comprimesVrac.value == null || upb.value <= 0) return null
+  return Math.floor(comprimesVrac.value / upb.value)
+})
+const ecartBoites = computed(() => {
+  if (boitesVrac.value == null || totalBoites.value == null) return null
+  return boitesVrac.value - totalBoites.value
+})
+const ecartPct = computed(() => {
+  if (ecartBoites.value == null || !boitesVrac.value) return null
+  return (ecartBoites.value / boitesVrac.value) * 100
+})
+
 // Boîtes d'un enregistrement
 function boitesC(c) {
   if (c.quantite_conditionnee == null || upb.value === 0) return null
@@ -234,6 +264,34 @@ watch(lotId, chargerDossier)
         </table>
       </section>
 
+      <!-- BILAN BOÎTES -->
+      <section class="block">
+        <h3>Bilan des boîtes — vrac → produit fini</h3>
+        <div class="bilan">
+          <div class="bilan-box">
+            <span class="bilan-ic" :style="TINTS.violet"><svg viewBox="0 0 24 24" v-html="ICONS.pill"></svg></span>
+            <div class="bilan-val">{{ boitesVrac != null ? fmt(boitesVrac) : '—' }}</div>
+            <div class="bilan-lbl">Boîtes vrac<template v-if="phaseVrac"> — sortie {{ phaseVrac.phase }}</template></div>
+          </div>
+          <span class="bilan-op">→</span>
+          <div class="bilan-box">
+            <span class="bilan-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span>
+            <div class="bilan-val">{{ totalBoites != null ? fmt(totalBoites) : '—' }}</div>
+            <div class="bilan-lbl">Boîtes produit fini — conditionnement</div>
+          </div>
+          <span class="bilan-op">=</span>
+          <div class="bilan-box">
+            <span class="bilan-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.trendDown"></svg></span>
+            <div class="bilan-val">{{ ecartBoites != null ? fmt(ecartBoites) : '—' }}<span v-if="ecartPct != null" class="bilan-pct"> ({{ fmtPct(ecartPct) }})</span></div>
+            <div class="bilan-lbl">Écart — freinte conditionnement</div>
+          </div>
+        </div>
+        <p class="bilan-note">
+          Boîtes vrac = sortie de la dernière phase de fabrication (kg) × 1 000 000 ÷ poids unitaire ({{ mm ? fmt(mm) + ' mg' : '—' }}) ÷ unités/boîte ({{ upb || '—' }}).
+          Boîtes produit fini = quantités conditionnées ÷ unités/boîte.
+        </p>
+      </section>
+
       <!-- SYNTHESE -->
       <section class="block synthese">
         <h3>Synthèse</h3>
@@ -313,4 +371,13 @@ table.grid td { padding: 8px 9px; border-bottom: 1px solid #eef2f6; white-space:
 .lot-picker { display: flex; flex-direction: column; gap: 6px; min-width: 320px; }
 .lot-search { font-size: 14px; padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; width: 100%; box-sizing: border-box; }
 .lot-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.bilan { display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap; }
+.bilan-box { flex: 1; min-width: 150px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; text-align: center; }
+.bilan-ic { width: 32px; height: 32px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+.bilan-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.bilan-val { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: #1b2733; }
+.bilan-pct { font-size: 14px; color: #64748b; font-weight: 600; }
+.bilan-lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
+.bilan-op { display: flex; align-items: center; font-size: 22px; font-weight: 700; color: #cbd5e1; }
+.bilan-note { font-size: 12px; color: #94a3b8; margin: 12px 0 0; line-height: 1.5; }
 </style>
