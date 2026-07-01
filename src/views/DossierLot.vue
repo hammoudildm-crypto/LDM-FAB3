@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, inject, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import { ICONS, TINTS } from '../icons.js'
@@ -155,6 +155,8 @@ function imprimer() { window.print() }
 
 const route = useRoute()
 const router = useRouter()
+const role = inject('role', ref(null))
+const estAdmin = computed(() => role.value === 'admin')
 function corrigerOrdre() { if (lot.value) router.push({ path: '/ordres', query: { edit: lot.value.id } }) }
 function corrigerCond() { if (lot.value) router.push({ path: '/conditionnement', query: { lot: lot.value.numero_lot } }) }
 function corrigerProduit() { if (lot.value && lot.value.produits) router.push({ path: '/referentiels', query: { produit: lot.value.produits.code_pf } }) }
@@ -241,7 +243,7 @@ watch(lotId, chargerDossier)
         <h2>Lot {{ lot.numero_lot }}</h2>
         <span class="badge" :class="classeStatut(lot.statut)">{{ lot.statut }}</span>
       </div>
-      <div class="corr-bar no-print">
+      <div v-if="estAdmin" class="corr-bar no-print">
         <span class="corr-lbl">Corriger :</span>
         <button class="corr-btn" @click="corrigerOrdre">✎ Ordre de fabrication</button>
         <button class="corr-btn" @click="corrigerCond">✎ Conditionnement</button>
