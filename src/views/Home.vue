@@ -288,6 +288,18 @@ function classeStatut(s) {
 }
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
 
+const kpisProd = computed(() => [
+  { v: fmtC(nbProduits.value),       l: 'Produits actifs',                     bg: '#ccfbf1', c: '#0d9488', ic: '<path d=\"m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z\"/><path d=\"m8.5 8.5 7 7\"/>' },
+  { v: fmtC(nbLots.value),           l: 'Lots',                                bg: '#dbeafe', c: '#2563eb', ic: '<path d=\"M21 8 12 3 3 8v8l9 5 9-5V8Z\"/><path d=\"m3 8 9 5 9-5\"/>' },
+  { v: fmtC(lotsEnCours.value),      l: 'Lots en cours',                       bg: '#fef3c7', c: '#d97706', ic: '<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 6v6l4 2\"/>' },
+  { v: fmtC(totalBoites.value),      l: 'Boîtes réalisées ' + anneeSel.value,  bg: '#dcfce7', c: '#16a34a', ic: '<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m9 12 2 2 4-4\"/>' },
+  { v: fmtC(vracEnAttente.value),    l: 'Vrac en attente (bts)',               bg: '#ffedd5', c: '#ea580c', ic: '<path d=\"M5 22h14\"/><path d=\"M5 2h14\"/><path d=\"M17 22v-4.17a2 2 0 0 0-.59-1.41L12 12l-4.41 4.42A2 2 0 0 0 7 17.83V22\"/><path d=\"M7 2v4.17a2 2 0 0 0 .59 1.41L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2\"/>' },
+  { v: fmtC(boitesCeMois.value),     l: 'Boîtes ce mois',                      bg: '#ede9fe', c: '#7c3aed', ic: '<path d=\"M8 2v4\"/><path d=\"M16 2v4\"/><rect width=\"18\" height=\"18\" x=\"3\" y=\"4\" rx=\"2\"/><path d=\"M3 10h18\"/>' },
+  { v: fmtC(planTotal.value),        l: 'Plan ' + anneeSel.value + ' (boîtes)', bg: '#e0e7ff', c: '#4f46e5', ic: '<circle cx=\"12\" cy=\"12\" r=\"10\"/><circle cx=\"12\" cy=\"12\" r=\"6\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/>' },
+  { v: fmtPct(pctPlanRealise.value), l: 'Plan ' + anneeSel.value + ' réalisé',  bg: '#d1fae5', c: '#059669', ic: '<line x1=\"19\" x2=\"5\" y1=\"5\" y2=\"19\"/><circle cx=\"6.5\" cy=\"6.5\" r=\"2.5\"/><circle cx=\"17.5\" cy=\"17.5\" r=\"2.5\"/>' },
+  { v: fmtC(boitesRestantes.value),  l: 'Boîtes restantes (plan)',             bg: '#ffe4e6', c: '#e11d48', ic: '<path d=\"M12 2 2 7l10 5 10-5-10-5Z\"/><path d=\"m2 17 10 5 10-5\"/><path d=\"m2 12 10 5 10-5\"/>' },
+])
+
 onMounted(async () => {
   const r = await supabase.auth.getSession()
   session.value = r.data ? r.data.session : null
@@ -327,15 +339,13 @@ onMounted(async () => {
       <!-- ====================== PRODUCTION ====================== -->
       <div v-show="ongletActif === 'production'">
         <div class="kpi-grid kpi-9">
-          <div class="kpi"><div class="kpi-val">{{ fmtC(nbProduits) }}</div><div class="kpi-lbl">Produits actifs</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmtC(nbLots) }}</div><div class="kpi-lbl">Lots</div></div>
-          <div class="kpi"><div class="kpi-val accent">{{ fmtC(lotsEnCours) }}</div><div class="kpi-lbl">Lots en cours</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmtC(totalBoites) }}</div><div class="kpi-lbl">Boîtes réalisées {{ anneeSel }}</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmtC(vracEnAttente) }}</div><div class="kpi-lbl">Vrac en attente (bts)</div></div>
-          <div class="kpi"><div class="kpi-val accent">{{ fmtC(boitesCeMois) }}</div><div class="kpi-lbl">Boîtes ce mois</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmtC(planTotal) }}</div><div class="kpi-lbl">Plan {{ anneeSel }} (boîtes)</div></div>
-          <div class="kpi"><div class="kpi-val accent">{{ fmtPct(pctPlanRealise) }}</div><div class="kpi-lbl">Plan {{ anneeSel }} réalisé</div></div>
-          <div class="kpi"><div class="kpi-val">{{ fmtC(boitesRestantes) }}</div><div class="kpi-lbl">Boîtes restantes (plan)</div></div>
+          <div class="kpi" v-for="(k, i) in kpisProd" :key="i">
+            <div class="kpi-top">
+              <span class="kpi-ic" :style="{ background: k.bg, color: k.c }"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span>
+              <span class="kpi-val">{{ k.v }}</span>
+            </div>
+            <div class="kpi-lbl">{{ k.l }}</div>
+          </div>
         </div>
 
         <div class="cols">
@@ -493,6 +503,9 @@ onMounted(async () => {
 .kpi-val { font-size: 23px; font-weight: 700; letter-spacing: -0.02em; }
 .kpi-val.accent { color: #0f766e; }
 .kpi-lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
+.kpi-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.kpi-ic { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.kpi-ic svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
