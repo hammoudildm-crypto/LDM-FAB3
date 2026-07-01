@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
+import { ICONS, TINTS } from '../icons.js'
 
 const anneeCourante = new Date().getFullYear()
 const ANNEES = []
@@ -178,22 +179,22 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
     <div class="kpi-grid k4">
       <div class="kpi">
         <div class="kpi-tag plan-tag">Plan</div>
-        <div class="kpi-val">{{ fmt(planTotal) }}</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(planTotal) }}</div></div>
         <div class="kpi-lbl">boîtes · {{ fmtDA(planCA) }}</div>
       </div>
       <div class="kpi">
         <div class="kpi-tag fab-tag">Fabrication réalisée</div>
-        <div class="kpi-val">{{ fmt(fabTotal) }}</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><div class="kpi-val">{{ fmt(fabTotal) }}</div></div>
         <div class="kpi-lbl">{{ fmtPct(pctFab) }} du plan · {{ fmtDA(fabCA) }}</div>
       </div>
       <div class="kpi">
         <div class="kpi-tag cond-tag">Conditionnement réalisé</div>
-        <div class="kpi-val">{{ fmt(condTotal) }}</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(condTotal) }}</div></div>
         <div class="kpi-lbl">{{ fmtPct(pctCond) }} du plan · {{ fmtDA(condCA) }}</div>
       </div>
       <div class="kpi">
         <div class="kpi-tag antic-tag">Anticipation N-1</div>
-        <div class="kpi-val">{{ fmt(anticipTotal) }}</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><div class="kpi-val">{{ fmt(anticipTotal) }}</div></div>
         <div class="kpi-lbl">fab. {{ anneeSel - 1 }} → cond. {{ anneeSel }} · {{ fmtDA(anticipCA) }}</div>
       </div>
     </div>
