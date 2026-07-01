@@ -16,6 +16,8 @@ const msg = ref('')
 const anneeSel = ref(0) // 0 = toutes
 const verifEnCours = ref(null)
 const vForm = ref({ verificateur: '', date: new Date().toISOString().slice(0, 10) })
+const superviseurChoix = ref('')
+const nouveauSuperviseur = ref('')
 
 async function fetchAllPaged(make) {
   const size = 1000
@@ -91,15 +93,18 @@ function fmtDate(d) {
 function ouvrir(l) {
   verifEnCours.value = l.id
   vForm.value = { verificateur: l.ddl_verificateur || '', date: new Date().toISOString().slice(0, 10) }
+  superviseurChoix.value = l.ddl_verificateur || ''
+  nouveauSuperviseur.value = ''
   msg.value = ''
 }
 
 async function valider(l) {
   msg.value = ''
-  if (!vForm.value.verificateur.trim()) { msg.value = 'Indique le nom du vérificateur.'; return }
+  const nom = (superviseurChoix.value === '__autre__' ? nouveauSuperviseur.value : superviseurChoix.value).trim()
+  if (!nom) { msg.value = 'Choisis ou saisis le nom du superviseur.'; return }
   const r = await supabase.from('ordres_fabrication').update({
     ddl_verifie: true,
-    ddl_verificateur: vForm.value.verificateur.trim(),
+    ddl_verificateur: nom,
     ddl_date_verification: vForm.value.date || null
   }).eq('id', l.id)
   if (r.error) { msg.value = r.error.message; return }
@@ -171,7 +176,12 @@ async function devalider(l) {
               <tr v-if="verifEnCours === l.id">
                 <td colspan="5">
                   <div class="verif-form">
-                    <input list="superv-list" v-model="vForm.verificateur" placeholder="Superviseur / vérificateur" />
+                    <select v-model="superviseurChoix" class="sv-sel">
+                      <option value="">— Choisir un superviseur —</option>
+                      <option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option>
+                      <option value="__autre__">＋ Autre (saisir un nom)…</option>
+                    </select>
+                    <input v-if="superviseurChoix === '__autre__'" list="superv-list" v-model="nouveauSuperviseur" placeholder="Nom du superviseur" />
                     <input type="date" v-model="vForm.date" />
                     <button class="btn sm" @click="valider(l)">Valider</button>
                     <button class="link" @click="verifEnCours = null">Annuler</button>
@@ -270,4 +280,5 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
   .cols { grid-template-columns: 1fr; }
   .card.span2 { grid-column: auto; }
 }
+.verif-form select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 230px; }
 </style>
