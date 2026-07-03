@@ -280,8 +280,9 @@ const kpisFile = computed(() => {
   ]
 })
 function joursDepuis(d) { if (!d) return '—'; const j = Math.floor((Date.now() - new Date(d)) / 86400000); return j <= 0 ? 'auj.' : j + ' j' }
-function ouvrirLot(l) {
-  router.push({ path: '/ordres', query: { edit: l.id } })
+function ouvrirLot(l, phaseKey) {
+  if (phaseKey === 'conditionnement') router.push({ path: '/ordres', query: { edit: l.id } })
+  else router.push({ path: '/suivi', query: { lot: l.id } })
 }
 
 // Pour chaque phase : { code_pf -> { code, desig, lots, boites } }
@@ -434,7 +435,7 @@ onMounted(async () => {
                 <div class="q-title cours">En cours — {{ ph.cours.length }} lot(s) · {{ fmtC(ph.volCours) }} bts</div>
                 <div v-if="ph.cours.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir l'ordre de fabrication de ce lot">
+                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span></td>
                       <td class="num">{{ fmt(l.boites) }}</td>
                       <td class="num age">{{ joursDepuis(l.date) }}</td>
@@ -448,7 +449,7 @@ onMounted(async () => {
                 <div class="q-title attente">En attente — {{ ph.attente.length }} lot(s) · {{ fmtC(ph.volAttente) }} bts</div>
                 <div v-if="ph.attente.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir l'ordre de fabrication de ce lot">
+                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span></td>
                       <td class="num">{{ fmt(l.boites) }}</td>
                       <td class="num age">{{ joursDepuis(l.date) }}</td>
@@ -496,7 +497,7 @@ onMounted(async () => {
                   <div class="q-title attente">En attente — {{ g.attente.length }} lot(s) · {{ fmtC(g.volAttente) }} bts</div>
                   <div v-if="g.attente.length" class="prod-scroll">
                     <table class="grid"><tbody>
-                      <tr v-for="l in g.attente" :key="l.id" class="lot-row" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir le conditionnement de ce lot">
+                      <tr v-for="l in g.attente" :key="l.id" class="lot-row" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir l'ordre de fabrication de ce lot">
                         <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span></td>
                         <td class="num">{{ fmt(l.boites) }}</td>
                         <td class="num age">{{ joursDepuis(l.date) }}</td>
