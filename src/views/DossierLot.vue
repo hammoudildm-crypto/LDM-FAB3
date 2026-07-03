@@ -2,6 +2,7 @@
 import { ref, computed, inject, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
 import { ICONS, TINTS } from '../icons.js'
 
 const lots = ref([])
@@ -200,34 +201,33 @@ watch(lotId, chargerDossier)
 
 <template>
   <div class="dl-page">
-    <header class="dl-head no-print">
-      <div>
-        <h1>Dossier de lot</h1>
-        <p class="sub">Fiche récapitulative : identification, fabrication et conditionnement d'un lot.</p>
-      </div>
-      <div class="controls">
-        <div class="lot-picker">
-          <input v-model="rechercheLot" type="search" class="lot-search" placeholder="Rechercher (code, désignation, n° lot)…" />
-          <div class="lot-filters">
-            <select v-model.number="anneeF" title="Filtrer par année">
-              <option :value="0">Toutes années</option>
-              <option v-for="a in anneesLot" :key="a" :value="a">{{ a }}</option>
-            </select>
-            <select v-model.number="moisF" title="Filtrer par mois">
-              <option :value="0">Tous les mois</option>
-              <option v-for="m in MOIS" :key="m.v" :value="m.v">{{ m.l }}</option>
+    <div class="no-print">
+      <PageHeader title="Dossier de lot" tone="slate"
+        subtitle="Fiche récapitulative : identification, fabrication et conditionnement d'un lot.">
+        <div class="controls">
+          <div class="lot-picker">
+            <input v-model="rechercheLot" type="search" class="lot-search" placeholder="Rechercher (code, désignation, n° lot)…" />
+            <div class="lot-filters">
+              <select v-model.number="anneeF" title="Filtrer par année">
+                <option :value="0">Toutes années</option>
+                <option v-for="a in anneesLot" :key="a" :value="a">{{ a }}</option>
+              </select>
+              <select v-model.number="moisF" title="Filtrer par mois">
+                <option :value="0">Tous les mois</option>
+                <option v-for="m in MOIS" :key="m.v" :value="m.v">{{ m.l }}</option>
+              </select>
+            </div>
+            <select v-model="lotId">
+              <option value="">— Choisir un lot — ({{ lotsFiltres.length }})</option>
+              <option v-for="l in lotsFiltres" :key="l.id" :value="l.id">
+                {{ l.numero_lot }} · {{ l.produits ? l.produits.code_pf + ' ' + l.produits.designation : '' }}
+              </option>
             </select>
           </div>
-          <select v-model="lotId">
-            <option value="">— Choisir un lot — ({{ lotsFiltres.length }})</option>
-            <option v-for="l in lotsFiltres" :key="l.id" :value="l.id">
-              {{ l.numero_lot }} · {{ l.produits ? l.produits.code_pf + ' ' + l.produits.designation : '' }}
-            </option>
-          </select>
+          <button v-if="lot" class="btn" @click="imprimer">Imprimer</button>
         </div>
-        <button v-if="lot" class="btn" @click="imprimer">Imprimer</button>
-      </div>
-    </header>
+      </PageHeader>
+    </div>
 
     <p v-if="erreur" class="alert no-print">{{ erreur }}</p>
 
