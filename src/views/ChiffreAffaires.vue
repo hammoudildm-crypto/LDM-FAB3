@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
 import { ICONS, TINTS } from '../icons.js'
 
 const anneeCourante = new Date().getFullYear()
@@ -94,18 +95,15 @@ onMounted(charger)
 
 <template>
   <div class="ca-page">
-    <header class="ca-head">
-      <div>
-        <h1>Chiffre d'affaires</h1>
-        <p class="sub">Valorisation de la production conditionnée (boîtes × PCSU).</p>
-      </div>
+    <PageHeader title="Chiffre d'affaires" tone="amber"
+      subtitle="Valorisation de la production conditionnée (boîtes × PCSU).">
       <label class="annee">Année
         <select v-model="annee">
           <option value="">Toutes</option>
           <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
         </select>
       </label>
-    </header>
+    </PageHeader>
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
 
