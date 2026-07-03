@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch, inject } from 'vue'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
 
@@ -94,11 +95,8 @@ watch(annee, chargerPlan)
 
 <template>
   <div class="pdp-page">
-    <header class="pdp-head">
-      <div>
-        <h1>Plan directeur de production</h1>
-        <p class="sub">Plan de fabrication par produit et par mois (quantités en unités / boîtes).</p>
-      </div>
+    <PageHeader title="Plan directeur de production" tone="indigo"
+      subtitle="Plan de fabrication par produit et par mois (quantités en unités / boîtes).">
       <div class="controls">
         <label class="annee">Année
           <select v-model.number="annee">
@@ -109,7 +107,7 @@ watch(annee, chargerPlan)
           {{ enCours ? 'Enregistrement…' : 'Enregistrer le plan' }}
         </button>
       </div>
-    </header>
+    </PageHeader>
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="message" class="ok">{{ message }}</p>
