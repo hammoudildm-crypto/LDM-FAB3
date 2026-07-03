@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, inject, onMounted } from 'vue'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
 
 const ROLES = [
   { v: 'admin', l: 'Admin' },
@@ -50,10 +51,8 @@ onMounted(charger)
 
 <template>
   <div class="hb-page">
-    <header class="hb-head">
-      <h1>Habilitations</h1>
-      <p class="sub">Gestion des comptes et des accès de l'équipe.</p>
-    </header>
+    <PageHeader title="Habilitations" tone="rose"
+      subtitle="Gestion des comptes et des accès de l'équipe." />
 
     <div v-if="!estAdmin" class="empty-card">
       🔒 Accès réservé aux administrateurs. Ton rôle actuel ne permet pas de gérer les habilitations.
