@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
 import { ICONS, TINTS } from '../icons.js'
 
 const lots = ref([])
@@ -92,16 +93,13 @@ onMounted(charger)
 
 <template>
   <div class="ec-page">
-    <header class="ec-head">
-      <div>
-        <h1>En-cours de fabrication</h1>
-        <p class="sub">Stock de vrac entre fabrication et conditionnement, par lot.</p>
-      </div>
+    <PageHeader title="En-cours de fabrication" tone="blue"
+      subtitle="Stock de vrac entre fabrication et conditionnement, par lot.">
       <label class="toggle">
         <input type="checkbox" v-model="masquerSoldes" />
         Masquer les lots soldés (en-cours = 0)
       </label>
-    </header>
+    </PageHeader>
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
 
