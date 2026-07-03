@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, inject } from 'vue'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
 import { ICONS, TINTS } from '../icons.js'
 
 const peutEditer = inject('peutEditer', ref(false))
@@ -165,18 +166,15 @@ async function devalider(l) {
 
 <template>
   <div class="vd-page">
-    <div class="vd-head">
-      <div>
-        <h1>Vérification des dossiers de lot</h1>
-        <p class="sub">Suivi de la vérification des DDL de fabrication par superviseur</p>
-      </div>
+    <PageHeader title="Vérification des dossiers de lot" tone="violet"
+      subtitle="Suivi de la vérification des DDL de fabrication par superviseur">
       <label class="annee-sel">Année
         <select v-model.number="anneeSel">
           <option :value="0">Toutes</option>
           <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
         </select>
       </label>
-    </div>
+    </PageHeader>
 
     <p v-if="msg" class="alert">{{ msg }}</p>
 
