@@ -8,6 +8,8 @@ const equipements = ref([])
 const ateliers = ref([])
 const ofs = ref([])
 const conds = ref([])
+const suivi = ref([])
+const ongletDispo = ref('file')
 const erreur = ref('')
 const chargement = ref(true)
 const recherche = ref('')
@@ -69,7 +71,7 @@ async function charger() {
   equipements.value = re.data || []
 
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, quantite_theorique, date_lancement, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme)')
+    .select('id, numero_lot, statut, quantite_theorique, date_lancement, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
@@ -78,6 +80,11 @@ async function charger() {
     .select('ordre_id').eq('actif', true))
   if (rc.error) { erreur.value = rc.error.message; chargement.value = false; return }
   conds.value = rc.data || []
+
+  const rs = await fetchAllPaged(() => supabase.from('suivi_phases')
+    .select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
+  if (rs.error) { erreur.value = rs.error.message; chargement.value = false; return }
+  suivi.value = rs.data || []
 
   chargement.value = false
 }
@@ -114,6 +121,96 @@ const ordresConditionnes = computed(() => {
   for (const c of conds.value) s.add(c.ordre_id)
   return s
 })
+
+// ============ FILE D'ATTENTE PAR ATELIER (temps réel) ============
+const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage: 'Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage Gélules', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
+const NOM_KEY = {}
+for (const [k, v] of Object.entries(PHASE_NOM)) NOM_KEY[v.toLowerCase()] = k
+const CANON_FAB = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+
+// Statut de chaque phase par lot (depuis suivi_phases)
+const phasesLot = computed(() => {
+  const m = {}
+  for (const sp of suivi.value) {
+    const id = sp.ordre_id, nom = (sp.phase || '').toLowerCase()
+    if (!m[id]) m[id] = {}
+    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut || null }
+    const cur = m[id][nom]
+    if (!cur || sp.statut === 'Terminé') m[id][nom] = rec
+  }
+  return m
+})
+
+// File par phase : lots à l'étape courante (en attente = étape précédente finie ; en cours = démarrée)
+const queuePhase = computed(() => {
+  const q = {}
+  for (const ph of PHASES) q[ph.key] = { attente: [], cours: [] }
+  const cond = ordresConditionnes.value
+  for (const o of ofs.value) {
+    if (!o.date_lancement || cond.has(o.id)) continue
+    if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
+    const pl = phasesLot.value[o.id] || {}
+    const stat = (nom) => (pl[(nom || '').toLowerCase()] || {}).statut
+    const gamme = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB
+    const p = o.produits || {}
+    const base = { id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0) }
+    if (!o.date_fin_fabrication) {
+      let courante = null, prevNom = null
+      for (let i = 0; i < gamme.length; i++) { if (stat(gamme[i]) !== 'Terminé') { courante = gamme[i]; prevNom = i > 0 ? gamme[i - 1] : null; break } }
+      if (!courante) { q.conditionnement.attente.push({ ...base, date: o.date_fin_fabrication || o.date_lancement }); continue }
+      const k = NOM_KEY[courante.toLowerCase()]
+      if (!k || !q[k]) continue
+      if (stat(courante) === 'En cours') {
+        const r = pl[courante.toLowerCase()]
+        q[k].cours.push({ ...base, date: (r && r.date) || o.date_lancement })
+      } else {
+        const r = prevNom ? pl[prevNom.toLowerCase()] : null
+        q[k].attente.push({ ...base, date: (r && r.date) || o.date_lancement })
+      }
+    } else {
+      q.conditionnement.attente.push({ ...base, date: o.date_fin_fabrication })
+    }
+  }
+  const byDate = (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
+  for (const k in q) { q[k].attente.sort(byDate); q[k].cours.sort(byDate) }
+  return q
+})
+
+// Phases couvertes par chaque atelier (via ses équipements)
+const phasesParAtelier = computed(() => {
+  const m = {}
+  for (const e of equipements.value) { const k = phaseDeType(e.type); if (!k) continue; (m[e.atelier_id] = m[e.atelier_id] || new Set()).add(k) }
+  return m
+})
+
+// Vue file : ateliers -> phases -> {attente, cours}, filtrée par recherche
+const vueFile = computed(() => {
+  const q = queuePhase.value
+  const rq = recherche.value.trim().toLowerCase()
+  const mL = (l) => !rq || (l.lot || '').toLowerCase().includes(rq) || (l.code || '').toLowerCase().includes(rq) || (l.desig || '').toLowerCase().includes(rq)
+  return ateliers.value.map(a => {
+    const keys = phasesParAtelier.value[a.id] ? [...phasesParAtelier.value[a.id]] : []
+    const phases = keys.map(k => {
+      const ph = PHASES.find(p => p.key === k)
+      const attente = (q[k] ? q[k].attente : []).filter(mL)
+      const cours = (q[k] ? q[k].cours : []).filter(mL)
+      return { phase: ph, attente, cours, volAttente: attente.reduce((s, l) => s + l.boites, 0), volCours: cours.reduce((s, l) => s + l.boites, 0) }
+    }).filter(x => x.phase).sort((x, y) => x.phase.ordre - y.phase.ordre)
+    const minOrdre = phases.reduce((m, x) => Math.min(m, x.phase.ordre), 99)
+    return { ...a, phases, minOrdre, totAttente: phases.reduce((s, x) => s + x.attente.length, 0), totCours: phases.reduce((s, x) => s + x.cours.length, 0) }
+  }).filter(a => a.phases.length > 0).sort((a, b) => a.minOrdre - b.minOrdre)
+})
+
+const kpisFile = computed(() => {
+  let att = 0, cours = 0, secs = 0
+  for (const a of vueFile.value) { att += a.totAttente; cours += a.totCours; for (const ph of a.phases) if (ph.attente.length === 0 && ph.cours.length === 0) secs++ }
+  return [
+    { v: fmt(att), l: 'Lots en attente', tint: TINTS.amber, ic: ICONS.hourglass },
+    { v: fmt(cours), l: 'Lots en cours', tint: TINTS.blue, ic: ICONS.activity },
+    { v: fmt(secs), l: 'Files à sec (risque)', tint: TINTS.rose, ic: ICONS.alert },
+  ]
+})
+function joursDepuis(d) { if (!d) return '—'; const j = Math.floor((Date.now() - new Date(d)) / 86400000); return j <= 0 ? 'auj.' : j + ' j' }
 
 // Pour chaque phase : { code_pf -> { code, desig, lots, boites } }
 const produitsParPhase = computed(() => {
@@ -202,8 +299,8 @@ onMounted(async () => {
 
 <template>
   <div class="de-page">
-    <PageHeader title="Disponibilité des produits par équipement" tone="cyan"
-      subtitle="Pour chaque équipement (selon sa phase), les produits qui y sont fabriqués — nombre de lots et volumes.">
+    <PageHeader title="Disponibilité des produits par atelier" tone="cyan"
+      subtitle="File d'attente en temps réel par atelier (pour prioriser et éviter les ruptures) et vue des produits fabriqués par équipement.">
       <label class="annee-sel">Année de fabrication
         <select v-model.number="anneeSel">
           <option :value="0">Toutes années</option>
@@ -223,6 +320,77 @@ onMounted(async () => {
         </template>
       </div>
 
+      <!-- Onglets -->
+      <div class="de-tabs">
+        <button :class="{ on: ongletDispo === 'file' }" @click="ongletDispo = 'file'">File d'attente par atelier</button>
+        <button :class="{ on: ongletDispo === 'retro' }" @click="ongletDispo = 'retro'">Fabriqués par équipement</button>
+      </div>
+
+      <!-- ===================== FILE D'ATTENTE ===================== -->
+      <div v-show="ongletDispo === 'file'">
+        <div class="kpi-grid k3">
+          <div class="kpi" v-for="(k, i) in kpisFile" :key="i">
+            <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val">{{ k.v }}</div></div>
+            <div class="kpi-lbl">{{ k.l }}</div>
+          </div>
+        </div>
+        <div class="searchbar">
+          <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
+        </div>
+        <p class="note">
+          Chaque lot apparaît dans l'atelier de son <strong>étape courante</strong> : « en cours » s'il y est démarré, « en attente » si l'étape précédente est terminée.
+          Une file <strong>vide</strong> = atelier à sec (risque de rupture). Les lots les plus anciens sont en haut.
+        </p>
+        <p v-if="vueFile.length === 0" class="muted">Aucun lot en production actuellement (un lot apparaît dès qu'il est lancé et suivi phase par phase).</p>
+
+        <section v-for="a in vueFile" :key="a.id" class="atelier">
+          <h2 class="atelier-titre">{{ a.code }} — {{ a.nom }}
+            <span class="at-sum">{{ a.totAttente }} en attente · {{ a.totCours }} en cours</span>
+          </h2>
+          <div class="eq-grid">
+            <div v-for="ph in a.phases" :key="ph.phase.key" class="card phase-card" :class="{ rupture: !ph.attente.length && !ph.cours.length }">
+              <div class="eq-head">
+                <div class="eq-ident">
+                  <span class="eq-ic" :style="ph.phase.tint"><svg viewBox="0 0 24 24" v-html="ph.phase.ic"></svg></span>
+                  <div><div class="eq-code">{{ ph.phase.label }}</div><div class="eq-nom">File de l'atelier</div></div>
+                </div>
+                <span v-if="!ph.attente.length && !ph.cours.length" class="phase-badge rupt-badge">À sec ⚠</span>
+              </div>
+
+              <div class="q-block">
+                <div class="q-title cours">En cours — {{ ph.cours.length }} lot(s) · {{ fmtC(ph.volCours) }} bts</div>
+                <div v-if="ph.cours.length" class="prod-scroll">
+                  <table class="grid"><tbody>
+                    <tr v-for="l in ph.cours" :key="l.id">
+                      <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span></td>
+                      <td class="num">{{ fmt(l.boites) }}</td>
+                      <td class="num age">{{ joursDepuis(l.date) }}</td>
+                    </tr>
+                  </tbody></table>
+                </div>
+                <p v-else class="empty">Aucun lot en cours.</p>
+              </div>
+
+              <div class="q-block">
+                <div class="q-title attente">En attente — {{ ph.attente.length }} lot(s) · {{ fmtC(ph.volAttente) }} bts</div>
+                <div v-if="ph.attente.length" class="prod-scroll">
+                  <table class="grid"><tbody>
+                    <tr v-for="l in ph.attente" :key="l.id">
+                      <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span></td>
+                      <td class="num">{{ fmt(l.boites) }}</td>
+                      <td class="num age">{{ joursDepuis(l.date) }}</td>
+                    </tr>
+                  </tbody></table>
+                </div>
+                <p v-else class="empty">Rien en attente.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ===================== RÉTROSPECTIVE ===================== -->
+      <div v-show="ongletDispo === 'retro'">
       <div class="kpi-grid k3">
         <div class="kpi" v-for="(k, i) in kpis" :key="i">
           <div class="kpi-top">
@@ -290,6 +458,7 @@ onMounted(async () => {
           </div>
         </div>
       </section>
+      </div>
     </template>
   </div>
 </template>
@@ -324,6 +493,21 @@ onMounted(async () => {
 
 .atelier { margin-bottom: 26px; }
 .atelier-titre { font-size: 16px; margin: 0 0 12px; color: #0f172a; border-left: 3px solid #0f766e; padding-left: 10px; }
+.at-sum { font-size: 12px; font-weight: 500; color: #64748b; margin-left: 10px; }
+/* Onglets */
+.de-tabs { display: flex; gap: 4px; background: #fff; border: 1px solid #e9edf2; border-radius: 12px; padding: 5px; margin: 0 0 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); width: fit-content; }
+.de-tabs button { background: none; border: 0; padding: 9px 16px; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer; border-radius: 8px; font-family: inherit; transition: color .15s ease, background .15s ease; }
+.de-tabs button:hover { color: #0891b2; }
+.de-tabs button.on { color: #0891b2; background: #ecfeff; }
+/* Cartes de file */
+.phase-card { display: flex; flex-direction: column; gap: 10px; }
+.phase-card.rupture { border-color: #fecdd3; background: #fff5f6; }
+.rupt-badge { background: #fee2e2; color: #b91c1c; }
+.q-block { border-top: 1px solid #f1f5f9; padding-top: 8px; }
+.q-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
+.q-title.cours { color: #2563eb; }
+.q-title.attente { color: #b45309; }
+.age { color: #64748b; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .eq-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .eq-card { display: flex; flex-direction: column; }
