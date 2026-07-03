@@ -367,6 +367,7 @@ onMounted(async () => {
         </p>
         <p v-if="vueFile.length === 0" class="muted">Aucun lot en production actuellement (un lot apparaît dès qu'il est lancé et suivi phase par phase).</p>
 
+        <div class="file-board">
         <section v-for="a in vueFile" :key="a.id" class="atelier">
           <h2 class="atelier-titre">{{ a.code }} — {{ a.nom }}
             <span class="at-sum">{{ a.totAttente }} en attente · {{ a.totCours }} en cours</span>
@@ -411,6 +412,7 @@ onMounted(async () => {
             </div>
           </div>
         </section>
+        </div>
       </div>
 
       <!-- ===================== RÉTROSPECTIVE ===================== -->
@@ -518,6 +520,10 @@ onMounted(async () => {
 .atelier { margin-bottom: 26px; }
 .atelier-titre { font-size: 16px; margin: 0 0 12px; color: #0f172a; border-left: 3px solid #0f766e; padding-left: 10px; }
 .at-sum { font-size: 12px; font-weight: 500; color: #64748b; margin-left: 10px; }
+/* File d'attente en colonnes (façon Kanban) */
+.file-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(285px, 1fr)); gap: 16px; align-items: start; }
+.file-board .atelier { margin-bottom: 0; }
+.file-board .eq-grid { grid-template-columns: 1fr; }
 /* Onglets */
 .de-tabs { display: flex; gap: 4px; background: #fff; border: 1px solid #e9edf2; border-radius: 12px; padding: 5px; margin: 0 0 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); width: fit-content; }
 .de-tabs button { background: none; border: 0; padding: 9px 16px; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer; border-radius: 8px; font-family: inherit; transition: color .15s ease, background .15s ease; }
