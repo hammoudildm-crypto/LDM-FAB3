@@ -436,14 +436,28 @@ onMounted(async () => {
       <div class="tab-content">
       <!-- ====================== PRODUCTION ====================== -->
       <div v-show="ongletActif === 'production'">
-        <div class="kpi-grid">
-          <div class="kpi" v-for="(k, i) in kpisProd" :key="i">
-            <div class="kpi-top">
-              <span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span>
-              <span class="kpi-val">{{ k.v }}</span>
-            </div>
-            <div class="kpi-lbl">{{ k.l }}</div>
-          </div>
+        <!-- Deux structures : Fabrication réalisée & Conditionnement réalisé -->
+        <h3 class="struct-h"><span class="struct-b fab">Fabrication réalisée</span><span class="struct-d">boîtes fabriquées · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k4">
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><span class="kpi-val accent">{{ fmt(fabRealisee) }}</span></div><div class="kpi-lbl">Fabrication réalisée (bts)</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.cyan"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><span class="kpi-val">{{ fmtPct(pctPlanFab) }}</span></div><div class="kpi-lbl">% du plan</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.violet"><svg viewBox="0 0 24 24" v-html="ICONS.layers"></svg></span><span class="kpi-val">{{ fmt(boitesRestantesFab) }}</span></div><div class="kpi-lbl">Reste / plan</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.orange"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span><span class="kpi-val">{{ fmt(vracEnAttente) }}</span></div><div class="kpi-lbl">Vrac en attente (bts)</div></div>
+        </div>
+        <h3 class="struct-h"><span class="struct-b cond">Conditionnement réalisé</span><span class="struct-d">boîtes conditionnées · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k4">
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val accent">{{ fmt(totalBoites) }}</span></div><div class="kpi-lbl">Conditionnement réalisé (bts)</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><span class="kpi-val">{{ fmtPct(pctPlanRealise) }}</span></div><div class="kpi-lbl">% du plan</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.rose"><svg viewBox="0 0 24 24" v-html="ICONS.layers"></svg></span><span class="kpi-val">{{ fmt(boitesRestantes) }}</span></div><div class="kpi-lbl">Reste / plan</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.calendar"></svg></span><span class="kpi-val">{{ fmt(boitesCeMois) }}</span></div><div class="kpi-lbl">Conditionnées ce mois</div></div>
+        </div>
+
+        <!-- Indicateurs généraux -->
+        <div class="kpi-grid k4">
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.pill"></svg></span><span class="kpi-val">{{ fmt(nbProduits) }}</span></div><div class="kpi-lbl">Produits actifs</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val">{{ fmt(nbLots) }}</span></div><div class="kpi-lbl">Lots</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><span class="kpi-val">{{ fmt(lotsEnCours) }}</span></div><div class="kpi-lbl">Lots en cours</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val">{{ fmt(planTotal) }}</span></div><div class="kpi-lbl">Plan {{ anneeSel }} (boîtes)</div></div>
         </div>
 
         <div class="cols">
