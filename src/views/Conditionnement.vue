@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
 
@@ -211,10 +212,8 @@ onMounted(async () => {
 
 <template>
   <div class="cd-page">
-    <header class="cd-head">
-      <h1>Conditionnement</h1>
-      <p class="sub">Mise en boîte des lots — quantité reçue (kg) et nombre de boîtes.</p>
-    </header>
+    <PageHeader title="Conditionnement" tone="blue"
+      subtitle="Mise en boîte des lots — quantité reçue (kg) et nombre de boîtes." />
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="message" class="ok">{{ message }}</p>
