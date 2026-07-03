@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, inject } from 'vue'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
 import { ICONS, TINTS } from '../icons.js'
 
 const peutEditer = inject('peutEditer', ref(true))
@@ -108,10 +109,8 @@ onMounted(chargerTout)
 
 <template>
   <div class="ef-page">
-    <header class="ef-head">
-      <h1>Effectifs</h1>
-      <p class="sub">Suivi des effectifs par atelier, par mois et par équipe.</p>
-    </header>
+    <PageHeader title="Effectifs" tone="teal"
+      subtitle="Suivi des effectifs par atelier, par mois et par équipe." />
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="message" class="ok">{{ message }}</p>
