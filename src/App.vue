@@ -79,7 +79,7 @@ async function signOut() {
 
 <template>
   <header class="topbar">
-    <div class="brand">LDM-FAB3</div>
+    <div class="brand"><span class="brand-mark" aria-hidden="true">L</span><span class="brand-wm">LDM<span class="brand-sub">FAB3</span></span></div>
 
     <nav class="nav" ref="navRef">
       <RouterLink to="/" class="navlink">Tableau de bord</RouterLink>
@@ -167,11 +167,15 @@ html[data-theme="ocean"]   { --bg: #eef4f9; --topbar: #0c4a6e; --topbar-muted: #
 html[data-theme="ardoise"] { --bg: #eceff4; --topbar: #1e293b; --topbar-muted: #cbd5e1; --topbar-border: #475569; --accent-bright: #94a3b8; }
 html[data-theme="sombre"]  { --bg: #0f172a; --text: #e6edf6; --topbar: #020617; --topbar-text: #f1f5f9; --topbar-muted: #94a3b8; --topbar-border: #334155; --accent-bright: #2dd4bf; color-scheme: dark; }
 
-body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: var(--bg); color: var(--text); }
+body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; margin: 0; background: var(--bg); color: var(--text); letter-spacing: -0.006em; }
 
-.topbar { display: flex; align-items: center; gap: 22px; padding: 0 20px; height: 56px;
-  background: var(--topbar); color: var(--topbar-text); box-shadow: 0 1px 3px rgba(0,0,0,.12); position: sticky; top: 0; z-index: 30; }
-.brand { font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
+.topbar { display: flex; align-items: center; gap: 22px; padding: 0 22px; height: 58px;
+  background: var(--topbar); color: var(--topbar-text); box-shadow: 0 2px 14px rgba(0,0,0,.14); position: sticky; top: 0; z-index: 30; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
+.brand-mark { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-size: 15px; font-weight: 800;
+  color: #06241f; background: linear-gradient(140deg, var(--accent-bright), #14b8a6); box-shadow: 0 2px 7px rgba(20,184,166,.4); }
+.brand-wm { font-size: 15px; font-weight: 800; letter-spacing: .05em; }
+.brand-sub { color: var(--accent-bright); margin-left: 3px; font-weight: 700; }
 .nav { display: flex; gap: 20px; align-items: center; }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
 
@@ -272,9 +276,10 @@ html[data-theme="sombre"] .lot-info { border-top-color: #1f2940 !important; }
 .zoom-val:hover { background: rgba(255,255,255,0.14); color: #fff; }
 
 /* ===== Mode compact — densité maximale (s'applique à toutes les pages) ===== */
-.card { padding: 12px 15px !important; margin-bottom: 12px !important; }
-.kpi { padding: 11px 14px !important; }
-.kpi-val { font-size: 18px !important; line-height: 1.15 !important; white-space: nowrap !important; }
+.card { padding: 13px 16px !important; margin-bottom: 12px !important; border-radius: 14px !important; box-shadow: 0 1px 2px rgba(16,24,40,.04), 0 8px 20px -12px rgba(16,24,40,.18) !important; }
+.kpi { padding: 11px 14px !important; border-radius: 13px !important; transition: box-shadow .18s ease; }
+.kpi:hover { box-shadow: 0 1px 2px rgba(16,24,40,.04), 0 10px 22px -10px rgba(16,24,40,.22) !important; }
+.kpi-val { font-size: 18px !important; line-height: 1.15 !important; white-space: nowrap !important; font-variant-numeric: tabular-nums; }
 .kpi-grid { gap: 9px !important; }
 .grid th, .grid td { padding: 5px 8px !important; }
 .grid th { font-size: 11px !important; }
@@ -288,4 +293,12 @@ h2 { font-size: 17px !important; }
 .kpi-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .kpi-ic { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .kpi-ic svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ===== Modernisation : transitions & focus visibles ===== */
+.navlink { transition: color .15s ease, border-color .15s ease; }
+.drop-panel a, .theme-item, .btn, .signout, .zoom-btn, .zoom-val { transition: background .15s ease, color .15s ease, border-color .15s ease; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent-bright); outline-offset: 2px; border-radius: 5px;
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
