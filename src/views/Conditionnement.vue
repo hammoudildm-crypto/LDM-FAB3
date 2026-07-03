@@ -206,7 +206,19 @@ const route = useRoute()
 onMounted(async () => {
   await chargerTout()
   const q = route.query.lot
-  if (q) { rechercheLot.value = String(q); showList.value = true }
+  if (q != null && q !== '') {
+    const o = lots.value.find(l => String(l.id) === String(q)) || lots.value.find(l => String(l.numero_lot) === String(q))
+    if (o) {
+      // Pré-remplir le formulaire « Nouveau conditionnement » pour ce lot
+      form.id = null
+      form.ordre_id = o.id
+      if (!form.date_conditionnement) form.date_conditionnement = new Date().toISOString().slice(0, 10)
+      rechercheLot.value = String(o.numero_lot || q)
+      showList.value = true
+    } else {
+      rechercheLot.value = String(q); showList.value = true
+    }
+  }
 })
 </script>
 
