@@ -315,6 +315,19 @@ const prodParMois = computed(() => {
 })
 const maxMois = computed(() => Math.max(1, ...prodParMois.value))
 
+// --- Fabrication par mois (boîtes fabriquées, par date de fin de fabrication) ---
+const fabParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const l of lotsAnnee.value) {
+    if (!l.date_fin_fabrication || !l.boites_fabriquees) continue
+    const d = new Date(l.date_fin_fabrication)
+    if (d.getFullYear() !== anneeSel.value) continue
+    a[d.getMonth()] += Number(l.boites_fabriquees || 0)
+  }
+  return a
+})
+const maxFabMois = computed(() => Math.max(1, ...fabParMois.value))
+
 // --- Top produits / donneurs / réalisation (année) — source : conditionnement ---
 const topProduits = computed(() => {
   const m = {}
@@ -462,6 +475,16 @@ onMounted(async () => {
 
         <div class="cols">
           <section class="card">
+            <h2 class="card-title">Fabrication {{ anneeSel }} par mois (boîtes)</h2>
+            <div v-for="(v, i) in fabParMois" :key="i" class="bar-row">
+              <span class="bar-lbl mois">{{ MOIS[i] }}</span>
+              <div class="bar-track"><div class="bar-fill" :style="{ width: (v / maxFabMois * 100) + '%', background: '#0f766e' }"></div></div>
+              <span class="bar-num wide">{{ fmt(v) }}</span>
+            </div>
+            <p v-if="!fabRealisee" class="empty">Aucune fabrication en {{ anneeSel }}.</p>
+          </section>
+
+          <section class="card">
             <h2 class="card-title">Conditionnement {{ anneeSel }} par mois (boîtes)</h2>
             <div v-for="(v, i) in prodParMois" :key="i" class="bar-row">
               <span class="bar-lbl mois">{{ MOIS[i] }}</span>
@@ -470,23 +493,24 @@ onMounted(async () => {
             </div>
             <p v-if="!totalBoites" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
           </section>
+        </div>
 
-          <section class="card">
-            <h2 class="card-title">Réalisation du plan — top produits</h2>
-            <div v-for="p in realisationPlan" :key="p.code" class="prog-row">
-              <div class="prog-head">
-                <span class="prog-nom">{{ p.nom }}</span>
-                <span v-if="p.horsPlan" class="hors-plan">Hors plan</span>
-                <span v-else class="prog-pct">{{ fmtPct(p.pct) }}</span>
-              </div>
-              <div class="bar-track"><div class="bar-fill" :class="p.horsPlan ? 'hp' : ((p.pct != null && p.pct >= 100) ? 'st-lib' : 'prod')" :style="{ width: (p.horsPlan ? 100 : Math.min(100, p.pct || 0)) + '%' }"></div></div>
-              <div class="prog-sub">
-                <template v-if="p.horsPlan">{{ fmt(p.produit) }} boîtes · non planifié</template>
-                <template v-else>{{ fmt(p.produit) }} / {{ fmt(p.cible) }} boîtes</template>
-              </div>
+        <section class="card">
+          <h2 class="card-title">Réalisation du plan — top produits</h2>
+          <div v-for="p in realisationPlan" :key="p.code" class="prog-row">
+            <div class="prog-head">
+              <span class="prog-nom">{{ p.nom }}</span>
+              <span v-if="p.horsPlan" class="hors-plan">Hors plan</span>
+              <span v-else class="prog-pct">{{ fmtPct(p.pct) }}</span>
             </div>
-            <p v-if="!realisationPlan.length" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
-          </section>
+            <div class="bar-track"><div class="bar-fill" :class="p.horsPlan ? 'hp' : ((p.pct != null && p.pct >= 100) ? 'st-lib' : 'prod')" :style="{ width: (p.horsPlan ? 100 : Math.min(100, p.pct || 0)) + '%' }"></div></div>
+            <div class="prog-sub">
+              <template v-if="p.horsPlan">{{ fmt(p.produit) }} boîtes · non planifié</template>
+              <template v-else>{{ fmt(p.produit) }} / {{ fmt(p.cible) }} boîtes</template>
+            </div>
+          </div>
+          <p v-if="!realisationPlan.length" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
+        </section>
 
           <section class="card span2">
             <h2 class="card-title">Derniers lots</h2>
@@ -502,7 +526,6 @@ onMounted(async () => {
               </tbody>
             </table>
           </section>
-        </div>
       </div>
 
       <!-- ====================== QUALITÉ ====================== -->
