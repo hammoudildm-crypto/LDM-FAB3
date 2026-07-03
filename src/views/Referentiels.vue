@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
 
@@ -197,10 +198,8 @@ onMounted(async () => {
 
 <template>
   <div class="ref-page">
-    <header class="ref-head">
-      <h1>Référentiels</h1>
-      <p class="sub">Données de base de LDM-FAB3 — tout le reste de l'application s'appuie dessus.</p>
-    </header>
+    <PageHeader title="Référentiels" tone="teal"
+      subtitle="Données de base de LDM-FAB3 — tout le reste de l'application s'appuie dessus." />
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
 
