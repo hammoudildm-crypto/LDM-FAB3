@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch, inject } from 'vue'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
 
@@ -187,10 +188,8 @@ watch(lotId, chargerPhases)
 
 <template>
   <div class="ph-page">
-    <header class="ph-head">
-      <h1>Suivi de fabrication</h1>
-      <p class="sub">Détail des phases d'un lot — quantités entrée / sortie et rendements.</p>
-    </header>
+    <PageHeader title="Suivi de fabrication" tone="blue"
+      subtitle="Détail des phases d'un lot — quantités entrée / sortie et rendements." />
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="message" class="ok">{{ message }}</p>
