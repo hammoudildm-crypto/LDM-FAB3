@@ -41,7 +41,7 @@ function phaseDeType(type) {
   if (/gélule|gelule|remplis|encapsul|capsul/.test(t)) return 'remplissage'
   if (/compress|presse|compri/.test(t)) return 'compression'
   if (/pellicul|enrob|coat|dragé|drage/.test(t)) return 'pelliculage'
-  if (/condition/.test(t)) return 'conditionnement'
+  if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)) return 'conditionnement'
   return null
 }
 
@@ -77,7 +77,7 @@ async function charger() {
   ofs.value = rof.data || []
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
-    .select('ordre_id').eq('actif', true))
+    .select('ordre_id, equipement_id').eq('actif', true))
   if (rc.error) { erreur.value = rc.error.message; chargement.value = false; return }
   conds.value = rc.data || []
 
@@ -121,6 +121,20 @@ const ordresConditionnes = computed(() => {
   for (const c of conds.value) s.add(c.ordre_id)
   return s
 })
+
+// Équipements utilisés dans le module conditionnement -> considérés atelier de conditionnement
+const condEquipIds = computed(() => {
+  const s = new Set()
+  for (const c of conds.value) if (c.equipement_id) s.add(c.equipement_id)
+  return s
+})
+// Phase d'un équipement : par son type, sinon 'conditionnement' s'il sert au conditionnement
+function phaseEquip(e) {
+  const k = phaseDeType(e.type)
+  if (k) return k
+  if (condEquipIds.value.has(e.id)) return 'conditionnement'
+  return null
+}
 
 // ============ FILE D'ATTENTE PAR ATELIER (temps réel) ============
 const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage: 'Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage Gélules', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
@@ -179,7 +193,7 @@ const queuePhase = computed(() => {
 // Phases couvertes par chaque atelier (via ses équipements)
 const phasesParAtelier = computed(() => {
   const m = {}
-  for (const e of equipements.value) { const k = phaseDeType(e.type); if (!k) continue; (m[e.atelier_id] = m[e.atelier_id] || new Set()).add(k) }
+  for (const e of equipements.value) { const k = phaseEquip(e); if (!k) continue; (m[e.atelier_id] = m[e.atelier_id] || new Set()).add(k) }
   return m
 })
 
@@ -188,7 +202,7 @@ const vueFile = computed(() => {
   const q = queuePhase.value
   const rq = recherche.value.trim().toLowerCase()
   const mL = (l) => !rq || (l.lot || '').toLowerCase().includes(rq) || (l.code || '').toLowerCase().includes(rq) || (l.desig || '').toLowerCase().includes(rq)
-  return ateliers.value.map(a => {
+  const res = ateliers.value.map(a => {
     const keys = phasesParAtelier.value[a.id] ? [...phasesParAtelier.value[a.id]] : []
     const phases = keys.map(k => {
       const ph = PHASES.find(p => p.key === k)
@@ -198,7 +212,17 @@ const vueFile = computed(() => {
     }).filter(x => x.phase).sort((x, y) => x.phase.ordre - y.phase.ordre)
     const minOrdre = phases.reduce((m, x) => Math.min(m, x.phase.ordre), 99)
     return { ...a, phases, minOrdre, totAttente: phases.reduce((s, x) => s + x.attente.length, 0), totCours: phases.reduce((s, x) => s + x.cours.length, 0) }
-  }).filter(a => a.phases.length > 0).sort((a, b) => a.minOrdre - b.minOrdre)
+  }).filter(a => a.phases.length > 0)
+  // Filet : si aucun atelier ne porte le conditionnement, l'ajouter en groupe synthétique
+  const qc = q.conditionnement
+  if (!res.some(a => a.phases.some(ph => ph.phase.key === 'conditionnement')) && qc && (qc.attente.length || qc.cours.length)) {
+    const attente = qc.attente.filter(mL), cours = qc.cours.filter(mL)
+    if (attente.length || cours.length) {
+      res.push({ id: '__cond__', code: 'CONDITIONNEMENT', nom: 'Mise en boîte', minOrdre: 8, totAttente: attente.length, totCours: cours.length,
+        phases: [{ phase: PHASES.find(p => p.key === 'conditionnement'), attente, cours, volAttente: attente.reduce((s, l) => s + l.boites, 0), volCours: cours.reduce((s, l) => s + l.boites, 0) }] })
+    }
+  }
+  return res.sort((a, b) => a.minOrdre - b.minOrdre)
 })
 
 const kpisFile = computed(() => {
@@ -250,7 +274,7 @@ const vue = computed(() => {
     const eqs = equipements.value
       .filter(e => e.atelier_id === a.id)
       .map(e => {
-        const ph = PHASES.find(x => x.key === phaseDeType(e.type)) || null
+        const ph = PHASES.find(x => x.key === phaseEquip(e)) || null
         let prods = ph ? Object.values(produitsParPhase.value[ph.key]).sort((x, y) => y.boites - x.boites) : []
         if (enCoursOnly.value) prods = prods.filter(p => produitsEnCours.value.has(p.code))
         return {
