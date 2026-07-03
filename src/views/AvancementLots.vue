@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
 import { ICONS, TINTS } from '../icons.js'
 
 // Gamme de fabrication (mêmes libellés que dans le suivi des phases)
@@ -182,12 +183,8 @@ onMounted(async () => {
 
 <template>
   <div class="av-page">
-    <header class="av-head">
-      <div>
-        <h1>Suivi du process — avancement des lots</h1>
-        <p class="sub">Où en est chaque lot dans la gamme, d'après les phases saisies (Pesée → … → Conditionnement).</p>
-      </div>
-    </header>
+    <PageHeader title="Suivi du process — avancement des lots" tone="blue"
+      subtitle="Où en est chaque lot dans la gamme, d'après les phases saisies (Pesée → … → Conditionnement)." />
 
     <p v-if="erreur" class="err">{{ erreur }}</p>
     <p v-if="chargement" class="muted">Chargement…</p>
