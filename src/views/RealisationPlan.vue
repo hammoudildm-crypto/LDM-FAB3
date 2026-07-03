@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 import { ICONS, TINTS } from '../icons.js'
+import PageHeader from '../components/PageHeader.vue'
 
 const anneeCourante = new Date().getFullYear()
 const ANNEES = []
@@ -180,17 +181,14 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 
 <template>
   <div class="rp-page">
-    <div class="rp-head">
-      <div>
-        <h1>Réalisation vs Plan</h1>
-        <p class="sub">Fabrication et conditionnement réalisés (boîtes) comparés au plan, et leur valorisation en CA.</p>
-      </div>
+    <PageHeader title="Réalisation vs Plan" tone="teal"
+      subtitle="Fabrication et conditionnement réalisés (boîtes) comparés au plan, et leur valorisation en CA.">
       <label class="annee-sel">Année
         <select v-model.number="anneeSel">
           <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
         </select>
       </label>
-    </div>
+    </PageHeader>
 
     <p v-if="msg" class="alert">{{ msg }}</p>
 
