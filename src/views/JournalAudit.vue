@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
 
 const TABLES = [
   { v: 'donneurs_ordre', l: "Donneurs d'ordre" },
@@ -92,10 +93,8 @@ watch([filtreTable, filtreAction], charger)
 
 <template>
   <div class="au-page">
-    <header class="au-head">
-      <h1>Journal d'audit</h1>
-      <p class="sub">Traçabilité des créations, modifications et suppressions — qui, quoi, quand (BPF / 21 CFR Part 11).</p>
-    </header>
+    <PageHeader title="Journal d'audit" tone="slate"
+      subtitle="Traçabilité des créations, modifications et suppressions — qui, quoi, quand (BPF / 21 CFR Part 11)." />
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
 
