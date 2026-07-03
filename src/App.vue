@@ -88,26 +88,31 @@ async function signOut() {
       <nav class="side-nav">
         <RouterLink to="/" class="side-link" @click="sidebarOpen = false">Tableau de bord</RouterLink>
         <template v-if="session">
-          <RouterLink to="/referentiels" class="side-link" @click="sidebarOpen = false">Référentiels</RouterLink>
-
-          <div class="side-group">Production</div>
-          <RouterLink to="/plan" class="side-link" @click="sidebarOpen = false">Plan directeur</RouterLink>
-          <RouterLink to="/ordres" class="side-link" @click="sidebarOpen = false">Ordres de fabrication</RouterLink>
-          <RouterLink to="/suivi" class="side-link" @click="sidebarOpen = false">Suivi fabrication</RouterLink>
-          <RouterLink to="/encours" class="side-link" @click="sidebarOpen = false">En-cours</RouterLink>
-          <RouterLink to="/conditionnement" class="side-link" @click="sidebarOpen = false">Conditionnement</RouterLink>
-          <RouterLink to="/dossier" class="side-link" @click="sidebarOpen = false">Dossier de lot</RouterLink>
-
-          <div class="side-group">Pilotage</div>
-          <RouterLink to="/ca" class="side-link" @click="sidebarOpen = false">Chiffre d'affaires</RouterLink>
+          <div class="side-group">Consultation</div>
           <RouterLink to="/realisation-plan" class="side-link" @click="sidebarOpen = false">Réalisation vs Plan</RouterLink>
           <RouterLink to="/rendement" class="side-link" @click="sidebarOpen = false">Rendement</RouterLink>
+          <RouterLink to="/ca" class="side-link" @click="sidebarOpen = false">Chiffre d'affaires</RouterLink>
           <RouterLink to="/dispo-equipements" class="side-link" @click="sidebarOpen = false">Disponibilité équipements</RouterLink>
           <RouterLink to="/avancement" class="side-link" @click="sidebarOpen = false">Suivi du process</RouterLink>
-          <RouterLink to="/effectifs" class="side-link" @click="sidebarOpen = false">Effectifs</RouterLink>
-          <RouterLink to="/verification-ddl" class="side-link" @click="sidebarOpen = false">Vérification DDL</RouterLink>
+          <RouterLink to="/encours" class="side-link" @click="sidebarOpen = false">En-cours</RouterLink>
+          <RouterLink to="/dossier" class="side-link" @click="sidebarOpen = false">Dossier de lot</RouterLink>
           <RouterLink to="/audit" class="side-link" @click="sidebarOpen = false">Journal d'audit</RouterLink>
-          <RouterLink v-if="estAdmin" to="/habilitations" class="side-link" @click="sidebarOpen = false">Habilitations</RouterLink>
+
+          <template v-if="peutEditer">
+            <div class="side-group">Production &amp; saisie</div>
+            <RouterLink to="/plan" class="side-link" @click="sidebarOpen = false">Plan directeur</RouterLink>
+            <RouterLink to="/ordres" class="side-link" @click="sidebarOpen = false">Ordres de fabrication</RouterLink>
+            <RouterLink to="/suivi" class="side-link" @click="sidebarOpen = false">Suivi fabrication</RouterLink>
+            <RouterLink to="/conditionnement" class="side-link" @click="sidebarOpen = false">Conditionnement</RouterLink>
+            <RouterLink to="/verification-ddl" class="side-link" @click="sidebarOpen = false">Vérification DDL</RouterLink>
+            <RouterLink to="/effectifs" class="side-link" @click="sidebarOpen = false">Effectifs</RouterLink>
+          </template>
+
+          <template v-if="estAdmin">
+            <div class="side-group">Administration</div>
+            <RouterLink to="/referentiels" class="side-link" @click="sidebarOpen = false">Référentiels</RouterLink>
+            <RouterLink to="/habilitations" class="side-link" @click="sidebarOpen = false">Habilitations</RouterLink>
+          </template>
         </template>
       </nav>
       <div class="side-foot">
