@@ -74,13 +74,13 @@ async function charger() {
   equipements.value = re.data || []
 
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, quantite_theorique, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme), equipements(code, nom)')
+    .select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite), equipements(code, nom)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
-    .select('ordre_id, equipement_id, statut').eq('actif', true))
+    .select('ordre_id, equipement_id, statut, quantite_conditionnee').eq('actif', true))
   if (rc.error) { erreur.value = rc.error.message; chargement.value = false; return }
   conds.value = rc.data || []
 
@@ -130,6 +130,30 @@ const condTermine = computed(() => {
   for (const c of conds.value) if (c.statut === 'Terminé' || c.statut === 'Libéré') s.add(c.ordre_id)
   return s
 })
+// Boîtes conditionnées cumulées par lot
+const condBoxParLot = computed(() => {
+  const upb = {}
+  for (const o of ofs.value) upb[o.id] = o.produits ? Number(o.produits.unites_par_boite || 0) : 0
+  const m = {}
+  for (const c of conds.value) {
+    const u = upb[c.ordre_id] || 0
+    if (u <= 0) continue
+    m[c.ordre_id] = (m[c.ordre_id] || 0) + Math.floor(Number(c.quantite_conditionnee || 0) / u)
+  }
+  return m
+})
+// Conditionnement complet : statut Terminé/Libéré OU quantité conditionnée >= 85 % du fabriqué
+// (couvre l'historique conditionné sans statut de clôture)
+const condComplet = computed(() => {
+  const s = new Set(condTermine.value)
+  const cb = condBoxParLot.value
+  for (const o of ofs.value) {
+    if (s.has(o.id)) continue
+    const avail = Number(o.boites_fabriquees || 0) || Number(o.quantite_theorique || 0)
+    if (avail > 0 && (cb[o.id] || 0) >= avail * 0.85) s.add(o.id)
+  }
+  return s
+})
 
 // Équipements utilisés dans le module conditionnement -> considérés atelier de conditionnement
 const condEquipIds = computed(() => {
@@ -168,7 +192,7 @@ const phasesLot = computed(() => {
 const queuePhase = computed(() => {
   const q = {}
   for (const ph of PHASES) q[ph.key] = { attente: [], cours: [] }
-  const condFini = condTermine.value
+  const condFini = condComplet.value
   const condAny = ordresConditionnes.value
   for (const o of ofs.value) {
     if (!o.date_lancement || condFini.has(o.id)) continue
@@ -226,7 +250,7 @@ const vueFile = computed(() => {
   }).filter(a => a.phases.length > 0).sort((a, b) => a.minOrdre - b.minOrdre)
 })
 
-// Planning CONDITIONNEMENT : lots à conditionner regroupés par LIGNE RÉSERVÉE (equipement_id de l'ordre)
+// Planning CONDITIONNEMENT : lots regroupés par LIGNE RÉSERVÉE (equipement_id de l'ordre)
 const vueCondLignes = computed(() => {
   const qc = queuePhase.value.conditionnement
   const rq = recherche.value.trim().toLowerCase()
@@ -256,9 +280,8 @@ const kpisFile = computed(() => {
   ]
 })
 function joursDepuis(d) { if (!d) return '—'; const j = Math.floor((Date.now() - new Date(d)) / 86400000); return j <= 0 ? 'auj.' : j + ' j' }
-function ouvrirLot(l, phaseKey) {
-  if (phaseKey === 'conditionnement') router.push({ path: '/conditionnement', query: { lot: l.id } })
-  else router.push({ path: '/suivi', query: { lot: l.id } })
+function ouvrirLot(l) {
+  router.push({ path: '/ordres', query: { edit: l.id } })
 }
 
 // Pour chaque phase : { code_pf -> { code, desig, lots, boites } }
@@ -411,7 +434,7 @@ onMounted(async () => {
                 <div class="q-title cours">En cours — {{ ph.cours.length }} lot(s) · {{ fmtC(ph.volCours) }} bts</div>
                 <div v-if="ph.cours.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Modifier l'étape / l'atelier de ce lot">
+                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir l'ordre de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span></td>
                       <td class="num">{{ fmt(l.boites) }}</td>
                       <td class="num age">{{ joursDepuis(l.date) }}</td>
@@ -425,7 +448,7 @@ onMounted(async () => {
                 <div class="q-title attente">En attente — {{ ph.attente.length }} lot(s) · {{ fmtC(ph.volAttente) }} bts</div>
                 <div v-if="ph.attente.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Modifier l'étape / l'atelier de ce lot">
+                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir l'ordre de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span></td>
                       <td class="num">{{ fmt(l.boites) }}</td>
                       <td class="num age">{{ joursDepuis(l.date) }}</td>
@@ -460,7 +483,7 @@ onMounted(async () => {
                   <div class="q-title cours">En cours — {{ g.cours.length }} lot(s) · {{ fmtC(g.volCours) }} bts</div>
                   <div v-if="g.cours.length" class="prod-scroll">
                     <table class="grid"><tbody>
-                      <tr v-for="l in g.cours" :key="l.id" class="lot-row" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir le conditionnement de ce lot">
+                      <tr v-for="l in g.cours" :key="l.id" class="lot-row" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir l'ordre de fabrication de ce lot">
                         <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span></td>
                         <td class="num">{{ fmt(l.boites) }}</td>
                         <td class="num age">{{ joursDepuis(l.date) }}</td>
