@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted, nextTick, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
 const STATUTS = ['Planifié', 'En cours', 'Terminé', 'Libéré', 'Rejeté']
@@ -228,10 +229,8 @@ onMounted(async () => {
 
 <template>
   <div class="of-page">
-    <header class="of-head">
-      <h1>Ordres de fabrication</h1>
-      <p class="sub">Création et suivi des lots de fabrication.</p>
-    </header>
+    <PageHeader title="Ordres de fabrication" tone="blue"
+      subtitle="Création et suivi des lots de fabrication." />
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="message" class="ok">{{ message }}</p>
