@@ -74,13 +74,13 @@ async function charger() {
   equipements.value = re.data || []
 
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, quantite_theorique, date_lancement, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme)')
+    .select('id, numero_lot, statut, quantite_theorique, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme), equipements(code, nom)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
-    .select('ordre_id, equipement_id').eq('actif', true))
+    .select('ordre_id, equipement_id, statut').eq('actif', true))
   if (rc.error) { erreur.value = rc.error.message; chargement.value = false; return }
   conds.value = rc.data || []
 
@@ -124,6 +124,12 @@ const ordresConditionnes = computed(() => {
   for (const c of conds.value) s.add(c.ordre_id)
   return s
 })
+// Lots dont le conditionnement est DÉFINITIF (au moins un enregistrement Terminé/Libéré)
+const condTermine = computed(() => {
+  const s = new Set()
+  for (const c of conds.value) if (c.statut === 'Terminé' || c.statut === 'Libéré') s.add(c.ordre_id)
+  return s
+})
 
 // Équipements utilisés dans le module conditionnement -> considérés atelier de conditionnement
 const condEquipIds = computed(() => {
@@ -162,19 +168,21 @@ const phasesLot = computed(() => {
 const queuePhase = computed(() => {
   const q = {}
   for (const ph of PHASES) q[ph.key] = { attente: [], cours: [] }
-  const cond = ordresConditionnes.value
+  const condFini = condTermine.value
+  const condAny = ordresConditionnes.value
   for (const o of ofs.value) {
-    if (!o.date_lancement || cond.has(o.id)) continue
+    if (!o.date_lancement || condFini.has(o.id)) continue
     if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
     const pl = phasesLot.value[o.id] || {}
     const stat = (nom) => (pl[(nom || '').toLowerCase()] || {}).statut
     const gamme = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB
     const p = o.produits || {}
-    const base = { id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0) }
+    const base = { id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0),
+      reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
     if (!o.date_fin_fabrication) {
       let courante = null, prevNom = null
       for (let i = 0; i < gamme.length; i++) { if (stat(gamme[i]) !== 'Terminé') { courante = gamme[i]; prevNom = i > 0 ? gamme[i - 1] : null; break } }
-      if (!courante) { q.conditionnement.attente.push({ ...base, date: o.date_fin_fabrication || o.date_lancement }); continue }
+      if (!courante) { (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_fin_fabrication || o.date_lancement }); continue }
       const k = NOM_KEY[courante.toLowerCase()]
       if (!k || !q[k]) continue
       if (stat(courante) === 'En cours') {
@@ -185,7 +193,7 @@ const queuePhase = computed(() => {
         q[k].attente.push({ ...base, date: (r && r.date) || o.date_lancement })
       }
     } else {
-      q.conditionnement.attente.push({ ...base, date: o.date_fin_fabrication })
+      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_fin_fabrication })
     }
   }
   const byDate = (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
@@ -200,14 +208,14 @@ const phasesParAtelier = computed(() => {
   return m
 })
 
-// Vue file : ateliers -> phases -> {attente, cours}, filtrée par recherche
+// Vue file FABRICATION : ateliers -> phases (hors conditionnement)
 const vueFile = computed(() => {
   const q = queuePhase.value
   const rq = recherche.value.trim().toLowerCase()
   const mL = (l) => !rq || (l.lot || '').toLowerCase().includes(rq) || (l.code || '').toLowerCase().includes(rq) || (l.desig || '').toLowerCase().includes(rq)
-  const res = ateliers.value.map(a => {
+  return ateliers.value.map(a => {
     const keys = phasesParAtelier.value[a.id] ? [...phasesParAtelier.value[a.id]] : []
-    const phases = keys.map(k => {
+    const phases = keys.filter(k => k !== 'conditionnement').map(k => {
       const ph = PHASES.find(p => p.key === k)
       const attente = (q[k] ? q[k].attente : []).filter(mL)
       const cours = (q[k] ? q[k].cours : []).filter(mL)
@@ -215,17 +223,27 @@ const vueFile = computed(() => {
     }).filter(x => x.phase).sort((x, y) => x.phase.ordre - y.phase.ordre)
     const minOrdre = phases.reduce((m, x) => Math.min(m, x.phase.ordre), 99)
     return { ...a, phases, minOrdre, totAttente: phases.reduce((s, x) => s + x.attente.length, 0), totCours: phases.reduce((s, x) => s + x.cours.length, 0) }
-  }).filter(a => a.phases.length > 0)
-  // Filet : si aucun atelier ne porte le conditionnement, l'ajouter en groupe synthétique
-  const qc = q.conditionnement
-  if (!res.some(a => a.phases.some(ph => ph.phase.key === 'conditionnement')) && qc && (qc.attente.length || qc.cours.length)) {
-    const attente = qc.attente.filter(mL), cours = qc.cours.filter(mL)
-    if (attente.length || cours.length) {
-      res.push({ id: '__cond__', code: 'CONDITIONNEMENT', nom: 'Mise en boîte', minOrdre: 8, totAttente: attente.length, totCours: cours.length,
-        phases: [{ phase: PHASES.find(p => p.key === 'conditionnement'), attente, cours, volAttente: attente.reduce((s, l) => s + l.boites, 0), volCours: cours.reduce((s, l) => s + l.boites, 0) }] })
-    }
+  }).filter(a => a.phases.length > 0).sort((a, b) => a.minOrdre - b.minOrdre)
+})
+
+// Planning CONDITIONNEMENT : lots à conditionner regroupés par LIGNE RÉSERVÉE (equipement_id de l'ordre)
+const vueCondLignes = computed(() => {
+  const qc = queuePhase.value.conditionnement
+  const rq = recherche.value.trim().toLowerCase()
+  const mL = (l) => !rq || (l.lot || '').toLowerCase().includes(rq) || (l.code || '').toLowerCase().includes(rq) || (l.desig || '').toLowerCase().includes(rq)
+  const groups = {}
+  const add = (l, type) => {
+    if (!mL(l)) return
+    const key = l.reserveId || '__none__'
+    if (!groups[key]) groups[key] = { id: key, label: l.reserveLabel || 'Non réservé', reserve: !!l.reserveId, attente: [], cours: [] }
+    groups[key][type].push(l)
   }
-  return res.sort((a, b) => a.minOrdre - b.minOrdre)
+  for (const l of qc.cours) add(l, 'cours')
+  for (const l of qc.attente) add(l, 'attente')
+  return Object.values(groups).map(g => ({ ...g,
+    volAttente: g.attente.reduce((s, l) => s + l.boites, 0), volCours: g.cours.reduce((s, l) => s + l.boites, 0),
+    tot: g.attente.length + g.cours.length }))
+    .sort((a, b) => (a.reserve === b.reserve ? b.tot - a.tot : (a.reserve ? -1 : 1)))
 })
 
 const kpisFile = computed(() => {
@@ -420,6 +438,54 @@ onMounted(async () => {
           </div>
         </section>
         </div>
+
+        <h3 class="cond-plan-h">Planning conditionnement — par ligne réservée</h3>
+        <p class="note">Chaque colonne = une <strong>ligne de conditionnement réservée</strong> (champ « Ligne / équipement » de l'ordre de fabrication). Les lots fabriqués non encore conditionnés y sont regroupés. « Non réservé » = lots sans ligne assignée.</p>
+        <p v-if="!vueCondLignes.length" class="muted">Aucun lot à conditionner pour le moment.</p>
+        <div class="file-board">
+          <section v-for="g in vueCondLignes" :key="g.id" class="atelier">
+            <h2 class="atelier-titre">{{ g.label }}
+              <span class="at-sum">{{ g.attente.length }} en attente · {{ g.cours.length }} en cours</span>
+            </h2>
+            <div class="eq-grid">
+              <div class="card phase-card" :class="{ rupture: !g.reserve }">
+                <div class="eq-head">
+                  <div class="eq-ident">
+                    <span class="eq-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span>
+                    <div><div class="eq-code">Conditionnement</div><div class="eq-nom">{{ g.reserve ? 'Ligne réservée' : 'Sans réservation' }}</div></div>
+                  </div>
+                  <span v-if="!g.reserve" class="phase-badge rupt-badge">à affecter</span>
+                </div>
+                <div class="q-block">
+                  <div class="q-title cours">En cours — {{ g.cours.length }} lot(s) · {{ fmtC(g.volCours) }} bts</div>
+                  <div v-if="g.cours.length" class="prod-scroll">
+                    <table class="grid"><tbody>
+                      <tr v-for="l in g.cours" :key="l.id" class="lot-row" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir le conditionnement de ce lot">
+                        <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span></td>
+                        <td class="num">{{ fmt(l.boites) }}</td>
+                        <td class="num age">{{ joursDepuis(l.date) }}</td>
+                      </tr>
+                    </tbody></table>
+                  </div>
+                  <p v-else class="empty">Aucun lot en cours.</p>
+                </div>
+                <div class="q-block">
+                  <div class="q-title attente">En attente — {{ g.attente.length }} lot(s) · {{ fmtC(g.volAttente) }} bts</div>
+                  <div v-if="g.attente.length" class="prod-scroll">
+                    <table class="grid"><tbody>
+                      <tr v-for="l in g.attente" :key="l.id" class="lot-row" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir le conditionnement de ce lot">
+                        <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span></td>
+                        <td class="num">{{ fmt(l.boites) }}</td>
+                        <td class="num age">{{ joursDepuis(l.date) }}</td>
+                      </tr>
+                    </tbody></table>
+                  </div>
+                  <p v-else class="empty">Rien en attente.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
 
       <!-- ===================== RÉTROSPECTIVE ===================== -->
@@ -529,6 +595,7 @@ onMounted(async () => {
 .at-sum { font-size: 12px; font-weight: 500; color: #64748b; margin-left: 10px; }
 /* File d'attente en colonnes (façon Kanban) */
 .file-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(285px, 1fr)); gap: 16px; align-items: start; }
+.cond-plan-h { font-size: 17px; font-weight: 700; margin: 26px 0 6px; color: #0f172a; }
 .file-board .atelier { margin-bottom: 0; }
 .file-board .eq-grid { grid-template-columns: 1fr; }
 .lot-row { cursor: pointer; }
