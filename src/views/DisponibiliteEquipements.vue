@@ -273,7 +273,7 @@ const vueCondLignes = computed(() => {
 
 const kpisFile = computed(() => {
   let att = 0, cours = 0, secs = 0
-  for (const a of vueFile.value) { att += a.totAttente; cours += a.totCours; for (const ph of a.phases) if (ph.attente.length === 0 && ph.cours.length === 0) secs++ }
+  for (const ph of vueFile.value) { att += ph.attente.length; cours += ph.cours.length; if (ph.attente.length === 0 && ph.cours.length === 0) secs++ }
   return [
     { v: fmt(att), l: 'Lots en attente', tint: TINTS.amber, ic: ICONS.hourglass },
     { v: fmt(cours), l: 'Lots en cours', tint: TINTS.blue, ic: ICONS.activity },
