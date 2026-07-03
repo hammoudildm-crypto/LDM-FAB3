@@ -74,7 +74,7 @@ async function charger() {
   equipements.value = re.data || []
 
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite), equipements(code, nom)')
+    .select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite), equipements(code, nom)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
@@ -239,7 +239,7 @@ const vueFile = computed(() => {
   const mL = (l) => !rq || (l.lot || '').toLowerCase().includes(rq) || (l.code || '').toLowerCase().includes(rq) || (l.desig || '').toLowerCase().includes(rq)
   return ateliers.value.map(a => {
     const keys = phasesParAtelier.value[a.id] ? [...phasesParAtelier.value[a.id]] : []
-    const phases = keys.filter(k => k !== 'conditionnement').map(k => {
+    const phases = keys.filter(k => k !== 'conditionnement' && k !== 'pesee').map(k => {
       const ph = PHASES.find(p => p.key === k)
       const attente = (q[k] ? q[k].attente : []).filter(mL)
       const cours = (q[k] ? q[k].cours : []).filter(mL)
@@ -279,6 +279,30 @@ const kpisFile = computed(() => {
     { v: fmt(secs), l: 'Files à sec (risque)', tint: TINTS.rose, ic: ICONS.alert },
   ]
 })
+// Lots planifiés EN ATTENTE DE PESÉE : réception OF faite, pesée pas encore terminée
+const attentePeseeList = computed(() => {
+  const rq = recherche.value.trim().toLowerCase()
+  const mL = (l) => !rq || (l.lot || '').toLowerCase().includes(rq) || (l.code || '').toLowerCase().includes(rq) || (l.desig || '').toLowerCase().includes(rq)
+  const cc = condComplet.value
+  const now = new Date()
+  const res = []
+  for (const o of ofs.value) {
+    if (!o.date_reception && !o.date_lancement) continue
+    if (o.date_fin_fabrication) continue
+    if (cc.has(o.id)) continue
+    if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
+    const pl = phasesLot.value[o.id] || {}
+    if ((pl['pesée'] || {}).statut === 'Terminé') continue // pesée effectuée -> le lot disparaît
+    const p = o.produits || {}
+    res.push({
+      id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '',
+      boites: Number(o.quantite_theorique || 0), date: o.date_reception || o.date_lancement,
+      validite: o.date_fin_validite || null, perime: o.date_fin_validite ? (new Date(o.date_fin_validite) < now) : false
+    })
+  }
+  return res.filter(mL).sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0))
+})
+
 function joursDepuis(d) { if (!d) return '—'; const j = Math.floor((Date.now() - new Date(d)) / 86400000); return j <= 0 ? 'auj.' : j + ' j' }
 function ouvrirLot(l, phaseKey) {
   if (phaseKey === 'conditionnement') router.push({ path: '/ordres', query: { edit: l.id } })
@@ -417,6 +441,34 @@ onMounted(async () => {
         <p v-if="vueFile.length === 0" class="muted">Aucun lot en production actuellement (un lot apparaît dès qu'il est lancé et suivi phase par phase).</p>
 
         <div class="file-board">
+        <section class="atelier">
+          <h2 class="atelier-titre">Réception OF
+            <span class="at-sum">{{ attentePeseeList.length }} en attente de pesée</span>
+          </h2>
+          <div class="eq-grid">
+            <div class="card phase-card" :class="{ rupture: !attentePeseeList.length }">
+              <div class="eq-head">
+                <div class="eq-ident">
+                  <span class="eq-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span>
+                  <div><div class="eq-code">En attente de pesée</div><div class="eq-nom">Reçus, avant pesée</div></div>
+                </div>
+              </div>
+              <div class="q-block">
+                <div class="q-title attente">À peser — {{ attentePeseeList.length }} lot(s)</div>
+                <div v-if="attentePeseeList.length" class="prod-scroll">
+                  <table class="grid"><tbody>
+                    <tr v-for="l in attentePeseeList" :key="l.id" class="lot-row" :class="{ 'row-perime': l.perime }" @click="ouvrirLot(l, 'pesee')" title="Ouvrir le suivi de fabrication de ce lot">
+                      <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span></td>
+                      <td class="num">{{ fmt(l.boites) }}</td>
+                      <td class="num age">{{ joursDepuis(l.date) }}</td>
+                    </tr>
+                  </tbody></table>
+                </div>
+                <p v-else class="empty">Aucun lot en attente de pesée.</p>
+              </div>
+            </div>
+          </div>
+        </section>
         <section v-for="a in vueFile" :key="a.id" class="atelier">
           <h2 class="atelier-titre">{{ a.code }} — {{ a.nom }}
             <span class="at-sum">{{ a.totAttente }} en attente · {{ a.totCours }} en cours</span>
@@ -625,6 +677,8 @@ onMounted(async () => {
 .lot-row { cursor: pointer; }
 .lot-row:hover td { background: #f0f9ff; }
 .lot-row:hover .pf { color: #0891b2; text-decoration: underline; }
+.perime-tag { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 700; color: #b91c1c; background: #fee2e2; padding: 1px 6px; border-radius: 999px; }
+.row-perime td { background: #fff5f6; }
 /* Onglets */
 .de-tabs { display: flex; gap: 4px; background: #fff; border: 1px solid #e9edf2; border-radius: 12px; padding: 5px; margin: 0 0 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); width: fit-content; }
 .de-tabs button { background: none; border: 0; padding: 9px 16px; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer; border-radius: 8px; font-family: inherit; transition: color .15s ease, background .15s ease; }
