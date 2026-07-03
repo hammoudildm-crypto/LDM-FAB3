@@ -9,6 +9,7 @@ const route = useRoute()
 const navRef = ref(null)
 const themeRef = ref(null)
 const openMenu = ref(null)
+const sidebarOpen = ref(false)
 const refreshTick = ref(0)
 
 const estAdmin = computed(() => role.value === 'admin')
@@ -78,77 +79,73 @@ async function signOut() {
 </script>
 
 <template>
-  <header class="topbar">
-    <div class="brand"><span class="brand-mark" aria-hidden="true">L</span><span class="brand-wm">LDM<span class="brand-sub">FAB3</span></span></div>
-
-    <nav class="nav" ref="navRef">
-      <RouterLink to="/" class="navlink">Tableau de bord</RouterLink>
-
-      <template v-if="session">
-        <RouterLink to="/referentiels" class="navlink">Référentiels</RouterLink>
-
-        <div class="dropdown">
-          <button class="navlink drop-toggle" :class="{ open: openMenu === 'production', active: prodActive }" @click="toggleMenu('production')">
-            Production <span class="caret">▾</span>
-          </button>
-          <div v-show="openMenu === 'production'" class="drop-panel">
-            <RouterLink to="/plan" @click="closeMenu">Plan directeur</RouterLink>
-            <RouterLink to="/ordres" @click="closeMenu">Ordres de fabrication</RouterLink>
-            <RouterLink to="/suivi" @click="closeMenu">Suivi fabrication</RouterLink>
-            <RouterLink to="/encours" @click="closeMenu">En-cours</RouterLink>
-            <RouterLink to="/conditionnement" @click="closeMenu">Conditionnement</RouterLink>
-            <RouterLink to="/dossier" @click="closeMenu">Dossier de lot</RouterLink>
-          </div>
-        </div>
-
-        <div class="dropdown">
-          <button class="navlink drop-toggle" :class="{ open: openMenu === 'pilotage', active: pilotActive }" @click="toggleMenu('pilotage')">
-            Pilotage <span class="caret">▾</span>
-          </button>
-          <div v-show="openMenu === 'pilotage'" class="drop-panel">
-            <RouterLink to="/ca" @click="closeMenu">Chiffre d'affaires</RouterLink>
-            <RouterLink to="/realisation-plan" @click="closeMenu">Réalisation vs Plan</RouterLink>
-            <RouterLink to="/rendement" @click="closeMenu">Rendement</RouterLink>
-            <RouterLink to="/dispo-equipements" @click="closeMenu">Disponibilité par équipement</RouterLink>
-            <RouterLink to="/avancement" @click="closeMenu">Suivi du process</RouterLink>
-            <RouterLink to="/effectifs" @click="closeMenu">Effectifs</RouterLink>
-            <RouterLink to="/verification-ddl" @click="closeMenu">Vérification DDL</RouterLink>
-            <RouterLink to="/audit" @click="closeMenu">Journal d'audit</RouterLink>
-            <RouterLink v-if="estAdmin" to="/habilitations" @click="closeMenu">Habilitations</RouterLink>
-          </div>
-        </div>
-      </template>
-    </nav>
-
-    <div class="topbar-right">
-      <div class="zoom-ctl" title="Zoom des pages">
-        <button class="zoom-btn" @click="changeZoom(-10)" :disabled="zoom <= 70" title="Réduire">−</button>
-        <button class="zoom-val" @click="setZoom(100)" title="Réinitialiser à 100 %">{{ zoom }}%</button>
-        <button class="zoom-btn" @click="changeZoom(10)" :disabled="zoom >= 150" title="Agrandir">+</button>
+  <div class="app-shell">
+    <aside class="sidebar" :class="{ open: sidebarOpen }">
+      <div class="side-brand">
+        <span class="brand-mark" aria-hidden="true">L</span>
+        <span class="brand-wm">LDM<span class="brand-sub">FAB3</span></span>
       </div>
-      <button class="zoom-btn" @click="refreshTick++" title="Actualiser les données de la page" style="margin-left:4px">⟳</button>
-      <div class="dropdown" ref="themeRef">
-        <button class="navlink drop-toggle" :class="{ open: openMenu === 'theme' }" @click="toggleMenu('theme')" title="Changer de thème">
-          <span class="swatch" :class="'sw-' + theme"></span>Thème <span class="caret">▾</span>
-        </button>
-        <div v-show="openMenu === 'theme'" class="drop-panel theme-panel">
-          <button v-for="t in THEMES" :key="t[0]" class="theme-item" :class="{ sel: theme === t[0] }" @click="setTheme(t[0])">
-            <span class="swatch" :class="'sw-' + t[0]"></span>
-            <span class="theme-name">{{ t[1] }}</span>
-            <span v-if="theme === t[0]" class="chk">✓</span>
-          </button>
-        </div>
-      </div>
+      <nav class="side-nav">
+        <RouterLink to="/" class="side-link" @click="sidebarOpen = false">Tableau de bord</RouterLink>
+        <template v-if="session">
+          <RouterLink to="/referentiels" class="side-link" @click="sidebarOpen = false">Référentiels</RouterLink>
 
-      <RouterLink v-if="session" to="/compte" class="navlink">Mon compte</RouterLink>
-      <span v-if="session && role" class="role-badge" :class="'r-' + role">{{ roleLabel }}</span>
-      <RouterLink v-if="!session" to="/login" class="navlink">Connexion</RouterLink>
-      <button v-else type="button" class="signout" @click="signOut">Déconnexion</button>
+          <div class="side-group">Production</div>
+          <RouterLink to="/plan" class="side-link" @click="sidebarOpen = false">Plan directeur</RouterLink>
+          <RouterLink to="/ordres" class="side-link" @click="sidebarOpen = false">Ordres de fabrication</RouterLink>
+          <RouterLink to="/suivi" class="side-link" @click="sidebarOpen = false">Suivi fabrication</RouterLink>
+          <RouterLink to="/encours" class="side-link" @click="sidebarOpen = false">En-cours</RouterLink>
+          <RouterLink to="/conditionnement" class="side-link" @click="sidebarOpen = false">Conditionnement</RouterLink>
+          <RouterLink to="/dossier" class="side-link" @click="sidebarOpen = false">Dossier de lot</RouterLink>
+
+          <div class="side-group">Pilotage</div>
+          <RouterLink to="/ca" class="side-link" @click="sidebarOpen = false">Chiffre d'affaires</RouterLink>
+          <RouterLink to="/realisation-plan" class="side-link" @click="sidebarOpen = false">Réalisation vs Plan</RouterLink>
+          <RouterLink to="/rendement" class="side-link" @click="sidebarOpen = false">Rendement</RouterLink>
+          <RouterLink to="/dispo-equipements" class="side-link" @click="sidebarOpen = false">Disponibilité équipements</RouterLink>
+          <RouterLink to="/avancement" class="side-link" @click="sidebarOpen = false">Suivi du process</RouterLink>
+          <RouterLink to="/effectifs" class="side-link" @click="sidebarOpen = false">Effectifs</RouterLink>
+          <RouterLink to="/verification-ddl" class="side-link" @click="sidebarOpen = false">Vérification DDL</RouterLink>
+          <RouterLink to="/audit" class="side-link" @click="sidebarOpen = false">Journal d'audit</RouterLink>
+          <RouterLink v-if="estAdmin" to="/habilitations" class="side-link" @click="sidebarOpen = false">Habilitations</RouterLink>
+        </template>
+      </nav>
+      <div class="side-foot">
+        <div class="theme-row" title="Thème">
+          <button v-for="t in THEMES" :key="t[0]" class="theme-dot" :class="['sw-' + t[0], { sel: theme === t[0] }]" @click="setTheme(t[0])" :title="t[1]"></button>
+        </div>
+        <div class="foot-row">
+          <div class="zoom-ctl" title="Zoom des pages">
+            <button class="zoom-btn" @click="changeZoom(-10)" :disabled="zoom <= 70" title="Réduire">−</button>
+            <button class="zoom-val" @click="setZoom(100)" title="Réinitialiser à 100 %">{{ zoom }}%</button>
+            <button class="zoom-btn" @click="changeZoom(10)" :disabled="zoom >= 150" title="Agrandir">+</button>
+          </div>
+          <button class="zoom-btn solo" @click="refreshTick++" title="Actualiser les données">⟳</button>
+        </div>
+        <template v-if="session">
+          <RouterLink to="/compte" class="side-link acct" @click="sidebarOpen = false">
+            <span>Mon compte</span>
+            <span v-if="role" class="role-badge" :class="'r-' + role">{{ roleLabel }}</span>
+          </RouterLink>
+          <button type="button" class="signout" @click="signOut">Déconnexion</button>
+        </template>
+        <RouterLink v-else to="/login" class="side-link" @click="sidebarOpen = false">Connexion</RouterLink>
+      </div>
+    </aside>
+
+    <div v-if="sidebarOpen" class="side-backdrop" @click="sidebarOpen = false"></div>
+
+    <div class="app-main">
+      <header class="mobile-top">
+        <button class="burger" @click="sidebarOpen = !sidebarOpen" aria-label="Ouvrir le menu">☰</button>
+        <span class="brand-wm">LDM<span class="brand-sub">FAB3</span></span>
+        <button class="zoom-btn solo" @click="refreshTick++" title="Actualiser" style="margin-left:auto">⟳</button>
+      </header>
+      <main :style="{ zoom: zoom / 100 }">
+        <RouterView :key="route.fullPath + '::' + refreshTick" />
+      </main>
     </div>
-  </header>
-  <main :style="{ zoom: zoom / 100 }">
-    <RouterView :key="route.fullPath + '::' + refreshTick" />
-  </main>
+  </div>
 </template>
 
 <style>
@@ -169,40 +166,51 @@ html[data-theme="sombre"]  { --bg: #0f172a; --text: #e6edf6; --topbar: #020617; 
 
 body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; margin: 0; background: var(--bg); color: var(--text); letter-spacing: -0.006em; }
 
-.topbar { display: flex; align-items: center; gap: 22px; padding: 0 22px; height: 58px;
-  background: var(--topbar); color: var(--topbar-text); box-shadow: 0 2px 14px rgba(0,0,0,.14); position: sticky; top: 0; z-index: 30; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
-.brand-mark { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-size: 15px; font-weight: 800;
-  color: #06241f; background: linear-gradient(140deg, var(--accent-bright), #14b8a6); box-shadow: 0 2px 7px rgba(20,184,166,.4); }
-.brand-wm { font-size: 15px; font-weight: 800; letter-spacing: .05em; }
+.app-shell { display: flex; min-height: 100vh; }
+
+/* ===== Barre latérale ===== */
+.sidebar { width: 236px; flex-shrink: 0; background: var(--topbar); color: var(--topbar-text);
+  display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh;
+  box-shadow: 2px 0 14px rgba(0,0,0,.10); z-index: 40; }
+.side-brand { display: flex; align-items: center; gap: 10px; padding: 16px 18px 12px; }
+.brand-mark { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; font-size: 16px; font-weight: 800;
+  color: #06241f; background: linear-gradient(140deg, var(--accent-bright), #14b8a6); box-shadow: 0 2px 7px rgba(20,184,166,.4); flex-shrink: 0; }
+.brand-wm { font-size: 16px; font-weight: 800; letter-spacing: .05em; }
 .brand-sub { color: var(--accent-bright); margin-left: 3px; font-weight: 700; }
-.nav { display: flex; gap: 20px; align-items: center; }
-.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
 
-.navlink { color: var(--topbar-muted); text-decoration: none; font-size: 14px; font-weight: 500; padding: 4px 0;
-  white-space: nowrap; background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 5px; }
-.navlink:hover { color: var(--topbar-text); }
-.nav a.router-link-exact-active { color: var(--topbar-text); border-bottom-color: var(--accent-bright); }
-.drop-toggle.active { color: var(--topbar-text); border-bottom-color: var(--accent-bright); }
-.caret { font-size: 10px; transition: transform .15s; }
-.drop-toggle.open .caret { transform: rotate(180deg); }
+.side-nav { flex: 1; overflow-y: auto; padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 1px; }
+.side-nav::-webkit-scrollbar { width: 8px; }
+.side-nav::-webkit-scrollbar-thumb { background: var(--topbar-border); border-radius: 8px; }
+.side-group { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--topbar-muted); opacity: .65; padding: 14px 10px 5px; }
+.side-link { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  color: var(--topbar-muted); text-decoration: none; font-size: 13.5px; font-weight: 500;
+  padding: 8px 11px; border-radius: 8px; white-space: nowrap; background: none; border: 0; cursor: pointer;
+  font-family: inherit; text-align: left; width: 100%; position: relative; }
+.side-link:hover { background: rgba(255,255,255,.06); color: var(--topbar-text); }
+.side-nav a.router-link-exact-active { background: rgba(255,255,255,.10); color: var(--topbar-text); font-weight: 600; }
+.side-nav a.router-link-exact-active::before { content: ""; position: absolute; left: -12px; top: 7px; bottom: 7px; width: 3px;
+  border-radius: 0 3px 3px 0; background: var(--accent-bright); }
 
-.dropdown { position: relative; }
-.drop-panel { position: absolute; top: calc(100% + 8px); left: 0; min-width: 210px; background: #fff;
-  border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 8px 24px rgba(16,24,40,.14); padding: 6px; z-index: 50; }
-.drop-panel a { display: block; color: #1b2733; text-decoration: none; font-size: 14px; padding: 8px 12px; border-radius: 7px; white-space: nowrap; }
-.drop-panel a:hover { background: #f1f5f9; }
-.drop-panel a.router-link-exact-active { background: #ecfdf5; color: #0f766e; font-weight: 600; }
+.side-foot { border-top: 1px solid var(--topbar-border); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.theme-row { display: flex; gap: 8px; }
+.theme-dot { width: 20px; height: 20px; border-radius: 6px; border: 1px solid rgba(255,255,255,.18); cursor: pointer; padding: 0; }
+.theme-dot.sel { outline: 2px solid var(--accent-bright); outline-offset: 1px; }
+.foot-row { display: flex; align-items: center; gap: 8px; }
+.zoom-btn.solo { border: 1px solid var(--topbar-border); border-radius: 8px; width: 30px; height: 30px; }
 
-/* Sélecteur de thème */
-.theme-panel { right: 0; left: auto; min-width: 170px; }
-.theme-item { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; cursor: pointer;
-  font-size: 14px; color: #1b2733; padding: 8px 12px; border-radius: 7px; font-family: inherit; text-align: left; }
-.theme-item:hover { background: #f1f5f9; }
-.theme-item.sel { font-weight: 600; }
-.theme-name { flex: 1; }
-.chk { color: #0f766e; font-weight: 700; }
-.swatch { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,.15); display: inline-block; }
+/* ===== Zone principale & mobile ===== */
+.app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mobile-top { display: none; }
+.side-backdrop { display: none; }
+@media (max-width: 900px) {
+  .sidebar { position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); transition: transform .25s ease; }
+  .sidebar.open { transform: translateX(0); }
+  .side-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 35; }
+  .mobile-top { display: flex; align-items: center; gap: 12px; padding: 0 14px; height: 52px;
+    background: var(--topbar); color: var(--topbar-text); position: sticky; top: 0; z-index: 20; box-shadow: 0 2px 10px rgba(0,0,0,.14); }
+  .burger { background: none; border: 0; color: var(--topbar-text); font-size: 22px; cursor: pointer; padding: 4px; line-height: 1; }
+}
 .sw-clair { background: #0f2a33; }
 .sw-ocean { background: #0c4a6e; }
 .sw-ardoise { background: #1e293b; }
@@ -213,10 +221,10 @@ body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; -
 .r-operateur { background: #60a5fa; color: #0b2a5b; }
 .r-lecteur { background: #94a3b8; color: #1b2733; }
 
-.signout { background: transparent; color: var(--topbar-muted); border: 1px solid var(--topbar-border); padding: 5px 12px; border-radius: 7px; font-size: 13px; cursor: pointer; white-space: nowrap; }
-.signout:hover { color: var(--topbar-text); border-color: var(--topbar-muted); }
+.signout { background: transparent; color: var(--topbar-muted); border: 1px solid var(--topbar-border); padding: 7px 12px; border-radius: 8px; font-size: 13px; cursor: pointer; white-space: nowrap; width: 100%; }
+.signout:hover { color: var(--topbar-text); border-color: var(--topbar-muted); background: rgba(255,255,255,.05); }
 
-main { padding: 12px 20px; max-width: 1560px; margin: 0 auto; }
+main { padding: 16px 22px; max-width: 1560px; margin: 0 auto; width: 100%; }
 
 .error { color: #b91c1c; }
 
@@ -264,7 +272,8 @@ html[data-theme="sombre"] .block { border-bottom-color: #1f2940 !important; }
 html[data-theme="sombre"] .lot-info { border-top-color: #1f2940 !important; }
 
 @media print {
-  .topbar { display: none !important; }
+  .sidebar, .mobile-top, .side-backdrop { display: none !important; }
+  .app-main, main { margin: 0; padding: 0; max-width: none; }
   main { padding: 0; max-width: none; }
 }
 .zoom-ctl { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--topbar-border); border-radius: 8px; padding: 2px; margin-right: 4px; }
@@ -295,8 +304,8 @@ h2 { font-size: 17px !important; }
 .kpi-ic svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ===== Modernisation : transitions & focus visibles ===== */
-.navlink { transition: color .15s ease, border-color .15s ease; }
-.drop-panel a, .theme-item, .btn, .signout, .zoom-btn, .zoom-val { transition: background .15s ease, color .15s ease, border-color .15s ease; }
+.side-link { transition: background .15s ease, color .15s ease; }
+.btn, .signout, .zoom-btn, .zoom-val, .theme-dot { transition: background .15s ease, color .15s ease, border-color .15s ease; }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--accent-bright); outline-offset: 2px; border-radius: 5px;
 }
