@@ -302,14 +302,18 @@ function hauteurCompare(rdt) {
   return Math.max(4, Math.min(100, ((rdt - min) / (max - min)) * 100))
 }
 
-// Filtre produit pour la comparaison 3 ans
-const produitSelCmp = ref('')
-const produitsListeCmp = computed(() =>
-  compareProduits.value.map(p => ({ code: p.code, nom: p.nom })).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
-)
-const compareProduitsFiltre = computed(() =>
-  produitSelCmp.value ? compareProduits.value.filter(p => p.code === produitSelCmp.value) : compareProduits.value
-)
+// Barre de filtre pour la comparaison 3 ans : recherche + tendance
+const rechercheCmp = ref('')
+const tendanceCmp = ref('') // '' | 'up' | 'down'
+const compareProduitsFiltre = computed(() => {
+  const q = rechercheCmp.value.trim().toLowerCase()
+  return compareProduits.value.filter(p => {
+    if (q && !((p.code || '').toLowerCase().includes(q) || (p.nom || '').toLowerCase().includes(q))) return false
+    if (tendanceCmp.value === 'up' && !(p.delta != null && p.delta >= 0)) return false
+    if (tendanceCmp.value === 'down' && !(p.delta != null && p.delta < 0)) return false
+    return true
+  })
+})
 
 // Rendement par phase + avarie (année sélectionnée, lots valides, pondéré par boîtes théoriques)
 const PHASES = [
@@ -396,7 +400,7 @@ function fmt(n) { return n == null ? '—' : Math.round(Number(n)).toLocaleStrin
 function pct2(n) { return n == null ? '—' : Number(n).toFixed(2).replace('.', ',') + ' %' }
 function pct1(n) { return n == null ? '—' : Number(n).toFixed(1).replace('.', ',') + ' %' }
 
-watch(anneeSel, () => { produitSel.value = ''; produitSelCmp.value = '' })
+watch(anneeSel, () => { produitSel.value = ''; rechercheCmp.value = ''; tendanceCmp.value = '' })
 
 onMounted(chargerTout)
 </script>
@@ -620,10 +624,13 @@ onMounted(chargerTout)
         <div class="card-head">
           <h2 class="card-title">Comparaison du rendement par produit — 3 ans</h2>
           <div class="head-tools">
-            <select v-model="produitSelCmp" class="filtre">
-              <option value="">Tous les produits ({{ produitsListeCmp.length }})</option>
-              <option v-for="p in produitsListeCmp" :key="p.code" :value="p.code">{{ p.code }} — {{ p.nom }}</option>
+            <input v-model="rechercheCmp" type="search" class="filtre" placeholder="Rechercher un produit…" />
+            <select v-model="tendanceCmp" class="filtre">
+              <option value="">Toutes tendances</option>
+              <option value="up">En progression ▲</option>
+              <option value="down">En baisse ▼</option>
             </select>
+            <span class="count">{{ compareProduitsFiltre.length }}</span>
             <div class="legend">
               <span v-for="(y, i) in anneesCompare" :key="y"><i class="dot" :class="'yr' + i"></i>{{ y }}</span>
             </div>
