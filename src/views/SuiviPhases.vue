@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch, inject } from 'vue'
+import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
@@ -182,7 +183,15 @@ function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—'
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 function fmtPct(n) { return n == null ? '—' : n.toFixed(1) + ' %' }
 
-onMounted(chargerBase)
+const route = useRoute()
+onMounted(async () => {
+  await chargerBase()
+  const q = route.query.lot ?? route.query.ordre
+  if (q != null && q !== '') {
+    const found = lots.value.find(l => String(l.id) === String(q))
+    if (found) lotId.value = found.id
+  }
+})
 watch(lotId, chargerPhases)
 </script>
 
