@@ -259,9 +259,9 @@ onMounted(async () => {
               <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
             </select>
           </label>
-          <label>Ligne / équipement
+          <label>Ligne de conditionnement (finale)
             <select v-model="form.equipement_id">
-              <option value="">—</option>
+              <option value="">— à affecter —</option>
               <option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
             </select>
           </label>
