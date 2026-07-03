@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
+import { ref, computed, onMounted, onUnmounted, provide, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { supabase } from './supabase'
 
@@ -18,6 +18,50 @@ provide('role', role)
 provide('peutEditer', peutEditer)
 
 const roleLabel = computed(() => ({ admin: 'Admin', operateur: 'Opérateur', lecteur: 'Lecteur' }[role.value] || ''))
+
+// --- Navigation par rôle, en groupes repliables ---
+const NAV_GROUPS = [
+  { key: 'consultation', label: 'Consultation', role: null, links: [
+    ['/realisation-plan', 'Réalisation vs Plan'],
+    ['/rendement', 'Rendement'],
+    ['/ca', "Chiffre d'affaires"],
+    ['/dispo-equipements', 'Disponibilité équipements'],
+    ['/avancement', 'Suivi du process'],
+    ['/encours', 'En-cours'],
+    ['/dossier', 'Dossier de lot'],
+    ['/audit', "Journal d'audit"],
+  ] },
+  { key: 'production', label: 'Production & saisie', role: 'edit', links: [
+    ['/plan', 'Plan directeur'],
+    ['/ordres', 'Ordres de fabrication'],
+    ['/suivi', 'Suivi fabrication'],
+    ['/conditionnement', 'Conditionnement'],
+    ['/verification-ddl', 'Vérification DDL'],
+    ['/effectifs', 'Effectifs'],
+  ] },
+  { key: 'admin', label: 'Administration', role: 'admin', links: [
+    ['/referentiels', 'Référentiels'],
+    ['/habilitations', 'Habilitations'],
+  ] },
+]
+function groupVisible(g) {
+  if (g.role === 'edit') return peutEditer.value
+  if (g.role === 'admin') return estAdmin.value
+  return true
+}
+const openGroups = ref(new Set(['consultation']))
+function toggleGroup(key) {
+  const s = new Set(openGroups.value)
+  s.has(key) ? s.delete(key) : s.add(key)
+  openGroups.value = s
+}
+// Déplier automatiquement le groupe de la page active
+function ouvrirGroupeActif(p) {
+  const g = NAV_GROUPS.find(gr => gr.links.some(l => l[0] === p))
+  if (g && !openGroups.value.has(g.key)) openGroups.value = new Set([...openGroups.value, g.key])
+}
+ouvrirGroupeActif(route.path)
+watch(() => route.path, (p) => ouvrirGroupeActif(p))
 
 const PROD = ['/plan', '/ordres', '/suivi', '/encours', '/conditionnement', '/dossier']
 const PILOT = ['/ca', '/realisation-plan', '/rendement', '/dispo-equipements', '/avancement', '/effectifs', '/verification-ddl', '/audit', '/habilitations']
@@ -88,30 +132,16 @@ async function signOut() {
       <nav class="side-nav">
         <RouterLink to="/" class="side-link" @click="sidebarOpen = false">Tableau de bord</RouterLink>
         <template v-if="session">
-          <div class="side-group">Consultation</div>
-          <RouterLink to="/realisation-plan" class="side-link" @click="sidebarOpen = false">Réalisation vs Plan</RouterLink>
-          <RouterLink to="/rendement" class="side-link" @click="sidebarOpen = false">Rendement</RouterLink>
-          <RouterLink to="/ca" class="side-link" @click="sidebarOpen = false">Chiffre d'affaires</RouterLink>
-          <RouterLink to="/dispo-equipements" class="side-link" @click="sidebarOpen = false">Disponibilité équipements</RouterLink>
-          <RouterLink to="/avancement" class="side-link" @click="sidebarOpen = false">Suivi du process</RouterLink>
-          <RouterLink to="/encours" class="side-link" @click="sidebarOpen = false">En-cours</RouterLink>
-          <RouterLink to="/dossier" class="side-link" @click="sidebarOpen = false">Dossier de lot</RouterLink>
-          <RouterLink to="/audit" class="side-link" @click="sidebarOpen = false">Journal d'audit</RouterLink>
-
-          <template v-if="peutEditer">
-            <div class="side-group">Production &amp; saisie</div>
-            <RouterLink to="/plan" class="side-link" @click="sidebarOpen = false">Plan directeur</RouterLink>
-            <RouterLink to="/ordres" class="side-link" @click="sidebarOpen = false">Ordres de fabrication</RouterLink>
-            <RouterLink to="/suivi" class="side-link" @click="sidebarOpen = false">Suivi fabrication</RouterLink>
-            <RouterLink to="/conditionnement" class="side-link" @click="sidebarOpen = false">Conditionnement</RouterLink>
-            <RouterLink to="/verification-ddl" class="side-link" @click="sidebarOpen = false">Vérification DDL</RouterLink>
-            <RouterLink to="/effectifs" class="side-link" @click="sidebarOpen = false">Effectifs</RouterLink>
-          </template>
-
-          <template v-if="estAdmin">
-            <div class="side-group">Administration</div>
-            <RouterLink to="/referentiels" class="side-link" @click="sidebarOpen = false">Référentiels</RouterLink>
-            <RouterLink to="/habilitations" class="side-link" @click="sidebarOpen = false">Habilitations</RouterLink>
+          <template v-for="g in NAV_GROUPS" :key="g.key">
+            <template v-if="groupVisible(g)">
+              <button class="side-group side-group-btn" :class="{ open: openGroups.has(g.key) }" @click="toggleGroup(g.key)">
+                <span>{{ g.label }}</span>
+                <span class="grp-caret">▾</span>
+              </button>
+              <div v-show="openGroups.has(g.key)" class="grp-links">
+                <RouterLink v-for="l in g.links" :key="l[0]" :to="l[0]" class="side-link" @click="sidebarOpen = false">{{ l[1] }}</RouterLink>
+              </div>
+            </template>
           </template>
         </template>
       </nav>
@@ -188,6 +218,12 @@ body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; -
 .side-nav::-webkit-scrollbar-thumb { background: var(--topbar-border); border-radius: 8px; }
 .side-group { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em;
   color: var(--topbar-muted); opacity: .65; padding: 14px 10px 5px; }
+.side-group-btn { display: flex; align-items: center; justify-content: space-between; width: 100%;
+  background: none; border: 0; cursor: pointer; font-family: inherit; text-align: left; border-radius: 6px; transition: opacity .15s ease, color .15s ease; }
+.side-group-btn:hover { opacity: 1; color: var(--topbar-text); }
+.grp-caret { font-size: 10px; opacity: .8; transition: transform .18s ease; }
+.side-group-btn.open .grp-caret { transform: rotate(180deg); }
+.grp-links { display: flex; flex-direction: column; gap: 1px; }
 .side-link { display: flex; align-items: center; justify-content: space-between; gap: 8px;
   color: var(--topbar-muted); text-decoration: none; font-size: 13.5px; font-weight: 500;
   padding: 8px 11px; border-radius: 8px; white-space: nowrap; background: none; border: 0; cursor: pointer;
