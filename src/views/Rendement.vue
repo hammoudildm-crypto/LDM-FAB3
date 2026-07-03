@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import { ICONS, TINTS } from '../icons.js'
+import PageHeader from '../components/PageHeader.vue'
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
@@ -402,17 +403,14 @@ onMounted(chargerTout)
 
 <template>
   <div class="rdt-page">
-    <header class="rdt-head">
-      <div>
-        <h1>Rendement quantitatif</h1>
-        <p class="sub">Fabrication et conditionnement suivis avec les mêmes KPI : rendement, avarie, boîtes produites et théoriques — par mois et par produit.</p>
-      </div>
+    <PageHeader title="Rendement quantitatif" tone="indigo"
+      subtitle="Fabrication et conditionnement suivis avec les mêmes KPI : rendement, avarie, boîtes produites et théoriques — par mois et par produit.">
       <label class="annee-sel">Année de fabrication
         <select v-model.number="anneeSel">
           <option v-for="a in anneesDispo" :key="a" :value="a">{{ a }}</option>
         </select>
       </label>
-    </header>
+    </PageHeader>
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="chargement" class="loading">Chargement des données…</p>
