@@ -25,11 +25,13 @@ const sig = reactive({ open: false, mode: 'sign', ordre: null, pin: '', pin2: ''
 
 const form = reactive({
   id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
+  date_reception: '', date_fin_validite: '',
   date_lancement: '', date_fin_fabrication: '', statut: 'Planifié', equipement_id: '', commentaire: ''
 })
 function resetForm() {
   Object.assign(form, {
     id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
+    date_reception: '', date_fin_validite: '',
     date_lancement: '', date_fin_fabrication: '', statut: 'Planifié', equipement_id: '', commentaire: ''
   })
 }
@@ -118,6 +120,8 @@ async function enregistrer() {
     numero_lot: form.numero_lot.trim(),
     produit_id: form.produit_id,
     quantite_theorique: toNum(form.quantite_theorique),
+    date_reception: form.date_reception || null,
+    date_fin_validite: form.date_fin_validite || null,
     date_lancement: form.date_lancement || null,
     date_fin_fabrication: dateFin,
     statut: form.statut,
@@ -136,6 +140,7 @@ function modifier(l) {
   Object.assign(form, {
     id: l.id, numero_lot: l.numero_lot, produit_id: l.produit_id || '',
     quantite_theorique: l.quantite_theorique ?? '', date_lancement: l.date_lancement || '',
+    date_reception: l.date_reception || '', date_fin_validite: l.date_fin_validite || '',
     date_fin_fabrication: l.date_fin_fabrication || '',
     statut: l.statut || 'Planifié', equipement_id: l.equipement_id || '', commentaire: l.commentaire || ''
   })
@@ -252,6 +257,8 @@ onMounted(async () => {
             </select>
           </label>
           <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" /></label>
+          <label>Date de réception OF<input v-model="form.date_reception" type="date" /></label>
+          <label>Date fin de validité OF<input v-model="form.date_fin_validite" type="date" /></label>
           <label>Date de lancement<input v-model="form.date_lancement" type="date" /></label>
           <label>Date fin fabrication<input v-model="form.date_fin_fabrication" type="date" /></label>
           <label>Statut
