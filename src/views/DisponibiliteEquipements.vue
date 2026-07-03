@@ -1,8 +1,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 import { ICONS, TINTS } from '../icons.js'
+
+const router = useRouter()
 
 const equipements = ref([])
 const ateliers = ref([])
@@ -235,6 +238,10 @@ const kpisFile = computed(() => {
   ]
 })
 function joursDepuis(d) { if (!d) return '—'; const j = Math.floor((Date.now() - new Date(d)) / 86400000); return j <= 0 ? 'auj.' : j + ' j' }
+function ouvrirLot(l, phaseKey) {
+  if (phaseKey === 'conditionnement') router.push({ path: '/conditionnement', query: { lot: l.lot } })
+  else router.push({ path: '/suivi', query: { lot: l.id } })
+}
 
 // Pour chaque phase : { code_pf -> { code, desig, lots, boites } }
 const produitsParPhase = computed(() => {
@@ -386,7 +393,7 @@ onMounted(async () => {
                 <div class="q-title cours">En cours — {{ ph.cours.length }} lot(s) · {{ fmtC(ph.volCours) }} bts</div>
                 <div v-if="ph.cours.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.cours" :key="l.id">
+                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Modifier l'étape / l'atelier de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span></td>
                       <td class="num">{{ fmt(l.boites) }}</td>
                       <td class="num age">{{ joursDepuis(l.date) }}</td>
@@ -400,7 +407,7 @@ onMounted(async () => {
                 <div class="q-title attente">En attente — {{ ph.attente.length }} lot(s) · {{ fmtC(ph.volAttente) }} bts</div>
                 <div v-if="ph.attente.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.attente" :key="l.id">
+                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Modifier l'étape / l'atelier de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span></td>
                       <td class="num">{{ fmt(l.boites) }}</td>
                       <td class="num age">{{ joursDepuis(l.date) }}</td>
@@ -524,6 +531,9 @@ onMounted(async () => {
 .file-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(285px, 1fr)); gap: 16px; align-items: start; }
 .file-board .atelier { margin-bottom: 0; }
 .file-board .eq-grid { grid-template-columns: 1fr; }
+.lot-row { cursor: pointer; }
+.lot-row:hover td { background: #f0f9ff; }
+.lot-row:hover .pf { color: #0891b2; text-decoration: underline; }
 /* Onglets */
 .de-tabs { display: flex; gap: 4px; background: #fff; border: 1px solid #e9edf2; border-radius: 12px; padding: 5px; margin: 0 0 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); width: fit-content; }
 .de-tabs button { background: none; border: 0; padding: 9px 16px; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer; border-radius: 8px; font-family: inherit; transition: color .15s ease, background .15s ease; }
