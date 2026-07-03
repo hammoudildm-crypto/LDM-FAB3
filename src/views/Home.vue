@@ -7,6 +7,14 @@ const anneeCourante = new Date().getFullYear()
 const moisCourant = new Date().getMonth()
 const anneeSel = ref(anneeCourante)
 const ongletActif = ref('production')
+// Accentuation par onglet : chaque onglet a sa couleur
+const ACCENTS = {
+  production: { c: '#0f766e', bg: '#f0fdfa' },
+  qualite:    { c: '#4338ca', bg: '#eef2ff' },
+  finance:    { c: '#b45309', bg: '#fff7ed' },
+}
+const accentC = computed(() => (ACCENTS[ongletActif.value] || ACCENTS.production).c)
+const accentBg = computed(() => (ACCENTS[ongletActif.value] || ACCENTS.production).bg)
 const session = ref(null)
 const erreur = ref('')
 
@@ -422,7 +430,7 @@ onMounted(async () => {
   <div class="dash">
     <header class="dash-head">
       <div>
-        <h1>Tableau de bord</h1>
+        <h1><span class="dash-dot" :style="{ background: accentC }"></span>Tableau de bord</h1>
         <p class="sub">Vue d'ensemble de la production — LDM-FAB3</p>
       </div>
       <label v-if="session" class="annee-sel">Année de référence
@@ -441,7 +449,7 @@ onMounted(async () => {
     <template v-else>
       <p v-if="erreur" class="alert">{{ erreur }}</p>
 
-      <div class="dash-body">
+      <div class="dash-body" :style="{ '--tab-c': accentC, '--tab-bg': accentBg }">
       <nav class="tabs">
         <button v-for="o in ONGLETS" :key="o[0]" class="tab" :class="{ active: ongletActif === o[0] }" @click="ongletActif = o[0]">{{ o[1] }}</button>
       </nav>
@@ -665,10 +673,16 @@ onMounted(async () => {
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 
 .dash-body { display: flex; gap: 18px; align-items: flex-start; }
-.tabs { display: flex; flex-direction: column; gap: 2px; margin-bottom: 0; flex-shrink: 0; min-width: 132px; }
-.tab { background: none; border: 0; text-align: left; padding: 9px 14px; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer; border-left: 3px solid transparent; border-radius: 0 7px 7px 0; }
-.tab:hover { color: #0f766e; background: #f8fafc; }
-.tab.active { color: #0f766e; border-left-color: #0f766e; background: #f0fdfa; }
+.tabs { display: flex; flex-direction: column; gap: 3px; margin-bottom: 0; flex-shrink: 0; min-width: 148px; background: #fff; border: 1px solid #e9edf2; border-radius: 12px; padding: 6px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.tab { background: none; border: 0; text-align: left; padding: 10px 13px; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer; border-radius: 8px; position: relative; transition: color .15s ease, background .15s ease; }
+.tab:hover { color: var(--tab-c, #0f766e); background: #f6f8fa; }
+.tab.active { color: var(--tab-c, #0f766e); background: var(--tab-bg, #f0fdfa); }
+.tab.active::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: var(--tab-c, #0f766e); }
+.dash-dot { display: inline-block; width: 12px; height: 12px; border-radius: 4px; margin-right: 10px; vertical-align: middle; transition: background .2s ease; }
+html[data-theme="sombre"] .tabs { background: #161f33; border-color: #2a3650; }
+html[data-theme="sombre"] .tab { color: #94a3b8; }
+html[data-theme="sombre"] .tab:hover { background: #1d2740; }
+html[data-theme="sombre"] .tab.active { background: #1d2740 !important; }
 .tab-content { flex: 1; min-width: 0; }
 
 .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 14px; }
@@ -739,10 +753,10 @@ table.mini td { padding: 3px 6px; border-bottom: 1px solid #eef2f6; white-space:
   .kpi-grid { grid-template-columns: repeat(3, 1fr); }
   .cols { grid-template-columns: 1fr; }
   .card.span2 { grid-column: auto; }
-  .dash-body { flex-direction: column; gap: 10px; }
-  .tabs { flex-direction: row; min-width: 0; border-bottom: 2px solid #e2e8f0; }
-  .tab { border-left: 0; border-bottom: 3px solid transparent; border-radius: 0; margin-bottom: -2px; }
-  .tab.active { border-left-color: transparent; border-bottom-color: #0f766e; }
+  .dash-body { flex-direction: column; gap: 12px; }
+  .tabs { flex-direction: row; min-width: 0; padding: 5px; }
+  .tab { flex: 1; text-align: center; }
+  .tab.active::before { display: none; }
 }
 @media (max-width: 560px) {
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
