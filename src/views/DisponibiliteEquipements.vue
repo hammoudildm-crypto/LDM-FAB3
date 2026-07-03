@@ -233,22 +233,22 @@ const phasesParAtelier = computed(() => {
   return m
 })
 
-// Vue file FABRICATION : ateliers -> phases (hors conditionnement)
+// Vue file FABRICATION : une colonne par PHASE (dédupliquée, hors pesée/conditionnement)
 const vueFile = computed(() => {
   const q = queuePhase.value
   const rq = recherche.value.trim().toLowerCase()
   const mL = (l) => !rq || (l.lot || '').toLowerCase().includes(rq) || (l.code || '').toLowerCase().includes(rq) || (l.desig || '').toLowerCase().includes(rq)
-  return ateliers.value.map(a => {
-    const keys = phasesParAtelier.value[a.id] ? [...phasesParAtelier.value[a.id]] : []
-    const phases = keys.filter(k => k !== 'conditionnement' && k !== 'pesee').map(k => {
-      const ph = PHASES.find(p => p.key === k)
-      const attente = (q[k] ? q[k].attente : []).filter(mL)
-      const cours = (q[k] ? q[k].cours : []).filter(mL)
-      return { phase: ph, attente, cours, volAttente: attente.reduce((s, l) => s + l.boites, 0), volCours: cours.reduce((s, l) => s + l.boites, 0) }
-    }).filter(x => x.phase).sort((x, y) => x.phase.ordre - y.phase.ordre)
-    const minOrdre = phases.reduce((m, x) => Math.min(m, x.phase.ordre), 99)
-    return { ...a, phases, minOrdre, totAttente: phases.reduce((s, x) => s + x.attente.length, 0), totCours: phases.reduce((s, x) => s + x.cours.length, 0) }
-  }).filter(a => a.phases.length > 0).sort((a, b) => a.minOrdre - b.minOrdre)
+  const presentes = new Set()
+  for (const a of ateliers.value) {
+    const keys = phasesParAtelier.value[a.id]
+    if (keys) for (const k of keys) if (k !== 'conditionnement' && k !== 'pesee') presentes.add(k)
+  }
+  return [...presentes].map(k => {
+    const ph = PHASES.find(p => p.key === k)
+    const attente = (q[k] ? q[k].attente : []).filter(mL)
+    const cours = (q[k] ? q[k].cours : []).filter(mL)
+    return { key: k, phase: ph, attente, cours, volAttente: attente.reduce((s, l) => s + l.boites, 0), volCours: cours.reduce((s, l) => s + l.boites, 0) }
+  }).filter(x => x.phase).sort((a, b) => a.phase.ordre - b.phase.ordre)
 })
 
 // Planning CONDITIONNEMENT : lots regroupés par LIGNE RÉSERVÉE (equipement_id de l'ordre)
@@ -471,12 +471,12 @@ onMounted(async () => {
             </div>
           </div>
         </section>
-        <section v-for="a in vueFile" :key="a.id" class="atelier">
-          <h2 class="atelier-titre">{{ a.code }} — {{ a.nom }}
-            <span class="at-sum">{{ a.totAttente }} en attente · {{ a.totCours }} en cours</span>
+        <section v-for="ph in vueFile" :key="ph.key" class="atelier">
+          <h2 class="atelier-titre">Atelier de {{ ph.phase.label }}
+            <span class="at-sum">{{ ph.attente.length }} en attente · {{ ph.cours.length }} en cours</span>
           </h2>
           <div class="eq-grid">
-            <div v-for="ph in a.phases" :key="ph.phase.key" class="card phase-card" :class="{ rupture: !ph.attente.length && !ph.cours.length }">
+            <div class="card phase-card" :class="{ rupture: !ph.attente.length && !ph.cours.length }">
               <div class="eq-head">
                 <div class="eq-ident">
                   <span class="eq-ic" :style="ph.phase.tint"><svg viewBox="0 0 24 24" v-html="ph.phase.ic"></svg></span>
