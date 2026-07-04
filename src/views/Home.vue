@@ -519,7 +519,7 @@ onMounted(async () => {
 
           <section class="card">
             <h2 class="card-title">Conditionnement {{ anneeSel }} par mois (boîtes)</h2>
-            <MiniChart :labels="MOIS" :format="fmt" :value-format="fmtC" show-values clickable :show-switch="false" @pick="ouvrirMois($event, 'cond')"
+            <MiniChart :labels="MOIS" :format="fmt" :value-format="fmtC" show-values clickable :show-switch="false" spacer @pick="ouvrirMois($event, 'cond')"
               :series="[{ label: 'Conditionnement', color: '#059669', data: prodParMois }]" />
             <p v-if="!totalBoites" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
           </section>
@@ -590,23 +590,15 @@ onMounted(async () => {
         <div class="cols">
           <section class="card">
             <h2 class="card-title">Rendement fabrication par mois — {{ anneeSel }}</h2>
-            <div class="histo">
-              <div v-for="(v, i) in rendementFabParMois" :key="i" class="histo-col" :title="MOIS[i] + ' : ' + fmtPct(v)">
-                <div class="histo-bar-wrap"><div class="histo-bar" :class="(v != null && v < 95) ? 'rej' : 'qual'" :style="{ height: Math.min(100, v || 0) + '%' }"><span v-if="v != null" class="histo-val">{{ Math.round(v) }}%</span></div></div>
-                <span class="histo-lbl">{{ MOIS[i] }}</span>
-              </div>
-            </div>
+            <MiniChart :labels="MOIS" :format="fmtPct" :value-format="v => v != null ? Math.round(v) + '%' : ''" :max="100" show-values :show-switch="false"
+              :series="[{ label: 'Rendement fab.', color: '#4338ca', low: '#dc2626', threshold: 95, data: rendementFabParMois }]" />
             <p v-if="rendementFabParMois.every(v => v == null)" class="empty">Aucune fabrication en {{ anneeSel }}.</p>
           </section>
 
           <section class="card">
             <h2 class="card-title">Rendement cond. par mois — {{ anneeSel }}</h2>
-            <div class="histo">
-              <div v-for="(v, i) in rendementCondParMois" :key="i" class="histo-col" :title="MOIS[i] + ' : ' + fmtPct(v)">
-                <div class="histo-bar-wrap"><div class="histo-bar" :class="(v != null && v < 95) ? 'rej' : 'qual'" :style="{ height: Math.min(100, v || 0) + '%' }"><span v-if="v != null" class="histo-val">{{ Math.round(v) }}%</span></div></div>
-                <span class="histo-lbl">{{ MOIS[i] }}</span>
-              </div>
-            </div>
+            <MiniChart :labels="MOIS" :format="fmtPct" :value-format="v => v != null ? Math.round(v) + '%' : ''" :max="100" show-values :show-switch="false"
+              :series="[{ label: 'Rendement cond.', color: '#4338ca', low: '#dc2626', threshold: 95, data: rendementCondParMois }]" />
             <p v-if="rendementCondParMois.every(v => v == null)" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
           </section>
         </div>
