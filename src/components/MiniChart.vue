@@ -63,7 +63,7 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
     <div v-else class="ch">
       <div v-for="(mo, i) in labels" :key="i" class="ch-group" :class="{ clic: clickable }" @click="clickable && emit('pick', i)">
         <div class="ch-bars">
-          <div v-for="(s, si) in series" :key="si" class="ch-bar" :style="{ height: barH(s.data[i]), background: s.color }" :title="mo + ' — ' + s.label + ' : ' + format(s.data[i])"><span v-if="showValues && series.length === 1 && s.data[i]" class="ch-val">{{ vfmt(s.data[i]) }}</span></div>
+          <div v-for="(s, si) in series" :key="si" class="ch-bar" :style="{ height: barH(s.data[i]), backgroundColor: s.color, width: series.length === 1 ? '84%' : '46%', maxWidth: (series.length === 1 ? 34 : 14) + 'px' }" :title="mo + ' — ' + s.label + ' : ' + format(s.data[i])"><span v-if="showValues && series.length === 1 && s.data[i]" class="ch-val">{{ vfmt(s.data[i]) }}</span></div>
         </div>
         <div class="ch-lbl">{{ mo }}</div>
       </div>
@@ -85,7 +85,7 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
 .ch { display: flex; align-items: flex-end; gap: 3px; height: 200px; padding-top: 20px; }
 .ch-group { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; height: 100%; }
 .ch-bars { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
-.ch-bar { position: relative; width: 46%; max-width: 14px; border-radius: 3px 3px 1px 1px; min-height: 2px; transition: height .45s cubic-bezier(.4,0,.2,1); box-shadow: inset 0 1px 0 rgba(255,255,255,.28); }
+.ch-bar { position: relative; border-radius: 5px 5px 2px 2px; min-height: 2px; transition: height .45s cubic-bezier(.4,0,.2,1); background-image: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,0) 55%); }
 .ch-val { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 700; color: #334155; white-space: nowrap; }
 .mc-val { fill: #334155; font-size: 12px; font-weight: 700; }
 .ch-bar:hover { filter: brightness(1.08); }
