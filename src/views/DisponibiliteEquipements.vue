@@ -243,12 +243,31 @@ const vueFile = computed(() => {
     const keys = phasesParAtelier.value[a.id]
     if (keys) for (const k of keys) if (k !== 'conditionnement' && k !== 'pesee') presentes.add(k)
   }
-  return [...presentes].map(k => {
+  const liste = [...presentes].map(k => {
     const ph = PHASES.find(p => p.key === k)
     const attente = (q[k] ? q[k].attente : []).filter(mL)
     const cours = (q[k] ? q[k].cours : []).filter(mL)
     return { key: k, phase: ph, attente, cours, volAttente: attente.reduce((s, l) => s + l.boites, 0), volCours: cours.reduce((s, l) => s + l.boites, 0) }
-  }).filter(x => x.phase).sort((a, b) => a.phase.ordre - b.phase.ordre)
+  }).filter(x => x.phase)
+  // Fusionner Granulation + Séchage en une seule colonne (même opération)
+  const gran = liste.find(x => x.key === 'granulation')
+  const sech = liste.find(x => x.key === 'sechage')
+  if (gran || sech) {
+    const byDate = (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
+    const ref = gran || sech
+    const attente = [...(gran ? gran.attente : []), ...(sech ? sech.attente : [])].sort(byDate)
+    const cours = [...(gran ? gran.cours : []), ...(sech ? sech.cours : [])].sort(byDate)
+    const merged = {
+      key: 'gran_sech',
+      phase: { key: 'gran_sech', label: 'Granulation et séchage', ordre: ref.phase.ordre, ic: ref.phase.ic, tint: ref.phase.tint },
+      attente, cours,
+      volAttente: attente.reduce((s, l) => s + l.boites, 0), volCours: cours.reduce((s, l) => s + l.boites, 0)
+    }
+    const rest = liste.filter(x => x.key !== 'granulation' && x.key !== 'sechage')
+    rest.push(merged)
+    return rest.sort((a, b) => a.phase.ordre - b.phase.ordre)
+  }
+  return liste.sort((a, b) => a.phase.ordre - b.phase.ordre)
 })
 
 // Planning CONDITIONNEMENT : lots regroupés par LIGNE RÉSERVÉE (equipement_id de l'ordre)
