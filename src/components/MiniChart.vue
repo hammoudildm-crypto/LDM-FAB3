@@ -64,9 +64,9 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
         <template v-for="(mo, i) in labels" :key="i">
           <template v-for="(s, si) in series" :key="'p' + si + '-' + i">
             <circle v-if="s.data[i] != null" :cx="x(i)" :cy="y(s.data[i])" r="3.3" :fill="colOf(s, s.data[i])" class="mc-pt"><title>{{ mo }} — {{ s.label }} : {{ format(s.data[i]) }}</title></circle>
+            <text v-if="showValues && s.data[i] != null" :x="x(i)" :y="y(s.data[i]) - 7" text-anchor="middle" class="mc-val" :class="{ multi: series.length > 1 }" :fill="series.length > 1 ? s.color : '#334155'">{{ vfmt(s.data[i]) }}</text>
           </template>
           <text :x="x(i)" :y="CH.h - 8" text-anchor="middle" class="lch-lbl">{{ mo }}</text>
-          <text v-if="showValues && series.length === 1 && series[0].data[i] != null" :x="x(i)" :y="y(series[0].data[i]) - 8" text-anchor="middle" class="mc-val">{{ vfmt(series[0].data[i]) }}</text>
         </template>
         <template v-if="clickable">
           <rect v-for="(mo, i) in labels" :key="'h' + i" :x="x(i) - bandW / 2" :y="CH.pt" :width="bandW" :height="CH.h - CH.pt - CH.pb" fill="transparent" class="mc-hit" @click="emit('pick', i)"><title>{{ mo }}</title></rect>
@@ -106,6 +106,7 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
 .ch-val { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 700; color: #334155; white-space: nowrap; }
 .ch-val.rot { writing-mode: vertical-rl; top: auto; bottom: 100%; margin-bottom: 3px; font-size: 9px; }
 .mc-val { fill: #334155; font-size: 12px; font-weight: 700; }
+.mc-val.multi { font-size: 9.5px; }
 .ch-bar:hover { filter: brightness(1.08); }
 .ch-lbl { font-size: 10px; color: #94a3b8; margin-top: 6px; font-weight: 600; }
 .mc-hit { cursor: pointer; }
