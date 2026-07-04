@@ -695,12 +695,16 @@ onMounted(async () => {
 .atelier-titre { font-size: 13px; font-weight: 700; margin: 0 0 7px; color: #0f172a; border-left: 3px solid #0f766e; padding-left: 8px; line-height: 1.25; }
 .at-sum { display: block; font-size: 10.5px; font-weight: 500; color: #64748b; margin: 2px 0 0 11px; }
 /* File d'attente en colonnes (façon Kanban) */
-.file-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: start; }
+.file-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; align-items: stretch; }
 .board-h { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; color: #0f172a; margin: 26px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #e2e8f0; }
 .board-h:first-of-type { margin-top: 6px; }
 .cond-plan-h { font-size: 17px; font-weight: 700; margin: 26px 0 6px; color: #0f172a; }
 .file-board .atelier { margin-bottom: 0; }
-.file-board .eq-grid { grid-template-columns: 1fr; }
+.file-board .eq-grid { grid-template-columns: 1fr; flex: 1; }
+.file-board .phase-card { height: 100%; }
+.file-board .atelier { min-width: 0; display: flex; flex-direction: column; }
+.file-board .prod-scroll { overflow-x: hidden; }
+.pf, .pd { overflow-wrap: anywhere; }
 .lot-row { cursor: pointer; }
 .lot-row:hover td { background: #f0f9ff; }
 .lot-row:hover .pf { color: #0891b2; text-decoration: underline; }
