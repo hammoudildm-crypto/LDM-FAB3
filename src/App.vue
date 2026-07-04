@@ -331,7 +331,7 @@ body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; -
   border-radius: 0 3px 3px 0; background: var(--accent-bright); }
 
 .side-foot { border-top: 1px solid var(--topbar-border); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-.theme-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.theme-row { display: none; flex-wrap: wrap; gap: 8px; }
 .theme-dot { width: 20px; height: 20px; border-radius: 6px; border: 1px solid rgba(255,255,255,.18); cursor: pointer; padding: 0; }
 .theme-dot.sel { outline: 2px solid var(--accent-bright); outline-offset: 1px; }
 .foot-row { display: flex; align-items: center; gap: 8px; }
