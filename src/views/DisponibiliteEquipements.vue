@@ -695,7 +695,7 @@ onMounted(async () => {
 .atelier-titre { font-size: 13px; font-weight: 700; margin: 0 0 7px; color: #0f172a; border-left: 3px solid #0f766e; padding-left: 8px; line-height: 1.25; }
 .at-sum { display: block; font-size: 10.5px; font-weight: 500; color: #64748b; margin: 2px 0 0 11px; }
 /* File d'attente en colonnes (façon Kanban) */
-.file-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(228px, 1fr)); gap: 12px; align-items: start; }
+.file-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: start; }
 .board-h { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; color: #0f172a; margin: 26px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #e2e8f0; }
 .board-h:first-of-type { margin-top: 6px; }
 .cond-plan-h { font-size: 17px; font-weight: 700; margin: 26px 0 6px; color: #0f172a; }
