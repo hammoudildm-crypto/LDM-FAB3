@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 import { ICONS, TINTS } from '../icons.js'
+import MiniChart from '../components/MiniChart.vue'
 
 const anneeCourante = new Date().getFullYear()
 const moisCourant = new Date().getMonth()
@@ -511,23 +512,15 @@ onMounted(async () => {
         <div class="cols">
           <section class="card">
             <h2 class="card-title">Fabrication {{ anneeSel }} par mois (boîtes)</h2>
-            <div class="histo">
-              <div v-for="(v, i) in fabParMois" :key="i" class="histo-col clic" @click="ouvrirMois(i, 'fab')" :title="MOIS[i] + ' : ' + fmt(v) + ' boîtes — cliquer pour la liste'">
-                <div class="histo-bar-wrap"><div class="histo-bar fab" :style="{ height: (v / maxFabMois * 100) + '%' }"><span v-if="v" class="histo-val">{{ fmtC(v) }}</span></div></div>
-                <span class="histo-lbl">{{ MOIS[i] }}</span>
-              </div>
-            </div>
+            <MiniChart :labels="MOIS" :format="fmt" :value-format="fmtC" show-values clickable @pick="ouvrirMois($event, 'fab')"
+              :series="[{ label: 'Fabrication', color: '#0f766e', data: fabParMois }]" />
             <p v-if="!fabRealisee" class="empty">Aucune fabrication en {{ anneeSel }}.</p>
           </section>
 
           <section class="card">
             <h2 class="card-title">Conditionnement {{ anneeSel }} par mois (boîtes)</h2>
-            <div class="histo">
-              <div v-for="(v, i) in prodParMois" :key="i" class="histo-col clic" @click="ouvrirMois(i, 'cond')" :title="MOIS[i] + ' : ' + fmt(v) + ' boîtes — cliquer pour la liste'">
-                <div class="histo-bar-wrap"><div class="histo-bar cond" :style="{ height: (v / maxMois * 100) + '%' }"><span v-if="v" class="histo-val">{{ fmtC(v) }}</span></div></div>
-                <span class="histo-lbl">{{ MOIS[i] }}</span>
-              </div>
-            </div>
+            <MiniChart :labels="MOIS" :format="fmt" :value-format="fmtC" show-values clickable :show-switch="false" @pick="ouvrirMois($event, 'cond')"
+              :series="[{ label: 'Conditionnement', color: '#059669', data: prodParMois }]" />
             <p v-if="!totalBoites" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
           </section>
         </div>
