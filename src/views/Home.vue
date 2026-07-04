@@ -635,7 +635,7 @@ onMounted(async () => {
             <div v-for="d in caParDonneur" :key="d.nom" class="bar-row">
               <span class="bar-lbl don">{{ d.nom }}</span>
               <div class="bar-track"><div class="bar-fill prod" :style="{ width: (d.ca / maxCaDonneur * 100) + '%' }"></div></div>
-              <span class="bar-num xl">{{ fmtDA(d.ca) }}</span>
+              <span class="bar-num ca-num">{{ fmtDA(d.ca) }}</span>
             </div>
             <p v-if="!caParDonneur.length" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
           </section>
@@ -737,6 +737,7 @@ html[data-theme="sombre"] .histo-val, html[data-theme="minuit"] .histo-val { col
 .bar-num { width: 36px; text-align: right; font-weight: 700; font-size: 14px; flex-shrink: 0; }
 .bar-num.wide { width: 64px; }
 .bar-num.xl { width: 78px; font-size: 13px; }
+.bar-num.ca-num { width: auto; min-width: 96px; white-space: nowrap; font-size: 12px; }
 
 .btn { display: inline-block; background: #0f766e; color: #fff; border: 0; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; }
 .btn:hover { background: #0c5f59; }
