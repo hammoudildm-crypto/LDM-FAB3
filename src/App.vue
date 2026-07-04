@@ -20,8 +20,27 @@ provide('peutEditer', peutEditer)
 const roleLabel = computed(() => ({ admin: 'Admin', operateur: 'Opérateur', lecteur: 'Lecteur' }[role.value] || ''))
 
 // --- Navigation par rôle, en groupes repliables ---
+const LINK_ICONS = {
+  '/': '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  '/realisation-plan': '<path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/>',
+  '/rendement': '<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+  '/ca': '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  '/dispo-equipements': '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+  '/avancement': '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  '/encours': '<path d="M5 22h14M5 2h14M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/>',
+  '/dossier': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+  '/audit': '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>',
+  '/plan': '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  '/ordres': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/>',
+  '/suivi': '<path d="M9 2v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V2"/><line x1="8" y1="2" x2="16" y2="2"/>',
+  '/conditionnement': '<path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><polyline points="3 8 12 13 21 8"/><line x1="12" y1="13" x2="12" y2="21"/>',
+  '/verification-ddl': '<circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/>',
+  '/effectifs': '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  '/referentiels': '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
+  '/habilitations': '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+}
 const NAV_GROUPS = [
-  { key: 'consultation', label: 'Consultation', role: null, links: [
+  { key: 'consultation', label: 'Consultation', role: null, icon: '<path d="M3 3v18h18"/><polyline points="7 13 11 9 14 12 20 6"/>', links: [
     ['/realisation-plan', 'Réalisation vs Plan'],
     ['/rendement', 'Rendement'],
     ['/ca', "Chiffre d'affaires"],
@@ -31,7 +50,7 @@ const NAV_GROUPS = [
     ['/dossier', 'Dossier de lot'],
     ['/audit', "Journal d'audit"],
   ] },
-  { key: 'production', label: 'Production & saisie', role: 'edit', links: [
+  { key: 'production', label: 'Production & saisie', role: 'edit', icon: '<path d="M2 20h20"/><path d="M4 20V9l5 3V9l5 3V5l5 3v12"/>', links: [
     ['/plan', 'Plan directeur'],
     ['/ordres', 'Ordres de fabrication'],
     ['/suivi', 'Suivi fabrication'],
@@ -39,7 +58,7 @@ const NAV_GROUPS = [
     ['/verification-ddl', 'Vérification DDL'],
     ['/effectifs', 'Effectifs'],
   ] },
-  { key: 'admin', label: 'Administration', role: 'admin', links: [
+  { key: 'admin', label: 'Administration', role: 'admin', icon: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>', links: [
     ['/referentiels', 'Référentiels'],
     ['/habilitations', 'Habilitations'],
   ] },
@@ -169,18 +188,18 @@ async function signOut() {
         <span class="brand-wm">LDM<span class="brand-sub">FAB3</span></span>
       </div>
       <nav class="side-nav">
-        <RouterLink to="/" class="side-link" @click="sidebarOpen = false">Tableau de bord</RouterLink>
+        <RouterLink to="/" class="side-link" @click="sidebarOpen = false"><span class="link-in"><span class="link-ic"><svg viewBox="0 0 24 24" v-html="LINK_ICONS['/']"></svg></span>Tableau de bord</span></RouterLink>
         <template v-if="session">
           <template v-for="g in NAV_GROUPS" :key="g.key">
-            <template v-if="groupVisible(g)">
+            <div v-if="groupVisible(g)" class="nav-group" :class="{ open: openGroups.has(g.key) }">
               <button class="side-group side-group-btn" :class="{ open: openGroups.has(g.key) }" @click="toggleGroup(g.key)">
-                <span>{{ g.label }}</span>
+                <span class="grp-label"><span class="grp-ic"><svg viewBox="0 0 24 24" v-html="g.icon"></svg></span>{{ g.label }}</span>
                 <span class="grp-caret">▾</span>
               </button>
               <div v-show="openGroups.has(g.key)" class="grp-links">
-                <RouterLink v-for="l in g.links" :key="l[0]" :to="l[0]" class="side-link" @click="sidebarOpen = false">{{ l[1] }}</RouterLink>
+                <RouterLink v-for="l in g.links" :key="l[0]" :to="l[0]" class="side-link" @click="sidebarOpen = false"><span class="link-in"><span class="link-ic"><svg viewBox="0 0 24 24" v-html="LINK_ICONS[l[0]]"></svg></span>{{ l[1] }}</span></RouterLink>
               </div>
-            </template>
+            </div>
           </template>
         </template>
       </nav>
@@ -282,14 +301,26 @@ body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; -
 .side-nav { flex: 1; overflow-y: auto; padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 1px; }
 .side-nav::-webkit-scrollbar { width: 8px; }
 .side-nav::-webkit-scrollbar-thumb { background: var(--topbar-border); border-radius: 8px; }
-.side-group { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em;
-  color: var(--topbar-muted); opacity: .65; padding: 14px 10px 5px; }
+.side-group { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--topbar-text); opacity: .55; padding: 15px 10px 6px; }
 .side-group-btn { display: flex; align-items: center; justify-content: space-between; width: 100%;
   background: none; border: 0; cursor: pointer; font-family: inherit; text-align: left; border-radius: 6px; transition: opacity .15s ease, color .15s ease; }
-.side-group-btn:hover { opacity: 1; color: var(--topbar-text); }
+.side-group-btn:hover { opacity: .9; color: var(--topbar-text); }
 .grp-caret { font-size: 10px; opacity: .8; transition: transform .18s ease; }
 .side-group-btn.open .grp-caret { transform: rotate(180deg); }
-.grp-links { display: flex; flex-direction: column; gap: 1px; }
+.grp-links { display: flex; flex-direction: column; gap: 1px; position: relative; margin: 2px 0 4px; }
+.grp-links::before { content: ""; position: absolute; left: 6px; top: 2px; bottom: 4px; width: 1.5px; border-radius: 2px; background: var(--topbar-border); opacity: .55; }
+.grp-links .side-link { padding-left: 16px; font-size: 13px; font-weight: 500; }
+.grp-links a.router-link-exact-active::before { left: 6px; top: 8px; bottom: 8px; width: 2px; opacity: 1; }
+.nav-group { border-radius: 10px; transition: background .18s ease; }
+.nav-group.open { background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.02)); padding-bottom: 5px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); }
+.grp-label { display: inline-flex; align-items: center; gap: 9px; }
+.grp-ic { display: inline-flex; width: 16px; height: 16px; flex-shrink: 0; }
+.grp-ic svg { width: 16px; height: 16px; fill: none; stroke: var(--accent-bright); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.link-in { display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
+.link-ic { display: inline-flex; width: 15px; height: 15px; flex-shrink: 0; opacity: .75; }
+.link-ic svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.side-nav a.router-link-exact-active .link-ic { opacity: 1; }
 .side-link { display: flex; align-items: center; justify-content: space-between; gap: 8px;
   color: var(--topbar-muted); text-decoration: none; font-size: 13.5px; font-weight: 500;
   padding: 8px 11px; border-radius: 8px; white-space: nowrap; background: none; border: 0; cursor: pointer;
