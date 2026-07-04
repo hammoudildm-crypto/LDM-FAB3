@@ -18,7 +18,7 @@ const props = defineProps({
 const emit = defineEmits(['pick'])
 const vfmt = computed(() => props.valueFormat || props.format)
 
-const CH = { w: 820, h: 240, pl: 12, pr: 12, pt: 22, pb: 26 }
+const CH = { w: 820, h: 240, pl: 12, pr: 12, pt: 32, pb: 26 }
 const n = computed(() => props.labels.length)
 const bandW = computed(() => (CH.w - CH.pl - CH.pr) / Math.max(1, n.value - 1))
 const maxV = computed(() => props.max || Math.max(1, ...props.series.flatMap(s => s.data.map(v => Number(v) || 0))))
@@ -99,14 +99,14 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
 .mc-pt { stroke: #fff; stroke-width: 1.5; cursor: pointer; }
 .mc-pt:hover { r: 5; }
 .lch-lbl { fill: #94a3b8; font-size: 13px; font-weight: 600; }
-.ch { display: flex; align-items: flex-end; gap: 3px; height: 200px; padding-top: 20px; }
+.ch { display: flex; align-items: flex-end; gap: 3px; height: 200px; padding-top: 24px; }
 .ch-group { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; height: 100%; }
 .ch-bars { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
 .ch-bar { position: relative; border-radius: 5px 5px 2px 2px; min-height: 2px; transition: height .45s cubic-bezier(.4,0,.2,1); background-image: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,0) 55%); }
-.ch-val { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 700; color: #334155; white-space: nowrap; }
-.ch-val.rot { writing-mode: vertical-rl; top: auto; bottom: 100%; margin-bottom: 3px; font-size: 9px; }
-.mc-val { fill: #334155; font-size: 12px; font-weight: 700; }
-.mc-val.multi { font-size: 9.5px; }
+.ch-val { position: absolute; top: -17px; left: 50%; transform: translateX(-50%); font-size: 13px; font-weight: 700; color: #334155; white-space: nowrap; }
+.ch-val.rot { writing-mode: vertical-rl; top: auto; bottom: 100%; margin-bottom: 3px; font-size: 11px; }
+.mc-val { fill: #334155; font-size: 20px; font-weight: 700; }
+.mc-val.multi { font-size: 15px; }
 .ch-bar:hover { filter: brightness(1.08); }
 .ch-lbl { font-size: 10px; color: #94a3b8; margin-top: 6px; font-weight: 600; }
 .mc-hit { cursor: pointer; }
