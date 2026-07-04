@@ -327,6 +327,13 @@ const attentePeseeList = computed(() => {
 })
 
 function joursDepuis(d) { if (!d) return '—'; const j = Math.floor((Date.now() - new Date(d)) / 86400000); return j <= 0 ? 'auj.' : j + ' j' }
+function ageClass(d) {
+  if (!d) return ''
+  const j = Math.floor((Date.now() - new Date(d)) / 86400000)
+  if (j >= 7) return 'age-danger'
+  if (j >= 3) return 'age-warn'
+  return ''
+}
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
 function ouvrirLot(l, phaseKey) {
   if (phaseKey === 'conditionnement') router.push({ path: '/ordres', query: { edit: l.id } })
@@ -485,7 +492,7 @@ onMounted(async () => {
                     <tr v-for="l in attentePeseeList" :key="l.id" class="lot-row" :class="{ 'row-perime': l.perime }" @click="ouvrirLot(l, 'pesee')" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                       <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
-                      <td class="num age">{{ joursDepuis(l.date) }}</td>
+                      <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
                     </tr>
                   </tbody></table>
                 </div>
@@ -515,7 +522,7 @@ onMounted(async () => {
                     <tr v-for="l in ph.cours" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                       <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
-                      <td class="num age">{{ joursDepuis(l.date) }}</td>
+                      <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
                     </tr>
                   </tbody></table>
                 </div>
@@ -529,7 +536,7 @@ onMounted(async () => {
                     <tr v-for="l in ph.attente" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                       <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
-                      <td class="num age">{{ joursDepuis(l.date) }}</td>
+                      <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
                     </tr>
                   </tbody></table>
                 </div>
@@ -564,7 +571,7 @@ onMounted(async () => {
                       <tr v-for="l in g.cours" :key="l.id" class="lot-row" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir l'ordre de fabrication de ce lot">
                         <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                         <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
-                        <td class="num age">{{ joursDepuis(l.date) }}</td>
+                        <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
                       </tr>
                     </tbody></table>
                   </div>
@@ -577,7 +584,7 @@ onMounted(async () => {
                       <tr v-for="l in g.attente" :key="l.id" class="lot-row" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir l'ordre de fabrication de ce lot">
                         <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                         <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
-                        <td class="num age">{{ joursDepuis(l.date) }}</td>
+                        <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
                       </tr>
                     </tbody></table>
                   </div>
@@ -726,6 +733,8 @@ onMounted(async () => {
 .q-title.cours { color: #2563eb; }
 .q-title.attente { color: #b45309; }
 .age { color: #64748b; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.age.age-warn { color: #b45309; font-weight: 700; }
+.age.age-danger { color: #b91c1c; font-weight: 700; }
 .eq-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .eq-card { display: flex; flex-direction: column; }
