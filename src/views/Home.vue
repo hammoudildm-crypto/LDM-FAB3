@@ -484,20 +484,22 @@ onMounted(async () => {
         <div class="cols">
           <section class="card">
             <h2 class="card-title">Fabrication {{ anneeSel }} par mois (boîtes)</h2>
-            <div v-for="(v, i) in fabParMois" :key="i" class="bar-row">
-              <span class="bar-lbl mois">{{ MOIS[i] }}</span>
-              <div class="bar-track"><div class="bar-fill" :style="{ width: (v / maxFabMois * 100) + '%', background: '#0f766e' }"></div></div>
-              <span class="bar-num wide">{{ fmt(v) }}</span>
+            <div class="histo">
+              <div v-for="(v, i) in fabParMois" :key="i" class="histo-col" :title="MOIS[i] + ' : ' + fmt(v) + ' boîtes'">
+                <div class="histo-bar-wrap"><div class="histo-bar fab" :style="{ height: (v / maxFabMois * 100) + '%' }"></div></div>
+                <span class="histo-lbl">{{ MOIS[i] }}</span>
+              </div>
             </div>
             <p v-if="!fabRealisee" class="empty">Aucune fabrication en {{ anneeSel }}.</p>
           </section>
 
           <section class="card">
             <h2 class="card-title">Conditionnement {{ anneeSel }} par mois (boîtes)</h2>
-            <div v-for="(v, i) in prodParMois" :key="i" class="bar-row">
-              <span class="bar-lbl mois">{{ MOIS[i] }}</span>
-              <div class="bar-track"><div class="bar-fill prod" :style="{ width: (v / maxMois * 100) + '%' }"></div></div>
-              <span class="bar-num wide">{{ fmt(v) }}</span>
+            <div class="histo">
+              <div v-for="(v, i) in prodParMois" :key="i" class="histo-col" :title="MOIS[i] + ' : ' + fmt(v) + ' boîtes'">
+                <div class="histo-bar-wrap"><div class="histo-bar cond" :style="{ height: (v / maxMois * 100) + '%' }"></div></div>
+                <span class="histo-lbl">{{ MOIS[i] }}</span>
+              </div>
             </div>
             <p v-if="!totalBoites" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
           </section>
@@ -718,6 +720,14 @@ html[data-theme="sombre"] .tab.active { background: #1d2740 !important; }
 .bar-fill.st-lib { background: #22c55e; }
 .bar-fill.st-rej { background: #ef4444; }
 .bar-fill.prod { background: #0f766e; }
+.histo { display: flex; align-items: stretch; gap: 4px; height: 160px; padding-top: 6px; }
+.histo-col { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.histo-bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; }
+.histo-bar { width: 100%; border-radius: 5px 5px 2px 2px; min-height: 2px; transition: height .5s cubic-bezier(.4,0,.2,1); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
+.histo-bar.fab { background: linear-gradient(180deg, #2dd4bf, #0f766e); }
+.histo-bar.cond { background: linear-gradient(180deg, #4ade80, #059669); }
+.histo-bar:hover { filter: brightness(1.08); }
+.histo-lbl { font-size: 10px; color: #94a3b8; margin-top: 6px; font-weight: 600; }
 .bar-num { width: 36px; text-align: right; font-weight: 700; font-size: 14px; flex-shrink: 0; }
 .bar-num.wide { width: 64px; }
 .bar-num.xl { width: 78px; font-size: 13px; }
