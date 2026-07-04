@@ -234,7 +234,8 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
           <span><i class="dot cond"></i>Conditionnement</span>
         </div>
       </div>
-      <MiniChart :labels="MOIS" :format="fmt" :max="maxMois"
+      <MiniChart :labels="MOIS" :format="fmt" :max="maxMois" show-values
+        :value-format="v => v == null ? '' : (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? Math.round(v / 1e3) + 'K' : String(v))"
         :series="[
           { label: 'Plan', color: '#94a3b8', data: planParMois, dash: true },
           { label: 'Fabrication', color: '#0f766e', data: fabParMois },
