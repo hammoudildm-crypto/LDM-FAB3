@@ -6,9 +6,8 @@ import { ICONS, TINTS } from '../icons.js'
 
 // Gamme de fabrication (mêmes libellés que dans le suivi des phases)
 const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Conditionnement']
-// Regroupement identique à la page Disponibilité équipements (Granulation + Séchage fusionnés)
-const PHASES_CARTES = ['Pesée', 'Granulation et séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Conditionnement']
-function carteDe(ph) { return (ph === 'Granulation' || ph === 'Séchage') ? 'Granulation et séchage' : ph }
+// Regroupement identique à la page Disponibilité équipements
+const PHASES_CARTES = ['En attente de pesée', 'Granulation et séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Conditionnement']
 const COURT = ['Pesée', 'Gran.', 'Séch.', 'Mél.', 'Comp.', 'Rempl.', 'Pell.', 'Cond.']
 
 const lots = ref([])
@@ -39,7 +38,7 @@ async function charger() {
   erreur.value = ''
 
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, produits(code_pf, designation, gamme)')
+    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, date_reception, boites_fabriquees, quantite_theorique, produits(code_pf, designation, gamme, unites_par_boite)')
     .eq('actif', true))
   if (rl.error) { erreur.value = rl.error.message; chargement.value = false; return }
   lots.value = rl.data || []
@@ -51,7 +50,7 @@ async function charger() {
   phases.value = rp.data || []
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
-    .select('ordre_id').eq('actif', true))
+    .select('ordre_id, quantite_conditionnee, statut').eq('actif', true))
   if (rc.error) { erreur.value = rc.error.message; chargement.value = false; return }
   conds.value = rc.data || []
 
@@ -75,6 +74,98 @@ const ordresConditionnes = computed(() => {
   const s = new Set()
   for (const c of conds.value) s.add(c.ordre_id)
   return s
+})
+
+// ===== Réplique EXACTE de la logique "File d'attente" (page Disponibilité équipements) =====
+const lotById = computed(() => { const m = {}; for (const l of lots.value) m[l.id] = l; return m })
+const condBoxParLot = computed(() => {
+  const m = {}
+  for (const c of conds.value) {
+    const l = lotById.value[c.ordre_id]
+    const upb = Number(l && l.produits ? l.produits.unites_par_boite : 0) || 0
+    const box = upb > 0 ? Math.floor(Number(c.quantite_conditionnee || 0) / upb) : 0
+    m[c.ordre_id] = (m[c.ordre_id] || 0) + box
+  }
+  return m
+})
+const condTermine = computed(() => { const s = new Set(); for (const c of conds.value) if (c.statut === 'Terminé' || c.statut === 'Libéré') s.add(c.ordre_id); return s })
+const condComplet = computed(() => {
+  const s = new Set(condTermine.value)
+  const cb = condBoxParLot.value
+  for (const o of lots.value) {
+    if (s.has(o.id)) continue
+    const avail = Number(o.boites_fabriquees || 0) || Number(o.quantite_theorique || 0)
+    if (avail > 0 && (cb[o.id] || 0) >= avail * 0.85) s.add(o.id)
+  }
+  return s
+})
+const phasesLotQ = computed(() => {
+  const m = {}
+  for (const sp of phases.value) {
+    const id = sp.ordre_id, nom = (sp.phase || '').toLowerCase()
+    if (!m[id]) m[id] = {}
+    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut || null }
+    const cur = m[id][nom]
+    if (!cur || sp.statut === 'Terminé') m[id][nom] = rec
+  }
+  return m
+})
+const PHASE_KEYS = ['pesee', 'granulation', 'sechage', 'melange', 'compression', 'remplissage', 'pelliculage', 'conditionnement']
+const NOM_KEY_Q = { 'pesée': 'pesee', 'granulation': 'granulation', 'séchage': 'sechage', 'mélange': 'melange', 'compression': 'compression', 'remplissage gélules': 'remplissage', 'pelliculage': 'pelliculage', 'conditionnement': 'conditionnement' }
+const CANON_FAB_Q = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+const queuePhaseQ = computed(() => {
+  const q = {}
+  for (const k of PHASE_KEYS) q[k] = { attente: [], cours: [] }
+  const condFini = condComplet.value
+  const condAny = ordresConditionnes.value
+  for (const o of lots.value) {
+    if (!o.date_lancement || condFini.has(o.id)) continue
+    if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
+    const pl = phasesLotQ.value[o.id] || {}
+    const stat = (nom) => (pl[(nom || '').toLowerCase()] || {}).statut
+    const gamme = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB_Q
+    if (!o.date_fin_fabrication) {
+      let courante = null
+      for (let i = 0; i < gamme.length; i++) { if (stat(gamme[i]) !== 'Terminé') { courante = gamme[i]; break } }
+      if (!courante) { (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ id: o.id }); continue }
+      const k = NOM_KEY_Q[courante.toLowerCase()]
+      if (!k || !q[k]) continue
+      if (stat(courante) === 'En cours') q[k].cours.push({ id: o.id })
+      else q[k].attente.push({ id: o.id })
+    } else {
+      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ id: o.id })
+    }
+  }
+  return q
+})
+const attentePesee = computed(() => {
+  const cc = condComplet.value
+  const res = []
+  for (const o of lots.value) {
+    if (!o.date_reception && !o.date_lancement) continue
+    if (o.date_fin_fabrication) continue
+    if (cc.has(o.id)) continue
+    if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
+    const pl = phasesLotQ.value[o.id] || {}
+    if ((pl['pesée'] || {}).statut === 'Terminé') continue
+    res.push(o.id)
+  }
+  return res
+})
+// Carte + état (attente/cours) de chaque lot, identique à la file d'attente
+const CARTE_DE_KEY = { granulation: 'Granulation et séchage', sechage: 'Granulation et séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage Gélules', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
+const lotEtape = computed(() => {
+  const m = {}
+  for (const id of attentePesee.value) m[id] = { carte: 'En attente de pesée', etat: 'attente' }
+  const q = queuePhaseQ.value
+  for (const k in q) {
+    if (k === 'pesee') continue
+    const carte = CARTE_DE_KEY[k]
+    if (!carte) continue
+    for (const l of q[k].attente) { if (!m[l.id]) m[l.id] = { carte, etat: 'attente' } }
+    for (const l of q[k].cours) { m[l.id] = { carte, etat: 'cours' } }
+  }
+  return m
 })
 
 // Étiquettes courtes par nom de phase
@@ -135,10 +226,14 @@ const produitsListe = computed(() => {
 const filtres = computed(() => {
   const q = recherche.value.trim().toLowerCase()
   return lotsAnalyses.value.filter(({ lot, a }) => {
-    if (filtre.value === 'production' && (a.termine || a.nbRec === 0)) return false
-    if (filtre.value === 'termines' && !a.termine) return false
-    if (filtre.value === 'tous' && a.nbRec === 0) return false
-    if (filtrePhase.value && carteDe(a.currentPhase) !== filtrePhase.value) return false
+    if (filtrePhase.value) {
+      const le = lotEtape.value[lot.id]
+      if (!le || le.carte !== filtrePhase.value) return false
+    } else {
+      if (filtre.value === 'production' && (a.termine || a.nbRec === 0)) return false
+      if (filtre.value === 'termines' && !a.termine) return false
+      if (filtre.value === 'tous' && a.nbRec === 0) return false
+    }
     if (filtreProduit.value && !(lot.produits && lot.produits.code_pf === filtreProduit.value)) return false
     if (!q) return true
     const p = lot.produits
@@ -156,14 +251,14 @@ const nbSuivis = computed(() => lotsAnalyses.value.filter(x => x.a.nbRec > 0).le
 // Répartition des lots en production par étape courante
 const parEtape = computed(() => {
   const counts = {}
-  for (const ph of PHASES_CARTES) counts[ph] = 0
-  for (const x of lotsAnalyses.value) {
-    if (x.a.termine || x.a.nbRec === 0) continue
-    if (x.a.currentPhase) { const c = carteDe(x.a.currentPhase); counts[c] = (counts[c] || 0) + 1 }
+  for (const ph of PHASES_CARTES) counts[ph] = { att: 0, cours: 0 }
+  for (const id in lotEtape.value) {
+    const e = lotEtape.value[id]
+    if (!counts[e.carte]) counts[e.carte] = { att: 0, cours: 0 }
+    if (e.etat === 'cours') counts[e.carte].cours++
+    else counts[e.carte].att++
   }
-  const c = PHASES_CARTES.map(ph => ({ phase: ph, n: counts[ph] || 0 }))
-  const max = Math.max(1, ...c.map(x => x.n))
-  return c.map(x => ({ ...x, pct: Math.round(x.n / max * 100) }))
+  return PHASES_CARTES.map(ph => ({ phase: ph, att: counts[ph].att, cours: counts[ph].cours, n: counts[ph].att + counts[ph].cours }))
 })
 
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
@@ -210,6 +305,7 @@ onMounted(async () => {
           <div v-for="e in parEtape" :key="e.phase" class="etape-card" :class="{ sel: filtrePhase === e.phase }" @click="filtrePhase = filtrePhase === e.phase ? '' : e.phase">
             <div class="ec-n">{{ e.n }}</div>
             <div class="ec-lbl">{{ e.phase }}</div>
+            <div class="ec-sub"><span class="ec-att">{{ e.att }} en attente</span> · <span class="ec-cours">{{ e.cours }} en cours</span></div>
           </div>
         </div>
       </aside>
@@ -304,6 +400,9 @@ onMounted(async () => {
 .ec-n { font-size: 26px; font-weight: 800; color: #0f766e; line-height: 1; }
 .ec-lbl { font-size: 12px; font-weight: 500; color: #475569; margin-top: 6px; }
 .etape-card.sel .ec-lbl { color: #0f766e; font-weight: 600; }
+.ec-sub { font-size: 10.5px; color: #94a3b8; margin-top: 5px; }
+.ec-att { color: #b45309; font-weight: 600; }
+.ec-cours { color: #0f766e; font-weight: 600; }
 .rep-n { font-size: 13px; font-weight: 600; text-align: right; color: #0f172a; }
 
 .filters { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
