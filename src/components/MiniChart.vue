@@ -75,7 +75,7 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
     </div>
 
     <div v-else class="ch">
-      <div v-for="(mo, i) in labels" :key="i" class="ch-group" :class="{ clic: clickable }" @click="clickable && emit('pick', i)">
+      <div v-for="(mo, i) in labels" :key="i" class="ch-group">
         <div class="ch-bars">
           <template v-for="(s, si) in series" :key="si">
             <div v-if="s.data[i] != null" class="ch-bar" :class="{ clic: clickable }" @click.stop="clickable && emit('pick', i, si)" :style="{ height: barH(s.data[i]), backgroundColor: colOf(s, s.data[i]), width: (series.length === 1 ? 82 : Math.floor(84 / series.length)) + '%', maxWidth: (series.length === 1 ? 34 : Math.floor(72 / series.length)) + 'px' }" :title="mo + ' — ' + s.label + ' : ' + format(s.data[i])"><span v-if="showValues && s.data[i]" class="ch-val" :class="{ rot: series.length > 1 }">{{ vfmt(s.data[i]) }}</span></div>
