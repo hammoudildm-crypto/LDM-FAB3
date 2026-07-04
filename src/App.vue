@@ -73,7 +73,7 @@ const THEMES = [['clair', 'Clair'], ['indigo', 'Indigo'], ['emeraude', 'Émeraud
 const theme = ref('clair')
 const zoom = ref(90)
 function setZoom(z) {
-  zoom.value = Math.max(70, Math.min(150, z))
+  zoom.value = Math.max(20, Math.min(200, z))
   try { localStorage.setItem('ldmfab-zoom', String(zoom.value)) } catch (e) { /* ignore */ }
 }
 function changeZoom(d) { setZoom(zoom.value + d) }
@@ -103,7 +103,7 @@ onMounted(async () => {
     const saved = localStorage.getItem('ldmfab-theme')
     if (saved) { theme.value = saved; document.documentElement.dataset.theme = saved }
     const sz = parseInt(localStorage.getItem('ldmfab-zoom') || '', 10)
-    if (sz) zoom.value = Math.max(70, Math.min(150, sz))
+    if (sz) zoom.value = Math.max(20, Math.min(200, sz))
   } catch (e) { /* ignore */ }
   document.addEventListener('click', onDocClick)
   const res = await supabase.auth.getSession()
@@ -151,9 +151,9 @@ async function signOut() {
         </div>
         <div class="foot-row">
           <div class="zoom-ctl" title="Zoom des pages">
-            <button class="zoom-btn" @click="changeZoom(-10)" :disabled="zoom <= 70" title="Réduire">−</button>
+            <button class="zoom-btn" @click="changeZoom(-5)" :disabled="zoom <= 20" title="Réduire">−</button>
             <button class="zoom-val" @click="setZoom(100)" title="Réinitialiser à 100 %">{{ zoom }}%</button>
-            <button class="zoom-btn" @click="changeZoom(10)" :disabled="zoom >= 150" title="Agrandir">+</button>
+            <button class="zoom-btn" @click="changeZoom(5)" :disabled="zoom >= 200" title="Agrandir">+</button>
           </div>
           <button class="zoom-btn solo" @click="refreshTick++" title="Actualiser les données">⟳</button>
         </div>
