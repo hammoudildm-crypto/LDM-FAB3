@@ -6,6 +6,9 @@ import { ICONS, TINTS } from '../icons.js'
 
 // Gamme de fabrication (mêmes libellés que dans le suivi des phases)
 const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Conditionnement']
+// Regroupement identique à la page Disponibilité équipements (Granulation + Séchage fusionnés)
+const PHASES_CARTES = ['Pesée', 'Granulation et séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Conditionnement']
+function carteDe(ph) { return (ph === 'Granulation' || ph === 'Séchage') ? 'Granulation et séchage' : ph }
 const COURT = ['Pesée', 'Gran.', 'Séch.', 'Mél.', 'Comp.', 'Rempl.', 'Pell.', 'Cond.']
 
 const lots = ref([])
@@ -135,7 +138,7 @@ const filtres = computed(() => {
     if (filtre.value === 'production' && (a.termine || a.nbRec === 0)) return false
     if (filtre.value === 'termines' && !a.termine) return false
     if (filtre.value === 'tous' && a.nbRec === 0) return false
-    if (filtrePhase.value && a.currentPhase !== filtrePhase.value) return false
+    if (filtrePhase.value && carteDe(a.currentPhase) !== filtrePhase.value) return false
     if (filtreProduit.value && !(lot.produits && lot.produits.code_pf === filtreProduit.value)) return false
     if (!q) return true
     const p = lot.produits
@@ -153,12 +156,12 @@ const nbSuivis = computed(() => lotsAnalyses.value.filter(x => x.a.nbRec > 0).le
 // Répartition des lots en production par étape courante
 const parEtape = computed(() => {
   const counts = {}
-  for (const ph of PHASES) counts[ph] = 0
+  for (const ph of PHASES_CARTES) counts[ph] = 0
   for (const x of lotsAnalyses.value) {
     if (x.a.termine || x.a.nbRec === 0) continue
-    if (x.a.currentPhase) counts[x.a.currentPhase]++
+    if (x.a.currentPhase) { const c = carteDe(x.a.currentPhase); counts[c] = (counts[c] || 0) + 1 }
   }
-  const c = PHASES.map(ph => ({ phase: ph, n: counts[ph] || 0 }))
+  const c = PHASES_CARTES.map(ph => ({ phase: ph, n: counts[ph] || 0 }))
   const max = Math.max(1, ...c.map(x => x.n))
   return c.map(x => ({ ...x, pct: Math.round(x.n / max * 100) }))
 })
@@ -216,7 +219,7 @@ onMounted(async () => {
         <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
         <select v-model="filtrePhase" class="sel">
           <option value="">Toutes les étapes</option>
-          <option v-for="ph in PHASES" :key="ph" :value="ph">{{ ph }}</option>
+          <option v-for="ph in PHASES_CARTES" :key="ph" :value="ph">{{ ph }}</option>
         </select>
         <select v-model="filtreProduit" class="sel">
           <option value="">Tous les produits</option>
