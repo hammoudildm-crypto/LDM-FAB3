@@ -135,6 +135,7 @@ async function chargerAlertes() {
   if (r.error) { console.error('alertes:', r.error.message); return }
   alertes.value = (r.data || []).map(o => ({
     id: o.id, lot: o.numero_lot || '—',
+    code: o.produits ? o.produits.code_pf : '',
     desig: o.produits ? o.produits.designation : '',
     date: o.date_fin_validite,
     dateStr: new Date(o.date_fin_validite).toLocaleDateString('fr-FR'),
@@ -239,13 +240,13 @@ async function signOut() {
     <div v-if="alertesOuvertes" class="notif-backdrop" @click="alertesOuvertes = false"></div>
     <div v-if="alertesOuvertes" class="notif-panel">
       <div class="notif-head">
-        <span>Validité OF — sous 3 jours</span>
+        <span>OF non valides &amp; sous 3 jours ({{ alertes.length }})</span>
         <button class="notif-x" @click="alertesOuvertes = false" title="Fermer">✕</button>
       </div>
       <RouterLink v-for="a in alertes" :key="a.id" :to="{ path: '/ordres', query: { edit: a.id } }"
         class="notif-item" :class="{ perime: a.jours <= 0 }" @click="alertesOuvertes = false; sidebarOpen = false">
-        <div class="notif-lot">{{ a.lot }} <span class="notif-desig">{{ a.desig }}</span></div>
-        <div class="notif-when">{{ a.jours <= 0 ? 'Expiré' : 'Expire dans ' + a.jours + ' j' }} · {{ a.dateStr }}</div>
+        <div class="notif-lot">{{ a.lot }} <span class="notif-desig">{{ a.code ? a.code + ' — ' : '' }}{{ a.desig }}</span></div>
+        <div class="notif-when">{{ a.jours <= 0 ? '⛔ OF non valide (expiré)' : '⏳ Expire dans ' + a.jours + ' j' }} · {{ a.dateStr }}</div>
       </RouterLink>
       <p v-if="!alertes.length" class="notif-empty">Aucune alerte de validité.</p>
     </div>
