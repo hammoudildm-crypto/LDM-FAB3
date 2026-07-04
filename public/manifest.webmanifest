@@ -1,0 +1,17 @@
+{
+  "name": "LDM-FAB3 — Gestion de fabrication",
+  "short_name": "LDM-FAB3",
+  "description": "Gestion de production pharmaceutique LDM Groupe",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f2a33",
+  "theme_color": "#0f2a33",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
