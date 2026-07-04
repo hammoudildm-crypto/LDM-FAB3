@@ -90,6 +90,7 @@ const pilotActive = computed(() => PILOT.includes(route.path))
 // --- Thèmes ---
 const THEMES = [['clair', 'Clair'], ['indigo', 'Indigo'], ['emeraude', 'Émeraude'], ['violet', 'Violet'], ['ocean', 'Océan'], ['ardoise', 'Ardoise'], ['sombre', 'Sombre'], ['minuit', 'Minuit']]
 const theme = ref('clair')
+const themeOuvert = ref(false)
 const zoom = ref(90)
 function setZoom(z) {
   zoom.value = Math.max(20, Math.min(200, z))
@@ -204,7 +205,11 @@ async function signOut() {
         </template>
       </nav>
       <div class="side-foot">
-        <div class="theme-row" title="Thème">
+        <button class="theme-toggle" @click="themeOuvert = !themeOuvert" :class="{ open: themeOuvert }">
+          <span class="tt-left"><span class="tt-dot" :class="'sw-' + theme"></span>Thème</span>
+          <span class="grp-caret">▾</span>
+        </button>
+        <div v-show="themeOuvert" class="theme-row" title="Thème">
           <button v-for="t in THEMES" :key="t[0]" class="theme-dot" :class="['sw-' + t[0], { sel: theme === t[0] }]" @click="setTheme(t[0])" :title="t[1]"></button>
         </div>
         <div class="foot-row">
@@ -331,7 +336,12 @@ body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; -
   border-radius: 0 3px 3px 0; background: var(--accent-bright); }
 
 .side-foot { border-top: 1px solid var(--topbar-border); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-.theme-row { display: none; flex-wrap: wrap; gap: 8px; }
+.theme-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.theme-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; background: none; border: 1px solid var(--topbar-border); color: var(--topbar-muted); cursor: pointer; font-family: inherit; font-size: 13px; padding: 7px 11px; border-radius: 8px; transition: color .15s ease, border-color .15s ease; }
+.theme-toggle:hover { color: var(--topbar-text); border-color: var(--topbar-muted); }
+.tt-left { display: inline-flex; align-items: center; gap: 8px; }
+.tt-dot { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(255,255,255,.2); flex-shrink: 0; }
+.theme-toggle.open .grp-caret { transform: rotate(180deg); }
 .theme-dot { width: 20px; height: 20px; border-radius: 6px; border: 1px solid rgba(255,255,255,.18); cursor: pointer; padding: 0; }
 .theme-dot.sel { outline: 2px solid var(--accent-bright); outline-offset: 1px; }
 .foot-row { display: flex; align-items: center; gap: 8px; }
