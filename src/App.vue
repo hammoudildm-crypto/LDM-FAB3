@@ -98,6 +98,42 @@ async function chargerRole() {
   role.value = r.data ? r.data.role : null
 }
 
+// --- Alertes : OF dont la validité expire sous 3 jours (et non encore fabriqués) ---
+const alertes = ref([])
+const alertesFermees = ref(false)
+async function chargerAlertes() {
+  if (!session.value) { alertes.value = []; return }
+  const auj = new Date()
+  const limite = new Date(auj.getTime() + 3 * 86400000).toISOString().slice(0, 10)
+  const r = await supabase.from('ordres_fabrication')
+    .select('id, numero_lot, date_fin_validite, produits(code_pf, designation)')
+    .eq('actif', true)
+    .not('date_fin_validite', 'is', null)
+    .is('date_fin_fabrication', null)
+    .lte('date_fin_validite', limite)
+  if (r.error) { console.error('alertes:', r.error.message); return }
+  alertes.value = (r.data || []).map(o => ({
+    id: o.id, lot: o.numero_lot || '—',
+    desig: o.produits ? o.produits.designation : '',
+    date: o.date_fin_validite,
+    jours: Math.ceil((new Date(o.date_fin_validite) - auj) / 86400000)
+  })).sort((a, b) => a.jours - b.jours)
+  notifierNavigateur()
+}
+function notifierNavigateur() {
+  if (!alertes.value.length || typeof Notification === 'undefined') return
+  const envoyer = () => {
+    try {
+      new Notification('LDM-FAB3 — Validité OF', {
+        body: alertes.value.length + ' ordre(s) de fabrication expire(nt) sous 3 jours.',
+        tag: 'ldmfab-validite'
+      })
+    } catch (e) { /* ignore */ }
+  }
+  if (Notification.permission === 'granted') envoyer()
+  else if (Notification.permission !== 'denied') Notification.requestPermission().then(p => { if (p === 'granted') envoyer() })
+}
+
 onMounted(async () => {
   try {
     const saved = localStorage.getItem('ldmfab-theme')
@@ -110,7 +146,8 @@ onMounted(async () => {
   if (res.error) { console.error('getSession:', res.error.message); return }
   session.value = res.data.session
   await chargerRole()
-  supabase.auth.onAuthStateChange(async (_event, s) => { session.value = s; await chargerRole() })
+  await chargerAlertes()
+  supabase.auth.onAuthStateChange(async (_event, s) => { session.value = s; await chargerRole(); await chargerAlertes() })
 })
 onUnmounted(() => document.removeEventListener('click', onDocClick))
 
@@ -176,6 +213,12 @@ async function signOut() {
         <span class="brand-wm">LDM<span class="brand-sub">FAB3</span></span>
         <button class="zoom-btn solo" @click="refreshTick++" title="Actualiser" style="margin-left:auto">⟳</button>
       </header>
+      <div v-if="alertes.length && !alertesFermees" class="alert-bar">
+        <span class="alert-ic">⚠</span>
+        <span class="alert-txt"><strong>{{ alertes.length }}</strong> ordre(s) de fabrication {{ alertes.length > 1 ? 'expirent' : 'expire' }} sous 3 jours : {{ alertes.slice(0, 4).map(a => a.lot).join(', ') }}<template v-if="alertes.length > 4"> …</template></span>
+        <RouterLink to="/ordres" class="alert-link" @click="alertesFermees = true">Voir</RouterLink>
+        <button class="alert-close" @click="alertesFermees = true" title="Masquer">✕</button>
+      </div>
       <main :style="{ zoom: zoom / 100 }">
         <RouterView :key="route.fullPath + '::' + refreshTick" />
       </main>
@@ -246,6 +289,12 @@ body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; -
 
 /* ===== Zone principale & mobile ===== */
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.alert-bar { display: flex; align-items: center; gap: 10px; background: #fff7ed; border-bottom: 1px solid #fed7aa; color: #9a3412; padding: 8px 16px; font-size: 13px; }
+.alert-ic { font-size: 15px; flex-shrink: 0; }
+.alert-txt { flex: 1; min-width: 0; }
+.alert-link { color: inherit; font-weight: 700; text-decoration: underline; white-space: nowrap; }
+.alert-close { background: none; border: 0; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 4px; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .alert-bar { background: #3b1d06; border-bottom-color: #7c2d12; color: #fdba74; }
 .mobile-top { display: none; }
 .side-backdrop { display: none; }
 @media (max-width: 900px) {
