@@ -28,6 +28,8 @@ const nbProduits = ref(0)
 const lots = ref([])
 const planData = ref([])
 const conditionnements = ref([])
+const moisSel = ref(null)
+function ouvrirMois(mois, type) { moisSel.value = { mois, type } }
 const phases = ref([])
 const realisations = ref([])
 
@@ -61,7 +63,7 @@ async function charger() {
   if (!rpp.error) planData.value = rpp.data
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
-    .select('ordre_id, quantite_entree, quantite_conditionnee, date_conditionnement, ordres_fabrication(date_fin_fabrication, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, pcsu, boites_theoriques, donneurs_ordre(nom)))')
+    .select('ordre_id, quantite_entree, quantite_conditionnee, date_conditionnement, ordres_fabrication(numero_lot, date_fin_fabrication, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, pcsu, boites_theoriques, donneurs_ordre(nom)))')
     .eq('actif', true))
   if (!rc.error) conditionnements.value = rc.data
 
@@ -362,6 +364,31 @@ const caParDonneur = computed(() => {
   return Object.values(m).filter(x => x.boites > 0).sort((a, b) => b.ca - a.ca)
 })
 const maxCaDonneur = computed(() => Math.max(1, ...caParDonneur.value.map(d => d.ca)))
+
+// Liste des lots du mois cliqué (fabrication ou conditionnement)
+const moisLots = computed(() => {
+  if (!moisSel.value) return []
+  const { mois, type } = moisSel.value
+  if (type === 'fab') {
+    return lotsAnnee.value.filter(l => {
+      if (!l.date_fin_fabrication || !l.boites_fabriquees) return false
+      const d = new Date(l.date_fin_fabrication)
+      return d.getFullYear() === anneeSel.value && d.getMonth() === mois
+    }).map(l => ({ id: l.id, lot: l.numero_lot || '—', prod: l.produits ? l.produits.designation : '', boites: Number(l.boites_fabriquees || 0) }))
+      .sort((a, b) => b.boites - a.boites)
+  }
+  const m = {}
+  for (const c of condAnnee.value) {
+    if (!c.date_conditionnement) continue
+    const d = new Date(c.date_conditionnement)
+    if (d.getFullYear() !== anneeSel.value || d.getMonth() !== mois) continue
+    const of = c.ordres_fabrication, p = prodDe(c)
+    if (!m[c.ordre_id]) m[c.ordre_id] = { id: c.ordre_id, lot: of ? (of.numero_lot || '—') : '—', prod: p ? p.designation : '', boites: 0 }
+    m[c.ordre_id].boites += boitesOf(c)
+  }
+  return Object.values(m).sort((a, b) => b.boites - a.boites)
+})
+const moisLotsTotal = computed(() => moisLots.value.reduce((s, l) => s + l.boites, 0))
 const realisationPlan = computed(() => {
   const m = {}
   for (const c of condAnnee.value) {
@@ -485,7 +512,7 @@ onMounted(async () => {
           <section class="card">
             <h2 class="card-title">Fabrication {{ anneeSel }} par mois (boîtes)</h2>
             <div class="histo">
-              <div v-for="(v, i) in fabParMois" :key="i" class="histo-col" :title="MOIS[i] + ' : ' + fmt(v) + ' boîtes'">
+              <div v-for="(v, i) in fabParMois" :key="i" class="histo-col clic" @click="ouvrirMois(i, 'fab')" :title="MOIS[i] + ' : ' + fmt(v) + ' boîtes — cliquer pour la liste'">
                 <div class="histo-bar-wrap"><div class="histo-bar fab" :style="{ height: (v / maxFabMois * 100) + '%' }"><span v-if="v" class="histo-val">{{ fmtC(v) }}</span></div></div>
                 <span class="histo-lbl">{{ MOIS[i] }}</span>
               </div>
@@ -496,7 +523,7 @@ onMounted(async () => {
           <section class="card">
             <h2 class="card-title">Conditionnement {{ anneeSel }} par mois (boîtes)</h2>
             <div class="histo">
-              <div v-for="(v, i) in prodParMois" :key="i" class="histo-col" :title="MOIS[i] + ' : ' + fmt(v) + ' boîtes'">
+              <div v-for="(v, i) in prodParMois" :key="i" class="histo-col clic" @click="ouvrirMois(i, 'cond')" :title="MOIS[i] + ' : ' + fmt(v) + ' boîtes — cliquer pour la liste'">
                 <div class="histo-bar-wrap"><div class="histo-bar cond" :style="{ height: (v / maxMois * 100) + '%' }"><span v-if="v" class="histo-val">{{ fmtC(v) }}</span></div></div>
                 <span class="histo-lbl">{{ MOIS[i] }}</span>
               </div>
@@ -659,6 +686,28 @@ onMounted(async () => {
       </div>
       </div>
     </template>
+
+    <div v-if="moisSel" class="mois-backdrop" @click="moisSel = null"></div>
+    <div v-if="moisSel" class="mois-modal">
+      <div class="mois-head">
+        <span>{{ moisSel.type === 'fab' ? 'Fabrication' : 'Conditionnement' }} — {{ MOIS[moisSel.mois] }} {{ anneeSel }}</span>
+        <button class="mois-x" @click="moisSel = null" title="Fermer">✕</button>
+      </div>
+      <div class="mois-sub">{{ moisLots.length }} lot(s) · {{ fmt(moisLotsTotal) }} boîtes</div>
+      <div class="mois-list">
+        <table>
+          <thead><tr><th>Lot</th><th>Produit</th><th class="num">Boîtes</th></tr></thead>
+          <tbody>
+            <tr v-for="l in moisLots" :key="l.id">
+              <td class="pf">{{ l.lot }}</td>
+              <td>{{ l.prod }}</td>
+              <td class="num">{{ fmt(l.boites) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="!moisLots.length" class="empty">Aucun lot pour ce mois.</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -734,6 +783,23 @@ html[data-theme="sombre"] .histo-val, html[data-theme="minuit"] .histo-val { col
 .histo-bar.rej { background: linear-gradient(180deg, #f87171, #dc2626); }
 .histo-bar:hover { filter: brightness(1.08); }
 .histo-lbl { font-size: 10px; color: #94a3b8; margin-top: 6px; font-weight: 600; }
+.histo-col.clic { cursor: pointer; border-radius: 6px; transition: background .15s ease; }
+.histo-col.clic:hover { background: rgba(15,118,110,.07); }
+.mois-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 70; }
+.mois-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 520px; max-width: calc(100vw - 32px); max-height: 80vh; display: flex; flex-direction: column; background: #fff; border-radius: 14px; box-shadow: 0 24px 60px rgba(16,24,40,.3); z-index: 71; overflow: hidden; }
+.mois-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; font-size: 15px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #eef2f6; }
+.mois-x { background: none; border: 0; cursor: pointer; color: #64748b; font-size: 16px; line-height: 1; }
+.mois-sub { padding: 8px 18px; font-size: 12px; color: #64748b; background: #f8fafc; border-bottom: 1px solid #eef2f6; }
+.mois-list { overflow-y: auto; padding: 6px 12px 14px; }
+.mois-list table { width: 100%; border-collapse: collapse; }
+.mois-list th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; padding: 8px; border-bottom: 1px solid #e2e8f0; }
+.mois-list td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+.mois-list td.num, .mois-list th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mois-list .pf { font-weight: 700; color: #0f766e; white-space: nowrap; }
+html[data-theme="sombre"] .mois-modal, html[data-theme="minuit"] .mois-modal { background: #161f33; }
+html[data-theme="sombre"] .mois-head, html[data-theme="minuit"] .mois-head { color: #e6edf6; border-bottom-color: #2a3650; }
+html[data-theme="sombre"] .mois-sub, html[data-theme="minuit"] .mois-sub { background: #0f1830; border-bottom-color: #2a3650; }
+html[data-theme="sombre"] .mois-list td, html[data-theme="minuit"] .mois-list td { border-bottom-color: #1f2940; color: #e6edf6; }
 .bar-num { width: 36px; text-align: right; font-weight: 700; font-size: 14px; flex-shrink: 0; }
 .bar-num.wide { width: 64px; }
 .bar-num.xl { width: 78px; font-size: 13px; }
