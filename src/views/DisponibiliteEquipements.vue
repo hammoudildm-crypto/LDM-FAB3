@@ -272,12 +272,15 @@ const vueCondLignes = computed(() => {
 })
 
 const kpisFile = computed(() => {
-  let att = 0, cours = 0, secs = 0
-  for (const ph of vueFile.value) { att += ph.attente.length; cours += ph.cours.length; if (ph.attente.length === 0 && ph.cours.length === 0) secs++ }
+  let attFab = 0, coursFab = 0, secs = 0
+  for (const ph of vueFile.value) { attFab += ph.attente.length; coursFab += ph.cours.length; if (ph.attente.length === 0 && ph.cours.length === 0) secs++ }
+  let attCond = 0, coursCond = 0
+  for (const g of vueCondLignes.value) { attCond += g.attente.length; coursCond += g.cours.length }
+  const pesee = attentePeseeList.value.length
   return [
-    { v: fmt(att), l: 'Lots en attente', tint: TINTS.amber, ic: ICONS.hourglass },
-    { v: fmt(cours), l: 'Lots en cours', tint: TINTS.blue, ic: ICONS.activity },
-    { v: fmt(secs), l: 'Files à sec (risque)', tint: TINTS.rose, ic: ICONS.alert },
+    { v: fmt(pesee + attFab + attCond), l: 'Lots en attente (toutes étapes)', tint: TINTS.amber, ic: ICONS.hourglass },
+    { v: fmt(coursFab + coursCond), l: 'Lots en cours (toutes étapes)', tint: TINTS.blue, ic: ICONS.activity },
+    { v: fmt(secs), l: 'Ateliers à sec (risque)', tint: TINTS.rose, ic: ICONS.alert },
   ]
 })
 // Lots planifiés EN ATTENTE DE PESÉE : réception OF faite, pesée pas encore terminée
