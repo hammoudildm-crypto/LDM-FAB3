@@ -70,14 +70,13 @@ function groupVisible(g) {
 }
 const openGroups = ref(new Set(['consultation']))
 function toggleGroup(key) {
-  const s = new Set(openGroups.value)
-  s.has(key) ? s.delete(key) : s.add(key)
-  openGroups.value = s
+  // Accordéon : un seul groupe ouvert à la fois
+  openGroups.value = openGroups.value.has(key) ? new Set() : new Set([key])
 }
-// Déplier automatiquement le groupe de la page active
+// Déplier automatiquement le groupe de la page active (et fermer les autres)
 function ouvrirGroupeActif(p) {
   const g = NAV_GROUPS.find(gr => gr.links.some(l => l[0] === p))
-  if (g && !openGroups.value.has(g.key)) openGroups.value = new Set([...openGroups.value, g.key])
+  if (g) openGroups.value = new Set([g.key])
 }
 ouvrirGroupeActif(route.path)
 watch(() => route.path, (p) => ouvrirGroupeActif(p))
