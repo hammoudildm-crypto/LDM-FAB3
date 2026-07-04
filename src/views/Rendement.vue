@@ -542,7 +542,7 @@ onMounted(chargerTout)
             <span><i class="dot av"></i>Avarie conditionnement</span>
           </div>
         </div>
-        <MiniChart :labels="MOIS" :format="pct2" :value-format="v => v == null ? '' : v.toFixed(1).replace('.', ',')" show-values clickable @pick="ouvrirMoisDechets($event)"
+        <MiniChart :labels="MOIS" :format="pct2" :value-format="v => v == null ? '' : v.toFixed(1).replace('.', ',')" show-values clickable @pick="ouvrirMoisDechets"
           :series="[
             { label: 'Fabrication', color: '#0f766e', data: avarieFabMois },
             { label: 'Conditionnement', color: '#ef4444', data: avarieCondMois }
