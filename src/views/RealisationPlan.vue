@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 import { ICONS, TINTS } from '../icons.js'
 import PageHeader from '../components/PageHeader.vue'
+import MiniChart from '../components/MiniChart.vue'
 
 const anneeCourante = new Date().getFullYear()
 const ANNEES = []
@@ -174,6 +175,14 @@ const parProduit = computed(() => {
 })
 
 const w = (v) => (Math.min(100, (v / maxMois.value) * 100)) + '%'
+
+// --- Graphe en courbes (SVG) ---
+const CH = { w: 820, h: 250, pl: 12, pr: 12, pt: 14, pb: 28 }
+function chX(i) { return CH.pl + (i / 11) * (CH.w - CH.pl - CH.pr) }
+function chY(v) { const m = maxMois.value || 1; return CH.h - CH.pb - (Math.min(v, m) / m) * (CH.h - CH.pt - CH.pb) }
+function chPts(arr) { return arr.map((v, i) => chX(i) + ',' + chY(v)).join(' ') }
+function chArea(arr) { const base = CH.h - CH.pb; return chX(0) + ',' + base + ' ' + chPts(arr) + ' ' + chX(11) + ',' + base }
+const chartType = ref('courbes') // 'courbes' | 'aires' | 'barres'
 const fmt = (n) => n == null ? '—' : Number(Math.round(n)).toLocaleString('fr-FR')
 const fmtDA = (n) => n == null ? '—' : Number(Math.round(n)).toLocaleString('fr-FR') + ' DA'
 const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
@@ -225,14 +234,12 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
           <span><i class="dot cond"></i>Conditionnement</span>
         </div>
       </div>
-      <div v-for="(mo, i) in MOIS" :key="i" class="mois-bloc">
-        <div class="mois-nom">{{ mo }}</div>
-        <div class="series">
-          <div class="serie"><div class="bar-track"><div class="bar-fill plan" :style="{ width: w(planParMois[i]) }"></div></div><span class="serie-val">{{ fmt(planParMois[i]) }}</span></div>
-          <div class="serie"><div class="bar-track"><div class="bar-fill fab" :style="{ width: w(fabParMois[i]) }"></div></div><span class="serie-val">{{ fmt(fabParMois[i]) }}</span></div>
-          <div class="serie"><div class="bar-track"><div class="bar-fill cond" :style="{ width: w(condParMois[i]) }"></div></div><span class="serie-val">{{ fmt(condParMois[i]) }}</span></div>
-        </div>
-      </div>
+      <MiniChart :labels="MOIS" :format="fmt" :max="maxMois"
+        :series="[
+          { label: 'Plan', color: '#94a3b8', data: planParMois, dash: true },
+          { label: 'Fabrication', color: '#0f766e', data: fabParMois },
+          { label: 'Conditionnement', color: '#2563eb', data: condParMois }
+        ]" />
     </section>
 
     <section class="card" style="margin-top: 22px">
@@ -297,6 +304,35 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 .dot.plan, .bar-fill.plan { background: #94a3b8; }
 .dot.fab, .bar-fill.fab { background: #0f766e; }
 .dot.cond, .bar-fill.cond { background: #2563eb; }
+.ch { display: flex; align-items: flex-end; gap: 3px; height: 180px; padding-top: 8px; }
+.ch-group { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; height: 100%; }
+.ch-bars { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
+.ch-bar { width: 30%; max-width: 11px; border-radius: 3px 3px 1px 1px; min-height: 2px; transition: height .45s cubic-bezier(.4,0,.2,1); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
+.ch-bar.plan { background: linear-gradient(180deg, #cbd5e1, #94a3b8); }
+.ch-bar.fab { background: linear-gradient(180deg, #2dd4bf, #0f766e); }
+.ch-bar.cond { background: linear-gradient(180deg, #60a5fa, #2563eb); }
+.ch-bar:hover { filter: brightness(1.08); }
+.ch-lbl { font-size: 10px; color: #94a3b8; margin-top: 6px; font-weight: 600; }
+.line-ch { width: 100%; margin-top: 4px; }
+.ch-switch { display: inline-flex; gap: 2px; background: #f1f5f9; border-radius: 8px; padding: 3px; }
+.ch-switch button { background: none; border: 0; font-family: inherit; font-size: 12px; font-weight: 600; color: #64748b; padding: 5px 11px; border-radius: 6px; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.ch-switch button.on { background: #fff; color: #0f766e; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
+html[data-theme="sombre"] .ch-switch, html[data-theme="minuit"] .ch-switch { background: #0f1830; }
+html[data-theme="sombre"] .ch-switch button.on, html[data-theme="minuit"] .ch-switch button.on { background: #243049; color: #2dd4bf; }
+.lch-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.lch-grid { stroke: #eef2f6; stroke-width: 1; }
+.lch-line { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.lch-line.plan { stroke: #94a3b8; stroke-dasharray: 5 4; }
+.lch-line.fab { stroke: #0f766e; }
+.lch-line.cond { stroke: #2563eb; }
+.lch-pt { stroke: #fff; stroke-width: 1.5; cursor: pointer; }
+.lch-pt.plan { fill: #94a3b8; }
+.lch-pt.fab { fill: #0f766e; }
+.lch-pt.cond { fill: #2563eb; }
+.lch-pt:hover { r: 5; }
+.lch-lbl { fill: #94a3b8; font-size: 13px; font-weight: 600; }
+html[data-theme="sombre"] .lch-grid, html[data-theme="minuit"] .lch-grid { stroke: #2a3650; }
+html[data-theme="sombre"] .lch-pt, html[data-theme="minuit"] .lch-pt { stroke: #161f33; }
 
 .mois-bloc { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
 .mois-bloc:last-child { border-bottom: 0; }
