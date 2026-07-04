@@ -458,6 +458,7 @@ onMounted(async () => {
         <div class="searchbar">
           <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
         </div>
+        <h3 class="board-h">Fabrication — files par atelier</h3>
         <p class="note">
           Chaque lot apparaît dans l'atelier de son <strong>étape courante</strong> : « en cours » s'il y est démarré, « en attente » si l'étape précédente est terminée.
           Une file <strong>vide</strong> = atelier à sec (risque de rupture). Les lots les plus anciens sont en haut.
@@ -539,7 +540,7 @@ onMounted(async () => {
         </section>
         </div>
 
-        <h3 class="cond-plan-h">Planning conditionnement — par ligne réservée</h3>
+        <h3 class="board-h">Conditionnement — planning par ligne réservée</h3>
         <p class="note">Chaque colonne = une <strong>ligne de conditionnement réservée</strong> (champ « Ligne / équipement » de l'ordre de fabrication). Les lots fabriqués non encore conditionnés y sont regroupés. « Non réservé » = lots sans ligne assignée.</p>
         <p v-if="!vueCondLignes.length" class="muted">Aucun lot à conditionner pour le moment.</p>
         <div class="file-board">
@@ -671,7 +672,7 @@ onMounted(async () => {
 .annee-sel select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: #fff; }
 .err { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; }
 .muted { color: #94a3b8; }
-.note { color: #64748b; font-size: 12px; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 8px; padding: 8px 12px; margin: 0 0 16px; }
+.note { color: #64748b; font-size: 11px; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 7px; padding: 6px 10px; margin: 0 0 10px; }
 
 .kpi-grid { display: grid; gap: 14px; margin-bottom: 14px; }
 .k3 { grid-template-columns: repeat(3, 1fr); }
@@ -691,10 +692,12 @@ onMounted(async () => {
 .chk input { width: 15px; height: 15px; cursor: pointer; }
 
 .atelier { margin-bottom: 26px; }
-.atelier-titre { font-size: 16px; margin: 0 0 12px; color: #0f172a; border-left: 3px solid #0f766e; padding-left: 10px; }
-.at-sum { font-size: 12px; font-weight: 500; color: #64748b; margin-left: 10px; }
+.atelier-titre { font-size: 13px; font-weight: 700; margin: 0 0 7px; color: #0f172a; border-left: 3px solid #0f766e; padding-left: 8px; line-height: 1.25; }
+.at-sum { display: block; font-size: 10.5px; font-weight: 500; color: #64748b; margin: 2px 0 0 11px; }
 /* File d'attente en colonnes (façon Kanban) */
-.file-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(285px, 1fr)); gap: 16px; align-items: start; }
+.file-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(228px, 1fr)); gap: 12px; align-items: start; }
+.board-h { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; color: #0f172a; margin: 26px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #e2e8f0; }
+.board-h:first-of-type { margin-top: 6px; }
 .cond-plan-h { font-size: 17px; font-weight: 700; margin: 26px 0 6px; color: #0f172a; }
 .file-board .atelier { margin-bottom: 0; }
 .file-board .eq-grid { grid-template-columns: 1fr; }
@@ -711,36 +714,36 @@ onMounted(async () => {
 .de-tabs button:hover { color: #0891b2; }
 .de-tabs button.on { color: #0891b2; background: #ecfeff; }
 /* Cartes de file */
-.phase-card { display: flex; flex-direction: column; gap: 10px; }
+.phase-card { display: flex; flex-direction: column; gap: 7px; padding: 11px 12px !important; border-radius: 11px !important; }
 .phase-card.rupture { border-color: #fecdd3; background: #fff5f6; }
 .rupt-badge { background: #fee2e2; color: #b91c1c; }
-.q-block { border-top: 1px solid #f1f5f9; padding-top: 8px; }
-.q-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
+.q-block { border-top: 1px solid #f1f5f9; padding-top: 6px; }
+.q-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
 .q-title.cours { color: #2563eb; }
 .q-title.attente { color: #b45309; }
 .age { color: #64748b; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .eq-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .eq-card { display: flex; flex-direction: column; }
-.eq-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.eq-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
 .eq-ident { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.eq-ic { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.eq-ic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.eq-code { font-weight: 700; font-size: 15px; }
-.eq-nom { font-size: 12px; color: #64748b; }
+.eq-ic { width: 27px; height: 27px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.eq-ic svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.eq-code { font-weight: 700; font-size: 13px; }
+.eq-nom { font-size: 10.5px; color: #64748b; }
 .phase-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
 .muted-badge { background: #f1f5f9; color: #94a3b8; }
 
 .eq-stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: #64748b; padding: 8px 0 10px; border-top: 1px solid #f1f5f9; }
 .eq-stats strong { color: #0f172a; font-size: 14px; }
 
-.prod-scroll { max-height: 280px; overflow-y: auto; border: 1px solid #eef2f6; border-radius: 8px; }
+.prod-scroll { max-height: 230px; overflow-y: auto; border: 1px solid #eef2f6; border-radius: 7px; }
 .grid { width: 100%; border-collapse: collapse; }
 .grid th { position: sticky; top: 0; background: #f8fafc; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
-.grid td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+.grid td { padding: 4px 7px; border-bottom: 1px solid #f1f5f9; font-size: 11.5px; }
 .grid tr:last-child td { border-bottom: none; }
 .num { text-align: right; white-space: nowrap; }
 .pf { font-weight: 600; color: #0f766e; }
 .pd { color: #475569; }
-.empty { font-size: 12px; color: #94a3b8; margin: 4px 0 0; }
+.empty { font-size: 11px; color: #94a3b8; margin: 3px 0 0; }
 </style>
