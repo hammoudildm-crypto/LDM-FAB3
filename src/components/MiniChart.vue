@@ -10,6 +10,7 @@ const props = defineProps({
   max: { type: Number, default: 0 },        // max imposé (sinon calculé)
   min: { type: Number, default: 0 },         // base d'échelle (zoom)
   showSwitch: { type: Boolean, default: true },
+  spacer: { type: Boolean, default: false },
   clickable: { type: Boolean, default: false },
   showValues: { type: Boolean, default: false },
   valueFormat: { type: Function, default: null }
@@ -45,6 +46,7 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
       <button :class="{ on: chartStyle === 'aires' }" @click="chartStyle = 'aires'">Aires</button>
       <button :class="{ on: chartStyle === 'barres' }" @click="chartStyle = 'barres'">Barres</button>
     </div>
+    <div v-else-if="spacer" class="ch-switch-spacer"></div>
 
     <div v-if="chartStyle !== 'barres'" class="line-ch">
       <svg :viewBox="'0 0 ' + CH.w + ' ' + CH.h" class="lch-svg">
@@ -88,6 +90,7 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
 <style scoped>
 .mc { width: 100%; }
 .ch-switch { display: inline-flex; gap: 2px; background: #f1f5f9; border-radius: 8px; padding: 3px; margin-bottom: 6px; }
+.ch-switch-spacer { height: 30px; margin-bottom: 6px; }
 .ch-switch button { background: none; border: 0; font-family: inherit; font-size: 12px; font-weight: 600; color: #64748b; padding: 5px 11px; border-radius: 6px; cursor: pointer; transition: background .15s ease, color .15s ease; }
 .ch-switch button.on { background: #fff; color: #0f766e; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
 .line-ch { width: 100%; }
