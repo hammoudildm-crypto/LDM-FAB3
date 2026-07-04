@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 import { ICONS, TINTS } from '../icons.js'
+import { useFileAttente } from '../useFileAttente.js'
 
 // Gamme de fabrication (mêmes libellés que dans le suivi des phases)
 const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Conditionnement']
@@ -69,104 +70,9 @@ const phasesByLot = computed(() => {
   return m
 })
 
-// Lots avec un enregistrement de conditionnement -> étape Conditionnement validée automatiquement
-const ordresConditionnes = computed(() => {
-  const s = new Set()
-  for (const c of conds.value) s.add(c.ordre_id)
-  return s
-})
-
-// ===== Réplique EXACTE de la logique "File d'attente" (page Disponibilité équipements) =====
-const lotById = computed(() => { const m = {}; for (const l of lots.value) m[l.id] = l; return m })
-const condBoxParLot = computed(() => {
-  const m = {}
-  for (const c of conds.value) {
-    const l = lotById.value[c.ordre_id]
-    const upb = Number(l && l.produits ? l.produits.unites_par_boite : 0) || 0
-    const box = upb > 0 ? Math.floor(Number(c.quantite_conditionnee || 0) / upb) : 0
-    m[c.ordre_id] = (m[c.ordre_id] || 0) + box
-  }
-  return m
-})
-const condTermine = computed(() => { const s = new Set(); for (const c of conds.value) if (c.statut === 'Terminé' || c.statut === 'Libéré') s.add(c.ordre_id); return s })
-const condComplet = computed(() => {
-  const s = new Set(condTermine.value)
-  const cb = condBoxParLot.value
-  for (const o of lots.value) {
-    if (s.has(o.id)) continue
-    const avail = Number(o.boites_fabriquees || 0) || Number(o.quantite_theorique || 0)
-    if (avail > 0 && (cb[o.id] || 0) >= avail * 0.85) s.add(o.id)
-  }
-  return s
-})
-const phasesLotQ = computed(() => {
-  const m = {}
-  for (const sp of phases.value) {
-    const id = sp.ordre_id, nom = (sp.phase || '').toLowerCase()
-    if (!m[id]) m[id] = {}
-    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut || null }
-    const cur = m[id][nom]
-    if (!cur || sp.statut === 'Terminé') m[id][nom] = rec
-  }
-  return m
-})
-const PHASE_KEYS = ['pesee', 'granulation', 'sechage', 'melange', 'compression', 'remplissage', 'pelliculage', 'conditionnement']
-const NOM_KEY_Q = { 'pesée': 'pesee', 'granulation': 'granulation', 'séchage': 'sechage', 'mélange': 'melange', 'compression': 'compression', 'remplissage gélules': 'remplissage', 'pelliculage': 'pelliculage', 'conditionnement': 'conditionnement' }
-const CANON_FAB_Q = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
-const queuePhaseQ = computed(() => {
-  const q = {}
-  for (const k of PHASE_KEYS) q[k] = { attente: [], cours: [] }
-  const condFini = condComplet.value
-  const condAny = ordresConditionnes.value
-  for (const o of lots.value) {
-    if (!o.date_lancement || condFini.has(o.id)) continue
-    if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
-    const pl = phasesLotQ.value[o.id] || {}
-    const stat = (nom) => (pl[(nom || '').toLowerCase()] || {}).statut
-    const gamme = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB_Q
-    if (!o.date_fin_fabrication) {
-      let courante = null
-      for (let i = 0; i < gamme.length; i++) { if (stat(gamme[i]) !== 'Terminé') { courante = gamme[i]; break } }
-      if (!courante) { (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ id: o.id }); continue }
-      const k = NOM_KEY_Q[courante.toLowerCase()]
-      if (!k || !q[k]) continue
-      if (stat(courante) === 'En cours') q[k].cours.push({ id: o.id })
-      else q[k].attente.push({ id: o.id })
-    } else {
-      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ id: o.id })
-    }
-  }
-  return q
-})
-const attentePesee = computed(() => {
-  const cc = condComplet.value
-  const res = []
-  for (const o of lots.value) {
-    if (!o.date_reception && !o.date_lancement) continue
-    if (o.date_fin_fabrication) continue
-    if (cc.has(o.id)) continue
-    if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
-    const pl = phasesLotQ.value[o.id] || {}
-    if ((pl['pesée'] || {}).statut === 'Terminé') continue
-    res.push(o.id)
-  }
-  return res
-})
-// Carte + état (attente/cours) de chaque lot, identique à la file d'attente
-const CARTE_DE_KEY = { granulation: 'Granulation et séchage', sechage: 'Granulation et séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage Gélules', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
-const lotEtape = computed(() => {
-  const m = {}
-  for (const id of attentePesee.value) m[id] = { carte: 'En attente de pesée', etat: 'attente' }
-  const q = queuePhaseQ.value
-  for (const k in q) {
-    if (k === 'pesee') continue
-    const carte = CARTE_DE_KEY[k]
-    if (!carte) continue
-    for (const l of q[k].attente) { if (!m[l.id]) m[l.id] = { carte, etat: 'attente' } }
-    for (const l of q[k].cours) { m[l.id] = { carte, etat: 'cours' } }
-  }
-  return m
-})
+// File d'attente centralisée — logique partagée avec « Disponibilité équipements »
+// (source unique : src/useFileAttente.js — plus de logique dupliquée)
+const { condComplet, ordresConditionnes, lotEtape } = useFileAttente({ ofs: lots, suivi: phases, conds })
 
 // Étiquettes courtes par nom de phase
 const COURT_MAP = {
