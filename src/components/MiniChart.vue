@@ -8,6 +8,7 @@ const props = defineProps({
   labels: { type: Array, required: true },
   format: { type: Function, default: (v) => (v == null ? '—' : Number(v).toLocaleString('fr-FR')) },
   max: { type: Number, default: 0 },        // max imposé (sinon calculé)
+  min: { type: Number, default: 0 },         // base d'échelle (zoom)
   showSwitch: { type: Boolean, default: true },
   clickable: { type: Boolean, default: false },
   showValues: { type: Boolean, default: false },
@@ -20,11 +21,20 @@ const CH = { w: 820, h: 240, pl: 12, pr: 12, pt: 22, pb: 26 }
 const n = computed(() => props.labels.length)
 const bandW = computed(() => (CH.w - CH.pl - CH.pr) / Math.max(1, n.value - 1))
 const maxV = computed(() => props.max || Math.max(1, ...props.series.flatMap(s => s.data.map(v => Number(v) || 0))))
+const minV = computed(() => props.min || 0)
+const span = computed(() => (maxV.value - minV.value) || 1)
 function x(i) { return CH.pl + (i / Math.max(1, n.value - 1)) * (CH.w - CH.pl - CH.pr) }
-function y(v) { return CH.h - CH.pb - (Math.min(Number(v) || 0, maxV.value) / maxV.value) * (CH.h - CH.pt - CH.pb) }
-function pts(data) { return data.map((v, i) => x(i) + ',' + y(v)).join(' ') }
-function area(data) { const b = CH.h - CH.pb; return x(0) + ',' + b + ' ' + pts(data) + ' ' + x(n.value - 1) + ',' + b }
-function barH(v) { return (Math.min(Number(v) || 0, maxV.value) / maxV.value * 100) + '%' }
+function y(v) { const vv = Math.max(minV.value, Math.min(Number(v), maxV.value)); return CH.h - CH.pb - ((vv - minV.value) / span.value) * (CH.h - CH.pt - CH.pb) }
+function gridY(g) { return CH.h - CH.pb - g * (CH.h - CH.pt - CH.pb) }
+function pts(data) { return data.map((v, i) => (v == null ? null : x(i) + ',' + y(v))).filter(Boolean).join(' ') }
+function area(data) {
+  const b = CH.h - CH.pb
+  const idx = data.map((v, i) => (v == null ? -1 : i)).filter(i => i >= 0)
+  if (!idx.length) return ''
+  return x(idx[0]) + ',' + b + ' ' + idx.map(i => x(i) + ',' + y(data[i])).join(' ') + ' ' + x(idx[idx.length - 1]) + ',' + b
+}
+function barH(v) { const vv = Math.max(minV.value, Math.min(Number(v), maxV.value)); return ((vv - minV.value) / span.value * 100) + '%' }
+function colOf(s, v) { return (s.threshold != null && v != null && v < s.threshold && s.low) ? s.low : s.color }
 const gl = [0, 0.25, 0.5, 0.75, 1]
 </script>
 
@@ -44,15 +54,17 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
             <stop offset="100%" :stop-color="s.color" stop-opacity="0" />
           </linearGradient>
         </defs>
-        <line v-for="g in gl" :key="'gr' + g" :x1="CH.pl" :x2="CH.w - CH.pr" :y1="y(maxV * g)" :y2="y(maxV * g)" class="lch-grid" />
+        <line v-for="g in gl" :key="'gr' + g" :x1="CH.pl" :x2="CH.w - CH.pr" :y1="gridY(g)" :y2="gridY(g)" class="lch-grid" />
         <template v-if="chartStyle === 'aires'">
           <polygon v-for="(s, si) in series" :key="'a' + si" :points="area(s.data)" :fill="'url(#mc-g' + si + ')'" />
         </template>
         <polyline v-for="(s, si) in series" :key="'l' + si" :points="pts(s.data)" fill="none" :stroke="s.color" :stroke-dasharray="s.dash ? '5 4' : ''" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
         <template v-for="(mo, i) in labels" :key="i">
-          <circle v-for="(s, si) in series" :key="'p' + si + '-' + i" :cx="x(i)" :cy="y(s.data[i])" r="3.3" :fill="s.color" class="mc-pt"><title>{{ mo }} — {{ s.label }} : {{ format(s.data[i]) }}</title></circle>
+          <template v-for="(s, si) in series" :key="'p' + si + '-' + i">
+            <circle v-if="s.data[i] != null" :cx="x(i)" :cy="y(s.data[i])" r="3.3" :fill="colOf(s, s.data[i])" class="mc-pt"><title>{{ mo }} — {{ s.label }} : {{ format(s.data[i]) }}</title></circle>
+          </template>
           <text :x="x(i)" :y="CH.h - 8" text-anchor="middle" class="lch-lbl">{{ mo }}</text>
-          <text v-if="showValues && series.length === 1 && series[0].data[i]" :x="x(i)" :y="y(series[0].data[i]) - 8" text-anchor="middle" class="mc-val">{{ vfmt(series[0].data[i]) }}</text>
+          <text v-if="showValues && series.length === 1 && series[0].data[i] != null" :x="x(i)" :y="y(series[0].data[i]) - 8" text-anchor="middle" class="mc-val">{{ vfmt(series[0].data[i]) }}</text>
         </template>
         <template v-if="clickable">
           <rect v-for="(mo, i) in labels" :key="'h' + i" :x="x(i) - bandW / 2" :y="CH.pt" :width="bandW" :height="CH.h - CH.pt - CH.pb" fill="transparent" class="mc-hit" @click="emit('pick', i)"><title>{{ mo }}</title></rect>
@@ -63,7 +75,9 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
     <div v-else class="ch">
       <div v-for="(mo, i) in labels" :key="i" class="ch-group" :class="{ clic: clickable }" @click="clickable && emit('pick', i)">
         <div class="ch-bars">
-          <div v-for="(s, si) in series" :key="si" class="ch-bar" :style="{ height: barH(s.data[i]), backgroundColor: s.color, width: series.length === 1 ? '84%' : '46%', maxWidth: (series.length === 1 ? 34 : 14) + 'px' }" :title="mo + ' — ' + s.label + ' : ' + format(s.data[i])"><span v-if="showValues && series.length === 1 && s.data[i]" class="ch-val">{{ vfmt(s.data[i]) }}</span></div>
+          <template v-for="(s, si) in series" :key="si">
+            <div v-if="s.data[i] != null" class="ch-bar" :style="{ height: barH(s.data[i]), backgroundColor: colOf(s, s.data[i]), width: (series.length === 1 ? 82 : Math.floor(84 / series.length)) + '%', maxWidth: (series.length === 1 ? 34 : Math.floor(72 / series.length)) + 'px' }" :title="mo + ' — ' + s.label + ' : ' + format(s.data[i])"><span v-if="showValues && s.data[i]" class="ch-val" :class="{ rot: series.length > 1 }">{{ vfmt(s.data[i]) }}</span></div>
+          </template>
         </div>
         <div class="ch-lbl">{{ mo }}</div>
       </div>
@@ -87,6 +101,7 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
 .ch-bars { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
 .ch-bar { position: relative; border-radius: 5px 5px 2px 2px; min-height: 2px; transition: height .45s cubic-bezier(.4,0,.2,1); background-image: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,0) 55%); }
 .ch-val { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 700; color: #334155; white-space: nowrap; }
+.ch-val.rot { writing-mode: vertical-rl; top: auto; bottom: 100%; margin-bottom: 3px; font-size: 9px; }
 .mc-val { fill: #334155; font-size: 12px; font-weight: 700; }
 .ch-bar:hover { filter: brightness(1.08); }
 .ch-lbl { font-size: 10px; color: #94a3b8; margin-top: 6px; font-weight: 600; }
