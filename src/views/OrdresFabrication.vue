@@ -10,6 +10,11 @@ const STATUTS = ['Planifié', 'En cours', 'Terminé', 'Libéré', 'Rejeté']
 const lots = ref([])
 const produits = ref([])
 const equipements = ref([])
+// Ateliers de conditionnement uniquement (pour la ligne finale réservée)
+const equipementsCond = computed(() => equipements.value.filter(e => {
+  const t = (e.type || '').toLowerCase()
+  return /condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)
+}))
 const filtreStatut = ref('')
 const rechercheLot = ref('')
 const anneeF = ref(0)
@@ -56,7 +61,7 @@ async function chargerTout() {
   if (rp.error) { erreur.value = rp.error.message; return }
   produits.value = rp.data
 
-  const re = await supabase.from('equipements').select('id, code, nom').eq('actif', true).order('code')
+  const re = await supabase.from('equipements').select('id, code, nom, type').eq('actif', true).order('code')
   if (re.error) { erreur.value = re.error.message; return }
   equipements.value = re.data
 
@@ -269,7 +274,7 @@ onMounted(async () => {
           <label>Ligne de conditionnement (finale)
             <select v-model="form.equipement_id">
               <option value="">— à affecter —</option>
-              <option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
+              <option v-for="e in equipementsCond" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
             </select>
           </label>
           <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
