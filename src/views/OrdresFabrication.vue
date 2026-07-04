@@ -136,7 +136,15 @@ async function enregistrer() {
   const res = form.id
     ? await supabase.from('ordres_fabrication').update(payload).eq('id', form.id)
     : await supabase.from('ordres_fabrication').insert(payload)
-  if (res.error) { erreur.value = res.error.message; return }
+  if (res.error) {
+    const m = res.error.message || ''
+    if (res.error.code === '23505' || /duplicate key|numero_lot/i.test(m)) {
+      erreur.value = 'Ce numéro de lot existe déjà. Choisis un numéro unique, ou modifie le lot existant depuis la liste (bouton « Modifier »).'
+    } else {
+      erreur.value = m
+    }
+    return
+  }
   message.value = form.id ? 'Lot mis à jour.' : 'Lot créé.'
   resetForm()
   await chargerTout()
