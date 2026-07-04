@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import { ICONS, TINTS } from '../icons.js'
 import PageHeader from '../components/PageHeader.vue'
+import MiniChart from '../components/MiniChart.vue'
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
@@ -396,6 +397,19 @@ const anChart = computed(() => {
 function segAvarie(m) { return m.rdt == null ? 0 : m.avarie }
 function segRdt(m) { return m.rdt == null ? 0 : Math.min(100, m.rdt) }
 
+// Séries brutes pour le composant MiniChart
+const avarieFabMois = computed(() => parMoisFab.value.map(m => (m.rdt == null ? null : m.avarie)))
+const avarieCondMois = computed(() => parMois.value.map(m => (m.rdt == null ? null : m.avarie)))
+const anYears = computed(() => {
+  const rc = Object.fromEntries(parAn.value.map(a => [a.an, a.rdt]))
+  const rf = Object.fromEntries(parAnFab.value.map(a => [a.an, a.rdt]))
+  return Array.from(new Set([...Object.keys(rc), ...Object.keys(rf)].map(Number))).sort((a, b) => a - b)
+})
+const rdtFabAn = computed(() => { const rf = Object.fromEntries(parAnFab.value.map(a => [a.an, a.rdt])); return anYears.value.map(y => (rf[y] == null ? null : rf[y])) })
+const rdtCondAn = computed(() => { const rc = Object.fromEntries(parAn.value.map(a => [a.an, a.rdt])); return anYears.value.map(y => (rc[y] == null ? null : rc[y])) })
+const anMin = computed(() => { const all = [...rdtFabAn.value, ...rdtCondAn.value].filter(v => v != null); return all.length ? Math.floor(Math.min(...all)) - 1 : 90 })
+const anMax = computed(() => { const all = [...rdtFabAn.value, ...rdtCondAn.value].filter(v => v != null); return all.length ? Math.ceil(Math.max(...all)) + 0.5 : 100 })
+
 function fmt(n) { return n == null ? '—' : Math.round(Number(n)).toLocaleString('fr-FR') }
 function pct2(n) { return n == null ? '—' : Number(n).toFixed(2).replace('.', ',') + ' %' }
 function pct1(n) { return n == null ? '—' : Number(n).toFixed(1).replace('.', ',') + ' %' }
@@ -512,37 +526,11 @@ onMounted(chargerTout)
             <span><i class="dot av"></i>Avarie conditionnement</span>
           </div>
         </div>
-        <div class="line-chart">
-          <svg :viewBox="`0 0 ${moisChart.W} ${moisChart.H}`" class="lc-svg" role="img">
-            <defs>
-              <linearGradient id="gradAv" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#ef4444" stop-opacity="0.20" />
-                <stop offset="100%" stop-color="#ef4444" stop-opacity="0.01" />
-              </linearGradient>
-              <linearGradient id="gradAvF" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#0f766e" stop-opacity="0.18" />
-                <stop offset="100%" stop-color="#0f766e" stop-opacity="0.01" />
-              </linearGradient>
-            </defs>
-            <line :x1="moisChart.padL" :y1="moisChart.baseY" :x2="moisChart.W - moisChart.padR" :y2="moisChart.baseY" stroke="#e5e9f0" stroke-width="1" vector-effect="non-scaling-stroke" />
-            <template v-for="(seg, i) in moisChart.segsC" :key="'sc' + i">
-              <path :d="seg.area" fill="url(#gradAv)" />
-              <path :d="seg.line" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
-            </template>
-            <g v-for="(p, idx) in moisChart.ptsC" :key="'pc' + idx"><circle v-if="p" :cx="p.x" :cy="p.y" r="2.8" fill="#fff" stroke="#ef4444" stroke-width="2.5" vector-effect="non-scaling-stroke" /></g>
-            <template v-for="(seg, i) in moisChart.segsF" :key="'sf' + i">
-              <path :d="seg.area" fill="url(#gradAvF)" />
-              <path :d="seg.line" fill="none" stroke="#0f766e" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
-            </template>
-            <g v-for="(p, idx) in moisChart.ptsF" :key="'pf' + idx">
-              <template v-if="p">
-                <circle :cx="p.x" :cy="p.y" r="2.8" fill="#fff" stroke="#0f766e" stroke-width="2.5" vector-effect="non-scaling-stroke" />
-                <text :x="p.x" :y="p.y - 7" class="lc-val">{{ p.v.toFixed(1).replace('.', ',') }}</text>
-              </template>
-            </g>
-            <text v-for="(m, i) in MOIS" :key="'l' + i" :x="moisChart.xi(i)" :y="moisChart.H - 4" class="lc-xlabel">{{ m }}</text>
-          </svg>
-        </div>
+        <MiniChart :labels="MOIS" :format="pct2" :value-format="v => v == null ? '' : v.toFixed(1).replace('.', ',')" show-values
+          :series="[
+            { label: 'Fabrication', color: '#0f766e', data: avarieFabMois },
+            { label: 'Conditionnement', color: '#ef4444', data: avarieCondMois }
+          ]" />
         <p class="hint">Taux d'avarie (%) par mois — Fabrication (teal) et Conditionnement (rouge). Mois sans données : pas de point.</p>
       </section>
 
@@ -588,33 +576,11 @@ onMounted(chargerTout)
             <span><i class="dot" style="background:#2563eb"></i>Conditionnement</span>
           </div>
         </div>
-        <div class="line-chart">
-          <svg :viewBox="`0 0 ${anChart.W} ${anChart.H}`" class="lc-svg" role="img">
-            <defs>
-              <linearGradient id="gradRdt" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#0f766e" stop-opacity="0.20" />
-                <stop offset="100%" stop-color="#0f766e" stop-opacity="0.01" />
-              </linearGradient>
-            </defs>
-            <line :x1="anChart.padL" :y1="anChart.baseY" :x2="anChart.W - anChart.padR" :y2="anChart.baseY" stroke="#e5e9f0" stroke-width="1" vector-effect="non-scaling-stroke" />
-            <template v-for="(seg, i) in anChart.segsC" :key="'sc' + i">
-              <path :d="seg.line" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
-            </template>
-            <g v-for="(p, idx) in anChart.ptsC" :key="'pc' + idx"><template v-if="p">
-              <circle :cx="p.x" :cy="p.y" r="3.2" fill="#fff" stroke="#2563eb" stroke-width="2.5" vector-effect="non-scaling-stroke" />
-              <text :x="p.x" :y="p.y + 14" class="lc-val" fill="#2563eb">{{ pct2(p.rdt) }}</text>
-            </template></g>
-            <template v-for="(seg, i) in anChart.segsF" :key="'sf' + i">
-              <path :d="seg.area" fill="url(#gradRdt)" />
-              <path :d="seg.line" fill="none" stroke="#0f766e" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
-            </template>
-            <g v-for="(p, idx) in anChart.ptsF" :key="'pf' + idx"><template v-if="p">
-              <circle :cx="p.x" :cy="p.y" :r="p.an === anneeSel ? 4.5 : 3.2" :fill="p.an === anneeSel ? '#0f766e' : '#fff'" stroke="#0f766e" stroke-width="2.5" vector-effect="non-scaling-stroke" />
-              <text :x="p.x" :y="p.y - 8" class="lc-val">{{ pct2(p.rdt) }}</text>
-            </template></g>
-            <text v-for="(y, i) in anChart.years" :key="'yl' + i" :x="anChart.xi(i)" :y="anChart.H - 4" class="lc-xlabel">{{ y }}</text>
-          </svg>
-        </div>
+        <MiniChart :labels="anYears" :format="pct2" :value-format="v => v == null ? '' : v.toFixed(1).replace('.', ',') + '%'" :min="anMin" :max="anMax" show-values :show-switch="false"
+          :series="[
+            { label: 'Fabrication', color: '#0f766e', data: rdtFabAn },
+            { label: 'Conditionnement', color: '#2563eb', data: rdtCondAn }
+          ]" />
         <p class="hint">Rendement global par année — Fabrication (teal) vs Conditionnement (bleu). Échelle {{ anChart.min }} % → {{ anChart.max }} %.</p>
       </section>
       </div><!-- /charts-2col -->
@@ -826,8 +792,8 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .rdt-num { width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 
 .ta-c { text-align: center; }
-.charts-2col { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 22px; align-items: start; }
-.charts-2col > .card { margin-bottom: 0; }
+.charts-2col { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 22px; align-items: stretch; }
+.charts-2col > .card { margin-bottom: 0; display: flex; flex-direction: column; }
 .charts-2col .phase-grid { grid-template-columns: 1fr; gap: 14px; }
 .charts-2col .donut-wrap { width: 160px; }
 @media (max-width: 820px) { .charts-2col { grid-template-columns: 1fr; } }
