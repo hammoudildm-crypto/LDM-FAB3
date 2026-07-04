@@ -164,15 +164,21 @@ const parMoisFab = computed(() => {
     return { prod: m.prod, theo: m.theo, rdt, avarie: rdt == null ? null : Math.max(0, 100 - rdt) }
   })
 })
-// Détail des déchets d'un mois (clic sur le graphe Taux de déchets)
-const moisDechets = ref(null)
-function ouvrirMoisDechets(i) { moisDechets.value = i }
+// Détail des déchets d'un mois (clic sur le graphe Taux de déchets) — par barre (fab / cond)
+const moisDechets = ref(null) // { mois, serie: 'fab' | 'cond' } | null
+function ouvrirMoisDechets(i, si) { moisDechets.value = { mois: i, serie: si === 1 ? 'cond' : 'fab' } }
 const lotsDechetsMois = computed(() => {
-  if (moisDechets.value == null) return []
-  return lotsValidesFab.value
-    .filter(r => r.mois === moisDechets.value && r.rdt < 100)
+  if (!moisDechets.value) return []
+  const src = moisDechets.value.serie === 'cond' ? lotsValides.value : lotsValidesFab.value
+  return src
+    .filter(r => r.mois === moisDechets.value.mois && r.rdt < 100)
     .map(r => ({ id: r.of.id, lot: r.of.numero_lot || '—', code: r.of.produits ? r.of.produits.code_pf : '', desig: r.of.produits ? r.of.produits.designation : '', rdt: r.rdt, avarie: 100 - r.rdt }))
     .sort((a, b) => b.avarie - a.avarie)
+})
+const avarieMoisSel = computed(() => {
+  if (!moisDechets.value) return null
+  const arr = moisDechets.value.serie === 'cond' ? avarieCondMois.value : avarieFabMois.value
+  return arr[moisDechets.value.mois]
 })
 const parAnFab = computed(() => {
   const m = {}
@@ -706,13 +712,13 @@ onMounted(chargerTout)
       </section>
     </template>
 
-    <div v-if="moisDechets != null" class="md-backdrop" @click="moisDechets = null"></div>
-    <div v-if="moisDechets != null" class="md-modal">
+    <div v-if="moisDechets" class="md-backdrop" @click="moisDechets = null"></div>
+    <div v-if="moisDechets" class="md-modal">
       <div class="md-head">
-        <span>Lots à déchets — {{ MOIS[moisDechets] }} {{ anneeSel }}</span>
+        <span>{{ moisDechets.serie === 'cond' ? 'Conditionnement' : 'Fabrication' }} — déchets {{ MOIS[moisDechets.mois] }} {{ anneeSel }}</span>
         <button class="md-x" @click="moisDechets = null" title="Fermer">✕</button>
       </div>
-      <div class="md-sub">{{ lotsDechetsMois.length }} lot(s) · avarie moyenne du mois {{ pct2(parMoisFab[moisDechets] && parMoisFab[moisDechets].avarie) }}</div>
+      <div class="md-sub">{{ lotsDechetsMois.length }} lot(s) · avarie moyenne du mois {{ pct2(avarieMoisSel) }}</div>
       <div class="md-list">
         <table>
           <thead><tr><th>Lot</th><th>Produit</th><th class="num">Rendement</th><th class="num">Avarie</th></tr></thead>
