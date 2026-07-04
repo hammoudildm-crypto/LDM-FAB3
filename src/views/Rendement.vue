@@ -164,6 +164,16 @@ const parMoisFab = computed(() => {
     return { prod: m.prod, theo: m.theo, rdt, avarie: rdt == null ? null : Math.max(0, 100 - rdt) }
   })
 })
+// Détail des déchets d'un mois (clic sur le graphe Taux de déchets)
+const moisDechets = ref(null)
+function ouvrirMoisDechets(i) { moisDechets.value = i }
+const lotsDechetsMois = computed(() => {
+  if (moisDechets.value == null) return []
+  return lotsValidesFab.value
+    .filter(r => r.mois === moisDechets.value && r.rdt < 100)
+    .map(r => ({ id: r.of.id, lot: r.of.numero_lot || '—', code: r.of.produits ? r.of.produits.code_pf : '', desig: r.of.produits ? r.of.produits.designation : '', rdt: r.rdt, avarie: 100 - r.rdt }))
+    .sort((a, b) => b.avarie - a.avarie)
+})
 const parAnFab = computed(() => {
   const m = {}
   for (const o of ofs.value) {
@@ -526,12 +536,12 @@ onMounted(chargerTout)
             <span><i class="dot av"></i>Avarie conditionnement</span>
           </div>
         </div>
-        <MiniChart :labels="MOIS" :format="pct2" :value-format="v => v == null ? '' : v.toFixed(1).replace('.', ',')" show-values
+        <MiniChart :labels="MOIS" :format="pct2" :value-format="v => v == null ? '' : v.toFixed(1).replace('.', ',')" show-values clickable @pick="ouvrirMoisDechets($event)"
           :series="[
             { label: 'Fabrication', color: '#0f766e', data: avarieFabMois },
             { label: 'Conditionnement', color: '#ef4444', data: avarieCondMois }
           ]" />
-        <p class="hint">Taux d'avarie (%) par mois — Fabrication (teal) et Conditionnement (rouge). Mois sans données : pas de point.</p>
+        <p class="hint">Taux d'avarie (%) par mois — Fabrication (teal) et Conditionnement (rouge). Cliquer un mois pour voir les lots à déchets.</p>
       </section>
 
       <!-- Graphes en 2 colonnes -->
@@ -695,6 +705,29 @@ onMounted(chargerTout)
         </div>
       </section>
     </template>
+
+    <div v-if="moisDechets != null" class="md-backdrop" @click="moisDechets = null"></div>
+    <div v-if="moisDechets != null" class="md-modal">
+      <div class="md-head">
+        <span>Lots à déchets — {{ MOIS[moisDechets] }} {{ anneeSel }}</span>
+        <button class="md-x" @click="moisDechets = null" title="Fermer">✕</button>
+      </div>
+      <div class="md-sub">{{ lotsDechetsMois.length }} lot(s) · avarie moyenne du mois {{ pct2(parMoisFab[moisDechets] && parMoisFab[moisDechets].avarie) }}</div>
+      <div class="md-list">
+        <table>
+          <thead><tr><th>Lot</th><th>Produit</th><th class="num">Rendement</th><th class="num">Avarie</th></tr></thead>
+          <tbody>
+            <tr v-for="l in lotsDechetsMois" :key="l.id">
+              <td class="pf">{{ l.lot }}</td>
+              <td>{{ l.code }} — {{ l.desig }}</td>
+              <td class="num">{{ pct2(l.rdt) }}</td>
+              <td class="num av">{{ pct2(l.avarie) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="!lotsDechetsMois.length" class="empty">Aucun lot avec déchets ce mois.</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -842,4 +875,16 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .row-link:hover td { background: #fef3c7; }
 .row-link .mono { color: #0f766e; }
 .row-link:hover .mono { text-decoration: underline; }
+.md-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 70; }
+.md-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 560px; max-width: calc(100vw - 32px); max-height: 80vh; display: flex; flex-direction: column; background: #fff; border-radius: 14px; box-shadow: 0 24px 60px rgba(16,24,40,.3); z-index: 71; overflow: hidden; }
+.md-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; font-size: 15px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #eef2f6; }
+.md-x { background: none; border: 0; cursor: pointer; color: #64748b; font-size: 16px; line-height: 1; }
+.md-sub { padding: 8px 18px; font-size: 12px; color: #64748b; background: #f8fafc; border-bottom: 1px solid #eef2f6; }
+.md-list { overflow-y: auto; padding: 6px 12px 14px; }
+.md-list table { width: 100%; border-collapse: collapse; }
+.md-list th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; padding: 8px; border-bottom: 1px solid #e2e8f0; }
+.md-list td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+.md-list td.num, .md-list th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.md-list .pf { font-weight: 700; color: #0f766e; white-space: nowrap; }
+.md-list td.av { color: #b91c1c; font-weight: 600; }
 </style>
