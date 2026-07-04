@@ -78,7 +78,7 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
       <div v-for="(mo, i) in labels" :key="i" class="ch-group" :class="{ clic: clickable }" @click="clickable && emit('pick', i)">
         <div class="ch-bars">
           <template v-for="(s, si) in series" :key="si">
-            <div v-if="s.data[i] != null" class="ch-bar" :style="{ height: barH(s.data[i]), backgroundColor: colOf(s, s.data[i]), width: (series.length === 1 ? 82 : Math.floor(84 / series.length)) + '%', maxWidth: (series.length === 1 ? 34 : Math.floor(72 / series.length)) + 'px' }" :title="mo + ' — ' + s.label + ' : ' + format(s.data[i])"><span v-if="showValues && s.data[i]" class="ch-val" :class="{ rot: series.length > 1 }">{{ vfmt(s.data[i]) }}</span></div>
+            <div v-if="s.data[i] != null" class="ch-bar" :class="{ clic: clickable }" @click.stop="clickable && emit('pick', i, si)" :style="{ height: barH(s.data[i]), backgroundColor: colOf(s, s.data[i]), width: (series.length === 1 ? 82 : Math.floor(84 / series.length)) + '%', maxWidth: (series.length === 1 ? 34 : Math.floor(72 / series.length)) + 'px' }" :title="mo + ' — ' + s.label + ' : ' + format(s.data[i])"><span v-if="showValues && s.data[i]" class="ch-val" :class="{ rot: series.length > 1 }">{{ vfmt(s.data[i]) }}</span></div>
           </template>
         </div>
         <div class="ch-lbl">{{ mo }}</div>
@@ -103,6 +103,8 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
 .ch-group { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; height: 100%; }
 .ch-bars { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
 .ch-bar { position: relative; border-radius: 5px 5px 2px 2px; min-height: 2px; transition: height .45s cubic-bezier(.4,0,.2,1); background-image: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,0) 55%); }
+.ch-bar.clic { cursor: pointer; }
+.ch-bar.clic:hover { filter: brightness(1.12); }
 .ch-val { position: absolute; top: -17px; left: 50%; transform: translateX(-50%); font-size: 13px; font-weight: 700; color: #334155; white-space: nowrap; }
 .ch-val.rot { writing-mode: vertical-rl; top: auto; bottom: 100%; margin-bottom: 3px; font-size: 11px; }
 .mc-val { fill: #334155; font-size: 20px; font-weight: 700; }
