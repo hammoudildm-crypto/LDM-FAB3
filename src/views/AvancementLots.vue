@@ -202,16 +202,13 @@ onMounted(async () => {
 
       <div class="proc-layout">
       <aside class="proc-side">
-      <div class="card">
-        <div class="card-title">Répartition par étape <span class="hint">— cliquer pour filtrer</span></div>
-        <div class="rep">
-          <div v-for="e in parEtape" :key="e.phase" class="rep-row" :class="{ sel: filtrePhase === e.phase }" @click="filtrePhase = filtrePhase === e.phase ? '' : e.phase">
-            <span class="rep-lbl">{{ e.phase }}</span>
-            <span class="rep-bar"><span class="rep-fill" :style="{ width: e.pct + '%' }"></span></span>
-            <span class="rep-n">{{ e.n }}</span>
+        <div class="etape-title">Répartition par étape <span class="hint">— cliquer sur un atelier pour filtrer</span></div>
+        <div class="etape-cards">
+          <div v-for="e in parEtape" :key="e.phase" class="etape-card" :class="{ sel: filtrePhase === e.phase }" @click="filtrePhase = filtrePhase === e.phase ? '' : e.phase">
+            <div class="ec-n">{{ e.n }}</div>
+            <div class="ec-lbl">{{ e.phase }}</div>
           </div>
         </div>
-      </div>
       </aside>
       <div class="proc-main">
 
@@ -279,11 +276,11 @@ onMounted(async () => {
 .kpi-lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
 
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); margin-bottom: 16px; }
-.proc-layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
-.proc-side { position: sticky; top: 12px; }
+.proc-layout { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
+.proc-side { position: static; }
 .proc-side .card { margin-bottom: 0; }
 .proc-main { min-width: 0; }
-.proc-side .rep-row { grid-template-columns: 118px 1fr 30px; }
+.proc-side .rep-row { grid-template-columns: 160px 1fr 40px; }
 .proc-side .rep-lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 900px) { .proc-layout { grid-template-columns: 1fr; } .proc-side { position: static; } }
 .card-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
@@ -296,6 +293,14 @@ onMounted(async () => {
 .rep-lbl { font-size: 12px; color: #475569; }
 .rep-bar { height: 10px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
 .rep-fill { display: block; height: 100%; background: #0f766e; border-radius: 999px; }
+.etape-title { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 10px; }
+.etape-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.etape-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 12px; text-align: center; cursor: pointer; transition: border-color .15s ease, background .15s ease, box-shadow .15s ease; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.etape-card:hover { border-color: #0f766e; box-shadow: 0 3px 10px rgba(16,24,40,.08); }
+.etape-card.sel { border-color: #0f766e; background: #f0fdfa; box-shadow: inset 0 0 0 1px #0f766e; }
+.ec-n { font-size: 26px; font-weight: 800; color: #0f766e; line-height: 1; }
+.ec-lbl { font-size: 12px; font-weight: 500; color: #475569; margin-top: 6px; }
+.etape-card.sel .ec-lbl { color: #0f766e; font-weight: 600; }
 .rep-n { font-size: 13px; font-weight: 600; text-align: right; color: #0f172a; }
 
 .filters { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
