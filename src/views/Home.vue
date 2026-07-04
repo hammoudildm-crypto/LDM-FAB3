@@ -570,20 +570,22 @@ onMounted(async () => {
         <div class="cols">
           <section class="card">
             <h2 class="card-title">Rendement fabrication par mois — {{ anneeSel }}</h2>
-            <div v-for="(v, i) in rendementFabParMois" :key="i" class="bar-row">
-              <span class="bar-lbl mois">{{ MOIS[i] }}</span>
-              <div class="bar-track"><div class="bar-fill" :class="(v != null && v < 95) ? 'st-rej' : 'prod'" :style="{ width: Math.min(100, v || 0) + '%' }"></div></div>
-              <span class="bar-num xl">{{ fmtPct(v) }}</span>
+            <div class="histo">
+              <div v-for="(v, i) in rendementFabParMois" :key="i" class="histo-col" :title="MOIS[i] + ' : ' + fmtPct(v)">
+                <div class="histo-bar-wrap"><div class="histo-bar" :class="(v != null && v < 95) ? 'rej' : 'qual'" :style="{ height: Math.min(100, v || 0) + '%' }"><span v-if="v != null" class="histo-val">{{ Math.round(v) }}%</span></div></div>
+                <span class="histo-lbl">{{ MOIS[i] }}</span>
+              </div>
             </div>
             <p v-if="rendementFabParMois.every(v => v == null)" class="empty">Aucune fabrication en {{ anneeSel }}.</p>
           </section>
 
           <section class="card">
             <h2 class="card-title">Rendement cond. par mois — {{ anneeSel }}</h2>
-            <div v-for="(v, i) in rendementCondParMois" :key="i" class="bar-row">
-              <span class="bar-lbl mois">{{ MOIS[i] }}</span>
-              <div class="bar-track"><div class="bar-fill" :class="(v != null && v < 95) ? 'st-rej' : 'prod'" :style="{ width: Math.min(100, v || 0) + '%' }"></div></div>
-              <span class="bar-num xl">{{ fmtPct(v) }}</span>
+            <div class="histo">
+              <div v-for="(v, i) in rendementCondParMois" :key="i" class="histo-col" :title="MOIS[i] + ' : ' + fmtPct(v)">
+                <div class="histo-bar-wrap"><div class="histo-bar" :class="(v != null && v < 95) ? 'rej' : 'qual'" :style="{ height: Math.min(100, v || 0) + '%' }"><span v-if="v != null" class="histo-val">{{ Math.round(v) }}%</span></div></div>
+                <span class="histo-lbl">{{ MOIS[i] }}</span>
+              </div>
             </div>
             <p v-if="rendementCondParMois.every(v => v == null)" class="empty">Aucun conditionnement en {{ anneeSel }}.</p>
           </section>
@@ -724,10 +726,12 @@ html[data-theme="sombre"] .tab.active { background: #1d2740 !important; }
 .histo-col { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; }
 .histo-bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; }
 .histo-bar { position: relative; width: 100%; border-radius: 5px 5px 2px 2px; min-height: 2px; transition: height .5s cubic-bezier(.4,0,.2,1); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
-.histo-val { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 700; color: #475569; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.histo-val { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 700; color: #334155; white-space: nowrap; font-variant-numeric: tabular-nums; }
 html[data-theme="sombre"] .histo-val, html[data-theme="minuit"] .histo-val { color: #cbd5e1; }
 .histo-bar.fab { background: linear-gradient(180deg, #2dd4bf, #0f766e); }
 .histo-bar.cond { background: linear-gradient(180deg, #4ade80, #059669); }
+.histo-bar.qual { background: linear-gradient(180deg, #818cf8, #4338ca); }
+.histo-bar.rej { background: linear-gradient(180deg, #f87171, #dc2626); }
 .histo-bar:hover { filter: brightness(1.08); }
 .histo-lbl { font-size: 10px; color: #94a3b8; margin-top: 6px; font-weight: 600; }
 .bar-num { width: 36px; text-align: right; font-weight: 700; font-size: 14px; flex-shrink: 0; }
