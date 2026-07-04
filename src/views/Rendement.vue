@@ -167,6 +167,7 @@ const parMoisFab = computed(() => {
 // Détail des déchets d'un mois (clic sur le graphe Taux de déchets) — par barre (fab / cond)
 const moisDechets = ref(null) // { mois, serie: 'fab' | 'cond' } | null
 function ouvrirMoisDechets(i, si) { moisDechets.value = { mois: i, serie: si === 1 ? 'cond' : 'fab' } }
+function ouvrirCorrection(l) { const s = moisDechets.value.serie; moisDechets.value = null; router.push(s === 'cond' ? { path: '/conditionnement', query: { lot: l.id } } : { path: '/suivi', query: { lot: l.id } }) }
 const lotsDechetsMois = computed(() => {
   if (!moisDechets.value) return []
   const src = moisDechets.value.serie === 'cond' ? lotsValides.value : lotsValidesFab.value
@@ -723,7 +724,7 @@ onMounted(chargerTout)
         <table>
           <thead><tr><th>Lot</th><th>Produit</th><th class="num">Rendement</th><th class="num">Avarie</th></tr></thead>
           <tbody>
-            <tr v-for="l in lotsDechetsMois" :key="l.id">
+            <tr v-for="l in lotsDechetsMois" :key="l.id" class="row-link" @click="ouvrirCorrection(l)" title="Corriger ce lot">
               <td class="pf">{{ l.lot }}</td>
               <td>{{ l.code }} — {{ l.desig }}</td>
               <td class="num">{{ pct2(l.rdt) }}</td>
