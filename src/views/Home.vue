@@ -486,7 +486,7 @@ onMounted(async () => {
             <h2 class="card-title">Fabrication {{ anneeSel }} par mois (boîtes)</h2>
             <div class="histo">
               <div v-for="(v, i) in fabParMois" :key="i" class="histo-col" :title="MOIS[i] + ' : ' + fmt(v) + ' boîtes'">
-                <div class="histo-bar-wrap"><div class="histo-bar fab" :style="{ height: (v / maxFabMois * 100) + '%' }"></div></div>
+                <div class="histo-bar-wrap"><div class="histo-bar fab" :style="{ height: (v / maxFabMois * 100) + '%' }"><span v-if="v" class="histo-val">{{ fmtC(v) }}</span></div></div>
                 <span class="histo-lbl">{{ MOIS[i] }}</span>
               </div>
             </div>
@@ -497,7 +497,7 @@ onMounted(async () => {
             <h2 class="card-title">Conditionnement {{ anneeSel }} par mois (boîtes)</h2>
             <div class="histo">
               <div v-for="(v, i) in prodParMois" :key="i" class="histo-col" :title="MOIS[i] + ' : ' + fmt(v) + ' boîtes'">
-                <div class="histo-bar-wrap"><div class="histo-bar cond" :style="{ height: (v / maxMois * 100) + '%' }"></div></div>
+                <div class="histo-bar-wrap"><div class="histo-bar cond" :style="{ height: (v / maxMois * 100) + '%' }"><span v-if="v" class="histo-val">{{ fmtC(v) }}</span></div></div>
                 <span class="histo-lbl">{{ MOIS[i] }}</span>
               </div>
             </div>
@@ -720,10 +720,12 @@ html[data-theme="sombre"] .tab.active { background: #1d2740 !important; }
 .bar-fill.st-lib { background: #22c55e; }
 .bar-fill.st-rej { background: #ef4444; }
 .bar-fill.prod { background: #0f766e; }
-.histo { display: flex; align-items: stretch; gap: 4px; height: 160px; padding-top: 6px; }
+.histo { display: flex; align-items: stretch; gap: 4px; height: 170px; padding-top: 20px; }
 .histo-col { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; }
 .histo-bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; }
-.histo-bar { width: 100%; border-radius: 5px 5px 2px 2px; min-height: 2px; transition: height .5s cubic-bezier(.4,0,.2,1); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
+.histo-bar { position: relative; width: 100%; border-radius: 5px 5px 2px 2px; min-height: 2px; transition: height .5s cubic-bezier(.4,0,.2,1); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
+.histo-val { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 700; color: #475569; white-space: nowrap; font-variant-numeric: tabular-nums; }
+html[data-theme="sombre"] .histo-val, html[data-theme="minuit"] .histo-val { color: #cbd5e1; }
 .histo-bar.fab { background: linear-gradient(180deg, #2dd4bf, #0f766e); }
 .histo-bar.cond { background: linear-gradient(180deg, #4ade80, #059669); }
 .histo-bar:hover { filter: brightness(1.08); }
