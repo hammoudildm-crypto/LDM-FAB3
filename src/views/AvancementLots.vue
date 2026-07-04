@@ -244,9 +244,10 @@ const filtres = computed(() => {
 })
 
 // KPIs
-const nbProduction = computed(() => lotsAnalyses.value.filter(x => !x.a.termine && x.a.nbRec > 0).length)
-const nbTermines = computed(() => lotsAnalyses.value.filter(x => x.a.termine).length)
-const nbSuivis = computed(() => lotsAnalyses.value.filter(x => x.a.nbRec > 0).length)
+// KPIs alignés sur la file d'attente (mêmes critères que les cartes)
+const nbProduction = computed(() => Object.keys(lotEtape.value).length)
+const nbTermines = computed(() => lots.value.filter(o => o.date_lancement && o.statut !== 'Rejeté' && !lotEtape.value[o.id] && (condComplet.value.has(o.id) || o.statut === 'Libéré')).length)
+const nbSuivis = computed(() => nbProduction.value + nbTermines.value)
 
 // Répartition des lots en production par étape courante
 const parEtape = computed(() => {
