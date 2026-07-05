@@ -338,6 +338,23 @@ const fabParMois = computed(() => {
   return a
 })
 const maxFabMois = computed(() => Math.max(1, ...fabParMois.value))
+// --- CA par mois (× PCSU) : fabrication et conditionnement ---
+const caFabParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const l of lotsAnnee.value) {
+    if (!l.date_fin_fabrication || !l.boites_fabriquees) continue
+    const d = new Date(l.date_fin_fabrication)
+    if (d.getFullYear() !== anneeSel.value) continue
+    const pcsu = l.produits ? Number(l.produits.pcsu || 0) : 0
+    a[d.getMonth()] += Number(l.boites_fabriquees || 0) * pcsu
+  }
+  return a
+})
+const caCondParMois = computed(() => {
+  const arr = Array(12).fill(0)
+  for (const c of condAnnee.value) arr[new Date(c.date_conditionnement).getMonth()] += boitesOf(c) * pcsuDe(c)
+  return arr
+})
 
 // --- Top produits / donneurs / réalisation (année) — source : conditionnement ---
 const topProduits = computed(() => {
@@ -640,6 +657,13 @@ onMounted(async () => {
             <div class="kpi-lbl">{{ k.l }}</div>
           </div>
         </div>
+
+        <section class="card">
+          <h2 class="card-title">CA par mois {{ anneeSel }} — Fabrication vs Conditionnement (DA)</h2>
+          <MiniChart :labels="MOIS" :format="fmtDA" :value-format="fmtC" show-values
+            :series="[{ label: 'CA fabrication', color: '#0f766e', data: caFabParMois }, { label: 'CA conditionnement', color: '#059669', data: caCondParMois }]" />
+          <p v-if="!caFabrication && !caRealise" class="empty">Aucun CA en {{ anneeSel }}.</p>
+        </section>
 
         <div class="cols">
           <section class="card">
