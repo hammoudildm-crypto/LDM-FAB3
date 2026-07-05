@@ -146,6 +146,7 @@ async function enregistrer() {
   message.value = ''
   if (!lotId.value) { erreur.value = 'Choisis d\'abord un lot.'; return }
   const oid = lotId.value
+  const statutPhase = form.date_phase ? 'Terminé' : (form.date_debut ? 'En cours' : 'À faire')
   const payload = {
     ordre_id: lotId.value,
     phase: form.phase,
@@ -154,7 +155,7 @@ async function enregistrer() {
     quantite_sortie: toNum(form.quantite_sortie),
     date_debut: form.date_debut || null,
     date_phase: form.date_phase || null,
-    statut: form.statut,
+    statut: statutPhase,
     commentaire: form.commentaire.trim() || null
   }
   const res = form.id
@@ -168,7 +169,7 @@ async function enregistrer() {
   const estPhaseFinale = phaseFin
     ? form.phase === phaseFin
     : ['Compression', 'Remplissage Gélules', 'Pelliculage'].includes(form.phase)  // repli si gamme non définie
-  if (estPhaseFinale && form.statut === 'Terminé') {
+  if (estPhaseFinale && statutPhase === 'Terminé') {
     const maj = { date_fin_fabrication: form.date_phase || new Date().toISOString().slice(0, 10) }
     const st = lotSelectionne.value ? lotSelectionne.value.statut : null
     if (st !== 'Libéré' && st !== 'Rejeté' && st !== 'Terminé') maj.statut = 'En cours'
@@ -296,11 +297,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
             <label>Quantité sortie (kg)<input v-model="form.quantite_sortie" type="number" step="any" placeholder="245" :disabled="['Pesée', 'Granulation'].includes(form.phase)" /><span class="hint-q">{{ ['Pesée', 'Granulation'].includes(form.phase) ? 'Figée = entrée (pas de perte).' : 'À saisir : poids réel après pertes.' }}</span></label>
             <label>Date début<input v-model="form.date_debut" type="date" /></label>
             <label>Date fin<input v-model="form.date_phase" type="date" /></label>
-            <label>Statut
-              <select v-model="form.statut">
-                <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
-              </select>
-            </label>
+            <label>Statut (automatique)<input :value="form.date_phase ? 'Terminé' : (form.date_debut ? 'En cours' : 'À faire')" disabled title="À faire → En cours (date début) → Terminé (date fin)." /></label>
             <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
             <div class="form-actions">
               <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Ajouter la phase' }}</button>
