@@ -23,12 +23,12 @@ const erreur = ref('')
 const message = ref('')
 
 const form = reactive({
-  id: null, ordre_id: '', date_conditionnement: '', equipement_id: '',
+  id: null, ordre_id: '', date_conditionnement: '', date_fin: '', equipement_id: '',
   quantite_entree: '', boites: '', statut: 'En cours', commentaire: ''
 })
 function resetForm() {
   Object.assign(form, {
-    id: null, ordre_id: '', date_conditionnement: '', equipement_id: '',
+    id: null, ordre_id: '', date_conditionnement: '', date_fin: '', equipement_id: '',
     quantite_entree: '', boites: '', statut: 'En cours', commentaire: ''
   })
 }
@@ -189,10 +189,11 @@ async function enregistrer() {
   const payload = {
     ordre_id: form.ordre_id,
     date_conditionnement: form.date_conditionnement || null,
+    date_fin: form.date_fin || null,
     equipement_id: form.equipement_id || null,
     quantite_entree: toNum(form.quantite_entree),
     quantite_conditionnee: qcond,
-    statut: form.statut,
+    statut: form.statut === 'Libéré' ? 'Libéré' : (form.date_fin ? 'Terminé' : 'En cours'),
     commentaire: form.commentaire.trim() || null
   }
   const res = form.id
@@ -228,7 +229,7 @@ async function majStatutLot(ordreId) {
 function modifier(r) {
   const upb = r.ordres_fabrication && r.ordres_fabrication.produits ? Number(r.ordres_fabrication.produits.unites_par_boite || 0) : 0
   Object.assign(form, {
-    id: r.id, ordre_id: r.ordre_id || '', date_conditionnement: r.date_conditionnement || '',
+    id: r.id, ordre_id: r.ordre_id || '', date_conditionnement: r.date_conditionnement || '', date_fin: r.date_fin || '',
     equipement_id: r.equipement_id || '', quantite_entree: r.quantite_entree ?? '',
     boites: (r.quantite_conditionnee != null && upb > 0) ? Math.round(Number(r.quantite_conditionnee) / upb) : '',
     statut: r.statut || 'En cours', commentaire: r.commentaire || ''
@@ -294,7 +295,8 @@ onMounted(async () => {
               </option>
             </select>
           </label>
-          <label>Date<input v-model="form.date_conditionnement" type="date" /></label>
+          <label>Date de début<input v-model="form.date_conditionnement" type="date" /></label>
+          <label>Date de fin<input v-model="form.date_fin" type="date" /></label>
           <label>Ligne / équipement
             <select v-model="form.equipement_id">
               <option value="">—</option>
@@ -303,11 +305,7 @@ onMounted(async () => {
           </label>
           <label>Quantité reçue (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="245" disabled /><span style="font-weight:500;font-size:11px;color:#94a3b8">Figée = sortie de la dernière phase de fabrication.</span></label>
           <label>Boîtes conditionnées<input v-model="form.boites" type="number" placeholder="16000" /></label>
-          <label>Statut
-            <select v-model="form.statut">
-              <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
-            </select>
-          </label>
+          <label>Statut (automatique)<input :value="form.statut === 'Libéré' ? 'Libéré' : (form.date_fin ? 'Terminé' : 'En cours')" disabled /><span style="font-weight:500;font-size:11px;color:#94a3b8">Terminé dès qu'une date de fin est renseignée.</span></label>
           <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
           <div class="form-actions">
             <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Enregistrer' }}</button>
