@@ -277,8 +277,6 @@ onMounted(async () => {
           <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" /></label>
           <label>Date de réception OF<input v-model="form.date_reception" type="date" /></label>
           <label>Date fin de validité OF<input v-model="form.date_fin_validite" type="date" /></label>
-          <label>Date de lancement<input v-model="form.date_lancement" type="date" disabled /><span class="hint-statut">Automatique : date de la 1re phase (Suivi des phases).</span></label>
-          <label>Date fin fabrication<input v-model="form.date_fin_fabrication" type="date" disabled /><span class="hint-statut">Automatique : date de la phase finale terminée.</span></label>
           <label>Statut
             <select v-model="form.statut">
               <option value="__auto__">Automatique (piloté par fabrication + conditionnement)</option>
