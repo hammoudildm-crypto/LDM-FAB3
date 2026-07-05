@@ -524,7 +524,7 @@ onMounted(async () => {
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val accent">{{ fmt(totalBoites) }}</span></div><div class="kpi-lbl">Conditionnement réalisé (bts)</div></div>
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><span class="kpi-val">{{ fmtPct(pctPlanRealise) }}</span></div><div class="kpi-lbl">% du plan</div></div>
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.rose"><svg viewBox="0 0 24 24" v-html="ICONS.layers"></svg></span><span class="kpi-val">{{ fmt(boitesRestantes) }}</span></div><div class="kpi-lbl">Reste / plan</div></div>
-          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.calendar"></svg></span><span class="kpi-val">{{ fmt(boitesCeMois) }}</span></div><div class="kpi-lbl">Conditionnées ce mois</div></div>
+          <div class="kpi kpi-clic" @click="ouvrirMois(moisCourant, 'cond')"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.calendar"></svg></span><span class="kpi-val">{{ fmt(boitesCeMois) }}</span></div><div class="kpi-lbl">Conditionnées ce mois ›</div></div>
         </div>
 
         <!-- Indicateurs généraux -->
