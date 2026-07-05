@@ -717,6 +717,9 @@ onMounted(async () => {
 .file-board .reception .q-block { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .file-board .reception .prod-scroll { flex: 1; height: auto; min-height: 0; }
 .file-board .reception .q-block .empty { flex: 1; height: auto; min-height: 0; }
+/* Bloc En cours = souvent 1 seul lot -> plus court (En attente garde 180px pour plusieurs lots) */
+.file-board .q-block:has(.q-title.cours) .prod-scroll { height: 72px; }
+.file-board .q-block:has(.q-title.cours) .empty { height: 72px; }
 .pf, .pd { overflow-wrap: anywhere; }
 .lot-row { cursor: pointer; }
 .lot-row:hover td { background: #f0f9ff; }
