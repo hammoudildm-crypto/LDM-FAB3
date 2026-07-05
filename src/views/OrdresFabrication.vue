@@ -279,7 +279,7 @@ onMounted(async () => {
               <option v-for="p in produitsForm" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
             </select>
           </label>
-          <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" title="Rempli auto depuis la taille de lot du produit (modifiable)." /></label>
+          <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" disabled title="Figée : taille de lot du produit (Référentiels)." /></label>
           <label>Date de réception OF<input v-model="form.date_reception" type="date" /></label>
           <label>Date fin de validité OF<input v-model="form.date_fin_validite" type="date" /></label>
           <label>Statut
