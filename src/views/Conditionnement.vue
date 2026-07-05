@@ -7,6 +7,8 @@ import PageHeader from '../components/PageHeader.vue'
 const peutEditer = inject('peutEditer', ref(true))
 
 const STATUTS = ['En cours', 'Terminé', 'Libéré']
+const PHASES_FAB = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+const vracFabParLot = ref({})  // ordre_id -> sortie (kg) de la dernière phase de fabrication
 
 const records = ref([])
 const lots = ref([])
@@ -43,6 +45,11 @@ const lotsFiltresForm = computed(() => {
     return code.toLowerCase().includes(q) || desig.toLowerCase().includes(q) || String(l.numero_lot || '').toLowerCase().includes(q)
   })
 })
+// Auto-remplir la quantité reçue = sortie de la dernière phase de fabrication du lot
+function onOrdreChange() {
+  const v = vracFabParLot.value[form.ordre_id]
+  if (v != null) form.quantite_entree = v
+}
 function upbLot(ordreId) {
   const l = lots.value.find(x => x.id === ordreId)
   const upb = l && l.produits ? Number(l.produits.unites_par_boite || 0) : 0
@@ -79,6 +86,22 @@ async function chargerTout() {
     .eq('actif', true).order('date_conditionnement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (rc.error) { erreur.value = rc.error.message; return }
   records.value = rc.data
+
+  const rs = await fetchAllPaged(() => supabase.from('suivi_phases')
+    .select('ordre_id, phase, quantite_sortie').eq('actif', true))
+  const vf = {}
+  if (!rs.error) {
+    for (const s of rs.data) {
+      if (s.quantite_sortie == null) continue
+      const idx = PHASES_FAB.indexOf(s.phase)
+      if (idx < 0) continue
+      const cur = vf[s.ordre_id]
+      if (!cur || idx > cur.idx) vf[s.ordre_id] = { idx, kg: Number(s.quantite_sortie) }
+    }
+  }
+  const m = {}
+  for (const oid in vf) m[oid] = vf[oid].kg
+  vracFabParLot.value = m
 }
 
 const MOIS = [
@@ -235,7 +258,7 @@ onMounted(async () => {
     if (o) {
       // Pré-remplir le formulaire « Nouveau conditionnement » pour ce lot
       form.id = null
-      form.ordre_id = o.id
+      form.ordre_id = o.id; onOrdreChange()
       if (!form.date_conditionnement) form.date_conditionnement = new Date().toISOString().slice(0, 10)
       rechercheLot.value = String(o.numero_lot || q)
       showList.value = true
@@ -264,7 +287,7 @@ onMounted(async () => {
         <div class="form-grid">
           <label class="wide">Lot <span class="lot-count">{{ lotsFiltresForm.length }}</span>
             <input v-model="rechercheLotForm" type="search" class="lot-search" placeholder="Rechercher un lot (code, désignation, n° lot)…" />
-            <select v-model="form.ordre_id" size="1">
+            <select v-model="form.ordre_id" size="1" @change="onOrdreChange">
               <option value="">—</option>
               <option v-for="l in lotsFiltresForm" :key="l.id" :value="l.id">
                 {{ l.numero_lot }} · {{ l.produits ? l.produits.code_pf + ' ' + l.produits.designation : '' }}
@@ -278,7 +301,7 @@ onMounted(async () => {
               <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
             </select>
           </label>
-          <label>Quantité reçue (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="245" /></label>
+          <label>Quantité reçue (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="245" /><span style="font-weight:500;font-size:11px;color:#94a3b8">Auto = sortie dernière phase fab (modifiable).</span></label>
           <label>Boîtes conditionnées<input v-model="form.boites" type="number" placeholder="16000" /></label>
           <label>Statut
             <select v-model="form.statut">
