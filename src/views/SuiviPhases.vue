@@ -147,7 +147,7 @@ async function enregistrer() {
   if (estPhaseFinale && form.statut === 'Terminé') {
     const maj = { date_fin_fabrication: form.date_phase || new Date().toISOString().slice(0, 10) }
     const st = lotSelectionne.value ? lotSelectionne.value.statut : null
-    if (st !== 'Libéré' && st !== 'Rejeté') maj.statut = 'Terminé'
+    if (st !== 'Libéré' && st !== 'Rejeté' && st !== 'Terminé') maj.statut = 'En cours'
     // Tranche « live » : boîtes fabriquées = sortie finale (kg) -> comprimés -> boîtes
     const pr = lotSelectionne.value ? lotSelectionne.value.produits : null
     const mm = pr ? Number(pr.poids_unitaire_mg || 0) : 0
@@ -157,7 +157,7 @@ async function enregistrer() {
     const ru = await supabase.from('ordres_fabrication').update(maj).eq('id', lotId.value)
     if (!ru.error) { finDeFab = true; await chargerBase() }
   }
-  message.value = (form.id ? 'Phase mise à jour.' : 'Phase ajoutée.') + (finDeFab ? ' Fin de fabrication : lot daté, boîtes fabriquées calculées (sortie kg), passé à « Terminé » → il entre dans la file DDL.' : '')
+  message.value = (form.id ? 'Phase mise à jour.' : 'Phase ajoutée.') + (finDeFab ? ' Fin de fabrication : lot daté, boîtes fabriquées calculées, vrac prêt à conditionner → il entre dans la file DDL.' : '')
   resetForm()
   await chargerPhases()
 }
