@@ -65,8 +65,9 @@ function remplirQuantites() {
   const lot = lotSelectionne.value
   if (!lot) return
   const mm = lot.produits ? Number(lot.produits.poids_unitaire_mg || 0) : 0
+  const upb = lot.produits ? Number(lot.produits.unites_par_boite || 0) : 0
   const qth = Number(lot.quantite_theorique || 0)
-  const theoKg = (qth > 0 && mm > 0) ? Math.round(qth * mm / 1e6 * 100) / 100 : null
+  const theoKg = (qth > 0 && mm > 0 && upb > 0) ? Math.round(qth * upb * mm / 1e6 * 100) / 100 : null
   const gamme = (lot.produits && Array.isArray(lot.produits.gamme) && lot.produits.gamme.length) ? lot.produits.gamme : PHASES
   const idx = gamme.indexOf(form.phase)
   let entree
