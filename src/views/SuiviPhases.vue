@@ -122,6 +122,7 @@ async function enregistrer() {
   erreur.value = ''
   message.value = ''
   if (!lotId.value) { erreur.value = 'Choisis d\'abord un lot.'; return }
+  const oid = lotId.value
   const payload = {
     ordre_id: lotId.value,
     phase: form.phase,
@@ -160,7 +161,27 @@ async function enregistrer() {
   message.value = (form.id ? 'Phase mise à jour.' : 'Phase ajoutée.') + (finDeFab ? ' Fin de fabrication : lot daté, boîtes fabriquées calculées, vrac prêt à conditionner → il entre dans la file DDL.' : '')
   resetForm()
   await chargerPhases()
+  await majDatesLot(oid)
 }
+
+// Dates automatiques du lot depuis les phases : lancement = 1re date de phase ; fin fab = date de la phase finale terminée
+async function majDatesLot(oid) {
+  if (!oid) return
+  const r = await supabase.from('suivi_phases').select('phase, statut, date_debut, date_phase').eq('ordre_id', oid).eq('actif', true)
+  if (r.error) return
+  const rows = r.data || []
+  let minD = null
+  for (const p of rows) { const d = p.date_debut || p.date_phase; if (d && (!minD || d < minD)) minD = d }
+  const lot = lots.value.find(l => l.id === oid)
+  const gamme = lot && lot.produits ? lot.produits.gamme : null
+  const phaseFin = phaseFinaleGamme(gamme)
+  const finale = rows.find(p => p.statut === 'Terminé' && (phaseFin ? p.phase === phaseFin : ['Compression', 'Remplissage Gélules', 'Pelliculage'].includes(p.phase)))
+  await supabase.from('ordres_fabrication').update({
+    date_lancement: minD || null,
+    date_fin_fabrication: finale ? (finale.date_phase || finale.date_debut || null) : null
+  }).eq('id', oid)
+}
+
 function modifier(p) {
   Object.assign(form, {
     id: p.id, phase: p.phase, equipement_id: p.equipement_id || '',
@@ -174,6 +195,7 @@ async function desactiver(p) {
   const res = await supabase.from('suivi_phases').update({ actif: false }).eq('id', p.id)
   if (res.error) { erreur.value = res.error.message; return }
   await chargerPhases()
+  await majDatesLot(p.ordre_id)
 }
 
 function classeStatut(s) {
