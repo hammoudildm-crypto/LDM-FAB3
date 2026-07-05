@@ -301,7 +301,7 @@ onMounted(async () => {
               <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
             </select>
           </label>
-          <label>Quantité reçue (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="245" /><span style="font-weight:500;font-size:11px;color:#94a3b8">Auto = sortie dernière phase fab (modifiable).</span></label>
+          <label>Quantité reçue (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="245" disabled /><span style="font-weight:500;font-size:11px;color:#94a3b8">Figée = sortie de la dernière phase de fabrication.</span></label>
           <label>Boîtes conditionnées<input v-model="form.boites" type="number" placeholder="16000" /></label>
           <label>Statut
             <select v-model="form.statut">
@@ -402,6 +402,7 @@ onMounted(async () => {
 .form-grid .wide { grid-column: span 2; }
 .form-grid input, .form-grid select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 400; }
 .form-grid input:focus, .form-grid select:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.form-grid input:disabled { background: #f1f5f9; color: #64748b; cursor: not-allowed; }
 .form-actions { display: flex; gap: 8px; align-items: end; grid-column: 1 / -1; }
 
 .btn { background: #0f766e; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
