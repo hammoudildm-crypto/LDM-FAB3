@@ -174,6 +174,14 @@ const parProduit = computed(() => {
   return Object.values(m).sort((a, b) => (b.plan - a.plan) || (b.fab - a.fab))
 })
 
+// --- Filtre de recherche (Détail par produit) ---
+const rechercheProduit = ref('')
+const parProduitFiltres = computed(() => {
+  const q = rechercheProduit.value.trim().toLowerCase()
+  if (!q) return parProduit.value
+  return parProduit.value.filter(p => (p.code && String(p.code).toLowerCase().includes(q)) || (p.nom && String(p.nom).toLowerCase().includes(q)))
+})
+
 const w = (v) => (Math.min(100, (v / maxMois.value) * 100)) + '%'
 
 // --- Graphe en courbes (SVG) ---
@@ -244,8 +252,12 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
     </section>
 
     <section class="card" style="margin-top: 22px">
-      <h3 class="card-title">Détail par produit ({{ parProduit.length }})</h3>
+      <div class="card-head">
+        <h3 class="card-title">Détail par produit ({{ parProduitFiltres.length }})</h3>
+        <input v-model="rechercheProduit" type="search" class="prod-search" placeholder="Rechercher un produit (code ou désignation)…" />
+      </div>
       <div v-if="!parProduit.length" class="empty">Aucune donnée pour {{ anneeSel }}.</div>
+      <div v-else-if="!parProduitFiltres.length" class="empty">Aucun produit ne correspond à « {{ rechercheProduit }} ».</div>
       <div v-else class="table-scroll">
         <table class="grid">
           <thead>
@@ -259,7 +271,7 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
             </tr>
           </thead>
           <tbody>
-            <tr v-for="p in parProduit" :key="p.code">
+            <tr v-for="p in parProduitFiltres" :key="p.code">
               <td class="sticky"><span class="mono">{{ p.code }}</span> <span class="desig">{{ p.nom }}</span></td>
               <td class="ta-r">{{ fmt(p.plan) }}</td>
               <td class="ta-r fab-txt">{{ fmt(p.fab) }}</td>
@@ -298,6 +310,8 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.prod-search { font-size: 13px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 240px; max-width: 100%; }
+.prod-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .card-title { margin: 0; font-size: 16px; }
 .legend { display: flex; gap: 16px; font-size: 12px; color: #475569; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
