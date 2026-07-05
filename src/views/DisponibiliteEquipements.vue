@@ -759,4 +759,6 @@ onMounted(async () => {
 .pf { font-weight: 600; color: #0f766e; }
 .pd { color: #475569; }
 .empty { font-size: 11px; color: #94a3b8; margin: 3px 0 0; }
+/* Cadre interne harmonisé : le bloc vide a le même encadré que le tableau (.prod-scroll) */
+.q-block .empty { border: 1px solid #eef2f6; border-radius: 7px; background: #f8fafc; padding: 12px 10px; text-align: center; margin: 0; }
 </style>
