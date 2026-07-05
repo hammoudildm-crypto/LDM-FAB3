@@ -303,9 +303,9 @@ onMounted(async () => {
               <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
             </select>
           </label>
-          <label>Quantité reçue (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="245" disabled /><span style="font-weight:500;font-size:11px;color:#94a3b8">Figée = sortie de la dernière phase de fabrication.</span></label>
+          <label>Quantité reçue (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="245" disabled title="Figée = sortie de la dernière phase de fabrication." /></label>
           <label>Boîtes conditionnées<input v-model="form.boites" type="number" placeholder="16000" /></label>
-          <label>Statut (automatique)<input :value="form.statut === 'Libéré' ? 'Libéré' : (form.date_fin ? 'Terminé' : 'En cours')" disabled /><span style="font-weight:500;font-size:11px;color:#94a3b8">Terminé dès qu'une date de fin est renseignée.</span></label>
+          <label>Statut (automatique)<input :value="form.statut === 'Libéré' ? 'Libéré' : (form.date_fin ? 'Terminé' : 'En cours')" disabled title="Terminé dès qu'une date de fin est renseignée." /></label>
           <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
           <div class="form-actions">
             <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Enregistrer' }}</button>
