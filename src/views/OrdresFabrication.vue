@@ -6,6 +6,7 @@ import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
 const STATUTS = ['Planifié', 'En cours', 'Terminé', 'Libéré', 'Rejeté']
+const statutOriginal = ref('Planifié')  // statut réel du lot chargé (pour la sentinelle __auto__)
 
 const lots = ref([])
 const produits = ref([])
@@ -31,13 +32,14 @@ const sig = reactive({ open: false, mode: 'sign', ordre: null, pin: '', pin2: ''
 const form = reactive({
   id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
   date_reception: '', date_fin_validite: '',
-  date_lancement: '', date_fin_fabrication: '', statut: 'Planifié', equipement_id: '', commentaire: ''
+  date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: ''
 })
 function resetForm() {
+  statutOriginal.value = 'Planifié'
   Object.assign(form, {
     id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
     date_reception: '', date_fin_validite: '',
-    date_lancement: '', date_fin_fabrication: '', statut: 'Planifié', equipement_id: '', commentaire: ''
+    date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: ''
   })
 }
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
@@ -115,9 +117,11 @@ async function enregistrer() {
   erreur.value = ''
   message.value = ''
   if (!form.numero_lot.trim() || !form.produit_id) { erreur.value = 'Numéro de lot et produit obligatoires.'; return }
+  let statutFinal = form.statut
+  if (statutFinal === '__auto__') statutFinal = ['Libéré', 'Rejeté'].includes(statutOriginal.value) ? 'En cours' : (statutOriginal.value || 'Planifié')
   // Fin de fabrication : auto-datée quand le lot passe à Terminé/Libéré -> alimente la file DDL
   let dateFin = form.date_fin_fabrication || null
-  if (!dateFin && (form.statut === 'Terminé' || form.statut === 'Libéré')) {
+  if (!dateFin && (statutFinal === 'Terminé' || statutFinal === 'Libéré')) {
     dateFin = new Date().toISOString().slice(0, 10)
     form.date_fin_fabrication = dateFin
   }
@@ -129,7 +133,7 @@ async function enregistrer() {
     date_fin_validite: form.date_fin_validite || null,
     date_lancement: form.date_lancement || null,
     date_fin_fabrication: dateFin,
-    statut: form.statut,
+    statut: statutFinal,
     equipement_id: form.equipement_id || null,
     commentaire: form.commentaire.trim() || null
   }
@@ -150,12 +154,13 @@ async function enregistrer() {
   await chargerTout()
 }
 function modifier(l) {
+  statutOriginal.value = l.statut || 'Planifié'
   Object.assign(form, {
     id: l.id, numero_lot: l.numero_lot, produit_id: l.produit_id || '',
     quantite_theorique: l.quantite_theorique ?? '', date_lancement: l.date_lancement || '',
     date_reception: l.date_reception || '', date_fin_validite: l.date_fin_validite || '',
     date_fin_fabrication: l.date_fin_fabrication || '',
-    statut: l.statut || 'Planifié', equipement_id: l.equipement_id || '', commentaire: l.commentaire || ''
+    statut: ['Libéré', 'Rejeté'].includes(l.statut) ? l.statut : '__auto__', equipement_id: l.equipement_id || '', commentaire: l.commentaire || ''
   })
 }
 async function desactiver(l) {
@@ -276,8 +281,11 @@ onMounted(async () => {
           <label>Date fin fabrication<input v-model="form.date_fin_fabrication" type="date" /></label>
           <label>Statut
             <select v-model="form.statut">
-              <option v-for="s in STATUTS" :key="s" :value="s">{{ s }}</option>
+              <option value="__auto__">Automatique (piloté par fabrication + conditionnement)</option>
+              <option value="Libéré">Libéré (qualité)</option>
+              <option value="Rejeté">Rejeté (qualité)</option>
             </select>
+            <span class="hint-statut">Seuls Libéré / Rejeté (qualité) sont manuels. Planifié / En cours / Terminé sont automatiques.</span>
           </label>
           <label>Ligne de conditionnement (finale)
             <select v-model="form.equipement_id">
@@ -469,4 +477,5 @@ button.link.release { color: #166534; }
 .cap-note { color: #94a3b8; font-size: 12px; padding: 8px 10px; }
 .prod-search { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; width: 100%; box-sizing: border-box; margin-bottom: 5px; }
 .prod-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.hint-statut { font-weight: 500; font-size: 11px; color: #94a3b8; margin-top: 2px; }
 </style>
