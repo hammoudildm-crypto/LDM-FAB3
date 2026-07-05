@@ -57,6 +57,23 @@ function onPhaseChange() {
   if (form.equipement_id && !equipements.value.some(e => e.id === form.equipement_id && e.type === form.phase)) {
     form.equipement_id = ''
   }
+  remplirQuantites(true)
+}
+// Auto-remplir Quantité entrée/sortie (kg) pour Pesée et Granulation
+function remplirQuantites(force) {
+  const lot = lotSelectionne.value
+  if (!lot) return
+  if (form.phase !== 'Pesée' && form.phase !== 'Granulation') return
+  if (!force && (form.quantite_entree !== '' || form.quantite_sortie !== '')) return
+  const mm = lot.produits ? Number(lot.produits.poids_unitaire_mg || 0) : 0
+  const qth = Number(lot.quantite_theorique || 0)
+  const theoKg = (qth > 0 && mm > 0) ? Math.round(qth * mm / 1e6 * 100) / 100 : null
+  let src = theoKg
+  if (form.phase === 'Granulation') {
+    const pesee = phases.value.find(ph => ph.phase === 'Pesée' && ph.quantite_sortie != null)
+    if (pesee) src = Number(pesee.quantite_sortie)
+  }
+  if (src != null) { form.quantite_entree = src; form.quantite_sortie = src }
 }
 
 async function fetchAllPaged(make) {
@@ -214,7 +231,7 @@ onMounted(async () => {
     if (found) lotId.value = found.id
   }
 })
-watch(lotId, chargerPhases)
+watch(lotId, async () => { await chargerPhases(); remplirQuantites(false) })
 </script>
 
 <template>
