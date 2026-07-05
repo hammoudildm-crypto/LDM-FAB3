@@ -478,7 +478,7 @@ onMounted(async () => {
             <span class="at-sum">{{ attentePeseeList.length }} en attente de pesée</span>
           </h2>
           <div class="eq-grid">
-            <div class="card phase-card" :class="{ rupture: !attentePeseeList.length }">
+            <div class="card phase-card reception" :class="{ rupture: !attentePeseeList.length }">
               <div class="eq-head">
                 <div class="eq-ident">
                   <span class="eq-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span>
@@ -713,6 +713,10 @@ onMounted(async () => {
 .file-board .prod-scroll { overflow-x: hidden; height: 180px; }
 /* Hauteur fixe des boites internes -> toutes les cartes a la meme hauteur */
 .file-board .q-block .empty { height: 180px; display: flex; align-items: center; justify-content: center; }
+/* Réception OF (1 seul bloc) : son bloc remplit la carte -> meme hauteur que les cartes a 2 blocs */
+.file-board .reception .q-block { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.file-board .reception .prod-scroll { flex: 1; height: auto; min-height: 0; }
+.file-board .reception .q-block .empty { flex: 1; height: auto; min-height: 0; }
 .pf, .pd { overflow-wrap: anywhere; }
 .lot-row { cursor: pointer; }
 .lot-row:hover td { background: #f0f9ff; }
