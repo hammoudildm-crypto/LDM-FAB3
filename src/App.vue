@@ -148,7 +148,7 @@ function notifierNavigateur() {
   const envoyer = () => {
     dejaNotifie = true
     try {
-      new Notification('LDM-FAB3 — Validité OF', {
+      new Notification('ProdTrack — Validité OF', {
         body: alertes.value.length + ' ordre(s) de fabrication expire(nt) sous 3 jours.',
         tag: 'ldmfab-validite'
       })
@@ -187,8 +187,8 @@ async function signOut() {
   <div class="app-shell">
     <aside class="sidebar" :class="{ open: sidebarOpen }">
       <div class="side-brand">
-        <span class="brand-mark" aria-hidden="true">L</span>
-        <span class="brand-wm">LDM<span class="brand-sub">FAB3</span></span>
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none"><path d="M4 16 L10 11 L15 14 L20 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="16" r="1.7" fill="#fff"/><circle cx="10" cy="11" r="1.7" fill="#fff"/><circle cx="15" cy="14" r="1.7" fill="#fff"/><circle cx="20" cy="6" r="1.7" fill="#fff"/></svg></span>
+        <span class="brand-wm">Prod<span class="brand-sub">Track</span></span>
       </div>
       <nav class="side-nav">
         <RouterLink to="/" class="side-link" @click="sidebarOpen = false"><span class="link-in"><span class="link-ic"><svg viewBox="0 0 24 24" v-html="LINK_ICONS['/']"></svg></span>Tableau de bord</span></RouterLink>
@@ -255,7 +255,7 @@ async function signOut() {
     <div class="app-main">
       <header class="mobile-top">
         <button class="burger" @click="sidebarOpen = !sidebarOpen" aria-label="Ouvrir le menu">☰</button>
-        <span class="brand-wm">LDM<span class="brand-sub">FAB3</span></span>
+        <span class="brand-wm">Prod<span class="brand-sub">Track</span></span>
         <button class="zoom-btn solo" @click="refreshTick++" title="Actualiser" style="margin-left:auto">⟳</button>
       </header>
       <main :style="{ zoom: zoom / 100 }">
