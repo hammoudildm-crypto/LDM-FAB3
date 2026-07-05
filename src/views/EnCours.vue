@@ -89,8 +89,9 @@ const lignes = computed(() => {
       return String(x.lot.numero_lot || '').toLowerCase().includes(q) || code.toLowerCase().includes(q) || desig.toLowerCase().includes(q)
     })
 })
-const totalEnCours = computed(() => lignes.value.reduce((s, x) => s + (x.enc != null && x.enc > 0 ? x.enc : 0), 0))
-const nbAttente = computed(() => lignes.value.filter(x => x.enc != null && x.enc > 0).length)
+const lotsVracAttente = computed(() => lots.value.filter(l => estVracAttente(l)))
+const totalEnCours = computed(() => lotsVracAttente.value.reduce((s, l) => { const f = fabrique(l); return s + (f != null && f > 0 ? f : 0) }, 0))
+const nbAttente = computed(() => lotsVracAttente.value.length)
 
 function classeStatut(s) {
   return { 'Planifié': 'st-plan', 'En cours': 'st-cours', 'Terminé': 'st-fini', 'Libéré': 'st-lib', 'Rejeté': 'st-rej' }[s] || 'st-plan'
