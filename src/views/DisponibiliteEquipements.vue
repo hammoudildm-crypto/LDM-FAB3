@@ -474,7 +474,7 @@ onMounted(async () => {
 
         <div class="file-board">
         <section class="atelier">
-          <h2 class="atelier-titre">Réception OF
+          <h2 class="atelier-titre"><span class="at-name">Réception OF</span>
             <span class="at-sum">{{ attentePeseeList.length }} en attente de pesée</span>
           </h2>
           <div class="eq-grid">
@@ -502,7 +502,7 @@ onMounted(async () => {
           </div>
         </section>
         <section v-for="ph in vueFile" :key="ph.key" class="atelier">
-          <h2 class="atelier-titre">Atelier de {{ ph.phase.label }}
+          <h2 class="atelier-titre"><span class="at-name">Atelier de {{ ph.phase.label }}</span>
             <span class="at-sum">{{ ph.attente.length }} en attente · {{ ph.cours.length }} en cours</span>
           </h2>
           <div class="eq-grid">
@@ -700,6 +700,8 @@ onMounted(async () => {
 
 .atelier { margin-bottom: 26px; }
 .atelier-titre { font-size: 13px; font-weight: 700; margin: 0 0 7px; color: #0f172a; border-left: 3px solid #0f766e; padding-left: 8px; line-height: 1.25; }
+/* Réserve 2 lignes pour le nom -> titres 1 ligne alignés sur les titres 2 lignes (cartes homogènes) */
+.at-name { display: block; min-height: 2.5em; }
 .at-sum { display: block; font-size: 10.5px; font-weight: 500; color: #64748b; margin: 2px 0 0 11px; }
 /* File d'attente en colonnes (façon Kanban) */
 .file-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; align-items: stretch; }
