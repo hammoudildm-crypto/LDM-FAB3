@@ -9,6 +9,7 @@ const phasesParLot = ref({})   // ordre_id -> dernière sortie (vrac fabriqué)
 const condParLot = ref({})     // ordre_id -> somme entrée conditionnement
 const condDemarre = ref(new Set())  // ordre_ids ayant au moins un enregistrement de conditionnement
 const masquerSoldes = ref(true)
+const vracSeul = ref(false)
 const recherche = ref('')
 const filtreStatut = ref('')
 const STATUTS = ['Planifié', 'En cours', 'Terminé', 'Libéré', 'Rejeté']
@@ -69,11 +70,16 @@ function enCours(l) {
   return f - entreCond(l)
 }
 
+// Vrac en attente = fabrication terminée (date_fin_fabrication) et conditionnement jamais démarré
+function estVracAttente(l) { return !!l.date_fin_fabrication && !condDemarre.value.has(l.id) }
+function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
+
 const lignes = computed(() => {
   const q = recherche.value.trim().toLowerCase()
   return lots.value
-    .map(l => ({ lot: l, fab: fabrique(l), cond: entreCond(l), enc: enCours(l) }))
+    .map(l => ({ lot: l, fab: fabrique(l), cond: entreCond(l), enc: enCours(l), vracAttente: estVracAttente(l) }))
     .filter(x => !masquerSoldes.value || x.enc == null || x.enc > 0)
+    .filter(x => !vracSeul.value || x.vracAttente)
     .filter(x => !filtreStatut.value || x.lot.statut === filtreStatut.value)
     .filter(x => {
       if (!q) return true
@@ -85,14 +91,6 @@ const lignes = computed(() => {
 })
 const totalEnCours = computed(() => lignes.value.reduce((s, x) => s + (x.enc != null && x.enc > 0 ? x.enc : 0), 0))
 const nbAttente = computed(() => lignes.value.filter(x => x.enc != null && x.enc > 0).length)
-
-const vracAttente = computed(() => {
-  return lots.value
-    .filter(l => l.date_fin_fabrication && !condDemarre.value.has(l.id))
-    .map(l => ({ lot: l, vrac: fabrique(l) }))
-    .sort((a, b) => new Date(a.lot.date_fin_fabrication || 0) - new Date(b.lot.date_fin_fabrication || 0))
-})
-function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
 
 function classeStatut(s) {
   return { 'Planifié': 'st-plan', 'En cours': 'st-cours', 'Terminé': 'st-fini', 'Libéré': 'st-lib', 'Rejeté': 'st-rej' }[s] || 'st-plan'
@@ -121,31 +119,10 @@ onMounted(charger)
     </div>
 
     <section class="card">
-      <h2 class="card-title">Vrac en attente de conditionnement <span class="count">{{ vracAttente.length }}</span></h2>
-      <p class="sub-note">Lots terminés en fabrication, conditionnement non démarré — le vrac est prêt à être conditionné.</p>
-      <div class="table-scroll">
-        <table class="grid">
-          <thead>
-            <tr><th>Lot</th><th>Produit</th><th>Statut</th><th class="right">Vrac fabriqué (kg)</th><th>Fin de fabrication</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="x in vracAttente" :key="x.lot.id">
-              <td class="mono">{{ x.lot.numero_lot }}</td>
-              <td class="desig">{{ x.lot.produits ? x.lot.produits.designation : '—' }}</td>
-              <td><span class="badge" :class="classeStatut(x.lot.statut)">{{ x.lot.statut }}</span></td>
-              <td class="right strong">{{ fmt(x.vrac) }}</td>
-              <td>{{ fmtDate(x.lot.date_fin_fabrication) }}</td>
-            </tr>
-            <tr v-if="!vracAttente.length"><td colspan="5" class="empty">Aucun vrac en attente : tous les lots terminés en fabrication ont démarré leur conditionnement.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="card">
       <div class="card-head">
         <h2 class="card-title">Par lot <span class="count">{{ lignes.length }}</span></h2>
         <div class="head-tools">
+          <label class="toggle-sm"><input type="checkbox" v-model="vracSeul" /> Vrac en attente seulement</label>
           <input v-model="recherche" type="search" class="recherche" placeholder="Rechercher (lot, code, désignation)…" />
           <select v-model="filtreStatut" class="filtre">
             <option value="">Tous les statuts</option>
@@ -157,20 +134,21 @@ onMounted(charger)
         <table class="grid">
           <thead>
             <tr>
-              <th>Lot</th><th>Produit</th><th>Statut</th>
+              <th>Lot</th><th>Produit</th><th>Statut</th><th>Fin de fab.</th>
               <th class="right">Fabriqué (kg)</th><th class="right">Reçu en cond. (kg)</th><th class="right">En-cours</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="x in lignes" :key="x.lot.id">
-              <td class="mono">{{ x.lot.numero_lot }}</td>
+              <td class="mono">{{ x.lot.numero_lot }}<span v-if="x.vracAttente" class="tag-vrac" title="Fabrication terminée, conditionnement non démarré">vrac en attente</span></td>
               <td class="desig">{{ x.lot.produits ? x.lot.produits.designation : '—' }}</td>
               <td><span class="badge" :class="classeStatut(x.lot.statut)">{{ x.lot.statut }}</span></td>
+              <td>{{ fmtDate(x.lot.date_fin_fabrication) }}</td>
               <td class="right">{{ fmt(x.fab) }}</td>
               <td class="right">{{ fmt(x.cond) }}</td>
               <td class="right strong" :class="classeEnc(x.enc)">{{ fmt(x.enc) }}</td>
             </tr>
-            <tr v-if="!lignes.length"><td colspan="6" class="empty">Aucun en-cours à afficher. Décoche « Masquer les lots soldés » pour voir tous les lots.</td></tr>
+            <tr v-if="!lignes.length"><td colspan="7" class="empty">Aucun en-cours à afficher. Décoche « Masquer les lots soldés » pour voir tous les lots.</td></tr>
           </tbody>
         </table>
       </div>
@@ -198,7 +176,9 @@ onMounted(charger)
 
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card-title { margin: 0 0 14px; font-size: 17px; }
-.sub-note { color: #64748b; font-size: 12.5px; margin: -8px 0 14px; }
+.tag-vrac { display: inline-block; margin-left: 7px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: #92400e; background: #fef3c7; padding: 1px 7px; border-radius: 999px; vertical-align: middle; }
+.toggle-sm { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: #475569; cursor: pointer; white-space: nowrap; }
+.toggle-sm input { width: 15px; height: 15px; accent-color: #0f766e; cursor: pointer; }
 
 .table-scroll { overflow-x: auto; }
 table.grid { width: 100%; border-collapse: collapse; font-size: 14px; }
