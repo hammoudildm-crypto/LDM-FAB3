@@ -57,23 +57,28 @@ function onPhaseChange() {
   if (form.equipement_id && !equipements.value.some(e => e.id === form.equipement_id && e.type === form.phase)) {
     form.equipement_id = ''
   }
-  remplirQuantites(true)
+  remplirQuantites()
 }
-// Auto-remplir Quantité entrée/sortie (kg) pour Pesée et Granulation
-function remplirQuantites(force) {
+// Auto : entrée FIGÉE = sortie de la phase précédente (1re phase = poids vrac théorique).
+// Sortie = auto pour Pesée/Granulation, VIDE dès le Séchage (saisie manuelle).
+function remplirQuantites() {
   const lot = lotSelectionne.value
   if (!lot) return
-  if (form.phase !== 'Pesée' && form.phase !== 'Granulation') return
-  if (!force && (form.quantite_entree !== '' || form.quantite_sortie !== '')) return
   const mm = lot.produits ? Number(lot.produits.poids_unitaire_mg || 0) : 0
   const qth = Number(lot.quantite_theorique || 0)
   const theoKg = (qth > 0 && mm > 0) ? Math.round(qth * mm / 1e6 * 100) / 100 : null
-  let src = theoKg
-  if (form.phase === 'Granulation') {
-    const pesee = phases.value.find(ph => ph.phase === 'Pesée' && ph.quantite_sortie != null)
-    if (pesee) src = Number(pesee.quantite_sortie)
+  const gamme = (lot.produits && Array.isArray(lot.produits.gamme) && lot.produits.gamme.length) ? lot.produits.gamme : PHASES
+  const idx = gamme.indexOf(form.phase)
+  let entree
+  if (idx <= 0) {
+    entree = theoKg
+  } else {
+    const prev = gamme[idx - 1]
+    const rec = phases.value.find(ph => ph.phase === prev && ph.quantite_sortie != null)
+    entree = rec ? Number(rec.quantite_sortie) : theoKg
   }
-  if (src != null) { form.quantite_entree = src; form.quantite_sortie = src }
+  form.quantite_entree = (entree != null) ? entree : ''
+  form.quantite_sortie = (form.phase === 'Pesée' || form.phase === 'Granulation') ? ((entree != null) ? entree : '') : ''
 }
 
 async function fetchAllPaged(make) {
@@ -231,7 +236,7 @@ onMounted(async () => {
     if (found) lotId.value = found.id
   }
 })
-watch(lotId, async () => { await chargerPhases(); remplirQuantites(false) })
+watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
 </script>
 
 <template>
@@ -286,7 +291,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites(false) })
                 <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
               </select>
             </label>
-            <label>Quantité entrée (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="250" /></label>
+            <label>Quantité entrée (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="250" disabled /><span class="hint-q">Figée = sortie de la phase précédente.</span></label>
             <label>Quantité sortie (kg)<input v-model="form.quantite_sortie" type="number" step="any" placeholder="245" /></label>
             <label>Date début<input v-model="form.date_debut" type="date" /></label>
             <label>Date fin<input v-model="form.date_phase" type="date" /></label>
@@ -379,6 +384,8 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites(false) })
 .form-grid .wide { grid-column: span 2; }
 .form-grid input, .form-grid select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 400; }
 .form-grid input:focus, .form-grid select:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.form-grid input:disabled { background: #f1f5f9; color: #64748b; cursor: not-allowed; }
+.hint-q { font-weight: 500; font-size: 11px; color: #94a3b8; }
 .form-actions { display: flex; gap: 8px; align-items: end; grid-column: 1 / -1; }
 
 .btn { background: #0f766e; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
