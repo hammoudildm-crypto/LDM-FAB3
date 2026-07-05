@@ -59,7 +59,7 @@ async function fetchAllPaged(make) {
 
 async function chargerTout() {
   erreur.value = ''
-  const rp = await supabase.from('produits').select('id, code_pf, designation').eq('actif', true).order('code_pf')
+  const rp = await supabase.from('produits').select('id, code_pf, designation, taille_lot').eq('actif', true).order('code_pf')
   if (rp.error) { erreur.value = rp.error.message; return }
   produits.value = rp.data
 
@@ -152,6 +152,11 @@ async function enregistrer() {
   message.value = form.id ? 'Lot mis à jour.' : 'Lot créé.'
   resetForm()
   await chargerTout()
+}
+// Auto-remplir la quantité théorique depuis la taille de lot du produit choisi
+function onProduitChange() {
+  const pr = produits.value.find(p => p.id === form.produit_id)
+  if (pr && pr.taille_lot != null && pr.taille_lot !== '') form.quantite_theorique = pr.taille_lot
 }
 function modifier(l) {
   statutOriginal.value = l.statut || 'Planifié'
@@ -269,12 +274,12 @@ onMounted(async () => {
           <label>N° de lot<input v-model="form.numero_lot" placeholder="L260145" /></label>
           <label class="wide">Produit
             <input v-model="rechProduit" type="search" class="prod-search" placeholder="Filtrer par code ou désignation…" />
-            <select v-model="form.produit_id">
+            <select v-model="form.produit_id" @change="onProduitChange">
               <option value="">— Choisir un produit — ({{ produitsForm.length }})</option>
               <option v-for="p in produitsForm" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
             </select>
           </label>
-          <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" /></label>
+          <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" /><span class="hint-statut">Rempli auto depuis la taille de lot du produit (modifiable).</span></label>
           <label>Date de réception OF<input v-model="form.date_reception" type="date" /></label>
           <label>Date fin de validité OF<input v-model="form.date_fin_validite" type="date" /></label>
           <label>Statut
