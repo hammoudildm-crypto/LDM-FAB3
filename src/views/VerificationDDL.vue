@@ -20,6 +20,8 @@ const anneeSel = ref(0) // 0 = toutes
 const verifEnCours = ref(null)
 const vForm = ref({ verificateur: '', date: new Date().toISOString().slice(0, 10) })
 const superviseurChoix = ref('')
+const supSuivis = ref([])          // superviseurs à suivre (vide = tous)
+const filtreSupOuvert = ref(false)
 const nouveauSuperviseur = ref('')
 const histRecherche = ref('')
 const histDu = ref('')
@@ -75,6 +77,11 @@ const parSuperviseur = computed(() => {
   return Object.values(m)
     .map(x => ({ ...x, taux: x.assignes ? (x.verifies / x.assignes) * 100 : 0 }))
     .sort((a, b) => b.assignes - a.assignes)
+})
+
+const parSuperviseurFiltre = computed(() => {
+  if (!supSuivis.value.length) return parSuperviseur.value
+  return parSuperviseur.value.filter(s => supSuivis.value.includes(s.nom))
 })
 
 const superviseurs = computed(() => {
@@ -186,10 +193,20 @@ async function devalider(l) {
 
     <div class="cols">
       <section class="card">
-        <h3 class="card-title">Taux de vérification par superviseur</h3>
+        <div class="sup-head">
+          <h3 class="card-title">Taux de vérification par superviseur</h3>
+          <div class="sup-filtre">
+            <button class="btn-filtre" type="button" @click="filtreSupOuvert = !filtreSupOuvert">Superviseurs<span v-if="supSuivis.length"> ({{ supSuivis.length }})</span> ▾</button>
+            <div v-if="filtreSupOuvert" class="sup-backdrop" @click="filtreSupOuvert = false"></div>
+            <div v-if="filtreSupOuvert" class="sup-menu">
+              <label class="sup-opt"><input type="checkbox" :checked="!supSuivis.length" @change="supSuivis = []" /> Tous</label>
+              <label v-for="sup in superviseurs" :key="sup" class="sup-opt"><input type="checkbox" :value="sup" v-model="supSuivis" /> {{ sup }}</label>
+            </div>
+          </div>
+        </div>
         <p class="hint">DDL envoyés à l'AQ ÷ DDL qui lui sont assignés</p>
-        <div v-if="!parSuperviseur.length" class="empty">Aucun DDL pour ce filtre.</div>
-        <div v-for="s in parSuperviseur" :key="s.nom" class="prog-row">
+        <div v-if="!parSuperviseurFiltre.length" class="empty">Aucun superviseur pour ce filtre.</div>
+        <div v-for="s in parSuperviseurFiltre" :key="s.nom" class="prog-row">
           <div class="prog-head">
             <span class="prog-nom">{{ s.nom }}</span>
             <span class="prog-pct" :class="{ warn: s.taux < 100 }">{{ s.verifies }}/{{ s.assignes }} · {{ s.taux.toFixed(0) }}%</span>
@@ -360,4 +377,13 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .hist-exp { font-size: 13px; padding: 7px 12px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .hist-exp:hover { background: #ecfdf5; }
 .hist-exp:disabled { opacity: .45; cursor: not-allowed; }
+.sup-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.sup-filtre { position: relative; }
+.btn-filtre { font-size: 12px; font-weight: 600; color: #475569; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+.btn-filtre:hover { border-color: #0f766e; color: #0f766e; }
+.sup-backdrop { position: fixed; inset: 0; z-index: 20; }
+.sup-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 21; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 28px rgba(16,24,40,.18); padding: 6px; min-width: 210px; max-height: 260px; overflow-y: auto; }
+.sup-opt { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1b2733; padding: 6px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.sup-opt:hover { background: #f1f5f9; }
+.sup-opt input { width: 15px; height: 15px; accent-color: #0f766e; cursor: pointer; }
 </style>
