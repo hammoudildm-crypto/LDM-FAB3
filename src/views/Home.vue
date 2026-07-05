@@ -304,14 +304,14 @@ const vracEnAttente = computed(() => {
   return t
 })
 
-// --- Fabrication réalisée (boîtes) = quantités réellement fabriquées ---
-// boites_fabriquees provient du classeur (cps/kg réels). Repli théorique pour
-// les lots récents pas encore dans le classeur mais dont la fab est terminée.
+// --- Fabrication réalisée (boîtes) = boîtes réellement fabriquées, par date de fin de fabrication ---
+// (même définition stricte que « Réalisation vs Plan » : pas de repli théorique)
 const fabRealisee = computed(() => {
   let t = 0
   for (const l of lotsAnnee.value) {
-    if (l.boites_fabriquees != null) { t += Number(l.boites_fabriquees); continue }
-    if (l.date_fin_fabrication || l.statut === 'Terminé' || l.statut === 'Libéré') t += Number(l.quantite_theorique || 0)
+    if (!l.date_fin_fabrication || !l.boites_fabriquees) continue
+    if (new Date(l.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+    t += Number(l.boites_fabriquees || 0)
   }
   return t
 })
