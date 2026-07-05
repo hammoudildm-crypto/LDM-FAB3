@@ -66,6 +66,15 @@ const parProduit = computed(() => {
 })
 const caTotal = computed(() => parProduit.value.reduce((s, x) => s + x.ca, 0))
 const boitesTotal = computed(() => parProduit.value.reduce((s, x) => s + x.boites, 0))
+// --- Filtre de recherche (CA par produit) ---
+const rechercheCA = ref('')
+const parProduitFiltres = computed(() => {
+  const q = rechercheCA.value.trim().toLowerCase()
+  if (!q) return parProduit.value
+  return parProduit.value.filter(x => (x.code && String(x.code).toLowerCase().includes(q)) || (x.nom && String(x.nom).toLowerCase().includes(q)))
+})
+const boitesFiltre = computed(() => parProduitFiltres.value.reduce((s, x) => s + x.boites, 0))
+const caFiltre = computed(() => parProduitFiltres.value.reduce((s, x) => s + x.ca, 0))
 
 function part(ca) { return caTotal.value > 0 ? (ca / caTotal.value) * 100 : 0 }
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
@@ -116,6 +125,7 @@ onMounted(charger)
     <section class="card">
       <div class="card-head">
         <h2 class="card-title">CA par produit</h2>
+        <input v-model="rechercheCA" type="search" class="prod-search" placeholder="Rechercher un produit…" style="margin-left:auto" />
         <button class="btn-exp" @click="exporterCSV" :disabled="!parProduit.length">Exporter CSV</button>
       </div>
       <div class="table-scroll">
@@ -124,7 +134,7 @@ onMounted(charger)
             <tr><th>Produit</th><th class="right">Boîtes</th><th class="right">CA</th><th class="part-col">Part</th></tr>
           </thead>
           <tbody>
-            <tr v-for="x in parProduit" :key="x.code">
+            <tr v-for="x in parProduitFiltres" :key="x.code">
               <td><span class="mono">{{ x.code }}</span> <span class="desig">{{ x.nom }}</span></td>
               <td class="right">{{ fmt(x.boites) }}</td>
               <td class="right strong">{{ fmtCA(x.ca) }}</td>
@@ -136,12 +146,13 @@ onMounted(charger)
               </td>
             </tr>
             <tr v-if="!parProduit.length"><td colspan="4" class="empty">Aucune donnée. Enregistre des conditionnements (avec un PCSU et des unités/boîte sur les produits) pour voir le CA.</td></tr>
+            <tr v-else-if="!parProduitFiltres.length"><td colspan="4" class="empty">Aucun produit ne correspond à « {{ rechercheCA }} ».</td></tr>
           </tbody>
-          <tfoot v-if="parProduit.length">
+          <tfoot v-if="parProduitFiltres.length">
             <tr>
               <td class="strong">Total</td>
-              <td class="right strong">{{ fmt(boitesTotal) }}</td>
-              <td class="right strong">{{ fmtCA(caTotal) }}</td>
+              <td class="right strong">{{ fmt(boitesFiltre) }}</td>
+              <td class="right strong">{{ fmtCA(caFiltre) }}</td>
               <td></td>
             </tr>
           </tfoot>
@@ -161,6 +172,8 @@ onMounted(charger)
 .annee { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
 .annee select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 600; color: #1b2733; }
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.prod-search { font-size: 13px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 220px; max-width: 100%; }
+.prod-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .card-head .card-title { margin: 0; }
 .btn-exp { margin-left: auto; font-size: 13px; padding: 7px 12px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .btn-exp:hover { background: #ecfdf5; }
