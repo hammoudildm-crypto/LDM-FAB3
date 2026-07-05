@@ -279,16 +279,15 @@ onMounted(async () => {
               <option v-for="p in produitsForm" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
             </select>
           </label>
-          <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" /><span class="hint-statut">Rempli auto depuis la taille de lot du produit (modifiable).</span></label>
+          <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" title="Rempli auto depuis la taille de lot du produit (modifiable)." /></label>
           <label>Date de réception OF<input v-model="form.date_reception" type="date" /></label>
           <label>Date fin de validité OF<input v-model="form.date_fin_validite" type="date" /></label>
           <label>Statut
-            <select v-model="form.statut">
+            <select v-model="form.statut" title="Seuls Libéré / Rejeté (qualité) sont manuels. Planifié / En cours / Terminé sont automatiques.">
               <option value="__auto__">Automatique (piloté par fabrication + conditionnement)</option>
               <option value="Libéré">Libéré (qualité)</option>
               <option value="Rejeté">Rejeté (qualité)</option>
             </select>
-            <span class="hint-statut">Seuls Libéré / Rejeté (qualité) sont manuels. Planifié / En cours / Terminé sont automatiques.</span>
           </label>
           <label>Ligne de conditionnement (finale)
             <select v-model="form.equipement_id">
