@@ -65,7 +65,7 @@ async function fetchAllPaged(make) {
 async function chargerTout() {
   erreur.value = ''
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, boites_theoriques)')
+    .select('id, numero_lot, statut, boites_fabriquees, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, boites_theoriques)')
     .eq('actif', true).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -156,6 +156,7 @@ async function enregistrer() {
   erreur.value = ''
   message.value = ''
   if (!form.ordre_id) { erreur.value = 'Choisis un lot.'; return }
+  const ordreId = form.ordre_id
   let qcond = null
   if (form.boites !== '' && form.boites !== null) {
     const upb = upbLot(form.ordre_id)
@@ -178,7 +179,29 @@ async function enregistrer() {
   message.value = form.id ? 'Conditionnement mis à jour.' : 'Conditionnement enregistré.'
   resetForm()
   await chargerTout()
+  await majStatutLot(ordreId)
 }
+
+// Statut automatique du lot : Terminé quand le conditionnement est complet, sinon En cours
+async function majStatutLot(ordreId) {
+  if (!ordreId) return
+  const lot = lots.value.find(l => l.id === ordreId)
+  if (!lot || lot.statut === 'Libéré' || lot.statut === 'Rejeté') return
+  const recs = records.value.filter(r => r.ordre_id === ordreId)
+  const upb = lot.produits ? Number(lot.produits.unites_par_boite || 0) : 0
+  let boitesCond = 0, explicite = false
+  for (const r of recs) {
+    if (r.statut === 'Terminé' || r.statut === 'Libéré') explicite = true
+    if (r.quantite_conditionnee != null && upb > 0) boitesCond += Math.floor(Number(r.quantite_conditionnee) / upb)
+  }
+  const boitesFab = Number(lot.boites_fabriquees || 0)
+  let cible
+  if (!recs.length) cible = lot.statut === 'Terminé' ? 'En cours' : lot.statut
+  else if (explicite || (boitesFab > 0 && boitesCond >= boitesFab * 0.85)) cible = 'Terminé'
+  else cible = 'En cours'
+  if (cible && cible !== lot.statut) await supabase.from('ordres_fabrication').update({ statut: cible }).eq('id', ordreId)
+}
+
 function modifier(r) {
   const upb = r.ordres_fabrication && r.ordres_fabrication.produits ? Number(r.ordres_fabrication.produits.unites_par_boite || 0) : 0
   Object.assign(form, {
@@ -194,6 +217,7 @@ async function desactiver(r) {
   const res = await supabase.from('conditionnement').update({ actif: false }).eq('id', r.id)
   if (res.error) { erreur.value = res.error.message; return }
   await chargerTout()
+  await majStatutLot(r.ordre_id)
 }
 
 function classeStatut(s) {
