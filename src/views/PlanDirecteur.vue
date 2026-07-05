@@ -15,6 +15,7 @@ const cellules = reactive({})   // cellules[produit_id][mois] = '' | nombre
 const erreur = ref('')
 const message = ref('')
 const enCours = ref(false)
+const fichierInput = ref(null)
 
 function initCellules() {
   Object.keys(cellules).forEach(k => delete cellules[k])
@@ -87,6 +88,57 @@ async function enregistrer() {
   message.value = 'Plan ' + annee.value + ' enregistré (' + rows.length + ' valeurs).'
 }
 
+// --- Import d'un plan depuis un fichier Excel/CSV (colonne 1 = Code PF, colonnes 2 a 13 = Jan..Dec) ---
+let xlsxPromise = null
+function chargerXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX)
+  if (xlsxPromise) return xlsxPromise
+  xlsxPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+    s.onload = () => resolve(window.XLSX)
+    s.onerror = () => reject(new Error('Librairie Excel non chargee (verifie la connexion).'))
+    document.head.appendChild(s)
+  })
+  return xlsxPromise
+}
+function declencherImport() { erreur.value = ''; message.value = ''; if (fichierInput.value) fichierInput.value.click() }
+async function importerFichier(e) {
+  const file = e.target.files && e.target.files[0]
+  e.target.value = ''
+  if (!file) return
+  erreur.value = ''; message.value = ''; enCours.value = true
+  try {
+    const XLSX = await chargerXLSX()
+    const buf = await file.arrayBuffer()
+    const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    const lignes = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false })
+    const parCode = {}
+    for (const p of produits.value) parCode[String(p.code_pf).trim().toLowerCase()] = p.id
+    let maj = 0, ignores = 0
+    const inconnus = []
+    for (const row of lignes) {
+      if (!row || !row.length) continue
+      const code = String(row[0] == null ? '' : row[0]).trim()
+      if (!code) continue
+      const pid = parCode[code.toLowerCase()]
+      if (!pid) { ignores++; if (inconnus.length < 6) inconnus.push(code); continue }
+      for (let m = 1; m <= 12; m++) {
+        const cell = row[m]
+        if (cell === undefined || cell === null || cell === '') continue
+        const n = Number(String(cell).replace(/\s/g, '').replace(',', '.'))
+        if (!isNaN(n)) { cellules[pid][m] = n; maj++ }
+      }
+    }
+    if (!maj) erreur.value = 'Aucune donnee reconnue. Attendu : colonne 1 = Code PF, colonnes 2 a 13 = Jan..Dec.' + (inconnus.length ? ' Codes non trouves : ' + inconnus.join(', ') : '')
+    else message.value = maj + ' valeur(s) importee(s) dans la grille ' + annee.value + '. Verifie puis clique Enregistrer le plan.' + (ignores ? ' — ' + ignores + ' ligne(s) ignoree(s)' + (inconnus.length ? ' (codes inconnus : ' + inconnus.join(', ') + ')' : '') : '')
+  } catch (err) {
+    erreur.value = 'Import impossible : ' + (err && err.message ? err.message : err)
+  } finally {
+    enCours.value = false
+  }
+}
 function fmt(n) { return n == null ? '' : Number(n).toLocaleString('fr-FR') }
 
 onMounted(async () => { await chargerProduits(); await chargerPlan() })
@@ -103,6 +155,10 @@ watch(annee, chargerPlan)
             <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
           </select>
         </label>
+        <button v-if="peutEditer" class="btn ghost" :disabled="enCours || !produits.length" @click="declencherImport">
+          Importer un fichier
+        </button>
+        <input ref="fichierInput" type="file" accept=".xlsx,.xls,.csv" style="display:none" @change="importerFichier" />
         <button v-if="peutEditer" class="btn" :disabled="enCours || !produits.length" @click="enregistrer">
           {{ enCours ? 'Enregistrement…' : 'Enregistrer le plan' }}
         </button>
@@ -153,7 +209,7 @@ watch(annee, chargerPlan)
       </table>
     </div>
 
-    <p class="hint">Astuce : laisse une case vide ou mets <strong>0</strong> s'il n'y a pas de production planifiée. Clique <strong>Enregistrer le plan</strong> pour sauvegarder toute la grille. La valeur est calculée à partir du PCSU de chaque produit.</p>
+    <p class="hint">Astuce : laisse une case vide ou mets <strong>0</strong> s'il n'y a pas de production planifiée. Clique <strong>Enregistrer le plan</strong> pour sauvegarder toute la grille. La valeur est calculée à partir du PCSU de chaque produit.<br><strong>Importer un fichier</strong> : Excel/CSV avec <strong>Code PF</strong> en colonne 1 et les mois <strong>Jan → Déc</strong> en colonnes 2 à 13 ; les valeurs remplissent la grille de l'année choisie (clique ensuite Enregistrer).</p>
   </div>
 </template>
 
@@ -172,6 +228,8 @@ watch(annee, chargerPlan)
 .btn { background: #0f766e; color: #fff; border: 0; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
 .btn:hover:not(:disabled) { background: #0c5f59; }
 .btn:disabled { opacity: .5; cursor: default; }
+.btn.ghost { background: #fff; color: #0f766e; border: 1px solid #0f766e; }
+.btn.ghost:hover:not(:disabled) { background: #f0fdfa; }
 
 .empty-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; color: #475569; text-align: center; font-size: 15px; }
 
