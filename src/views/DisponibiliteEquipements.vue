@@ -552,7 +552,7 @@ onMounted(async () => {
         <p v-if="!vueCondLignes.length" class="muted">Aucun lot à conditionner pour le moment.</p>
         <div class="file-board">
           <section v-for="g in vueCondLignes" :key="g.id" class="atelier">
-            <h2 class="atelier-titre">{{ g.label }}
+            <h2 class="atelier-titre"><span class="at-name">{{ g.label }}</span>
               <span class="at-sum">{{ g.attente.length }} en attente · {{ g.cours.length }} en cours</span>
             </h2>
             <div class="eq-grid">
