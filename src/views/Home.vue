@@ -517,7 +517,7 @@ onMounted(async () => {
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.cyan"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><span class="kpi-val">{{ fmtPct(pctPlanFab) }}</span></div><div class="kpi-lbl">% du plan</div></div>
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.violet"><svg viewBox="0 0 24 24" v-html="ICONS.layers"></svg></span><span class="kpi-val">{{ fmt(boitesRestantesFab) }}</span></div><div class="kpi-lbl">Reste / plan</div></div>
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.orange"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span><span class="kpi-val">{{ fmt(vracEnAttente) }}</span></div><div class="kpi-lbl">Vrac en attente (bts)</div></div>
-          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.calendar"></svg></span><span class="kpi-val">{{ fmt(fabCeMois) }}</span></div><div class="kpi-lbl">Fabriquées ce mois</div></div>
+          <div class="kpi kpi-clic" @click="ouvrirMois(moisCourant, 'fab')"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.calendar"></svg></span><span class="kpi-val">{{ fmt(fabCeMois) }}</span></div><div class="kpi-lbl">Fabriquées ce mois ›</div></div>
         </div>
         <h3 class="struct-h"><span class="struct-b cond">Conditionnement réalisé</span><span class="struct-d">boîtes conditionnées · {{ anneeSel }}</span></h3>
         <div class="kpi-grid k4">
@@ -859,4 +859,6 @@ table.mini td { padding: 3px 6px; border-bottom: 1px solid #eef2f6; white-space:
 @media (max-width: 560px) {
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
 }
+.kpi-clic { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.kpi-clic:hover { border-color: #0f766e; box-shadow: 0 2px 12px rgba(15,118,110,.16); }
 </style>
