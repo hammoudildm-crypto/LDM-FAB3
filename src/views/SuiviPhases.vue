@@ -293,8 +293,8 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
                 <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
               </select>
             </label>
-            <label>Quantité entrée (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="250" disabled /><span class="hint-q">Figée = sortie de la phase précédente.</span></label>
-            <label>Quantité sortie (kg)<input v-model="form.quantite_sortie" type="number" step="any" placeholder="245" :disabled="['Pesée', 'Granulation'].includes(form.phase)" /><span class="hint-q">{{ ['Pesée', 'Granulation'].includes(form.phase) ? 'Figée = entrée (pas de perte).' : 'À saisir : poids réel après pertes.' }}</span></label>
+            <label>Quantité entrée (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="250" disabled title="Figée = sortie de la phase précédente." /></label>
+            <label>Quantité sortie (kg)<input v-model="form.quantite_sortie" type="number" step="any" placeholder="245" :disabled="['Pesée', 'Granulation'].includes(form.phase)" :title="['Pesée', 'Granulation'].includes(form.phase) ? 'Figée = entrée (pas de perte).' : 'À saisir : poids réel après pertes.'" /></label>
             <label>Date début<input v-model="form.date_debut" type="date" /></label>
             <label>Date fin<input v-model="form.date_phase" type="date" /></label>
             <label>Statut (automatique)<input :value="form.date_phase ? 'Terminé' : (form.date_debut ? 'En cours' : 'À faire')" disabled title="À faire → En cours (date début) → Terminé (date fin)." /></label>
