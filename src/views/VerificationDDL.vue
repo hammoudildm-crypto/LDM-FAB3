@@ -28,6 +28,10 @@ const supSuivis = ref(supInit)      // superviseurs à suivre (vide = tous), mé
 watch(supSuivis, (v) => { try { localStorage.setItem(CLE_SUP, JSON.stringify(v)) } catch (e) {} }, { deep: true })
 const filtreSupOuvert = ref(false)
 const nouveauSuperviseur = ref('')
+const supList = ref([])           // liste gérée de superviseurs (table)
+const nouveauSup = ref('')
+const editSupId = ref(null)
+const editSupNom = ref('')
 const histRecherche = ref('')
 const histDu = ref('')
 const histAu = ref('')
@@ -53,6 +57,8 @@ async function charger() {
     .order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (r.error) { msg.value = r.error.message; return }
   lots.value = r.data
+  const rs = await supabase.from('superviseurs').select('id, nom').order('nom')
+  if (!rs.error) supList.value = rs.data
 }
 onMounted(charger)
 
@@ -102,10 +108,35 @@ const parSuperviseurFiltre = computed(() => {
 
 const superviseurs = computed(() => {
   const s = new Set()
+  for (const sv of supList.value) if (sv.nom) s.add(sv.nom)
   for (const l of lots.value) if (l.ddl_verificateur) s.add(l.ddl_verificateur)
   return [...s].sort()
 })
 
+async function ajouterSup() {
+  const nom = nouveauSup.value.trim()
+  if (!nom) return
+  const r = await supabase.from('superviseurs').insert({ nom })
+  if (r.error) { msg.value = r.error.message; return }
+  nouveauSup.value = ''
+  await charger()
+}
+function ouvrirEditSup(sv) { editSupId.value = sv.id; editSupNom.value = sv.nom }
+async function renommerSup(sv) {
+  const nom = editSupNom.value.trim()
+  if (!nom || nom === sv.nom) { editSupId.value = null; return }
+  const r = await supabase.from('superviseurs').update({ nom }).eq('id', sv.id)
+  if (r.error) { msg.value = r.error.message; return }
+  await supabase.from('ordres_fabrication').update({ ddl_verificateur: nom }).eq('ddl_verificateur', sv.nom)
+  editSupId.value = null
+  await charger()
+}
+async function supprimerSup(sv) {
+  if (!confirm('Supprimer le superviseur « ' + sv.nom + ' » de la liste ?')) return
+  const r = await supabase.from('superviseurs').delete().eq('id', sv.id)
+  if (r.error) { msg.value = r.error.message; return }
+  await charger()
+}
 const verifiesFiltres = computed(() => {
   const q = histRecherche.value.trim().toLowerCase()
   const du = histDu.value, au = histAu.value
@@ -211,6 +242,27 @@ async function devalider(l) {
       <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
       <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
       <p v-if="!verifParMois.some(v => v)" class="empty">Aucun DDL vérifié<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
+    </section>
+
+    <section class="card" v-if="peutEditer">
+      <h3 class="card-title">Gérer les superviseurs</h3>
+      <div class="sv-add">
+        <input v-model="nouveauSup" placeholder="Nom du superviseur" @keyup.enter="ajouterSup" />
+        <button class="btn sm" @click="ajouterSup">Ajouter</button>
+      </div>
+      <div v-if="!supList.length" class="empty">Aucun superviseur dans la liste — ajoute-en un ci-dessus.</div>
+      <div v-for="sv in supList" :key="sv.id" class="sv-row">
+        <template v-if="editSupId === sv.id">
+          <input v-model="editSupNom" class="sv-edit" @keyup.enter="renommerSup(sv)" />
+          <button class="btn sm" @click="renommerSup(sv)">OK</button>
+          <button class="link" @click="editSupId = null">Annuler</button>
+        </template>
+        <template v-else>
+          <span class="sv-nom">{{ sv.nom }}</span>
+          <button class="link" @click="ouvrirEditSup(sv)">Renommer</button>
+          <button class="link danger" @click="supprimerSup(sv)">Supprimer</button>
+        </template>
+      </div>
     </section>
 
     <div class="cols">
@@ -408,4 +460,10 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .sup-opt { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1b2733; padding: 6px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
 .sup-opt:hover { background: #f1f5f9; }
 .sup-opt input { width: 15px; height: 15px; accent-color: #0f766e; cursor: pointer; }
+.sv-add { display: flex; gap: 8px; margin-bottom: 12px; }
+.sv-add input, .sv-edit { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
+.sv-add input { flex: 1; }
+.sv-add input:focus, .sv-edit:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.sv-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #eef2f6; }
+.sv-nom { flex: 1; font-size: 14px; font-weight: 600; color: #1b2733; }
 </style>
