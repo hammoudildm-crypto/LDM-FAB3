@@ -256,12 +256,6 @@ async function signOut() {
         <span class="brand-wm">LDM<span class="brand-sub">FAB3</span></span>
         <button class="zoom-btn solo" @click="refreshTick++" title="Actualiser" style="margin-left:auto">⟳</button>
       </header>
-      <div v-if="alertes.length && !alertesFermees" class="alert-bar">
-        <span class="alert-ic">⚠</span>
-        <span class="alert-txt"><strong>{{ alertes.length }}</strong> ordre(s) de fabrication {{ alertes.length > 1 ? 'expirent' : 'expire' }} sous 3 jours : {{ alertes.slice(0, 4).map(a => a.lot).join(', ') }}<template v-if="alertes.length > 4"> …</template></span>
-        <RouterLink to="/ordres" class="alert-link" @click="alertesFermees = true">Voir</RouterLink>
-        <button class="alert-close" @click="alertesFermees = true" title="Masquer">✕</button>
-      </div>
       <main :style="{ zoom: zoom / 100 }">
         <RouterView :key="route.fullPath + '::' + refreshTick" />
       </main>
