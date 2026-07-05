@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, inject } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
+import MiniChart from '../components/MiniChart.vue'
 import { ICONS, TINTS } from '../icons.js'
 
 const peutEditer = inject('peutEditer', ref(false))
@@ -52,11 +53,22 @@ async function charger() {
 onMounted(charger)
 
 const anYear = (d) => d ? new Date(d).getFullYear() : null
+const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
 const produits = computed(() => lots.value.filter(l =>
   l.date_fin_fabrication && (anneeSel.value === 0 || anYear(l.date_fin_fabrication) === anneeSel.value)))
 const verifies = computed(() => produits.value.filter(l => l.ddl_verifie))
 const attente = computed(() => produits.value.filter(l => !l.ddl_verifie))
+const verifParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const l of lots.value) {
+    if (!l.ddl_verifie || !l.ddl_date_verification) continue
+    const d = new Date(l.ddl_date_verification)
+    if (anneeSel.value && d.getFullYear() !== anneeSel.value) continue
+    a[d.getMonth()]++
+  }
+  return a
+})
 
 const nbVerifies = computed(() => verifies.value.length)
 const nbAttente = computed(() => attente.value.length)
@@ -190,6 +202,12 @@ async function devalider(l) {
       <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><div class="kpi-val" :class="{ warn: nbAttente > 0 }">{{ fmt(nbAttente) }}</div></div><div class="kpi-lbl">DDL en attente de vérification</div></div>
       <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><div class="kpi-val accent">{{ fmtPct(taux) }}</div></div><div class="kpi-lbl">Taux de vérification</div></div>
     </div>
+
+    <section class="card">
+      <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
+      <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
+      <p v-if="!verifParMois.some(v => v)" class="empty">Aucun DDL vérifié<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
+    </section>
 
     <div class="cols">
       <section class="card">
