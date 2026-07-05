@@ -290,16 +290,15 @@ const rendementFabParMois = computed(() => {
   return prod.map((v, i) => theo[i] > 0 ? (v / theo[i]) * 100 : null)
 })
 
-// --- Vrac en attente (boîtes) : lots fabriqués (Terminé) pas encore conditionnés ---
-// Base = boîtes réellement fabriquées (classeur) ; repli théorique si absent.
+// --- Vrac en attente (boîtes) : fabrication terminée (date de fin) mais conditionnement pas démarré ---
 const vracEnAttente = computed(() => {
   const condIds = new Set()
   for (const c of conditionnements.value) condIds.add(c.ordre_id)
   let t = 0
   for (const l of lots.value) {
-    if (l.statut !== 'Terminé') continue
+    if (!l.date_fin_fabrication) continue
     if (condIds.has(l.id)) continue
-    t += l.boites_fabriquees != null ? Number(l.boites_fabriquees) : Number(l.quantite_theorique || 0)
+    t += Number(l.boites_fabriquees || 0)
   }
   return t
 })
