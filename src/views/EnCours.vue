@@ -7,6 +7,7 @@ import { ICONS, TINTS } from '../icons.js'
 const lots = ref([])
 const phasesParLot = ref({})   // ordre_id -> dernière sortie (vrac fabriqué)
 const condParLot = ref({})     // ordre_id -> somme entrée conditionnement
+const condDemarre = ref(new Set())  // ordre_ids ayant au moins un enregistrement de conditionnement
 const masquerSoldes = ref(true)
 const recherche = ref('')
 const filtreStatut = ref('')
@@ -29,7 +30,7 @@ async function fetchAllPaged(make) {
 async function charger() {
   erreur.value = ''
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, produits(code_pf, designation)')
+    .select('id, numero_lot, statut, date_fin_fabrication, produits(code_pf, designation)')
     .eq('actif', true).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -49,12 +50,15 @@ async function charger() {
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
     .select('ordre_id, quantite_entree').eq('actif', true))
   const cd = {}
+  const dem = new Set()
   if (!rc.error) {
     for (const c of rc.data) {
+      dem.add(c.ordre_id)
       if (c.quantite_entree != null) cd[c.ordre_id] = (cd[c.ordre_id] || 0) + Number(c.quantite_entree)
     }
   }
   condParLot.value = cd
+  condDemarre.value = dem
 }
 
 function fabrique(l) { return phasesParLot.value[l.id] ?? null }
@@ -82,6 +86,14 @@ const lignes = computed(() => {
 const totalEnCours = computed(() => lignes.value.reduce((s, x) => s + (x.enc != null && x.enc > 0 ? x.enc : 0), 0))
 const nbAttente = computed(() => lignes.value.filter(x => x.enc != null && x.enc > 0).length)
 
+const vracAttente = computed(() => {
+  return lots.value
+    .filter(l => l.date_fin_fabrication && !condDemarre.value.has(l.id))
+    .map(l => ({ lot: l, vrac: fabrique(l) }))
+    .sort((a, b) => new Date(a.lot.date_fin_fabrication || 0) - new Date(b.lot.date_fin_fabrication || 0))
+})
+function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
+
 function classeStatut(s) {
   return { 'Planifié': 'st-plan', 'En cours': 'st-cours', 'Terminé': 'st-fini', 'Libéré': 'st-lib', 'Rejeté': 'st-rej' }[s] || 'st-plan'
 }
@@ -107,6 +119,28 @@ onMounted(charger)
       <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.orange"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span><div class="kpi-val accent">{{ fmt(totalEnCours) }}</div></div><div class="kpi-lbl">Vrac en attente (kg)</div></div>
       <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.layers"></svg></span><div class="kpi-val">{{ nbAttente }}</div></div><div class="kpi-lbl">Lots avec vrac en attente</div></div>
     </div>
+
+    <section class="card">
+      <h2 class="card-title">Vrac en attente de conditionnement <span class="count">{{ vracAttente.length }}</span></h2>
+      <p class="sub-note">Lots terminés en fabrication, conditionnement non démarré — le vrac est prêt à être conditionné.</p>
+      <div class="table-scroll">
+        <table class="grid">
+          <thead>
+            <tr><th>Lot</th><th>Produit</th><th>Statut</th><th class="right">Vrac fabriqué (kg)</th><th>Fin de fabrication</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="x in vracAttente" :key="x.lot.id">
+              <td class="mono">{{ x.lot.numero_lot }}</td>
+              <td class="desig">{{ x.lot.produits ? x.lot.produits.designation : '—' }}</td>
+              <td><span class="badge" :class="classeStatut(x.lot.statut)">{{ x.lot.statut }}</span></td>
+              <td class="right strong">{{ fmt(x.vrac) }}</td>
+              <td>{{ fmtDate(x.lot.date_fin_fabrication) }}</td>
+            </tr>
+            <tr v-if="!vracAttente.length"><td colspan="5" class="empty">Aucun vrac en attente : tous les lots terminés en fabrication ont démarré leur conditionnement.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
     <section class="card">
       <div class="card-head">
@@ -164,6 +198,7 @@ onMounted(charger)
 
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card-title { margin: 0 0 14px; font-size: 17px; }
+.sub-note { color: #64748b; font-size: 12.5px; margin: -8px 0 14px; }
 
 .table-scroll { overflow-x: auto; }
 table.grid { width: 100%; border-collapse: collapse; font-size: 14px; }
