@@ -316,6 +316,15 @@ const fabRealisee = computed(() => {
 })
 const pctPlanFab = computed(() => planTotal.value > 0 ? (fabRealisee.value / planTotal.value) * 100 : null)
 const boitesRestantesFab = computed(() => Math.max(0, planTotal.value - fabRealisee.value))
+const fabCeMois = computed(() => {
+  let t = 0
+  for (const l of lots.value) {
+    if (!l.date_fin_fabrication || !l.boites_fabriquees) continue
+    const d = new Date(l.date_fin_fabrication)
+    if (d.getFullYear() === anneeCourante && d.getMonth() === moisCourant) t += Number(l.boites_fabriquees || 0)
+  }
+  return t
+})
 
 // --- Conditionnement par mois (année) ---
 const prodParMois = computed(() => {
@@ -503,11 +512,12 @@ onMounted(async () => {
       <div v-show="ongletActif === 'production'">
         <!-- Deux structures : Fabrication réalisée & Conditionnement réalisé -->
         <h3 class="struct-h"><span class="struct-b fab">Fabrication réalisée</span><span class="struct-d">boîtes fabriquées · {{ anneeSel }}</span></h3>
-        <div class="kpi-grid k4">
+        <div class="kpi-grid k5">
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><span class="kpi-val accent">{{ fmt(fabRealisee) }}</span></div><div class="kpi-lbl">Fabrication réalisée (bts)</div></div>
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.cyan"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><span class="kpi-val">{{ fmtPct(pctPlanFab) }}</span></div><div class="kpi-lbl">% du plan</div></div>
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.violet"><svg viewBox="0 0 24 24" v-html="ICONS.layers"></svg></span><span class="kpi-val">{{ fmt(boitesRestantesFab) }}</span></div><div class="kpi-lbl">Reste / plan</div></div>
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.orange"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span><span class="kpi-val">{{ fmt(vracEnAttente) }}</span></div><div class="kpi-lbl">Vrac en attente (bts)</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.calendar"></svg></span><span class="kpi-val">{{ fmt(fabCeMois) }}</span></div><div class="kpi-lbl">Fabriquées ce mois</div></div>
         </div>
         <h3 class="struct-h"><span class="struct-b cond">Conditionnement réalisé</span><span class="struct-d">boîtes conditionnées · {{ anneeSel }}</span></h3>
         <div class="kpi-grid k4">
@@ -749,9 +759,10 @@ html[data-theme="sombre"] .tab.active { background: #1d2740 !important; }
 .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 14px; }
 .kpi-grid:last-of-type { margin-bottom: 22px; }
 .kpi-grid.k4 { grid-template-columns: repeat(4, 1fr); }
+.kpi-grid.k5 { grid-template-columns: repeat(5, 1fr); }
 .kpi-grid.k3 { grid-template-columns: repeat(3, 1fr); }
-@media (max-width: 900px) { .kpi-grid.k4, .kpi-grid.k3 { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .kpi-grid.k4, .kpi-grid.k3 { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .kpi-grid.k4, .kpi-grid.k3, .kpi-grid.k5 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .kpi-grid.k4, .kpi-grid.k3, .kpi-grid.k5 { grid-template-columns: 1fr; } }
 .struct-h { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; font-size: 14px; font-weight: 600; }
 .struct-b { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 4px 12px; border-radius: 999px; color: #fff; }
 .struct-b.fab { background: #0f766e; }
