@@ -68,7 +68,7 @@ function groupVisible(g) {
   if (g.role === 'admin') return estAdmin.value
   return true
 }
-const openGroups = ref(new Set(['consultation']))
+const openGroups = ref(new Set())
 function toggleGroup(key) {
   // Accordéon : un seul groupe ouvert à la fois
   openGroups.value = openGroups.value.has(key) ? new Set() : new Set([key])
@@ -78,7 +78,6 @@ function ouvrirGroupeActif(p) {
   const g = NAV_GROUPS.find(gr => gr.links.some(l => l[0] === p))
   if (g) openGroups.value = new Set([g.key])
 }
-ouvrirGroupeActif(route.path)
 watch(() => route.path, (p) => ouvrirGroupeActif(p))
 
 const PROD = ['/plan', '/ordres', '/suivi', '/encours', '/conditionnement', '/dossier']
