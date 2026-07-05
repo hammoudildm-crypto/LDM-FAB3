@@ -10,6 +10,10 @@ const donneurs = ref([])
 const produits = ref([])
 const ateliers = ref([])
 const equipements = ref([])
+const supList = ref([])
+const nouveauSup = ref('')
+const editSupId = ref(null)
+const editSupNom = ref('')
 const erreur = ref('')
 
 const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet']
@@ -58,7 +62,7 @@ function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
 
 // --- Équipement ---
 const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '' })
-const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false })
+const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false })
 function resetE() { Object.assign(formE, { id: null, code: '', nom: '', atelier_id: '', type: '' }) }
 
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
@@ -82,8 +86,36 @@ async function chargerTout() {
   const rE = await supabase.from('equipements').select('*').eq('actif', true).order('code')
   if (rE.error) { erreur.value = rE.error.message; return }
   equipements.value = rE.data
+
+  const rS = await supabase.from('superviseurs').select('id, nom').order('nom')
+  if (!rS.error) supList.value = rS.data
 }
 
+// --- Actions Superviseurs ---
+async function ajouterSup() {
+  const nom = nouveauSup.value.trim()
+  if (!nom) return
+  const r = await supabase.from('superviseurs').insert({ nom })
+  if (r.error) { erreur.value = r.error.message; return }
+  nouveauSup.value = ''
+  await chargerTout()
+}
+function ouvrirEditSup(sv) { editSupId.value = sv.id; editSupNom.value = sv.nom }
+async function renommerSup(sv) {
+  const nom = editSupNom.value.trim()
+  if (!nom || nom === sv.nom) { editSupId.value = null; return }
+  const r = await supabase.from('superviseurs').update({ nom }).eq('id', sv.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  await supabase.from('ordres_fabrication').update({ ddl_verificateur: nom }).eq('ddl_verificateur', sv.nom)
+  editSupId.value = null
+  await chargerTout()
+}
+async function supprimerSup(sv) {
+  if (!confirm('Supprimer le superviseur « ' + sv.nom + ' » ?')) return
+  const r = await supabase.from('superviseurs').delete().eq('id', sv.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  await chargerTout()
+}
 // --- Actions Donneur d'ordre ---
 async function enregistrerDO() {
   erreur.value = ''
@@ -410,6 +442,35 @@ onMounted(async () => {
       </div>
       </div>
     </section>
+
+    <section class="card">
+      <div class="card-head clickable" @click="ouvert.superviseurs = !ouvert.superviseurs">
+        <h2>Superviseurs</h2>
+        <span class="count">{{ supList.length }}</span>
+        <span class="chevron">{{ ouvert.superviseurs ? '▾' : '▸' }}</span>
+      </div>
+      <div v-show="ouvert.superviseurs">
+        <div class="sv-add" v-if="peutEditer">
+          <input v-model="nouveauSup" placeholder="Nom du superviseur" @keyup.enter="ajouterSup" />
+          <button class="btn" @click="ajouterSup">Ajouter</button>
+        </div>
+        <div v-if="!supList.length" class="empty">Aucun superviseur.</div>
+        <div v-for="sv in supList" :key="sv.id" class="sv-row">
+          <template v-if="editSupId === sv.id">
+            <input v-model="editSupNom" class="sv-edit" @keyup.enter="renommerSup(sv)" />
+            <button class="btn" @click="renommerSup(sv)">OK</button>
+            <button class="link" @click="editSupId = null">Annuler</button>
+          </template>
+          <template v-else>
+            <span class="sv-nom">{{ sv.nom }}</span>
+            <template v-if="peutEditer">
+              <button class="link" @click="ouvrirEditSup(sv)">Renommer</button>
+              <button class="link danger" @click="supprimerSup(sv)">Supprimer</button>
+            </template>
+          </template>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -474,4 +535,10 @@ button.link.danger { color: #b91c1c; }
 .gamme-hint { display: block; font-size: 11px; color: #94a3b8; margin-top: 5px; }
 .gamme-badge { background: #ccfbf1; color: #0f766e; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .gamme-none { color: #cbd5e1; font-size: 12px; }
+.sv-add { display: flex; gap: 8px; margin-bottom: 14px; }
+.sv-add input, .sv-edit { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
+.sv-add input { flex: 1; }
+.sv-add input:focus, .sv-edit:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.sv-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eef2f6; }
+.sv-nom { flex: 1; font-size: 14px; font-weight: 600; color: #1b2733; }
 </style>
