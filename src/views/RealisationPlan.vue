@@ -231,7 +231,6 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
         <div class="kpi-lbl">fab. {{ anneeSel - 1 }} → cond. {{ anneeSel }} · {{ fmtDA(anticipCA) }}</div>
       </div>
     </div>
-    <p class="note"><strong>Fabrication réalisée</strong> = boîtes fabriquées dans l'année (par date de fabrication). <strong>Conditionnement réalisé</strong> = boîtes conditionnées dans l'année (par date de conditionnement). L'<strong>anticipation</strong> (fab. {{ anneeSel - 1 }} → cond. {{ anneeSel }}) est indiquée à part et <strong>non comptée</strong> dans la fabrication.</p>
 
     <section class="card">
       <div class="card-head">
