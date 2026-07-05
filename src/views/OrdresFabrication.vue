@@ -277,8 +277,8 @@ onMounted(async () => {
           <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" /></label>
           <label>Date de réception OF<input v-model="form.date_reception" type="date" /></label>
           <label>Date fin de validité OF<input v-model="form.date_fin_validite" type="date" /></label>
-          <label>Date de lancement<input v-model="form.date_lancement" type="date" /></label>
-          <label>Date fin fabrication<input v-model="form.date_fin_fabrication" type="date" /></label>
+          <label>Date de lancement<input v-model="form.date_lancement" type="date" disabled /><span class="hint-statut">Automatique : date de la 1re phase (Suivi des phases).</span></label>
+          <label>Date fin fabrication<input v-model="form.date_fin_fabrication" type="date" disabled /><span class="hint-statut">Automatique : date de la phase finale terminée.</span></label>
           <label>Statut
             <select v-model="form.statut">
               <option value="__auto__">Automatique (piloté par fabrication + conditionnement)</option>
@@ -421,6 +421,7 @@ onMounted(async () => {
 
 .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: end; }
 .form-grid label { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
+.form-grid input:disabled { background: #f1f5f9; color: #64748b; cursor: not-allowed; }
 .form-grid .wide { grid-column: span 2; }
 .form-grid input, .form-grid select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 400; }
 .form-grid input:focus, .form-grid select:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
