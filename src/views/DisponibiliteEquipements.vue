@@ -710,7 +710,9 @@ onMounted(async () => {
 .file-board .eq-grid { grid-template-columns: 1fr; flex: 1; }
 .file-board .phase-card { height: 100%; }
 .file-board .atelier { min-width: 0; display: flex; flex-direction: column; }
-.file-board .prod-scroll { overflow-x: hidden; }
+.file-board .prod-scroll { overflow-x: hidden; height: 180px; }
+/* Hauteur fixe des boites internes -> toutes les cartes a la meme hauteur */
+.file-board .q-block .empty { height: 180px; display: flex; align-items: center; justify-content: center; }
 .pf, .pd { overflow-wrap: anywhere; }
 .lot-row { cursor: pointer; }
 .lot-row:hover td { background: #f0f9ff; }
