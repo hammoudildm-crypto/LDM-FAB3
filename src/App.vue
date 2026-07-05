@@ -142,9 +142,11 @@ async function chargerAlertes() {
   })).sort((a, b) => a.jours - b.jours)
   notifierNavigateur()
 }
+let dejaNotifie = false
 function notifierNavigateur() {
-  if (!alertes.value.length || typeof Notification === 'undefined') return
+  if (dejaNotifie || !alertes.value.length || typeof Notification === 'undefined') return
   const envoyer = () => {
+    dejaNotifie = true
     try {
       new Notification('LDM-FAB3 — Validité OF', {
         body: alertes.value.length + ' ordre(s) de fabrication expire(nt) sous 3 jours.',
