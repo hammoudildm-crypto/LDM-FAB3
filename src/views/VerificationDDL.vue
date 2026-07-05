@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, inject } from 'vue'
+import { ref, computed, onMounted, inject, watch } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 import MiniChart from '../components/MiniChart.vue'
@@ -21,7 +21,11 @@ const anneeSel = ref(0) // 0 = toutes
 const verifEnCours = ref(null)
 const vForm = ref({ verificateur: '', date: new Date().toISOString().slice(0, 10) })
 const superviseurChoix = ref('')
-const supSuivis = ref([])          // superviseurs à suivre (vide = tous)
+const CLE_SUP = 'prodtrack-vd-superviseurs'
+let supInit = []
+try { const raw = JSON.parse(localStorage.getItem(CLE_SUP) || '[]'); if (Array.isArray(raw)) supInit = raw } catch (e) {}
+const supSuivis = ref(supInit)      // superviseurs à suivre (vide = tous), mémorisé
+watch(supSuivis, (v) => { try { localStorage.setItem(CLE_SUP, JSON.stringify(v)) } catch (e) {} }, { deep: true })
 const filtreSupOuvert = ref(false)
 const nouveauSuperviseur = ref('')
 const histRecherche = ref('')
