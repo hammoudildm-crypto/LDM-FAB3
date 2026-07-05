@@ -125,8 +125,8 @@ const lotsParStatut = computed(() => {
   for (const l of lotsAnnee.value) { if (m[l.statut] != null) m[l.statut]++; else m[l.statut] = 1 }
   return m
 })
-// Lots en cours = OF reçu/lancé (date de lancement) ET fin de fabrication non finalisée
-const lotsEnCours = computed(() => lotsAnnee.value.filter(l => l.date_lancement && !l.date_fin_fabrication).length)
+// Lots en cours = fabrication lancée (date de lancement) mais pas encore conditionnée (statut ≠ Terminé)
+const lotsEnCours = computed(() => lotsAnnee.value.filter(l => l.date_lancement && l.statut !== 'Terminé').length)
 const lotsLiberes = computed(() => lotsParStatut.value['Libéré'] || 0)
 const lotsTermines = computed(() => lotsParStatut.value['Terminé'] || 0)
 const tauxLiberation = computed(() => nbLots.value > 0 ? (lotsLiberes.value / nbLots.value) * 100 : null)
