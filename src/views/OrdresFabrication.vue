@@ -158,6 +158,12 @@ function onProduitChange() {
   const pr = produits.value.find(p => p.id === form.produit_id)
   if (pr && pr.taille_lot != null && pr.taille_lot !== '') form.quantite_theorique = pr.taille_lot
 }
+
+// Quantité figée uniquement si le produit a une taille de lot ; sinon saisie libre
+const qteFigee = computed(() => {
+  const pr = produits.value.find(p => p.id === form.produit_id)
+  return !!(pr && pr.taille_lot != null && pr.taille_lot !== '')
+})
 function modifier(l) {
   statutOriginal.value = l.statut || 'Planifié'
   Object.assign(form, {
@@ -279,7 +285,7 @@ onMounted(async () => {
               <option v-for="p in produitsForm" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
             </select>
           </label>
-          <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" disabled title="Figée : taille de lot du produit (Référentiels)." /></label>
+          <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" :disabled="qteFigee" :title="qteFigee ? 'Figée : taille de lot du produit (Référentiels).' : 'Saisir la quantité (pas de taille de lot définie pour ce produit).'" /></label>
           <label>Date de réception OF<input v-model="form.date_reception" type="date" /></label>
           <label>Date fin de validité OF<input v-model="form.date_fin_validite" type="date" /></label>
           <label>Statut
