@@ -7,7 +7,7 @@ import { ICONS, TINTS } from '../icons.js'
 const anneeCourante = new Date().getFullYear()
 const ANNEES = [anneeCourante - 1, anneeCourante, anneeCourante + 1]
 
-const annee = ref('')        // '' = toutes les années
+const annee = ref(anneeCourante)  // par défaut : année en cours (choisir « Toutes » pour tout voir)
 const records = ref([])
 const erreur = ref('')
 
