@@ -125,6 +125,19 @@ function seriesAtelier(ph) {
   return ANNEES_COMP.map((y, i) => ({ label: String(y), color: COULEURS_ANNEES[i] || '#0f766e', data: matriceMultiAn.value[ph][y] }))
 }
 function totalAtelierAnnee(ph, y) { return matriceMultiAn.value[ph][y].reduce((s, x) => s + x, 0) }
+const atelierSel = ref('Compression')
+const anneesActives = ref(new Set(ANNEES_COMP))
+function toggleAnnee(y) {
+  const s = new Set(anneesActives.value)
+  if (s.has(y)) s.delete(y); else s.add(y)
+  anneesActives.value = s
+}
+const seriesChart = computed(() =>
+  ANNEES_COMP.filter(y => anneesActives.value.has(y)).map(y => ({
+    label: String(y), color: COULEURS_ANNEES[ANNEES_COMP.indexOf(y)] || '#0f766e',
+    data: matriceMultiAn.value[atelierSel.value][y]
+  }))
+)
 
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 
@@ -203,17 +216,25 @@ onMounted(charger)
       </section>
 
       <section class="card">
-        <div class="card-head">
-          <h2 class="card-title">Comparaison annuelle par atelier</h2>
-          <div class="legend">
-            <span v-for="(y, i) in ANNEES_COMP" :key="y" class="leg"><span class="leg-dot" :style="{ background: COULEURS_ANNEES[i] }"></span>{{ y }}</span>
+        <div class="card-head"><h2 class="card-title">Comparaison mensuelle par atelier</h2></div>
+        <div class="filtres">
+          <div class="filtre-groupe">
+            <span class="filtre-lbl">Atelier</span>
+            <div class="btn-row">
+              <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
+            </div>
+          </div>
+          <div class="filtre-groupe">
+            <span class="filtre-lbl">Années</span>
+            <div class="btn-row">
+              <button v-for="(y, i) in ANNEES_COMP" :key="y" type="button" class="an-btn" :class="{ on: anneesActives.has(y) }" @click="toggleAnnee(y)"><span class="an-dot" :style="{ background: COULEURS_ANNEES[i] }"></span>{{ y }}</button>
+            </div>
           </div>
         </div>
-        <div class="charts-grid">
-          <div v-for="ph in PHASES" :key="ph" class="chart-box">
-            <div class="chart-title">{{ ph }} <span class="chart-tot">{{ totalAtelierAnnee(ph, anneeCourante) }} en {{ anneeCourante }}</span></div>
-            <MiniChart :series="seriesAtelier(ph)" :labels="MOIS" :show-switch="false" />
-          </div>
+        <div class="chart-titre">{{ atelierSel }} — lots terminés par mois</div>
+        <div class="chart-wrap">
+          <MiniChart v-if="seriesChart.length" :series="seriesChart" :labels="MOIS" :show-switch="true" :show-values="anneesActives.size <= 1" />
+          <p v-else class="empty">Sélectionne au moins une année pour afficher le graphe.</p>
         </div>
       </section>
 
@@ -262,15 +283,18 @@ tr.cond td { border-top: 1px solid #cbd5e1; }
 table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; background: #f8fafc; }
 .empty { color: #94a3b8; text-align: center; padding: 18px; font-style: italic; white-space: normal; }
 .hint { color: #64748b; font-size: 13px; margin-top: 4px; }
-.legend { display: flex; gap: 14px; margin-left: auto; flex-wrap: wrap; }
-.leg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #475569; }
-.leg-dot { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
-.charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-.chart-box { min-width: 0; }
-.chart-title { font-size: 13px; font-weight: 700; color: #1b2733; margin-bottom: 2px; display: flex; align-items: baseline; gap: 8px; }
-.chart-tot { font-size: 11px; font-weight: 600; color: #0f766e; }
+.filtres { display: flex; flex-direction: column; gap: 12px; margin-bottom: 10px; }
+.filtre-groupe { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.filtre-lbl { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding-top: 8px; min-width: 58px; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.btn-row button { font-size: 13px; font-weight: 600; padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #475569; cursor: pointer; transition: all .15s ease; display: inline-flex; align-items: center; gap: 6px; }
+.btn-row button:hover { border-color: #0f766e; color: #0f766e; }
+.btn-row button.on { background: #0f766e; border-color: #0f766e; color: #fff; }
+.an-dot { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+.btn-row button.an-btn.on .an-dot { background: #fff; }
+.chart-titre { font-size: 14px; font-weight: 700; color: #0f766e; margin: 4px 0 2px; }
+.chart-wrap { margin-top: 4px; }
 
-@media (max-width: 800px) { .charts-grid { grid-template-columns: 1fr; } }
 @media (max-width: 700px) {
   .kpi-grid { grid-template-columns: 1fr; }
 }
