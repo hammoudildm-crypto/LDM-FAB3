@@ -100,21 +100,21 @@ export function useFileAttente(sources) {
       const pl = plAll[o.id] || {}
       const stat = (nom) => (pl[(nom || '').toLowerCase()] || {}).statut
       const gamme = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB
-      if (!o.date_fin_fabrication) {
-        let courante = null, prevNom = null
-        for (let i = 0; i < gamme.length; i++) { if (stat(gamme[i]) !== 'Terminé') { courante = gamme[i]; prevNom = i > 0 ? gamme[i - 1] : null; break } }
-        if (!courante) { (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ id: o.id, date: o.date_fin_fabrication || o.date_lancement }); continue }
-        const k = NOM_KEY[courante.toLowerCase()]
-        if (!k || !q[k]) continue
-        if (stat(courante) === 'En cours') {
-          const r = pl[courante.toLowerCase()]
-          q[k].cours.push({ id: o.id, date: (r && r.date) || o.date_lancement })
-        } else {
-          const r = prevNom ? pl[prevNom.toLowerCase()] : null
-          q[k].attente.push({ id: o.id, date: (r && r.date) || o.date_lancement })
-        }
+      // Routage selon l'avancement RÉEL des phases (indépendant de date_fin_fabrication)
+      let courante = null, prevNom = null
+      for (let i = 0; i < gamme.length; i++) { if (stat(gamme[i]) !== 'Terminé') { courante = gamme[i]; prevNom = i > 0 ? gamme[i - 1] : null; break } }
+      if (!courante) {
+        (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ id: o.id, date: o.date_fin_fabrication || o.date_lancement })
+        continue
+      }
+      const k = NOM_KEY[courante.toLowerCase()]
+      if (!k || !q[k]) continue
+      if (stat(courante) === 'En cours') {
+        const r = pl[courante.toLowerCase()]
+        q[k].cours.push({ id: o.id, date: (r && r.date) || o.date_lancement })
       } else {
-        (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ id: o.id, date: o.date_fin_fabrication })
+        const r = prevNom ? pl[prevNom.toLowerCase()] : null
+        q[k].attente.push({ id: o.id, date: (r && r.date) || o.date_lancement })
       }
     }
     const byDate = (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
