@@ -204,21 +204,32 @@ const queuePhase = computed(() => {
     const base = { id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0),
       validite: o.date_fin_validite || null, perime: o.date_fin_validite ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
-    // Routage selon l'avancement RÉEL des phases (robuste : indépendant de date_fin_fabrication)
-    let courante = null, prevNom = null
-    for (let i = 0; i < gamme.length; i++) { if (stat(gamme[i]) !== 'Terminé') { courante = gamme[i]; prevNom = i > 0 ? gamme[i - 1] : null; break } }
-    if (!courante) {
-      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_fin_fabrication || o.date_lancement })
+    // Règle : le lot est à sa phase la plus AVANCÉE déjà saisie (dans la gamme du produit).
+    //   En cours -> en cours à cet atelier ; À faire -> en attente à cet atelier ;
+    //   Terminé -> en attente de la phase SUIVANTE de la gamme ; si c'était la dernière -> conditionnement.
+    let lastIdx = -1
+    for (let i = 0; i < gamme.length; i++) { if (pl[gamme[i].toLowerCase()]) lastIdx = i }
+    if (lastIdx < 0) {
+      const k0 = NOM_KEY[gamme[0].toLowerCase()]
+      if (k0 && q[k0]) q[k0].attente.push({ ...base, date: o.date_lancement })
       continue
     }
-    const k = NOM_KEY[courante.toLowerCase()]
-    if (!k || !q[k]) continue
-    if (stat(courante) === 'En cours') {
-      const r = pl[courante.toLowerCase()]
-      q[k].cours.push({ ...base, date: (r && r.date) || o.date_lancement })
+    const nomAv = gamme[lastIdx]
+    const recAv = pl[nomAv.toLowerCase()]
+    const stAv = recAv ? recAv.statut : undefined
+    if (stAv === 'Terminé') {
+      if (lastIdx >= gamme.length - 1) {
+        (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: (recAv && recAv.date) || o.date_fin_fabrication || o.date_lancement })
+      } else {
+        const kSuiv = NOM_KEY[gamme[lastIdx + 1].toLowerCase()]
+        if (kSuiv && q[kSuiv]) q[kSuiv].attente.push({ ...base, date: (recAv && recAv.date) || o.date_lancement })
+      }
     } else {
-      const r = prevNom ? pl[prevNom.toLowerCase()] : null
-      q[k].attente.push({ ...base, date: (r && r.date) || o.date_lancement })
+      const kAv = NOM_KEY[nomAv.toLowerCase()]
+      if (kAv && q[kAv]) {
+        if (stAv === 'En cours') q[kAv].cours.push({ ...base, date: (recAv && recAv.date) || o.date_lancement })
+        else q[kAv].attente.push({ ...base, date: (recAv && recAv.date) || o.date_lancement })
+      }
     }
   }
   const byDate = (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
