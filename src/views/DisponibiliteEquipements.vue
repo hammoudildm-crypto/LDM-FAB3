@@ -334,7 +334,7 @@ const attentePeseeList = computed(() => {
       validite: o.date_fin_validite || null, perime: o.date_fin_validite ? (new Date(o.date_fin_validite) < now) : false
     })
   }
-  return res.filter(mL).sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0))
+  return res.filter(mL).sort((a, b) => String(a.lot || '').localeCompare(String(b.lot || ''), undefined, { numeric: true }))
 })
 
 function joursDepuis(d) { if (!d) return '—'; const j = Math.floor((Date.now() - new Date(d)) / 86400000); return j <= 0 ? 'auj.' : j + ' j' }
