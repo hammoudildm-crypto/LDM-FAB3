@@ -18,6 +18,26 @@ provide('role', role)
 provide('peutEditer', peutEditer)
 
 const roleLabel = computed(() => ({ admin: 'Admin', operateur: 'Opérateur', lecteur: 'Lecteur' }[role.value] || ''))
+// --- Présence temps réel : qui est en ligne ---
+const enLigne = ref([])
+let canalPresence = null
+function nomEnLigne(u) { return u.email ? u.email.split('@')[0] : 'Utilisateur' }
+function demarrerPresence() {
+  if (!session.value || canalPresence) return
+  const u = session.value.user
+  canalPresence = supabase.channel('presence-app', { config: { presence: { key: u.id } } })
+  canalPresence.on('presence', { event: 'sync' }, () => {
+    const etat = canalPresence.presenceState()
+    enLigne.value = Object.entries(etat).map(([id, arr]) => ({ id, ...(arr[0] || {}) }))
+  })
+  canalPresence.subscribe(async (statut) => {
+    if (statut === 'SUBSCRIBED') await canalPresence.track({ email: u.email, role: role.value, online_at: new Date().toISOString() })
+  })
+}
+function arreterPresence() {
+  if (canalPresence) { supabase.removeChannel(canalPresence); canalPresence = null }
+  enLigne.value = []
+}
 
 // --- Navigation par rôle, en groupes repliables ---
 const LINK_ICONS = {
@@ -111,9 +131,10 @@ function onDocClick(e) {
 }
 
 async function chargerRole() {
-  if (!session.value) { role.value = null; return }
+  if (!session.value) { role.value = null; arreterPresence(); return }
   const r = await supabase.from('profils').select('role').eq('user_id', session.value.user.id).maybeSingle()
   role.value = r.data ? r.data.role : null
+  demarrerPresence()
 }
 
 // --- Alertes : OF dont la validité expire sous 3 jours (et non encore fabriqués) ---
@@ -172,9 +193,10 @@ onMounted(async () => {
   await chargerAlertes()
   supabase.auth.onAuthStateChange(async (_event, s) => { session.value = s; await chargerRole(); await chargerAlertes() })
 })
-onUnmounted(() => document.removeEventListener('click', onDocClick))
+onUnmounted(() => { document.removeEventListener('click', onDocClick); arreterPresence() })
 
 async function signOut() {
+  arreterPresence()
   const res = await supabase.auth.signOut()
   if (res.error) { console.error('signOut:', res.error.message); return }
   session.value = null
@@ -225,6 +247,12 @@ async function signOut() {
           </button>
         </div>
         <template v-if="session">
+          <div class="online-box" v-if="enLigne.length">
+            <div class="online-head"><span class="online-dot"></span> {{ enLigne.length }} en ligne</div>
+            <ul class="online-list">
+              <li v-for="u in enLigne" :key="u.id"><span class="online-nom">{{ nomEnLigne(u) }}</span><span v-if="session && u.id === session.user.id" class="online-moi">moi</span></li>
+            </ul>
+          </div>
           <RouterLink to="/compte" class="side-link acct" @click="sidebarOpen = false">
             <span>Mon compte</span>
             <span v-if="role" class="role-badge" :class="'r-' + role">{{ roleLabel }}</span>
@@ -481,4 +509,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   outline: 2px solid var(--accent-bright); outline-offset: 2px; border-radius: 5px;
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+.online-box { border: 1px solid var(--topbar-border); border-radius: 8px; padding: 8px 10px; }
+.online-head { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--topbar-text); margin-bottom: 6px; }
+.online-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.2); flex: none; }
+.online-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; max-height: 140px; overflow-y: auto; }
+.online-list li { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; color: var(--topbar-muted); }
+.online-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.online-moi { font-size: 10px; font-weight: 700; color: #22c55e; background: rgba(34,197,94,.15); padding: 1px 6px; border-radius: 999px; flex: none; }
 </style>
