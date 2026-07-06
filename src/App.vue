@@ -47,6 +47,7 @@ const LINK_ICONS = {
   '/ca': '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
   '/dispo-equipements': '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
   '/avancement': '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  '/production-atelier': '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
   '/encours': '<path d="M5 22h14M5 2h14M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/>',
   '/dossier': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
   '/audit': '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>',
@@ -66,6 +67,7 @@ const NAV_GROUPS = [
     ['/ca', "Chiffre d'affaires"],
     ['/dispo-equipements', 'Disponibilité équipements'],
     ['/avancement', 'Suivi du process'],
+    ['/production-atelier', 'Production par atelier'],
     ['/encours', 'En-cours'],
     ['/dossier', 'Dossier de lot'],
     ['/audit', "Journal d'audit"],
@@ -101,7 +103,7 @@ function ouvrirGroupeActif(p) {
 watch(() => route.path, (p) => ouvrirGroupeActif(p))
 
 const PROD = ['/plan', '/ordres', '/suivi', '/encours', '/conditionnement', '/dossier']
-const PILOT = ['/ca', '/realisation-plan', '/rendement', '/dispo-equipements', '/avancement', '/effectifs', '/verification-ddl', '/audit', '/habilitations']
+const PILOT = ['/ca', '/realisation-plan', '/rendement', '/dispo-equipements', '/avancement', '/production-atelier', '/effectifs', '/verification-ddl', '/audit', '/habilitations']
 const prodActive = computed(() => PROD.includes(route.path))
 const pilotActive = computed(() => PILOT.includes(route.path))
 
