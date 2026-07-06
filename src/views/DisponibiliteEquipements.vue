@@ -195,7 +195,7 @@ const queuePhase = computed(() => {
   const condFini = condComplet.value
   const condAny = ordresConditionnes.value
   for (const o of ofs.value) {
-    if (!o.date_lancement || condFini.has(o.id)) continue
+    if ((!o.date_lancement && !o.date_fin_fabrication) || condFini.has(o.id)) continue
     if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
     const pl = phasesLot.value[o.id] || {}
     const stat = (nom) => (pl[(nom || '').toLowerCase()] || {}).statut
@@ -210,8 +210,12 @@ const queuePhase = computed(() => {
     let lastIdx = -1
     for (let i = 0; i < gamme.length; i++) { if (pl[gamme[i].toLowerCase()]) lastIdx = i }
     if (lastIdx < 0) {
-      const k0 = NOM_KEY[gamme[0].toLowerCase()]
-      if (k0 && q[k0]) q[k0].attente.push({ ...base, date: o.date_lancement })
+      if (o.date_fin_fabrication) {
+        (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_fin_fabrication })
+      } else {
+        const k0 = NOM_KEY[gamme[0].toLowerCase()]
+        if (k0 && q[k0]) q[k0].attente.push({ ...base, date: o.date_lancement })
+      }
       continue
     }
     const nomAv = gamme[lastIdx]
