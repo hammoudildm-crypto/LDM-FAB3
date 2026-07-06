@@ -201,7 +201,7 @@ const queuePhase = computed(() => {
     const stat = (nom) => (pl[(nom || '').toLowerCase()] || {}).statut
     const gamme = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB
     const p = o.produits || {}
-    const base = { id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0),
+    const base = { id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
       validite: o.date_fin_validite || null, perime: o.date_fin_validite ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
     // Règle : le lot est à sa phase la plus AVANCÉE déjà saisie (dans la gamme du produit).
@@ -232,7 +232,7 @@ const queuePhase = computed(() => {
       }
     }
   }
-  const byDate = (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
+  const byDate = (a, b) => String(a.lot || '').localeCompare(String(b.lot || ''), undefined, { numeric: true })
   for (const k in q) { q[k].attente.sort(byDate); q[k].cours.sort(byDate) }
   return q
 })
@@ -264,7 +264,7 @@ const vueFile = computed(() => {
   const gran = liste.find(x => x.key === 'granulation')
   const sech = liste.find(x => x.key === 'sechage')
   if (gran || sech) {
-    const byDate = (a, b) => new Date(a.date || 0) - new Date(b.date || 0)
+    const byDate = (a, b) => String(a.lot || '').localeCompare(String(b.lot || ''), undefined, { numeric: true })
     const ref = gran || sech
     const attente = [...(gran ? gran.attente : []), ...(sech ? sech.attente : [])].sort(byDate)
     const cours = [...(gran ? gran.cours : []), ...(sech ? sech.cours : [])].sort(byDate)
