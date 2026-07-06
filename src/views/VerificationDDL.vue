@@ -17,7 +17,7 @@ const LIMITE = 300
 
 const lots = ref([])
 const msg = ref('')
-const anneeSel = ref(0) // 0 = toutes
+const anneeSel = ref(anneeCourante) // par défaut : année en cours (0 = toutes)
 const verifEnCours = ref(null)
 const vForm = ref({ verificateur: '', date: new Date().toISOString().slice(0, 10) })
 const superviseurChoix = ref('')
