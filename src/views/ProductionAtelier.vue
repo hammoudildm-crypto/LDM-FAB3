@@ -17,6 +17,7 @@ const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juill
 
 const phases = ref([])
 const conds = ref([])
+const hist = ref([])
 const erreur = ref('')
 const chargement = ref(true)
 
@@ -43,32 +44,46 @@ async function charger() {
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
     .select('ordre_id, date_conditionnement, date_fin').eq('actif', true))
   if (!rc.error) conds.value = rc.data || []
+  const rh = await fetchAllPaged(() => supabase.from('production_historique').select('annee, mois, etape, nb_lots'))
+  if (!rh.error) hist.value = rh.data || []
   chargement.value = false
 }
 
 // Matrice : { phase -> [12 compteurs] } = nb de LOTS DISTINCTS ayant terminé la phase ce mois-là
+// Données LIVE (suivi fabrication) agrégées : étape -> année -> [12 mois]
+const liveParAn = computed(() => {
+  const m = {}, vus = {}
+  const ajouter = (ph, ordreId, d) => {
+    if (!d || ordreId == null || !PHASES.includes(ph)) return
+    const dt = new Date(d), y = dt.getFullYear(), mo = dt.getMonth()
+    if (!m[ph]) m[ph] = {}
+    if (!m[ph][y]) m[ph][y] = Array(12).fill(0)
+    const cle = ph + '|' + y + '|' + mo
+    if (!vus[cle]) vus[cle] = new Set()
+    if (!vus[cle].has(ordreId)) { vus[cle].add(ordreId); m[ph][y][mo]++ }
+  }
+  for (const sp of phases.value) { if (sp.date_phase) ajouter(sp.phase, sp.ordre_id, sp.date_phase) }
+  for (const c of conds.value) ajouter('Conditionnement', c.ordre_id, c.date_fin || c.date_conditionnement)
+  return m
+})
+// Données HISTORIQUE importées (table production_historique)
+const histParAn = computed(() => {
+  const m = {}
+  for (const r of hist.value) {
+    if (!m[r.etape]) m[r.etape] = {}
+    if (!m[r.etape][r.annee]) m[r.etape][r.annee] = Array(12).fill(0)
+    if (r.mois >= 1 && r.mois <= 12) m[r.etape][r.annee][r.mois - 1] = r.nb_lots
+  }
+  return m
+})
+// Valeurs mensuelles d'une étape pour une année : historique si année passée, sinon temps réel
+function valeurs(stage, year) {
+  const src = year < anneeCourante ? histParAn.value : liveParAn.value
+  return (src[stage] && src[stage][year]) ? src[stage][year] : Array(12).fill(0)
+}
 const matrice = computed(() => {
   const m = {}
-  for (const ph of PHASES) m[ph] = Array(12).fill(0)
-  const vus = {}   // "phase|mois" -> Set(ordre_id) pour ne compter chaque lot qu'une fois
-  const ajouter = (ph, ordreId, d) => {
-    if (!d || ordreId == null) return
-    const dt = new Date(d)
-    if (dt.getFullYear() !== anneeSel.value) return
-    const mo = dt.getMonth()
-    const cle = ph + '|' + mo
-    if (!vus[cle]) vus[cle] = new Set()
-    if (!vus[cle].has(ordreId)) { vus[cle].add(ordreId); m[ph][mo]++ }
-  }
-  for (const sp of phases.value) {
-    // toute phase ayant une date de fin = terminée (inclut l'historique, quel que soit le statut)
-    if (!sp.date_phase) continue
-    if (!m[sp.phase]) continue
-    ajouter(sp.phase, sp.ordre_id, sp.date_phase)
-  }
-  for (const c of conds.value) {
-    ajouter('Conditionnement', c.ordre_id, c.date_fin || c.date_conditionnement)
-  }
+  for (const ph of PHASES) m[ph] = valeurs(ph, anneeSel.value)
   return m
 })
 
@@ -107,18 +122,7 @@ for (let a = anneeCourante - 3; a <= anneeCourante; a++) ANNEES_COMP.push(a)
 const COULEURS_ANNEES = ['#cbd5e1', '#60a5fa', '#2dd4bf', '#0f766e']
 const matriceMultiAn = computed(() => {
   const m = {}
-  for (const ph of PHASES) { m[ph] = {}; for (const y of ANNEES_COMP) m[ph][y] = Array(12).fill(0) }
-  const vus = {}
-  const ajouter = (ph, ordreId, d) => {
-    if (!d || ordreId == null) return
-    const dt = new Date(d), y = dt.getFullYear()
-    if (!m[ph] || !m[ph][y]) return
-    const mo = dt.getMonth(), cle = ph + '|' + y + '|' + mo
-    if (!vus[cle]) vus[cle] = new Set()
-    if (!vus[cle].has(ordreId)) { vus[cle].add(ordreId); m[ph][y][mo]++ }
-  }
-  for (const sp of phases.value) { if (!sp.date_phase || !m[sp.phase]) continue; ajouter(sp.phase, sp.ordre_id, sp.date_phase) }
-  for (const c of conds.value) ajouter('Conditionnement', c.ordre_id, c.date_fin || c.date_conditionnement)
+  for (const ph of PHASES) { m[ph] = {}; for (const y of ANNEES_COMP) m[ph][y] = valeurs(ph, y) }
   return m
 })
 function seriesAtelier(ph) {
@@ -238,7 +242,7 @@ onMounted(charger)
         </div>
       </section>
 
-      <p class="hint">Chaque cellule = nombre de <strong>lots distincts</strong> ayant <strong>terminé</strong> l'étape ce mois-là, d'après la <strong>date de fin de phase</strong> saisie dans Suivi des phases — <strong>tout l'historique</strong> est pris en compte (peu importe le statut du lot). La ligne Conditionnement s'appuie sur les enregistrements de conditionnement. Un même lot compte une fois par atelier qu'il traverse.</p>
+      <p class="hint">Chaque cellule = nombre de <strong>lots distincts</strong> ayant <strong>terminé</strong> l'étape ce mois-là. Les <strong>années passées</strong> proviennent de l'<strong>historique importé</strong> (TDB PROD) ; l'<strong>année en cours</strong> est calculée en <strong>temps réel</strong> depuis Suivi des phases. Un même lot compte une fois par atelier.</p>
     </template>
   </div>
 </template>
