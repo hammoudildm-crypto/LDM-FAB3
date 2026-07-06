@@ -85,9 +85,8 @@ function valeurs(stage, year) {
   const h = (histParAn.value[stage] && histParAn.value[stage][year]) ? histParAn.value[stage][year] : null
   const l = (liveParAn.value[stage] && liveParAn.value[stage][year]) ? liveParAn.value[stage][year] : null
   if (year < anneeCourante) return h || Array(12).fill(0)                 // années passées : historique importé
-  if (!h) return l || Array(12).fill(0)                                   // année en cours sans historique : temps réel
-  if (!l) return h
-  return h.map((v, i) => Math.max(v, l[i]))                               // année en cours : max(historique à ce jour, temps réel)
+  const hh = h || Array(12).fill(0), ll = l || Array(12).fill(0)
+  return hh.map((v, i) => v > 0 ? v : ll[i])                              // année en cours : historique à ce jour, sinon temps réel
 }
 const matrice = computed(() => {
   const m = {}
