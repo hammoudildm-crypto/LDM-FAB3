@@ -11,13 +11,14 @@ for (let a = anneeCourante - 4; a <= anneeCourante + 1; a++) ANNEES.push(a)
 const anneeSel = ref(anneeCourante)
 
 // Ateliers de fabrication (phases) + Conditionnement en dernière ligne
-const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Conditionnement']
+const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Livraison Vrac', 'Conditionnement']
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
 const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
 const phases = ref([])
 const conds = ref([])
 const hist = ref([])
+const ofs = ref([])
 const erreur = ref('')
 const chargement = ref(true)
 
@@ -46,6 +47,8 @@ async function charger() {
   if (!rc.error) conds.value = rc.data || []
   const rh = await fetchAllPaged(() => supabase.from('production_historique').select('annee, mois, etape, nb_lots'))
   if (!rh.error) hist.value = rh.data || []
+  const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, date_fin_fabrication').eq('actif', true))
+  if (!ro.error) ofs.value = ro.data || []
   chargement.value = false
 }
 
@@ -64,6 +67,7 @@ const liveParAn = computed(() => {
   }
   for (const sp of phases.value) { if (sp.date_phase) ajouter(sp.phase, sp.ordre_id, sp.date_phase) }
   for (const c of conds.value) ajouter('Conditionnement', c.ordre_id, c.date_fin || c.date_conditionnement)
+  for (const o of ofs.value) ajouter('Livraison Vrac', o.id, o.date_fin_fabrication)
   return m
 })
 // Données HISTORIQUE importées (table production_historique)
