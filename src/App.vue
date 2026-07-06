@@ -12,12 +12,17 @@ const openMenu = ref(null)
 const sidebarOpen = ref(false)
 const refreshTick = ref(0)
 // --- Synchronisation périodique automatique (recharge les pages de consultation) ---
-const AUTO_REFRESH_MS = 120000 // 2 minutes
+const AUTO_REFRESH_MS = 300000 // 5 minutes (filet de sécurité ; le temps réel gère l'instantané)
 const ROUTES_SANS_AUTO = ['/ordres', '/suivi', '/conditionnement', '/plan', '/referentiels', '/habilitations', '/effectifs', '/verification-ddl', '/compte', '/login']
 let autoRefreshTimer = null
 function autoRefresh() {
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
   if (ROUTES_SANS_AUTO.includes(route.path)) return  // ne pas interrompre un écran de saisie
+  refreshTick.value++
+}
+let canalSync = null
+function onDbChange() {
+  if (ROUTES_SANS_AUTO.includes(route.path)) return  // pas de rechargement pendant une saisie
   refreshTick.value++
 }
 
@@ -205,8 +210,13 @@ onMounted(async () => {
   supabase.auth.onAuthStateChange(async (_event, s) => { session.value = s; await chargerRole(); await chargerAlertes() })
   autoRefreshTimer = setInterval(autoRefresh, AUTO_REFRESH_MS)
   window.addEventListener('focus', autoRefresh)
+  canalSync = supabase.channel('sync-donnees')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ordres_fabrication' }, onDbChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'suivi_phases' }, onDbChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'conditionnement' }, onDbChange)
+    .subscribe()
 })
-onUnmounted(() => { document.removeEventListener('click', onDocClick); arreterPresence(); if (autoRefreshTimer) clearInterval(autoRefreshTimer); window.removeEventListener('focus', autoRefresh) })
+onUnmounted(() => { document.removeEventListener('click', onDocClick); arreterPresence(); if (autoRefreshTimer) clearInterval(autoRefreshTimer); window.removeEventListener('focus', autoRefresh); if (canalSync) supabase.removeChannel(canalSync) })
 
 async function signOut() {
   arreterPresence()
