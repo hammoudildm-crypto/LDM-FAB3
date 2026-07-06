@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
+import MiniChart from '../components/MiniChart.vue'
 import { ICONS, TINTS } from '../icons.js'
 
 const anneeCourante = new Date().getFullYear()
@@ -60,7 +61,8 @@ const matrice = computed(() => {
     if (!vus[cle].has(ordreId)) { vus[cle].add(ordreId); m[ph][mo]++ }
   }
   for (const sp of phases.value) {
-    if (sp.statut !== 'Terminé' || !sp.date_phase) continue
+    // toute phase ayant une date de fin = terminée (inclut l'historique, quel que soit le statut)
+    if (!sp.date_phase) continue
     if (!m[sp.phase]) continue
     ajouter(sp.phase, sp.ordre_id, sp.date_phase)
   }
@@ -98,6 +100,31 @@ const moisTop = computed(() => {
   totalColonne.value.forEach((n, i) => { if (n > mx) { mx = n; best = i } })
   return mx > 0 ? { nom: MOIS_LONG[best], n: mx } : null
 })
+
+// --- Comparaison multi-années : une courbe par année, par atelier ---
+const ANNEES_COMP = []
+for (let a = anneeCourante - 3; a <= anneeCourante; a++) ANNEES_COMP.push(a)
+const COULEURS_ANNEES = ['#cbd5e1', '#60a5fa', '#2dd4bf', '#0f766e']
+const matriceMultiAn = computed(() => {
+  const m = {}
+  for (const ph of PHASES) { m[ph] = {}; for (const y of ANNEES_COMP) m[ph][y] = Array(12).fill(0) }
+  const vus = {}
+  const ajouter = (ph, ordreId, d) => {
+    if (!d || ordreId == null) return
+    const dt = new Date(d), y = dt.getFullYear()
+    if (!m[ph] || !m[ph][y]) return
+    const mo = dt.getMonth(), cle = ph + '|' + y + '|' + mo
+    if (!vus[cle]) vus[cle] = new Set()
+    if (!vus[cle].has(ordreId)) { vus[cle].add(ordreId); m[ph][y][mo]++ }
+  }
+  for (const sp of phases.value) { if (!sp.date_phase || !m[sp.phase]) continue; ajouter(sp.phase, sp.ordre_id, sp.date_phase) }
+  for (const c of conds.value) ajouter('Conditionnement', c.ordre_id, c.date_fin || c.date_conditionnement)
+  return m
+})
+function seriesAtelier(ph) {
+  return ANNEES_COMP.map((y, i) => ({ label: String(y), color: COULEURS_ANNEES[i] || '#0f766e', data: matriceMultiAn.value[ph][y] }))
+}
+function totalAtelierAnnee(ph, y) { return matriceMultiAn.value[ph][y].reduce((s, x) => s + x, 0) }
 
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 
@@ -175,7 +202,22 @@ onMounted(charger)
         </div>
       </section>
 
-      <p class="hint">Chaque cellule = nombre de <strong>lots distincts</strong> ayant <strong>terminé</strong> l'étape ce mois-là (d'après la date de fin de phase dans Suivi des phases ; la ligne Conditionnement s'appuie sur les enregistrements de conditionnement). Un même lot compte une fois par atelier qu'il traverse.</p>
+      <section class="card">
+        <div class="card-head">
+          <h2 class="card-title">Comparaison annuelle par atelier</h2>
+          <div class="legend">
+            <span v-for="(y, i) in ANNEES_COMP" :key="y" class="leg"><span class="leg-dot" :style="{ background: COULEURS_ANNEES[i] }"></span>{{ y }}</span>
+          </div>
+        </div>
+        <div class="charts-grid">
+          <div v-for="ph in PHASES" :key="ph" class="chart-box">
+            <div class="chart-title">{{ ph }} <span class="chart-tot">{{ totalAtelierAnnee(ph, anneeCourante) }} en {{ anneeCourante }}</span></div>
+            <MiniChart :series="seriesAtelier(ph)" :labels="MOIS" :show-switch="false" />
+          </div>
+        </div>
+      </section>
+
+      <p class="hint">Chaque cellule = nombre de <strong>lots distincts</strong> ayant <strong>terminé</strong> l'étape ce mois-là, d'après la <strong>date de fin de phase</strong> saisie dans Suivi des phases — <strong>tout l'historique</strong> est pris en compte (peu importe le statut du lot). La ligne Conditionnement s'appuie sur les enregistrements de conditionnement. Un même lot compte une fois par atelier qu'il traverse.</p>
     </template>
   </div>
 </template>
@@ -220,7 +262,15 @@ tr.cond td { border-top: 1px solid #cbd5e1; }
 table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; background: #f8fafc; }
 .empty { color: #94a3b8; text-align: center; padding: 18px; font-style: italic; white-space: normal; }
 .hint { color: #64748b; font-size: 13px; margin-top: 4px; }
+.legend { display: flex; gap: 14px; margin-left: auto; flex-wrap: wrap; }
+.leg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #475569; }
+.leg-dot { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+.chart-box { min-width: 0; }
+.chart-title { font-size: 13px; font-weight: 700; color: #1b2733; margin-bottom: 2px; display: flex; align-items: baseline; gap: 8px; }
+.chart-tot { font-size: 11px; font-weight: 600; color: #0f766e; }
 
+@media (max-width: 800px) { .charts-grid { grid-template-columns: 1fr; } }
 @media (max-width: 700px) {
   .kpi-grid { grid-template-columns: 1fr; }
 }
