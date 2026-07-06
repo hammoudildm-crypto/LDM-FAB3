@@ -204,20 +204,18 @@ const queuePhase = computed(() => {
     const base = { id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0),
       validite: o.date_fin_validite || null, perime: o.date_fin_validite ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
-    // Routage par avancement des phases. Conditionnement si toutes les phases sont finies,
-    // OU si la fabrication est datée finie et que l'étape courante n'est pas enregistrée
-    // pour ce lot (phase de la gamme générique qu'il ne réalise pas).
+    // Routage selon l'avancement RÉEL des phases (robuste : indépendant de date_fin_fabrication)
     let courante = null, prevNom = null
     for (let i = 0; i < gamme.length; i++) { if (stat(gamme[i]) !== 'Terminé') { courante = gamme[i]; prevNom = i > 0 ? gamme[i - 1] : null; break } }
-    const recCourante = courante ? pl[courante.toLowerCase()] : null
-    if (!courante || (o.date_fin_fabrication && !recCourante)) {
+    if (!courante) {
       (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_fin_fabrication || o.date_lancement })
       continue
     }
     const k = NOM_KEY[courante.toLowerCase()]
     if (!k || !q[k]) continue
     if (stat(courante) === 'En cours') {
-      q[k].cours.push({ ...base, date: (recCourante && recCourante.date) || o.date_lancement })
+      const r = pl[courante.toLowerCase()]
+      q[k].cours.push({ ...base, date: (r && r.date) || o.date_lancement })
     } else {
       const r = prevNom ? pl[prevNom.toLowerCase()] : null
       q[k].attente.push({ ...base, date: (r && r.date) || o.date_lancement })
