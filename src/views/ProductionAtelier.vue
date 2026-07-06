@@ -241,7 +241,7 @@ onMounted(charger)
         </div>
         <div class="chart-titre">{{ atelierSel }} — lots terminés par mois</div>
         <div class="chart-wrap">
-          <MiniChart v-if="seriesChart.length" :series="seriesChart" :labels="MOIS" :show-switch="true" :show-values="anneesActives.size <= 1" />
+          <MiniChart v-if="seriesChart.length" :series="seriesChart" :labels="MOIS" :show-switch="true" :show-values="true" />
           <p v-else class="empty">Sélectionne au moins une année pour afficher le graphe.</p>
         </div>
       </section>
