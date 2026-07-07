@@ -111,12 +111,7 @@ function toggleGroup(key) {
   // Accordéon : un seul groupe ouvert à la fois
   openGroups.value = openGroups.value.has(key) ? new Set() : new Set([key])
 }
-// Déplier automatiquement le groupe de la page active (et fermer les autres)
-function ouvrirGroupeActif(p) {
-  const g = NAV_GROUPS.find(gr => gr.links.some(l => l[0] === p))
-  if (g) openGroups.value = new Set([g.key])
-}
-watch(() => route.path, (p) => ouvrirGroupeActif(p))
+// Sous-menus repliés par défaut ; on les ouvre/ferme uniquement au clic sur le menu principal
 
 const PROD = ['/plan', '/ordres', '/suivi', '/encours', '/conditionnement', '/dossier']
 const PILOT = ['/ca', '/realisation-plan', '/rendement', '/dispo-equipements', '/avancement', '/production-atelier', '/effectifs', '/verification-ddl', '/audit', '/habilitations']
