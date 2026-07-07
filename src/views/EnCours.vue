@@ -88,6 +88,7 @@ const lignes = computed(() => {
       const desig = p ? String(p.designation || '') : ''
       return String(x.lot.numero_lot || '').toLowerCase().includes(q) || code.toLowerCase().includes(q) || desig.toLowerCase().includes(q)
     })
+    .sort((a, b) => String(a.lot.numero_lot || '').localeCompare(String(b.lot.numero_lot || ''), undefined, { numeric: true }))
 })
 const lotsVracAttente = computed(() => lots.value.filter(l => estVracAttente(l)))
 const totalEnCours = computed(() => lotsVracAttente.value.reduce((s, l) => { const f = fabrique(l); return s + (f != null && f > 0 ? f : 0) }, 0))
