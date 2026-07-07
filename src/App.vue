@@ -346,13 +346,13 @@ body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; -
 .side-brand { display: flex; align-items: center; gap: 10px; padding: 16px 18px 12px; }
 .brand-mark { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; font-size: 16px; font-weight: 800;
   color: #06241f; background: linear-gradient(140deg, var(--accent-bright), #14b8a6); box-shadow: 0 2px 7px rgba(20,184,166,.4); flex-shrink: 0; }
-.brand-wm { font-size: 16px; font-weight: 800; letter-spacing: .05em; }
+.brand-wm { font-size: 14.5px; font-weight: 800; letter-spacing: .05em; }
 .brand-sub { color: var(--accent-bright); margin-left: 3px; font-weight: 700; }
 
 .side-nav { flex: 1; overflow-y: auto; padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 1px; }
 .side-nav::-webkit-scrollbar { width: 8px; }
 .side-nav::-webkit-scrollbar-thumb { background: var(--topbar-border); border-radius: 8px; }
-.side-group { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em;
+.side-group { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em;
   color: var(--topbar-text); opacity: .55; padding: 15px 10px 6px; }
 .side-group-btn { display: flex; align-items: center; justify-content: space-between; width: 100%;
   background: none; border: 0; cursor: pointer; font-family: inherit; text-align: left; border-radius: 6px; transition: opacity .15s ease, color .15s ease; }
@@ -361,7 +361,7 @@ body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; -
 .side-group-btn.open .grp-caret { transform: rotate(180deg); }
 .grp-links { display: flex; flex-direction: column; gap: 1px; position: relative; margin: 2px 0 4px; }
 .grp-links::before { content: ""; position: absolute; left: 6px; top: 2px; bottom: 4px; width: 1.5px; border-radius: 2px; background: var(--topbar-border); opacity: .55; }
-.grp-links .side-link { padding-left: 16px; font-size: 13px; font-weight: 500; }
+.grp-links .side-link { padding-left: 16px; font-size: 12px; font-weight: 500; }
 .grp-links a.router-link-exact-active::before { left: 6px; top: 8px; bottom: 8px; width: 2px; opacity: 1; }
 .nav-group { border-radius: 10px; transition: background .18s ease; }
 .nav-group.open { background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.02)); padding-bottom: 5px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); }
@@ -373,8 +373,8 @@ body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; -
 .link-ic svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .side-nav a.router-link-exact-active .link-ic { opacity: 1; }
 .side-link { display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  color: var(--topbar-muted); text-decoration: none; font-size: 13.5px; font-weight: 500;
-  padding: 8px 11px; border-radius: 8px; white-space: nowrap; background: none; border: 0; cursor: pointer;
+  color: var(--topbar-muted); text-decoration: none; font-size: 12px; font-weight: 500;
+  padding: 6px 10px; border-radius: 8px; white-space: nowrap; background: none; border: 0; cursor: pointer;
   font-family: inherit; text-align: left; width: 100%; position: relative; }
 .side-link:hover { background: rgba(255,255,255,.06); color: var(--topbar-text); }
 .side-nav a.router-link-exact-active { background: rgba(255,255,255,.10); color: var(--topbar-text); font-weight: 600; }
