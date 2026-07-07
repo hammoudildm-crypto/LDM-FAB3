@@ -10,6 +10,8 @@ const navRef = ref(null)
 const themeRef = ref(null)
 const openMenu = ref(null)
 const sidebarOpen = ref(false)
+const sidebarMasquee = ref(false)
+watch(sidebarMasquee, v => { try { localStorage.setItem('ldmfab-sidebar-masquee', v ? '1' : '0') } catch (e) { /* ignore */ } })
 const refreshTick = ref(0)
 // --- Synchronisation périodique automatique (recharge les pages de consultation) ---
 const AUTO_REFRESH_MS = 300000 // 5 minutes (filet de sécurité ; le temps réel gère l'instantané)
@@ -200,6 +202,7 @@ onMounted(async () => {
     if (saved) { theme.value = saved; document.documentElement.dataset.theme = saved }
     const sz = parseInt(localStorage.getItem('ldmfab-zoom') || '', 10)
     if (sz) zoom.value = Math.max(20, Math.min(200, sz))
+    if (localStorage.getItem('ldmfab-sidebar-masquee') === '1') sidebarMasquee.value = true
   } catch (e) { /* ignore */ }
   document.addEventListener('click', onDocClick)
   const res = await supabase.auth.getSession()
@@ -228,11 +231,13 @@ async function signOut() {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ masquee: sidebarMasquee }">
+    <div class="side-reveal" aria-hidden="true"></div>
     <aside class="sidebar" :class="{ open: sidebarOpen }">
       <div class="side-brand">
         <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none"><path d="M4 16 L10 11 L15 14 L20 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="16" r="1.7" fill="#fff"/><circle cx="10" cy="11" r="1.7" fill="#fff"/><circle cx="15" cy="14" r="1.7" fill="#fff"/><circle cx="20" cy="6" r="1.7" fill="#fff"/></svg></span>
         <span class="brand-wm">Prod<span class="brand-sub">Track</span></span>
+        <button class="side-hide" @click="sidebarMasquee = !sidebarMasquee" :title="sidebarMasquee ? 'Épingler la barre' : 'Masquer la barre'">{{ sidebarMasquee ? '»' : '«' }}</button>
       </div>
       <nav class="side-nav">
         <RouterLink to="/" class="side-link" @click="sidebarOpen = false"><span class="link-in"><span class="link-ic"><svg viewBox="0 0 24 24" v-html="LINK_ICONS['/']"></svg></span>Tableau de bord</span></RouterLink>
@@ -421,6 +426,17 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-item { background: 
 html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-item.perime { background: #2a1010; }
 .mobile-top { display: none; }
 .side-backdrop { display: none; }
+/* --- Barre latérale masquable (desktop) --- */
+.side-brand { display: flex; align-items: center; }
+.side-reveal { display: none; }
+.side-hide { margin-left: auto; background: transparent; border: 0; color: var(--topbar-muted); font-size: 17px; line-height: 1; cursor: pointer; padding: 2px 7px; border-radius: 6px; }
+.side-hide:hover { background: rgba(255,255,255,.12); color: #fff; }
+@media (min-width: 901px) {
+  .app-shell.masquee .sidebar { position: fixed; left: 0; top: 0; bottom: 0; height: 100vh; transform: translateX(-100%); transition: transform .22s ease; z-index: 60; box-shadow: 2px 0 18px rgba(0,0,0,.28); }
+  .app-shell.masquee .side-reveal { display: block; position: fixed; left: 0; top: 0; bottom: 0; width: 12px; z-index: 55; }
+  .app-shell.masquee .side-reveal:hover + .sidebar,
+  .app-shell.masquee .sidebar:hover { transform: translateX(0); }
+}
 @media (max-width: 900px) {
   .sidebar { position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); transition: transform .25s ease; }
   .sidebar.open { transform: translateX(0); }
