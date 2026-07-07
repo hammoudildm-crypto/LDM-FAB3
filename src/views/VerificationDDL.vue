@@ -16,6 +16,7 @@ const STATUTS_PRODUITS = ['Terminé', 'Libéré'] // lots produits = sujets à v
 const LIMITE = 300
 
 const lots = ref([])
+const phases = ref([])
 const msg = ref('')
 const anneeSel = ref(anneeCourante) // par défaut : année en cours (0 = toutes)
 const verifEnCours = ref(null)
@@ -49,11 +50,13 @@ async function fetchAllPaged(make) {
 async function charger() {
   msg.value = ''
   const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, ddl_verifie, ddl_verificateur, ddl_date_verification, produits(designation, code_pf)')
+    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, ddl_verifie, ddl_verificateur, ddl_date_verification, produits(designation, code_pf, gamme)')
     .eq('actif', true)
     .order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (r.error) { msg.value = r.error.message; return }
   lots.value = r.data
+  const rp = await fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
+  if (!rp.error) phases.value = rp.data
   const rs = await supabase.from('superviseurs').select('nom').order('nom')
   if (!rs.error) supList.value = rs.data.map(s => s.nom)
 }
@@ -62,8 +65,27 @@ onMounted(charger)
 const anYear = (d) => d ? new Date(d).getFullYear() : null
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
-const produits = computed(() => lots.value.filter(l =>
-  l.date_fin_fabrication && (anneeSel.value === 0 || anYear(l.date_fin_fabrication) === anneeSel.value)))
+const CANON_FAB = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+const phasesParLot = computed(() => {
+  const m = {}
+  for (const sp of phases.value) {
+    if (!m[sp.ordre_id]) m[sp.ordre_id] = {}
+    m[sp.ordre_id][String(sp.phase || '').toLowerCase()] = { statut: sp.statut, date: sp.date_phase || sp.date_debut }
+  }
+  return m
+})
+// Date de fin de fabrication : la date renseignée, sinon la date de la DERNIÈRE phase de gamme si Terminé
+function dateFinFab(l) {
+  if (l.date_fin_fabrication) return l.date_fin_fabrication
+  const g = (l.produits && Array.isArray(l.produits.gamme) && l.produits.gamme.length) ? l.produits.gamme : CANON_FAB
+  const derniere = g[g.length - 1]
+  const rec = phasesParLot.value[l.id] && phasesParLot.value[l.id][String(derniere).toLowerCase()]
+  return (rec && rec.statut === 'Terminé') ? rec.date : null
+}
+const produits = computed(() => lots.value.filter(l => {
+  const d = dateFinFab(l)
+  return d && (anneeSel.value === 0 || anYear(d) === anneeSel.value)
+}))
 const verifies = computed(() => produits.value.filter(l => l.ddl_verifie))
 const attente = computed(() => produits.value.filter(l => !l.ddl_verifie))
 const verifParMois = computed(() => {
@@ -252,7 +274,7 @@ async function devalider(l) {
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td class="desig">{{ prodNom(l) }}</td>
                 <td>{{ l.ddl_verificateur || '—' }}</td>
-                <td class="right nowrap">{{ fmtDate(l.date_fin_fabrication) }}</td>
+                <td class="right nowrap">{{ fmtDate(dateFinFab(l)) }}</td>
                 <td class="right"><button v-if="peutEditer" class="link" @click="ouvrir(l)">Vérifier</button></td>
               </tr>
               <tr v-if="verifEnCours === l.id">
