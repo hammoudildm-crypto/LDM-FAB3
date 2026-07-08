@@ -220,7 +220,7 @@ async function majDatesLot(oid) {
 function modifier(p) {
   Object.assign(form, {
     id: p.id, phase: p.phase, equipement_id: p.equipement_id || '',
-    quantite_entree: p.quantite_entree ?? '', quantite_sortie: p.quantite_sortie ?? '',
+    quantite_entree: (p.quantite_entree != null && p.quantite_entree !== '') ? p.quantite_entree : (entreeEffective(p) ?? ''), quantite_sortie: p.quantite_sortie ?? '',
     date_debut: p.date_debut || '', date_phase: p.date_phase || '', statut: p.statut || 'Terminé', commentaire: p.commentaire || ''
   })
 }
@@ -334,7 +334,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
                 <tr v-for="p in phases" :key="p.id">
                   <td class="strong">{{ p.phase }}</td>
                   <td>{{ p.equipements ? p.equipements.code : '—' }}</td>
-                  <td class="right">{{ fmt(p.quantite_entree) }}</td>
+                  <td class="right">{{ fmt(entreeEffective(p)) }}</td>
                   <td class="right">{{ fmt(p.quantite_sortie) }}</td>
                   <td class="right" :class="rendement(p) != null && rendement(p) < 95 ? 'rdt-bas' : ''">{{ fmtPct(rendement(p)) }}</td>
                   <td>{{ fmtDate(p.date_debut) }}</td>
