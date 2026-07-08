@@ -121,9 +121,20 @@ async function chargerPhases() {
   phases.value = r.data
 }
 
+const ORDRE_PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+// Entrée effective : la quantité entrée saisie, sinon la sortie de la phase précédente (repli)
+function entreeEffective(p) {
+  if (p.quantite_entree != null && p.quantite_entree !== '') return Number(p.quantite_entree)
+  const idx = ORDRE_PHASES.indexOf(p.phase)
+  for (let i = idx - 1; i >= 0; i--) {
+    const prev = phases.value.find(ph => ph.phase === ORDRE_PHASES[i] && ph.quantite_sortie != null && ph.quantite_sortie !== '')
+    if (prev) return Number(prev.quantite_sortie)
+  }
+  return null
+}
 function rendement(p) {
-  const e = p.quantite_entree, s = p.quantite_sortie
-  if (e == null || s == null || Number(e) === 0) return null
+  const e = entreeEffective(p), s = p.quantite_sortie
+  if (e == null || e === 0 || s == null || s === '') return null
   return (Number(s) / Number(e)) * 100
 }
 const rendementGlobal = computed(() => {
