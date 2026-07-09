@@ -34,7 +34,7 @@ async function charger() {
   msg.value = ''
   chargement.value = true
   const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, ddl_cond_verifie, ddl_cond_verificateur, ddl_cond_date_verification, produits(designation, code_pf)')
+    .select('id, numero_lot, ddl_cond_verifie, ddl_cond_verificateur, ddl_cond_date_verification, ddl_cond_date_envoi, produits(designation, code_pf)')
     .eq('actif', true))
   if (r.error) { msg.value = r.error.message; chargement.value = false; return }
   lots.value = r.data || []
@@ -65,8 +65,10 @@ function dateFinCond(l) {
 }
 
 // Lots dont le conditionnement est terminé (date de fin renseignée), pour l'année choisie
+// Date de référence : fin de conditionnement (appli), sinon date d'envoi importée
+function dateRef(l) { return dateFinCond(l) || l.ddl_cond_date_envoi || null }
 const dossiers = computed(() => lots.value.filter(l => {
-  const d = dateFinCond(l)
+  const d = dateRef(l)
   return d && (anneeSel.value === 0 || anYear(d) === anneeSel.value)
 }))
 const attente = computed(() => dossiers.value
@@ -153,18 +155,19 @@ async function devalider(l) {
         <div v-if="!attente.length" class="empty">Aucun dossier conditionnement en attente. 🎉</div>
         <div v-else class="table-scroll">
           <table class="mini">
-            <thead><tr><th>N° lot</th><th>Code</th><th>Produit</th><th class="right">Fin cond.</th><th class="right"></th></tr></thead>
+            <thead><tr><th>N° lot</th><th>Code</th><th>Produit</th><th class="right">Envoi DDL</th><th class="right">Fin cond.</th><th class="right"></th></tr></thead>
             <tbody>
               <template v-for="l in attente" :key="l.id">
                 <tr>
                   <td class="strong">{{ l.numero_lot }}</td>
                   <td>{{ l.produits ? l.produits.code_pf : '—' }}</td>
                   <td>{{ l.produits ? l.produits.designation : '—' }}</td>
+                  <td class="right nowrap">{{ fmtDate(l.ddl_cond_date_envoi) }}</td>
                   <td class="right nowrap">{{ fmtDate(dateFinCond(l)) }}</td>
                   <td class="right"><button v-if="peutEditer" class="link" @click="ouvrir(l)">Vérifier</button></td>
                 </tr>
                 <tr v-if="verifEnCours === l.id">
-                  <td colspan="5" class="verif-row">
+                  <td colspan="6" class="verif-row">
                     <span>Vérificateur :</span>
                     <input v-model="nomVerif" placeholder="Nom" @keyup.enter="valider(l)" />
                     <button class="btn sm" @click="valider(l)">Valider</button>
@@ -182,12 +185,13 @@ async function devalider(l) {
         <div v-if="!verifies.length" class="empty">Aucun dossier vérifié pour cette période.</div>
         <div v-else class="table-scroll">
           <table class="mini">
-            <thead><tr><th>N° lot</th><th>Code</th><th>Produit</th><th>Vérifié par</th><th class="right">Date</th><th class="right"></th></tr></thead>
+            <thead><tr><th>N° lot</th><th>Code</th><th>Produit</th><th class="right">Envoi DDL</th><th>Vérifié par</th><th class="right">Date</th><th class="right"></th></tr></thead>
             <tbody>
               <tr v-for="l in verifies" :key="l.id">
                 <td class="strong">{{ l.numero_lot }}</td>
                 <td>{{ l.produits ? l.produits.code_pf : '—' }}</td>
                 <td>{{ l.produits ? l.produits.designation : '—' }}</td>
+                <td class="right nowrap">{{ fmtDate(l.ddl_cond_date_envoi) }}</td>
                 <td>{{ l.ddl_cond_verificateur || '—' }}</td>
                 <td class="right nowrap">{{ fmtDate(l.ddl_cond_date_verification) }}</td>
                 <td class="right"><button v-if="peutEditer" class="link danger" @click="devalider(l)">Annuler</button></td>
