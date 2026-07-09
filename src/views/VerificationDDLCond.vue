@@ -2,6 +2,7 @@
 import { ref, computed, inject, onMounted } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
+import MiniChart from '../components/MiniChart.vue'
 import { ICONS, TINTS } from '../icons.js'
 
 const peutEditer = inject('peutEditer', ref(false))
@@ -81,6 +82,18 @@ const taux = computed(() => {
   const tot = dossiers.value.length
   return tot ? Math.round((nbVerifies.value / tot) * 100) : 0
 })
+const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+const verifParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const l of lots.value) {
+    if (!l.ddl_cond_verifie || !l.ddl_cond_date_verification) continue
+    const d = new Date(l.ddl_cond_date_verification)
+    if (anneeSel.value && d.getFullYear() !== anneeSel.value) continue
+    a[d.getMonth()]++
+  }
+  return a
+})
+const totalVerifAnnee = computed(() => verifParMois.value.reduce((s, x) => s + x, 0))
 
 // Vérification
 const verifEnCours = ref(null)
@@ -129,6 +142,11 @@ async function devalider(l) {
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><div class="kpi-val" :class="{ warn: nbAttente > 0 }">{{ fmt(nbAttente) }}</div></div><div class="kpi-lbl">En attente de vérification</div></div>
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><div class="kpi-val accent">{{ taux }} %</div></div><div class="kpi-lbl">{{ nbVerifies }} vérifiés</div></div>
       </div>
+
+      <section class="card" v-if="totalVerifAnnee">
+        <h3 class="card-title">Dossiers vérifiés par mois — {{ anneeSel || 'toutes années' }}</h3>
+        <MiniChart :series="[{ label: 'Dossiers vérifiés', color: '#2563eb', data: verifParMois }]" :labels="MOIS" :show-values="true" />
+      </section>
 
       <section class="card">
         <h3 class="card-title">En attente de vérification ({{ nbAttente }})</h3>
