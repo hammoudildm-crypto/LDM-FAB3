@@ -15,7 +15,7 @@ watch(sidebarMasquee, v => { try { localStorage.setItem('ldmfab-sidebar-masquee'
 const refreshTick = ref(0)
 // --- Synchronisation périodique automatique (recharge les pages de consultation) ---
 const AUTO_REFRESH_MS = 300000 // 5 minutes (filet de sécurité ; le temps réel gère l'instantané)
-const ROUTES_SANS_AUTO = ['/ordres', '/suivi', '/conditionnement', '/plan', '/referentiels', '/habilitations', '/effectifs', '/verification-ddl', '/compte', '/login']
+const ROUTES_SANS_AUTO = ['/ordres', '/suivi', '/conditionnement', '/plan', '/referentiels', '/habilitations', '/effectifs', '/verification-ddl', '/verification-ddl-cond', '/compte', '/login']
 let autoRefreshTimer = null
 function autoRefresh() {
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
@@ -72,6 +72,7 @@ const LINK_ICONS = {
   '/suivi': '<path d="M9 2v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V2"/><line x1="8" y1="2" x2="16" y2="2"/>',
   '/conditionnement': '<path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><polyline points="3 8 12 13 21 8"/><line x1="12" y1="13" x2="12" y2="21"/>',
   '/verification-ddl': '<circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/>',
+  '/verification-ddl-cond': '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 12l3 3 5-6"/>',
   '/effectifs': '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   '/referentiels': '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
   '/habilitations': '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
@@ -93,7 +94,8 @@ const NAV_GROUPS = [
     ['/ordres', 'Ordres de fabrication'],
     ['/suivi', 'Suivi fabrication'],
     ['/conditionnement', 'Conditionnement'],
-    ['/verification-ddl', 'Vérification DDL'],
+    ['/verification-ddl', 'DDL Fabrication'],
+    ['/verification-ddl-cond', 'DDL Conditionnement'],
     ['/effectifs', 'Effectifs'],
   ] },
   { key: 'admin', label: 'Administration', role: 'admin', icon: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>', links: [
@@ -114,7 +116,7 @@ function toggleGroup(key) {
 // Sous-menus repliés par défaut ; on les ouvre/ferme uniquement au clic sur le menu principal
 
 const PROD = ['/plan', '/ordres', '/suivi', '/encours', '/conditionnement', '/dossier']
-const PILOT = ['/ca', '/realisation-plan', '/rendement', '/dispo-equipements', '/avancement', '/production-atelier', '/effectifs', '/verification-ddl', '/audit', '/habilitations']
+const PILOT = ['/ca', '/realisation-plan', '/rendement', '/dispo-equipements', '/avancement', '/production-atelier', '/effectifs', '/verification-ddl', '/verification-ddl-cond', '/audit', '/habilitations']
 const prodActive = computed(() => PROD.includes(route.path))
 const pilotActive = computed(() => PILOT.includes(route.path))
 
