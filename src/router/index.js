@@ -14,6 +14,7 @@ import JournalAudit from '../views/JournalAudit.vue'
 import Habilitations from '../views/Habilitations.vue'
 import MonCompte from '../views/MonCompte.vue'
 import VerificationDDL from '../views/VerificationDDL.vue'
+import VerificationDDLCond from '../views/VerificationDDLCond.vue'
 import RealisationPlan from '../views/RealisationPlan.vue'
 import Rendement from '../views/Rendement.vue'
 import DisponibiliteEquipements from '../views/DisponibiliteEquipements.vue'
@@ -34,6 +35,7 @@ const routes = [
   { path: '/audit', name: 'audit', component: JournalAudit },
   { path: '/habilitations', name: 'habilitations', component: Habilitations },
   { path: '/verification-ddl', name: 'verification-ddl', component: VerificationDDL },
+  { path: '/verification-ddl-cond', name: 'verification-ddl-cond', component: VerificationDDLCond },
   { path: '/realisation-plan', name: 'realisation-plan', component: RealisationPlan },
   { path: '/rendement', name: 'rendement', component: Rendement },
   { path: '/dispo-equipements', name: 'dispo-equipements', component: DisponibiliteEquipements },
