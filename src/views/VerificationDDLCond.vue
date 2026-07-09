@@ -107,6 +107,17 @@ const envoyesParMois = computed(() => {
   return a
 })
 const totalEnvoyesAnnee = computed(() => envoyesParMois.value.reduce((s, x) => s + x, 0))
+const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+const moisSel = ref(null)
+function ouvrirMois(i) { moisSel.value = i }
+const dossiersDuMois = computed(() => {
+  if (moisSel.value == null) return []
+  return lots.value.filter(l => {
+    if (!l.ddl_cond_date_envoi) return false
+    const d = new Date(l.ddl_cond_date_envoi)
+    return (anneeSel.value === 0 || d.getFullYear() === anneeSel.value) && d.getMonth() === moisSel.value
+  }).sort((a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true }))
+})
 
 // Vérification
 const verifEnCours = ref(null)
@@ -158,7 +169,8 @@ async function devalider(l) {
 
       <section class="card" v-if="totalEnvoyesAnnee">
         <h3 class="card-title">Dossiers envoyés par mois — {{ anneeSel || 'toutes années' }}</h3>
-        <MiniChart :series="[{ label: 'Envoyés', color: '#0f766e', data: envoyesParMois }]" :labels="MOIS" :show-values="true" />
+        <MiniChart :series="[{ label: 'Envoyés', color: '#0f766e', data: envoyesParMois }]" :labels="MOIS" :show-values="true" :clickable="true" @pick="ouvrirMois" />
+        <p class="chart-hint">Clique sur une barre pour voir les dossiers envoyés ce mois-là.</p>
       </section>
 
       <section class="card">
@@ -213,6 +225,29 @@ async function devalider(l) {
       </section>
 
       <p class="hint">Un dossier apparaît ici dès que le <strong>conditionnement du lot est terminé</strong> (date de fin de conditionnement renseignée dans Conditionnement). La vérification est indépendante de celle de la fabrication.</p>
+
+      <div v-if="moisSel != null" class="modal-overlay" @click.self="moisSel = null">
+        <div class="modal">
+          <div class="modal-head">
+            <h3 class="modal-title">Dossiers envoyés — {{ MOIS_LONG[moisSel] }} {{ anneeSel }} ({{ dossiersDuMois.length }})</h3>
+            <button class="modal-close" @click="moisSel = null">✕</button>
+          </div>
+          <div class="modal-body">
+            <div v-if="!dossiersDuMois.length" class="empty">Aucun dossier envoyé ce mois-là.</div>
+            <table v-else class="mini">
+              <thead><tr><th>N° lot</th><th>Code</th><th>Produit</th><th class="right">Envoi DDL</th></tr></thead>
+              <tbody>
+                <tr v-for="l in dossiersDuMois" :key="l.id">
+                  <td class="strong">{{ l.numero_lot }}</td>
+                  <td>{{ l.produits ? l.produits.code_pf : '—' }}</td>
+                  <td>{{ l.produits ? l.produits.designation : '—' }}</td>
+                  <td class="right nowrap">{{ fmtDate(l.ddl_cond_date_envoi) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -254,4 +289,11 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .hint { color: #64748b; font-size: 13px; margin-top: 4px; }
 
 @media (max-width: 700px) { .kpi-grid { grid-template-columns: 1fr; } }
+.chart-hint { font-size: 12px; color: #94a3b8; margin: 8px 0 0; font-style: italic; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.modal { background: #fff; border-radius: 14px; width: min(680px, 100%); max-height: 82vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+.modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid #e2e8f0; }
+.modal-title { margin: 0; font-size: 16px; }
+.modal-close { margin-left: auto; background: none; border: 0; font-size: 18px; color: #64748b; cursor: pointer; line-height: 1; }
+.modal-body { overflow-y: auto; padding: 8px 18px 18px; }
 </style>
