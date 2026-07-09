@@ -156,9 +156,9 @@ async function devalider(l) {
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><div class="kpi-val accent">{{ taux }} %</div></div><div class="kpi-lbl">{{ nbVerifies }} vérifiés</div></div>
       </div>
 
-      <section class="card" v-if="totalEnvoyesAnnee || totalVerifAnnee">
-        <h3 class="card-title">Dossiers conditionnement par mois — {{ anneeSel || 'toutes années' }}</h3>
-        <MiniChart :series="[{ label: 'Envoyés', color: '#0f766e', data: envoyesParMois }, { label: 'Vérifiés', color: '#2563eb', data: verifParMois }]" :labels="MOIS" :show-values="true" />
+      <section class="card" v-if="totalEnvoyesAnnee">
+        <h3 class="card-title">Dossiers envoyés par mois — {{ anneeSel || 'toutes années' }}</h3>
+        <MiniChart :series="[{ label: 'Envoyés', color: '#0f766e', data: envoyesParMois }]" :labels="MOIS" :show-values="true" />
       </section>
 
       <section class="card">
