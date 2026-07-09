@@ -14,6 +14,7 @@ const anneeSel = ref(anneeCourante)
 
 const lots = ref([])
 const conds = ref([])
+const condList = ref([])
 const msg = ref('')
 const chargement = ref(true)
 
@@ -41,6 +42,8 @@ async function charger() {
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
     .select('ordre_id, date_conditionnement, date_fin, statut').eq('actif', true))
   if (!rc.error) conds.value = rc.data || []
+  const rv = await supabase.from('verificateurs_cond').select('nom').order('nom')
+  if (!rv.error) condList.value = rv.data.map(v => v.nom)
   chargement.value = false
 }
 onMounted(charger)
@@ -107,6 +110,19 @@ const envoyesParMois = computed(() => {
   return a
 })
 const totalEnvoyesAnnee = computed(() => envoyesParMois.value.reduce((s, x) => s + x, 0))
+const parVerificateurCond = computed(() => {
+  const m = {}
+  for (const nom of condList.value) if (nom) m[nom] = { nom, verifies: 0 }
+  for (const l of dossiers.value) {
+    if (!l.ddl_cond_verifie || !l.ddl_cond_verificateur) continue
+    const k = l.ddl_cond_verificateur
+    if (!m[k]) m[k] = { nom: k, verifies: 0 }
+    m[k].verifies++
+  }
+  const arr = Object.values(m).sort((a, b) => b.verifies - a.verifies)
+  const max = Math.max(1, ...arr.map(x => x.verifies))
+  return arr.map(x => ({ ...x, pct: Math.round((x.verifies / max) * 100) }))
+})
 const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const moisSel = ref(null)
 function ouvrirMois(i) { moisSel.value = i }
@@ -171,6 +187,15 @@ async function devalider(l) {
         <h3 class="card-title">Dossiers envoyés par mois — {{ anneeSel || 'toutes années' }}</h3>
         <MiniChart :series="[{ label: 'Envoyés', color: '#0f766e', data: envoyesParMois }]" :labels="MOIS" :show-values="true" :clickable="true" @pick="ouvrirMois" />
         <p class="chart-hint">Clique sur une barre pour voir les dossiers envoyés ce mois-là.</p>
+      </section>
+
+      <section class="card" v-if="parVerificateurCond.length">
+        <h3 class="card-title">Taux de vérification par vérificateur</h3>
+        <div v-for="v in parVerificateurCond" :key="v.nom" class="prog-row">
+          <span class="prog-nom">{{ v.nom }}</span>
+          <div class="prog-bar"><div class="prog-fill" :style="{ width: v.pct + '%' }"></div></div>
+          <span class="prog-val">{{ v.verifies }}</span>
+        </div>
       </section>
 
       <section class="card">
@@ -296,4 +321,9 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .modal-title { margin: 0; font-size: 16px; }
 .modal-close { margin-left: auto; background: none; border: 0; font-size: 18px; color: #64748b; cursor: pointer; line-height: 1; }
 .modal-body { overflow-y: auto; padding: 8px 18px 18px; }
+.prog-row { display: flex; align-items: center; gap: 12px; padding: 7px 0; }
+.prog-nom { flex: 0 0 160px; font-weight: 600; font-size: 14px; color: #1b2733; }
+.prog-bar { flex: 1; height: 10px; background: #eef2f6; border-radius: 6px; overflow: hidden; }
+.prog-fill { height: 100%; background: #2563eb; border-radius: 6px; }
+.prog-val { flex: 0 0 auto; font-weight: 700; font-size: 14px; color: #0f766e; min-width: 30px; text-align: right; }
 </style>
