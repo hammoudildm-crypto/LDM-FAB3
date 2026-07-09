@@ -14,6 +14,10 @@ const supList = ref([])
 const nouveauSup = ref('')
 const editSupId = ref(null)
 const editSupNom = ref('')
+const condList = ref([])
+const nouveauCond = ref('')
+const editCondId = ref(null)
+const editCondNom = ref('')
 const erreur = ref('')
 
 const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet']
@@ -62,7 +66,7 @@ function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
 
 // --- Équipement ---
 const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '' })
-const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false })
+const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false })
 function resetE() { Object.assign(formE, { id: null, code: '', nom: '', atelier_id: '', type: '' }) }
 
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
@@ -89,6 +93,8 @@ async function chargerTout() {
 
   const rS = await supabase.from('superviseurs').select('id, nom').order('nom')
   if (!rS.error) supList.value = rS.data
+  const rVC = await supabase.from('verificateurs_cond').select('id, nom').order('nom')
+  if (!rVC.error) condList.value = rVC.data
 }
 
 // --- Actions Vérificateurs ---
@@ -113,6 +119,32 @@ async function renommerSup(sv) {
 async function supprimerSup(sv) {
   if (!confirm('Supprimer le vérificateur « ' + sv.nom + ' » ?')) return
   const r = await supabase.from('superviseurs').delete().eq('id', sv.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  await chargerTout()
+}
+
+// --- Actions Vérificateurs conditionnement ---
+async function ajouterCond() {
+  const nom = nouveauCond.value.trim()
+  if (!nom) return
+  const r = await supabase.from('verificateurs_cond').insert({ nom })
+  if (r.error) { erreur.value = r.error.message; return }
+  nouveauCond.value = ''
+  await chargerTout()
+}
+function ouvrirEditCond(v) { editCondId.value = v.id; editCondNom.value = v.nom }
+async function renommerCond(v) {
+  const nom = editCondNom.value.trim()
+  if (!nom || nom === v.nom) { editCondId.value = null; return }
+  const r = await supabase.from('verificateurs_cond').update({ nom }).eq('id', v.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  await supabase.from('ordres_fabrication').update({ ddl_cond_verificateur: nom }).eq('ddl_cond_verificateur', v.nom)
+  editCondId.value = null
+  await chargerTout()
+}
+async function supprimerCond(v) {
+  if (!confirm('Supprimer le vérificateur conditionnement « ' + v.nom + ' » ?')) return
+  const r = await supabase.from('verificateurs_cond').delete().eq('id', v.id)
   if (r.error) { erreur.value = r.error.message; return }
   await chargerTout()
 }
@@ -466,6 +498,35 @@ onMounted(async () => {
             <template v-if="peutEditer">
               <button class="link" @click="ouvrirEditSup(sv)">Renommer</button>
               <button class="link danger" @click="supprimerSup(sv)">Supprimer</button>
+            </template>
+          </template>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head clickable" @click="ouvert.verifCond = !ouvert.verifCond">
+        <h2>Vérificateurs conditionnement</h2>
+        <span class="count">{{ condList.length }}</span>
+        <span class="chevron">{{ ouvert.verifCond ? '▾' : '▸' }}</span>
+      </div>
+      <div v-show="ouvert.verifCond">
+        <div class="sv-add" v-if="peutEditer">
+          <input v-model="nouveauCond" placeholder="Nom du vérificateur conditionnement" @keyup.enter="ajouterCond" />
+          <button class="btn" @click="ajouterCond">Ajouter</button>
+        </div>
+        <div v-if="!condList.length" class="empty">Aucun vérificateur conditionnement.</div>
+        <div v-for="v in condList" :key="v.id" class="sv-row">
+          <template v-if="editCondId === v.id">
+            <input v-model="editCondNom" class="sv-edit" @keyup.enter="renommerCond(v)" />
+            <button class="btn" @click="renommerCond(v)">OK</button>
+            <button class="link" @click="editCondId = null">Annuler</button>
+          </template>
+          <template v-else>
+            <span class="sv-nom">{{ v.nom }}</span>
+            <template v-if="peutEditer">
+              <button class="link" @click="ouvrirEditCond(v)">Renommer</button>
+              <button class="link danger" @click="supprimerCond(v)">Supprimer</button>
             </template>
           </template>
         </div>
