@@ -109,6 +109,13 @@ const condParMois = computed(() => {
 const planTotal = computed(() => planParMois.value.reduce((s, x) => s + x, 0))
 const fabTotal = computed(() => fabParMois.value.reduce((s, x) => s + x, 0))
 const condTotal = computed(() => condParMois.value.reduce((s, x) => s + x, 0))
+const moisCourant = new Date().getMonth()
+const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+const objectifMois = computed(() => planParMois.value[moisCourant])
+const fabMois = computed(() => fabParMois.value[moisCourant])
+const condMois = computed(() => condParMois.value[moisCourant])
+const moisTopFab = computed(() => { let idx = -1, mx = -1; fabParMois.value.forEach((v, i) => { if (v > mx) { mx = v; idx = i } }); return mx > 0 ? { nom: MOIS_LONG[idx], val: mx } : null })
+const moisTopCond = computed(() => { let idx = -1, mx = -1; condParMois.value.forEach((v, i) => { if (v > mx) { mx = v; idx = i } }); return mx > 0 ? { nom: MOIS_LONG[idx], val: mx } : null })
 
 // --- Valorisation CA (boîtes × PCSU) ---
 const planCA = computed(() => {
@@ -232,6 +239,34 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
       </div>
     </div>
 
+    <div class="kpi-grid k5">
+      <div class="kpi">
+        <div class="kpi-tag plan-tag">Objectif du mois</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(objectifMois) }}</div></div>
+        <div class="kpi-lbl">{{ MOIS_LONG[moisCourant] }} {{ anneeSel }} · boîtes</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-tag fab-tag">Fabrication du mois</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><div class="kpi-val">{{ fmt(fabMois) }}</div></div>
+        <div class="kpi-lbl">{{ MOIS_LONG[moisCourant] }} · réalisé</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-tag cond-tag">Conditionnement du mois</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(condMois) }}</div></div>
+        <div class="kpi-lbl">{{ MOIS_LONG[moisCourant] }} · réalisé</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-tag fab-tag">Meilleur mois — fab.</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><div class="kpi-val">{{ moisTopFab ? moisTopFab.nom : '—' }}</div></div>
+        <div class="kpi-lbl"><template v-if="moisTopFab">{{ fmt(moisTopFab.val) }} boîtes</template><template v-else>—</template></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-tag cond-tag">Meilleur mois — cond.</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ moisTopCond ? moisTopCond.nom : '—' }}</div></div>
+        <div class="kpi-lbl"><template v-if="moisTopCond">{{ fmt(moisTopCond.val) }} boîtes</template><template v-else>—</template></div>
+      </div>
+    </div>
+
     <section class="card">
       <div class="card-head">
         <h3 class="card-title">Comparaison mensuelle (boîtes)</h3>
@@ -297,6 +332,7 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 .kpi-grid { display: grid; gap: 14px; margin-bottom: 22px; }
 .kpi-grid.k3 { grid-template-columns: repeat(3, 1fr); }
 .kpi-grid.k4 { grid-template-columns: repeat(4, 1fr); }
+.kpi-grid.k5 { grid-template-columns: repeat(5, 1fr); }
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .kpi-tag { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 3px 8px; border-radius: 999px; margin-bottom: 8px; }
 .plan-tag { background: #f1f5f9; color: #475569; }
@@ -371,10 +407,10 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .empty { color: #94a3b8; font-style: italic; font-size: 13px; }
 
 @media (max-width: 980px) {
-  .kpi-grid.k4 { grid-template-columns: 1fr 1fr; }
+  .kpi-grid.k4, .kpi-grid.k5 { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 760px) {
-  .kpi-grid.k3, .kpi-grid.k4 { grid-template-columns: 1fr; }
+  .kpi-grid.k3, .kpi-grid.k4, .kpi-grid.k5 { grid-template-columns: 1fr; }
   .serie-val { width: 70px; }
 }
 </style>
