@@ -106,6 +106,20 @@ const lotsFiltres = computed(() => {
   })
 })
 const lotsAffiches = computed(() => lotsFiltres.value.slice(0, LIMITE))
+// Dernier numéro de lot enregistré (le plus élevé) + le suivant proposé
+const dernierLot = computed(() => {
+  const nums = lots.value.map(l => String(l.numero_lot || '').trim()).filter(Boolean)
+  if (!nums.length) return null
+  return nums.slice().sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).pop()
+})
+const prochainLot = computed(() => {
+  const d = dernierLot.value
+  if (!d) return null
+  const m = String(d).match(/^(.*?)(\d+)(\D*)$/)
+  if (!m) return null
+  const suivant = String(Number(m[2]) + 1).padStart(m[2].length, '0')
+  return m[1] + suivant + m[3]
+})
 const produitsForm = computed(() => {
   const q = rechProduit.value.trim().toLowerCase()
   if (!q) return produits.value
@@ -277,7 +291,7 @@ onMounted(async () => {
       <section class="card" v-if="peutEditer" ref="formCard">
         <h2 class="card-title">{{ form.id ? 'Modifier le lot' : 'Nouveau lot' }}</h2>
         <div class="form-grid">
-          <label>N° de lot<input v-model="form.numero_lot" placeholder="L260145" /></label>
+          <label>N° de lot<input v-model="form.numero_lot" placeholder="L260145" /><span v-if="dernierLot" class="lot-hint">Dernier lot : <b>{{ dernierLot }}</b><button v-if="prochainLot" type="button" class="lot-next" @click="form.numero_lot = prochainLot" title="Remplir avec le lot suivant">→ {{ prochainLot }}</button></span></label>
           <label class="wide">Produit
             <input v-model="rechProduit" type="search" class="prod-search" placeholder="Filtrer par code ou désignation…" />
             <select v-model="form.produit_id" @change="onProduitChange">
@@ -487,4 +501,8 @@ button.link.release { color: #166534; }
 .prod-search { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; width: 100%; box-sizing: border-box; margin-bottom: 5px; }
 .prod-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .hint-statut { font-weight: 500; font-size: 11px; color: #94a3b8; margin-top: 2px; }
+.lot-hint { display: block; margin-top: 5px; font-size: 12px; color: #64748b; font-weight: 500; }
+.lot-hint b { color: #0f766e; }
+.lot-next { margin-left: 8px; font-size: 12px; font-weight: 600; color: #0f766e; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 1px 7px; cursor: pointer; }
+.lot-next:hover { background: #d1fae5; }
 </style>
