@@ -108,17 +108,16 @@ const lotsFiltres = computed(() => {
 const lotsAffiches = computed(() => lotsFiltres.value.slice(0, LIMITE))
 // Dernier numéro de lot enregistré (le plus élevé) + le suivant proposé
 const dernierLot = computed(() => {
-  const nums = lots.value.map(l => String(l.numero_lot || '').trim()).filter(Boolean)
+  const nums = lots.value
+    .map(l => String(l.numero_lot || '').trim())
+    .filter(s => /^\d+$/.test(s))   // uniquement les numéros purement numériques
+    .map(Number)
   if (!nums.length) return null
-  return nums.slice().sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).pop()
+  return String(Math.max(...nums))
 })
 const prochainLot = computed(() => {
   const d = dernierLot.value
-  if (!d) return null
-  const m = String(d).match(/^(.*?)(\d+)(\D*)$/)
-  if (!m) return null
-  const suivant = String(Number(m[2]) + 1).padStart(m[2].length, '0')
-  return m[1] + suivant + m[3]
+  return d ? String(Number(d) + 1) : null
 })
 const produitsForm = computed(() => {
   const q = rechProduit.value.trim().toLowerCase()
