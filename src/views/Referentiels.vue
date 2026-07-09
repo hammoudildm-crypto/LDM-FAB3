@@ -91,7 +91,7 @@ async function chargerTout() {
   if (!rS.error) supList.value = rS.data
 }
 
-// --- Actions Superviseurs ---
+// --- Actions Vérificateurs ---
 async function ajouterSup() {
   const nom = nouveauSup.value.trim()
   if (!nom) return
@@ -111,7 +111,7 @@ async function renommerSup(sv) {
   await chargerTout()
 }
 async function supprimerSup(sv) {
-  if (!confirm('Supprimer le superviseur « ' + sv.nom + ' » ?')) return
+  if (!confirm('Supprimer le vérificateur « ' + sv.nom + ' » ?')) return
   const r = await supabase.from('superviseurs').delete().eq('id', sv.id)
   if (r.error) { erreur.value = r.error.message; return }
   await chargerTout()
@@ -445,16 +445,16 @@ onMounted(async () => {
 
     <section class="card">
       <div class="card-head clickable" @click="ouvert.superviseurs = !ouvert.superviseurs">
-        <h2>Superviseurs</h2>
+        <h2>Vérificateurs</h2>
         <span class="count">{{ supList.length }}</span>
         <span class="chevron">{{ ouvert.superviseurs ? '▾' : '▸' }}</span>
       </div>
       <div v-show="ouvert.superviseurs">
         <div class="sv-add" v-if="peutEditer">
-          <input v-model="nouveauSup" placeholder="Nom du superviseur" @keyup.enter="ajouterSup" />
+          <input v-model="nouveauSup" placeholder="Nom du vérificateur" @keyup.enter="ajouterSup" />
           <button class="btn" @click="ajouterSup">Ajouter</button>
         </div>
-        <div v-if="!supList.length" class="empty">Aucun superviseur.</div>
+        <div v-if="!supList.length" class="empty">Aucun vérificateur.</div>
         <div v-for="sv in supList" :key="sv.id" class="sv-row">
           <template v-if="editSupId === sv.id">
             <input v-model="editSupNom" class="sv-edit" @keyup.enter="renommerSup(sv)" />
