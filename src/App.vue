@@ -17,14 +17,30 @@ const refreshTick = ref(0)
 const AUTO_REFRESH_MS = 300000 // 5 minutes (filet de sécurité ; le temps réel gère l'instantané)
 const ROUTES_SANS_AUTO = ['/ordres', '/suivi', '/conditionnement', '/plan', '/referentiels', '/habilitations', '/effectifs', '/verification-ddl', '/verification-ddl-cond', '/compte', '/login']
 let autoRefreshTimer = null
+// Ne jamais recharger pendant qu'un opérateur saisit (champ focalisé) ou qu'une fenêtre est ouverte
+const refreshEnAttente = ref(false)
+function enSaisie() {
+  if (typeof document === 'undefined') return false
+  const el = document.activeElement
+  if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return true
+  if (document.querySelector('.modal-overlay, .modal')) return true
+  return false
+}
+function surFinSaisie() {
+  setTimeout(() => {
+    if (refreshEnAttente.value && !enSaisie() && !ROUTES_SANS_AUTO.includes(route.path)) { refreshEnAttente.value = false; refreshTick.value++ }
+  }, 500)
+}
 function autoRefresh() {
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
   if (ROUTES_SANS_AUTO.includes(route.path)) return  // ne pas interrompre un écran de saisie
+  if (enSaisie()) { refreshEnAttente.value = true; return }  // opérateur en train de saisir : on diffère
   refreshTick.value++
 }
 let canalSync = null
 function onDbChange() {
   if (ROUTES_SANS_AUTO.includes(route.path)) return  // pas de rechargement pendant une saisie
+  if (enSaisie()) { refreshEnAttente.value = true; return }  // opérateur en train de saisir : on diffère
   refreshTick.value++
 }
 
@@ -210,13 +226,14 @@ onMounted(async () => {
   supabase.auth.onAuthStateChange(async (_event, s) => { session.value = s; await chargerRole(); await chargerAlertes() })
   autoRefreshTimer = setInterval(autoRefresh, AUTO_REFRESH_MS)
   window.addEventListener('focus', autoRefresh)
+  document.addEventListener('focusout', surFinSaisie)
   canalSync = supabase.channel('sync-donnees')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'ordres_fabrication' }, onDbChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'suivi_phases' }, onDbChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'conditionnement' }, onDbChange)
     .subscribe()
 })
-onUnmounted(() => { document.removeEventListener('click', onDocClick); arreterPresence(); if (autoRefreshTimer) clearInterval(autoRefreshTimer); window.removeEventListener('focus', autoRefresh); if (canalSync) supabase.removeChannel(canalSync) })
+onUnmounted(() => { document.removeEventListener('click', onDocClick); arreterPresence(); if (autoRefreshTimer) clearInterval(autoRefreshTimer); window.removeEventListener('focus', autoRefresh); document.removeEventListener('focusout', surFinSaisie); if (canalSync) supabase.removeChannel(canalSync) })
 
 async function signOut() {
   arreterPresence()
