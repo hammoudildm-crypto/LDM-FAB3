@@ -108,12 +108,11 @@ const lotsFiltres = computed(() => {
 const lotsAffiches = computed(() => lotsFiltres.value.slice(0, LIMITE))
 // Dernier numéro de lot enregistré (le plus élevé) + le suivant proposé
 const dernierLot = computed(() => {
-  const nums = lots.value
-    .map(l => String(l.numero_lot || '').trim())
-    .filter(s => /^\d+$/.test(s))   // uniquement les numéros purement numériques
-    .map(Number)
-  if (!nums.length) return null
-  return String(Math.max(...nums))
+  // le dernier lot NUMÉRIQUE réellement enregistré (le plus récemment créé = id le plus élevé)
+  const num = lots.value
+    .filter(l => /^\d+$/.test(String(l.numero_lot || '').trim()))
+    .sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0))[0]
+  return num ? String(num.numero_lot).trim() : null
 })
 const prochainLot = computed(() => {
   const d = dernierLot.value
