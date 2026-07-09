@@ -138,10 +138,11 @@ const dossiersDuMois = computed(() => {
 // Vérification
 const verifEnCours = ref(null)
 const nomVerif = ref('')
-function ouvrir(l) { verifEnCours.value = l.id; nomVerif.value = l.ddl_cond_verificateur || '' }
+const nomAutre = ref('')
+function ouvrir(l) { verifEnCours.value = l.id; nomVerif.value = l.ddl_cond_verificateur || ''; nomAutre.value = '' }
 async function valider(l) {
-  const nom = nomVerif.value.trim()
-  if (!nom) { msg.value = 'Indiquer le nom du vérificateur.'; return }
+  const nom = (nomVerif.value === '__autre__' ? nomAutre.value : nomVerif.value).trim()
+  if (!nom) { msg.value = 'Choisir ou saisir le nom du vérificateur.'; return }
   const r = await supabase.from('ordres_fabrication').update({
     ddl_cond_verifie: true,
     ddl_cond_verificateur: nom,
@@ -217,7 +218,12 @@ async function devalider(l) {
                 <tr v-if="verifEnCours === l.id">
                   <td colspan="6" class="verif-row">
                     <span>Vérificateur :</span>
-                    <input v-model="nomVerif" placeholder="Nom" @keyup.enter="valider(l)" />
+                    <select v-model="nomVerif" class="verif-sel">
+                      <option value="">— Choisir —</option>
+                      <option v-for="v in condList" :key="v" :value="v">{{ v }}</option>
+                      <option value="__autre__">Autre…</option>
+                    </select>
+                    <input v-if="nomVerif === '__autre__'" v-model="nomAutre" placeholder="Nom" @keyup.enter="valider(l)" />
                     <button class="btn sm" @click="valider(l)">Valider</button>
                     <button class="link" @click="verifEnCours = null">Annuler</button>
                   </td>
@@ -306,7 +312,7 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .accent { color: #0f766e; }
 .empty { color: #94a3b8; text-align: center; padding: 18px; font-style: italic; }
 .verif-row { background: #f8fafc; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.verif-row input { font-size: 13px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 8px; }
+.verif-row input, .verif-row select { font-size: 13px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
 .btn { font-size: 13px; font-weight: 600; padding: 7px 12px; border: 0; border-radius: 8px; background: #0f766e; color: #fff; cursor: pointer; }
 .btn.sm { padding: 5px 12px; }
 .link { background: none; border: 0; color: #0f766e; font-weight: 600; cursor: pointer; font-size: 13px; }
