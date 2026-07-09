@@ -76,18 +76,19 @@ const phasesParLot = computed(() => {
 })
 // Date de fin de fabrication : la date renseignée, sinon la date de la DERNIÈRE phase de gamme si Terminé
 function dateFinFab(l) {
-  if (l.date_fin_fabrication) return l.date_fin_fabrication
   const g = (l.produits && Array.isArray(l.produits.gamme) && l.produits.gamme.length) ? l.produits.gamme : CANON_FAB
-  const derniere = g[g.length - 1]
-  const rec = phasesParLot.value[l.id] && phasesParLot.value[l.id][String(derniere).toLowerCase()]
-  return (rec && rec.statut === 'Terminé') ? rec.date : null
+  const rec = phasesParLot.value[l.id] && phasesParLot.value[l.id][String(g[g.length - 1]).toLowerCase()]
+  // Si la dernière phase de gamme est enregistrée, elle décide (Terminé => finie, sinon PAS finie même si date posée).
+  // Si elle n'est pas encore saisie, on se fie à la date de fin de fabrication.
+  if (rec) return rec.statut === 'Terminé' ? (rec.date || l.date_fin_fabrication) : null
+  return l.date_fin_fabrication || null
 }
 const produits = computed(() => lots.value.filter(l => {
   const d = dateFinFab(l)
   return d && (anneeSel.value === 0 || anYear(d) === anneeSel.value)
 }))
 const verifies = computed(() => produits.value.filter(l => l.ddl_verifie))
-const attente = computed(() => produits.value.filter(l => !l.ddl_verifie))
+const attente = computed(() => produits.value.filter(l => !l.ddl_verifie).sort((a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })))
 const verifParMois = computed(() => {
   const a = Array(12).fill(0)
   for (const l of lots.value) {
@@ -164,7 +165,7 @@ function fmtDate(d) {
 function exporterHistoriqueCSV() {
   const list = [...verifiesFiltres.value].sort((a, b) =>
     String(b.ddl_date_verification || '').localeCompare(String(a.ddl_date_verification || '')))
-  const rows = [['Lot', 'Code produit', 'Produit', 'Superviseur', 'Date vérification']]
+  const rows = [['Lot', 'Code produit', 'Produit', 'Vérificateur', 'Date vérification']]
   for (const l of list) rows.push([
     l.numero_lot || '', (l.produits && l.produits.code_pf) || '', prodNom(l),
     l.ddl_verificateur || '', fmtDate(l.ddl_date_verification)
@@ -192,7 +193,7 @@ function ouvrir(l) {
 async function valider(l) {
   msg.value = ''
   const nom = (superviseurChoix.value === '__autre__' ? nouveauSuperviseur.value : superviseurChoix.value).trim()
-  if (!nom) { msg.value = 'Choisis ou saisis le nom du superviseur.'; return }
+  if (!nom) { msg.value = 'Choisis ou saisis le nom du vérificateur.'; return }
   const r = await supabase.from('ordres_fabrication').update({
     ddl_verifie: true,
     ddl_verificateur: nom,
@@ -216,7 +217,7 @@ async function devalider(l) {
 <template>
   <div class="vd-page">
     <PageHeader title="Vérification des dossiers de lot" tone="violet"
-      subtitle="Suivi de la vérification des DDL de fabrication par superviseur">
+      subtitle="Suivi de la vérification des DDL de fabrication par vérificateur">
       <label class="annee-sel">Année
         <select v-model.number="anneeSel">
           <option :value="0">Toutes</option>
@@ -242,9 +243,9 @@ async function devalider(l) {
     <div class="cols">
       <section class="card">
         <div class="sup-head">
-          <h3 class="card-title">Taux de vérification par superviseur</h3>
+          <h3 class="card-title">Taux de vérification par vérificateur</h3>
           <div class="sup-filtre">
-            <button class="btn-filtre" type="button" @click="filtreSupOuvert = !filtreSupOuvert">Superviseurs<span v-if="supSuivis.length"> ({{ supSuivis.length }})</span> ▾</button>
+            <button class="btn-filtre" type="button" @click="filtreSupOuvert = !filtreSupOuvert">Vérificateurs<span v-if="supSuivis.length"> ({{ supSuivis.length }})</span> ▾</button>
             <div v-if="filtreSupOuvert" class="sup-backdrop" @click="filtreSupOuvert = false"></div>
             <div v-if="filtreSupOuvert" class="sup-menu">
               <label class="sup-opt"><input type="checkbox" :checked="!supSuivis.length" @change="supSuivis = []" /> Tous</label>
@@ -253,7 +254,7 @@ async function devalider(l) {
           </div>
         </div>
         <p class="hint">DDL envoyés à l'AQ ÷ DDL qui lui sont assignés</p>
-        <div v-if="!parSuperviseurFiltre.length" class="empty">Aucun superviseur pour ce filtre.</div>
+        <div v-if="!parSuperviseurFiltre.length" class="empty">Aucun vérificateur pour ce filtre.</div>
         <div v-for="s in parSuperviseurFiltre" :key="s.nom" class="prog-row">
           <div class="prog-head">
             <span class="prog-nom">{{ s.nom }}</span>
@@ -267,7 +268,7 @@ async function devalider(l) {
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <table v-else class="mini">
-          <thead><tr><th>Lot</th><th>Produit</th><th>Superviseur</th><th class="right">Fin fab.</th><th></th></tr></thead>
+          <thead><tr><th>Lot</th><th>Produit</th><th>Vérificateur</th><th class="right">Fin fab.</th><th></th></tr></thead>
           <tbody>
             <template v-for="l in attente" :key="l.id">
               <tr>
@@ -281,11 +282,11 @@ async function devalider(l) {
                 <td colspan="5">
                   <div class="verif-form">
                     <select v-model="superviseurChoix" class="sv-sel">
-                      <option value="">— Choisir un superviseur —</option>
+                      <option value="">— Choisir un vérificateur —</option>
                       <option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option>
                       <option value="__autre__">＋ Autre (saisir un nom)…</option>
                     </select>
-                    <input v-if="superviseurChoix === '__autre__'" list="superv-list" v-model="nouveauSuperviseur" placeholder="Nom du superviseur" />
+                    <input v-if="superviseurChoix === '__autre__'" list="superv-list" v-model="nouveauSuperviseur" placeholder="Nom du vérificateur" />
                     <input type="date" v-model="vForm.date" />
                     <button class="btn sm" @click="valider(l)">Valider</button>
                     <button class="link" @click="verifEnCours = null">Annuler</button>
@@ -303,7 +304,7 @@ async function devalider(l) {
         <h3 class="card-title">DDL vérifiés</h3>
         <span class="hist-count">{{ verifiesFiltres.length }}</span>
         <div class="hist-tools">
-          <input v-model="histRecherche" type="search" class="hist-search" placeholder="Rechercher (lot, produit, superviseur)…" />
+          <input v-model="histRecherche" type="search" class="hist-search" placeholder="Rechercher (lot, produit, vérificateur)…" />
           <label class="dlab">Du <input type="date" v-model="histDu" /></label>
           <label class="dlab">Au <input type="date" v-model="histAu" /></label>
           <button class="hist-exp" @click="exporterHistoriqueCSV" :disabled="!verifiesFiltres.length">Exporter CSV</button>
@@ -311,7 +312,7 @@ async function devalider(l) {
       </div>
       <div v-if="!verifiesFiltres.length" class="empty">Aucun DDL vérifié pour ces critères.</div>
       <table v-else class="mini">
-        <thead><tr><th>Lot</th><th>Produit</th><th>Superviseur</th><th class="right">Date d'envoi</th><th></th></tr></thead>
+        <thead><tr><th>Lot</th><th>Produit</th><th>Vérificateur</th><th class="right">Date d'envoi</th><th></th></tr></thead>
         <tbody>
           <template v-for="l in verifiesAffiches" :key="l.id">
             <tr>
@@ -328,11 +329,11 @@ async function devalider(l) {
               <td colspan="5">
                 <div class="verif-form">
                   <select v-model="superviseurChoix" class="sv-sel">
-                    <option value="">— Choisir un superviseur —</option>
+                    <option value="">— Choisir un vérificateur —</option>
                     <option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option>
                     <option value="__autre__">＋ Autre (saisir un nom)…</option>
                   </select>
-                  <input v-if="superviseurChoix === '__autre__'" list="superv-list" v-model="nouveauSuperviseur" placeholder="Nom du superviseur" />
+                  <input v-if="superviseurChoix === '__autre__'" list="superv-list" v-model="nouveauSuperviseur" placeholder="Nom du vérificateur" />
                   <input type="date" v-model="vForm.date" />
                   <button class="btn sm" @click="valider(l)">Enregistrer</button>
                   <button class="link" @click="verifEnCours = null">Annuler</button>
