@@ -96,6 +96,17 @@ const verifParMois = computed(() => {
   return a
 })
 const totalVerifAnnee = computed(() => verifParMois.value.reduce((s, x) => s + x, 0))
+const envoyesParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const l of lots.value) {
+    if (!l.ddl_cond_date_envoi) continue
+    const d = new Date(l.ddl_cond_date_envoi)
+    if (anneeSel.value && d.getFullYear() !== anneeSel.value) continue
+    a[d.getMonth()]++
+  }
+  return a
+})
+const totalEnvoyesAnnee = computed(() => envoyesParMois.value.reduce((s, x) => s + x, 0))
 
 // Vérification
 const verifEnCours = ref(null)
@@ -145,9 +156,9 @@ async function devalider(l) {
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><div class="kpi-val accent">{{ taux }} %</div></div><div class="kpi-lbl">{{ nbVerifies }} vérifiés</div></div>
       </div>
 
-      <section class="card" v-if="totalVerifAnnee">
-        <h3 class="card-title">Dossiers vérifiés par mois — {{ anneeSel || 'toutes années' }}</h3>
-        <MiniChart :series="[{ label: 'Dossiers vérifiés', color: '#2563eb', data: verifParMois }]" :labels="MOIS" :show-values="true" />
+      <section class="card" v-if="totalEnvoyesAnnee || totalVerifAnnee">
+        <h3 class="card-title">Dossiers conditionnement par mois — {{ anneeSel || 'toutes années' }}</h3>
+        <MiniChart :series="[{ label: 'Envoyés', color: '#0f766e', data: envoyesParMois }, { label: 'Vérifiés', color: '#2563eb', data: verifParMois }]" :labels="MOIS" :show-values="true" />
       </section>
 
       <section class="card">
