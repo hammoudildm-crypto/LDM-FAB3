@@ -50,14 +50,10 @@ const produitsFiltres = computed(() => {
   if (!q) return produits.value
   return produits.value.filter(p => (String(p.code_pf || '') + ' ' + String(p.designation || '')).toLowerCase().includes(q))
 })
-const uniteCad = computed(() => {
-  const c = cadences.value.find(c => c.equipement_id === equipId.value && c.produit_id === produitId.value)
-  return c && c.unite_cadence ? c.unite_cadence : 'unités/h'
-})
-const cadence = computed(() => {
-  const c = cadences.value.find(c => c.equipement_id === equipId.value && c.produit_id === produitId.value)
-  return c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0
-})
+const cadenceObj = computed(() => cadences.value.find(c => c.equipement_id === equipId.value && c.produit_id === produitId.value) || null)
+const cadence = computed(() => cadenceObj.value && cadenceObj.value.cadence_nominale != null ? Number(cadenceObj.value.cadence_nominale) : 0)
+const cadenceMode = computed(() => cadenceObj.value ? (cadenceObj.value.mode || 'debit') : 'debit')
+const uniteCad = computed(() => cadenceObj.value && cadenceObj.value.unite_cadence ? cadenceObj.value.unite_cadence : 'unités/h')
 
 function chargerContexte() {
   const ex = saisies.value.find(s => s.equipement_id === equipId.value && s.date === dateSel.value && s.poste === Number(poste.value))
@@ -75,8 +71,11 @@ const sommeArrets = computed(() => MOTIFS.reduce((s, m) => s + (Number(form[m[0]
 const tempsFonct = computed(() => Math.max(0, (Number(form.temps_ouverture_min) || 0) - sommeArrets.value))
 const dispo = computed(() => { const to = Number(form.temps_ouverture_min) || 0; return to ? tempsFonct.value / to : 0 })
 const perf = computed(() => {
-  const theo = (tempsFonct.value / 60) * cadence.value
-  return theo ? Math.min(1, (Number(form.production_realisee) || 0) / theo) : 0
+  const prod = Number(form.production_realisee) || 0
+  let theo
+  if (cadenceMode.value === 'cycle') theo = cadence.value ? tempsFonct.value / cadence.value : 0
+  else theo = (tempsFonct.value / 60) * cadence.value
+  return theo ? Math.min(1, prod / theo) : 0
 })
 const qualite = computed(() => {
   const p = Number(form.production_realisee) || 0
@@ -168,7 +167,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         </div>
         <div>
           <h3 class="card-title">Production</h3>
-          <label class="fl">Production réalisée ({{ uniteCad.replace('/h','') }})<input type="number" min="0" v-model.number="form.production_realisee" /></label>
+          <label class="fl">{{ cadenceMode === 'cycle' ? 'Nombre de lots réalisés' : 'Production réalisée (' + uniteCad.replace('/h','') + ')' }}<input type="number" min="0" v-model.number="form.production_realisee" /></label>
           <label class="fl">Rebuts<input type="number" min="0" v-model.number="form.rebuts" /></label>
           <label class="fl">Commentaire<input type="text" v-model="form.commentaire" placeholder="Optionnel" /></label>
 
