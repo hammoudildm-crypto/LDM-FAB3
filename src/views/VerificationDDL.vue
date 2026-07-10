@@ -97,6 +97,13 @@ const attenteParMois = computed(() => {
   }
   return a
 })
+const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+const moisSel = ref(null)
+function ouvrirMois(i) { moisSel.value = i }
+const lotsDuMois = computed(() => {
+  if (moisSel.value == null) return []
+  return attente.value.filter(l => { const d = dateFinFab(l); return d && new Date(d).getMonth() === moisSel.value })
+})
 const verifParMois = computed(() => {
   const a = Array(12).fill(0)
   for (const l of lots.value) {
@@ -244,7 +251,8 @@ async function devalider(l) {
 
     <section class="card">
       <h3 class="card-title">Dossiers en attente de vérification par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
-      <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" />
+      <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :clickable="true" @pick="ouvrirMois" :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" />
+      <p class="chart-hint-vd">Clique sur une barre pour voir les dossiers en attente ce mois-là.</p>
       <p v-if="!attenteParMois.some(v => v)" class="empty">Aucun DDL en attente<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
     </section>
 
@@ -365,6 +373,27 @@ async function devalider(l) {
     <datalist id="superv-list">
       <option v-for="s in superviseurs" :key="s" :value="s"></option>
     </datalist>
+    <div v-if="moisSel != null" class="vd-modal-overlay" @click.self="moisSel = null">
+      <div class="vd-modal">
+        <div class="vd-modal-head">
+          <h3 class="vd-modal-title">En attente de vérification — {{ MOIS_LONG[moisSel] }}<span v-if="anneeSel"> {{ anneeSel }}</span> ({{ lotsDuMois.length }})</h3>
+          <button class="vd-modal-close" @click="moisSel = null">✕</button>
+        </div>
+        <div class="vd-modal-body">
+          <div v-if="!lotsDuMois.length" class="empty">Aucun dossier en attente ce mois-là.</div>
+          <table v-else class="mini-vd">
+            <thead><tr><th>N° lot</th><th>Produit</th><th class="right">Fin fab.</th></tr></thead>
+            <tbody>
+              <tr v-for="l in lotsDuMois" :key="l.id">
+                <td class="strong">{{ l.numero_lot }}</td>
+                <td>{{ l.produits ? l.produits.designation : '—' }}</td>
+                <td class="right nowrap">{{ fmtDate(dateFinFab(l)) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -449,4 +478,17 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .sup-opt { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1b2733; padding: 6px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
 .sup-opt:hover { background: #f1f5f9; }
 .sup-opt input { width: 15px; height: 15px; accent-color: #0f766e; cursor: pointer; }
+.chart-hint-vd { font-size: 12px; color: #94a3b8; margin: 8px 0 0; font-style: italic; }
+.vd-modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.vd-modal { background: #fff; border-radius: 14px; width: min(640px, 100%); max-height: 82vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+.vd-modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid #e2e8f0; }
+.vd-modal-title { margin: 0; font-size: 16px; }
+.vd-modal-close { margin-left: auto; background: none; border: 0; font-size: 18px; color: #64748b; cursor: pointer; line-height: 1; }
+.vd-modal-body { overflow-y: auto; padding: 8px 18px 18px; }
+.mini-vd { width: 100%; border-collapse: collapse; font-size: 14px; }
+.mini-vd th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; }
+.mini-vd td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
+.mini-vd .right { text-align: right; }
+.mini-vd .strong { font-weight: 700; }
+.mini-vd .nowrap { white-space: nowrap; }
 </style>
