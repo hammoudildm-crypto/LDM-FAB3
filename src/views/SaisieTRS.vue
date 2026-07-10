@@ -14,6 +14,7 @@ const ok = ref('')
 
 const equipId = ref('')
 const produitId = ref('')
+const rechercheProduit = ref('')
 const dateSel = ref(new Date().toISOString().slice(0, 10))
 const poste = ref(1)
 const cadenceEdit = ref('')
@@ -45,6 +46,11 @@ async function charger() {
 onMounted(charger)
 
 const equip = computed(() => equipements.value.find(e => e.id === equipId.value))
+const produitsFiltres = computed(() => {
+  const q = rechercheProduit.value.trim().toLowerCase()
+  if (!q) return produits.value
+  return produits.value.filter(p => (String(p.code_pf || '') + ' ' + String(p.designation || '')).toLowerCase().includes(q))
+})
 const uniteCad = computed(() => {
   const c = cadences.value.find(c => c.equipement_id === equipId.value && c.produit_id === produitId.value)
   return c && c.unite_cadence ? c.unite_cadence : 'unités/h'
@@ -142,9 +148,10 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
           </select>
         </label>
         <label>Produit
+          <input class="prod-search" v-model="rechercheProduit" placeholder="Rechercher (code / nom)…" />
           <select v-model="produitId" @change="lookupCadence">
-            <option value="">— Choisir —</option>
-            <option v-for="p in produits" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
+            <option value="">— {{ produitsFiltres.length }} produit(s) —</option>
+            <option v-for="p in produitsFiltres" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
           </select>
         </label>
         <label>Date
@@ -230,6 +237,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 .sel-row label, .fl { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
 .sel-row select, .sel-row input, .fl input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 500; }
 .sel-row select { max-width: 320px; }
+.prod-search { font-size: 13px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 5px; max-width: 320px; }
 .cad-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; font-size: 14px; }
 .cad-lbl { font-weight: 600; color: #475569; }
 .cad-row input { font-size: 14px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; width: 130px; }
