@@ -133,9 +133,18 @@ const parVerificateurCond = computed(() => {
 })
 const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const moisSel = ref(null)
-function ouvrirMois(i) { moisSel.value = i }
+const modeMois = ref('attente')
+function ouvrirMois(i) { modeMois.value = 'attente'; moisSel.value = i }
+function ouvrirMoisVerif(i) { modeMois.value = 'verifies'; moisSel.value = i }
 const dossiersDuMois = computed(() => {
   if (moisSel.value == null) return []
+  if (modeMois.value === 'verifies') {
+    return lots.value.filter(l => {
+      if (!l.ddl_cond_date_envoi) return false
+      const d = new Date(l.ddl_cond_date_envoi)
+      return (anneeSel.value === 0 || d.getFullYear() === anneeSel.value) && d.getMonth() === moisSel.value
+    }).sort((a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true }))
+  }
   return attente.value.filter(l => {
     const d = dateFinCond(l)
     return d && new Date(d).getMonth() === moisSel.value
@@ -199,7 +208,8 @@ async function devalider(l) {
 
       <section class="card" v-if="totalVerifiesMois">
         <h3 class="card-title">Dossiers de lot conditionnement vérifiés par mois — {{ anneeSel || 'toutes années' }}</h3>
-        <MiniChart :series="[{ label: 'Vérifiés', color: '#2563eb', data: verifiesParMois }]" :labels="MOIS" :show-values="true" />
+        <MiniChart :series="[{ label: 'Vérifiés', color: '#2563eb', data: verifiesParMois }]" :labels="MOIS" :show-values="true" :clickable="true" @pick="ouvrirMoisVerif" />
+        <p class="chart-hint">Clique sur une barre pour voir les dossiers vérifiés ce mois-là.</p>
       </section>
 
       <section class="card" v-if="parVerificateurCond.length">
@@ -272,19 +282,19 @@ async function devalider(l) {
       <div v-if="moisSel != null" class="modal-overlay" @click.self="moisSel = null">
         <div class="modal">
           <div class="modal-head">
-            <h3 class="modal-title">Dossiers en attente — {{ MOIS_LONG[moisSel] }} {{ anneeSel }} ({{ dossiersDuMois.length }})</h3>
+            <h3 class="modal-title">{{ modeMois === 'verifies' ? 'Dossiers vérifiés' : 'Dossiers en attente' }} — {{ MOIS_LONG[moisSel] }} {{ anneeSel }} ({{ dossiersDuMois.length }})</h3>
             <button class="modal-close" @click="moisSel = null">✕</button>
           </div>
           <div class="modal-body">
-            <div v-if="!dossiersDuMois.length" class="empty">Aucun dossier en attente ce mois-là.</div>
+            <div v-if="!dossiersDuMois.length" class="empty">{{ modeMois === 'verifies' ? 'Aucun dossier vérifié' : 'Aucun dossier en attente' }} ce mois-là.</div>
             <table v-else class="mini">
-              <thead><tr><th>N° lot</th><th>Code</th><th>Produit</th><th class="right">Fin cond.</th></tr></thead>
+              <thead><tr><th>N° lot</th><th>Code</th><th>Produit</th><th class="right">{{ modeMois === 'verifies' ? 'Envoi DDL' : 'Fin cond.' }}</th></tr></thead>
               <tbody>
                 <tr v-for="l in dossiersDuMois" :key="l.id">
                   <td class="strong">{{ l.numero_lot }}</td>
                   <td>{{ l.produits ? l.produits.code_pf : '—' }}</td>
                   <td>{{ l.produits ? l.produits.designation : '—' }}</td>
-                  <td class="right nowrap">{{ fmtDate(dateFinCond(l)) }}</td>
+                  <td class="right nowrap">{{ modeMois === 'verifies' ? fmtDate(l.ddl_cond_date_envoi) : fmtDate(dateFinCond(l)) }}</td>
                 </tr>
               </tbody>
             </table>
