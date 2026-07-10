@@ -17,7 +17,6 @@ const produitId = ref('')
 const rechercheProduit = ref('')
 const dateSel = ref(new Date().toISOString().slice(0, 10))
 const poste = ref(1)
-const cadenceEdit = ref('')
 
 const form = reactive({
   temps_ouverture_min: 480,
@@ -55,12 +54,11 @@ const uniteCad = computed(() => {
   const c = cadences.value.find(c => c.equipement_id === equipId.value && c.produit_id === produitId.value)
   return c && c.unite_cadence ? c.unite_cadence : 'unités/h'
 })
-const cadence = computed(() => Number(cadenceEdit.value) || 0)
-
-function lookupCadence() {
+const cadence = computed(() => {
   const c = cadences.value.find(c => c.equipement_id === equipId.value && c.produit_id === produitId.value)
-  cadenceEdit.value = c && c.cadence_nominale != null ? c.cadence_nominale : ''
-}
+  return c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0
+})
+
 function chargerContexte() {
   const ex = saisies.value.find(s => s.equipement_id === equipId.value && s.date === dateSel.value && s.poste === Number(poste.value))
   if (ex) {
@@ -71,18 +69,6 @@ function chargerContexte() {
     form.rebuts = ex.rebuts || 0
     form.commentaire = ex.commentaire || ''
   }
-  lookupCadence()
-}
-
-async function majCadence() {
-  if (!equipId.value || !produitId.value) { msg.value = 'Choisir un équipement ET un produit.'; return }
-  const v = cadenceEdit.value === '' ? null : Number(cadenceEdit.value)
-  const r = await supabase.from('cadences_produit').upsert(
-    { equipement_id: equipId.value, produit_id: produitId.value, cadence_nominale: v },
-    { onConflict: 'equipement_id,produit_id' })
-  if (r.error) { msg.value = r.error.message; return }
-  await charger()
-  ok.value = 'Cadence enregistrée pour ce produit.'; setTimeout(() => ok.value = '', 2500)
 }
 
 const sommeArrets = computed(() => MOTIFS.reduce((s, m) => s + (Number(form[m[0]]) || 0), 0))
@@ -103,11 +89,7 @@ async function enregistrer() {
   msg.value = ''
   if (!equipId.value) { msg.value = 'Choisir un équipement.'; return }
   if (!produitId.value) { msg.value = 'Choisir le produit qui tournait sur ce poste.'; return }
-  if (!cadence.value) { msg.value = "Renseigner la cadence nominale de ce produit sur cet équipement (ci-dessus)."; return }
-  // mémoriser la cadence du couple équipement/produit
-  await supabase.from('cadences_produit').upsert(
-    { equipement_id: equipId.value, produit_id: produitId.value, cadence_nominale: Number(cadenceEdit.value) || null },
-    { onConflict: 'equipement_id,produit_id' })
+  if (!cadence.value) { msg.value = "Cadence non définie pour ce produit sur cet équipement — renseigne-la dans Référentiels › Cadences."; return }
   const payload = {
     equipement_id: equipId.value, produit_id: produitId.value, date: dateSel.value, poste: Number(poste.value),
     temps_ouverture_min: Number(form.temps_ouverture_min) || 0,
@@ -149,7 +131,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         </label>
         <label>Produit
           <input class="prod-search" v-model="rechercheProduit" placeholder="Rechercher (code / nom)…" />
-          <select v-model="produitId" @change="lookupCadence">
+          <select v-model="produitId">
             <option value="">— {{ produitsFiltres.length }} produit(s) —</option>
             <option v-for="p in produitsFiltres" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
           </select>
@@ -168,10 +150,8 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 
       <div v-if="equipId && produitId" class="cad-row">
         <span class="cad-lbl">Cadence de ce produit sur cet équipement :</span>
-        <input type="number" step="any" v-model="cadenceEdit" placeholder="ex. 60000" :disabled="!peutEditer" />
-        <span class="cad-unit">{{ uniteCad }}</span>
-        <button v-if="peutEditer" class="btn-sm" @click="majCadence">Enregistrer la cadence</button>
-        <span v-if="!cadence" class="cad-warn">⚠ cadence requise pour la performance</span>
+        <span class="cad-val">{{ cadence ? cadence.toLocaleString('fr-FR') + ' ' + uniteCad : '—' }}</span>
+        <span v-if="!cadence" class="cad-warn">⚠ non définie — à renseigner dans Référentiels › Cadences</span>
       </div>
       <p v-else class="hint">Choisis un équipement <b>et</b> un produit : la cadence est propre à chaque couple.</p>
     </section>
@@ -242,6 +222,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 .cad-lbl { font-weight: 600; color: #475569; }
 .cad-row input { font-size: 14px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; width: 130px; }
 .cad-unit { color: #64748b; }
+.cad-val { font-weight: 700; color: #4338ca; font-size: 15px; }
 .cad-warn { color: #d97706; font-size: 12px; font-weight: 600; }
 .hint { margin-top: 12px; color: #64748b; font-size: 13px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
