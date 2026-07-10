@@ -74,7 +74,7 @@ const dossiers = computed(() => lots.value.filter(l => {
   return d && (anneeSel.value === 0 || anYear(d) === anneeSel.value)
 }))
 const attente = computed(() => dossiers.value
-  .filter(l => !l.ddl_cond_verifie)
+  .filter(l => !l.ddl_cond_verifie && !l.ddl_cond_date_envoi)
   .sort((a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })))
 const verifies = computed(() => dossiers.value
   .filter(l => l.ddl_cond_verifie)
@@ -98,17 +98,15 @@ const verifParMois = computed(() => {
   return a
 })
 const totalVerifAnnee = computed(() => verifParMois.value.reduce((s, x) => s + x, 0))
-const envoyesParMois = computed(() => {
+const attenteParMois = computed(() => {
   const a = Array(12).fill(0)
-  for (const l of lots.value) {
-    if (!l.ddl_cond_date_envoi) continue
-    const d = new Date(l.ddl_cond_date_envoi)
-    if (anneeSel.value && d.getFullYear() !== anneeSel.value) continue
-    a[d.getMonth()]++
+  for (const l of attente.value) {
+    const d = dateFinCond(l)
+    if (d) a[new Date(d).getMonth()]++
   }
   return a
 })
-const totalEnvoyesAnnee = computed(() => envoyesParMois.value.reduce((s, x) => s + x, 0))
+const totalAttenteMois = computed(() => attenteParMois.value.reduce((s, x) => s + x, 0))
 const parVerificateurCond = computed(() => {
   const m = {}
   for (const nom of condList.value) if (nom) m[nom] = { nom, verifies: 0 }
@@ -127,10 +125,9 @@ const moisSel = ref(null)
 function ouvrirMois(i) { moisSel.value = i }
 const dossiersDuMois = computed(() => {
   if (moisSel.value == null) return []
-  return lots.value.filter(l => {
-    if (!l.ddl_cond_date_envoi) return false
-    const d = new Date(l.ddl_cond_date_envoi)
-    return (anneeSel.value === 0 || d.getFullYear() === anneeSel.value) && d.getMonth() === moisSel.value
+  return attente.value.filter(l => {
+    const d = dateFinCond(l)
+    return d && new Date(d).getMonth() === moisSel.value
   }).sort((a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true }))
 })
 
@@ -183,10 +180,10 @@ async function devalider(l) {
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><div class="kpi-val accent">{{ taux }} %</div></div><div class="kpi-lbl">{{ nbVerifies }} vérifiés</div></div>
       </div>
 
-      <section class="card" v-if="totalEnvoyesAnnee">
-        <h3 class="card-title">Dossiers envoyés par mois — {{ anneeSel || 'toutes années' }}</h3>
-        <MiniChart :series="[{ label: 'Envoyés', color: '#0f766e', data: envoyesParMois }]" :labels="MOIS" :show-values="true" :clickable="true" @pick="ouvrirMois" />
-        <p class="chart-hint">Clique sur une barre pour voir les dossiers envoyés ce mois-là.</p>
+      <section class="card" v-if="totalAttenteMois">
+        <h3 class="card-title">Dossiers en attente de vérification par mois — {{ anneeSel || 'toutes années' }}</h3>
+        <MiniChart :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" :labels="MOIS" :show-values="true" :clickable="true" @pick="ouvrirMois" />
+        <p class="chart-hint">Clique sur une barre pour voir les dossiers en attente ce mois-là.</p>
       </section>
 
       <section class="card" v-if="parVerificateurCond.length">
@@ -259,19 +256,19 @@ async function devalider(l) {
       <div v-if="moisSel != null" class="modal-overlay" @click.self="moisSel = null">
         <div class="modal">
           <div class="modal-head">
-            <h3 class="modal-title">Dossiers envoyés — {{ MOIS_LONG[moisSel] }} {{ anneeSel }} ({{ dossiersDuMois.length }})</h3>
+            <h3 class="modal-title">Dossiers en attente — {{ MOIS_LONG[moisSel] }} {{ anneeSel }} ({{ dossiersDuMois.length }})</h3>
             <button class="modal-close" @click="moisSel = null">✕</button>
           </div>
           <div class="modal-body">
-            <div v-if="!dossiersDuMois.length" class="empty">Aucun dossier envoyé ce mois-là.</div>
+            <div v-if="!dossiersDuMois.length" class="empty">Aucun dossier en attente ce mois-là.</div>
             <table v-else class="mini">
-              <thead><tr><th>N° lot</th><th>Code</th><th>Produit</th><th class="right">Envoi DDL</th></tr></thead>
+              <thead><tr><th>N° lot</th><th>Code</th><th>Produit</th><th class="right">Fin cond.</th></tr></thead>
               <tbody>
                 <tr v-for="l in dossiersDuMois" :key="l.id">
                   <td class="strong">{{ l.numero_lot }}</td>
                   <td>{{ l.produits ? l.produits.code_pf : '—' }}</td>
                   <td>{{ l.produits ? l.produits.designation : '—' }}</td>
-                  <td class="right nowrap">{{ fmtDate(l.ddl_cond_date_envoi) }}</td>
+                  <td class="right nowrap">{{ fmtDate(dateFinCond(l)) }}</td>
                 </tr>
               </tbody>
             </table>
