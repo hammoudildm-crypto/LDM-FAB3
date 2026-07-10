@@ -107,6 +107,17 @@ const attenteParMois = computed(() => {
   return a
 })
 const totalAttenteMois = computed(() => attenteParMois.value.reduce((s, x) => s + x, 0))
+const verifiesParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const l of lots.value) {
+    if (!l.ddl_cond_date_envoi) continue
+    const d = new Date(l.ddl_cond_date_envoi)
+    if (anneeSel.value && d.getFullYear() !== anneeSel.value) continue
+    a[d.getMonth()]++
+  }
+  return a
+})
+const totalVerifiesMois = computed(() => verifiesParMois.value.reduce((s, x) => s + x, 0))
 const parVerificateurCond = computed(() => {
   const m = {}
   for (const nom of condList.value) if (nom) m[nom] = { nom, verifies: 0 }
@@ -184,6 +195,11 @@ async function devalider(l) {
         <h3 class="card-title">Dossiers en attente de vérification par mois — {{ anneeSel || 'toutes années' }}</h3>
         <MiniChart :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" :labels="MOIS" :show-values="true" :clickable="true" @pick="ouvrirMois" />
         <p class="chart-hint">Clique sur une barre pour voir les dossiers en attente ce mois-là.</p>
+      </section>
+
+      <section class="card" v-if="totalVerifiesMois">
+        <h3 class="card-title">Dossiers de lot conditionnement vérifiés par mois — {{ anneeSel || 'toutes années' }}</h3>
+        <MiniChart :series="[{ label: 'Vérifiés', color: '#2563eb', data: verifiesParMois }]" :labels="MOIS" :show-values="true" />
       </section>
 
       <section class="card" v-if="parVerificateurCond.length">
