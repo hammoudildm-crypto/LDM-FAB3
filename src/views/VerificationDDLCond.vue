@@ -68,10 +68,9 @@ function dateFinCond(l) {
 }
 
 // Lots dont le conditionnement est terminé (date de fin renseignée), pour l'année choisie
-// Date de référence : fin de conditionnement (appli), sinon date d'envoi importée
-function dateRef(l) { return dateFinCond(l) || l.ddl_cond_date_envoi || null }
+// En attente de vérification = conditionnement TERMINÉ (date de fin renseignée) + pas encore vérifié
 const dossiers = computed(() => lots.value.filter(l => {
-  const d = dateRef(l)
+  const d = dateFinCond(l)
   return d && (anneeSel.value === 0 || anYear(d) === anneeSel.value)
 }))
 const attente = computed(() => dossiers.value
