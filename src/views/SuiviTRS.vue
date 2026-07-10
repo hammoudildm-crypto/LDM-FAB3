@@ -42,9 +42,44 @@ function cadenceDe(eq, pr) {
   return { value: c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0, mode: c ? (c.mode || 'debit') : 'debit' }
 }
 
+const equipFiltre = ref('')
+const equipList = computed(() => {
+  const m = {}
+  for (const s of postes.value) if (s.equipements && !m[s.equipement_id]) m[s.equipement_id] = { id: s.equipement_id, code: s.equipements.code, nom: s.equipements.nom }
+  return Object.values(m).sort((a, b) => String(a.code).localeCompare(String(b.code)))
+})
+const equipFiltreCode = computed(() => { const e = equipList.value.find(e => e.id === equipFiltre.value); return e ? e.code : '' })
+const postesFiltres = computed(() => equipFiltre.value ? postes.value.filter(s => s.equipement_id === equipFiltre.value) : postes.value)
+const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+const trsParMois = computed(() => {
+  const parM = {}
+  for (const s of postesFiltres.value) {
+    const mo = new Date(s.date).getMonth()
+    if (!parM[mo]) parM[mo] = { ouverture: 0, fonct: 0, theo: 0, prodPerf: 0, ecoule: 0, fonctPerf: 0, prodQual: 0, rebutsQual: 0 }
+    const a = parM[mo]
+    const to = s.temps_ouverture_min || 0
+    let arr = 0
+    for (const m of MOTIFS) arr += s[m[1]] || 0
+    const tf = Math.max(0, to - arr)
+    a.ouverture += to; a.fonct += tf
+    const cd = cadenceDe(s.equipement_id, s.produit_id)
+    if (cd.mode === 'cycle') { a.ecoule += Number(s.production_realisee) || 0; a.fonctPerf += tf }
+    else if (cd.value > 0) { a.theo += (tf / 60) * cd.value; a.prodPerf += Number(s.production_realisee) || 0; a.prodQual += Number(s.production_realisee) || 0; a.rebutsQual += Number(s.rebuts) || 0 }
+  }
+  const out = Array(12).fill(0)
+  for (let mo = 0; mo < 12; mo++) {
+    const a = parM[mo]; if (!a) continue
+    const dispo = a.ouverture ? a.fonct / a.ouverture : 0
+    const perf = a.theo ? Math.min(1, a.prodPerf / a.theo) : (a.fonctPerf ? Math.min(1, a.ecoule / a.fonctPerf) : 0)
+    const qualite = a.prodQual ? Math.max(0, (a.prodQual - a.rebutsQual) / a.prodQual) : 1
+    out[mo] = +((dispo * perf * qualite) * 100).toFixed(1)
+  }
+  return out
+})
+
 const parEquip = computed(() => {
   const m = {}
-  for (const s of postes.value) {
+  for (const s of postesFiltres.value) {
     const k = s.equipement_id
     if (!m[k]) m[k] = {
       id: k, code: s.equipements ? s.equipements.code : '?', nom: s.equipements ? s.equipements.nom : '',
@@ -108,6 +143,7 @@ const heures = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigi
     <PageHeader title="Suivi TRS" tone="indigo"
       subtitle="TRS par équipement, décomposé Disponibilité / Performance / Qualité, sur la période.">
       <div class="periode">
+        <label>Équipement <select v-model="equipFiltre"><option value="">Tous</option><option v-for="e in equipList" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option></select></label>
         <label>Du <input type="date" v-model="du" @change="charger" /></label>
         <label>Au <input type="date" v-model="au" @change="charger" /></label>
       </div>
@@ -130,6 +166,11 @@ const heures = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigi
         <section class="card">
           <h3 class="card-title">TRS par équipement</h3>
           <MiniChart :labels="labelsEquip" :format="v => v + ' %'" :value-format="v => v || ''" show-values :series="trsParEquipChart" />
+        </section>
+
+        <section class="card">
+          <h3 class="card-title">TRS par mois<span v-if="equipFiltre"> — {{ equipFiltreCode }}</span></h3>
+          <MiniChart :labels="MOIS" :format="v => v + ' %'" :value-format="v => v || ''" show-values :series="[{ label: 'TRS %', color: '#0f766e', data: trsParMois }]" />
         </section>
 
         <section class="card">
@@ -175,7 +216,7 @@ const heures = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigi
 .strs-page { color: #1b2733; }
 .periode { display: flex; gap: 12px; }
 .periode label { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 4px; }
-.periode input { font-size: 14px; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 600; }
+.periode input, .periode select { font-size: 14px; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 600; }
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .muted { color: #94a3b8; }
 .empty { color: #94a3b8; text-align: center; padding: 30px; font-style: italic; }
