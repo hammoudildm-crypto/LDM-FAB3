@@ -89,6 +89,14 @@ const produits = computed(() => lots.value.filter(l => {
 }))
 const verifies = computed(() => produits.value.filter(l => l.ddl_verifie))
 const attente = computed(() => produits.value.filter(l => !l.ddl_verifie).sort((a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })))
+const attenteParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const l of attente.value) {
+    const d = dateFinFab(l)
+    if (d) a[new Date(d).getMonth()]++
+  }
+  return a
+})
 const verifParMois = computed(() => {
   const a = Array(12).fill(0)
   for (const l of lots.value) {
@@ -233,6 +241,12 @@ async function devalider(l) {
       <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><div class="kpi-val" :class="{ warn: nbAttente > 0 }">{{ fmt(nbAttente) }}</div></div><div class="kpi-lbl">DDL en attente de vérification</div></div>
       <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><div class="kpi-val accent">{{ fmtPct(taux) }}</div></div><div class="kpi-lbl">Taux de vérification</div></div>
     </div>
+
+    <section class="card">
+      <h3 class="card-title">Dossiers en attente de vérification par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
+      <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" />
+      <p v-if="!attenteParMois.some(v => v)" class="empty">Aucun DDL en attente<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
+    </section>
 
     <section class="card">
       <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
