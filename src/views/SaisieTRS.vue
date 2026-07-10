@@ -12,6 +12,7 @@ const saisies = ref([])
 const msg = ref('')
 const ok = ref('')
 
+const phaseFiltre = ref('')
 const equipId = ref('')
 const produitId = ref('')
 const rechercheProduit = ref('')
@@ -45,6 +46,9 @@ async function charger() {
 onMounted(charger)
 
 const equip = computed(() => equipements.value.find(e => e.id === equipId.value))
+const phases = computed(() => { const s = new Set(); for (const e of equipements.value) if (e.type) s.add(e.type); return [...s].sort() })
+const equipementsFiltres = computed(() => phaseFiltre.value ? equipements.value.filter(e => e.type === phaseFiltre.value) : equipements.value)
+function onPhaseChange() { equipId.value = '' }
 const produitsFiltres = computed(() => {
   const q = rechercheProduit.value.trim().toLowerCase()
   if (!q) return produits.value
@@ -99,8 +103,15 @@ async function enregistrer() {
   for (const m of MOTIFS) payload[m[0]] = Number(form[m[0]]) || 0
   const r = await supabase.from('trs_postes').upsert(payload, { onConflict: 'equipement_id,date,poste' })
   if (r.error) { msg.value = r.error.message; return }
+  const trsFige = pct(trs.value)
   await charger()
-  ok.value = 'Poste enregistré (TRS ' + pct(trs.value) + ').'; setTimeout(() => ok.value = '', 3500)
+  ok.value = 'Poste enregistré (TRS ' + trsFige + ').'; setTimeout(() => ok.value = '', 3500)
+  // vider les champs pour la saisie suivante
+  form.temps_ouverture_min = 480
+  for (const m of MOTIFS) form[m[0]] = 0
+  form.production_realisee = 0
+  form.rebuts = 0
+  form.commentaire = ''
 }
 
 function trsSaisie(s) {
@@ -123,10 +134,16 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 
     <section class="card">
       <div class="sel-row">
+        <label>Phase / Atelier
+          <select v-model="phaseFiltre" @change="onPhaseChange">
+            <option value="">— Toutes —</option>
+            <option v-for="ph in phases" :key="ph" :value="ph">{{ ph }}</option>
+          </select>
+        </label>
         <label>Équipement
           <select v-model="equipId" @change="chargerContexte">
             <option value="">— Choisir —</option>
-            <option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
+            <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
           </select>
         </label>
         <label>Produit
