@@ -28,6 +28,12 @@ const editCadId = ref(null)
 const editCadValeur = ref('')
 const editCadUnite = ref('')
 const editCadMode = ref('debit')
+const rechercheProdCad = ref('')
+const produitsFiltresCad = computed(() => {
+  const q = rechercheProdCad.value.trim().toLowerCase()
+  if (!q) return produits.value
+  return produits.value.filter(p => (String(p.code_pf || '') + ' ' + String(p.designation || '')).toLowerCase().includes(q))
+})
 const erreur = ref('')
 
 const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet']
@@ -587,7 +593,8 @@ onMounted(async () => {
       <div v-show="ouvert.cadences">
         <div class="cad-form" v-if="peutEditer">
           <select v-model="cadEquip"><option value="">Équipement…</option><option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option></select>
-          <select v-model="cadProduit"><option value="">Produit…</option><option v-for="p in produits" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option></select>
+          <input v-model="rechercheProdCad" placeholder="Rechercher produit…" class="cad-prod-search" />
+          <select v-model="cadProduit"><option value="">— {{ produitsFiltresCad.length }} produit(s) —</option><option v-for="p in produitsFiltresCad" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option></select>
           <select v-model="cadMode"><option value="debit">Débit (unités/h ou kg/h)</option><option value="cycle">Temps écoulé (au poste)</option></select>
           <input v-if="cadMode === 'debit'" type="number" step="any" v-model="cadValeur" placeholder="cadence (ex. 60000)" />
           <select v-if="cadMode === 'debit'" v-model="cadUnite" class="cad-unite-in"><option value="unités/h">unités/h (conditionnement)</option><option value="kg/h">kg/h (fabrication)</option></select>
@@ -690,6 +697,7 @@ button.link.danger { color: #b91c1c; }
 .cad-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
 .cad-form select, .cad-form input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
 .cad-form select { max-width: 250px; }
+.cad-prod-search { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; max-width: 200px; }
 .cad-unite-in { width: 90px; }
 .cad-scroll { overflow-x: auto; }
 .ref-table { width: 100%; border-collapse: collapse; font-size: 14px; }
