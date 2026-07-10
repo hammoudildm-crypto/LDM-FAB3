@@ -6,11 +6,14 @@ import PageHeader from '../components/PageHeader.vue'
 const peutEditer = inject('peutEditer', ref(false))
 
 const equipements = ref([])
+const produits = ref([])
+const cadences = ref([])
 const saisies = ref([])
 const msg = ref('')
 const ok = ref('')
 
 const equipId = ref('')
+const produitId = ref('')
 const dateSel = ref(new Date().toISOString().slice(0, 10))
 const poste = ref(1)
 const cadenceEdit = ref('')
@@ -30,16 +33,51 @@ const MOTIFS = [
 ]
 
 async function charger() {
-  const re = await supabase.from('equipements').select('id, code, nom, type, cadence_nominale, unite_cadence').eq('actif', true).order('code')
+  const re = await supabase.from('equipements').select('id, code, nom, type').eq('actif', true).order('code')
   if (!re.error) equipements.value = re.data || []
-  const rs = await supabase.from('trs_postes').select('*, equipements(code, nom)').eq('actif', true).order('date', { ascending: false }).order('poste').limit(40)
+  const rp = await supabase.from('produits').select('id, code_pf, designation').eq('actif', true).order('code_pf')
+  if (!rp.error) produits.value = rp.data || []
+  const rc = await supabase.from('cadences_produit').select('*')
+  if (!rc.error) cadences.value = rc.data || []
+  const rs = await supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf)').eq('actif', true).order('date', { ascending: false }).order('poste').limit(40)
   if (!rs.error) saisies.value = rs.data || []
 }
 onMounted(charger)
 
 const equip = computed(() => equipements.value.find(e => e.id === equipId.value))
-const cadence = computed(() => equip.value ? Number(equip.value.cadence_nominale || 0) : 0)
-const uniteCad = computed(() => equip.value ? (equip.value.unite_cadence || 'unités/h') : 'unités/h')
+const uniteCad = computed(() => {
+  const c = cadences.value.find(c => c.equipement_id === equipId.value && c.produit_id === produitId.value)
+  return c && c.unite_cadence ? c.unite_cadence : 'unités/h'
+})
+const cadence = computed(() => Number(cadenceEdit.value) || 0)
+
+function lookupCadence() {
+  const c = cadences.value.find(c => c.equipement_id === equipId.value && c.produit_id === produitId.value)
+  cadenceEdit.value = c && c.cadence_nominale != null ? c.cadence_nominale : ''
+}
+function chargerContexte() {
+  const ex = saisies.value.find(s => s.equipement_id === equipId.value && s.date === dateSel.value && s.poste === Number(poste.value))
+  if (ex) {
+    if (ex.produit_id) produitId.value = ex.produit_id
+    form.temps_ouverture_min = ex.temps_ouverture_min
+    for (const m of MOTIFS) form[m[0]] = ex[m[0]] || 0
+    form.production_realisee = ex.production_realisee || 0
+    form.rebuts = ex.rebuts || 0
+    form.commentaire = ex.commentaire || ''
+  }
+  lookupCadence()
+}
+
+async function majCadence() {
+  if (!equipId.value || !produitId.value) { msg.value = 'Choisir un équipement ET un produit.'; return }
+  const v = cadenceEdit.value === '' ? null : Number(cadenceEdit.value)
+  const r = await supabase.from('cadences_produit').upsert(
+    { equipement_id: equipId.value, produit_id: produitId.value, cadence_nominale: v },
+    { onConflict: 'equipement_id,produit_id' })
+  if (r.error) { msg.value = r.error.message; return }
+  await charger()
+  ok.value = 'Cadence enregistrée pour ce produit.'; setTimeout(() => ok.value = '', 2500)
+}
 
 const sommeArrets = computed(() => MOTIFS.reduce((s, m) => s + (Number(form[m[0]]) || 0), 0))
 const tempsFonct = computed(() => Math.max(0, (Number(form.temps_ouverture_min) || 0) - sommeArrets.value))
@@ -55,34 +93,17 @@ const qualite = computed(() => {
 const trs = computed(() => dispo.value * perf.value * qualite.value)
 const pct = (x) => (x * 100).toFixed(1) + ' %'
 
-function chargerEquip() {
-  cadenceEdit.value = equip.value && equip.value.cadence_nominale != null ? equip.value.cadence_nominale : ''
-  // pré-remplir depuis une saisie existante (même équipement/date/poste)
-  const ex = saisies.value.find(s => s.equipement_id === equipId.value && s.date === dateSel.value && s.poste === Number(poste.value))
-  if (ex) {
-    form.temps_ouverture_min = ex.temps_ouverture_min
-    for (const m of MOTIFS) form[m[0]] = ex[m[0]] || 0
-    form.production_realisee = ex.production_realisee || 0
-    form.rebuts = ex.rebuts || 0
-    form.commentaire = ex.commentaire || ''
-  }
-}
-
-async function majCadence() {
-  if (!equip.value) return
-  const v = cadenceEdit.value === '' ? null : Number(cadenceEdit.value)
-  const r = await supabase.from('equipements').update({ cadence_nominale: v }).eq('id', equipId.value)
-  if (r.error) { msg.value = r.error.message; return }
-  await charger()
-  ok.value = 'Cadence enregistrée.'; setTimeout(() => ok.value = '', 2500)
-}
-
 async function enregistrer() {
   msg.value = ''
   if (!equipId.value) { msg.value = 'Choisir un équipement.'; return }
-  if (!cadence.value) { msg.value = 'Renseigner d\'abord la cadence nominale de l\'équipement (ci-dessus).'; return }
+  if (!produitId.value) { msg.value = 'Choisir le produit qui tournait sur ce poste.'; return }
+  if (!cadence.value) { msg.value = "Renseigner la cadence nominale de ce produit sur cet équipement (ci-dessus)."; return }
+  // mémoriser la cadence du couple équipement/produit
+  await supabase.from('cadences_produit').upsert(
+    { equipement_id: equipId.value, produit_id: produitId.value, cadence_nominale: Number(cadenceEdit.value) || null },
+    { onConflict: 'equipement_id,produit_id' })
   const payload = {
-    equipement_id: equipId.value, date: dateSel.value, poste: Number(poste.value),
+    equipement_id: equipId.value, produit_id: produitId.value, date: dateSel.value, poste: Number(poste.value),
     temps_ouverture_min: Number(form.temps_ouverture_min) || 0,
     production_realisee: Number(form.production_realisee) || 0,
     rebuts: Number(form.rebuts) || 0, commentaire: form.commentaire || null
@@ -94,14 +115,11 @@ async function enregistrer() {
   ok.value = 'Poste enregistré (TRS ' + pct(trs.value) + ').'; setTimeout(() => ok.value = '', 3500)
 }
 
-// TRS d'une saisie de la liste
 function trsSaisie(s) {
   const arr = MOTIFS.reduce((t, m) => t + (s[m[0]] || 0), 0)
   const to = s.temps_ouverture_min || 0
   const tf = Math.max(0, to - arr)
-  const d = to ? tf / to : 0
-  const cad = s.equipements ? 0 : 0 // cadence non jointe ici
-  return { d, arr, tf }
+  return { arr, tf }
 }
 const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 </script>
@@ -109,7 +127,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 <template>
   <div class="trs-page">
     <PageHeader title="Saisie TRS" tone="indigo"
-      subtitle="Temps, arrêts, production et rebuts par équipement et par poste (3×8).">
+      subtitle="Temps, arrêts, production et rebuts par équipement, produit et poste (3×8).">
     </PageHeader>
 
     <p v-if="msg" class="alert">{{ msg }}</p>
@@ -118,16 +136,22 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
     <section class="card">
       <div class="sel-row">
         <label>Équipement
-          <select v-model="equipId" @change="chargerEquip">
+          <select v-model="equipId" @change="chargerContexte">
             <option value="">— Choisir —</option>
             <option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
           </select>
         </label>
+        <label>Produit
+          <select v-model="produitId" @change="lookupCadence">
+            <option value="">— Choisir —</option>
+            <option v-for="p in produits" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
+          </select>
+        </label>
         <label>Date
-          <input type="date" v-model="dateSel" @change="chargerEquip" />
+          <input type="date" v-model="dateSel" @change="chargerContexte" />
         </label>
         <label>Poste
-          <select v-model.number="poste" @change="chargerEquip">
+          <select v-model.number="poste" @change="chargerContexte">
             <option :value="1">Poste 1</option>
             <option :value="2">Poste 2</option>
             <option :value="3">Poste 3</option>
@@ -135,16 +159,17 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         </label>
       </div>
 
-      <div v-if="equip" class="cad-row">
-        <span class="cad-lbl">Cadence nominale :</span>
+      <div v-if="equipId && produitId" class="cad-row">
+        <span class="cad-lbl">Cadence de ce produit sur cet équipement :</span>
         <input type="number" step="any" v-model="cadenceEdit" placeholder="ex. 60000" :disabled="!peutEditer" />
         <span class="cad-unit">{{ uniteCad }}</span>
         <button v-if="peutEditer" class="btn-sm" @click="majCadence">Enregistrer la cadence</button>
         <span v-if="!cadence" class="cad-warn">⚠ cadence requise pour la performance</span>
       </div>
+      <p v-else class="hint">Choisis un équipement <b>et</b> un produit : la cadence est propre à chaque couple.</p>
     </section>
 
-    <section v-if="equip" class="card">
+    <section v-if="equipId && produitId" class="card">
       <div class="grid2">
         <div>
           <h3 class="card-title">Temps du poste (minutes)</h3>
@@ -176,12 +201,13 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
       <div v-if="!saisies.length" class="empty">Aucune saisie pour l'instant.</div>
       <div v-else class="table-scroll">
         <table class="mini">
-          <thead><tr><th>Date</th><th>Poste</th><th>Équipement</th><th class="right">Ouv. (min)</th><th class="right">Arrêts</th><th class="right">Fonct.</th><th class="right">Nettoyage</th></tr></thead>
+          <thead><tr><th>Date</th><th>Poste</th><th>Équip.</th><th>Produit</th><th class="right">Ouv.</th><th class="right">Arrêts</th><th class="right">Fonct.</th><th class="right">Nettoyage</th></tr></thead>
           <tbody>
             <tr v-for="s in saisies" :key="s.id">
               <td class="nowrap">{{ s.date }}</td>
               <td>P{{ s.poste }}</td>
               <td>{{ s.equipements ? s.equipements.code : '—' }}</td>
+              <td>{{ s.produits ? s.produits.code_pf : '—' }}</td>
               <td class="right">{{ fmt(s.temps_ouverture_min) }}</td>
               <td class="right">{{ fmt(trsSaisie(s).arr) }}</td>
               <td class="right">{{ fmt(trsSaisie(s).tf) }}</td>
@@ -203,11 +229,13 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 .sel-row { display: flex; gap: 14px; flex-wrap: wrap; }
 .sel-row label, .fl { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
 .sel-row select, .sel-row input, .fl input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 500; }
+.sel-row select { max-width: 320px; }
 .cad-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; font-size: 14px; }
 .cad-lbl { font-weight: 600; color: #475569; }
 .cad-row input { font-size: 14px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; width: 130px; }
 .cad-unit { color: #64748b; }
 .cad-warn { color: #d97706; font-size: 12px; font-weight: 600; }
+.hint { margin-top: 12px; color: #64748b; font-size: 13px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
 .fl { margin-bottom: 10px; }
 .motifs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
