@@ -588,9 +588,9 @@ onMounted(async () => {
         <div class="cad-form" v-if="peutEditer">
           <select v-model="cadEquip"><option value="">Équipement…</option><option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option></select>
           <select v-model="cadProduit"><option value="">Produit…</option><option v-for="p in produits" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option></select>
-          <select v-model="cadMode"><option value="debit">Débit (unités/h)</option><option value="cycle">Temps de cycle (min/lot)</option></select>
+          <select v-model="cadMode"><option value="debit">Débit (unités/h ou kg/h)</option><option value="cycle">Temps de cycle (min/lot)</option></select>
           <input type="number" step="any" v-model="cadValeur" :placeholder="cadMode === 'cycle' ? 'min/lot (ex. 45)' : 'cadence (ex. 60000)'" />
-          <input v-if="cadMode === 'debit'" type="text" v-model="cadUnite" placeholder="unité" class="cad-unite-in" />
+          <select v-if="cadMode === 'debit'" v-model="cadUnite" class="cad-unite-in"><option value="unités/h">unités/h (conditionnement)</option><option value="kg/h">kg/h (fabrication)</option></select>
           <button class="btn" @click="ajouterCad">Enregistrer</button>
         </div>
         <div v-if="!cadList.length" class="empty">Aucune cadence définie.</div>
@@ -603,7 +603,7 @@ onMounted(async () => {
                 <td>{{ c.produits ? (c.produits.code_pf + ' — ' + c.produits.designation) : '—' }}</td>
                 <template v-if="editCadId === c.id">
                   <td class="right"><input type="number" step="any" v-model="editCadValeur" class="cad-edit-in" /></td>
-                  <td><select v-model="editCadMode" class="cad-edit-sel"><option value="debit">unités/h</option><option value="cycle">min/lot</option></select><input v-if="editCadMode === 'debit'" type="text" v-model="editCadUnite" class="cad-edit-in2" placeholder="unité" /></td>
+                  <td><select v-model="editCadMode" class="cad-edit-sel"><option value="debit">Débit</option><option value="cycle">Cycle</option></select><select v-if="editCadMode === 'debit'" v-model="editCadUnite" class="cad-edit-in2"><option value="unités/h">unités/h</option><option value="kg/h">kg/h</option></select></td>
                   <td class="right nowrap"><button class="link" @click="enregistrerCad(c)">OK</button> <button class="link" @click="editCadId = null">Annuler</button></td>
                 </template>
                 <template v-else>
