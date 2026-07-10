@@ -72,12 +72,12 @@ const tempsFonct = computed(() => Math.max(0, (Number(form.temps_ouverture_min) 
 const dispo = computed(() => { const to = Number(form.temps_ouverture_min) || 0; return to ? tempsFonct.value / to : 0 })
 const perf = computed(() => {
   const prod = Number(form.production_realisee) || 0
-  let theo
-  if (cadenceMode.value === 'cycle') theo = cadence.value ? tempsFonct.value / cadence.value : 0
-  else theo = (tempsFonct.value / 60) * cadence.value
+  if (cadenceMode.value === 'cycle') return tempsFonct.value ? Math.min(1, prod / tempsFonct.value) : 0
+  const theo = (tempsFonct.value / 60) * cadence.value
   return theo ? Math.min(1, prod / theo) : 0
 })
 const qualite = computed(() => {
+  if (cadenceMode.value === 'cycle') return 1
   const p = Number(form.production_realisee) || 0
   return p ? Math.max(0, (p - (Number(form.rebuts) || 0)) / p) : 0
 })
@@ -88,7 +88,8 @@ async function enregistrer() {
   msg.value = ''
   if (!equipId.value) { msg.value = 'Choisir un équipement.'; return }
   if (!produitId.value) { msg.value = 'Choisir le produit qui tournait sur ce poste.'; return }
-  if (!cadence.value) { msg.value = "Cadence non définie pour ce produit sur cet équipement — renseigne-la dans Référentiels › Cadences."; return }
+  if (!cadenceObj.value) { msg.value = "Ce produit sur cet équipement n'a pas de mode/cadence défini — renseigne-le dans Référentiels › Cadences."; return }
+  if (cadenceMode.value === 'debit' && !cadence.value) { msg.value = "Renseigner la cadence (débit) dans Référentiels › Cadences."; return }
   const payload = {
     equipement_id: equipId.value, produit_id: produitId.value, date: dateSel.value, poste: Number(poste.value),
     temps_ouverture_min: Number(form.temps_ouverture_min) || 0,
@@ -149,8 +150,9 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 
       <div v-if="equipId && produitId" class="cad-row">
         <span class="cad-lbl">Cadence de ce produit sur cet équipement :</span>
-        <span class="cad-val">{{ cadence ? cadence.toLocaleString('fr-FR') + ' ' + uniteCad : '—' }}</span>
-        <span v-if="!cadence" class="cad-warn">⚠ non définie — à renseigner dans Référentiels › Cadences</span>
+        <span class="cad-val" v-if="cadenceMode === 'cycle'">Mesuré au temps écoulé</span>
+        <span class="cad-val" v-else>{{ cadence ? cadence.toLocaleString('fr-FR') + ' ' + uniteCad : '—' }}</span>
+        <span v-if="cadenceMode === 'debit' && !cadence" class="cad-warn">⚠ non définie — à renseigner dans Référentiels › Cadences</span>
       </div>
       <p v-else class="hint">Choisis un équipement <b>et</b> un produit : la cadence est propre à chaque couple.</p>
     </section>
@@ -167,8 +169,8 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         </div>
         <div>
           <h3 class="card-title">Production</h3>
-          <label class="fl">{{ cadenceMode === 'cycle' ? 'Nombre de lots réalisés' : 'Production réalisée (' + uniteCad.replace('/h','') + ')' }}<input type="number" min="0" v-model.number="form.production_realisee" /></label>
-          <label class="fl">Rebuts<input type="number" min="0" v-model.number="form.rebuts" /></label>
+          <label class="fl">{{ cadenceMode === 'cycle' ? 'Temps écoulé (min)' : 'Production réalisée (' + uniteCad.replace('/h','') + ')' }}<input type="number" min="0" v-model.number="form.production_realisee" /></label>
+          <label v-if="cadenceMode !== 'cycle'" class="fl">Rebuts<input type="number" min="0" v-model.number="form.rebuts" /></label>
           <label class="fl">Commentaire<input type="text" v-model="form.commentaire" placeholder="Optionnel" /></label>
 
           <div class="trs-box">
