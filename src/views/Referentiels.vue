@@ -24,6 +24,10 @@ const cadProduit = ref('')
 const cadValeur = ref('')
 const cadUnite = ref('unités/h')
 const cadMode = ref('debit')
+const editCadId = ref(null)
+const editCadValeur = ref('')
+const editCadUnite = ref('')
+const editCadMode = ref('debit')
 const erreur = ref('')
 
 const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet']
@@ -173,6 +177,20 @@ async function supprimerCad(c) {
   if (!confirm('Supprimer cette cadence ?')) return
   const r = await supabase.from('cadences_produit').delete().eq('id', c.id)
   if (r.error) { erreur.value = r.error.message; return }
+  await chargerTout()
+}
+function ouvrirEditCad(c) {
+  editCadId.value = c.id
+  editCadValeur.value = c.cadence_nominale != null ? c.cadence_nominale : ''
+  editCadUnite.value = c.unite_cadence || 'unités/h'
+  editCadMode.value = c.mode || 'debit'
+}
+async function enregistrerCad(c) {
+  const v = editCadValeur.value === '' ? null : Number(editCadValeur.value)
+  const unite = editCadMode.value === 'cycle' ? 'min/lot' : (editCadUnite.value || 'unités/h')
+  const r = await supabase.from('cadences_produit').update({ cadence_nominale: v, unite_cadence: unite, mode: editCadMode.value }).eq('id', c.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  editCadId.value = null
   await chargerTout()
 }
 // --- Actions Donneur d'ordre ---
@@ -583,9 +601,16 @@ onMounted(async () => {
               <tr v-for="c in cadList" :key="c.id">
                 <td>{{ c.equipements ? c.equipements.code : '—' }}</td>
                 <td>{{ c.produits ? (c.produits.code_pf + ' — ' + c.produits.designation) : '—' }}</td>
-                <td class="right strong">{{ c.cadence_nominale != null ? Number(c.cadence_nominale).toLocaleString('fr-FR') : '—' }}</td>
-                <td>{{ c.unite_cadence }}</td>
-                <td class="right"><button v-if="peutEditer" class="link danger" @click="supprimerCad(c)">Supprimer</button></td>
+                <template v-if="editCadId === c.id">
+                  <td class="right"><input type="number" step="any" v-model="editCadValeur" class="cad-edit-in" /></td>
+                  <td><select v-model="editCadMode" class="cad-edit-sel"><option value="debit">unités/h</option><option value="cycle">min/lot</option></select><input v-if="editCadMode === 'debit'" type="text" v-model="editCadUnite" class="cad-edit-in2" placeholder="unité" /></td>
+                  <td class="right nowrap"><button class="link" @click="enregistrerCad(c)">OK</button> <button class="link" @click="editCadId = null">Annuler</button></td>
+                </template>
+                <template v-else>
+                  <td class="right strong">{{ c.cadence_nominale != null ? Number(c.cadence_nominale).toLocaleString('fr-FR') : '—' }}</td>
+                  <td>{{ c.unite_cadence }}</td>
+                  <td class="right nowrap"><button v-if="peutEditer" class="link" @click="ouvrirEditCad(c)">Modifier</button> <button v-if="peutEditer" class="link danger" @click="supprimerCad(c)">Supprimer</button></td>
+                </template>
               </tr>
             </tbody>
           </table>
@@ -672,4 +697,8 @@ button.link.danger { color: #b91c1c; }
 .ref-table td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .ref-table .right { text-align: right; }
 .ref-table .strong { font-weight: 700; }
+.ref-table .nowrap { white-space: nowrap; }
+.cad-edit-in { width: 90px; font-size: 13px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
+.cad-edit-in2 { width: 78px; font-size: 13px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; margin-left: 4px; }
+.cad-edit-sel { font-size: 13px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
 </style>
