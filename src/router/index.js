@@ -6,6 +6,7 @@ import PlanDirecteur from '../views/PlanDirecteur.vue'
 import OrdresFabrication from '../views/OrdresFabrication.vue'
 import SuiviPhases from '../views/SuiviPhases.vue'
 import Conditionnement from '../views/Conditionnement.vue'
+import SaisieTRS from '../views/SaisieTRS.vue'
 import DossierLot from '../views/DossierLot.vue'
 import ChiffreAffaires from '../views/ChiffreAffaires.vue'
 import Effectifs from '../views/Effectifs.vue'
@@ -28,6 +29,7 @@ const routes = [
   { path: '/ordres', name: 'ordres', component: OrdresFabrication },
   { path: '/suivi', name: 'suivi', component: SuiviPhases },
   { path: '/conditionnement', name: 'conditionnement', component: Conditionnement },
+  { path: '/saisie-trs', name: 'saisie-trs', component: SaisieTRS },
   { path: '/encours', name: 'encours', component: EnCours },
   { path: '/dossier', name: 'dossier', component: DossierLot },
   { path: '/ca', name: 'ca', component: ChiffreAffaires },
