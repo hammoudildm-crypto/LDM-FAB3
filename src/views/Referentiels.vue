@@ -18,6 +18,11 @@ const condList = ref([])
 const nouveauCond = ref('')
 const editCondId = ref(null)
 const editCondNom = ref('')
+const cadList = ref([])
+const cadEquip = ref('')
+const cadProduit = ref('')
+const cadValeur = ref('')
+const cadUnite = ref('unités/h')
 const erreur = ref('')
 
 const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet']
@@ -66,7 +71,7 @@ function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
 
 // --- Équipement ---
 const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '' })
-const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false })
+const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, cadences: false })
 function resetE() { Object.assign(formE, { id: null, code: '', nom: '', atelier_id: '', type: '' }) }
 
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
@@ -95,6 +100,8 @@ async function chargerTout() {
   if (!rS.error) supList.value = rS.data
   const rVC = await supabase.from('verificateurs_cond').select('id, nom').order('nom')
   if (!rVC.error) condList.value = rVC.data
+  const rCad = await supabase.from('cadences_produit').select('id, cadence_nominale, unite_cadence, equipement_id, produit_id, equipements(code), produits(code_pf, designation)').order('id', { ascending: false })
+  if (!rCad.error) cadList.value = rCad.data
 }
 
 // --- Actions Vérificateurs ---
@@ -145,6 +152,24 @@ async function renommerCond(v) {
 async function supprimerCond(v) {
   if (!confirm('Supprimer le vérificateur conditionnement « ' + v.nom + ' » ?')) return
   const r = await supabase.from('verificateurs_cond').delete().eq('id', v.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  await chargerTout()
+}
+
+// --- Cadences (équipement × produit) ---
+async function ajouterCad() {
+  if (!cadEquip.value || !cadProduit.value) { erreur.value = 'Choisir un équipement ET un produit.'; return }
+  const v = cadValeur.value === '' ? null : Number(cadValeur.value)
+  const r = await supabase.from('cadences_produit').upsert(
+    { equipement_id: cadEquip.value, produit_id: cadProduit.value, cadence_nominale: v, unite_cadence: cadUnite.value || 'unités/h' },
+    { onConflict: 'equipement_id,produit_id' })
+  if (r.error) { erreur.value = r.error.message; return }
+  cadValeur.value = ''
+  await chargerTout()
+}
+async function supprimerCad(c) {
+  if (!confirm('Supprimer cette cadence ?')) return
+  const r = await supabase.from('cadences_produit').delete().eq('id', c.id)
   if (r.error) { erreur.value = r.error.message; return }
   await chargerTout()
 }
@@ -532,6 +557,38 @@ onMounted(async () => {
         </div>
       </div>
     </section>
+
+    <section class="card">
+      <div class="card-head clickable" @click="ouvert.cadences = !ouvert.cadences">
+        <h2>Cadences (équipement × produit)</h2>
+        <span class="count">{{ cadList.length }}</span>
+        <span class="chevron">{{ ouvert.cadences ? '▾' : '▸' }}</span>
+      </div>
+      <div v-show="ouvert.cadences">
+        <div class="cad-form" v-if="peutEditer">
+          <select v-model="cadEquip"><option value="">Équipement…</option><option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option></select>
+          <select v-model="cadProduit"><option value="">Produit…</option><option v-for="p in produits" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option></select>
+          <input type="number" step="any" v-model="cadValeur" placeholder="Cadence" />
+          <input type="text" v-model="cadUnite" placeholder="unité" class="cad-unite-in" />
+          <button class="btn" @click="ajouterCad">Enregistrer</button>
+        </div>
+        <div v-if="!cadList.length" class="empty">Aucune cadence définie.</div>
+        <div class="cad-scroll" v-else>
+          <table class="ref-table">
+            <thead><tr><th>Équipement</th><th>Produit</th><th class="right">Cadence</th><th>Unité</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="c in cadList" :key="c.id">
+                <td>{{ c.equipements ? c.equipements.code : '—' }}</td>
+                <td>{{ c.produits ? (c.produits.code_pf + ' — ' + c.produits.designation) : '—' }}</td>
+                <td class="right strong">{{ c.cadence_nominale != null ? Number(c.cadence_nominale).toLocaleString('fr-FR') : '—' }}</td>
+                <td>{{ c.unite_cadence }}</td>
+                <td class="right"><button v-if="peutEditer" class="link danger" @click="supprimerCad(c)">Supprimer</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -602,4 +659,14 @@ button.link.danger { color: #b91c1c; }
 .sv-add input:focus, .sv-edit:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .sv-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eef2f6; }
 .sv-nom { flex: 1; font-size: 14px; font-weight: 600; color: #1b2733; }
+.cad-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
+.cad-form select, .cad-form input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
+.cad-form select { max-width: 250px; }
+.cad-unite-in { width: 90px; }
+.cad-scroll { overflow-x: auto; }
+.ref-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ref-table th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+.ref-table td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
+.ref-table .right { text-align: right; }
+.ref-table .strong { font-weight: 700; }
 </style>
