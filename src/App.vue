@@ -13,6 +13,7 @@ const sidebarOpen = ref(false)
 const sidebarMasquee = ref(false)
 watch(sidebarMasquee, v => { try { localStorage.setItem('ldmfab-sidebar-masquee', v ? '1' : '0') } catch (e) { /* ignore */ } })
 const refreshTick = ref(0)
+const presenceOuverte = ref(false)
 // --- Synchronisation périodique automatique (recharge les pages de consultation) ---
 const AUTO_REFRESH_MS = 300000 // 5 minutes (filet de sécurité ; le temps réel gère l'instantané)
 const ROUTES_SANS_AUTO = ['/ordres', '/suivi', '/conditionnement', '/plan', '/referentiels', '/habilitations', '/effectifs', '/verification-ddl', '/verification-ddl-cond', '/compte', '/login']
@@ -269,40 +270,6 @@ async function signOut() {
           </template>
         </template>
       </nav>
-      <div class="side-foot">
-        <button class="theme-toggle" @click="themeOuvert = !themeOuvert" :class="{ open: themeOuvert }">
-          <span class="tt-left"><span class="tt-dot" :class="'sw-' + theme"></span>Thème</span>
-          <span class="grp-caret">▾</span>
-        </button>
-        <div v-show="themeOuvert" class="theme-row" title="Thème">
-          <button v-for="t in THEMES" :key="t[0]" class="theme-dot" :class="['sw-' + t[0], { sel: theme === t[0] }]" @click="setTheme(t[0])" :title="t[1]"></button>
-        </div>
-        <div class="foot-row">
-          <div class="zoom-ctl" title="Zoom des pages">
-            <button class="zoom-btn" @click="changeZoom(-5)" :disabled="zoom <= 20" title="Réduire">−</button>
-            <button class="zoom-val" @click="setZoom(100)" title="Réinitialiser à 100 %">{{ zoom }}%</button>
-            <button class="zoom-btn" @click="changeZoom(5)" :disabled="zoom >= 200" title="Agrandir">+</button>
-          </div>
-          <button class="zoom-btn solo" @click="refreshTick++" title="Actualiser les données">⟳</button>
-          <button class="zoom-btn solo cloche" @click.stop="alertesOuvertes = !alertesOuvertes" :title="(alertes.length || 'Aucune') + ' alerte(s) de validité'">
-            🔔<span v-if="alertes.length" class="cloche-badge">{{ alertes.length }}</span>
-          </button>
-        </div>
-        <template v-if="session">
-          <div class="online-box" v-if="enLigne.length">
-            <div class="online-head"><span class="online-dot"></span> {{ enLigne.length }} en ligne</div>
-            <ul class="online-list">
-              <li v-for="u in enLigne" :key="u.id"><span class="online-nom">{{ nomEnLigne(u) }}</span><span v-if="session && u.id === session.user.id" class="online-moi">moi</span></li>
-            </ul>
-          </div>
-          <RouterLink to="/compte" class="side-link acct" @click="sidebarOpen = false">
-            <span>Mon compte</span>
-            <span v-if="role" class="role-badge" :class="'r-' + role">{{ roleLabel }}</span>
-          </RouterLink>
-          <button type="button" class="signout" @click="signOut">Déconnexion</button>
-        </template>
-        <RouterLink v-else to="/login" class="side-link" @click="sidebarOpen = false">Connexion</RouterLink>
-      </div>
     </aside>
 
     <div v-if="sidebarOpen" class="side-backdrop" @click="sidebarOpen = false"></div>
@@ -322,10 +289,37 @@ async function signOut() {
     </div>
 
     <div class="app-main">
-      <header class="mobile-top">
-        <button class="burger" @click="sidebarOpen = !sidebarOpen" aria-label="Ouvrir le menu">☰</button>
-        <span class="brand-wm">Prod<span class="brand-sub">Track</span></span>
-        <button class="zoom-btn solo" @click="refreshTick++" title="Actualiser" style="margin-left:auto">⟳</button>
+      <header class="app-topbar">
+        <button class="burger" @click="sidebarOpen = !sidebarOpen" aria-label="Menu">☰</button>
+        <span class="brand-wm tb-brand">Prod<span class="brand-sub">Track</span></span>
+        <div class="tb-spacer"></div>
+        <div class="tb-item" v-if="session && enLigne.length">
+          <button class="tb-icon" @click.stop="presenceOuverte = !presenceOuverte" :title="enLigne.length + ' en ligne'"><span class="online-dot"></span>{{ enLigne.length }}</button>
+          <div v-if="presenceOuverte" class="tb-drop">
+            <div class="tb-drop-head">{{ enLigne.length }} en ligne</div>
+            <ul class="online-list">
+              <li v-for="u in enLigne" :key="u.id"><span class="online-nom">{{ nomEnLigne(u) }}</span><span v-if="session && u.id === session.user.id" class="online-moi">moi</span></li>
+            </ul>
+          </div>
+        </div>
+        <div class="tb-item">
+          <button class="tb-icon" @click.stop="themeOuvert = !themeOuvert" title="Thème"><span class="tt-dot" :class="'sw-' + theme"></span></button>
+          <div v-if="themeOuvert" class="tb-drop theme-drop">
+            <button v-for="t in THEMES" :key="t[0]" class="theme-dot" :class="['sw-' + t[0], { sel: theme === t[0] }]" @click="setTheme(t[0]); themeOuvert = false" :title="t[1]"></button>
+          </div>
+        </div>
+        <div class="zoom-ctl" title="Zoom des pages">
+          <button class="zoom-btn" @click="changeZoom(-5)" :disabled="zoom <= 20" title="Réduire">−</button>
+          <button class="zoom-val" @click="setZoom(100)" title="Réinitialiser à 100 %">{{ zoom }}%</button>
+          <button class="zoom-btn" @click="changeZoom(5)" :disabled="zoom >= 200" title="Agrandir">+</button>
+        </div>
+        <button class="zoom-btn solo" @click="refreshTick++" title="Actualiser les données">⟳</button>
+        <button class="zoom-btn solo cloche" @click.stop="alertesOuvertes = !alertesOuvertes" :title="(alertes.length || 'Aucune') + ' alerte(s) de validité'">🔔<span v-if="alertes.length" class="cloche-badge">{{ alertes.length }}</span></button>
+        <template v-if="session">
+          <RouterLink to="/compte" class="tb-acct" @click="sidebarOpen = false" title="Mon compte">Compte<span v-if="role" class="role-badge" :class="'r-' + role">{{ roleLabel }}</span></RouterLink>
+          <button type="button" class="tb-signout" @click="signOut" title="Déconnexion">⏻</button>
+        </template>
+        <RouterLink v-else to="/login" class="tb-acct" @click="sidebarOpen = false">Connexion</RouterLink>
       </header>
       <main :style="{ zoom: zoom / 100 }">
         <RouterView :key="route.fullPath + '::' + refreshTick" />
@@ -569,4 +563,20 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .online-list li { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; color: var(--topbar-muted); }
 .online-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .online-moi { font-size: 10px; font-weight: 700; color: #22c55e; background: rgba(34,197,94,.15); padding: 1px 6px; border-radius: 999px; flex: none; }
+.app-topbar { display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 54px; background: var(--topbar); color: var(--topbar-text); position: sticky; top: 0; z-index: 40; box-shadow: 0 2px 10px rgba(0,0,0,.14); flex-wrap: wrap; }
+.app-topbar .burger { display: none; background: none; border: 0; color: var(--topbar-text); font-size: 22px; cursor: pointer; padding: 4px; line-height: 1; }
+.tb-brand { display: none; }
+.tb-spacer { flex: 1; }
+.tb-item { position: relative; }
+.tb-icon { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 1px solid var(--topbar-border); color: var(--topbar-muted); border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.tb-icon:hover { color: var(--topbar-text); border-color: var(--topbar-muted); }
+.tb-icon .tt-dot { width: 16px; height: 16px; border-radius: 5px; border: 1px solid rgba(255,255,255,.2); }
+.tb-drop { position: absolute; top: calc(100% + 6px); right: 0; background: var(--topbar); border: 1px solid var(--topbar-border); border-radius: 10px; padding: 10px; z-index: 50; box-shadow: 0 12px 30px rgba(0,0,0,.35); min-width: 190px; }
+.tb-drop.theme-drop { display: flex; flex-wrap: wrap; gap: 8px; width: 210px; min-width: 0; }
+.tb-drop-head { font-size: 12px; font-weight: 700; color: var(--topbar-text); margin-bottom: 6px; }
+.tb-acct { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--topbar-muted); font-size: 13px; font-weight: 600; padding: 6px 10px; border: 1px solid var(--topbar-border); border-radius: 8px; white-space: nowrap; }
+.tb-acct:hover { color: var(--topbar-text); border-color: var(--topbar-muted); }
+.tb-signout { background: transparent; color: var(--topbar-muted); border: 1px solid var(--topbar-border); padding: 6px 11px; border-radius: 8px; font-size: 15px; cursor: pointer; line-height: 1; }
+.tb-signout:hover { color: #fca5a5; border-color: #fca5a5; }
+@media (max-width: 900px) { .app-topbar .burger, .tb-brand { display: inline-flex; } .tb-acct { display: none; } }
 </style>
