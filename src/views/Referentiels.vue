@@ -23,6 +23,7 @@ const cadEquip = ref('')
 const cadProduit = ref('')
 const cadValeur = ref('')
 const cadUnite = ref('unités/h')
+const cadMode = ref('debit')
 const erreur = ref('')
 
 const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet']
@@ -100,7 +101,7 @@ async function chargerTout() {
   if (!rS.error) supList.value = rS.data
   const rVC = await supabase.from('verificateurs_cond').select('id, nom').order('nom')
   if (!rVC.error) condList.value = rVC.data
-  const rCad = await supabase.from('cadences_produit').select('id, cadence_nominale, unite_cadence, equipement_id, produit_id, equipements(code), produits(code_pf, designation)').order('id', { ascending: false })
+  const rCad = await supabase.from('cadences_produit').select('id, cadence_nominale, unite_cadence, mode, equipement_id, produit_id, equipements(code), produits(code_pf, designation)').order('id', { ascending: false })
   if (!rCad.error) cadList.value = rCad.data
 }
 
@@ -160,8 +161,9 @@ async function supprimerCond(v) {
 async function ajouterCad() {
   if (!cadEquip.value || !cadProduit.value) { erreur.value = 'Choisir un équipement ET un produit.'; return }
   const v = cadValeur.value === '' ? null : Number(cadValeur.value)
+  const unite = cadMode.value === 'cycle' ? 'min/lot' : (cadUnite.value || 'unités/h')
   const r = await supabase.from('cadences_produit').upsert(
-    { equipement_id: cadEquip.value, produit_id: cadProduit.value, cadence_nominale: v, unite_cadence: cadUnite.value || 'unités/h' },
+    { equipement_id: cadEquip.value, produit_id: cadProduit.value, cadence_nominale: v, unite_cadence: unite, mode: cadMode.value },
     { onConflict: 'equipement_id,produit_id' })
   if (r.error) { erreur.value = r.error.message; return }
   cadValeur.value = ''
@@ -568,8 +570,9 @@ onMounted(async () => {
         <div class="cad-form" v-if="peutEditer">
           <select v-model="cadEquip"><option value="">Équipement…</option><option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option></select>
           <select v-model="cadProduit"><option value="">Produit…</option><option v-for="p in produits" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option></select>
-          <input type="number" step="any" v-model="cadValeur" placeholder="Cadence" />
-          <input type="text" v-model="cadUnite" placeholder="unité" class="cad-unite-in" />
+          <select v-model="cadMode"><option value="debit">Débit (unités/h)</option><option value="cycle">Temps de cycle (min/lot)</option></select>
+          <input type="number" step="any" v-model="cadValeur" :placeholder="cadMode === 'cycle' ? 'min/lot (ex. 45)' : 'cadence (ex. 60000)'" />
+          <input v-if="cadMode === 'debit'" type="text" v-model="cadUnite" placeholder="unité" class="cad-unite-in" />
           <button class="btn" @click="ajouterCad">Enregistrer</button>
         </div>
         <div v-if="!cadList.length" class="empty">Aucune cadence définie.</div>
