@@ -16,7 +16,7 @@ const refreshTick = ref(0)
 const presenceOuverte = ref(false)
 // --- Synchronisation périodique automatique (recharge les pages de consultation) ---
 const AUTO_REFRESH_MS = 300000 // 5 minutes (filet de sécurité ; le temps réel gère l'instantané)
-const ROUTES_SANS_AUTO = ['/ordres', '/suivi', '/conditionnement', '/plan', '/referentiels', '/habilitations', '/effectifs', '/verification-ddl', '/verification-ddl-cond', '/compte', '/login']
+const ROUTES_SANS_AUTO = ['/ordres', '/suivi', '/conditionnement', '/saisie-trs', '/plan', '/referentiels', '/habilitations', '/effectifs', '/verification-ddl', '/verification-ddl-cond', '/compte', '/login']
 let autoRefreshTimer = null
 // Ne jamais recharger pendant qu'un opérateur saisit (champ focalisé) ou qu'une fenêtre est ouverte
 const refreshEnAttente = ref(false)
@@ -88,6 +88,7 @@ const LINK_ICONS = {
   '/ordres': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/>',
   '/suivi': '<path d="M9 2v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V2"/><line x1="8" y1="2" x2="16" y2="2"/>',
   '/conditionnement': '<path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><polyline points="3 8 12 13 21 8"/><line x1="12" y1="13" x2="12" y2="21"/>',
+  '/saisie-trs': '<path d="M3.34 19a10 10 0 1 1 17.32 0"/><path d="M12 14l4-4"/>',
   '/verification-ddl': '<circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/>',
   '/verification-ddl-cond': '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 12l3 3 5-6"/>',
   '/effectifs': '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -111,6 +112,7 @@ const NAV_GROUPS = [
     ['/ordres', 'Ordres de fabrication'],
     ['/suivi', 'Suivi fabrication'],
     ['/conditionnement', 'Conditionnement'],
+    ['/saisie-trs', 'Saisie TRS'],
     ['/verification-ddl', 'DDL Fabrication'],
     ['/verification-ddl-cond', 'DDL Conditionnement'],
     ['/effectifs', 'Effectifs'],
@@ -133,7 +135,7 @@ function toggleGroup(key) {
 // Sous-menus repliés par défaut ; on les ouvre/ferme uniquement au clic sur le menu principal
 
 const PROD = ['/plan', '/ordres', '/suivi', '/encours', '/conditionnement', '/dossier']
-const PILOT = ['/ca', '/realisation-plan', '/rendement', '/dispo-equipements', '/avancement', '/production-atelier', '/effectifs', '/verification-ddl', '/verification-ddl-cond', '/audit', '/habilitations']
+const PILOT = ['/ca', '/realisation-plan', '/rendement', '/dispo-equipements', '/avancement', '/production-atelier', '/saisie-trs', '/effectifs', '/verification-ddl', '/verification-ddl-cond', '/audit', '/habilitations']
 const prodActive = computed(() => PROD.includes(route.path))
 const pilotActive = computed(() => PILOT.includes(route.path))
 
