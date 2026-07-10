@@ -20,7 +20,7 @@ const dateSel = ref(new Date().toISOString().slice(0, 10))
 const poste = ref(1)
 
 const form = reactive({
-  temps_ouverture_min: 480,
+  temps_ouverture_min: 450,
   arret_panne_min: 0, arret_format_min: 0, arret_nettoyage_min: 0,
   arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
   production_realisee: 0, rebuts: 0, commentaire: ''
@@ -107,7 +107,7 @@ async function enregistrer() {
   await charger()
   ok.value = 'Poste enregistré (TRS ' + trsFige + ').'; setTimeout(() => ok.value = '', 3500)
   // vider les champs pour la saisie suivante
-  form.temps_ouverture_min = 480
+  form.temps_ouverture_min = 450
   for (const m of MOTIFS) form[m[0]] = 0
   form.production_realisee = 0
   form.rebuts = 0
@@ -178,7 +178,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
       <div class="grid2">
         <div>
           <h3 class="card-title">Temps du poste (minutes)</h3>
-          <label class="fl">Temps d'ouverture<input type="number" v-model.number="form.temps_ouverture_min" /></label>
+          <label class="fl">Temps d'ouverture (pause 30 min déduite)<input type="number" v-model.number="form.temps_ouverture_min" /></label>
           <div class="motifs">
             <label v-for="m in MOTIFS" :key="m[0]" class="fl" :class="{ hl: m[0] === 'arret_nettoyage_min' }">{{ m[1] }}<input type="number" min="0" v-model.number="form[m[0]]" /></label>
           </div>
