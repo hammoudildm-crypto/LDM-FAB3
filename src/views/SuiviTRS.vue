@@ -39,7 +39,7 @@ onMounted(charger)
 
 function cadenceDe(eq, pr) {
   const c = cadences.value.find(c => c.equipement_id === eq && c.produit_id === pr)
-  return c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0
+  return { value: c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0, mode: c ? (c.mode || 'debit') : 'debit' }
 }
 
 const parEquip = computed(() => {
@@ -59,8 +59,11 @@ const parEquip = computed(() => {
     e.ouverture += to; e.fonct += tf; e.nbPostes++
     e.prod += Number(s.production_realisee) || 0
     e.rebuts += Number(s.rebuts) || 0
-    const cad = cadenceDe(s.equipement_id, s.produit_id)
-    if (cad > 0) { e.theo += (tf / 60) * cad; e.prodPerf += Number(s.production_realisee) || 0 }
+    const cd = cadenceDe(s.equipement_id, s.produit_id)
+    if (cd.value > 0) {
+      e.theo += cd.mode === 'cycle' ? (tf / cd.value) : ((tf / 60) * cd.value)
+      e.prodPerf += Number(s.production_realisee) || 0
+    }
   }
   return Object.values(m).map(e => {
     const dispo = e.ouverture ? e.fonct / e.ouverture : 0
