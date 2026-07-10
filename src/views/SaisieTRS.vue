@@ -1,0 +1,231 @@
+<script setup>
+import { ref, reactive, computed, inject, onMounted } from 'vue'
+import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
+
+const peutEditer = inject('peutEditer', ref(false))
+
+const equipements = ref([])
+const saisies = ref([])
+const msg = ref('')
+const ok = ref('')
+
+const equipId = ref('')
+const dateSel = ref(new Date().toISOString().slice(0, 10))
+const poste = ref(1)
+const cadenceEdit = ref('')
+
+const form = reactive({
+  temps_ouverture_min: 480,
+  arret_panne_min: 0, arret_format_min: 0, arret_nettoyage_min: 0,
+  arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
+  production_realisee: 0, rebuts: 0, commentaire: ''
+})
+
+const MOTIFS = [
+  ['arret_panne_min', 'Panne'], ['arret_format_min', 'Changement de format'],
+  ['arret_nettoyage_min', 'Nettoyage'], ['arret_reglage_min', 'Réglage'],
+  ['arret_maintenance_min', 'Maintenance'], ['arret_attente_min', 'Attente (matière/perso.)'],
+  ['arret_autre_min', 'Autre']
+]
+
+async function charger() {
+  const re = await supabase.from('equipements').select('id, code, nom, type, cadence_nominale, unite_cadence').eq('actif', true).order('code')
+  if (!re.error) equipements.value = re.data || []
+  const rs = await supabase.from('trs_postes').select('*, equipements(code, nom)').eq('actif', true).order('date', { ascending: false }).order('poste').limit(40)
+  if (!rs.error) saisies.value = rs.data || []
+}
+onMounted(charger)
+
+const equip = computed(() => equipements.value.find(e => e.id === equipId.value))
+const cadence = computed(() => equip.value ? Number(equip.value.cadence_nominale || 0) : 0)
+const uniteCad = computed(() => equip.value ? (equip.value.unite_cadence || 'unités/h') : 'unités/h')
+
+const sommeArrets = computed(() => MOTIFS.reduce((s, m) => s + (Number(form[m[0]]) || 0), 0))
+const tempsFonct = computed(() => Math.max(0, (Number(form.temps_ouverture_min) || 0) - sommeArrets.value))
+const dispo = computed(() => { const to = Number(form.temps_ouverture_min) || 0; return to ? tempsFonct.value / to : 0 })
+const perf = computed(() => {
+  const theo = (tempsFonct.value / 60) * cadence.value
+  return theo ? Math.min(1, (Number(form.production_realisee) || 0) / theo) : 0
+})
+const qualite = computed(() => {
+  const p = Number(form.production_realisee) || 0
+  return p ? Math.max(0, (p - (Number(form.rebuts) || 0)) / p) : 0
+})
+const trs = computed(() => dispo.value * perf.value * qualite.value)
+const pct = (x) => (x * 100).toFixed(1) + ' %'
+
+function chargerEquip() {
+  cadenceEdit.value = equip.value && equip.value.cadence_nominale != null ? equip.value.cadence_nominale : ''
+  // pré-remplir depuis une saisie existante (même équipement/date/poste)
+  const ex = saisies.value.find(s => s.equipement_id === equipId.value && s.date === dateSel.value && s.poste === Number(poste.value))
+  if (ex) {
+    form.temps_ouverture_min = ex.temps_ouverture_min
+    for (const m of MOTIFS) form[m[0]] = ex[m[0]] || 0
+    form.production_realisee = ex.production_realisee || 0
+    form.rebuts = ex.rebuts || 0
+    form.commentaire = ex.commentaire || ''
+  }
+}
+
+async function majCadence() {
+  if (!equip.value) return
+  const v = cadenceEdit.value === '' ? null : Number(cadenceEdit.value)
+  const r = await supabase.from('equipements').update({ cadence_nominale: v }).eq('id', equipId.value)
+  if (r.error) { msg.value = r.error.message; return }
+  await charger()
+  ok.value = 'Cadence enregistrée.'; setTimeout(() => ok.value = '', 2500)
+}
+
+async function enregistrer() {
+  msg.value = ''
+  if (!equipId.value) { msg.value = 'Choisir un équipement.'; return }
+  if (!cadence.value) { msg.value = 'Renseigner d\'abord la cadence nominale de l\'équipement (ci-dessus).'; return }
+  const payload = {
+    equipement_id: equipId.value, date: dateSel.value, poste: Number(poste.value),
+    temps_ouverture_min: Number(form.temps_ouverture_min) || 0,
+    production_realisee: Number(form.production_realisee) || 0,
+    rebuts: Number(form.rebuts) || 0, commentaire: form.commentaire || null
+  }
+  for (const m of MOTIFS) payload[m[0]] = Number(form[m[0]]) || 0
+  const r = await supabase.from('trs_postes').upsert(payload, { onConflict: 'equipement_id,date,poste' })
+  if (r.error) { msg.value = r.error.message; return }
+  await charger()
+  ok.value = 'Poste enregistré (TRS ' + pct(trs.value) + ').'; setTimeout(() => ok.value = '', 3500)
+}
+
+// TRS d'une saisie de la liste
+function trsSaisie(s) {
+  const arr = MOTIFS.reduce((t, m) => t + (s[m[0]] || 0), 0)
+  const to = s.temps_ouverture_min || 0
+  const tf = Math.max(0, to - arr)
+  const d = to ? tf / to : 0
+  const cad = s.equipements ? 0 : 0 // cadence non jointe ici
+  return { d, arr, tf }
+}
+const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
+</script>
+
+<template>
+  <div class="trs-page">
+    <PageHeader title="Saisie TRS" tone="indigo"
+      subtitle="Temps, arrêts, production et rebuts par équipement et par poste (3×8).">
+    </PageHeader>
+
+    <p v-if="msg" class="alert">{{ msg }}</p>
+    <p v-if="ok" class="okmsg">{{ ok }}</p>
+
+    <section class="card">
+      <div class="sel-row">
+        <label>Équipement
+          <select v-model="equipId" @change="chargerEquip">
+            <option value="">— Choisir —</option>
+            <option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
+          </select>
+        </label>
+        <label>Date
+          <input type="date" v-model="dateSel" @change="chargerEquip" />
+        </label>
+        <label>Poste
+          <select v-model.number="poste" @change="chargerEquip">
+            <option :value="1">Poste 1</option>
+            <option :value="2">Poste 2</option>
+            <option :value="3">Poste 3</option>
+          </select>
+        </label>
+      </div>
+
+      <div v-if="equip" class="cad-row">
+        <span class="cad-lbl">Cadence nominale :</span>
+        <input type="number" step="any" v-model="cadenceEdit" placeholder="ex. 60000" :disabled="!peutEditer" />
+        <span class="cad-unit">{{ uniteCad }}</span>
+        <button v-if="peutEditer" class="btn-sm" @click="majCadence">Enregistrer la cadence</button>
+        <span v-if="!cadence" class="cad-warn">⚠ cadence requise pour la performance</span>
+      </div>
+    </section>
+
+    <section v-if="equip" class="card">
+      <div class="grid2">
+        <div>
+          <h3 class="card-title">Temps du poste (minutes)</h3>
+          <label class="fl">Temps d'ouverture<input type="number" v-model.number="form.temps_ouverture_min" /></label>
+          <div class="motifs">
+            <label v-for="m in MOTIFS" :key="m[0]" class="fl" :class="{ hl: m[0] === 'arret_nettoyage_min' }">{{ m[1] }}<input type="number" min="0" v-model.number="form[m[0]]" /></label>
+          </div>
+          <div class="sub">Σ arrêts : <b>{{ sommeArrets }}</b> min · Fonctionnement : <b>{{ tempsFonct }}</b> min</div>
+        </div>
+        <div>
+          <h3 class="card-title">Production</h3>
+          <label class="fl">Production réalisée ({{ uniteCad.replace('/h','') }})<input type="number" min="0" v-model.number="form.production_realisee" /></label>
+          <label class="fl">Rebuts<input type="number" min="0" v-model.number="form.rebuts" /></label>
+          <label class="fl">Commentaire<input type="text" v-model="form.commentaire" placeholder="Optionnel" /></label>
+
+          <div class="trs-box">
+            <div class="trs-line"><span>Disponibilité</span><b>{{ pct(dispo) }}</b></div>
+            <div class="trs-line"><span>Performance</span><b>{{ pct(perf) }}</b></div>
+            <div class="trs-line"><span>Qualité</span><b>{{ pct(qualite) }}</b></div>
+            <div class="trs-total"><span>TRS</span><b>{{ pct(trs) }}</b></div>
+          </div>
+          <button v-if="peutEditer" class="btn" @click="enregistrer">Enregistrer le poste</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Dernières saisies</h3>
+      <div v-if="!saisies.length" class="empty">Aucune saisie pour l'instant.</div>
+      <div v-else class="table-scroll">
+        <table class="mini">
+          <thead><tr><th>Date</th><th>Poste</th><th>Équipement</th><th class="right">Ouv. (min)</th><th class="right">Arrêts</th><th class="right">Fonct.</th><th class="right">Nettoyage</th></tr></thead>
+          <tbody>
+            <tr v-for="s in saisies" :key="s.id">
+              <td class="nowrap">{{ s.date }}</td>
+              <td>P{{ s.poste }}</td>
+              <td>{{ s.equipements ? s.equipements.code : '—' }}</td>
+              <td class="right">{{ fmt(s.temps_ouverture_min) }}</td>
+              <td class="right">{{ fmt(trsSaisie(s).arr) }}</td>
+              <td class="right">{{ fmt(trsSaisie(s).tf) }}</td>
+              <td class="right">{{ fmt(s.arret_nettoyage_min) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</template>
+
+<style scoped>
+.trs-page { color: #1b2733; }
+.alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
+.okmsg { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card-title { margin: 0 0 12px; font-size: 16px; }
+.sel-row { display: flex; gap: 14px; flex-wrap: wrap; }
+.sel-row label, .fl { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
+.sel-row select, .sel-row input, .fl input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 500; }
+.cad-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; font-size: 14px; }
+.cad-lbl { font-weight: 600; color: #475569; }
+.cad-row input { font-size: 14px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; width: 130px; }
+.cad-unit { color: #64748b; }
+.cad-warn { color: #d97706; font-size: 12px; font-weight: 600; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.fl { margin-bottom: 10px; }
+.motifs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fl.hl input { border-color: #0f766e; background: #f0fdfa; }
+.sub { font-size: 13px; color: #64748b; margin-top: 8px; }
+.trs-box { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin: 14px 0; background: #f8fafc; }
+.trs-line { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; color: #475569; }
+.trs-line b { color: #1b2733; }
+.trs-total { display: flex; justify-content: space-between; padding: 8px 0 2px; margin-top: 6px; border-top: 2px solid #e2e8f0; font-size: 17px; font-weight: 700; }
+.trs-total b { color: #4338ca; }
+.btn { font-size: 14px; font-weight: 600; padding: 9px 16px; border: 0; border-radius: 8px; background: #4338ca; color: #fff; cursor: pointer; }
+.btn-sm { font-size: 13px; font-weight: 600; padding: 6px 12px; border: 1px solid #4338ca; border-radius: 8px; background: #fff; color: #4338ca; cursor: pointer; }
+.table-scroll { overflow-x: auto; }
+table.mini { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.mini th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
+.right { text-align: right; }
+.nowrap { white-space: nowrap; }
+.empty { color: #94a3b8; text-align: center; padding: 16px; font-style: italic; }
+@media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } .motifs { grid-template-columns: 1fr; } }
+</style>
