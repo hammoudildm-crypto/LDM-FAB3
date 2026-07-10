@@ -48,7 +48,7 @@ const parEquip = computed(() => {
     const k = s.equipement_id
     if (!m[k]) m[k] = {
       id: k, code: s.equipements ? s.equipements.code : '?', nom: s.equipements ? s.equipements.nom : '',
-      ouverture: 0, fonct: 0, prod: 0, rebuts: 0, theo: 0, prodPerf: 0, nbPostes: 0,
+      ouverture: 0, fonct: 0, theo: 0, prodPerf: 0, ecoule: 0, fonctPerf: 0, prodQual: 0, rebutsQual: 0, nbPostes: 0,
       arrets: { panne: 0, format: 0, nettoyage: 0, reglage: 0, maintenance: 0, attente: 0, autre: 0 }
     }
     const e = m[k]
@@ -57,18 +57,21 @@ const parEquip = computed(() => {
     for (const mo of MOTIFS) { const v = s[mo[1]] || 0; e.arrets[mo[0]] += v; arr += v }
     const tf = Math.max(0, to - arr)
     e.ouverture += to; e.fonct += tf; e.nbPostes++
-    e.prod += Number(s.production_realisee) || 0
-    e.rebuts += Number(s.rebuts) || 0
     const cd = cadenceDe(s.equipement_id, s.produit_id)
-    if (cd.value > 0) {
-      e.theo += cd.mode === 'cycle' ? (tf / cd.value) : ((tf / 60) * cd.value)
+    if (cd.mode === 'cycle') {
+      e.ecoule += Number(s.production_realisee) || 0
+      e.fonctPerf += tf
+    } else if (cd.value > 0) {
+      e.theo += (tf / 60) * cd.value
       e.prodPerf += Number(s.production_realisee) || 0
+      e.prodQual += Number(s.production_realisee) || 0
+      e.rebutsQual += Number(s.rebuts) || 0
     }
   }
   return Object.values(m).map(e => {
     const dispo = e.ouverture ? e.fonct / e.ouverture : 0
-    const perf = e.theo ? Math.min(1, e.prodPerf / e.theo) : 0
-    const qualite = e.prod ? Math.max(0, (e.prod - e.rebuts) / e.prod) : 0
+    const perf = e.theo ? Math.min(1, e.prodPerf / e.theo) : (e.fonctPerf ? Math.min(1, e.ecoule / e.fonctPerf) : 0)
+    const qualite = e.prodQual ? Math.max(0, (e.prodQual - e.rebutsQual) / e.prodQual) : 1
     return { ...e, dispo, perf, qualite, trs: dispo * perf * qualite, pctNettoyage: e.ouverture ? e.arrets.nettoyage / e.ouverture : 0 }
   }).sort((a, b) => b.trs - a.trs)
 })
@@ -85,12 +88,9 @@ const totalArrets = computed(() => MOTIFS.reduce((s, mo) => s + pertes.value[mo[
 
 // TRS global (pondéré)
 const global = computed(() => {
-  let ouv = 0, fonct = 0, prod = 0, rebuts = 0, theo = 0, prodPerf = 0
-  for (const e of parEquip.value) { ouv += e.ouverture; fonct += e.fonct; prod += e.prod; rebuts += e.rebuts; theo += e.theo; prodPerf += e.prodPerf }
-  const dispo = ouv ? fonct / ouv : 0
-  const perf = theo ? Math.min(1, prodPerf / theo) : 0
-  const qualite = prod ? Math.max(0, (prod - rebuts) / prod) : 0
-  return { dispo, perf, qualite, trs: dispo * perf * qualite }
+  let ouv = 0, sTrs = 0, sDispo = 0, sPerf = 0, sQual = 0
+  for (const e of parEquip.value) { ouv += e.ouverture; sTrs += e.trs * e.ouverture; sDispo += e.dispo * e.ouverture; sPerf += e.perf * e.ouverture; sQual += e.qualite * e.ouverture }
+  return ouv ? { dispo: sDispo / ouv, perf: sPerf / ouv, qualite: sQual / ouv, trs: sTrs / ouv } : { dispo: 0, perf: 0, qualite: 0, trs: 0 }
 })
 
 const trsParEquipChart = computed(() => [{ label: 'TRS %', color: '#4338ca', data: parEquip.value.map(e => +(e.trs * 100).toFixed(1)) }])
