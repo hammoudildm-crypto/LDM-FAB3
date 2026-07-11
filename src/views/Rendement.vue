@@ -178,6 +178,44 @@ const boitesCondTotal = computed(() => {
   }
   return s
 })
+// Théorique BRUT fabrication (lots fabriqués de l'année) + nb de lots
+const theoFabTotal = computed(() => {
+  let s = 0
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    if (new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+    if (Number(o.boites_fabriquees || 0) <= 0) continue
+    s += Number(o.quantite_theorique || 0)
+  }
+  return s
+})
+const nbLotsFabTotal = computed(() => {
+  let n = 0
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    if (new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+    if (Number(o.boites_fabriquees || 0) > 0) n++
+  }
+  return n
+})
+// Théorique BRUT conditionnement (lots conditionnés dans l'année, par date de cond.) + nb de lots
+const condIdsAnnee = computed(() => {
+  const ids = new Set()
+  for (const c of conds.value) {
+    if (!c.date_conditionnement) continue
+    if (new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
+    ids.add(c.ordre_id)
+  }
+  return ids
+})
+const theoCondTotal = computed(() => {
+  const ofById = {}
+  for (const o of ofs.value) ofById[o.id] = o
+  let s = 0
+  for (const id of condIdsAnnee.value) { const o = ofById[id]; if (o) s += Number(o.quantite_theorique || 0) }
+  return s
+})
+const nbLotsCondTotal = computed(() => condIdsAnnee.value.size)
 
 // Fabrication : par mois (rendement/avarie) et par année (tendance)
 const parMoisFab = computed(() => {
@@ -496,8 +534,8 @@ onMounted(chargerTout)
           </div>
           <div class="kpi">
             <span class="kpi-tag theo-tag">Théorique</span>
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(globalAnneeFab.theo) }}</div></div>
-            <div class="kpi-lbl">Boîtes théoriques · {{ nbLotsFab }} lots</div>
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(theoFabTotal) }}</div></div>
+            <div class="kpi-lbl">Boîtes théoriques · {{ nbLotsFabTotal }} lots</div>
           </div>
         </div>
       </section>
@@ -522,8 +560,8 @@ onMounted(chargerTout)
           </div>
           <div class="kpi">
             <span class="kpi-tag theo-tag">Théorique</span>
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(globalAnnee.theo) }}</div></div>
-            <div class="kpi-lbl">Boîtes théoriques · {{ nbLotsAnnee }} lots</div>
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(theoCondTotal) }}</div></div>
+            <div class="kpi-lbl">Boîtes théoriques · {{ nbLotsCondTotal }} lots</div>
           </div>
         </div>
       </section>
