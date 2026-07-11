@@ -163,20 +163,9 @@ const boitesFabTotal = computed(() => {
   }
   return s
 })
-// Total BRUT de boîtes conditionnées (par date de conditionnement, tous lots) = base Réalisation
-const boitesCondTotal = computed(() => {
-  const ofById = {}
-  for (const o of ofs.value) ofById[o.id] = o
-  let s = 0
-  for (const c of conds.value) {
-    if (!c.date_conditionnement) continue
-    if (new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
-    const o = ofById[c.ordre_id]; if (!o) continue
-    const upb = upbOf(o); if (upb <= 0) continue
-    s += Math.floor(Number(c.quantite_conditionnee || 0) / upb)
-  }
-  return s
-})
+// Boîtes conditionnées = somme des boîtes TOTALES des lots conditionnés dans l'année
+// (alignées sur le théorique pour un rendement correct, sans écrasement par les lots à cheval).
+const boitesCondTotal = computed(() => condLotsAnnee.value.reduce((s, r) => s + r.prod, 0))
 // Théorique BRUT fabrication (lots fabriqués de l'année) + nb de lots
 const theoFabTotal = computed(() => {
   let s = 0
@@ -207,14 +196,23 @@ const condIdsAnnee = computed(() => {
   }
   return ids
 })
-const theoCondTotal = computed(() => {
+// Lots conditionnés dans l'année : boîtes TOTALES (toutes sessions) + théorique.
+const condLotsAnnee = computed(() => {
+  const prod = produitParLot.value
   const ofById = {}
   for (const o of ofs.value) ofById[o.id] = o
-  let s = 0
-  for (const id of condIdsAnnee.value) { const o = ofById[id]; if (o) s += Number(o.quantite_theorique || 0) }
-  return s
+  const arr = []
+  for (const id of condIdsAnnee.value) {
+    const o = ofById[id]; if (!o) continue
+    const tt = Number(o.quantite_theorique || 0)
+    const pp = prod[id] || 0
+    if (tt <= 0 || pp <= 0) continue
+    arr.push({ prod: pp, theo: tt })
+  }
+  return arr
 })
-const nbLotsCondTotal = computed(() => condIdsAnnee.value.size)
+const theoCondTotal = computed(() => condLotsAnnee.value.reduce((s, r) => s + r.theo, 0))
+const nbLotsCondTotal = computed(() => condLotsAnnee.value.length)
 
 // Fabrication : par mois (rendement/avarie) et par année (tendance)
 const parMoisFab = computed(() => {
