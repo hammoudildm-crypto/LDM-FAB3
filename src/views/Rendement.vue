@@ -154,6 +154,16 @@ const globalAnneeFab = computed(() => {
 const rendementFab = computed(() => globalAnneeFab.value.rdt)
 const avarieFab = computed(() => globalAnneeFab.value.rdt == null ? null : Math.max(0, 100 - globalAnneeFab.value.rdt))
 const nbLotsFab = computed(() => lotsValidesFab.value.length)
+// Total BRUT de boîtes fabriquées (tous les lots, comme Réalisation/Tableau de bord)
+const boitesFabTotal = computed(() => {
+  let s = 0
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    if (new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+    s += Number(o.boites_fabriquees || 0)
+  }
+  return s
+})
 
 // Fabrication : par mois (rendement/avarie) et par année (tendance)
 const parMoisFab = computed(() => {
@@ -467,7 +477,7 @@ onMounted(chargerTout)
           </div>
           <div class="kpi">
             <span class="kpi-tag prod-tag">Production</span>
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(globalAnneeFab.prod) }}</div></div>
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(boitesFabTotal) }}</div></div>
             <div class="kpi-lbl">Boîtes fabriquées</div>
           </div>
           <div class="kpi">
