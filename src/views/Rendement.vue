@@ -48,7 +48,7 @@ async function chargerTout() {
   ofs.value = rof.data
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
-    .select('ordre_id, quantite_conditionnee')
+    .select('ordre_id, quantite_conditionnee, date_conditionnement')
     .eq('actif', true))
   if (rc.error) { erreur.value = rc.error.message; chargement.value = false; return }
   conds.value = rc.data
@@ -161,6 +161,20 @@ const boitesFabTotal = computed(() => {
     if (!o.date_fin_fabrication) continue
     if (new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
     s += Number(o.boites_fabriquees || 0)
+  }
+  return s
+})
+// Total BRUT de boîtes conditionnées (par date de conditionnement, tous lots) = base Réalisation
+const boitesCondTotal = computed(() => {
+  const ofById = {}
+  for (const o of ofs.value) ofById[o.id] = o
+  let s = 0
+  for (const c of conds.value) {
+    if (!c.date_conditionnement) continue
+    if (new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
+    const o = ofById[c.ordre_id]; if (!o) continue
+    const upb = upbOf(o); if (upb <= 0) continue
+    s += Math.floor(Number(c.quantite_conditionnee || 0) / upb)
   }
   return s
 })
@@ -503,7 +517,7 @@ onMounted(chargerTout)
           </div>
           <div class="kpi">
             <span class="kpi-tag prod-tag">Production</span>
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(globalAnnee.prod) }}</div></div>
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(boitesCondTotal) }}</div></div>
             <div class="kpi-lbl">Boîtes conditionnées</div>
           </div>
           <div class="kpi">
