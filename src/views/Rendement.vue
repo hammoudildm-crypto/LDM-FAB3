@@ -153,39 +153,15 @@ const globalAnneeFab = computed(() => {
 const rendementFab = computed(() => theoFabTotal.value ? (boitesFabTotal.value / theoFabTotal.value) * 100 : null)
 const avarieFab = computed(() => rendementFab.value == null ? null : Math.max(0, 100 - rendementFab.value))
 const nbLotsFab = computed(() => lotsValidesFab.value.length)
-// Total BRUT de boîtes fabriquées (tous les lots, comme Réalisation/Tableau de bord)
-const boitesFabTotal = computed(() => {
-  let s = 0
-  for (const o of ofs.value) {
-    if (!o.date_fin_fabrication) continue
-    if (new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
-    s += Number(o.boites_fabriquees || 0)
-  }
-  return s
-})
+// Boîtes fabriquées = somme des boîtes des lots fabriqués de l'année (structure par lot,
+// alignée sur le théorique pour Boîtes ÷ Théorique = rendement).
+const boitesFabTotal = computed(() => lotsAnneeFab.value.reduce((s, r) => s + r.prod, 0))
 // Boîtes conditionnées = somme des boîtes TOTALES des lots conditionnés dans l'année
 // (alignées sur le théorique pour un rendement correct, sans écrasement par les lots à cheval).
 const boitesCondTotal = computed(() => condLotsAnnee.value.reduce((s, r) => s + r.prod, 0))
-// Théorique BRUT fabrication (lots fabriqués de l'année) + nb de lots
-const theoFabTotal = computed(() => {
-  let s = 0
-  for (const o of ofs.value) {
-    if (!o.date_fin_fabrication) continue
-    if (new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
-    if (Number(o.boites_fabriquees || 0) <= 0) continue
-    s += Number(o.quantite_theorique || 0)
-  }
-  return s
-})
-const nbLotsFabTotal = computed(() => {
-  let n = 0
-  for (const o of ofs.value) {
-    if (!o.date_fin_fabrication) continue
-    if (new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
-    if (Number(o.boites_fabriquees || 0) > 0) n++
-  }
-  return n
-})
+// Théorique fabrication (mêmes lots que les boîtes) + nb de lots
+const theoFabTotal = computed(() => lotsAnneeFab.value.reduce((s, r) => s + r.theo, 0))
+const nbLotsFabTotal = computed(() => lotsAnneeFab.value.length)
 // Théorique BRUT conditionnement (lots conditionnés dans l'année, par date de cond.) + nb de lots
 const condIdsAnnee = computed(() => {
   const ids = new Set()
