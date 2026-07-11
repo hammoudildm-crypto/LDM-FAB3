@@ -83,7 +83,6 @@ const parAn = computed(() => {
     const theo = Number(o.quantite_theorique || 0)
     const p = prod[o.id] || 0
     if (theo <= 0 || p <= 0) continue
-    if (!rdtValide((p / theo) * 100)) continue
     const y = new Date(o.date_fin_fabrication).getFullYear()
     if (!m[y]) m[y] = { prod: 0, theo: 0 }
     m[y].prod += p; m[y].theo += theo
@@ -116,7 +115,7 @@ const lotsAnnee = computed(() => {
   return arr
 })
 
-const lotsValides = computed(() => lotsAnnee.value.filter(r => rdtValide(r.rdt)))
+const lotsValides = computed(() => lotsAnnee.value)
 const anomalies = computed(() => lotsAnnee.value.filter(r => !rdtValide(r.rdt)).sort((a, b) => a.rdt - b.rdt))
 
 const globalAnnee = computed(() => {
@@ -125,8 +124,8 @@ const globalAnnee = computed(() => {
   return { prod, theo, rdt: theo > 0 ? (prod / theo) * 100 : null }
 })
 
-const rendementGlobal = computed(() => globalAnnee.value.rdt)
-const tauxDechets = computed(() => globalAnnee.value.rdt == null ? null : Math.max(0, 100 - globalAnnee.value.rdt))
+const rendementGlobal = computed(() => theoCondTotal.value ? (boitesCondTotal.value / theoCondTotal.value) * 100 : null)
+const tauxDechets = computed(() => rendementGlobal.value == null ? null : Math.max(0, 100 - rendementGlobal.value))
 const nbLotsAnnee = computed(() => lotsValides.value.length)
 
 // --- Structure FABRICATION : boîtes fabriquées / boîtes théoriques ---
@@ -145,14 +144,14 @@ const lotsAnneeFab = computed(() => {
   }
   return arr
 })
-const lotsValidesFab = computed(() => lotsAnneeFab.value.filter(r => rdtValide(r.rdt)))
+const lotsValidesFab = computed(() => lotsAnneeFab.value)
 const globalAnneeFab = computed(() => {
   let prod = 0, theo = 0
   for (const r of lotsValidesFab.value) { prod += r.prod; theo += r.theo }
   return { prod, theo, rdt: theo > 0 ? (prod / theo) * 100 : null }
 })
-const rendementFab = computed(() => globalAnneeFab.value.rdt)
-const avarieFab = computed(() => globalAnneeFab.value.rdt == null ? null : Math.max(0, 100 - globalAnneeFab.value.rdt))
+const rendementFab = computed(() => theoFabTotal.value ? (boitesFabTotal.value / theoFabTotal.value) * 100 : null)
+const avarieFab = computed(() => rendementFab.value == null ? null : Math.max(0, 100 - rendementFab.value))
 const nbLotsFab = computed(() => lotsValidesFab.value.length)
 // Total BRUT de boîtes fabriquées (tous les lots, comme Réalisation/Tableau de bord)
 const boitesFabTotal = computed(() => {
@@ -250,7 +249,6 @@ const parAnFab = computed(() => {
     const theo = Number(o.quantite_theorique || 0)
     const p = Number(o.boites_fabriquees || 0)
     if (theo <= 0 || p <= 0) continue
-    if (!rdtValide((p / theo) * 100)) continue
     const y = new Date(o.date_fin_fabrication).getFullYear()
     if (!m[y]) m[y] = { prod: 0, theo: 0 }
     m[y].prod += p; m[y].theo += theo
@@ -357,7 +355,6 @@ const compareProduits = computed(() => {
     if (theo <= 0) continue
     const p = prodBox[o.id] || 0
     if (p <= 0) continue
-    if (!rdtValide((p / theo) * 100)) continue   // garde-fou : lots anormaux exclus
     const code = o.produits ? o.produits.code_pf : '—'
     if (!m[code]) m[code] = { code, nom: o.produits ? o.produits.designation : '—', an: {} }
     if (!m[code].an[y]) m[code].an[y] = { prod: 0, theo: 0 }
@@ -572,7 +569,7 @@ onMounted(chargerTout)
           <h2 class="card-title">⚠ Lots à vérifier — {{ anneeSel }}</h2>
           <span class="count warn-count">{{ anomalies.length }}</span>
         </div>
-        <p class="warn-txt">Rendement &lt; {{ SEUIL_ANOMALIE }} % ou &gt; {{ SEUIL_HAUT }} % — saisie incomplète, ou fiche produit (poids / théorique) erronée. Ces lots sont <strong>exclus</strong> des rendements ; vérifie les comprimés fabriqués et la fiche produit. Les lots <strong>pas encore conditionnés</strong> (sans boîtes) ne sont ni comptés ni listés.</p>
+        <p class="warn-txt">Rendement &lt; {{ SEUIL_ANOMALIE }} % ou &gt; {{ SEUIL_HAUT }} % — saisie incomplète, ou fiche produit (poids / théorique) erronée. Ces lots restent <strong>inclus</strong> dans le rendement mais sont <strong>à contrôler</strong> (comprimés fabriqués / fiche produit). Les lots <strong>pas encore conditionnés</strong> (sans boîtes) ne sont ni comptés ni listés.</p>
         <p class="warn-hint">👉 Clique sur une ligne pour ouvrir le <strong>dossier du lot</strong> et corriger la saisie ou la fiche produit.</p>
         <div class="table-scroll">
           <table class="grid">
