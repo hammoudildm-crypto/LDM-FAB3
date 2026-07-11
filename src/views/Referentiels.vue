@@ -24,6 +24,8 @@ const cadProduit = ref('')
 const cadValeur = ref('')
 const cadUnite = ref('unités/h')
 const cadMode = ref('debit')
+const bulkAtelier = ref('')
+const bulkMsg = ref('')
 const editCadId = ref(null)
 const editCadValeur = ref('')
 const editCadUnite = ref('')
@@ -178,6 +180,26 @@ async function ajouterCad() {
   if (r.error) { erreur.value = r.error.message; return }
   cadValeur.value = ''
   await chargerTout()
+}
+async function passerAtelierTempsEcoule() {
+  bulkMsg.value = ''
+  if (!bulkAtelier.value) { bulkMsg.value = 'Choisir un atelier.'; return }
+  const equips = equipements.value.filter(e => e.atelier_id === bulkAtelier.value)
+  if (!equips.length) { bulkMsg.value = 'Aucun équipement pour cet atelier.'; return }
+  const at = ateliers.value.find(a => a.id === bulkAtelier.value)
+  const atNom = at ? (at.code + ' — ' + at.nom) : 'cet atelier'
+  if (!confirm('Passer TOUS les produits (' + produits.value.length + ') en temps écoulé sur les ' + equips.length + ' équipement(s) de « ' + atNom + ' » ?')) return
+  const rows = []
+  for (const e of equips) for (const p of produits.value) rows.push({ equipement_id: e.id, produit_id: p.id, cadence_nominale: null, unite_cadence: 'temps écoulé', mode: 'cycle' })
+  bulkMsg.value = 'Enregistrement de ' + rows.length + ' cadences…'
+  const CHUNK = 500
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const r = await supabase.from('cadences_produit').upsert(rows.slice(i, i + CHUNK), { onConflict: 'equipement_id,produit_id' })
+    if (r.error) { bulkMsg.value = 'Erreur : ' + r.error.message; return }
+  }
+  await chargerTout()
+  bulkMsg.value = rows.length + ' cadences en temps écoulé configurées pour « ' + atNom + ' ».'
+  setTimeout(() => { bulkMsg.value = '' }, 6000)
 }
 async function supprimerCad(c) {
   if (!confirm('Supprimer cette cadence ?')) return
@@ -600,6 +622,12 @@ onMounted(async () => {
           <select v-if="cadMode === 'debit'" v-model="cadUnite" class="cad-unite-in"><option value="unités/h">unités/h (conditionnement)</option><option value="kg/h">kg/h (fabrication)</option></select>
           <button class="btn" @click="ajouterCad">Enregistrer</button>
         </div>
+        <div class="bulk-row" v-if="peutEditer">
+          <span class="bulk-lbl">En masse — atelier :</span>
+          <select v-model="bulkAtelier"><option value="">Choisir…</option><option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.code }} — {{ a.nom }}</option></select>
+          <button class="btn-sm" @click="passerAtelierTempsEcoule">Tout passer en temps écoulé</button>
+          <span v-if="bulkMsg" class="bulk-msg">{{ bulkMsg }}</span>
+        </div>
         <div v-if="!cadList.length" class="empty">Aucune cadence définie.</div>
         <div class="cad-scroll" v-else>
           <table class="ref-table">
@@ -698,6 +726,10 @@ button.link.danger { color: #b91c1c; }
 .cad-form select, .cad-form input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
 .cad-form select { max-width: 250px; }
 .cad-prod-search { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; max-width: 200px; }
+.bulk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 16px; padding: 10px 12px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px; }
+.bulk-lbl { font-weight: 600; color: #0f766e; font-size: 13px; }
+.bulk-row select { font-size: 14px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; max-width: 220px; }
+.bulk-msg { font-size: 13px; color: #0f766e; font-weight: 600; }
 .cad-unite-in { width: 90px; }
 .cad-scroll { overflow-x: auto; }
 .ref-table { width: 100%; border-collapse: collapse; font-size: 14px; }
