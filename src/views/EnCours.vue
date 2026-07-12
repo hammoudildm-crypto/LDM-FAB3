@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 import { ICONS, TINTS } from '../icons.js'
@@ -9,7 +10,8 @@ const phasesParLot = ref({})   // ordre_id -> dernière sortie (vrac fabriqué)
 const condParLot = ref({})     // ordre_id -> somme entrée conditionnement
 const condDemarre = ref(new Set())  // ordre_ids ayant au moins un enregistrement de conditionnement
 const masquerSoldes = ref(true)
-const vracSeul = ref(false)
+const route = useRoute()
+const vracSeul = ref(String(route.query.vrac || '') === '1')
 const recherche = ref('')
 const filtreStatut = ref('')
 const STATUTS = ['Planifié', 'En cours', 'Terminé', 'Libéré', 'Rejeté']
