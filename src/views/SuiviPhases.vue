@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted, watch, inject } from 'vue'
+import { ref, reactive, computed, onMounted, watch, inject, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
@@ -250,9 +250,14 @@ async function chargerACompleter() {
     .not('ordres_fabrication.date_fin_fabrication', 'is', null)
   if (!r.error) aCompleter.value = r.data || []
 }
-function allerVersLot(id) {
-  lotId.value = id
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+async function allerVersLot(x) {
+  lotId.value = x.ordre_id
+  await chargerPhases()
+  const ph = phases.value.find(p => p.id === x.id)
+  if (ph) modifier(ph)
+  await nextTick()
+  const el = document.getElementById('fp-sortie')
+  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus() }
 }
 const route = useRoute()
 onMounted(async () => {
@@ -322,7 +327,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
                     <td>{{ x.phase }}</td>
                     <td class="ac-r">{{ x.quantite_entree != null ? fmt(x.quantite_entree) : '—' }}</td>
                     <td class="ac-nowrap">{{ x.ordres_fabrication.date_fin_fabrication }}</td>
-                    <td class="ac-r"><button class="ac-link" @click="allerVersLot(x.ordre_id)">Corriger ›</button></td>
+                    <td class="ac-r"><button class="ac-link" @click="allerVersLot(x)">Corriger ›</button></td>
                   </tr>
                 </tbody>
               </table>
@@ -345,7 +350,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
               </select>
             </label>
             <label>Quantité entrée (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="250" disabled title="Figée = sortie de la phase précédente." /></label>
-            <label>Quantité sortie (kg)<input v-model="form.quantite_sortie" type="number" step="any" placeholder="245" :disabled="['Pesée', 'Granulation'].includes(form.phase)" :title="['Pesée', 'Granulation'].includes(form.phase) ? 'Figée = entrée (pas de perte).' : 'À saisir : poids réel après pertes.'" /></label>
+            <label>Quantité sortie (kg)<input id="fp-sortie" v-model="form.quantite_sortie" type="number" step="any" placeholder="245" :disabled="['Pesée', 'Granulation'].includes(form.phase)" :title="['Pesée', 'Granulation'].includes(form.phase) ? 'Figée = entrée (pas de perte).' : 'À saisir : poids réel après pertes.'" /></label>
             <label>Date début<input v-model="form.date_debut" type="date" /></label>
             <label>Date fin<input v-model="form.date_phase" type="date" /></label>
             <label>Statut (automatique)<input :value="form.date_phase ? 'Terminé' : (form.date_debut ? 'En cours' : 'À faire')" disabled title="À faire → En cours (date début) → Terminé (date fin)." /></label>
