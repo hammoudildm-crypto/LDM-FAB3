@@ -13,6 +13,8 @@ const lots = ref([])
 const rechercheLot = ref('')
 const equipements = ref([])
 const lotId = ref('')
+const aCompleter = ref([])
+const ouvertACompleter = ref(false)
 const phases = ref([])
 const erreur = ref('')
 const message = ref('')
@@ -240,9 +242,22 @@ function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—'
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 function fmtPct(n) { return n == null ? '—' : n.toFixed(1) + ' %' }
 
+async function chargerACompleter() {
+  const r = await supabase.from('suivi_phases')
+    .select('id, phase, quantite_entree, quantite_sortie, ordre_id, ordres_fabrication!inner(numero_lot, date_fin_fabrication, produits(code_pf))')
+    .eq('actif', true)
+    .or('quantite_sortie.is.null,quantite_sortie.eq.0')
+    .not('ordres_fabrication.date_fin_fabrication', 'is', null)
+  if (!r.error) aCompleter.value = r.data || []
+}
+function allerVersLot(id) {
+  lotId.value = id
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
 const route = useRoute()
 onMounted(async () => {
   await chargerBase()
+  await chargerACompleter()
   const q = route.query.lot ?? route.query.ordre
   if (q != null && q !== '') {
     const found = lots.value.find(l => String(l.id) === String(q))
@@ -290,6 +305,31 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
       </section>
 
       <template v-if="lotId">
+        <section class="card" v-if="aCompleter.length">
+          <div class="ac-head" @click="ouvertACompleter = !ouvertACompleter">
+            <h2 class="card-title">Phases à compléter <span class="ac-badge">{{ aCompleter.length }}</span></h2>
+            <span class="ac-chev">{{ ouvertACompleter ? '▾' : '▸' }}</span>
+          </div>
+          <div v-show="ouvertACompleter">
+            <p class="ac-hint">Lots terminés en fabrication dont une phase n'a pas de quantité sortie. Clique « Corriger » pour ouvrir le lot.</p>
+            <div class="ac-scroll">
+              <table class="ac-table">
+                <thead><tr><th>Lot</th><th>Produit</th><th>Phase</th><th class="ac-r">Entrée (kg)</th><th>Fin fab.</th><th></th></tr></thead>
+                <tbody>
+                  <tr v-for="x in aCompleter" :key="x.id">
+                    <td class="ac-mono">{{ x.ordres_fabrication.numero_lot }}</td>
+                    <td>{{ x.ordres_fabrication.produits ? x.ordres_fabrication.produits.code_pf : '—' }}</td>
+                    <td>{{ x.phase }}</td>
+                    <td class="ac-r">{{ x.quantite_entree != null ? fmt(x.quantite_entree) : '—' }}</td>
+                    <td class="ac-nowrap">{{ x.ordres_fabrication.date_fin_fabrication }}</td>
+                    <td class="ac-r"><button class="ac-link" @click="allerVersLot(x.ordre_id)">Corriger ›</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <section class="card" v-if="peutEditer">
           <h2 class="card-title">{{ form.id ? 'Modifier la phase' : 'Ajouter une phase' }}</h2>
           <div class="form-grid">
@@ -428,4 +468,17 @@ button.link.danger { color: #b91c1c; }
   .form-grid { grid-template-columns: 1fr 1fr; }
   .form-grid .wide { grid-column: span 2; }
 }
+.ac-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+.ac-badge { display: inline-block; background: #f59e0b; color: #fff; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 10px; margin-left: 6px; }
+.ac-chev { color: #94a3b8; }
+.ac-hint { color: #64748b; font-size: 13px; margin: 8px 0 12px; }
+.ac-scroll { overflow-x: auto; }
+.ac-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ac-table th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+.ac-table td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
+.ac-r { text-align: right; }
+.ac-mono { font-family: ui-monospace, monospace; font-weight: 600; }
+.ac-nowrap { white-space: nowrap; }
+.ac-link { background: none; border: 0; color: #2563eb; font-weight: 600; cursor: pointer; font-size: 13px; }
+.ac-link:hover { text-decoration: underline; }
 </style>
