@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted, inject } from 'vue'
+import { ref, reactive, computed, onMounted, inject, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
@@ -260,9 +260,11 @@ async function chargerACompleterC() {
     .or('quantite_conditionnee.is.null,quantite_conditionnee.eq.0')
   if (!r.error) aCompleterC.value = r.data || []
 }
-function allerVersLotC(r) {
+async function allerVersLotC(r) {
   modifier(r)
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  await nextTick()
+  const el = document.getElementById('cc-boites')
+  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus() }
 }
 const route = useRoute()
 onMounted(async () => {
@@ -343,7 +345,7 @@ onMounted(async () => {
             </select>
           </label>
           <label>Quantité reçue (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="245" disabled title="Figée = sortie de la dernière phase de fabrication." /></label>
-          <label>Boîtes conditionnées<input v-model="form.boites" type="number" placeholder="16000" /></label>
+          <label>Boîtes conditionnées<input id="cc-boites" v-model="form.boites" type="number" placeholder="16000" /></label>
           <label>Statut (automatique)<input :value="form.statut === 'Libéré' ? 'Libéré' : (form.date_fin ? 'Terminé' : 'En cours')" disabled title="Terminé dès qu'une date de fin est renseignée." /></label>
           <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
           <div class="form-actions">
