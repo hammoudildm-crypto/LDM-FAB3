@@ -11,6 +11,8 @@ const PHASES_FAB = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compressio
 const vracFabParLot = ref({})  // ordre_id -> sortie (kg) de la dernière phase de fabrication
 
 const records = ref([])
+const aCompleterC = ref([])
+const ouvertACompleterC = ref(false)
 const lots = ref([])
 const equipements = ref([])
 const filtreStatut = ref('')
@@ -250,9 +252,22 @@ function classeStatut(s) {
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 
+async function chargerACompleterC() {
+  const r = await supabase.from('conditionnement')
+    .select('id, ordre_id, date_conditionnement, date_fin, equipement_id, quantite_entree, quantite_conditionnee, statut, commentaire, ordres_fabrication!inner(numero_lot, produits(code_pf, unites_par_boite))')
+    .eq('actif', true)
+    .not('date_fin', 'is', null)
+    .or('quantite_conditionnee.is.null,quantite_conditionnee.eq.0')
+  if (!r.error) aCompleterC.value = r.data || []
+}
+function allerVersLotC(r) {
+  modifier(r)
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
 const route = useRoute()
 onMounted(async () => {
   await chargerTout()
+  await chargerACompleterC()
   const q = route.query.lot
   if (q != null && q !== '') {
     const o = lots.value.find(l => String(l.id) === String(q)) || lots.value.find(l => String(l.numero_lot) === String(q))
@@ -283,6 +298,30 @@ onMounted(async () => {
     </div>
 
     <template v-else>
+      <section class="card" v-if="aCompleterC.length">
+        <div class="ac-head" @click="ouvertACompleterC = !ouvertACompleterC">
+          <h2 class="card-title">Conditionnements à compléter <span class="ac-badge">{{ aCompleterC.length }}</span></h2>
+          <span class="ac-chev">{{ ouvertACompleterC ? '▾' : '▸' }}</span>
+        </div>
+        <div v-show="ouvertACompleterC">
+          <p class="ac-hint">Conditionnements terminés (date de fin renseignée) sans quantité conditionnée. Clique « Corriger » pour l'ouvrir dans le formulaire.</p>
+          <div class="ac-scroll">
+            <table class="ac-table">
+              <thead><tr><th>Lot</th><th>Produit</th><th>Début</th><th>Fin</th><th></th></tr></thead>
+              <tbody>
+                <tr v-for="r in aCompleterC" :key="r.id">
+                  <td class="ac-mono">{{ r.ordres_fabrication.numero_lot }}</td>
+                  <td>{{ r.ordres_fabrication.produits ? r.ordres_fabrication.produits.code_pf : '—' }}</td>
+                  <td class="ac-nowrap">{{ r.date_conditionnement || '—' }}</td>
+                  <td class="ac-nowrap">{{ r.date_fin }}</td>
+                  <td class="ac-r"><button class="ac-link" @click="allerVersLotC(r)">Corriger ›</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section class="card" v-if="peutEditer">
         <h2 class="card-title">{{ form.id ? 'Modifier le conditionnement' : 'Nouveau conditionnement' }}</h2>
         <div class="form-grid">
@@ -442,4 +481,17 @@ button.link.danger { color: #b91c1c; }
 .btn-toggle { background: #fff; border: 1px solid #cbd5e1; color: #0f766e; font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
 .btn-toggle:hover { background: #f0fdfa; border-color: #0f766e; }
 .masque-hint { color: #94a3b8; font-size: 13px; margin: 4px 2px; }
+.ac-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+.ac-badge { display: inline-block; background: #f59e0b; color: #fff; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 10px; margin-left: 6px; }
+.ac-chev { color: #94a3b8; }
+.ac-hint { color: #64748b; font-size: 13px; margin: 8px 0 12px; }
+.ac-scroll { overflow-x: auto; }
+.ac-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ac-table th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+.ac-table td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
+.ac-r { text-align: right; }
+.ac-mono { font-family: ui-monospace, monospace; font-weight: 600; }
+.ac-nowrap { white-space: nowrap; }
+.ac-link { background: none; border: 0; color: #2563eb; font-weight: 600; cursor: pointer; font-size: 13px; }
+.ac-link:hover { text-decoration: underline; }
 </style>
