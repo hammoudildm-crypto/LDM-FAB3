@@ -285,6 +285,31 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
     </div>
 
     <template v-else>
+      <section class="card" v-if="aCompleter.length">
+        <div class="ac-head" @click="ouvertACompleter = !ouvertACompleter">
+          <h2 class="card-title">Phases à compléter <span class="ac-badge">{{ aCompleter.length }}</span></h2>
+          <span class="ac-chev">{{ ouvertACompleter ? '▾' : '▸' }}</span>
+        </div>
+        <div v-show="ouvertACompleter">
+          <p class="ac-hint">Lots terminés en fabrication dont une phase n'a pas de quantité sortie. Clique « Corriger » pour ouvrir le lot.</p>
+          <div class="ac-scroll">
+            <table class="ac-table">
+              <thead><tr><th>Lot</th><th>Produit</th><th>Phase</th><th class="ac-r">Entrée (kg)</th><th>Fin fab.</th><th></th></tr></thead>
+              <tbody>
+                <tr v-for="x in aCompleter" :key="x.id">
+                  <td class="ac-mono">{{ x.ordres_fabrication.numero_lot }}</td>
+                  <td>{{ x.ordres_fabrication.produits ? x.ordres_fabrication.produits.code_pf : '—' }}</td>
+                  <td>{{ x.phase }}</td>
+                  <td class="ac-r">{{ x.quantite_entree != null ? fmt(x.quantite_entree) : '—' }}</td>
+                  <td class="ac-nowrap">{{ x.ordres_fabrication.date_fin_fabrication }}</td>
+                  <td class="ac-r"><button class="ac-link" @click="allerVersLot(x)">Corriger ›</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section class="card">
         <label class="lot-select">Recherche produit / lot
           <input v-model="rechercheLot" type="search" class="lot-search" placeholder="Code produit, désignation ou n° de lot…" />
@@ -310,31 +335,6 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
       </section>
 
       <template v-if="lotId">
-        <section class="card" v-if="aCompleter.length">
-          <div class="ac-head" @click="ouvertACompleter = !ouvertACompleter">
-            <h2 class="card-title">Phases à compléter <span class="ac-badge">{{ aCompleter.length }}</span></h2>
-            <span class="ac-chev">{{ ouvertACompleter ? '▾' : '▸' }}</span>
-          </div>
-          <div v-show="ouvertACompleter">
-            <p class="ac-hint">Lots terminés en fabrication dont une phase n'a pas de quantité sortie. Clique « Corriger » pour ouvrir le lot.</p>
-            <div class="ac-scroll">
-              <table class="ac-table">
-                <thead><tr><th>Lot</th><th>Produit</th><th>Phase</th><th class="ac-r">Entrée (kg)</th><th>Fin fab.</th><th></th></tr></thead>
-                <tbody>
-                  <tr v-for="x in aCompleter" :key="x.id">
-                    <td class="ac-mono">{{ x.ordres_fabrication.numero_lot }}</td>
-                    <td>{{ x.ordres_fabrication.produits ? x.ordres_fabrication.produits.code_pf : '—' }}</td>
-                    <td>{{ x.phase }}</td>
-                    <td class="ac-r">{{ x.quantite_entree != null ? fmt(x.quantite_entree) : '—' }}</td>
-                    <td class="ac-nowrap">{{ x.ordres_fabrication.date_fin_fabrication }}</td>
-                    <td class="ac-r"><button class="ac-link" @click="allerVersLot(x)">Corriger ›</button></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
         <section class="card" v-if="peutEditer">
           <h2 class="card-title">{{ form.id ? 'Modifier la phase' : 'Ajouter une phase' }}</h2>
           <div class="form-grid">
