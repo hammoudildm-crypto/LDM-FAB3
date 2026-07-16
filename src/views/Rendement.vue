@@ -212,6 +212,7 @@ function boitesDepuisKg(x, kg) {
 }
 
 // Correction EN LIGNE (sans quitter la page)
+const ouvertExclus = ref(false)
 const saisieExclu = reactive({})
 const enCoursExclu = ref('')
 const msgExclu = ref('')
@@ -647,10 +648,12 @@ onMounted(chargerTout)
 
       <!-- Lots à vérifier (rendement anormalement bas) -->
       <section v-if="lotsExclus.length" class="card warn">
-        <div class="card-head">
+        <div class="card-head excl-head" @click="ouvertExclus = !ouvertExclus">
           <h2 class="card-title">⛔ Lots exclus du calcul — {{ anneeSel }}</h2>
           <span class="count warn-count">{{ lotsExclus.length }}</span>
+          <span class="excl-chev">{{ ouvertExclus ? '▾ masquer' : '▸ afficher' }}</span>
         </div>
+        <div v-show="ouvertExclus">
         <p class="warn-txt">Ces lots ne sont comptés dans <strong>aucun taux</strong> : une donnée manque, donc leur avarie est <strong>invisible</strong>. Tant que cette liste n'est pas vide, les rendements et les taux de déchets sont <strong>incomplets</strong>. (Les lots encore en cours ne sont pas listés.)</p>
         <p class="warn-hint">👉 Saisis la valeur manquante <strong>directement dans la ligne</strong> puis <strong>Entrée</strong> (ou « Enregistrer ») — le lot rentre aussitôt dans les taux. Le bouton <strong>›</strong> ouvre la page complète si besoin.</p>
         <p v-if="msgExclu" class="excl-msg">{{ msgExclu }}</p>
@@ -683,6 +686,7 @@ onMounted(chargerTout)
               </tr>
             </tbody>
           </table>
+        </div>
         </div>
       </section>
 
@@ -1070,6 +1074,8 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .excl-in { width: 120px; font-size: 13px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; text-align: right; }
 .excl-unite { font-size: 11px; color: #94a3b8; margin-left: 5px; }
 .excl-conv { font-size: 11px; color: #2563eb; font-weight: 700; margin-top: 3px; }
+.excl-head { cursor: pointer; user-select: none; }
+.excl-chev { font-size: 12px; color: #94a3b8; font-weight: 600; margin-left: 8px; }
 .excl-msg { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 7px 10px; border-radius: 7px; }
 .excl-lnk { background: none; border: 0; color: #94a3b8; font-weight: 700; cursor: pointer; font-size: 15px; padding: 0 4px; }
 .excl-lnk:hover { color: #2563eb; }
