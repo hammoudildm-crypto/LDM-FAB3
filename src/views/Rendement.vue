@@ -43,7 +43,7 @@ async function chargerTout() {
   chargement.value = true
   erreur.value = ''
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, quantite_theorique, boites_fabriquees, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(id, code_pf, designation, unites_par_boite, poids_unitaire_mg, taille_lot)')
+    .select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(id, code_pf, designation, unites_par_boite, poids_unitaire_mg, taille_lot)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data
@@ -170,8 +170,13 @@ const lotsExclus = computed(() => {
     const condAnnee = !!dc && new Date(dc).getFullYear() === anneeSel.value
     if (!fabAnnee && !condAnnee) continue
     const p = prod[o.id] || 0
-    const exFab = fabAnnee && (theo <= 0 || bf <= 0)
-    const exCond = condAnnee && (theo <= 0 || upb <= 0 || (p <= 0 && !!finis[o.id]))
+    // Un lot n'est signalé que s'il DEVRAIT déjà compter dans les taux :
+    // fabrication réellement finie (statut Terminé/Libéré) ou déjà des boîtes,
+    // conditionnement clôturé (date de fin) ou déjà des boîtes conditionnées.
+    // -> les lots encore en cours ne sont pas listés.
+    const fabTerm = o.statut === 'Terminé' || o.statut === 'Libéré'
+    const exFab = fabAnnee && (fabTerm || bf > 0) && (theo <= 0 || bf <= 0)
+    const exCond = condAnnee && (!!finis[o.id] || p > 0) && (theo <= 0 || upb <= 0 || p <= 0)
     if (!exFab && !exCond) continue
     const taille = o.produits ? Number(o.produits.taille_lot || 0) : 0
     let cause, cible, unite, hint
