@@ -732,7 +732,7 @@ onMounted(async () => {
 .file-board .q-block .empty { height: 180px; display: flex; align-items: center; justify-content: center; }
 /* Réception OF (1 seul bloc) : son bloc remplit la carte -> meme hauteur que les cartes a 2 blocs */
 .file-board .reception .q-block { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.file-board .reception .prod-scroll { flex: 1; height: auto; min-height: 0; }
+.file-board .reception .prod-scroll { flex: 1; height: auto; min-height: 0; max-height: none; }
 .file-board .reception .q-block .empty { flex: 1; height: auto; min-height: 0; }
 /* Bloc En cours = souvent 1 seul lot -> plus court (En attente garde 180px pour plusieurs lots) */
 .file-board .q-block:has(.q-title.cours) .prod-scroll { height: 72px; }
