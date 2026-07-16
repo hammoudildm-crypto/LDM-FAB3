@@ -42,13 +42,13 @@ async function chargerTout() {
   chargement.value = true
   erreur.value = ''
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, quantite_theorique, boites_fabriquees, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, unites_par_boite)')
+    .select('id, numero_lot, quantite_theorique, boites_fabriquees, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, unites_par_boite, taille_lot)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
-    .select('ordre_id, quantite_conditionnee, date_conditionnement')
+    .select('ordre_id, quantite_conditionnee, date_conditionnement, date_fin')
     .eq('actif', true))
   if (rc.error) { erreur.value = rc.error.message; chargement.value = false; return }
   conds.value = rc.data
@@ -131,6 +131,57 @@ const lotsAnnee = computed(() => {
 
 const lotsValides = computed(() => lotsAnnee.value)
 const anomalies = computed(() => lotsAnnee.value.filter(r => !rdtValide(r.rdt)).sort((a, b) => a.rdt - b.rdt))
+
+// --- CONTRÔLE ANTI-OUBLI : lots EXCLUS du calcul (avarie invisible) ---
+// Un lot n'entre dans les taux que si théorique > 0 ET boîtes > 0. S'il manque
+// une donnée, le lot sort du calcul sans bruit : on le liste ici.
+// (Les lots encore EN COURS ne sont pas listés : conditionnement sans date de fin.)
+const condFiniParLot = computed(() => {
+  const m = {}
+  for (const c of conds.value) if (c.date_fin) m[c.ordre_id] = true
+  return m
+})
+const lotsExclus = computed(() => {
+  const prod = produitParLot.value
+  const dates = condDateParLot.value
+  const finis = condFiniParLot.value
+  const arr = []
+  for (const o of ofs.value) {
+    const theo = Number(o.quantite_theorique || 0)
+    const upb = upbOf(o)
+    const bf = Number(o.boites_fabriquees || 0)
+    const dFab = o.date_fin_fabrication
+    const fabAnnee = !!dFab && new Date(dFab).getFullYear() === anneeSel.value
+    const dc = dates[o.id]
+    const condAnnee = !!dc && new Date(dc).getFullYear() === anneeSel.value
+    if (!fabAnnee && !condAnnee) continue
+    const p = prod[o.id] || 0
+    const exFab = fabAnnee && (theo <= 0 || bf <= 0)
+    const exCond = condAnnee && (theo <= 0 || upb <= 0 || (p <= 0 && !!finis[o.id]))
+    if (!exFab && !exCond) continue
+    let cause, cible
+    if (theo <= 0) { cause = 'Théorique manquant'; cible = 'of' }
+    else if (exCond && upb <= 0) { cause = 'Unités/boîte manquant (fiche produit)'; cible = 'produit' }
+    else if (exFab && bf <= 0) { cause = 'Boîtes fabriquées non saisies'; cible = 'of' }
+    else { cause = 'Quantité conditionnée non saisie'; cible = 'cond' }
+    arr.push({
+      id: o.id, lot: o.numero_lot || '—',
+      code: o.produits ? o.produits.code_pf : '—',
+      desig: o.produits ? o.produits.designation : '',
+      taille: o.produits ? o.produits.taille_lot : null,
+      cause, cible,
+      impact: exFab && exCond ? 'Fab. + Cond.' : (exFab ? 'Fabrication' : 'Conditionnement'),
+      date: dc || dFab
+    })
+  }
+  return arr.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))
+    || String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
+})
+function corrigerExclu(x) {
+  if (x.cible === 'produit') router.push({ path: '/referentiels' })
+  else if (x.cible === 'cond') router.push({ path: '/conditionnement', query: { lot: x.id } })
+  else router.push({ path: '/ordres', query: { edit: x.id } })
+}
 
 const globalAnnee = computed(() => {
   let prod = 0, theo = 0
@@ -530,6 +581,32 @@ onMounted(chargerTout)
       </section>
 
       <!-- Lots à vérifier (rendement anormalement bas) -->
+      <section v-if="lotsExclus.length" class="card warn">
+        <div class="card-head">
+          <h2 class="card-title">⛔ Lots exclus du calcul — {{ anneeSel }}</h2>
+          <span class="count warn-count">{{ lotsExclus.length }}</span>
+        </div>
+        <p class="warn-txt">Ces lots ne sont comptés dans <strong>aucun taux</strong> : une donnée manque, donc leur avarie est <strong>invisible</strong>. Tant que cette liste n'est pas vide, les rendements et les taux de déchets sont <strong>incomplets</strong>. (Les lots encore en cours ne sont pas listés.)</p>
+        <p class="warn-hint">👉 Clique sur <strong>Corriger</strong> pour aller directement à la donnée manquante.</p>
+        <div class="table-scroll">
+          <table class="grid">
+            <thead>
+              <tr><th>Lot</th><th>Produit</th><th>Donnée manquante</th><th>Taux impacté</th><th class="ta-r">Taille lot</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="x in lotsExclus" :key="x.id + x.cause">
+                <td class="mono">{{ x.lot }}</td>
+                <td><span class="mono">{{ x.code }}</span> <span class="desig">{{ x.desig }}</span></td>
+                <td class="av-num">{{ x.cause }}</td>
+                <td>{{ x.impact }}</td>
+                <td class="ta-r">{{ x.taille ? fmt(x.taille) : '—' }}</td>
+                <td class="ta-r"><button class="excl-btn" @click="corrigerExclu(x)">Corriger ›</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section v-if="anomalies.length" class="card warn">
         <div class="card-head">
           <h2 class="card-title">⚠ Lots à vérifier — {{ anneeSel }}</h2>
@@ -911,6 +988,8 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .md-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 560px; max-width: calc(100vw - 32px); max-height: 80vh; display: flex; flex-direction: column; background: #fff; border-radius: 14px; box-shadow: 0 24px 60px rgba(16,24,40,.3); z-index: 71; overflow: hidden; }
 .md-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; font-size: 15px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #eef2f6; }
 .md-x { background: none; border: 0; cursor: pointer; color: #64748b; font-size: 16px; line-height: 1; }
+.excl-btn { background: none; border: 0; color: #2563eb; font-weight: 700; cursor: pointer; font-size: 13px; white-space: nowrap; }
+.excl-btn:hover { text-decoration: underline; }
 .md-sub { padding: 8px 18px; font-size: 12px; color: #64748b; background: #f8fafc; border-bottom: 1px solid #eef2f6; }
 .md-list { overflow-y: auto; padding: 6px 12px 14px; }
 .md-list table { width: 100%; border-collapse: collapse; }
