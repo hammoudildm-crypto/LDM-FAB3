@@ -283,6 +283,20 @@ const globalAnneeFab = computed(() => {
 })
 const rendementFab = computed(() => theoFabTotal.value ? (boitesFabTotal.value / theoFabTotal.value) * 100 : null)
 const avarieFab = computed(() => rendementFab.value == null ? null : Math.max(0, 100 - rendementFab.value))
+
+// --- AVARIE EN KG (perte physique) : boîtes -> comprimés -> kg ---
+function kgDeBoites(o, boites) {
+  const upb = upbOf(o)
+  const mm = o && o.produits ? Number(o.produits.poids_unitaire_mg || 0) : 0
+  if (!(upb > 0) || !(mm > 0) || !(boites > 0)) return 0
+  return (boites * upb * mm) / 1e6
+}
+const theoFabKg = computed(() => lotsAnneeFab.value.reduce((s, r) => s + kgDeBoites(r.of, r.theo), 0))
+const prodFabKg = computed(() => lotsAnneeFab.value.reduce((s, r) => s + kgDeBoites(r.of, r.prod), 0))
+const avarieFabKg = computed(() => Math.round(Math.max(0, theoFabKg.value - prodFabKg.value)))
+const theoCondKg = computed(() => lotsAnnee.value.reduce((s, r) => s + kgDeBoites(r.of, r.theo), 0))
+const prodCondKg = computed(() => lotsAnnee.value.reduce((s, r) => s + kgDeBoites(r.of, r.prod), 0))
+const avarieCondKg = computed(() => Math.round(Math.max(0, theoCondKg.value - prodCondKg.value)))
 const nbLotsFab = computed(() => lotsValidesFab.value.length)
 // Boîtes fabriquées = somme des boîtes des lots fabriqués de l'année (structure par lot,
 // alignée sur le théorique pour Boîtes ÷ Théorique = rendement).
@@ -606,6 +620,7 @@ onMounted(chargerTout)
             <span class="kpi-tag av-tag">Avarie</span>
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.red"><svg viewBox="0 0 24 24" v-html="ICONS.trash"></svg></span><div class="kpi-val danger">{{ pct2(avarieFab) }}</div></div>
             <div class="kpi-lbl">Taux de déchets {{ anneeSel }}</div>
+            <div v-if="avarieFabKg > 0" class="kpi-kg">≈ {{ fmt(avarieFabKg) }} kg perdus</div>
           </div>
           <div class="kpi">
             <span class="kpi-tag prod-tag">Production</span>
@@ -632,6 +647,7 @@ onMounted(chargerTout)
             <span class="kpi-tag av-tag">Avarie</span>
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.red"><svg viewBox="0 0 24 24" v-html="ICONS.trash"></svg></span><div class="kpi-val danger">{{ pct2(tauxDechets) }}</div></div>
             <div class="kpi-lbl">Taux de déchets {{ anneeSel }}</div>
+            <div v-if="avarieCondKg > 0" class="kpi-kg">≈ {{ fmt(avarieCondKg) }} kg perdus</div>
           </div>
           <div class="kpi">
             <span class="kpi-tag prod-tag">Production</span>
@@ -1074,6 +1090,7 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .excl-in { width: 120px; font-size: 13px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; text-align: right; }
 .excl-unite { font-size: 11px; color: #94a3b8; margin-left: 5px; }
 .excl-conv { font-size: 11px; color: #2563eb; font-weight: 700; margin-top: 3px; }
+.kpi-kg { font-size: 11.5px; color: #b91c1c; font-weight: 700; margin-top: 3px; }
 .excl-head { cursor: pointer; user-select: none; }
 .excl-chev { font-size: 12px; color: #94a3b8; font-weight: 600; margin-left: 8px; }
 .excl-msg { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 7px 10px; border-radius: 7px; }
