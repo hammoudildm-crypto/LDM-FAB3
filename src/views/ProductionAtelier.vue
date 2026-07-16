@@ -19,6 +19,7 @@ const phases = ref([])
 const conds = ref([])
 const hist = ref([])
 const ofs = ref([])
+const histLots = ref([])   // historique des lots par phase (TDB importé)
 const erreur = ref('')
 const chargement = ref(true)
 
@@ -49,6 +50,9 @@ async function charger() {
   if (!rh.error) hist.value = rh.data || []
   const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, date_fin_fabrication, produits(code_pf, designation)').eq('actif', true))
   if (!ro.error) ofs.value = ro.data || []
+  const rhl = await fetchAllPaged(() => supabase.from('historique_lots_phases')
+    .select('numero_lot, code_pf, designation, phase, date_fin'))
+  if (!rhl.error) histLots.value = rhl.data || []   // table absente -> on reste sur le temps réel
   chargement.value = false
 }
 
@@ -161,23 +165,36 @@ function ouvrirBarrePA(i, si) {
   if (y == null) return
   modalPA.value = { mois: i, annee: y }
 }
+// Lots du mois : TEMPS RÉEL (base) + HISTORIQUE importé (TDB), fusionnés par n° de lot.
+//  - Livraison Vrac   -> date de fin de FABRICATION (ordres_fabrication)
+//  - Conditionnement  -> date de fin de CONDITIONNEMENT
+//  - autres phases    -> suivi_phases (temps réel) + historique_lots_phases (TDB)
 const lotsMoisPA = computed(() => {
   const m = modalPA.value
   if (!m) return []
   const ph = atelierSel.value, y = m.annee
   const dansMois = (d) => { if (!d) return false; const dt = new Date(d); return dt.getFullYear() === y && dt.getMonth() === m.mois }
-  const ids = new Set()
-  if (ph === 'Conditionnement') { for (const c of conds.value) if (dansMois(c.date_fin || c.date_conditionnement)) ids.add(c.ordre_id) }
-  else if (ph === 'Livraison Vrac') { for (const o of ofs.value) if (dansMois(o.date_fin_fabrication)) ids.add(o.id) }
-  else { for (const sp of phases.value) if (sp.phase === ph && dansMois(sp.date_phase)) ids.add(sp.ordre_id) }
-  const arr = []
-  for (const id of ids) {
-    const o = ofById.value[id]
-    arr.push({ id, lot: o && o.numero_lot ? o.numero_lot : '—',
-      code: o && o.produits ? o.produits.code_pf : '—',
-      desig: o && o.produits ? o.produits.designation : '' })
+  const parLot = new Map()
+  const push = (lot, code, desig, src) => {
+    if (lot == null) return
+    const k = String(lot).trim()
+    if (!k || parLot.has(k)) return
+    parLot.set(k, { lot: k, code: code || '—', desig: desig || '', src })
   }
-  return arr.sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
+  const pushOf = (id, src) => {
+    const o = ofById.value[id]
+    if (!o) return
+    push(o.numero_lot, o.produits ? o.produits.code_pf : null, o.produits ? o.produits.designation : null, src)
+  }
+  if (ph === 'Conditionnement') {
+    for (const c of conds.value) if (dansMois(c.date_fin || c.date_conditionnement)) pushOf(c.ordre_id, 'live')
+  } else if (ph === 'Livraison Vrac') {
+    for (const o of ofs.value) if (dansMois(o.date_fin_fabrication)) pushOf(o.id, 'live')
+  } else {
+    for (const sp of phases.value) if (sp.phase === ph && dansMois(sp.date_phase)) pushOf(sp.ordre_id, 'live')
+    for (const h of histLots.value) if (h.phase === ph && dansMois(h.date_fin)) push(h.numero_lot, h.code_pf, h.designation, 'hist')
+  }
+  return [...parLot.values()].sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
 })
 const valeurBarrePA = computed(() => {
   const m = modalPA.value; if (!m) return 0
