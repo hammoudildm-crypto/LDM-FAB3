@@ -297,6 +297,8 @@ const avarieFabKg = computed(() => Math.round(Math.max(0, theoFabKg.value - prod
 const theoCondKg = computed(() => lotsAnnee.value.reduce((s, r) => s + kgDeBoites(r.of, r.theo), 0))
 const prodCondKg = computed(() => lotsAnnee.value.reduce((s, r) => s + kgDeBoites(r.of, r.prod), 0))
 const avarieCondKg = computed(() => Math.round(Math.max(0, theoCondKg.value - prodCondKg.value)))
+const prodFabKgAff = computed(() => Math.round(prodFabKg.value))
+const prodCondKgAff = computed(() => Math.round(prodCondKg.value))
 const nbLotsFab = computed(() => lotsValidesFab.value.length)
 // Boîtes fabriquées = somme des boîtes des lots fabriqués de l'année (structure par lot,
 // alignée sur le théorique pour Boîtes ÷ Théorique = rendement).
@@ -626,6 +628,7 @@ onMounted(chargerTout)
             <span class="kpi-tag prod-tag">Production</span>
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(boitesFabTotal) }}</div></div>
             <div class="kpi-lbl">Boîtes fabriquées</div>
+            <div v-if="prodFabKgAff > 0" class="kpi-kg prod-kg">≈ {{ fmt(prodFabKgAff) }} kg produits</div>
           </div>
           <div class="kpi">
             <span class="kpi-tag theo-tag">Théorique</span>
@@ -653,6 +656,7 @@ onMounted(chargerTout)
             <span class="kpi-tag prod-tag">Production</span>
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(boitesCondTotal) }}</div></div>
             <div class="kpi-lbl">Boîtes conditionnées</div>
+            <div v-if="prodCondKgAff > 0" class="kpi-kg prod-kg">≈ {{ fmt(prodCondKgAff) }} kg conditionnés</div>
           </div>
           <div class="kpi">
             <span class="kpi-tag theo-tag">Théorique</span>
@@ -1091,6 +1095,7 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .excl-unite { font-size: 11px; color: #94a3b8; margin-left: 5px; }
 .excl-conv { font-size: 11px; color: #2563eb; font-weight: 700; margin-top: 3px; }
 .kpi-kg { font-size: 11.5px; color: #b91c1c; font-weight: 700; margin-top: 3px; }
+.kpi-kg.prod-kg { color: #0f766e; }
 .excl-head { cursor: pointer; user-select: none; }
 .excl-chev { font-size: 12px; color: #94a3b8; font-weight: 600; margin-left: 8px; }
 .excl-msg { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 7px 10px; border-radius: 7px; }
