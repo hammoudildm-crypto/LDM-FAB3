@@ -106,6 +106,44 @@ const condParMois = computed(() => {
   return a
 })
 
+// --- Clic sur une barre : détail du mois par produit ---
+const SERIES_RP = ['Plan', 'Fabrication', 'Conditionnement']
+const modalRP = ref(null)   // { mois, si }
+function ouvrirBarre(i, si) { modalRP.value = { mois: i, si: si == null ? 1 : si } }
+const detailBarre = computed(() => {
+  const m = modalRP.value
+  if (!m) return []
+  const acc = {}
+  const add = (p, q) => {
+    if (!p || !(q > 0)) return
+    const k = p.code_pf || '—'
+    if (!acc[k]) acc[k] = { code: k, desig: p.designation || '', q: 0 }
+    acc[k].q += q
+  }
+  if (m.si === 0) {
+    for (const r of planRows.value) {
+      if (Number(r.annee) !== anneeSel.value || Number(r.mois) !== m.mois + 1) continue
+      add(r.produits, num(r.quantite_planifiee))
+    }
+  } else if (m.si === 1) {
+    for (const o of ofs.value) {
+      if (!o.date_fin_fabrication) continue
+      const d = new Date(o.date_fin_fabrication)
+      if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
+      add(o.produits, num(o.boites_fabriquees))
+    }
+  } else {
+    for (const c of condRows.value) {
+      if (!c.date_conditionnement) continue
+      const d = new Date(c.date_conditionnement)
+      if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
+      add(c.ordres_fabrication ? c.ordres_fabrication.produits : null, condBoites(c))
+    }
+  }
+  return Object.values(acc).sort((a, b) => b.q - a.q)
+})
+const totalBarre = computed(() => detailBarre.value.reduce((s, r) => s + r.q, 0))
+
 const planTotal = computed(() => planParMois.value.reduce((s, x) => s + x, 0))
 const fabTotal = computed(() => fabParMois.value.reduce((s, x) => s + x, 0))
 const condTotal = computed(() => condParMois.value.reduce((s, x) => s + x, 0))
@@ -276,7 +314,7 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
           <span><i class="dot cond"></i>Conditionnement</span>
         </div>
       </div>
-      <MiniChart :labels="MOIS" :format="fmt" :max="maxMois" show-values
+      <MiniChart :labels="MOIS" :format="fmt" :max="maxMois" show-values clickable @pick="ouvrirBarre"
         :value-format="v => v == null ? '' : (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? Math.round(v / 1e3) + 'K' : String(v))"
         :series="[
           { label: 'Plan', color: '#94a3b8', data: planParMois, dash: true },
@@ -318,6 +356,30 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
       </div>
     </section>
   </div>
+    <div v-if="modalRP" class="modal-overlay" @click="modalRP = null">
+      <div class="rp-modal" @click.stop>
+        <div class="rp-md-head">
+          <h3>{{ MOIS_LONG[modalRP.mois] }} {{ anneeSel }}</h3>
+          <button class="rp-md-x" @click="modalRP = null">✕</button>
+        </div>
+        <div class="rp-tabs">
+          <button v-for="(s, i) in SERIES_RP" :key="s" :class="{ on: modalRP.si === i }" @click="modalRP.si = i">{{ s }}</button>
+        </div>
+        <div class="rp-md-sub">{{ detailBarre.length }} produit(s) · {{ fmt(totalBarre) }} boîtes</div>
+        <div class="rp-md-body">
+          <div v-if="!detailBarre.length" class="empty">Aucune donnée pour ce mois.</div>
+          <table v-else class="grid">
+            <tbody>
+              <tr v-for="r in detailBarre" :key="r.code">
+                <td class="rp-code">{{ r.code }}</td>
+                <td class="rp-des">{{ r.desig }}</td>
+                <td class="rp-num">{{ fmt(r.q) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 </template>
 
 <style scoped>
@@ -413,4 +475,17 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
   .kpi-grid.k3, .kpi-grid.k4, .kpi-grid.k5 { grid-template-columns: 1fr; }
   .serie-val { width: 70px; }
 }
+.modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.rp-modal { background: #fff; border-radius: 14px; width: min(580px, 100%); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+.rp-md-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; }
+.rp-md-head h3 { margin: 0; font-size: 15.5px; }
+.rp-md-x { background: none; border: 0; font-size: 17px; color: #94a3b8; cursor: pointer; }
+.rp-tabs { display: flex; gap: 6px; padding: 0 18px 10px; }
+.rp-tabs button { background: #f1f5f9; border: 0; font-family: inherit; font-size: 12px; font-weight: 600; color: #64748b; padding: 5px 12px; border-radius: 7px; cursor: pointer; }
+.rp-tabs button.on { background: #0f766e; color: #fff; }
+.rp-md-sub { padding: 8px 18px; font-size: 12.5px; color: #64748b; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; }
+.rp-md-body { overflow-y: auto; padding: 6px 18px 16px; }
+.rp-code { font-family: ui-monospace, monospace; font-weight: 700; color: #0f766e; white-space: nowrap; }
+.rp-des { color: #475569; }
+.rp-num { text-align: right; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
 </style>
