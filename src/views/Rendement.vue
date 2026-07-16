@@ -43,7 +43,7 @@ async function chargerTout() {
   chargement.value = true
   erreur.value = ''
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, quantite_theorique, boites_fabriquees, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(id, code_pf, designation, unites_par_boite, taille_lot)')
+    .select('id, numero_lot, quantite_theorique, boites_fabriquees, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(id, code_pf, designation, unites_par_boite, poids_unitaire_mg, taille_lot)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data
@@ -162,6 +162,7 @@ const lotsExclus = computed(() => {
   for (const o of ofs.value) {
     const theo = Number(o.quantite_theorique || 0)
     const upb = upbOf(o)
+    const mm = o.produits ? Number(o.produits.poids_unitaire_mg || 0) : 0
     const bf = Number(o.boites_fabriquees || 0)
     const dFab = o.date_fin_fabrication
     const fabAnnee = !!dFab && new Date(dFab).getFullYear() === anneeSel.value
@@ -180,8 +181,9 @@ const lotsExclus = computed(() => {
     } else if (exCond && upb <= 0) {
       cause = 'Unités/boîte manquant (fiche produit)'; cible = 'produit'; unite = 'unités/boîte'; hint = 'ex. 30'
     } else if (exFab && bf <= 0) {
-      cause = 'Boîtes fabriquées non saisies'; cible = 'of_boites'; unite = 'boîtes'
-      hint = 'théorique : ' + theo
+      cause = 'Quantité fabriquée non saisie'; cible = 'of_boites'; unite = 'kg'
+      const theoKg = (mm > 0 && upb > 0) ? Math.round(theo * upb * mm / 1e6) : 0
+      hint = theoKg > 0 ? 'théorique ≈ ' + theoKg + ' kg' : 'kg produits'
     } else {
       cause = 'Quantité conditionnée non saisie'; cible = 'cond'; unite = 'boîtes'
       hint = bf > 0 ? 'fabriquées : ' + bf : 'ex. 8000'
@@ -193,7 +195,7 @@ const lotsExclus = computed(() => {
       taille: taille || null, unite, hint,
       produitId: o.produits ? o.produits.id : null,
       condId: aCompl[o.id] ? aCompl[o.id].id : null,
-      upb,
+      upb, mm,
       cause, cible,
       impact: exFab && exCond ? 'Fab. + Cond.' : (exFab ? 'Fabrication' : 'Conditionnement'),
       date: dc || dFab
@@ -202,6 +204,13 @@ const lotsExclus = computed(() => {
   return arr.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))
     || String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
 })
+// Conversion kg -> boîtes (identique à l'appli : kg -> comprimés -> boîtes)
+function boitesDepuisKg(x, kg) {
+  const v = Number(kg)
+  if (!(v > 0) || !(x.mm > 0) || !(x.upb > 0)) return null
+  return Math.floor((v * 1e6) / x.mm / x.upb)
+}
+
 // Correction EN LIGNE (sans quitter la page)
 const saisieExclu = reactive({})
 const enCoursExclu = ref('')
@@ -215,7 +224,11 @@ async function enregistrerExclu(x) {
   let r = null
   enCoursExclu.value = k
   if (x.cible === 'of_theo') r = await supabase.from('ordres_fabrication').update({ quantite_theorique: v }).eq('id', x.id)
-  else if (x.cible === 'of_boites') r = await supabase.from('ordres_fabrication').update({ boites_fabriquees: v }).eq('id', x.id)
+  else if (x.cible === 'of_boites') {
+    const b = boitesDepuisKg(x, v)
+    if (b == null) { enCoursExclu.value = ''; msgExclu.value = "Poids unitaire ou unités/boîte manquant dans la fiche produit — corrige-la d'abord (Référentiels)."; return }
+    r = await supabase.from('ordres_fabrication').update({ boites_fabriquees: b }).eq('id', x.id)
+  }
   else if (x.cible === 'produit') r = await supabase.from('produits').update({ unites_par_boite: v }).eq('id', x.produitId)
   else if (x.cible === 'cond') {
     if (!x.condId) { enCoursExclu.value = ''; msgExclu.value = 'Session de conditionnement introuvable — utilise le bouton ›.'; return }
@@ -657,6 +670,9 @@ onMounted(chargerTout)
                     v-model="saisieExclu[x.id + '|' + x.cause]" :placeholder="x.hint"
                     @keyup.enter="enregistrerExclu(x)" />
                   <span class="excl-unite">{{ x.unite }}</span>
+                  <div v-if="x.cible === 'of_boites' && boitesDepuisKg(x, saisieExclu[x.id + '|' + x.cause])" class="excl-conv">
+                    ≈ {{ fmt(boitesDepuisKg(x, saisieExclu[x.id + '|' + x.cause])) }} boîtes
+                  </div>
                 </td>
                 <td class="ta-r nowrap">
                   <button v-if="peutEditer" class="excl-btn" :disabled="enCoursExclu === (x.id + '|' + x.cause)" @click="enregistrerExclu(x)">
@@ -1053,6 +1069,7 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .md-x { background: none; border: 0; cursor: pointer; color: #64748b; font-size: 16px; line-height: 1; }
 .excl-in { width: 120px; font-size: 13px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; text-align: right; }
 .excl-unite { font-size: 11px; color: #94a3b8; margin-left: 5px; }
+.excl-conv { font-size: 11px; color: #2563eb; font-weight: 700; margin-top: 3px; }
 .excl-msg { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 7px 10px; border-radius: 7px; }
 .excl-lnk { background: none; border: 0; color: #94a3b8; font-weight: 700; cursor: pointer; font-size: 15px; padding: 0 4px; }
 .excl-lnk:hover { color: #2563eb; }
