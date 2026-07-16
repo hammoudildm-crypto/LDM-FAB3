@@ -291,6 +291,14 @@ const vueCondLignes = computed(() => {
   const rq = recherche.value.trim().toLowerCase()
   const mL = (l) => !rq || (l.lot || '').toLowerCase().includes(rq) || (l.code || '').toLowerCase().includes(rq) || (l.desig || '').toLowerCase().includes(rq)
   const groups = {}
+  // Toutes les lignes de conditionnement, MÊME SANS LOT (pour visualiser l'utilisation).
+  // Exception : pendant une recherche, on ne garde que les lignes concernées.
+  if (!rq) {
+    for (const e of equipements.value) {
+      if (phaseEquip(e) !== 'conditionnement') continue
+      groups[e.id] = { id: e.id, label: e.code + (e.nom ? ' — ' + e.nom : ''), reserve: true, attente: [], cours: [] }
+    }
+  }
   const add = (l, type) => {
     if (!mL(l)) return
     const key = l.reserveId || '__none__'
@@ -571,13 +579,14 @@ onMounted(async () => {
               <span class="at-sum">{{ g.attente.length }} en attente · {{ g.cours.length }} en cours</span>
             </h2>
             <div class="eq-grid">
-              <div class="card phase-card" :class="{ rupture: !g.reserve }">
+              <div class="card phase-card" :class="{ rupture: !g.reserve || !g.tot }">
                 <div class="eq-head">
                   <div class="eq-ident">
                     <span class="eq-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span>
                     <div><div class="eq-code">Conditionnement</div><div class="eq-nom">{{ g.reserve ? 'Ligne réservée' : 'Sans réservation' }}</div></div>
                   </div>
                   <span v-if="!g.reserve" class="phase-badge rupt-badge">à affecter</span>
+                  <span v-else-if="!g.tot" class="phase-badge rupt-badge">Libre</span>
                 </div>
                 <div class="q-block">
                   <div class="q-title cours">En cours — {{ g.cours.length }} lot(s) · {{ fmtC(g.volCours) }} bts</div>
