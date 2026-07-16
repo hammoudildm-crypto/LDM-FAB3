@@ -47,7 +47,7 @@ async function charger() {
   if (!rc.error) conds.value = rc.data || []
   const rh = await fetchAllPaged(() => supabase.from('production_historique').select('annee, mois, etape, nb_lots'))
   if (!rh.error) hist.value = rh.data || []
-  const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, date_fin_fabrication').eq('actif', true))
+  const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, date_fin_fabrication, produits(code_pf, designation)').eq('actif', true))
   if (!ro.error) ofs.value = ro.data || []
   chargement.value = false
 }
@@ -150,6 +150,48 @@ const seriesChart = computed(() =>
   }))
 )
 
+// --- Clic sur une barre : les lots de ce mois / cette année pour l'atelier ---
+const anneesChart = computed(() => ANNEES_COMP.filter(y => anneesActives.value.has(y)))
+const ofById = computed(() => { const m = {}; for (const o of ofs.value) m[o.id] = o; return m })
+const modalPA = ref(null)   // { mois, annee }
+function ouvrirBarrePA(i, si) {
+  const ys = anneesChart.value
+  if (!ys.length) return
+  const y = ys[si == null ? ys.length - 1 : si]
+  if (y == null) return
+  modalPA.value = { mois: i, annee: y }
+}
+const lotsMoisPA = computed(() => {
+  const m = modalPA.value
+  if (!m) return []
+  const ph = atelierSel.value, y = m.annee
+  const dansMois = (d) => { if (!d) return false; const dt = new Date(d); return dt.getFullYear() === y && dt.getMonth() === m.mois }
+  const ids = new Set()
+  if (ph === 'Conditionnement') { for (const c of conds.value) if (dansMois(c.date_fin || c.date_conditionnement)) ids.add(c.ordre_id) }
+  else if (ph === 'Livraison Vrac') { for (const o of ofs.value) if (dansMois(o.date_fin_fabrication)) ids.add(o.id) }
+  else { for (const sp of phases.value) if (sp.phase === ph && dansMois(sp.date_phase)) ids.add(sp.ordre_id) }
+  const arr = []
+  for (const id of ids) {
+    const o = ofById.value[id]
+    arr.push({ id, lot: o && o.numero_lot ? o.numero_lot : '—',
+      code: o && o.produits ? o.produits.code_pf : '—',
+      desig: o && o.produits ? o.produits.designation : '' })
+  }
+  return arr.sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
+})
+const valeurBarrePA = computed(() => {
+  const m = modalPA.value; if (!m) return 0
+  const d = matriceMultiAn.value[atelierSel.value]
+  return d && d[m.annee] ? d[m.annee][m.mois] : 0
+})
+// La valeur affichée vient-elle de l'historique importé (compteurs seuls, sans lots) ?
+const sourceHistPA = computed(() => {
+  const m = modalPA.value; if (!m) return false
+  if (m.annee < anneeCourante) return true
+  const h = (histParAn.value[atelierSel.value] || {})[m.annee]
+  return !!(h && h[m.mois] > 0)
+})
+
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 
 function telechargerCSV(nom, entetes, lignes) {
@@ -244,13 +286,37 @@ onMounted(charger)
         </div>
         <div class="chart-titre">{{ atelierSel }} — lots terminés par mois</div>
         <div class="chart-wrap">
-          <MiniChart v-if="seriesChart.length" :series="seriesChart" :labels="MOIS" :show-switch="true" :show-values="true" />
+          <MiniChart v-if="seriesChart.length" :series="seriesChart" :labels="MOIS" :show-switch="true" :show-values="true" clickable @pick="ouvrirBarrePA" />
           <p v-else class="empty">Sélectionne au moins une année pour afficher le graphe.</p>
         </div>
       </section>
 
       <p class="hint">Chaque cellule = nombre de <strong>lots distincts</strong> ayant <strong>terminé</strong> l'étape ce mois-là. Les <strong>années passées</strong> proviennent de l'<strong>historique importé</strong> (TDB PROD) ; l'<strong>année en cours</strong> est calculée en <strong>temps réel</strong> depuis Suivi des phases. Un même lot compte une fois par atelier.</p>
     </template>
+
+    <div v-if="modalPA" class="modal-overlay" @click="modalPA = null">
+      <div class="pa-modal" @click.stop>
+        <div class="pa-md-head">
+          <h3>{{ atelierSel }} — {{ MOIS_LONG[modalPA.mois] }} {{ modalPA.annee }}</h3>
+          <button class="pa-md-x" @click="modalPA = null">✕</button>
+        </div>
+        <div class="pa-md-sub">{{ fmt(valeurBarrePA) }} lot(s) terminé(s)<span v-if="lotsMoisPA.length"> · {{ lotsMoisPA.length }} détaillé(s)</span></div>
+        <div class="pa-md-body">
+          <p v-if="sourceHistPA && !lotsMoisPA.length" class="pa-note">Valeur issue de l'<strong>historique importé</strong> — le détail des lots n'est pas disponible pour ce mois.</p>
+          <div v-else-if="!lotsMoisPA.length" class="empty">Aucun lot pour ce mois.</div>
+          <table v-else class="pa-table">
+            <tbody>
+              <tr v-for="l in lotsMoisPA" :key="l.id">
+                <td class="pa-lot">{{ l.lot }}</td>
+                <td class="pa-code">{{ l.code }}</td>
+                <td class="pa-des">{{ l.desig }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-if="sourceHistPA && lotsMoisPA.length" class="pa-note">Note : la valeur du graphe vient de l'<strong>historique importé</strong> ; la liste ci-dessus est le détail <strong>temps réel</strong> — les deux peuvent différer.</p>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -309,4 +375,17 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 @media (max-width: 700px) {
   .kpi-grid { grid-template-columns: 1fr; }
 }
+.modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.pa-modal { background: #fff; border-radius: 14px; width: min(600px, 100%); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+.pa-md-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; }
+.pa-md-head h3 { margin: 0; font-size: 15.5px; }
+.pa-md-x { background: none; border: 0; font-size: 17px; color: #94a3b8; cursor: pointer; }
+.pa-md-sub { padding: 8px 18px; font-size: 12.5px; color: #64748b; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; }
+.pa-md-body { overflow-y: auto; padding: 6px 18px 16px; }
+.pa-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.pa-table td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; }
+.pa-lot { font-family: ui-monospace, monospace; font-weight: 700; white-space: nowrap; }
+.pa-code { font-family: ui-monospace, monospace; font-weight: 600; color: #0f766e; white-space: nowrap; }
+.pa-des { color: #475569; }
+.pa-note { font-size: 12.5px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; padding: 8px 10px; border-radius: 7px; margin: 10px 0 0; }
 </style>
