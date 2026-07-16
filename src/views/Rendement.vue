@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import { ICONS, TINTS } from '../icons.js'
@@ -13,6 +13,7 @@ const conds = ref([])
 const erreur = ref('')
 const chargement = ref(true)
 const router = useRouter()
+const peutEditer = inject('peutEditer', ref(false))
 function ouvrirDossier(ordreId) {
   router.push({ path: '/dossier', query: { lot: ordreId } })
 }
@@ -42,13 +43,13 @@ async function chargerTout() {
   chargement.value = true
   erreur.value = ''
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, quantite_theorique, boites_fabriquees, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, unites_par_boite, taille_lot)')
+    .select('id, numero_lot, quantite_theorique, boites_fabriquees, date_fin_fabrication, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(id, code_pf, designation, unites_par_boite, taille_lot)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
-    .select('ordre_id, quantite_conditionnee, date_conditionnement, date_fin')
+    .select('id, ordre_id, quantite_conditionnee, date_conditionnement, date_fin')
     .eq('actif', true))
   if (rc.error) { erreur.value = rc.error.message; chargement.value = false; return }
   conds.value = rc.data
@@ -141,10 +142,22 @@ const condFiniParLot = computed(() => {
   for (const c of conds.value) if (c.date_fin) m[c.ordre_id] = true
   return m
 })
+// Session de conditionnement à compléter (terminée, sans quantité) par lot
+const condACompleterParLot = computed(() => {
+  const m = {}
+  for (const c of conds.value) {
+    if (!c.date_fin) continue
+    if (Number(c.quantite_conditionnee || 0) > 0) continue
+    const prev = m[c.ordre_id]
+    if (!prev || String(c.date_fin) > String(prev.date_fin)) m[c.ordre_id] = c
+  }
+  return m
+})
 const lotsExclus = computed(() => {
   const prod = produitParLot.value
   const dates = condDateParLot.value
   const finis = condFiniParLot.value
+  const aCompl = condACompleterParLot.value
   const arr = []
   for (const o of ofs.value) {
     const theo = Number(o.quantite_theorique || 0)
@@ -159,16 +172,28 @@ const lotsExclus = computed(() => {
     const exFab = fabAnnee && (theo <= 0 || bf <= 0)
     const exCond = condAnnee && (theo <= 0 || upb <= 0 || (p <= 0 && !!finis[o.id]))
     if (!exFab && !exCond) continue
-    let cause, cible
-    if (theo <= 0) { cause = 'Théorique manquant'; cible = 'of' }
-    else if (exCond && upb <= 0) { cause = 'Unités/boîte manquant (fiche produit)'; cible = 'produit' }
-    else if (exFab && bf <= 0) { cause = 'Boîtes fabriquées non saisies'; cible = 'of' }
-    else { cause = 'Quantité conditionnée non saisie'; cible = 'cond' }
+    const taille = o.produits ? Number(o.produits.taille_lot || 0) : 0
+    let cause, cible, unite, hint
+    if (theo <= 0) {
+      cause = 'Théorique manquant'; cible = 'of_theo'; unite = 'boîtes'
+      hint = taille > 0 ? 'taille de lot : ' + taille : 'ex. 8000'
+    } else if (exCond && upb <= 0) {
+      cause = 'Unités/boîte manquant (fiche produit)'; cible = 'produit'; unite = 'unités/boîte'; hint = 'ex. 30'
+    } else if (exFab && bf <= 0) {
+      cause = 'Boîtes fabriquées non saisies'; cible = 'of_boites'; unite = 'boîtes'
+      hint = 'théorique : ' + theo
+    } else {
+      cause = 'Quantité conditionnée non saisie'; cible = 'cond'; unite = 'boîtes'
+      hint = bf > 0 ? 'fabriquées : ' + bf : 'ex. 8000'
+    }
     arr.push({
       id: o.id, lot: o.numero_lot || '—',
       code: o.produits ? o.produits.code_pf : '—',
       desig: o.produits ? o.produits.designation : '',
-      taille: o.produits ? o.produits.taille_lot : null,
+      taille: taille || null, unite, hint,
+      produitId: o.produits ? o.produits.id : null,
+      condId: aCompl[o.id] ? aCompl[o.id].id : null,
+      upb,
       cause, cible,
       impact: exFab && exCond ? 'Fab. + Cond.' : (exFab ? 'Fabrication' : 'Conditionnement'),
       date: dc || dFab
@@ -177,6 +202,33 @@ const lotsExclus = computed(() => {
   return arr.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))
     || String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
 })
+// Correction EN LIGNE (sans quitter la page)
+const saisieExclu = reactive({})
+const enCoursExclu = ref('')
+const msgExclu = ref('')
+function cleExclu(x) { return x.id + '|' + x.cause }
+async function enregistrerExclu(x) {
+  const k = cleExclu(x)
+  const v = Number(saisieExclu[k])
+  msgExclu.value = ''
+  if (!(v > 0)) { msgExclu.value = 'Saisir une valeur supérieure à 0.'; return }
+  let r = null
+  enCoursExclu.value = k
+  if (x.cible === 'of_theo') r = await supabase.from('ordres_fabrication').update({ quantite_theorique: v }).eq('id', x.id)
+  else if (x.cible === 'of_boites') r = await supabase.from('ordres_fabrication').update({ boites_fabriquees: v }).eq('id', x.id)
+  else if (x.cible === 'produit') r = await supabase.from('produits').update({ unites_par_boite: v }).eq('id', x.produitId)
+  else if (x.cible === 'cond') {
+    if (!x.condId) { enCoursExclu.value = ''; msgExclu.value = 'Session de conditionnement introuvable — utilise le bouton ›.'; return }
+    if (!(x.upb > 0)) { enCoursExclu.value = ''; msgExclu.value = "Unités/boîte manquant : corrige d'abord la fiche produit."; return }
+    r = await supabase.from('conditionnement').update({ quantite_conditionnee: v * x.upb }).eq('id', x.condId)
+  }
+  enCoursExclu.value = ''
+  if (r && r.error) { msgExclu.value = r.error.message; return }
+  delete saisieExclu[k]
+  msgExclu.value = 'Lot ' + x.lot + ' corrigé.'
+  setTimeout(() => { if (msgExclu.value.indexOf('corrigé') > -1) msgExclu.value = '' }, 3000)
+  await chargerTout()
+}
 function corrigerExclu(x) {
   if (x.cible === 'produit') router.push({ path: '/referentiels' })
   else if (x.cible === 'cond') router.push({ path: '/conditionnement', query: { lot: x.id } })
@@ -587,20 +639,31 @@ onMounted(chargerTout)
           <span class="count warn-count">{{ lotsExclus.length }}</span>
         </div>
         <p class="warn-txt">Ces lots ne sont comptés dans <strong>aucun taux</strong> : une donnée manque, donc leur avarie est <strong>invisible</strong>. Tant que cette liste n'est pas vide, les rendements et les taux de déchets sont <strong>incomplets</strong>. (Les lots encore en cours ne sont pas listés.)</p>
-        <p class="warn-hint">👉 Clique sur <strong>Corriger</strong> pour aller directement à la donnée manquante.</p>
+        <p class="warn-hint">👉 Saisis la valeur manquante <strong>directement dans la ligne</strong> puis <strong>Entrée</strong> (ou « Enregistrer ») — le lot rentre aussitôt dans les taux. Le bouton <strong>›</strong> ouvre la page complète si besoin.</p>
+        <p v-if="msgExclu" class="excl-msg">{{ msgExclu }}</p>
         <div class="table-scroll">
           <table class="grid">
             <thead>
-              <tr><th>Lot</th><th>Produit</th><th>Donnée manquante</th><th>Taux impacté</th><th class="ta-r">Taille lot</th><th></th></tr>
+              <tr><th>Lot</th><th>Produit</th><th>Donnée manquante</th><th>Taux impacté</th><th class="ta-r">Valeur à saisir</th><th></th></tr>
             </thead>
             <tbody>
-              <tr v-for="x in lotsExclus" :key="x.id + x.cause">
+              <tr v-for="x in lotsExclus" :key="x.id + '|' + x.cause">
                 <td class="mono">{{ x.lot }}</td>
                 <td><span class="mono">{{ x.code }}</span> <span class="desig">{{ x.desig }}</span></td>
                 <td class="av-num">{{ x.cause }}</td>
                 <td>{{ x.impact }}</td>
-                <td class="ta-r">{{ x.taille ? fmt(x.taille) : '—' }}</td>
-                <td class="ta-r"><button class="excl-btn" @click="corrigerExclu(x)">Corriger ›</button></td>
+                <td class="ta-r nowrap">
+                  <input v-if="peutEditer" class="excl-in" type="number" step="any" min="0"
+                    v-model="saisieExclu[x.id + '|' + x.cause]" :placeholder="x.hint"
+                    @keyup.enter="enregistrerExclu(x)" />
+                  <span class="excl-unite">{{ x.unite }}</span>
+                </td>
+                <td class="ta-r nowrap">
+                  <button v-if="peutEditer" class="excl-btn" :disabled="enCoursExclu === (x.id + '|' + x.cause)" @click="enregistrerExclu(x)">
+                    {{ enCoursExclu === (x.id + '|' + x.cause) ? '…' : 'Enregistrer' }}
+                  </button>
+                  <button class="excl-lnk" @click="corrigerExclu(x)" title="Ouvrir la page correspondante">›</button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -988,7 +1051,13 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .md-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 560px; max-width: calc(100vw - 32px); max-height: 80vh; display: flex; flex-direction: column; background: #fff; border-radius: 14px; box-shadow: 0 24px 60px rgba(16,24,40,.3); z-index: 71; overflow: hidden; }
 .md-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; font-size: 15px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #eef2f6; }
 .md-x { background: none; border: 0; cursor: pointer; color: #64748b; font-size: 16px; line-height: 1; }
+.excl-in { width: 120px; font-size: 13px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; text-align: right; }
+.excl-unite { font-size: 11px; color: #94a3b8; margin-left: 5px; }
+.excl-msg { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 7px 10px; border-radius: 7px; }
+.excl-lnk { background: none; border: 0; color: #94a3b8; font-weight: 700; cursor: pointer; font-size: 15px; padding: 0 4px; }
+.excl-lnk:hover { color: #2563eb; }
 .excl-btn { background: none; border: 0; color: #2563eb; font-weight: 700; cursor: pointer; font-size: 13px; white-space: nowrap; }
+.excl-btn:disabled { color: #94a3b8; cursor: default; }
 .excl-btn:hover { text-decoration: underline; }
 .md-sub { padding: 8px 18px; font-size: 12px; color: #64748b; background: #f8fafc; border-bottom: 1px solid #eef2f6; }
 .md-list { overflow-y: auto; padding: 6px 12px 14px; }
