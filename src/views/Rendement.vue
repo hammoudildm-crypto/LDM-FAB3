@@ -98,18 +98,32 @@ const anneesDispo = computed(() => {
   return ys.length ? ys : [anneeSel.value]
 })
 
-// Lots de l'année sélectionnée (fabrication)
+// Date de conditionnement par lot (dernière session) = date d'attribution mois/année
+const condDateParLot = computed(() => {
+  const m = {}
+  for (const c of conds.value) {
+    if (!c.date_conditionnement) continue
+    if (!m[c.ordre_id] || c.date_conditionnement > m[c.ordre_id]) m[c.ordre_id] = c.date_conditionnement
+  }
+  return m
+})
+
+// Lots CONDITIONNÉS dans l'année sélectionnée, placés sur le MOIS DE LEUR
+// CONDITIONNEMENT (et non sur le mois de fabrication) : même base que le
+// tableau de bord et que les KPI annuels du conditionnement.
 const lotsAnnee = computed(() => {
   const prod = produitParLot.value
+  const dates = condDateParLot.value
   const arr = []
   for (const o of ofs.value) {
-    if (!o.date_fin_fabrication) continue
-    const d = new Date(o.date_fin_fabrication)
+    const dc = dates[o.id]
+    if (!dc) continue   // lot pas encore conditionné -> non pris en compte
+    const d = new Date(dc)
     if (d.getFullYear() !== anneeSel.value) continue
     const theo = Number(o.quantite_theorique || 0)
     if (theo <= 0) continue
     const p = prod[o.id] || 0
-    if (p <= 0) continue   // lot pas encore conditionné -> non pris en compte (ni rendement, ni anomalie)
+    if (p <= 0) continue
     arr.push({ of: o, mois: d.getMonth(), prod: p, theo, rdt: (p / theo) * 100 })
   }
   return arr
@@ -162,31 +176,9 @@ const boitesCondTotal = computed(() => condLotsAnnee.value.reduce((s, r) => s + 
 // Théorique fabrication (mêmes lots que les boîtes) + nb de lots
 const theoFabTotal = computed(() => lotsAnneeFab.value.reduce((s, r) => s + r.theo, 0))
 const nbLotsFabTotal = computed(() => lotsAnneeFab.value.length)
-// Théorique BRUT conditionnement (lots conditionnés dans l'année, par date de cond.) + nb de lots
-const condIdsAnnee = computed(() => {
-  const ids = new Set()
-  for (const c of conds.value) {
-    if (!c.date_conditionnement) continue
-    if (new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
-    ids.add(c.ordre_id)
-  }
-  return ids
-})
-// Lots conditionnés dans l'année : boîtes TOTALES (toutes sessions) + théorique.
-const condLotsAnnee = computed(() => {
-  const prod = produitParLot.value
-  const ofById = {}
-  for (const o of ofs.value) ofById[o.id] = o
-  const arr = []
-  for (const id of condIdsAnnee.value) {
-    const o = ofById[id]; if (!o) continue
-    const tt = Number(o.quantite_theorique || 0)
-    const pp = prod[id] || 0
-    if (tt <= 0 || pp <= 0) continue
-    arr.push({ prod: pp, theo: tt })
-  }
-  return arr
-})
+// Lots conditionnés dans l'année = EXACTEMENT les mêmes que le graphe mensuel
+// et le modal (une seule source de vérité pour le conditionnement).
+const condLotsAnnee = computed(() => lotsAnnee.value)
 const theoCondTotal = computed(() => condLotsAnnee.value.reduce((s, r) => s + r.theo, 0))
 const nbLotsCondTotal = computed(() => condLotsAnnee.value.length)
 
