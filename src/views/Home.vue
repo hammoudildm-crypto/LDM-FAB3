@@ -316,6 +316,41 @@ const fabRealisee = computed(() => {
 })
 const pctPlanFab = computed(() => planTotal.value > 0 ? (fabRealisee.value / planTotal.value) * 100 : null)
 const boitesRestantesFab = computed(() => Math.max(0, planTotal.value - fabRealisee.value))
+
+// --- Valorisation en CA de chaque carte (boîtes x PCSU du produit) ---
+// Chaque CA est le MIROIR EXACT de sa carte : mêmes lots, mêmes filtres.
+function pcsuLot(l) { return l.produits ? Number(l.produits.pcsu || 0) : 0 }
+const caFabRealisee = computed(() => {
+  let t = 0
+  for (const l of lotsAnnee.value) {
+    if (!l.date_fin_fabrication || !l.boites_fabriquees) continue
+    if (new Date(l.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+    t += Number(l.boites_fabriquees || 0) * pcsuLot(l)
+  }
+  return t
+})
+const caVrac = computed(() => {
+  const condIds = new Set()
+  for (const c of conditionnements.value) condIds.add(c.ordre_id)
+  let t = 0
+  for (const l of lots.value) {
+    if (!l.date_fin_fabrication) continue
+    if (condIds.has(l.id)) continue
+    t += Number(l.boites_fabriquees || 0) * pcsuLot(l)
+  }
+  return t
+})
+const caFabCeMois = computed(() => {
+  let t = 0
+  for (const l of lots.value) {
+    if (!l.date_fin_fabrication || !l.boites_fabriquees) continue
+    const d = new Date(l.date_fin_fabrication)
+    if (d.getFullYear() === anneeCourante && d.getMonth() === moisCourant) t += Number(l.boites_fabriquees || 0) * pcsuLot(l)
+  }
+  return t
+})
+const caResteFabPlan = computed(() => Math.max(0, caPotentielPlan.value - caFabRealisee.value))
+const caResteCondPlan = computed(() => Math.max(0, caPotentielPlan.value - caRealise.value))
 const fabCeMois = computed(() => {
   let t = 0
   for (const l of lots.value) {
@@ -513,18 +548,18 @@ onMounted(async () => {
         <!-- Deux structures : Fabrication réalisée & Conditionnement réalisé -->
         <h3 class="struct-h"><span class="struct-b fab">Fabrication réalisée</span><span class="struct-d">boîtes fabriquées · {{ anneeSel }}</span></h3>
         <div class="kpi-grid k5">
-          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><span class="kpi-val accent">{{ fmt(fabRealisee) }}</span></div><div class="kpi-lbl">Fabrication réalisée (bts)</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><span class="kpi-val accent">{{ fmt(fabRealisee) }}</span></div><div class="kpi-lbl">Fabrication réalisée (bts)</div><div class="kpi-ca">{{ fmtDA(caFabRealisee) }}</div></div>
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.cyan"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><span class="kpi-val">{{ fmtPct(pctPlanFab) }}</span></div><div class="kpi-lbl">% du plan</div></div>
-          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.violet"><svg viewBox="0 0 24 24" v-html="ICONS.layers"></svg></span><span class="kpi-val">{{ fmt(boitesRestantesFab) }}</span></div><div class="kpi-lbl">Reste / plan</div></div>
-          <RouterLink to="/encours?vrac=1" class="kpi kpi-clic vrac-link"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.orange"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span><span class="kpi-val">{{ fmt(vracEnAttente) }}</span></div><div class="kpi-lbl">Vrac en attente (bts) ›</div></RouterLink>
-          <div class="kpi kpi-clic" @click="ouvrirMois(moisCourant, 'fab')"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.calendar"></svg></span><span class="kpi-val">{{ fmt(fabCeMois) }}</span></div><div class="kpi-lbl">Fabriquées ce mois ›</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.violet"><svg viewBox="0 0 24 24" v-html="ICONS.layers"></svg></span><span class="kpi-val">{{ fmt(boitesRestantesFab) }}</span></div><div class="kpi-lbl">Reste / plan</div><div class="kpi-ca">{{ fmtDA(caResteFabPlan) }}</div></div>
+          <RouterLink to="/encours?vrac=1" class="kpi kpi-clic vrac-link"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.orange"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span><span class="kpi-val">{{ fmt(vracEnAttente) }}</span></div><div class="kpi-lbl">Vrac en attente (bts) ›</div><div class="kpi-ca">{{ fmtDA(caVrac) }}</div></RouterLink>
+          <div class="kpi kpi-clic" @click="ouvrirMois(moisCourant, 'fab')"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.calendar"></svg></span><span class="kpi-val">{{ fmt(fabCeMois) }}</span></div><div class="kpi-lbl">Fabriquées ce mois ›</div><div class="kpi-ca">{{ fmtDA(caFabCeMois) }}</div></div>
         </div>
         <h3 class="struct-h"><span class="struct-b cond">Conditionnement réalisé</span><span class="struct-d">boîtes conditionnées · {{ anneeSel }}</span></h3>
         <div class="kpi-grid k4">
-          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val accent">{{ fmt(totalBoites) }}</span></div><div class="kpi-lbl">Conditionnement réalisé (bts)</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val accent">{{ fmt(totalBoites) }}</span></div><div class="kpi-lbl">Conditionnement réalisé (bts)</div><div class="kpi-ca">{{ fmtDA(caRealise) }}</div></div>
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><span class="kpi-val">{{ fmtPct(pctPlanRealise) }}</span></div><div class="kpi-lbl">% du plan</div></div>
-          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.rose"><svg viewBox="0 0 24 24" v-html="ICONS.layers"></svg></span><span class="kpi-val">{{ fmt(boitesRestantes) }}</span></div><div class="kpi-lbl">Reste / plan</div></div>
-          <div class="kpi kpi-clic" @click="ouvrirMois(moisCourant, 'cond')"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.calendar"></svg></span><span class="kpi-val">{{ fmt(boitesCeMois) }}</span></div><div class="kpi-lbl">Conditionnées ce mois ›</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.rose"><svg viewBox="0 0 24 24" v-html="ICONS.layers"></svg></span><span class="kpi-val">{{ fmt(boitesRestantes) }}</span></div><div class="kpi-lbl">Reste / plan</div><div class="kpi-ca">{{ fmtDA(caResteCondPlan) }}</div></div>
+          <div class="kpi kpi-clic" @click="ouvrirMois(moisCourant, 'cond')"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.calendar"></svg></span><span class="kpi-val">{{ fmt(boitesCeMois) }}</span></div><div class="kpi-lbl">Conditionnées ce mois ›</div><div class="kpi-ca">{{ fmtDA(caCeMois) }}</div></div>
         </div>
 
         <!-- Indicateurs généraux -->
@@ -532,7 +567,7 @@ onMounted(async () => {
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.pill"></svg></span><span class="kpi-val">{{ fmt(nbProduits) }}</span></div><div class="kpi-lbl">Produits actifs</div></div>
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val">{{ fmt(nbLots) }}</span></div><div class="kpi-lbl">Lots</div></div>
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><span class="kpi-val">{{ fmt(lotsEnCours) }}</span></div><div class="kpi-lbl">Lots en cours</div></div>
-          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val">{{ fmt(planTotal) }}</span></div><div class="kpi-lbl">Plan {{ anneeSel }} (boîtes)</div></div>
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val">{{ fmt(planTotal) }}</span></div><div class="kpi-lbl">Plan {{ anneeSel }} (boîtes)</div><div class="kpi-ca">{{ fmtDA(caPotentielPlan) }}</div></div>
         </div>
 
         <div class="cols">
@@ -772,6 +807,7 @@ html[data-theme="sombre"] .tab.active { background: #1d2740 !important; }
 .kpi-val { font-size: 23px; font-weight: 700; letter-spacing: -0.02em; }
 .kpi-val.accent { color: #0f766e; }
 .kpi-lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
+.kpi-ca { font-size: 11.5px; color: #0f766e; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
 
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
