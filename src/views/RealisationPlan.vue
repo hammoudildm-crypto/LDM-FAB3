@@ -191,6 +191,32 @@ const condCA = computed(() => {
   return ca
 })
 
+// --- Contrôle : produits SANS PCSU -> leurs boîtes comptent, leur CA vaut 0 ---
+const ouvertSansPcsu = ref(false)
+const sansPcsu = computed(() => {
+  const m = {}
+  const entree = (p) => {
+    if (!p || num(p.pcsu) > 0) return null
+    const k = p.code_pf || '—'
+    if (!m[k]) m[k] = { code: k, desig: p.designation || '', fab: 0, cond: 0 }
+    return m[k]
+  }
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    if (new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+    const b = num(o.boites_fabriquees); if (b <= 0) continue
+    const e = entree(o.produits); if (e) e.fab += b
+  }
+  for (const c of condRows.value) {
+    if (!c.date_conditionnement) continue
+    if (new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
+    const b = condBoites(c); if (b <= 0) continue
+    const e = entree(c.ordres_fabrication ? c.ordres_fabrication.produits : null); if (e) e.cond += b
+  }
+  return Object.values(m).sort((a, b) => (b.fab + b.cond) - (a.fab + a.cond))
+})
+const boitesSansPcsu = computed(() => sansPcsu.value.reduce((s, r) => s + r.fab + r.cond, 0))
+
 const pctFab = computed(() => planTotal.value > 0 ? (fabTotal.value / planTotal.value) * 100 : null)
 const pctCond = computed(() => planTotal.value > 0 ? (condTotal.value / planTotal.value) * 100 : null)
 const maxMois = computed(() => {
@@ -276,6 +302,37 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
         <div class="kpi-lbl">fab. {{ anneeSel - 1 }} → cond. {{ anneeSel }} · {{ fmtDA(anticipCA) }}</div>
       </div>
     </div>
+
+    <p class="ca-note">
+      <strong>Comment le CA est calculé :</strong> boîtes × <strong>PCSU actuel</strong> du produit (Référentiels › Produits).
+      C'est la <strong>valorisation</strong> du vrac fabriqué et du conditionnement réalisé — pas un CA encaissé.
+      Le PCSU n'est pas historisé : le modifier revalorise aussi les années passées.
+    </p>
+
+    <section v-if="sansPcsu.length" class="ca-warn">
+      <div class="ca-warn-head" @click="ouvertSansPcsu = !ouvertSansPcsu">
+        <h3>⚠ {{ sansPcsu.length }} produit(s) sans PCSU — CA sous-estimé</h3>
+        <span class="ca-chev">{{ ouvertSansPcsu ? '▾ masquer' : '▸ afficher le détail' }}</span>
+      </div>
+      <p class="ca-warn-txt">
+        Ces produits totalisent <strong>{{ fmt(boitesSansPcsu) }} boîtes</strong> en {{ anneeSel }}, mais leur PCSU
+        n'est pas renseigné : leurs boîtes sont comptées, leur CA vaut <strong>0</strong>. Les montants ci-dessus sont
+        donc <strong>incomplets</strong>. À corriger dans Référentiels › Produits.
+      </p>
+      <div v-show="ouvertSansPcsu" class="ca-scroll">
+        <table class="ca-table">
+          <thead><tr><th>Code</th><th>Produit</th><th class="ta-r">Boîtes fabriquées</th><th class="ta-r">Boîtes conditionnées</th></tr></thead>
+          <tbody>
+            <tr v-for="r in sansPcsu" :key="r.code">
+              <td class="ca-code">{{ r.code }}</td>
+              <td>{{ r.desig }}</td>
+              <td class="ta-r">{{ r.fab ? fmt(r.fab) : '—' }}</td>
+              <td class="ta-r">{{ r.cond ? fmt(r.cond) : '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
     <div class="kpi-grid k5">
       <div class="kpi">
@@ -488,4 +545,16 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .rp-code { font-family: ui-monospace, monospace; font-weight: 700; color: #0f766e; white-space: nowrap; }
 .rp-des { color: #475569; }
 .rp-num { text-align: right; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ca-note { font-size: 12.5px; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 12px; margin: 0 0 14px; line-height: 1.5; }
+.ca-warn { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 13px 16px; margin: 0 0 16px; }
+.ca-warn-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; gap: 10px; }
+.ca-warn-head h3 { margin: 0; font-size: 15px; color: #92400e; }
+.ca-chev { font-size: 12px; color: #b45309; font-weight: 600; white-space: nowrap; }
+.ca-warn-txt { font-size: 13px; color: #78350f; margin: 8px 0 0; line-height: 1.5; }
+.ca-scroll { overflow-x: auto; margin-top: 12px; }
+.ca-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ca-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #92400e; padding: 6px 8px; border-bottom: 2px solid #fde68a; white-space: nowrap; }
+.ca-table td { padding: 6px 8px; border-bottom: 1px solid #fef3c7; }
+.ca-table .ta-r { text-align: right; font-variant-numeric: tabular-nums; }
+.ca-code { font-family: ui-monospace, monospace; font-weight: 700; color: #b45309; white-space: nowrap; }
 </style>
