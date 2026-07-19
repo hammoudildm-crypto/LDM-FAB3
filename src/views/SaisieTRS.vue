@@ -8,6 +8,8 @@ const peutEditer = inject('peutEditer', ref(false))
 const equipements = ref([])
 const produits = ref([])
 const cadences = ref([])
+const cadIn = ref('')
+const cadUniteIn = ref('kg/h')
 const saisies = ref([])
 const msg = ref('')
 const ok = ref('')
@@ -58,6 +60,21 @@ const cadenceObj = computed(() => cadences.value.find(c => c.equipement_id === e
 const cadence = computed(() => cadenceObj.value && cadenceObj.value.cadence_nominale != null ? Number(cadenceObj.value.cadence_nominale) : 0)
 const cadenceMode = computed(() => cadenceObj.value ? (cadenceObj.value.mode || 'debit') : 'debit')
 const uniteCad = computed(() => cadenceObj.value && cadenceObj.value.unite_cadence ? cadenceObj.value.unite_cadence : 'unités/h')
+
+// Enregistrer la cadence directement depuis la Saisie TRS (évite l'aller-retour
+// vers Référentiels et recharge la liste sur place -> plus de discordance).
+async function enregistrerCadenceInline() {
+  if (!equipId.value || !produitId.value) { msg.value = 'Choisir équipement et produit.'; return }
+  const v = cadIn.value === '' ? null : Number(cadIn.value)
+  if (!(v > 0)) { msg.value = 'Saisir une cadence supérieure à 0.'; return }
+  const r = await supabase.from('cadences_produit').upsert(
+    { equipement_id: equipId.value, produit_id: produitId.value, cadence_nominale: v, unite_cadence: cadUniteIn.value, mode: 'debit' },
+    { onConflict: 'equipement_id,produit_id' })
+  if (r.error) { msg.value = r.error.message; return }
+  cadIn.value = ''
+  await charger()
+  ok.value = 'Cadence enregistrée pour ce couple.'; setTimeout(() => ok.value = '', 3000)
+}
 
 function chargerContexte() {
   const ex = saisies.value.find(s => s.equipement_id === equipId.value && s.date === dateSel.value && s.poste === Number(poste.value))
@@ -169,7 +186,12 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         <span class="cad-lbl">Cadence de ce produit sur cet équipement :</span>
         <span class="cad-val" v-if="cadenceMode === 'cycle'">Mesuré au temps écoulé</span>
         <span class="cad-val" v-else>{{ cadence ? cadence.toLocaleString('fr-FR') + ' ' + uniteCad : '—' }}</span>
-        <span v-if="cadenceMode === 'debit' && !cadence" class="cad-warn">⚠ non définie — à renseigner dans Référentiels › Cadences</span>
+        <span v-if="cadenceMode === 'debit' && !cadence" class="cad-warn">⚠ non définie</span>
+        <span v-if="peutEditer && cadenceMode === 'debit' && !cadence" class="cad-inline">
+          <input type="number" step="any" min="0" v-model="cadIn" placeholder="cadence" class="cad-inline-in" @keyup.enter="enregistrerCadenceInline" />
+          <select v-model="cadUniteIn" class="cad-inline-sel"><option value="kg/h">kg/h</option><option value="unités/h">unités/h</option></select>
+          <button class="cad-inline-btn" @click="enregistrerCadenceInline">Enregistrer ici</button>
+        </span>
       </div>
       <p v-else class="hint">Choisis un équipement <b>et</b> un produit : la cadence est propre à chaque couple.</p>
     </section>
@@ -263,4 +285,9 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .nowrap { white-space: nowrap; }
 .empty { color: #94a3b8; text-align: center; padding: 16px; font-style: italic; }
 @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } .motifs { grid-template-columns: 1fr; } }
+.cad-inline { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; }
+.cad-inline-in { width: 110px; font-size: 13px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
+.cad-inline-sel { font-size: 13px; padding: 5px 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
+.cad-inline-btn { font-size: 13px; font-weight: 700; color: #fff; background: #0f766e; border: 0; border-radius: 7px; padding: 6px 12px; cursor: pointer; }
+.cad-inline-btn:hover { background: #0b5b55; }
 </style>
