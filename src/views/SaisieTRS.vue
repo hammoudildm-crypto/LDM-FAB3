@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, inject, onMounted } from 'vue'
+import { ref, reactive, computed, inject, onMounted, watch } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
@@ -7,7 +7,7 @@ const peutEditer = inject('peutEditer', ref(false))
 
 const equipements = ref([])
 const produits = ref([])
-const cadences = ref([])
+const cadenceObj = ref(null)
 const cadIn = ref('')
 const cadUniteIn = ref('kg/h')
 const cadMsg = ref('')
@@ -41,8 +41,6 @@ async function charger() {
   if (!re.error) equipements.value = re.data || []
   const rp = await supabase.from('produits').select('id, code_pf, designation').eq('actif', true).order('code_pf')
   if (!rp.error) produits.value = rp.data || []
-  const rc = await supabase.from('cadences_produit').select('*')
-  if (!rc.error) cadences.value = rc.data || []
   const rs = await supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf)').eq('actif', true).order('date', { ascending: false }).order('poste').limit(40)
   if (!rs.error) saisies.value = rs.data || []
 }
@@ -57,7 +55,15 @@ const produitsFiltres = computed(() => {
   if (!q) return produits.value
   return produits.value.filter(p => (String(p.code_pf || '') + ' ' + String(p.designation || '')).toLowerCase().includes(q))
 })
-const cadenceObj = computed(() => cadences.value.find(c => String(c.equipement_id) === String(equipId.value) && String(c.produit_id) === String(produitId.value)) || null)
+// Récupère UNIQUEMENT la cadence du couple sélectionné (pas de limite à 1000 lignes).
+async function chargerCadence() {
+  cadenceObj.value = null
+  if (!equipId.value || !produitId.value) return
+  const r = await supabase.from('cadences_produit').select('*')
+    .eq('equipement_id', equipId.value).eq('produit_id', produitId.value).limit(1)
+  if (!r.error && r.data && r.data.length) cadenceObj.value = r.data[0]
+}
+watch([equipId, produitId], chargerCadence)
 const cadence = computed(() => cadenceObj.value && cadenceObj.value.cadence_nominale != null ? Number(cadenceObj.value.cadence_nominale) : 0)
 const cadenceMode = computed(() => cadenceObj.value ? (cadenceObj.value.mode || 'debit') : 'debit')
 const uniteCad = computed(() => cadenceObj.value && cadenceObj.value.unite_cadence ? cadenceObj.value.unite_cadence : 'unités/h')
@@ -76,7 +82,7 @@ async function enregistrerCadenceInline() {
     { equipement_id: equipId.value, produit_id: produitId.value, cadence_nominale: v, unite_cadence: cadUniteIn.value, mode: 'debit' })
   if (r.error) { cadMsg.value = 'Erreur enregistrement : ' + r.error.message; return }
   cadIn.value = ''
-  await charger()
+  await chargerCadence()
   cadMsg.value = ''
   ok.value = 'Cadence enregistrée.'; setTimeout(() => ok.value = '', 2500)
 }
