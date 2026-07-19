@@ -254,7 +254,7 @@ function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 
 async function chargerACompleterC() {
   const r = await supabase.from('conditionnement')
-    .select('id, ordre_id, date_conditionnement, date_fin, equipement_id, quantite_entree, quantite_conditionnee, statut, commentaire, ordres_fabrication!inner(numero_lot, produits(code_pf, unites_par_boite))')
+    .select('id, ordre_id, date_conditionnement, date_fin, equipement_id, quantite_entree, quantite_conditionnee, statut, commentaire, ordres_fabrication!inner(numero_lot, produits(code_pf, designation, unites_par_boite))')
     .eq('actif', true)
     .not('date_fin', 'is', null)
     .or('quantite_conditionnee.is.null,quantite_conditionnee.eq.0')
@@ -313,7 +313,7 @@ onMounted(async () => {
               <tbody>
                 <tr v-for="r in aCompleterC" :key="r.id">
                   <td class="ac-mono">{{ r.ordres_fabrication.numero_lot }}</td>
-                  <td>{{ r.ordres_fabrication.produits ? r.ordres_fabrication.produits.code_pf : '—' }}</td>
+                  <td><span class="ac-mono">{{ r.ordres_fabrication.produits ? r.ordres_fabrication.produits.code_pf : '—' }}</span> <span class="ac-desig">{{ r.ordres_fabrication.produits ? r.ordres_fabrication.produits.designation : '' }}</span></td>
                   <td class="ac-nowrap">{{ r.date_conditionnement || '—' }}</td>
                   <td class="ac-nowrap">{{ r.date_fin }}</td>
                   <td class="ac-r"><button class="ac-link" @click="allerVersLotC(r)">Corriger ›</button></td>
@@ -493,6 +493,7 @@ button.link.danger { color: #b91c1c; }
 .ac-table td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .ac-r { text-align: right; }
 .ac-mono { font-family: ui-monospace, monospace; font-weight: 600; }
+.ac-desig { color: #475569; }
 .ac-nowrap { white-space: nowrap; }
 .ac-link { background: none; border: 0; color: #2563eb; font-weight: 600; cursor: pointer; font-size: 13px; }
 .ac-link:hover { text-decoration: underline; }
