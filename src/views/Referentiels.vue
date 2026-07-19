@@ -31,6 +31,7 @@ const editCadValeur = ref('')
 const editCadUnite = ref('')
 const editCadMode = ref('debit')
 const rechercheProdCad = ref('')
+const filtreCadEquip = ref('')
 const produitsFiltresCad = computed(() => {
   const q = rechercheProdCad.value.trim().toLowerCase()
   if (!q) return produits.value
@@ -180,6 +181,25 @@ async function ajouterCad() {
   if (r.error) { erreur.value = r.error.message; return }
   cadValeur.value = ''
   await chargerTout()
+}
+
+// --- Remplissage manuel : produits SANS cadence pour un équipement ---
+const produitsSansCadence = computed(() => {
+  if (!filtreCadEquip.value) return []
+  const avec = new Set(cadList.value.filter(c => c.equipement_id === filtreCadEquip.value).map(c => c.produit_id))
+  return produits.value
+    .filter(pr => !avec.has(pr.id))
+    .sort((a, b) => String(a.code_pf || '').localeCompare(String(b.code_pf || ''), undefined, { numeric: true }))
+})
+function prefillCad(pr) {
+  cadEquip.value = filtreCadEquip.value
+  rechercheProdCad.value = pr.code_pf || ''
+  cadProduit.value = pr.id
+  cadMode.value = 'debit'
+  setTimeout(() => {
+    const el = document.getElementById('cad-valeur')
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus() }
+  }, 50)
 }
 async function passerAtelierTempsEcoule() {
   bulkMsg.value = ''
@@ -618,7 +638,7 @@ onMounted(async () => {
           <input v-model="rechercheProdCad" placeholder="Rechercher produit…" class="cad-prod-search" />
           <select v-model="cadProduit"><option value="">— {{ produitsFiltresCad.length }} produit(s) —</option><option v-for="p in produitsFiltresCad" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option></select>
           <select v-model="cadMode"><option value="debit">Débit (unités/h ou kg/h)</option><option value="cycle">Temps écoulé (au poste)</option></select>
-          <input v-if="cadMode === 'debit'" type="number" step="any" v-model="cadValeur" placeholder="cadence (ex. 60000)" />
+          <input v-if="cadMode === 'debit'" id="cad-valeur" type="number" step="any" v-model="cadValeur" placeholder="cadence (ex. 60000)" />
           <select v-if="cadMode === 'debit'" v-model="cadUnite" class="cad-unite-in"><option value="unités/h">unités/h (conditionnement)</option><option value="kg/h">kg/h (fabrication)</option></select>
           <button class="btn" @click="ajouterCad">Enregistrer</button>
         </div>
@@ -627,6 +647,21 @@ onMounted(async () => {
           <select v-model="bulkAtelier"><option value="">Choisir…</option><option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.code }} — {{ a.nom }}</option></select>
           <button class="btn-sm" @click="passerAtelierTempsEcoule">Tout passer en temps écoulé</button>
           <span v-if="bulkMsg" class="bulk-msg">{{ bulkMsg }}</span>
+        </div>
+        <div class="cadfill" v-if="peutEditer">
+          <div class="cadfill-row">
+            <span class="cadfill-lbl">Remplissage manuel — produits sans cadence pour :</span>
+            <select v-model="filtreCadEquip"><option value="">Choisir un équipement…</option><option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option></select>
+          </div>
+          <div v-if="filtreCadEquip" class="cadfill-body">
+            <p v-if="!produitsSansCadence.length" class="cadfill-ok">✓ Tous les produits actifs ont déjà une cadence sur cet équipement.</p>
+            <template v-else>
+              <p class="cadfill-count">{{ produitsSansCadence.length }} produit(s) sans cadence — clique pour pré-remplir le formulaire ci-dessus :</p>
+              <div class="cadfill-chips">
+                <button v-for="pr in produitsSansCadence" :key="pr.id" class="cadfill-chip" @click="prefillCad(pr)" :title="pr.designation">{{ pr.code_pf }}</button>
+              </div>
+            </template>
+          </div>
         </div>
         <div v-if="!cadList.length" class="empty">Aucune cadence définie.</div>
         <div class="cad-scroll" v-else>
@@ -730,6 +765,16 @@ button.link.danger { color: #b91c1c; }
 .bulk-lbl { font-weight: 600; color: #0f766e; font-size: 13px; }
 .bulk-row select { font-size: 14px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; max-width: 220px; }
 .bulk-msg { font-size: 13px; color: #0f766e; font-weight: 600; }
+.cadfill { margin: 0 0 16px; padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; }
+.cadfill-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cadfill-lbl { font-weight: 600; color: #334155; font-size: 13px; }
+.cadfill-row select { font-size: 14px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; max-width: 260px; }
+.cadfill-body { margin-top: 10px; }
+.cadfill-ok { font-size: 13px; color: #047857; font-weight: 600; margin: 0; }
+.cadfill-count { font-size: 12.5px; color: #64748b; margin: 0 0 8px; }
+.cadfill-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 160px; overflow-y: auto; padding: 2px; }
+.cadfill-chip { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 700; color: #0f766e; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 7px; padding: 4px 9px; cursor: pointer; }
+.cadfill-chip:hover { background: #0f766e; color: #fff; }
 .cad-unite-in { width: 90px; }
 .cad-scroll { overflow-x: auto; }
 .ref-table { width: 100%; border-collapse: collapse; font-size: 14px; }
