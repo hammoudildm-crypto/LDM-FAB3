@@ -21,6 +21,7 @@ const conds = ref([])
 const hist = ref([])
 const ofs = ref([])
 const histLots = ref([])   // historique des lots par phase (TDB importé)
+const planRows = ref([])    // PDP : quantités planifiées par produit et mois
 const erreur = ref('')
 const chargement = ref(true)
 
@@ -53,7 +54,10 @@ async function charger() {
   if (!ro.error) ofs.value = ro.data || []
   const rhl = await fetchAllPaged(() => supabase.from('historique_lots_phases')
     .select('numero_lot, code_pf, designation, phase, date_fin'))
-  if (!rhl.error) histLots.value = rhl.data || []   // table absente -> on reste sur le temps réel
+  if (!rhl.error) histLots.value = rhl.data || []
+  const rpl = await fetchAllPaged(() => supabase.from('plan_production')
+    .select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot)'))
+  if (!rpl.error) planRows.value = rpl.data || []   // table absente -> on reste sur le temps réel
   chargement.value = false
 }
 
@@ -157,6 +161,32 @@ function profilSaisonnier(ph) {
   }
   return n ? prof.map(x => x / n) : null
 }
+// Plan (PDP) converti en LOTS par atelier : boîtes planifiées / taille de lot,
+// réparties selon la gamme du produit (Vrac & Conditionnement = tous les produits).
+const planParAtelier = computed(() => {
+  const res = {}
+  for (const ph of PHASES) res[ph] = 0
+  const parProduit = {}
+  for (const r of planRows.value) {
+    if (Number(r.annee) !== anneeCourante) continue
+    const pr = r.produits
+    if (!pr || !pr.id) continue
+    if (!parProduit[pr.id]) parProduit[pr.id] = { boites: 0, gamme: Array.isArray(pr.gamme) ? pr.gamme : [], taille: Number(pr.taille_lot || 0) }
+    parProduit[pr.id].boites += Number(r.quantite_planifiee || 0)
+  }
+  for (const id in parProduit) {
+    const o = parProduit[id]
+    if (o.taille <= 0 || o.boites <= 0) continue
+    const lots = o.boites / o.taille
+    const gset = new Set(o.gamme.map(g => String(g).toLowerCase().trim()))
+    for (const ph of PHASES) {
+      const compte = (ph === 'Livraison Vrac' || ph === 'Conditionnement') ? true : gset.has(ph.toLowerCase())
+      if (compte) res[ph] += lots
+    }
+  }
+  for (const ph of PHASES) res[ph] = Math.round(res[ph])
+  return res
+})
 function projectionAtelier(ph) {
   const data = matriceMultiAn.value[ph][anneeCourante] || Array(12).fill(0)
   const mc = moisCourant
@@ -174,9 +204,11 @@ function projectionAtelier(ph) {
   projTotal = Math.max(Math.round(projTotal), realiseTotal)  // jamais sous le réalisé
   const totN1 = totalAtelierAnnee(ph, anneeCourante - 1)
   const vsN1 = totN1 > 0 ? Math.round((projTotal / totN1 - 1) * 100) : null
-  return { ph, realise: realiseTotal, projTotal, reste: Math.max(0, projTotal - realiseTotal), methode, vsN1 }
+  const plan = planParAtelier.value[ph] || 0
+  const pctPlan = plan > 0 ? Math.round((projTotal / plan) * 100) : null
+  return { ph, realise: realiseTotal, projTotal, reste: Math.max(0, projTotal - realiseTotal), methode, vsN1, plan, pctPlan }
 }
-const projectionsTable = computed(() => PHASES.map(projectionAtelier).filter(r => r.realise > 0 || r.projTotal > 0))
+const projectionsTable = computed(() => PHASES.map(projectionAtelier).filter(r => r.realise > 0 || r.projTotal > 0 || r.plan > 0))
 const atelierSel = ref('Compression')
 const anneesActives = ref(new Set(ANNEES_COMP))
 function toggleAnnee(y) {
@@ -360,6 +392,8 @@ onMounted(charger)
               <th>Atelier</th>
               <th class="ta-r">Réalisé à ce jour</th>
               <th class="ta-r">Projection {{ anneeCourante }}</th>
+              <th class="ta-r">Plan {{ anneeCourante }}</th>
+              <th class="ta-r">% du plan</th>
               <th class="ta-r">Reste à faire</th>
               <th class="ta-r">vs {{ anneeCourante - 1 }}</th>
             </tr>
@@ -369,6 +403,8 @@ onMounted(charger)
               <td class="proj-at">{{ r.ph }}<span v-if="r.methode === 'lineaire'" class="proj-star" title="Sans historique saisonnier : projection linéaire">*</span></td>
               <td class="ta-r">{{ fmt(r.realise) }}</td>
               <td class="ta-r proj-val">{{ fmt(r.projTotal) }}</td>
+              <td class="ta-r">{{ r.plan ? fmt(r.plan) : '—' }}</td>
+              <td class="ta-r" :class="r.pctPlan == null ? '' : (r.pctPlan >= 100 ? 'proj-up' : (r.pctPlan >= 80 ? 'proj-warn' : 'proj-down'))">{{ r.pctPlan != null ? r.pctPlan + ' %' : '—' }}</td>
               <td class="ta-r proj-reste">{{ fmt(r.reste) }}</td>
               <td class="ta-r" :class="r.vsN1 == null ? '' : (r.vsN1 >= 0 ? 'proj-up' : 'proj-down')">
                 <template v-if="r.vsN1 != null">{{ r.vsN1 >= 0 ? '+' : '' }}{{ r.vsN1 }} %</template>
@@ -379,7 +415,7 @@ onMounted(charger)
         </table>
       </div>
       <p class="proj-note">
-        <strong>Méthode :</strong> le réalisé des mois clôturés (janvier → {{ MOIS[moisCourant - 1] || '—' }}) est rapporté à l'année entière selon le <strong>profil saisonnier moyen</strong> des années passées. Le mois en cours ({{ MOIS[moisCourant] }}), partiel, n'entre pas dans le calcul. <span class="proj-star">*</span> atelier sans historique → projection linéaire (réalisé ÷ mois écoulés × 12).
+        <strong>Méthode :</strong> le réalisé des mois clôturés (janvier → {{ MOIS[moisCourant - 1] || '—' }}) est rapporté à l'année entière selon le <strong>profil saisonnier moyen</strong> des années passées. Le mois en cours ({{ MOIS[moisCourant] }}), partiel, n'entre pas dans le calcul. <span class="proj-star">*</span> atelier sans historique → projection linéaire (réalisé ÷ mois écoulés × 12).<br><strong>Plan :</strong> PDP converti en lots (boîtes planifiées ÷ taille de lot), réparti selon la gamme. <strong>% du plan</strong> = projection ÷ plan.
       </p>
     </section>
 
@@ -493,6 +529,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .proj-on .proj-at { color: #0f766e; }
 .proj-up { color: #047857; font-weight: 700; }
 .proj-down { color: #b91c1c; font-weight: 700; }
+.proj-warn { color: #b45309; font-weight: 700; }
 .proj-star { color: #b45309; font-weight: 800; cursor: help; }
 .proj-note { font-size: 12px; color: #64748b; line-height: 1.5; margin: 12px 0 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 12px; }
 </style>
