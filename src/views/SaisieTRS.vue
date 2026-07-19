@@ -12,6 +12,11 @@ const cadIn = ref('')
 const cadUniteIn = ref('kg/h')
 const cadMsg = ref('')
 const saisies = ref([])
+const filtreSaisiesEquip = ref(true)
+const saisiesAffichees = computed(() => {
+  if (filtreSaisiesEquip.value && equipId.value) return saisies.value.filter(s => String(s.equipement_id) === String(equipId.value))
+  return saisies.value
+})
 const msg = ref('')
 const ok = ref('')
 
@@ -41,7 +46,7 @@ async function charger() {
   if (!re.error) equipements.value = re.data || []
   const rp = await supabase.from('produits').select('id, code_pf, designation').eq('actif', true).order('code_pf')
   if (!rp.error) produits.value = rp.data || []
-  const rs = await supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf)').eq('actif', true).order('date', { ascending: false }).order('poste').limit(40)
+  const rs = await supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf)').eq('actif', true).order('date', { ascending: false }).order('poste').limit(80)
   if (!rs.error) saisies.value = rs.data || []
 }
 onMounted(charger)
@@ -236,16 +241,19 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
     </section>
 
     <section class="card">
-      <h3 class="card-title">Dernières saisies</h3>
-      <div v-if="!saisies.length" class="empty">Aucune saisie pour l'instant.</div>
+      <div class="ds-head">
+        <h3 class="card-title">Dernières saisies</h3>
+        <label class="ds-filtre"><input type="checkbox" v-model="filtreSaisiesEquip" /> Équipement sélectionné uniquement</label>
+      </div>
+      <div v-if="!saisiesAffichees.length" class="empty">{{ filtreSaisiesEquip && equipId ? 'Aucune saisie pour cet équipement.' : "Aucune saisie pour l\'instant." }}</div>
       <div v-else class="table-scroll">
         <table class="mini">
           <thead><tr><th>Date</th><th>Poste</th><th>Équip.</th><th>Produit</th><th class="right">Ouv.</th><th class="right">Arrêts</th><th class="right">Fonct.</th><th class="right">Nettoyage</th></tr></thead>
           <tbody>
-            <tr v-for="s in saisies" :key="s.id">
+            <tr v-for="s in saisiesAffichees" :key="s.id">
               <td class="nowrap">{{ s.date }}</td>
               <td>P{{ s.poste }}</td>
-              <td>{{ s.equipements ? s.equipements.code : '—' }}</td>
+              <td>{{ s.equipements ? s.equipements.code : '—' }}<span v-if="s.equipements && s.equipements.nom" class="dt-nom"> — {{ s.equipements.nom }}</span></td>
               <td>{{ s.produits ? s.produits.code_pf : '—' }}</td>
               <td class="right">{{ fmt(s.temps_ouverture_min) }}</td>
               <td class="right">{{ fmt(trsSaisie(s).arr) }}</td>
@@ -303,4 +311,8 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .cad-inline-btn { font-size: 13px; font-weight: 700; color: #fff; background: #0f766e; border: 0; border-radius: 7px; padding: 6px 12px; cursor: pointer; }
 .cad-inline-btn:hover { background: #0b5b55; }
 .cad-inline-msg { font-size: 12.5px; font-weight: 700; color: #b91c1c; margin-left: 8px; }
+.ds-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.ds-filtre { font-size: 13px; color: #475569; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.ds-filtre input { cursor: pointer; }
+.dt-nom { color: #94a3b8; font-weight: 400; }
 </style>
