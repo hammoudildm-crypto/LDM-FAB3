@@ -208,7 +208,13 @@ function projectionAtelier(ph) {
   const pctPlan = plan > 0 ? Math.round((projTotal / plan) * 100) : null
   return { ph, realise: realiseTotal, projTotal, reste: Math.max(0, projTotal - realiseTotal), methode, vsN1, plan, pctPlan }
 }
-const projectionsTable = computed(() => PHASES.map(projectionAtelier).filter(r => r.realise > 0 || r.projTotal > 0 || r.plan > 0))
+const projectionsTable = computed(() => {
+  // Séchage = mêmes chiffres que Granulation (granulation humide : mêmes lots).
+  const gran = projectionAtelier('Granulation')
+  return PHASES
+    .map(ph => ph === 'Séchage' ? { ...gran, ph: 'Séchage' } : projectionAtelier(ph))
+    .filter(r => r.realise > 0 || r.projTotal > 0 || r.plan > 0)
+})
 const atelierSel = ref('Compression')
 const anneesActives = ref(new Set(ANNEES_COMP))
 function toggleAnnee(y) {
