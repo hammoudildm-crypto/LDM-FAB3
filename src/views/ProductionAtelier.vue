@@ -6,6 +6,7 @@ import MiniChart from '../components/MiniChart.vue'
 import { ICONS, TINTS } from '../icons.js'
 
 const anneeCourante = new Date().getFullYear()
+const moisCourant = new Date().getMonth()   // 0-11
 const ANNEES = []
 for (let a = anneeCourante - 4; a <= anneeCourante + 1; a++) ANNEES.push(a)
 const anneeSel = ref(anneeCourante)
@@ -140,6 +141,42 @@ function seriesAtelier(ph) {
   return ANNEES_COMP.map((y, i) => ({ label: String(y), color: COULEURS_ANNEES[i] || '#0f766e', data: matriceMultiAn.value[ph][y] }))
 }
 function totalAtelierAnnee(ph, y) { return matriceMultiAn.value[ph][y].reduce((s, x) => s + x, 0) }
+
+// --- PRÉVISIONNEL DE FIN D'ANNÉE ---------------------------------
+// Méthode : réalisé des mois clôturés, rapporté à l'année entière via le
+// profil saisonnier moyen des années passées. Repli linéaire si pas d'historique.
+function profilSaisonnier(ph) {
+  const prof = Array(12).fill(0); let n = 0
+  for (const y of ANNEES_COMP) {
+    if (y >= anneeCourante) continue                    // années passées complètes
+    const data = matriceMultiAn.value[ph][y]
+    const tot = data.reduce((s, x) => s + x, 0)
+    if (tot <= 0) continue
+    for (let m = 0; m < 12; m++) prof[m] += data[m] / tot
+    n++
+  }
+  return n ? prof.map(x => x / n) : null
+}
+function projectionAtelier(ph) {
+  const data = matriceMultiAn.value[ph][anneeCourante] || Array(12).fill(0)
+  const mc = moisCourant
+  const realiseTotal = data.reduce((s, x) => s + x, 0)      // réalisé (mois courant partiel inclus)
+  let realiseClos = 0
+  for (let m = 0; m < mc; m++) realiseClos += data[m]        // mois entièrement clôturés
+  let projTotal = null, methode = 'lineaire'
+  const prof = profilSaisonnier(ph)
+  if (prof && mc > 0) {
+    let frac = 0
+    for (let m = 0; m < mc; m++) frac += prof[m]
+    if (frac > 0.02) { projTotal = realiseClos / frac; methode = 'saison' }
+  }
+  if (projTotal == null) projTotal = mc > 0 ? realiseClos * 12 / mc : realiseTotal
+  projTotal = Math.max(Math.round(projTotal), realiseTotal)  // jamais sous le réalisé
+  const totN1 = totalAtelierAnnee(ph, anneeCourante - 1)
+  const vsN1 = totN1 > 0 ? Math.round((projTotal / totN1 - 1) * 100) : null
+  return { ph, realise: realiseTotal, projTotal, reste: Math.max(0, projTotal - realiseTotal), methode, vsN1 }
+}
+const projectionsTable = computed(() => PHASES.map(projectionAtelier).filter(r => r.realise > 0 || r.projTotal > 0))
 const atelierSel = ref('Compression')
 const anneesActives = ref(new Set(ANNEES_COMP))
 function toggleAnnee(y) {
@@ -311,6 +348,41 @@ onMounted(charger)
       <p class="hint">Chaque cellule = nombre de <strong>lots distincts</strong> ayant <strong>terminé</strong> l'étape ce mois-là. Les <strong>années passées</strong> proviennent de l'<strong>historique importé</strong> (TDB PROD) ; l'<strong>année en cours</strong> est calculée en <strong>temps réel</strong> depuis Suivi des phases. Un même lot compte une fois par atelier.</p>
     </template>
 
+    <section v-if="projectionsTable.length" class="proj-card">
+      <div class="proj-head">
+        <h2 class="proj-title">Prévisionnel de fin d'année — {{ anneeCourante }}</h2>
+        <span class="proj-sub">réalisé à ce jour, projeté au 31/12</span>
+      </div>
+      <div class="proj-scroll">
+        <table class="proj-table">
+          <thead>
+            <tr>
+              <th>Atelier</th>
+              <th class="ta-r">Réalisé à ce jour</th>
+              <th class="ta-r">Projection {{ anneeCourante }}</th>
+              <th class="ta-r">Reste à faire</th>
+              <th class="ta-r">vs {{ anneeCourante - 1 }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in projectionsTable" :key="r.ph" :class="{ 'proj-on': r.ph === atelierSel }">
+              <td class="proj-at">{{ r.ph }}<span v-if="r.methode === 'lineaire'" class="proj-star" title="Sans historique saisonnier : projection linéaire">*</span></td>
+              <td class="ta-r">{{ fmt(r.realise) }}</td>
+              <td class="ta-r proj-val">{{ fmt(r.projTotal) }}</td>
+              <td class="ta-r proj-reste">{{ fmt(r.reste) }}</td>
+              <td class="ta-r" :class="r.vsN1 == null ? '' : (r.vsN1 >= 0 ? 'proj-up' : 'proj-down')">
+                <template v-if="r.vsN1 != null">{{ r.vsN1 >= 0 ? '+' : '' }}{{ r.vsN1 }} %</template>
+                <template v-else>—</template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="proj-note">
+        <strong>Méthode :</strong> le réalisé des mois clôturés (janvier → {{ MOIS[moisCourant - 1] || '—' }}) est rapporté à l'année entière selon le <strong>profil saisonnier moyen</strong> des années passées. Le mois en cours ({{ MOIS[moisCourant] }}), partiel, n'entre pas dans le calcul. <span class="proj-star">*</span> atelier sans historique → projection linéaire (réalisé ÷ mois écoulés × 12).
+      </p>
+    </section>
+
     <div v-if="modalPA" class="modal-overlay" @click="modalPA = null">
       <div class="pa-modal" @click.stop>
         <div class="pa-md-head">
@@ -405,4 +477,22 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-code { font-family: ui-monospace, monospace; font-weight: 600; color: #0f766e; white-space: nowrap; }
 .pa-des { color: #475569; }
 .pa-note { font-size: 12.5px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; padding: 8px 10px; border-radius: 7px; margin: 10px 0 0; }
+.proj-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px 18px; margin-top: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.proj-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.proj-title { margin: 0; font-size: 17px; color: #161c2e; }
+.proj-sub { font-size: 12.5px; color: #64748b; }
+.proj-scroll { overflow-x: auto; }
+.proj-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.proj-table th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+.proj-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
+.proj-table .ta-r { text-align: right; font-variant-numeric: tabular-nums; }
+.proj-at { font-weight: 600; color: #1a2233; }
+.proj-val { font-weight: 800; color: #0f766e; }
+.proj-reste { color: #475569; }
+.proj-on { background: #f0fdfa; }
+.proj-on .proj-at { color: #0f766e; }
+.proj-up { color: #047857; font-weight: 700; }
+.proj-down { color: #b91c1c; font-weight: 700; }
+.proj-star { color: #b45309; font-weight: 800; cursor: help; }
+.proj-note { font-size: 12px; color: #64748b; line-height: 1.5; margin: 12px 0 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 12px; }
 </style>
