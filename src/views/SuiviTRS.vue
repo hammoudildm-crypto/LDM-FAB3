@@ -1,293 +1,255 @@
 <script setup>
-import { ref, reactive, computed, inject, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
+import MiniChart from '../components/MiniChart.vue'
+import { ICONS, TINTS } from '../icons.js'
 
-const peutEditer = inject('peutEditer', ref(false))
-
-const equipements = ref([])
-const produits = ref([])
+const postes = ref([])
 const cadences = ref([])
-const cadIn = ref('')
-const cadUniteIn = ref('kg/h')
-const saisies = ref([])
+const chargement = ref(true)
 const msg = ref('')
-const ok = ref('')
 
-const phaseFiltre = ref('')
-const equipId = ref('')
-const produitId = ref('')
-const rechercheProduit = ref('')
-const dateSel = ref(new Date().toISOString().slice(0, 10))
-const poste = ref(1)
-
-const form = reactive({
-  temps_ouverture_min: 450,
-  arret_panne_min: 0, arret_format_min: 0, arret_nettoyage_min: 0,
-  arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
-  production_realisee: 0, rebuts: 0, commentaire: ''
-})
+const now = new Date()
+const du = ref(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10))
+const au = ref(now.toISOString().slice(0, 10))
 
 const MOTIFS = [
-  ['arret_panne_min', 'Panne'], ['arret_format_min', 'Changement de format'],
-  ['arret_nettoyage_min', 'Nettoyage'], ['arret_reglage_min', 'Réglage'],
-  ['arret_maintenance_min', 'Maintenance'], ['arret_attente_min', 'Attente (matière/perso.)'],
-  ['arret_autre_min', 'Autre']
+  ['panne', 'arret_panne_min', 'Panne', '#ef4444'],
+  ['format', 'arret_format_min', 'Format', '#f59e0b'],
+  ['nettoyage', 'arret_nettoyage_min', 'Nettoyage', '#0f766e'],
+  ['reglage', 'arret_reglage_min', 'Réglage', '#8b5cf6'],
+  ['maintenance', 'arret_maintenance_min', 'Maintenance', '#6366f1'],
+  ['attente', 'arret_attente_min', 'Attente', '#94a3b8'],
+  ['autre', 'arret_autre_min', 'Autre', '#cbd5e1']
 ]
 
 async function charger() {
-  const re = await supabase.from('equipements').select('id, code, nom, type').eq('actif', true).order('code')
-  if (!re.error) equipements.value = re.data || []
-  const rp = await supabase.from('produits').select('id, code_pf, designation').eq('actif', true).order('code_pf')
-  if (!rp.error) produits.value = rp.data || []
+  chargement.value = true; msg.value = ''
+  const r = await supabase.from('trs_postes')
+    .select('*, equipements(code, nom), produits(code_pf)')
+    .eq('actif', true).gte('date', du.value).lte('date', au.value)
+  if (r.error) { msg.value = r.error.message; chargement.value = false; return }
+  postes.value = r.data || []
   const rc = await supabase.from('cadences_produit').select('*')
   if (!rc.error) cadences.value = rc.data || []
-  const rs = await supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf)').eq('actif', true).order('date', { ascending: false }).order('poste').limit(40)
-  if (!rs.error) saisies.value = rs.data || []
+  chargement.value = false
 }
 onMounted(charger)
 
-const equip = computed(() => equipements.value.find(e => e.id === equipId.value))
-const phases = computed(() => { const s = new Set(); for (const e of equipements.value) if (e.type) s.add(e.type); return [...s].sort() })
-const equipementsFiltres = computed(() => phaseFiltre.value ? equipements.value.filter(e => e.type === phaseFiltre.value) : equipements.value)
-function onPhaseChange() { equipId.value = '' }
-const produitsFiltres = computed(() => {
-  const q = rechercheProduit.value.trim().toLowerCase()
-  if (!q) return produits.value
-  return produits.value.filter(p => (String(p.code_pf || '') + ' ' + String(p.designation || '')).toLowerCase().includes(q))
-})
-const cadenceObj = computed(() => cadences.value.find(c => c.equipement_id === equipId.value && c.produit_id === produitId.value) || null)
-const cadence = computed(() => cadenceObj.value && cadenceObj.value.cadence_nominale != null ? Number(cadenceObj.value.cadence_nominale) : 0)
-const cadenceMode = computed(() => cadenceObj.value ? (cadenceObj.value.mode || 'debit') : 'debit')
-const uniteCad = computed(() => cadenceObj.value && cadenceObj.value.unite_cadence ? cadenceObj.value.unite_cadence : 'unités/h')
-
-// Enregistrer la cadence directement depuis la Saisie TRS (évite l'aller-retour
-// vers Référentiels et recharge la liste sur place -> plus de discordance).
-async function enregistrerCadenceInline() {
-  if (!equipId.value || !produitId.value) { msg.value = 'Choisir équipement et produit.'; return }
-  const v = cadIn.value === '' ? null : Number(cadIn.value)
-  if (!(v > 0)) { msg.value = 'Saisir une cadence supérieure à 0.'; return }
-  const r = await supabase.from('cadences_produit').upsert(
-    { equipement_id: equipId.value, produit_id: produitId.value, cadence_nominale: v, unite_cadence: cadUniteIn.value, mode: 'debit' },
-    { onConflict: 'equipement_id,produit_id' })
-  if (r.error) { msg.value = r.error.message; return }
-  cadIn.value = ''
-  await charger()
-  ok.value = 'Cadence enregistrée pour ce couple.'; setTimeout(() => ok.value = '', 3000)
+function cadenceDe(eq, pr) {
+  const c = cadences.value.find(c => c.equipement_id === eq && c.produit_id === pr)
+  return { value: c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0, mode: c ? (c.mode || 'debit') : 'debit' }
 }
 
-function chargerContexte() {
-  const ex = saisies.value.find(s => s.equipement_id === equipId.value && s.date === dateSel.value && s.poste === Number(poste.value))
-  if (ex) {
-    if (ex.produit_id) produitId.value = ex.produit_id
-    form.temps_ouverture_min = ex.temps_ouverture_min
-    for (const m of MOTIFS) form[m[0]] = ex[m[0]] || 0
-    form.production_realisee = ex.production_realisee || 0
-    form.rebuts = ex.rebuts || 0
-    form.commentaire = ex.commentaire || ''
+const equipFiltre = ref('')
+const moisVisible = ref(false)
+const equipList = computed(() => {
+  const m = {}
+  for (const s of postes.value) if (s.equipements && !m[s.equipement_id]) m[s.equipement_id] = { id: s.equipement_id, code: s.equipements.code, nom: s.equipements.nom }
+  return Object.values(m).sort((a, b) => String(a.code).localeCompare(String(b.code)))
+})
+const equipFiltreCode = computed(() => { const e = equipList.value.find(e => e.id === equipFiltre.value); return e ? e.code : '' })
+const postesFiltres = computed(() => equipFiltre.value ? postes.value.filter(s => s.equipement_id === equipFiltre.value) : postes.value)
+const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+const trsParMois = computed(() => {
+  const parM = {}
+  for (const s of postesFiltres.value) {
+    const mo = new Date(s.date).getMonth()
+    if (!parM[mo]) parM[mo] = { ouverture: 0, fonct: 0, theo: 0, prodPerf: 0, ecoule: 0, fonctPerf: 0, prodQual: 0, rebutsQual: 0 }
+    const a = parM[mo]
+    const to = s.temps_ouverture_min || 0
+    let arr = 0
+    for (const m of MOTIFS) arr += s[m[1]] || 0
+    const tf = Math.max(0, to - arr)
+    a.ouverture += to; a.fonct += tf
+    const cd = cadenceDe(s.equipement_id, s.produit_id)
+    if (cd.mode === 'cycle') { a.ecoule += Number(s.production_realisee) || 0; a.fonctPerf += tf }
+    else if (cd.value > 0) { a.theo += (tf / 60) * cd.value; a.prodPerf += Number(s.production_realisee) || 0; a.prodQual += Number(s.production_realisee) || 0; a.rebutsQual += Number(s.rebuts) || 0 }
   }
-}
+  const out = Array(12).fill(0)
+  for (let mo = 0; mo < 12; mo++) {
+    const a = parM[mo]; if (!a) continue
+    const dispo = a.ouverture ? a.fonct / a.ouverture : 0
+    const perf = a.theo ? Math.min(1, a.prodPerf / a.theo) : (a.fonctPerf ? Math.min(1, a.ecoule / a.fonctPerf) : 0)
+    const qualite = a.prodQual ? Math.max(0, (a.prodQual - a.rebutsQual) / a.prodQual) : 1
+    out[mo] = +((dispo * perf * qualite) * 100).toFixed(1)
+  }
+  return out
+})
 
-const sommeArrets = computed(() => MOTIFS.reduce((s, m) => s + (Number(form[m[0]]) || 0), 0))
-const tempsFonct = computed(() => Math.max(0, (Number(form.temps_ouverture_min) || 0) - sommeArrets.value))
-const dispo = computed(() => { const to = Number(form.temps_ouverture_min) || 0; return to ? tempsFonct.value / to : 0 })
-const perf = computed(() => {
-  const prod = Number(form.production_realisee) || 0
-  if (cadenceMode.value === 'cycle') return tempsFonct.value ? Math.min(1, prod / tempsFonct.value) : 0
-  const theo = (tempsFonct.value / 60) * cadence.value
-  return theo ? Math.min(1, prod / theo) : 0
+const parEquip = computed(() => {
+  const m = {}
+  for (const s of postesFiltres.value) {
+    const k = s.equipement_id
+    if (!m[k]) m[k] = {
+      id: k, code: s.equipements ? s.equipements.code : '?', nom: s.equipements ? s.equipements.nom : '',
+      ouverture: 0, fonct: 0, theo: 0, prodPerf: 0, ecoule: 0, fonctPerf: 0, prodQual: 0, rebutsQual: 0, nbPostes: 0,
+      arrets: { panne: 0, format: 0, nettoyage: 0, reglage: 0, maintenance: 0, attente: 0, autre: 0 }
+    }
+    const e = m[k]
+    const to = s.temps_ouverture_min || 0
+    let arr = 0
+    for (const mo of MOTIFS) { const v = s[mo[1]] || 0; e.arrets[mo[0]] += v; arr += v }
+    const tf = Math.max(0, to - arr)
+    e.ouverture += to; e.fonct += tf; e.nbPostes++
+    const cd = cadenceDe(s.equipement_id, s.produit_id)
+    if (cd.mode === 'cycle') {
+      e.ecoule += Number(s.production_realisee) || 0
+      e.fonctPerf += tf
+    } else if (cd.value > 0) {
+      e.theo += (tf / 60) * cd.value
+      e.prodPerf += Number(s.production_realisee) || 0
+      e.prodQual += Number(s.production_realisee) || 0
+      e.rebutsQual += Number(s.rebuts) || 0
+    }
+  }
+  return Object.values(m).map(e => {
+    const dispo = e.ouverture ? e.fonct / e.ouverture : 0
+    const perf = e.theo ? Math.min(1, e.prodPerf / e.theo) : (e.fonctPerf ? Math.min(1, e.ecoule / e.fonctPerf) : 0)
+    const qualite = e.prodQual ? Math.max(0, (e.prodQual - e.rebutsQual) / e.prodQual) : 1
+    return { ...e, dispo, perf, qualite, trs: dispo * perf * qualite, pctNettoyage: e.ouverture ? e.arrets.nettoyage / e.ouverture : 0 }
+  }).sort((a, b) => b.trs - a.trs)
 })
-const qualite = computed(() => {
-  if (cadenceMode.value === 'cycle') return 1
-  const p = Number(form.production_realisee) || 0
-  return p ? Math.max(0, (p - (Number(form.rebuts) || 0)) / p) : 0
+
+const pertes = computed(() => {
+  const t = { ouverture: 0, fonct: 0, panne: 0, format: 0, nettoyage: 0, reglage: 0, maintenance: 0, attente: 0, autre: 0 }
+  for (const e of parEquip.value) {
+    t.ouverture += e.ouverture; t.fonct += e.fonct
+    for (const mo of MOTIFS) t[mo[0]] += e.arrets[mo[0]]
+  }
+  return t
 })
-const trs = computed(() => dispo.value * perf.value * qualite.value)
+const totalArrets = computed(() => MOTIFS.reduce((s, mo) => s + pertes.value[mo[0]], 0))
+
+// TRS global (pondéré)
+const global = computed(() => {
+  let ouv = 0, sTrs = 0, sDispo = 0, sPerf = 0, sQual = 0
+  for (const e of parEquip.value) { ouv += e.ouverture; sTrs += e.trs * e.ouverture; sDispo += e.dispo * e.ouverture; sPerf += e.perf * e.ouverture; sQual += e.qualite * e.ouverture }
+  return ouv ? { dispo: sDispo / ouv, perf: sPerf / ouv, qualite: sQual / ouv, trs: sTrs / ouv } : { dispo: 0, perf: 0, qualite: 0, trs: 0 }
+})
+
+const trsParEquipChart = computed(() => [{ label: 'TRS %', color: '#4338ca', data: parEquip.value.map(e => +(e.trs * 100).toFixed(1)) }])
+const labelsEquip = computed(() => parEquip.value.map(e => e.code))
+const pertesChart = computed(() => [{ label: 'Minutes', color: '#64748b', data: MOTIFS.map(mo => pertes.value[mo[0]]) }])
+const labelsMotifs = computed(() => MOTIFS.map(mo => mo[2]))
+
 const pct = (x) => (x * 100).toFixed(1) + ' %'
-
-async function enregistrer() {
-  msg.value = ''
-  if (!equipId.value) { msg.value = 'Choisir un équipement.'; return }
-  if (!produitId.value) { msg.value = 'Choisir le produit qui tournait sur ce poste.'; return }
-  if (!cadenceObj.value) { msg.value = "Ce produit sur cet équipement n'a pas de mode/cadence défini — renseigne-le dans Référentiels › Cadences."; return }
-  if (cadenceMode.value === 'debit' && !cadence.value) { msg.value = "Renseigner la cadence (débit) dans Référentiels › Cadences."; return }
-  const payload = {
-    equipement_id: equipId.value, produit_id: produitId.value, date: dateSel.value, poste: Number(poste.value),
-    temps_ouverture_min: Number(form.temps_ouverture_min) || 0,
-    production_realisee: Number(form.production_realisee) || 0,
-    rebuts: Number(form.rebuts) || 0, commentaire: form.commentaire || null
-  }
-  for (const m of MOTIFS) payload[m[0]] = Number(form[m[0]]) || 0
-  const r = await supabase.from('trs_postes').upsert(payload, { onConflict: 'equipement_id,date,poste' })
-  if (r.error) { msg.value = r.error.message; return }
-  const trsFige = pct(trs.value)
-  await charger()
-  ok.value = 'Poste enregistré (TRS ' + trsFige + ').'; setTimeout(() => ok.value = '', 3500)
-  // vider les champs pour la saisie suivante
-  form.temps_ouverture_min = 450
-  for (const m of MOTIFS) form[m[0]] = 0
-  form.production_realisee = 0
-  form.rebuts = 0
-  form.commentaire = ''
-}
-
-function trsSaisie(s) {
-  const arr = MOTIFS.reduce((t, m) => t + (s[m[0]] || 0), 0)
-  const to = s.temps_ouverture_min || 0
-  const tf = Math.max(0, to - arr)
-  return { arr, tf }
-}
-const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
+const fmt = (n) => n == null ? '0' : Math.round(Number(n)).toLocaleString('fr-FR')
+const heures = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' h'
 </script>
 
 <template>
-  <div class="trs-page">
-    <PageHeader title="Saisie TRS" tone="indigo"
-      subtitle="Temps, arrêts, production et rebuts par équipement, produit et poste (3×8).">
+  <div class="strs-page">
+    <PageHeader title="Suivi TRS" tone="indigo"
+      subtitle="TRS par équipement, décomposé Disponibilité / Performance / Qualité, sur la période.">
+      <div class="periode">
+        <label>Équipement <select v-model="equipFiltre"><option value="">Tous</option><option v-for="e in equipList" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option></select></label>
+        <label>Du <input type="date" v-model="du" @change="charger" /></label>
+        <label>Au <input type="date" v-model="au" @change="charger" /></label>
+      </div>
     </PageHeader>
 
     <p v-if="msg" class="alert">{{ msg }}</p>
-    <p v-if="ok" class="okmsg">{{ ok }}</p>
+    <p v-if="chargement" class="muted">Chargement…</p>
 
-    <section class="card">
-      <div class="sel-row">
-        <label>Phase / Atelier
-          <select v-model="phaseFiltre" @change="onPhaseChange">
-            <option value="">— Toutes —</option>
-            <option v-for="ph in phases" :key="ph" :value="ph">{{ ph }}</option>
-          </select>
-        </label>
-        <label>Équipement
-          <select v-model="equipId" @change="chargerContexte">
-            <option value="">— Choisir —</option>
-            <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
-          </select>
-        </label>
-        <label>Produit
-          <input class="prod-search" v-model="rechercheProduit" placeholder="Rechercher (code / nom)…" />
-          <select v-model="produitId">
-            <option value="">— {{ produitsFiltres.length }} produit(s) —</option>
-            <option v-for="p in produitsFiltres" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
-          </select>
-        </label>
-        <label>Date
-          <input type="date" v-model="dateSel" @change="chargerContexte" />
-        </label>
-        <label>Poste
-          <select v-model.number="poste" @change="chargerContexte">
-            <option :value="1">Poste 1</option>
-            <option :value="2">Poste 2</option>
-            <option :value="3">Poste 3</option>
-          </select>
-        </label>
-      </div>
+    <template v-if="!chargement">
+      <div v-if="!parEquip.length" class="empty">Aucune saisie TRS sur cette période. Renseigne des postes dans « Saisie TRS ».</div>
 
-      <div v-if="equipId && produitId" class="cad-row">
-        <span class="cad-lbl">Cadence de ce produit sur cet équipement :</span>
-        <span class="cad-val" v-if="cadenceMode === 'cycle'">Mesuré au temps écoulé</span>
-        <span class="cad-val" v-else>{{ cadence ? cadence.toLocaleString('fr-FR') + ' ' + uniteCad : '—' }}</span>
-        <span v-if="cadenceMode === 'debit' && !cadence" class="cad-warn">⚠ non définie</span>
-        <span v-if="peutEditer && cadenceMode === 'debit' && !cadence" class="cad-inline">
-          <input type="number" step="any" min="0" v-model="cadIn" placeholder="cadence" class="cad-inline-in" @keyup.enter="enregistrerCadenceInline" />
-          <select v-model="cadUniteIn" class="cad-inline-sel"><option value="kg/h">kg/h</option><option value="unités/h">unités/h</option></select>
-          <button class="cad-inline-btn" @click="enregistrerCadenceInline">Enregistrer ici</button>
-        </span>
-      </div>
-      <p v-else class="hint">Choisis un équipement <b>et</b> un produit : la cadence est propre à chaque couple.</p>
-    </section>
-
-    <section v-if="equipId && produitId" class="card">
-      <div class="grid2">
-        <div>
-          <h3 class="card-title">Temps du poste (minutes)</h3>
-          <label class="fl">Temps d'ouverture (pause 30 min déduite)<input type="number" v-model.number="form.temps_ouverture_min" /></label>
-          <div class="motifs">
-            <label v-for="m in MOTIFS" :key="m[0]" class="fl" :class="{ hl: m[0] === 'arret_nettoyage_min' }">{{ m[1] }}<input type="number" min="0" v-model.number="form[m[0]]" /></label>
-          </div>
-          <div class="sub">Σ arrêts : <b>{{ sommeArrets }}</b> min · Fonctionnement : <b>{{ tempsFonct }}</b> min</div>
+      <template v-else>
+        <div class="kpi-grid">
+          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.gauge || ICONS.activity"></svg></span><div class="kpi-val big">{{ pct(global.trs) }}</div></div><div class="kpi-lbl">TRS global (pondéré)</div></div>
+          <div class="kpi"><div class="kpi-top"><div class="kpi-val">{{ pct(global.dispo) }}</div></div><div class="kpi-lbl">Disponibilité</div></div>
+          <div class="kpi"><div class="kpi-top"><div class="kpi-val">{{ pct(global.perf) }}</div></div><div class="kpi-lbl">Performance</div></div>
+          <div class="kpi"><div class="kpi-top"><div class="kpi-val">{{ pct(global.qualite) }}</div></div><div class="kpi-lbl">Qualité</div></div>
         </div>
-        <div>
-          <h3 class="card-title">Production</h3>
-          <label class="fl">{{ cadenceMode === 'cycle' ? 'Temps écoulé (min)' : 'Production réalisée (' + uniteCad.replace('/h','') + ')' }}<input type="number" min="0" v-model.number="form.production_realisee" /></label>
-          <label v-if="cadenceMode !== 'cycle'" class="fl">Rebuts<input type="number" min="0" v-model.number="form.rebuts" /></label>
-          <label class="fl">Commentaire<input type="text" v-model="form.commentaire" placeholder="Optionnel" /></label>
 
-          <div class="trs-box">
-            <div class="trs-line"><span>Disponibilité</span><b>{{ pct(dispo) }}</b></div>
-            <div class="trs-line"><span>Performance</span><b>{{ pct(perf) }}</b></div>
-            <div class="trs-line"><span>Qualité</span><b>{{ pct(qualite) }}</b></div>
-            <div class="trs-total"><span>TRS</span><b>{{ pct(trs) }}</b></div>
+        <section class="card">
+          <h3 class="card-title">TRS par équipement</h3>
+          <MiniChart :labels="labelsEquip" :format="v => v + ' %'" :value-format="v => v || ''" show-values :series="trsParEquipChart" />
+        </section>
+
+        <section class="card">
+          <h3 class="card-title clickable-title" @click="moisVisible = !moisVisible">TRS par mois<span v-if="equipFiltre"> — {{ equipFiltreCode }}</span> <span class="toggle-caret">{{ moisVisible ? '▾ masquer' : '▸ afficher' }}</span></h3>
+          <MiniChart v-if="moisVisible" :labels="MOIS" :format="v => v + ' %'" :value-format="v => v || ''" show-values :series="[{ label: 'TRS %', color: '#0f766e', data: trsParMois }]" />
+        </section>
+
+        <section class="card">
+          <h3 class="card-title">Détail par équipement</h3>
+          <div class="table-scroll">
+            <table class="mini">
+              <thead><tr><th>Équipement</th><th class="right">Ouverture</th><th class="right">Fonct.</th><th class="right">Dispo.</th><th class="right">Perf.</th><th class="right">Qualité</th><th class="right">TRS</th><th class="right">Nettoyage</th></tr></thead>
+              <tbody>
+                <tr v-for="e in parEquip" :key="e.id">
+                  <td class="strong">{{ e.code }} <span class="nom">{{ e.nom }}</span></td>
+                  <td class="right nowrap">{{ heures(e.ouverture) }}</td>
+                  <td class="right nowrap">{{ heures(e.fonct) }}</td>
+                  <td class="right">{{ pct(e.dispo) }}</td>
+                  <td class="right">{{ pct(e.perf) }}</td>
+                  <td class="right">{{ pct(e.qualite) }}</td>
+                  <td class="right trs-cell">{{ pct(e.trs) }}</td>
+                  <td class="right nettoyage-cell">{{ heures(e.arrets.nettoyage) }} <span class="pcm">({{ pct(e.pctNettoyage) }})</span></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <button v-if="peutEditer" class="btn" @click="enregistrer">Enregistrer le poste</button>
-        </div>
-      </div>
-    </section>
+        </section>
 
-    <section class="card">
-      <h3 class="card-title">Dernières saisies</h3>
-      <div v-if="!saisies.length" class="empty">Aucune saisie pour l'instant.</div>
-      <div v-else class="table-scroll">
-        <table class="mini">
-          <thead><tr><th>Date</th><th>Poste</th><th>Équip.</th><th>Produit</th><th class="right">Ouv.</th><th class="right">Arrêts</th><th class="right">Fonct.</th><th class="right">Nettoyage</th></tr></thead>
-          <tbody>
-            <tr v-for="s in saisies" :key="s.id">
-              <td class="nowrap">{{ s.date }}</td>
-              <td>P{{ s.poste }}</td>
-              <td>{{ s.equipements ? s.equipements.code : '—' }}</td>
-              <td>{{ s.produits ? s.produits.code_pf : '—' }}</td>
-              <td class="right">{{ fmt(s.temps_ouverture_min) }}</td>
-              <td class="right">{{ fmt(trsSaisie(s).arr) }}</td>
-              <td class="right">{{ fmt(trsSaisie(s).tf) }}</td>
-              <td class="right">{{ fmt(s.arret_nettoyage_min) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+        <section class="card">
+          <h3 class="card-title">Détail des pertes de temps (tous équipements)</h3>
+          <MiniChart :labels="labelsMotifs" :format="v => fmt(v) + ' min'" :value-format="v => v || ''" show-values :series="pertesChart" />
+          <div class="pertes-list">
+            <div v-for="mo in MOTIFS" :key="mo[0]" class="perte-row" :class="{ hl: mo[0] === 'nettoyage' }">
+              <span class="perte-dot" :style="{ background: mo[3] }"></span>
+              <span class="perte-nom">{{ mo[2] }}</span>
+              <span class="perte-min">{{ heures(pertes[mo[0]]) }}</span>
+              <span class="perte-pct">{{ totalArrets ? ((pertes[mo[0]] / totalArrets) * 100).toFixed(1) : 0 }} % des arrêts</span>
+              <span class="perte-pct2">{{ pertes.ouverture ? ((pertes[mo[0]] / pertes.ouverture) * 100).toFixed(1) : 0 }} % du temps d'ouverture</span>
+            </div>
+          </div>
+        </section>
+      </template>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.trs-page { color: #1b2733; }
+.strs-page { color: #1b2733; }
+.periode { display: flex; gap: 12px; }
+.periode label { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 4px; }
+.periode input, .periode select { font-size: 14px; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 600; }
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
-.okmsg { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
+.muted { color: #94a3b8; }
+.empty { color: #94a3b8; text-align: center; padding: 30px; font-style: italic; }
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.kpi-top { display: flex; align-items: center; gap: 10px; }
+.kpi-ic { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.kpi-ic svg { width: 19px; height: 19px; }
+.kpi-val { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.kpi-val.big { font-size: 26px; color: #4338ca; }
+.kpi-lbl { font-size: 12px; color: #64748b; margin-top: 6px; }
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card-title { margin: 0 0 12px; font-size: 16px; }
-.sel-row { display: flex; gap: 14px; flex-wrap: wrap; }
-.sel-row label, .fl { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
-.sel-row select, .sel-row input, .fl input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 500; }
-.sel-row select { max-width: 320px; }
-.prod-search { font-size: 13px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 5px; max-width: 320px; }
-.cad-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; font-size: 14px; }
-.cad-lbl { font-weight: 600; color: #475569; }
-.cad-row input { font-size: 14px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; width: 130px; }
-.cad-unit { color: #64748b; }
-.cad-val { font-weight: 700; color: #4338ca; font-size: 15px; }
-.cad-warn { color: #d97706; font-size: 12px; font-weight: 600; }
-.hint { margin-top: 12px; color: #64748b; font-size: 13px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
-.fl { margin-bottom: 10px; }
-.motifs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.fl.hl input { border-color: #0f766e; background: #f0fdfa; }
-.sub { font-size: 13px; color: #64748b; margin-top: 8px; }
-.trs-box { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin: 14px 0; background: #f8fafc; }
-.trs-line { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; color: #475569; }
-.trs-line b { color: #1b2733; }
-.trs-total { display: flex; justify-content: space-between; padding: 8px 0 2px; margin-top: 6px; border-top: 2px solid #e2e8f0; font-size: 17px; font-weight: 700; }
-.trs-total b { color: #4338ca; }
-.btn { font-size: 14px; font-weight: 600; padding: 9px 16px; border: 0; border-radius: 8px; background: #4338ca; color: #fff; cursor: pointer; }
-.btn-sm { font-size: 13px; font-weight: 600; padding: 6px 12px; border: 1px solid #4338ca; border-radius: 8px; background: #fff; color: #4338ca; cursor: pointer; }
+.clickable-title { cursor: pointer; user-select: none; }
+.toggle-caret { font-size: 13px; color: #94a3b8; font-weight: 500; }
 .table-scroll { overflow-x: auto; }
 table.mini { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.mini th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
 table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .right { text-align: right; }
 .nowrap { white-space: nowrap; }
-.empty { color: #94a3b8; text-align: center; padding: 16px; font-style: italic; }
-@media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } .motifs { grid-template-columns: 1fr; } }
-.cad-inline { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; }
-.cad-inline-in { width: 110px; font-size: 13px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
-.cad-inline-sel { font-size: 13px; padding: 5px 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
-.cad-inline-btn { font-size: 13px; font-weight: 700; color: #fff; background: #0f766e; border: 0; border-radius: 7px; padding: 6px 12px; cursor: pointer; }
-.cad-inline-btn:hover { background: #0b5b55; }
+.strong { font-weight: 700; }
+.nom { font-weight: 400; color: #94a3b8; font-size: 12px; }
+.trs-cell { font-weight: 800; color: #4338ca; }
+.nettoyage-cell { color: #0f766e; font-weight: 600; }
+.pcm { color: #94a3b8; font-weight: 400; font-size: 12px; }
+.pertes-list { margin-top: 14px; }
+.perte-row { display: grid; grid-template-columns: 16px 130px 90px 1fr 1fr; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+.perte-row.hl { background: #f0fdfa; border-radius: 6px; }
+.perte-dot { width: 13px; height: 13px; border-radius: 4px; }
+.perte-nom { font-weight: 600; }
+.perte-min { font-weight: 700; text-align: right; }
+.perte-pct, .perte-pct2 { color: #64748b; font-size: 12.5px; }
+@media (max-width: 800px) { .kpi-grid { grid-template-columns: 1fr 1fr; } .perte-row { grid-template-columns: 16px 1fr auto; } .perte-pct, .perte-pct2 { display: none; } }
 </style>
