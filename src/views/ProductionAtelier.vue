@@ -222,12 +222,35 @@ function toggleAnnee(y) {
   if (s.has(y)) s.delete(y); else s.add(y)
   anneesActives.value = s
 }
-const seriesChart = computed(() =>
-  ANNEES_COMP.filter(y => anneesActives.value.has(y)).map(y => ({
+const montrerTendance = ref(false)
+// Droite de tendance (régression linéaire) sur les nMois premiers mois.
+function tendance(data, nMois) {
+  const out = Array(12).fill(null)
+  const n = Math.max(0, Math.min(12, nMois))
+  if (n < 2) return out
+  let sx = 0, sy = 0, sxx = 0, sxy = 0
+  for (let m = 0; m < n; m++) { const y = Number(data[m] || 0); sx += m; sy += y; sxx += m * m; sxy += m * y }
+  const denom = n * sxx - sx * sx
+  if (denom === 0) return out
+  const b = (n * sxy - sx * sy) / denom
+  const a = (sy - b * sx) / n
+  for (let m = 0; m < n; m++) out[m] = Math.max(0, Math.round((a + b * m) * 10) / 10)
+  return out
+}
+const seriesChart = computed(() => {
+  const ans = ANNEES_COMP.filter(y => anneesActives.value.has(y))
+  const base = ans.map(y => ({
     label: String(y), color: COULEURS_ANNEES[ANNEES_COMP.indexOf(y)] || '#0f766e',
     data: matriceMultiAn.value[atelierSel.value][y]
   }))
-)
+  if (!montrerTendance.value) return base
+  const trends = ans.map(y => ({
+    label: y + ' · tendance',
+    color: COULEURS_ANNEES[ANNEES_COMP.indexOf(y)] || '#0f766e',
+    data: tendance(matriceMultiAn.value[atelierSel.value][y], y >= anneeCourante ? moisCourant : 12)
+  }))
+  return [...base, ...trends]
+})
 
 // --- Clic sur une barre : les lots de ce mois / cette année pour l'atelier ---
 const anneesChart = computed(() => ANNEES_COMP.filter(y => anneesActives.value.has(y)))
@@ -375,8 +398,15 @@ onMounted(charger)
               <button v-for="(y, i) in ANNEES_COMP" :key="y" type="button" class="an-btn" :class="{ on: anneesActives.has(y) }" @click="toggleAnnee(y)"><span class="an-dot" :style="{ background: COULEURS_ANNEES[i] }"></span>{{ y }}</button>
             </div>
           </div>
+          <div class="filtre-groupe">
+            <span class="filtre-lbl">Affichage</span>
+            <div class="btn-row">
+              <button type="button" :class="{ on: montrerTendance }" @click="montrerTendance = !montrerTendance">Tendance</button>
+            </div>
+          </div>
         </div>
         <div class="chart-titre">{{ atelierSel }} — lots terminés par mois</div>
+        <p v-if="montrerTendance" class="chart-note">Les droites « · tendance » sont des régressions linéaires (année passée : sur 12 mois ; année en cours : sur les mois clôturés).</p>
         <div class="chart-wrap">
           <MiniChart v-if="seriesChart.length" :series="seriesChart" :labels="MOIS" :show-switch="true" :show-values="true" clickable @pick="ouvrirBarrePA" />
           <p v-else class="empty">Sélectionne au moins une année pour afficher le graphe.</p>
