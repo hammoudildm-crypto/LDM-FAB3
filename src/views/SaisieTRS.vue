@@ -57,7 +57,7 @@ const produitsFiltres = computed(() => {
   if (!q) return produits.value
   return produits.value.filter(p => (String(p.code_pf || '') + ' ' + String(p.designation || '')).toLowerCase().includes(q))
 })
-const cadenceObj = computed(() => cadences.value.find(c => c.equipement_id === equipId.value && c.produit_id === produitId.value) || null)
+const cadenceObj = computed(() => cadences.value.find(c => String(c.equipement_id) === String(equipId.value) && String(c.produit_id) === String(produitId.value)) || null)
 const cadence = computed(() => cadenceObj.value && cadenceObj.value.cadence_nominale != null ? Number(cadenceObj.value.cadence_nominale) : 0)
 const cadenceMode = computed(() => cadenceObj.value ? (cadenceObj.value.mode || 'debit') : 'debit')
 const uniteCad = computed(() => cadenceObj.value && cadenceObj.value.unite_cadence ? cadenceObj.value.unite_cadence : 'unités/h')
@@ -77,12 +77,12 @@ async function enregistrerCadenceInline() {
   if (r.error) { cadMsg.value = 'Erreur enregistrement : ' + r.error.message; return }
   cadIn.value = ''
   await charger()
-  if (!cadenceObj.value || !cadence.value) { cadMsg.value = 'Enregistré, mais toujours pas relu — préviens le support.'; return }
   cadMsg.value = ''
+  ok.value = 'Cadence enregistrée.'; setTimeout(() => ok.value = '', 2500)
 }
 
 function chargerContexte() {
-  const ex = saisies.value.find(s => s.equipement_id === equipId.value && s.date === dateSel.value && s.poste === Number(poste.value))
+  const ex = saisies.value.find(s => String(s.equipement_id) === String(equipId.value) && s.date === dateSel.value && s.poste === Number(poste.value))
   if (ex) {
     if (ex.produit_id) produitId.value = ex.produit_id
     form.temps_ouverture_min = ex.temps_ouverture_min
