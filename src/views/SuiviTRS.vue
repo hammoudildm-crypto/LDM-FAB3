@@ -130,7 +130,7 @@ const global = computed(() => {
 })
 
 const trsParEquipChart = computed(() => [{ label: 'TRS %', color: '#4338ca', data: parEquip.value.map(e => +(e.trs * 100).toFixed(1)) }])
-const labelsEquip = computed(() => parEquip.value.map(e => e.code))
+const labelsEquip = computed(() => parEquip.value.map(e => e.nom ? e.code + ' — ' + e.nom : e.code))
 const pertesChart = computed(() => [{ label: 'Minutes', color: '#64748b', data: MOTIFS.map(mo => pertes.value[mo[0]]) }])
 const labelsMotifs = computed(() => MOTIFS.map(mo => mo[2]))
 
