@@ -10,6 +10,7 @@ const produits = ref([])
 const cadences = ref([])
 const cadIn = ref('')
 const cadUniteIn = ref('kg/h')
+const cadMsg = ref('')
 const saisies = ref([])
 const msg = ref('')
 const ok = ref('')
@@ -64,16 +65,20 @@ const uniteCad = computed(() => cadenceObj.value && cadenceObj.value.unite_caden
 // Enregistrer la cadence directement depuis la Saisie TRS (évite l'aller-retour
 // vers Référentiels et recharge la liste sur place -> plus de discordance).
 async function enregistrerCadenceInline() {
-  if (!equipId.value || !produitId.value) { msg.value = 'Choisir équipement et produit.'; return }
+  cadMsg.value = ''
+  if (!equipId.value || !produitId.value) { cadMsg.value = 'Choisir équipement et produit.'; return }
   const v = cadIn.value === '' ? null : Number(cadIn.value)
-  if (!(v > 0)) { msg.value = 'Saisir une cadence supérieure à 0.'; return }
-  const r = await supabase.from('cadences_produit').upsert(
-    { equipement_id: equipId.value, produit_id: produitId.value, cadence_nominale: v, unite_cadence: cadUniteIn.value, mode: 'debit' },
-    { onConflict: 'equipement_id,produit_id' })
-  if (r.error) { msg.value = r.error.message; return }
+  if (!(v > 0)) { cadMsg.value = 'Valeur > 0 requise.'; return }
+  // Nettoie toute ligne existante pour ce couple (doublons / valeurs nulles), puis réinsère.
+  const del = await supabase.from('cadences_produit').delete().eq('equipement_id', equipId.value).eq('produit_id', produitId.value)
+  if (del.error) { cadMsg.value = 'Erreur suppression : ' + del.error.message; return }
+  const r = await supabase.from('cadences_produit').insert(
+    { equipement_id: equipId.value, produit_id: produitId.value, cadence_nominale: v, unite_cadence: cadUniteIn.value, mode: 'debit' })
+  if (r.error) { cadMsg.value = 'Erreur enregistrement : ' + r.error.message; return }
   cadIn.value = ''
   await charger()
-  ok.value = 'Cadence enregistrée pour ce couple.'; setTimeout(() => ok.value = '', 3000)
+  if (!cadenceObj.value || !cadence.value) { cadMsg.value = 'Enregistré, mais toujours pas relu — préviens le support.'; return }
+  cadMsg.value = ''
 }
 
 function chargerContexte() {
@@ -191,6 +196,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
           <input type="number" step="any" min="0" v-model="cadIn" placeholder="cadence" class="cad-inline-in" @keyup.enter="enregistrerCadenceInline" />
           <select v-model="cadUniteIn" class="cad-inline-sel"><option value="kg/h">kg/h</option><option value="unités/h">unités/h</option></select>
           <button class="cad-inline-btn" @click="enregistrerCadenceInline">Enregistrer ici</button>
+          <span v-if="cadMsg" class="cad-inline-msg">{{ cadMsg }}</span>
         </span>
       </div>
       <p v-else class="hint">Choisis un équipement <b>et</b> un produit : la cadence est propre à chaque couple.</p>
@@ -290,4 +296,5 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .cad-inline-sel { font-size: 13px; padding: 5px 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
 .cad-inline-btn { font-size: 13px; font-weight: 700; color: #fff; background: #0f766e; border: 0; border-radius: 7px; padding: 6px 12px; cursor: pointer; }
 .cad-inline-btn:hover { background: #0b5b55; }
+.cad-inline-msg { font-size: 12.5px; font-weight: 700; color: #b91c1c; margin-left: 8px; }
 </style>
