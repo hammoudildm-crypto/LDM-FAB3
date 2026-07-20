@@ -294,7 +294,7 @@ async function signOut() {
 
     <div class="app-main">
       <header class="app-topbar">
-        <button class="burger" @click="sidebarOpen = !sidebarOpen" aria-label="Menu">☰</button>
+        <button class="burger" @click="sidebarMasquee = false; sidebarOpen = !sidebarOpen" aria-label="Menu">☰</button>
         <span class="brand-wm tb-brand">Prod<span class="brand-sub">Track</span></span>
         <div class="tb-spacer"></div>
         <div class="tb-item" v-if="session && enLigne.length">
@@ -443,13 +443,13 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-item.perime { backg
 .side-reveal { display: none; }
 .side-hide { margin-left: auto; background: transparent; border: 0; color: var(--topbar-muted); font-size: 17px; line-height: 1; cursor: pointer; padding: 2px 7px; border-radius: 6px; }
 .side-hide:hover { background: rgba(255,255,255,.12); color: #fff; }
-@media (min-width: 901px) {
+@media (min-width: 1025px) {
   .app-shell.masquee .sidebar { position: fixed; left: 0; top: 0; bottom: 0; height: 100vh; transform: translateX(-100%); transition: transform .22s ease; z-index: 60; box-shadow: 2px 0 18px rgba(0,0,0,.28); }
   .app-shell.masquee .side-reveal { display: block; position: fixed; left: 0; top: 0; bottom: 0; width: 12px; z-index: 55; }
   .app-shell.masquee .side-reveal:hover + .sidebar,
   .app-shell.masquee .sidebar:hover { transform: translateX(0); }
 }
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .sidebar { position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); transition: transform .25s ease; }
   .sidebar.open { transform: translateX(0); }
   .side-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 35; }
@@ -569,6 +569,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .online-moi { font-size: 10px; font-weight: 700; color: #22c55e; background: rgba(34,197,94,.15); padding: 1px 6px; border-radius: 999px; flex: none; }
 .app-topbar { display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 54px; background: var(--topbar); color: var(--topbar-text); position: sticky; top: 0; z-index: 40; box-shadow: 0 2px 10px rgba(0,0,0,.14); flex-wrap: wrap; }
 .app-topbar .burger { display: none; background: none; border: 0; color: var(--topbar-text); font-size: 22px; cursor: pointer; padding: 4px; line-height: 1; }
+.app-shell.masquee .app-topbar .burger { display: inline-flex; }
 .tb-brand { display: none; }
 .tb-spacer { flex: 1; }
 .tb-item { position: relative; }
@@ -582,5 +583,5 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .tb-acct:hover { color: var(--topbar-text); border-color: var(--topbar-muted); }
 .tb-signout { background: transparent; color: var(--topbar-muted); border: 1px solid var(--topbar-border); padding: 6px 11px; border-radius: 8px; font-size: 15px; cursor: pointer; line-height: 1; }
 .tb-signout:hover { color: #fca5a5; border-color: #fca5a5; }
-@media (max-width: 900px) { .app-topbar .burger, .tb-brand { display: inline-flex; } .tb-acct { display: none; } }
+@media (max-width: 1024px) { .app-topbar .burger, .tb-brand { display: inline-flex; } .tb-acct { display: none; } }
 </style>
