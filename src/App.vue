@@ -443,13 +443,13 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-item.perime { backg
 .side-reveal { display: none; }
 .side-hide { margin-left: auto; background: transparent; border: 0; color: var(--topbar-muted); font-size: 17px; line-height: 1; cursor: pointer; padding: 2px 7px; border-radius: 6px; }
 .side-hide:hover { background: rgba(255,255,255,.12); color: #fff; }
-@media (min-width: 1025px) {
+@media (min-width: 901px) and (hover: hover) and (pointer: fine) {
   .app-shell.masquee .sidebar { position: fixed; left: 0; top: 0; bottom: 0; height: 100vh; transform: translateX(-100%); transition: transform .22s ease; z-index: 60; box-shadow: 2px 0 18px rgba(0,0,0,.28); }
   .app-shell.masquee .side-reveal { display: block; position: fixed; left: 0; top: 0; bottom: 0; width: 12px; z-index: 55; }
   .app-shell.masquee .side-reveal:hover + .sidebar,
   .app-shell.masquee .sidebar:hover { transform: translateX(0); }
 }
-@media (max-width: 1024px) {
+@media (max-width: 900px), (hover: none) and (pointer: coarse) {
   .sidebar { position: fixed; top: 0; left: 0; height: 100vh; padding-top: env(safe-area-inset-top, 0px); transform: translateX(-100%); transition: transform .25s ease; }
   .sidebar.open { transform: translateX(0); }
   .side-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 35; }
@@ -583,5 +583,5 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .tb-acct:hover { color: var(--topbar-text); border-color: var(--topbar-muted); }
 .tb-signout { background: transparent; color: var(--topbar-muted); border: 1px solid var(--topbar-border); padding: 6px 11px; border-radius: 8px; font-size: 15px; cursor: pointer; line-height: 1; }
 .tb-signout:hover { color: #fca5a5; border-color: #fca5a5; }
-@media (max-width: 1024px) { .app-topbar .burger, .tb-brand { display: inline-flex; } .tb-acct { display: none; } }
+@media (max-width: 900px), (hover: none) and (pointer: coarse) { .app-topbar .burger, .tb-brand { display: inline-flex; } .tb-acct { display: none; } }
 </style>
