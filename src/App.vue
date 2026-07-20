@@ -449,7 +449,7 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-item.perime { backg
   .app-shell.masquee .side-reveal:hover + .sidebar,
   .app-shell.masquee .sidebar:hover { transform: translateX(0); }
 }
-@media (max-width: 900px), (hover: none) and (pointer: coarse) {
+@media (max-width: 900px) and (orientation: portrait), (hover: none) and (pointer: coarse) and (orientation: portrait) {
   .sidebar { position: fixed; top: 0; left: 0; height: 100vh; padding-top: env(safe-area-inset-top, 0px); transform: translateX(-100%); transition: transform .25s ease; }
   .sidebar.open { transform: translateX(0); }
   .side-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 35; }
@@ -583,7 +583,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .tb-acct:hover { color: var(--topbar-text); border-color: var(--topbar-muted); }
 .tb-signout { background: transparent; color: var(--topbar-muted); border: 1px solid var(--topbar-border); padding: 6px 11px; border-radius: 8px; font-size: 15px; cursor: pointer; line-height: 1; }
 .tb-signout:hover { color: #fca5a5; border-color: #fca5a5; }
-@media (max-width: 900px), (hover: none) and (pointer: coarse) { .app-topbar .burger, .tb-brand { display: inline-flex; } .tb-acct { display: none; } }
+@media (max-width: 900px) and (orientation: portrait), (hover: none) and (pointer: coarse) and (orientation: portrait) { .app-topbar .burger, .tb-brand { display: inline-flex; } .tb-acct { display: none; } }
 /* Mode application (ajoutée à l'écran d'accueil) : réserver la barre d'état,
    avec une marge fixe de secours pour Android où env(safe-area) vaut souvent 0. */
 @media (display-mode: standalone) and (hover: none), (display-mode: fullscreen) and (hover: none) {
