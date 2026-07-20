@@ -1,0 +1,9 @@
+{
+  "name": "prodtrack-rapport-hebdo",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "pptxgenjs": "^3.12.0"
+  }
+}
