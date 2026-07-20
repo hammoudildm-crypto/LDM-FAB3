@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 import { ICONS, TINTS } from '../icons.js'
 import MiniChart from '../components/MiniChart.vue'
+import BoutonRapport from '../components/BoutonRapport.vue'
 
 const anneeCourante = new Date().getFullYear()
 const moisCourant = new Date().getMonth()
@@ -521,11 +522,14 @@ onMounted(async () => {
         <h1><span class="dash-dot" :style="{ background: accentC }"></span>Tableau de bord</h1>
         <p class="sub">Vue d'ensemble de la production — LDM-FAB3</p>
       </div>
-      <label v-if="session" class="annee-sel">Année de référence
-        <select v-model.number="anneeSel">
-          <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
-        </select>
-      </label>
+      <div v-if="session" class="dash-actions">
+        <BoutonRapport />
+        <label class="annee-sel">Année de référence
+          <select v-model.number="anneeSel">
+            <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
+          </select>
+        </label>
+      </div>
     </header>
 
     <div v-if="!session" class="welcome">
@@ -898,4 +902,5 @@ table.mini td { padding: 3px 6px; border-bottom: 1px solid #eef2f6; white-space:
 .kpi-clic { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
 .kpi-clic:hover { border-color: #0f766e; box-shadow: 0 2px 12px rgba(15,118,110,.16); }
 .vrac-link { text-decoration: none; color: inherit; display: block; }
+.dash-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 </style>
