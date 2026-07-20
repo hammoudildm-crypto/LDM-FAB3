@@ -26,8 +26,38 @@ async function charger() {
   const r = await supabase.rpc('lister_utilisateurs')
   chargement.value = false
   if (r.error) { erreur.value = r.error.message; return }
-  users.value = r.data
+  let liste = r.data || []
+  // Fusionner la date de dernière connexion (fonction sécurisée admin).
+  const ra = await supabase.rpc('rapport_acces')
+  if (!ra.error && ra.data) {
+    const m = {}
+    for (const x of ra.data) m[x.user_id] = x
+    liste = liste.map(u => ({ ...u, dernier_acces: (m[u.user_id] || {}).dernier_acces, cree_le: (m[u.user_id] || {}).cree_le }))
+  }
+  users.value = liste
 }
+
+// Mise en forme de la date de dernier accès + fraîcheur (couleur).
+function fmtAcces(d) {
+  if (!d) return { txt: 'Jamais connecté', cls: 'ac-never' }
+  const dt = new Date(d)
+  const jours = Math.floor((Date.now() - dt.getTime()) / 86400000)
+  let rel
+  if (jours <= 0) rel = "aujourd'hui"
+  else if (jours === 1) rel = 'hier'
+  else if (jours < 30) rel = 'il y a ' + jours + ' j'
+  else if (jours < 365) rel = 'il y a ' + Math.floor(jours / 30) + ' mois'
+  else rel = 'il y a ' + Math.floor(jours / 365) + ' an(s)'
+  const cls = jours <= 7 ? 'ac-recent' : (jours <= 30 ? 'ac-mid' : 'ac-old')
+  return { txt: dt.toLocaleDateString('fr-FR') + ' · ' + rel, cls }
+}
+const resume = computed(() => {
+  const tot = users.value.length
+  const jamais = users.value.filter(u => !u.dernier_acces).length
+  const now = Date.now()
+  const semaine = users.value.filter(u => u.dernier_acces && (now - new Date(u.dernier_acces).getTime()) <= 7 * 86400000).length
+  return { tot, jamais, semaine }
+})
 
 async function changerRole(u, e) {
   const nouveau = e.target.value
@@ -79,9 +109,14 @@ onMounted(charger)
         </div>
         <p v-if="chargement" class="info">Chargement…</p>
         <div class="table-scroll">
+          <div class="acces-resume">
+            <span class="ar-item"><strong>{{ resume.tot }}</strong> compte(s)</span>
+            <span class="ar-item ar-ok"><strong>{{ resume.semaine }}</strong> actif(s) cette semaine</span>
+            <span class="ar-item ar-warn" v-if="resume.jamais"><strong>{{ resume.jamais }}</strong> jamais connecté(s)</span>
+          </div>
           <table class="grid">
             <thead>
-              <tr><th>Utilisateur</th><th>Rôle</th><th>Actif</th></tr>
+              <tr><th>Utilisateur</th><th>Rôle</th><th>Actif</th><th>Dernier accès</th></tr>
             </thead>
             <tbody>
               <tr v-for="u in users" :key="u.user_id">
@@ -101,8 +136,9 @@ onMounted(charger)
                     {{ u.actif ? 'Désactiver' : 'Réactiver' }}
                   </button>
                 </td>
+                <td><span class="ac-badge" :class="fmtAcces(u.dernier_acces).cls">{{ fmtAcces(u.dernier_acces).txt }}</span></td>
               </tr>
-              <tr v-if="!users.length && !chargement"><td colspan="3" class="empty">Aucun compte.</td></tr>
+              <tr v-if="!users.length && !chargement"><td colspan="4" class="empty">Aucun compte.</td></tr>
             </tbody>
           </table>
         </div>
@@ -157,4 +193,14 @@ button.link:hover { text-decoration: underline; }
 button.link.danger { color: #b91c1c; }
 
 .hint { color: #64748b; font-size: 13px; margin-top: 4px; }
+.acces-resume { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.ar-item { font-size: 13px; color: #475569; background: #f1f5f9; border-radius: 8px; padding: 6px 12px; }
+.ar-item strong { color: #0f172a; }
+.ar-ok { background: #ecfdf5; color: #047857; } .ar-ok strong { color: #047857; }
+.ar-warn { background: #fffbeb; color: #b45309; } .ar-warn strong { color: #b45309; }
+.ac-badge { font-size: 12.5px; white-space: nowrap; }
+.ac-recent { color: #047857; font-weight: 600; }
+.ac-mid { color: #b45309; }
+.ac-old { color: #64748b; }
+.ac-never { color: #b91c1c; font-weight: 600; }
 </style>
