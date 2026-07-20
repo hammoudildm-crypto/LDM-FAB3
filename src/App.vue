@@ -584,4 +584,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .tb-signout { background: transparent; color: var(--topbar-muted); border: 1px solid var(--topbar-border); padding: 6px 11px; border-radius: 8px; font-size: 15px; cursor: pointer; line-height: 1; }
 .tb-signout:hover { color: #fca5a5; border-color: #fca5a5; }
 @media (max-width: 900px), (hover: none) and (pointer: coarse) { .app-topbar .burger, .tb-brand { display: inline-flex; } .tb-acct { display: none; } }
+/* Mode application (ajoutée à l'écran d'accueil) : réserver la barre d'état,
+   avec une marge fixe de secours pour Android où env(safe-area) vaut souvent 0. */
+@media (display-mode: standalone) and (hover: none), (display-mode: fullscreen) and (hover: none) {
+  .app-topbar { padding-top: max(env(safe-area-inset-top, 0px), 30px); }
+  .sidebar { padding-top: max(env(safe-area-inset-top, 0px), 30px); }
+}
 </style>
