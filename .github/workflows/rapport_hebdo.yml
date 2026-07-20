@@ -20,8 +20,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Installer les dépendances du rapport
-        run: npm install --no-save @supabase/supabase-js pptxgenjs
+      - name: Installer les dépendances du rapport (dossier isolé)
+        run: npm install --prefix scripts
 
       - name: Générer le rapport PowerPoint
         run: node scripts/rapport_hebdo.mjs
