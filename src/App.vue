@@ -450,7 +450,7 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-item.perime { backg
   .app-shell.masquee .sidebar:hover { transform: translateX(0); }
 }
 @media (max-width: 1024px) {
-  .sidebar { position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); transition: transform .25s ease; }
+  .sidebar { position: fixed; top: 0; left: 0; height: 100vh; padding-top: env(safe-area-inset-top, 0px); transform: translateX(-100%); transition: transform .25s ease; }
   .sidebar.open { transform: translateX(0); }
   .side-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 35; }
   .mobile-top { display: flex; align-items: center; gap: 12px; padding: 0 14px; height: 52px;
@@ -567,7 +567,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .online-list li { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; color: var(--topbar-muted); }
 .online-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .online-moi { font-size: 10px; font-weight: 700; color: #22c55e; background: rgba(34,197,94,.15); padding: 1px 6px; border-radius: 999px; flex: none; }
-.app-topbar { display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 54px; background: var(--topbar); color: var(--topbar-text); position: sticky; top: 0; z-index: 40; box-shadow: 0 2px 10px rgba(0,0,0,.14); flex-wrap: wrap; }
+.app-topbar { display: flex; align-items: center; gap: 8px; padding: env(safe-area-inset-top, 0px) 14px 0; min-height: 54px; background: var(--topbar); color: var(--topbar-text); position: sticky; top: 0; z-index: 40; box-shadow: 0 2px 10px rgba(0,0,0,.14); flex-wrap: wrap; }
 .app-topbar .burger { display: none; background: none; border: 0; color: var(--topbar-text); font-size: 22px; cursor: pointer; padding: 4px; line-height: 1; }
 .app-shell.masquee .app-topbar .burger { display: inline-flex; }
 .tb-brand { display: none; }
