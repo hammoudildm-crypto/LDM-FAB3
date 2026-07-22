@@ -1,0 +1,497 @@
+<script setup>
+import { ref, computed, onMounted, inject, watch } from 'vue'
+import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
+import MiniChart from '../components/MiniChart.vue'
+import { ICONS, TINTS } from '../icons.js'
+
+const peutEditer = inject('peutEditer', ref(false))
+const role = inject('role', ref(null))
+const estAdmin = computed(() => role.value === 'admin')
+
+const anneeCourante = new Date().getFullYear()
+const ANNEES = []
+for (let a = anneeCourante - 4; a <= anneeCourante + 1; a++) ANNEES.push(a)
+const STATUTS_PRODUITS = ['Terminé', 'Libéré'] // lots produits = sujets à vérification
+const LIMITE = 300
+
+const lots = ref([])
+const phases = ref([])
+const msg = ref('')
+const anneeSel = ref(anneeCourante) // par défaut : année en cours (0 = toutes)
+const verifEnCours = ref(null)
+const vForm = ref({ verificateur: '', date: new Date().toISOString().slice(0, 10), avec_reserve: false })
+const superviseurChoix = ref('')
+const CLE_SUP = 'prodtrack-vd-superviseurs'
+let supInit = []
+try { const raw = JSON.parse(localStorage.getItem(CLE_SUP) || '[]'); if (Array.isArray(raw)) supInit = raw } catch (e) {}
+const supSuivis = ref(supInit)      // superviseurs à suivre (vide = tous), mémorisé
+watch(supSuivis, (v) => { try { localStorage.setItem(CLE_SUP, JSON.stringify(v)) } catch (e) {} }, { deep: true })
+const filtreSupOuvert = ref(false)
+const nouveauSuperviseur = ref('')
+const supList = ref([])  // superviseurs gérés dans Référentiels (noms)
+const histRecherche = ref('')
+const histDu = ref('')
+const histAu = ref('')
+
+async function fetchAllPaged(make) {
+  const size = 1000
+  let from = 0, all = []
+  for (;;) {
+    const r = await make().range(from, from + size - 1)
+    if (r.error) return { error: r.error, data: all }
+    all = all.concat(r.data || [])
+    if (!r.data || r.data.length < size) break
+    from += size
+  }
+  return { data: all, error: null }
+}
+
+async function charger() {
+  msg.value = ''
+  const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
+    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, ddl_verifie, ddl_aq_verifie, ddl_aq_verificateur, ddl_aq_date_verification, ddl_aq_reserve, produits(designation, code_pf, gamme)')
+    .eq('actif', true)
+    .order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
+  if (r.error) { msg.value = r.error.message; return }
+  lots.value = r.data
+  const rp = await fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
+  if (!rp.error) phases.value = rp.data
+  const rs = await supabase.from('superviseurs').select('nom').order('nom')
+  if (!rs.error) supList.value = rs.data.map(s => s.nom)
+}
+onMounted(charger)
+
+const anYear = (d) => d ? new Date(d).getFullYear() : null
+const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+
+const CANON_FAB = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+const phasesParLot = computed(() => {
+  const m = {}
+  for (const sp of phases.value) {
+    if (!m[sp.ordre_id]) m[sp.ordre_id] = {}
+    m[sp.ordre_id][String(sp.phase || '').toLowerCase()] = { statut: sp.statut, date: sp.date_phase || sp.date_debut }
+  }
+  return m
+})
+// Date de fin de fabrication : la date renseignée, sinon la date de la DERNIÈRE phase de gamme si Terminé
+function dateFinFab(l) {
+  const g = (l.produits && Array.isArray(l.produits.gamme) && l.produits.gamme.length) ? l.produits.gamme : CANON_FAB
+  const rec = phasesParLot.value[l.id] && phasesParLot.value[l.id][String(g[g.length - 1]).toLowerCase()]
+  // Si la dernière phase de gamme est enregistrée, elle décide (Terminé => finie, sinon PAS finie même si date posée).
+  // Si elle n'est pas encore saisie, on se fie à la date de fin de fabrication.
+  if (rec) return rec.statut === 'Terminé' ? (rec.date || l.date_fin_fabrication) : null
+  return l.date_fin_fabrication || null
+}
+const produits = computed(() => lots.value.filter(l => {
+  const d = dateFinFab(l)
+  return d && (anneeSel.value === 0 || anYear(d) === anneeSel.value)
+}))
+const verifies = computed(() => produits.value.filter(l => l.ddl_aq_verifie))
+const attente = computed(() => produits.value.filter(l => l.ddl_verifie && !l.ddl_aq_verifie).sort((a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })))
+const attenteParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const l of attente.value) {
+    const d = dateFinFab(l)
+    if (d) a[new Date(d).getMonth()]++
+  }
+  return a
+})
+const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+const moisSel = ref(null)
+function ouvrirMois(i) { moisSel.value = i }
+const lotsDuMois = computed(() => {
+  if (moisSel.value == null) return []
+  return attente.value.filter(l => { const d = dateFinFab(l); return d && new Date(d).getMonth() === moisSel.value })
+})
+const verifParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const l of lots.value) {
+    if (!l.ddl_aq_verifie || !l.ddl_aq_date_verification) continue
+    const d = new Date(l.ddl_aq_date_verification)
+    if (anneeSel.value && d.getFullYear() !== anneeSel.value) continue
+    a[d.getMonth()]++
+  }
+  return a
+})
+
+const nbVerifies = computed(() => verifies.value.length)
+const nbAttente = computed(() => attente.value.length)
+const taux = computed(() => {
+  const tot = nbVerifies.value + nbAttente.value
+  return tot > 0 ? (nbVerifies.value / tot) * 100 : null
+})
+
+const parSuperviseur = computed(() => {
+  const m = {}
+  for (const l of produits.value) {
+    const k = l.ddl_aq_verificateur
+    if (!k) continue
+    if (!m[k]) m[k] = { nom: k, assignes: 0, verifies: 0 }
+    m[k].assignes++
+    if (l.ddl_aq_verifie) m[k].verifies++
+  }
+  return Object.values(m)
+    .map(x => ({ ...x, taux: x.assignes ? (x.verifies / x.assignes) * 100 : 0 }))
+    .sort((a, b) => b.assignes - a.assignes)
+})
+
+const parSuperviseurFiltre = computed(() => {
+  if (!supSuivis.value.length) return parSuperviseur.value
+  return parSuperviseur.value.filter(s => supSuivis.value.includes(s.nom))
+})
+
+const superviseurs = computed(() => {
+  const s = new Set()
+  for (const nom of supList.value) if (nom) s.add(nom)
+  for (const l of lots.value) if (l.ddl_aq_verificateur) s.add(l.ddl_aq_verificateur)
+  return [...s].sort()
+})
+
+const verifiesFiltres = computed(() => {
+  const q = histRecherche.value.trim().toLowerCase()
+  const du = histDu.value, au = histAu.value
+  return verifies.value.filter(l => {
+    const d = l.ddl_aq_date_verification ? String(l.ddl_aq_date_verification).slice(0, 10) : ''
+    if (du && (!d || d < du)) return false
+    if (au && (!d || d > au)) return false
+    if (q) {
+      const lot = String(l.numero_lot || '').toLowerCase()
+      const sup = String(l.ddl_aq_verificateur || '').toLowerCase()
+      const nom = prodNom(l).toLowerCase()
+      const code = (l.produits && l.produits.code_pf ? l.produits.code_pf : '').toLowerCase()
+      if (!(lot.includes(q) || sup.includes(q) || nom.includes(q) || code.includes(q))) return false
+    }
+    return true
+  })
+})
+const verifiesAffiches = computed(() => [...verifiesFiltres.value]
+  .sort((a, b) => String(b.ddl_aq_date_verification || '').localeCompare(String(a.ddl_aq_date_verification || '')))
+  .slice(0, LIMITE))
+
+function prodNom(l) { return l.produits?.designation || l.produits?.code_pf || '—' }
+function fmt(n) { return (n == null ? '—' : Number(n).toLocaleString('fr-FR')) }
+function fmtPct(p) { return (p == null ? '—' : p.toFixed(1) + ' %') }
+function fmtDate(d) {
+  if (!d) return '—'
+  const x = new Date(d); if (isNaN(x)) return '—'
+  return x.toLocaleDateString('fr-FR')
+}
+function exporterHistoriqueCSV() {
+  const list = [...verifiesFiltres.value].sort((a, b) =>
+    String(b.ddl_aq_date_verification || '').localeCompare(String(a.ddl_aq_date_verification || '')))
+  const rows = [['Lot', 'Code produit', 'Produit', 'Vérificateur', 'Date vérification']]
+  for (const l of list) rows.push([
+    l.numero_lot || '', (l.produits && l.produits.code_pf) || '', prodNom(l),
+    l.ddl_aq_verificateur || '', fmtDate(l.ddl_aq_date_verification)
+  ])
+  const csv = rows.map(r => r.map(c => {
+    const v = String(c == null ? '' : c)
+    return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+  }).join(';')).join('\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = 'historique_ddl_' + new Date().toISOString().slice(0, 10) + '.csv'
+  a.click(); URL.revokeObjectURL(url)
+}
+
+function ouvrir(l) {
+  verifEnCours.value = l.id
+  const d = l.ddl_aq_date_verification ? String(l.ddl_aq_date_verification).slice(0, 10) : new Date().toISOString().slice(0, 10)
+  vForm.value = { verificateur: l.ddl_aq_verificateur || '', date: d, avec_reserve: !!l.ddl_aq_reserve }
+  superviseurChoix.value = l.ddl_aq_verificateur || ''
+  nouveauSuperviseur.value = ''
+  msg.value = ''
+}
+
+async function valider(l) {
+  msg.value = ''
+  const nom = (superviseurChoix.value === '__autre__' ? nouveauSuperviseur.value : superviseurChoix.value).trim()
+  if (!nom) { msg.value = 'Choisis ou saisis le nom du vérificateur.'; return }
+  const r = await supabase.from('ordres_fabrication').update({
+    ddl_aq_verifie: true,
+    ddl_aq_reserve: !!vForm.value.avec_reserve,
+    ddl_aq_verificateur: nom,
+    ddl_aq_date_verification: vForm.value.date || null
+  }).eq('id', l.id)
+  if (r.error) { msg.value = r.error.message; return }
+  verifEnCours.value = null
+  await charger()
+}
+
+async function devalider(l) {
+  if (!confirm(`Annuler la vérification du lot ${l.numero_lot} ?`)) return
+  const r = await supabase.from('ordres_fabrication').update({
+    ddl_aq_verifie: false, ddl_aq_verificateur: null, ddl_aq_date_verification: null
+  }).eq('id', l.id)
+  if (r.error) { msg.value = r.error.message; return }
+  await charger()
+}
+</script>
+
+<template>
+  <div class="vd-page">
+    <PageHeader title="Vérification AQ — dossiers de fabrication" tone="rose"
+      subtitle="2ème vérification (Assurance Qualité) — lots déjà vérifiés par la Production">
+      <label class="annee-sel">Année
+        <select v-model.number="anneeSel">
+          <option :value="0">Toutes</option>
+          <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
+        </select>
+      </label>
+    </PageHeader>
+
+    <p v-if="msg" class="alert">{{ msg }}</p>
+
+    <div class="kpi-grid k3">
+      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.clipboard"></svg></span><div class="kpi-val">{{ fmt(nbVerifies) }}</div></div><div class="kpi-lbl">DDL vérifiés</div></div>
+      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><div class="kpi-val" :class="{ warn: nbAttente > 0 }">{{ fmt(nbAttente) }}</div></div><div class="kpi-lbl">DDL en attente de vérification</div></div>
+      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><div class="kpi-val accent">{{ fmtPct(taux) }}</div></div><div class="kpi-lbl">Taux de vérification</div></div>
+    </div>
+
+    <section class="card">
+      <h3 class="card-title">Dossiers en attente de vérification par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
+      <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :clickable="true" @pick="ouvrirMois" :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" />
+      <p class="chart-hint-vd">Clique sur une barre pour voir les dossiers en attente ce mois-là.</p>
+      <p v-if="!attenteParMois.some(v => v)" class="empty">Aucun DDL en attente<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
+      <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
+      <p v-if="!verifParMois.some(v => v)" class="empty">Aucun DDL vérifié<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
+    </section>
+
+    <div class="cols">
+      <section class="card">
+        <div class="sup-head">
+          <h3 class="card-title">Taux de vérification par vérificateur</h3>
+          <div class="sup-filtre">
+            <button class="btn-filtre" type="button" @click="filtreSupOuvert = !filtreSupOuvert">Vérificateurs<span v-if="supSuivis.length"> ({{ supSuivis.length }})</span> ▾</button>
+            <div v-if="filtreSupOuvert" class="sup-backdrop" @click="filtreSupOuvert = false"></div>
+            <div v-if="filtreSupOuvert" class="sup-menu">
+              <label class="sup-opt"><input type="checkbox" :checked="!supSuivis.length" @change="supSuivis = []" /> Tous</label>
+              <label v-for="sup in superviseurs" :key="sup" class="sup-opt"><input type="checkbox" :value="sup" v-model="supSuivis" /> {{ sup }}</label>
+            </div>
+          </div>
+        </div>
+        <p class="hint">DDL envoyés à l'AQ ÷ DDL qui lui sont assignés</p>
+        <div v-if="!parSuperviseurFiltre.length" class="empty">Aucun vérificateur pour ce filtre.</div>
+        <div v-for="s in parSuperviseurFiltre" :key="s.nom" class="prog-row">
+          <div class="prog-head">
+            <span class="prog-nom">{{ s.nom }}</span>
+            <span class="prog-pct" :class="{ warn: s.taux < 100 }">{{ s.verifies }}/{{ s.assignes }} · {{ s.taux.toFixed(0) }}%</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" :class="s.taux >= 100 ? 'ok' : 'part'" :style="{ width: s.taux + '%' }"></div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
+        <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
+        <table v-else class="mini">
+          <thead><tr><th>Lot</th><th>Produit</th><th>Vérificateur</th><th class="right">Fin fab.</th><th></th></tr></thead>
+          <tbody>
+            <template v-for="l in attente" :key="l.id">
+              <tr>
+                <td class="mono">{{ l.numero_lot }}</td>
+                <td class="desig">{{ prodNom(l) }}</td>
+                <td>{{ l.ddl_aq_verificateur || '—' }}</td>
+                <td class="right nowrap">{{ fmtDate(dateFinFab(l)) }}</td>
+                <td class="right"><button v-if="peutEditer" class="link" @click="ouvrir(l)">Vérifier</button></td>
+              </tr>
+              <tr v-if="verifEnCours === l.id">
+                <td colspan="5">
+                  <div class="verif-form">
+                    <select v-model="superviseurChoix" class="sv-sel">
+                      <option value="">— Choisir un vérificateur —</option>
+                      <option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option>
+                      <option value="__autre__">＋ Autre (saisir un nom)…</option>
+                    </select>
+                    <input v-if="superviseurChoix === '__autre__'" list="superv-list" v-model="nouveauSuperviseur" placeholder="Nom du vérificateur" />
+                    <input type="date" v-model="vForm.date" /><label class="verif-chk"><input type="checkbox" v-model="vForm.avec_reserve" /> Avec réserve</label>
+                    <button class="btn sm" @click="valider(l)">Valider</button>
+                    <button class="link" @click="verifEnCours = null">Annuler</button>
+                  </div>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <section class="card span2" style="margin-top: 22px">
+      <div class="hist-head">
+        <h3 class="card-title">DDL vérifiés</h3>
+        <span class="hist-count">{{ verifiesFiltres.length }}</span>
+        <div class="hist-tools">
+          <input v-model="histRecherche" type="search" class="hist-search" placeholder="Rechercher (lot, produit, vérificateur)…" />
+          <label class="dlab">Du <input type="date" v-model="histDu" /></label>
+          <label class="dlab">Au <input type="date" v-model="histAu" /></label>
+          <button class="hist-exp" @click="exporterHistoriqueCSV" :disabled="!verifiesFiltres.length">Exporter CSV</button>
+        </div>
+      </div>
+      <div v-if="!verifiesFiltres.length" class="empty">Aucun DDL vérifié pour ces critères.</div>
+      <table v-else class="mini">
+        <thead><tr><th>Lot</th><th>Produit</th><th>Vérificateur</th><th class="right">Date d'envoi</th><th></th></tr></thead>
+        <tbody>
+          <template v-for="l in verifiesAffiches" :key="l.id">
+            <tr>
+              <td class="mono">{{ l.numero_lot }}</td>
+              <td class="desig">{{ prodNom(l) }}</td>
+              <td>{{ l.ddl_aq_verificateur || '—' }}</td>
+              <td class="right nowrap">{{ fmtDate(l.ddl_aq_date_verification) }}</td>
+              <td class="right nowrap">
+                <button v-if="estAdmin" class="link" @click="ouvrir(l)">Modifier</button>
+                <button v-if="peutEditer" class="link danger" @click="devalider(l)">Annuler</button>
+              </td>
+            </tr>
+            <tr v-if="verifEnCours === l.id">
+              <td colspan="5">
+                <div class="verif-form">
+                  <select v-model="superviseurChoix" class="sv-sel">
+                    <option value="">— Choisir un vérificateur —</option>
+                    <option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option>
+                    <option value="__autre__">＋ Autre (saisir un nom)…</option>
+                  </select>
+                  <input v-if="superviseurChoix === '__autre__'" list="superv-list" v-model="nouveauSuperviseur" placeholder="Nom du vérificateur" />
+                  <input type="date" v-model="vForm.date" /><label class="verif-chk"><input type="checkbox" v-model="vForm.avec_reserve" /> Avec réserve</label>
+                  <button class="btn sm" @click="valider(l)">Enregistrer</button>
+                  <button class="link" @click="verifEnCours = null">Annuler</button>
+                </div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <p v-if="verifiesFiltres.length > verifiesAffiches.length" class="empty">
+        … {{ fmt(verifiesFiltres.length - verifiesAffiches.length) }} autres (affichage limité à {{ LIMITE }} ; affine la recherche ou les dates).
+      </p>
+    </section>
+
+    <datalist id="superv-list">
+      <option v-for="s in superviseurs" :key="s" :value="s"></option>
+    </datalist>
+    <div v-if="moisSel != null" class="vd-modal-overlay" @click.self="moisSel = null">
+      <div class="vd-modal">
+        <div class="vd-modal-head">
+          <h3 class="vd-modal-title">En attente de vérification — {{ MOIS_LONG[moisSel] }}<span v-if="anneeSel"> {{ anneeSel }}</span> ({{ lotsDuMois.length }})</h3>
+          <button class="vd-modal-close" @click="moisSel = null">✕</button>
+        </div>
+        <div class="vd-modal-body">
+          <div v-if="!lotsDuMois.length" class="empty">Aucun dossier en attente ce mois-là.</div>
+          <table v-else class="mini-vd">
+            <thead><tr><th>N° lot</th><th>Produit</th><th class="right">Fin fab.</th></tr></thead>
+            <tbody>
+              <tr v-for="l in lotsDuMois" :key="l.id">
+                <td class="strong">{{ l.numero_lot }}</td>
+                <td>{{ l.produits ? l.produits.designation : '—' }}</td>
+                <td class="right nowrap">{{ fmtDate(dateFinFab(l)) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.vd-page { color: #1b2733; }
+.vd-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
+.vd-head h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
+.sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
+.annee-sel { display: flex; flex-direction: column; font-size: 11px; font-weight: 600; color: #64748b; gap: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.annee-sel select { font-size: 14px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 600; color: #1b2733; min-width: 110px; }
+
+.alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
+
+.kpi-grid { display: grid; gap: 14px; margin-bottom: 22px; }
+.kpi-grid.k3 { grid-template-columns: repeat(3, 1fr); }
+.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.kpi-val { font-size: 23px; font-weight: 700; letter-spacing: -0.02em; }
+.kpi-val.accent { color: #0f766e; }
+.kpi-val.warn { color: #b45309; }
+.kpi-lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
+
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card.span2 { grid-column: 1 / -1; }
+.card-title { margin: 0 0 14px; font-size: 16px; }
+
+.prog-row { margin-bottom: 13px; }
+.prog-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+.prog-nom { font-size: 13px; font-weight: 600; color: #1b2733; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
+.prog-pct { font-size: 13px; font-weight: 700; color: #0f766e; flex-shrink: 0; }
+.bar-track { height: 10px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 999px; min-width: 2px; }
+.bar-fill.prod { background: #0f766e; }
+.bar-fill.ok { background: #16a34a; }
+.bar-fill.part { background: #f59e0b; }
+.prog-pct.warn { color: #b45309; }
+.hint { margin: -8px 0 14px; font-size: 12px; color: #94a3b8; }
+
+table.mini { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.mini th { text-align: left; padding: 7px 6px; border-bottom: 2px solid #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; }
+table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.desig { color: #64748b; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.right { text-align: right; }
+.nowrap { white-space: nowrap; }
+.empty { color: #94a3b8; font-style: italic; font-size: 13px; }
+
+.btn { display: inline-block; background: #0f766e; color: #fff; border: 0; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.btn:hover { background: #0c5f59; }
+.btn.sm { padding: 7px 14px; font-size: 13px; }
+.link { background: none; border: 0; color: #0f766e; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 6px; }
+.link:hover { text-decoration: underline; }
+.link.danger { color: #b91c1c; }
+
+.verif-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
+.verif-form input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
+.verif-form input[list] { min-width: 230px; }
+
+@media (max-width: 900px) {
+  .kpi-grid.k3 { grid-template-columns: 1fr; }
+  .cols { grid-template-columns: 1fr; }
+  .card.span2 { grid-column: auto; }
+}
+.verif-form select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 230px; }
+.hist-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.hist-head .card-title { margin: 0; }
+.hist-count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+.hist-tools { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.hist-search { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 220px; }
+.hist-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.dlab { font-size: 12px; color: #64748b; display: inline-flex; align-items: center; gap: 5px; }
+.dlab input { font-size: 13px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
+.hist-exp { font-size: 13px; padding: 7px 12px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.hist-exp:hover { background: #ecfdf5; }
+.hist-exp:disabled { opacity: .45; cursor: not-allowed; }
+.sup-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.sup-filtre { position: relative; }
+.btn-filtre { font-size: 12px; font-weight: 600; color: #475569; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+.btn-filtre:hover { border-color: #0f766e; color: #0f766e; }
+.sup-backdrop { position: fixed; inset: 0; z-index: 20; }
+.sup-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 21; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 28px rgba(16,24,40,.18); padding: 6px; min-width: 210px; max-height: 260px; overflow-y: auto; }
+.sup-opt { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1b2733; padding: 6px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.sup-opt:hover { background: #f1f5f9; }
+.sup-opt input { width: 15px; height: 15px; accent-color: #0f766e; cursor: pointer; }
+.chart-hint-vd { font-size: 12px; color: #94a3b8; margin: 8px 0 0; font-style: italic; }
+.vd-modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.vd-modal { background: #fff; border-radius: 14px; width: min(640px, 100%); max-height: 82vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+.vd-modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid #e2e8f0; }
+.vd-modal-title { margin: 0; font-size: 16px; }
+.vd-modal-close { margin-left: auto; background: none; border: 0; font-size: 18px; color: #64748b; cursor: pointer; line-height: 1; }
+.vd-modal-body { overflow-y: auto; padding: 8px 18px 18px; }
+.mini-vd { width: 100%; border-collapse: collapse; font-size: 14px; }
+.mini-vd th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; }
+.mini-vd td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
+.mini-vd .right { text-align: right; }
+.mini-vd .strong { font-weight: 700; }
+.mini-vd .nowrap { white-space: nowrap; }
+.verif-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #b45309; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.verif-chk input { width: 15px; height: 15px; cursor: pointer; }
+</style>
