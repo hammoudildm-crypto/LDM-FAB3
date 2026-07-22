@@ -634,19 +634,26 @@ onMounted(async () => {
           </section>
         </div>
 
-        <h3 class="struct-h"><span class="struct-b qual">Qualité — coup d'œil</span><span class="struct-d">bon du 1er coup &amp; triage · {{ anneeSel }}</span></h3>
-        <div class="kpi-grid k3">
+        <h3 class="struct-h"><span class="struct-b prod2">Production — fabrication &amp; conditionnement</span><span class="struct-d">bon du 1er coup &amp; triage · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k2">
           <div class="kpi kpi-clic" @click="modalQualite = 'brft'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brft)">{{ brft != null ? fmtPct(brft) : '—' }}</span></div>
             <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
           </div>
-          <div class="kpi kpi-clic" @click="modalQualite = 'brrft'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val" :class="clsQualite(brrft)">{{ brrft != null ? fmtPct(brrft) : '—' }}</span></div>
-            <div class="kpi-lbl">BRRFT — dossiers bons du 1<sup>er</sup> coup</div>
-          </div>
           <div class="kpi kpi-clic" @click="modalQualite = 'triage'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="lotsEnTriage > 0 ? 'q-warn' : ''">{{ fmt(lotsEnTriage) }}</span></div>
             <div class="kpi-lbl">Lots en cours de triage</div>
+          </div>
+        </div>
+        <h3 class="struct-h"><span class="struct-b qa">Assurance qualité</span><span class="struct-d">conformité des dossiers de lot · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k2">
+          <div class="kpi kpi-clic" @click="modalQualite = 'brrft'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrft)">{{ brrft != null ? fmtPct(brrft) : '—' }}</span></div>
+            <div class="kpi-lbl">BRRFT — dossiers bons du 1<sup>er</sup> coup</div>
+          </div>
+          <div class="kpi kpi-clic" @click="modalQualite = 'brrft'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.rose"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val" :class="detailBRRFT.length > 0 ? 'q-warn' : ''">{{ fmt(detailBRRFT.length) }}</span></div>
+            <div class="kpi-lbl">Dossiers avec réserve</div>
           </div>
         </div>
 
@@ -712,19 +719,26 @@ onMounted(async () => {
           </div>
         </div>
 
-        <h3 class="struct-h"><span class="struct-b qual">Bon du premier coup &amp; triage</span><span class="struct-d">indicateurs qualité · {{ anneeSel }}</span></h3>
-        <div class="kpi-grid k3">
+        <h3 class="struct-h"><span class="struct-b prod2">Production — fabrication &amp; conditionnement</span><span class="struct-d">bon du 1er coup &amp; triage · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k2">
           <div class="kpi kpi-clic" @click="modalQualite = 'brft'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brft)">{{ brft != null ? fmtPct(brft) : '—' }}</span></div>
             <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
           </div>
-          <div class="kpi kpi-clic" @click="modalQualite = 'brrft'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val" :class="clsQualite(brrft)">{{ brrft != null ? fmtPct(brrft) : '—' }}</span></div>
-            <div class="kpi-lbl">BRRFT — dossiers bons du 1<sup>er</sup> coup</div>
-          </div>
           <div class="kpi kpi-clic" @click="modalQualite = 'triage'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="lotsEnTriage > 0 ? 'q-warn' : ''">{{ fmt(lotsEnTriage) }}</span></div>
             <div class="kpi-lbl">Lots en cours de triage</div>
+          </div>
+        </div>
+        <h3 class="struct-h"><span class="struct-b qa">Assurance qualité</span><span class="struct-d">conformité des dossiers de lot · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k2">
+          <div class="kpi kpi-clic" @click="modalQualite = 'brrft'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrft)">{{ brrft != null ? fmtPct(brrft) : '—' }}</span></div>
+            <div class="kpi-lbl">BRRFT — dossiers bons du 1<sup>er</sup> coup</div>
+          </div>
+          <div class="kpi kpi-clic" @click="modalQualite = 'brrft'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.rose"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val" :class="detailBRRFT.length > 0 ? 'q-warn' : ''">{{ fmt(detailBRRFT.length) }}</span></div>
+            <div class="kpi-lbl">Dossiers avec réserve</div>
           </div>
         </div>
 
@@ -1001,6 +1015,8 @@ table.mini td { padding: 3px 6px; border-bottom: 1px solid #eef2f6; white-space:
 .vrac-link { text-decoration: none; color: inherit; display: block; }
 .dash-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .struct-b.qual { background: #ede9fe; color: #4338ca; }
+.struct-b.prod2 { background: #d1fae5; color: #047857; }
+.struct-b.qa { background: #e0e7ff; color: #4338ca; }
 .q-good { color: #047857 !important; }
 .q-mid { color: #b45309 !important; }
 .q-bad { color: #b91c1c !important; }
