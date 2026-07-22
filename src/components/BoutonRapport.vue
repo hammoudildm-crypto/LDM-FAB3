@@ -41,7 +41,7 @@ async function collecte() {
   const semaine = new Date(); semaine.setDate(semaine.getDate() - 7)
 
   const [ofs, conds, produits, planRows, phases, cadences, trsPostes] = await Promise.all([
-    fetchAll('ordres_fabrication', 'id, produit_id, statut, boites_fabriquees, quantite_theorique, date_fin_fabrication'),
+    fetchAll('ordres_fabrication', 'id, produit_id, statut, boites_fabriquees, quantite_theorique, date_fin_fabrication, deviation, deviation_cond, en_triage, en_triage_cond, ddl_verifie, ddl_reserve, ddl_cond_verifie, ddl_cond_reserve, ddl_aq_verifie, ddl_aq_reserve, ddl_cond_aq_verifie, ddl_cond_aq_reserve'),
     fetchAll('conditionnement', 'ordre_id, quantite_conditionnee, date_conditionnement, date_fin, actif'),
     fetchAll('produits', 'id, unites_par_boite'),
     fetchAll('plan_production', 'annee, quantite_planifiee'),
@@ -124,8 +124,20 @@ async function collecte() {
     sOuv += ouverture; sTrs += trs * ouverture; sDispo += dispo * ouverture; sPerf += perf * ouverture; sQual += qual * ouverture; nPostes++
   }
 
+  // Qualité — bon du 1er coup (sur l'année)
+  const lotsAn = ofs.filter(o => o.date_fin_fabrication && new Date(o.date_fin_fabrication).getFullYear() === annee)
+  const prodFinis = lotsAn.filter(o => ['Terminé', 'Libéré', 'Rejeté'].includes(o.statut))
+  const brftDe = (k) => prodFinis.length ? (prodFinis.filter(o => o.statut !== 'Rejeté' && !o[k]).length / prodFinis.length) * 100 : null
+  const brrftDe = (kv, kr) => { let v = 0, s = 0; for (const o of lotsAn) if (o[kv]) { v++; if (!o[kr]) s++ } return v ? (s / v) * 100 : null }
+  const qualite = {
+    brftFab: brftDe('deviation'), brftCond: brftDe('deviation_cond'),
+    triageFab: ofs.filter(o => o.en_triage).length, triageCond: ofs.filter(o => o.en_triage_cond).length,
+    brrftFabProd: brrftDe('ddl_verifie', 'ddl_reserve'), brrftCondProd: brrftDe('ddl_cond_verifie', 'ddl_cond_reserve'),
+    brrftFabAQ: brrftDe('ddl_aq_verifie', 'ddl_aq_reserve'), brrftCondAQ: brrftDe('ddl_cond_aq_verifie', 'ddl_cond_aq_reserve'),
+  }
+
   return {
-    annee, dateGen: new Date(),
+    annee, dateGen: new Date(), qualite,
     fabBoxes, rdtFab, fabBoxesSem, fabLotsSem,
     condBoxes, rdtCond, condBoxesSem, condLotsSem: condLotsSem.size,
     plan, pctPlanFab: plan ? (fabBoxes / plan) * 100 : 0, pctPlanCond: plan ? (condBoxes / plan) * 100 : 0,
@@ -196,6 +208,18 @@ function construire(pres, d) {
   card(s, 0.9, 4.2, 11.5, 2.0, 'F8FAFC')
   s.addText('Lecture', { x: 1.2, y: 4.4, w: 10.9, h: 0.35, fontFace: HF, fontSize: 15, bold: true, color: TEAL, margin: 0 })
   s.addText('Rendement = boîtes réelles ÷ boîtes théoriques. Vert (≥ 95 %) = bon ; sous 85 %, identifier les pertes. Ne comptent que les lots dont la donnée est complète.', { x: 1.2, y: 4.85, w: 10.9, h: 1.2, fontFace: BF, fontSize: 13, color: TEXT, margin: 0 })
+
+  // ---- SLIDES QUALITÉ ----
+  const slideQualite = (titre, brft, triage, brrftProd, brrftAQ) => {
+    const sq = pres.addSlide(); sq.background = { color: LIGHT }
+    head(sq, 'Bon du premier coup', titre)
+    tuile(sq, 0.9, 1.9, 5.6, 2.0, brft != null ? pct(brft) : '—', 'BRFT — lots bons du 1er coup', brft != null ? couleurTaux(brft) : GREY, '')
+    tuile(sq, 6.8, 1.9, 5.6, 2.0, fmt(triage), 'Lots en cours de triage', triage > 0 ? AMBER : GREEN, '')
+    tuile(sq, 0.9, 4.1, 5.6, 2.0, brrftProd != null ? pct(brrftProd) : '—', 'BRRFT dossier — vérif Production', brrftProd != null ? couleurTaux(brrftProd) : GREY, '')
+    tuile(sq, 6.8, 4.1, 5.6, 2.0, brrftAQ != null ? pct(brrftAQ) : '—', 'BRRFT dossier — vérif AQ', brrftAQ != null ? couleurTaux(brrftAQ) : GREY, '')
+  }
+  slideQualite('Qualité — fabrication', d.qualite.brftFab, d.qualite.triageFab, d.qualite.brrftFabProd, d.qualite.brrftFabAQ)
+  slideQualite('Qualité — conditionnement', d.qualite.brftCond, d.qualite.triageCond, d.qualite.brrftCondProd, d.qualite.brrftCondAQ)
 
   s = pres.addSlide(); s.background = { color: LIGHT }
   head(s, 'Efficience machine', 'TRS de la semaine')
