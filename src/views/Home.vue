@@ -140,6 +140,29 @@ const brrft = computed(() => {
 // Lots en triage = instantané (tous les lots actifs cochés « en triage »).
 const lotsEnTriage = computed(() => lots.value.filter(l => l.en_triage).length)
 function clsQualite(v) { return v == null ? '' : (v >= 95 ? 'q-good' : (v >= 85 ? 'q-mid' : 'q-bad')) }
+const modalQualite = ref(null)
+const detailBRFT = computed(() => lotsAnnee.value
+  .filter(l => ['Terminé', 'Libéré', 'Rejeté'].includes(l.statut) && (l.statut === 'Rejeté' || l.deviation))
+  .map(l => ({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: l.statut === 'Rejeté' ? 'Rejeté' : 'Déviation' }))
+  .sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true })))
+const detailBRRFT = computed(() => {
+  const out = []
+  for (const l of lotsAnnee.value) {
+    if (l.ddl_verifie && l.ddl_reserve) out.push({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: 'Fabrication' })
+    if (l.ddl_cond_verifie && l.ddl_cond_reserve) out.push({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: 'Conditionnement' })
+  }
+  return out.sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
+})
+const detailTriage = computed(() => lots.value
+  .filter(l => l.en_triage)
+  .map(l => ({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: l.statut }))
+  .sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true })))
+const modalInfo = computed(() => {
+  if (modalQualite.value === 'brft') return { titre: 'Lots NON bons du 1er coup', sous: 'rejetés ou avec déviation · ' + anneeSel.value, liste: detailBRFT.value, col3: 'Motif' }
+  if (modalQualite.value === 'brrft') return { titre: 'Dossiers avec réserve', sous: 'fabrication ou conditionnement · ' + anneeSel.value, liste: detailBRRFT.value, col3: 'Dossier' }
+  if (modalQualite.value === 'triage') return { titre: 'Lots en cours de triage', sous: 'instantané', liste: detailTriage.value, col3: 'Statut' }
+  return { titre: '', sous: '', liste: [], col3: '' }
+})
 const nbLots = computed(() => lotsAnnee.value.length)
 const lotsParStatut = computed(() => {
   const m = {}
@@ -613,15 +636,15 @@ onMounted(async () => {
 
         <h3 class="struct-h"><span class="struct-b qual">Qualité — coup d'œil</span><span class="struct-d">bon du 1er coup &amp; triage · {{ anneeSel }}</span></h3>
         <div class="kpi-grid k3">
-          <div class="kpi">
+          <div class="kpi kpi-clic" @click="modalQualite = 'brft'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brft)">{{ brft != null ? fmtPct(brft) : '—' }}</span></div>
             <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
           </div>
-          <div class="kpi">
+          <div class="kpi kpi-clic" @click="modalQualite = 'brrft'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val" :class="clsQualite(brrft)">{{ brrft != null ? fmtPct(brrft) : '—' }}</span></div>
             <div class="kpi-lbl">BRRFT — dossiers bons du 1<sup>er</sup> coup</div>
           </div>
-          <div class="kpi">
+          <div class="kpi kpi-clic" @click="modalQualite = 'triage'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="lotsEnTriage > 0 ? 'q-warn' : ''">{{ fmt(lotsEnTriage) }}</span></div>
             <div class="kpi-lbl">Lots en cours de triage</div>
           </div>
@@ -691,15 +714,15 @@ onMounted(async () => {
 
         <h3 class="struct-h"><span class="struct-b qual">Bon du premier coup &amp; triage</span><span class="struct-d">indicateurs qualité · {{ anneeSel }}</span></h3>
         <div class="kpi-grid k3">
-          <div class="kpi">
+          <div class="kpi kpi-clic" @click="modalQualite = 'brft'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brft)">{{ brft != null ? fmtPct(brft) : '—' }}</span></div>
             <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
           </div>
-          <div class="kpi">
+          <div class="kpi kpi-clic" @click="modalQualite = 'brrft'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val" :class="clsQualite(brrft)">{{ brrft != null ? fmtPct(brrft) : '—' }}</span></div>
             <div class="kpi-lbl">BRRFT — dossiers bons du 1<sup>er</sup> coup</div>
           </div>
-          <div class="kpi">
+          <div class="kpi kpi-clic" @click="modalQualite = 'triage'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="lotsEnTriage > 0 ? 'q-warn' : ''">{{ fmt(lotsEnTriage) }}</span></div>
             <div class="kpi-lbl">Lots en cours de triage</div>
           </div>
@@ -816,6 +839,27 @@ onMounted(async () => {
           </tbody>
         </table>
         <p v-if="!moisLots.length" class="empty">Aucun lot pour ce mois.</p>
+      </div>
+    </div>
+    <div v-if="modalQualite" class="modal-overlay" @click="modalQualite = null">
+      <div class="q-modal" @click.stop>
+        <div class="q-md-head">
+          <div><h3>{{ modalInfo.titre }}</h3><span class="q-md-sub">{{ modalInfo.sous }} · {{ modalInfo.liste.length }} lot(s)</span></div>
+          <button class="q-md-x" @click="modalQualite = null">✕</button>
+        </div>
+        <div class="q-md-body">
+          <p v-if="!modalInfo.liste.length" class="empty">Aucun lot concerné — tout est bon !</p>
+          <table v-else class="grid">
+            <thead><tr><th>N° lot</th><th>Produit</th><th>{{ modalInfo.col3 }}</th></tr></thead>
+            <tbody>
+              <tr v-for="(r, i) in modalInfo.liste" :key="i">
+                <td class="q-lot">{{ r.lot }}</td>
+                <td>{{ r.prod }}</td>
+                <td>{{ r.v }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -961,4 +1005,14 @@ table.mini td { padding: 3px 6px; border-bottom: 1px solid #eef2f6; white-space:
 .q-mid { color: #b45309 !important; }
 .q-bad { color: #b91c1c !important; }
 .q-warn { color: #b45309 !important; }
+.kpi-clic { cursor: pointer; transition: box-shadow .15s, transform .15s; }
+.kpi-clic:hover { box-shadow: 0 4px 14px rgba(0,0,0,.1); transform: translateY(-1px); }
+.modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.q-modal { background: #fff; border-radius: 14px; width: min(600px, 100%); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+.q-md-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 14px 18px 10px; gap: 12px; }
+.q-md-head h3 { margin: 0; font-size: 16px; }
+.q-md-sub { font-size: 12.5px; color: #64748b; }
+.q-md-x { background: none; border: 0; font-size: 17px; color: #94a3b8; cursor: pointer; }
+.q-md-body { overflow-y: auto; padding: 6px 18px 16px; }
+.q-lot { font-family: ui-monospace, monospace; font-weight: 700; white-space: nowrap; }
 </style>
