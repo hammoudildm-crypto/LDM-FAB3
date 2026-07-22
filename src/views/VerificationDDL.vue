@@ -20,7 +20,7 @@ const phases = ref([])
 const msg = ref('')
 const anneeSel = ref(anneeCourante) // par défaut : année en cours (0 = toutes)
 const verifEnCours = ref(null)
-const vForm = ref({ verificateur: '', date: new Date().toISOString().slice(0, 10) })
+const vForm = ref({ verificateur: '', date: new Date().toISOString().slice(0, 10), avec_reserve: false })
 const superviseurChoix = ref('')
 const CLE_SUP = 'prodtrack-vd-superviseurs'
 let supInit = []
@@ -50,7 +50,7 @@ async function fetchAllPaged(make) {
 async function charger() {
   msg.value = ''
   const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, ddl_verifie, ddl_verificateur, ddl_date_verification, produits(designation, code_pf, gamme)')
+    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, ddl_verifie, ddl_verificateur, ddl_date_verification, ddl_reserve, produits(designation, code_pf, gamme)')
     .eq('actif', true)
     .order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (r.error) { msg.value = r.error.message; return }
@@ -199,7 +199,7 @@ function exporterHistoriqueCSV() {
 function ouvrir(l) {
   verifEnCours.value = l.id
   const d = l.ddl_date_verification ? String(l.ddl_date_verification).slice(0, 10) : new Date().toISOString().slice(0, 10)
-  vForm.value = { verificateur: l.ddl_verificateur || '', date: d }
+  vForm.value = { verificateur: l.ddl_verificateur || '', date: d, avec_reserve: !!l.ddl_reserve }
   superviseurChoix.value = l.ddl_verificateur || ''
   nouveauSuperviseur.value = ''
   msg.value = ''
@@ -211,6 +211,7 @@ async function valider(l) {
   if (!nom) { msg.value = 'Choisis ou saisis le nom du vérificateur.'; return }
   const r = await supabase.from('ordres_fabrication').update({
     ddl_verifie: true,
+    ddl_reserve: !!vForm.value.avec_reserve,
     ddl_verificateur: nom,
     ddl_date_verification: vForm.value.date || null
   }).eq('id', l.id)
@@ -309,7 +310,7 @@ async function devalider(l) {
                       <option value="__autre__">＋ Autre (saisir un nom)…</option>
                     </select>
                     <input v-if="superviseurChoix === '__autre__'" list="superv-list" v-model="nouveauSuperviseur" placeholder="Nom du vérificateur" />
-                    <input type="date" v-model="vForm.date" />
+                    <input type="date" v-model="vForm.date" /><label class="verif-chk"><input type="checkbox" v-model="vForm.avec_reserve" /> Avec réserve</label>
                     <button class="btn sm" @click="valider(l)">Valider</button>
                     <button class="link" @click="verifEnCours = null">Annuler</button>
                   </div>
@@ -356,7 +357,7 @@ async function devalider(l) {
                     <option value="__autre__">＋ Autre (saisir un nom)…</option>
                   </select>
                   <input v-if="superviseurChoix === '__autre__'" list="superv-list" v-model="nouveauSuperviseur" placeholder="Nom du vérificateur" />
-                  <input type="date" v-model="vForm.date" />
+                  <input type="date" v-model="vForm.date" /><label class="verif-chk"><input type="checkbox" v-model="vForm.avec_reserve" /> Avec réserve</label>
                   <button class="btn sm" @click="valider(l)">Enregistrer</button>
                   <button class="link" @click="verifEnCours = null">Annuler</button>
                 </div>
@@ -491,4 +492,6 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .mini-vd .right { text-align: right; }
 .mini-vd .strong { font-weight: 700; }
 .mini-vd .nowrap { white-space: nowrap; }
+.verif-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #b45309; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.verif-chk input { width: 15px; height: 15px; cursor: pointer; }
 </style>
