@@ -56,7 +56,7 @@ async function charger() {
   if (!rp.error) nbProduits.value = rp.count || 0
 
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, quantite_theorique, boites_fabriquees, produits(designation, pcsu)')
+    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, quantite_theorique, boites_fabriquees, deviation, en_triage, ddl_verifie, ddl_reserve, ddl_cond_verifie, ddl_cond_reserve, produits(designation, pcsu)')
     .eq('actif', true).order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -119,6 +119,27 @@ const anLot = (l) => {
   return d ? new Date(d).getFullYear() : null
 }
 const lotsAnnee = computed(() => lots.value.filter(l => anLot(l) === anneeSel.value))
+
+// --- Indicateurs qualité BRFT / BRRFT / triage ---
+// BRFT = lots produits sans déviation ET non rejetés / lots produits (année).
+const brft = computed(() => {
+  const prod = lotsAnnee.value.filter(l => ['Terminé', 'Libéré', 'Rejeté'].includes(l.statut))
+  if (!prod.length) return null
+  const rft = prod.filter(l => l.statut !== 'Rejeté' && !l.deviation).length
+  return (rft / prod.length) * 100
+})
+// BRRFT = dossiers vérifiés (fab + cond) sans réserve / dossiers vérifiés (année).
+const brrft = computed(() => {
+  let ver = 0, sans = 0
+  for (const l of lotsAnnee.value) {
+    if (l.ddl_verifie) { ver++; if (!l.ddl_reserve) sans++ }
+    if (l.ddl_cond_verifie) { ver++; if (!l.ddl_cond_reserve) sans++ }
+  }
+  return ver ? (sans / ver) * 100 : null
+})
+// Lots en triage = instantané (tous les lots actifs cochés « en triage »).
+const lotsEnTriage = computed(() => lots.value.filter(l => l.en_triage).length)
+function clsQualite(v) { return v == null ? '' : (v >= 95 ? 'q-good' : (v >= 85 ? 'q-mid' : 'q-bad')) }
 const nbLots = computed(() => lotsAnnee.value.length)
 const lotsParStatut = computed(() => {
   const m = {}
@@ -590,6 +611,22 @@ onMounted(async () => {
           </section>
         </div>
 
+        <h3 class="struct-h"><span class="struct-b qual">Qualité — coup d'œil</span><span class="struct-d">bon du 1er coup &amp; triage · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k3">
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brft)">{{ brft != null ? fmtPct(brft) : '—' }}</span></div>
+            <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val" :class="clsQualite(brrft)">{{ brrft != null ? fmtPct(brrft) : '—' }}</span></div>
+            <div class="kpi-lbl">BRRFT — dossiers bons du 1<sup>er</sup> coup</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="lotsEnTriage > 0 ? 'q-warn' : ''">{{ fmt(lotsEnTriage) }}</span></div>
+            <div class="kpi-lbl">Lots en cours de triage</div>
+          </div>
+        </div>
+
         <section class="card">
           <h2 class="card-title">Réalisation du plan — top produits</h2>
           <div v-for="p in realisationPlan" :key="p.code" class="prog-row">
@@ -649,6 +686,22 @@ onMounted(async () => {
               <span class="kpi-val">{{ k.v }}</span>
             </div>
             <div class="kpi-lbl">{{ k.l }}</div>
+          </div>
+        </div>
+
+        <h3 class="struct-h"><span class="struct-b qual">Bon du premier coup &amp; triage</span><span class="struct-d">indicateurs qualité · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k3">
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brft)">{{ brft != null ? fmtPct(brft) : '—' }}</span></div>
+            <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val" :class="clsQualite(brrft)">{{ brrft != null ? fmtPct(brrft) : '—' }}</span></div>
+            <div class="kpi-lbl">BRRFT — dossiers bons du 1<sup>er</sup> coup</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="lotsEnTriage > 0 ? 'q-warn' : ''">{{ fmt(lotsEnTriage) }}</span></div>
+            <div class="kpi-lbl">Lots en cours de triage</div>
           </div>
         </div>
 
@@ -903,4 +956,9 @@ table.mini td { padding: 3px 6px; border-bottom: 1px solid #eef2f6; white-space:
 .kpi-clic:hover { border-color: #0f766e; box-shadow: 0 2px 12px rgba(15,118,110,.16); }
 .vrac-link { text-decoration: none; color: inherit; display: block; }
 .dash-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.struct-b.qual { background: #ede9fe; color: #4338ca; }
+.q-good { color: #047857 !important; }
+.q-mid { color: #b45309 !important; }
+.q-bad { color: #b91c1c !important; }
+.q-warn { color: #b45309 !important; }
 </style>
