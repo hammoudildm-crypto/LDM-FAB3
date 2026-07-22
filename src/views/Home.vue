@@ -56,7 +56,7 @@ async function charger() {
   if (!rp.error) nbProduits.value = rp.count || 0
 
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, quantite_theorique, boites_fabriquees, deviation, en_triage, ddl_verifie, ddl_reserve, ddl_cond_verifie, ddl_cond_reserve, ddl_aq_verifie, ddl_aq_reserve, ddl_cond_aq_verifie, ddl_cond_aq_reserve, produits(designation, pcsu)')
+    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, quantite_theorique, boites_fabriquees, deviation, deviation_cond, en_triage, en_triage_cond, ddl_verifie, ddl_reserve, ddl_cond_verifie, ddl_cond_reserve, ddl_aq_verifie, ddl_aq_reserve, ddl_cond_aq_verifie, ddl_cond_aq_reserve, produits(designation, pcsu)')
     .eq('actif', true).order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -122,12 +122,14 @@ const lotsAnnee = computed(() => lots.value.filter(l => anLot(l) === anneeSel.va
 
 // --- Indicateurs qualité BRFT / BRRFT / triage ---
 // BRFT = lots produits sans déviation ET non rejetés / lots produits (année).
-const brft = computed(() => {
+function calcBrft(kDev) {
   const prod = lotsAnnee.value.filter(l => ['Terminé', 'Libéré', 'Rejeté'].includes(l.statut))
   if (!prod.length) return null
-  const rft = prod.filter(l => l.statut !== 'Rejeté' && !l.deviation).length
+  const rft = prod.filter(l => l.statut !== 'Rejeté' && !l[kDev]).length
   return (rft / prod.length) * 100
-})
+}
+const brftFab = computed(() => calcBrft('deviation'))
+const brftCond = computed(() => calcBrft('deviation_cond'))
 // BRRFT = dossiers vérifiés (fab + cond) sans réserve / dossiers vérifiés (année).
 // BRRFT par niveau (Production / AQ) et par type (fabrication / conditionnement).
 function calcBrrft(kVer, kRes) {
@@ -140,13 +142,18 @@ const brrftCondProd = computed(() => calcBrrft('ddl_cond_verifie', 'ddl_cond_res
 const brrftFabAQ = computed(() => calcBrrft('ddl_aq_verifie', 'ddl_aq_reserve'))
 const brrftCondAQ = computed(() => calcBrrft('ddl_cond_aq_verifie', 'ddl_cond_aq_reserve'))
 // Lots en triage = instantané (tous les lots actifs cochés « en triage »).
-const lotsEnTriage = computed(() => lots.value.filter(l => l.en_triage).length)
+const triageFab = computed(() => lots.value.filter(l => l.en_triage).length)
+const triageCond = computed(() => lots.value.filter(l => l.en_triage_cond).length)
 function clsQualite(v) { return v == null ? '' : (v >= 95 ? 'q-good' : (v >= 85 ? 'q-mid' : 'q-bad')) }
 const modalQualite = ref(null)
-const detailBRFT = computed(() => lotsAnnee.value
-  .filter(l => ['Terminé', 'Libéré', 'Rejeté'].includes(l.statut) && (l.statut === 'Rejeté' || l.deviation))
-  .map(l => ({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: l.statut === 'Rejeté' ? 'Rejeté' : 'Déviation' }))
-  .sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true })))
+function detailBrft(kDev) {
+  return lotsAnnee.value
+    .filter(l => ['Terminé', 'Libéré', 'Rejeté'].includes(l.statut) && (l.statut === 'Rejeté' || l[kDev]))
+    .map(l => ({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: l.statut === 'Rejeté' ? 'Rejeté' : 'Déviation' }))
+    .sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
+}
+const detailBrftFab = computed(() => detailBrft('deviation'))
+const detailBrftCond = computed(() => detailBrft('deviation_cond'))
 function detailReserve(kVer, kRes) {
   return lotsAnnee.value.filter(l => l[kVer] && l[kRes])
     .map(l => ({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: 'Avec réserve' }))
@@ -156,14 +163,19 @@ const detailBrrftFabProd = computed(() => detailReserve('ddl_verifie', 'ddl_rese
 const detailBrrftCondProd = computed(() => detailReserve('ddl_cond_verifie', 'ddl_cond_reserve'))
 const detailBrrftFabAQ = computed(() => detailReserve('ddl_aq_verifie', 'ddl_aq_reserve'))
 const detailBrrftCondAQ = computed(() => detailReserve('ddl_cond_aq_verifie', 'ddl_cond_aq_reserve'))
-const detailTriage = computed(() => lots.value
-  .filter(l => l.en_triage)
-  .map(l => ({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: l.statut }))
-  .sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true })))
+function detailTri(kTri) {
+  return lots.value.filter(l => l[kTri])
+    .map(l => ({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: l.statut }))
+    .sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
+}
+const detailTriageFab = computed(() => detailTri('en_triage'))
+const detailTriageCond = computed(() => detailTri('en_triage_cond'))
 const modalInfo = computed(() => {
   const m = modalQualite.value, an = anneeSel.value
-  if (m === 'brft') return { titre: 'Lots NON bons du 1er coup', sous: 'rejetés ou avec déviation · ' + an, liste: detailBRFT.value, col3: 'Motif' }
-  if (m === 'triage') return { titre: 'Lots en cours de triage', sous: 'instantané', liste: detailTriage.value, col3: 'Statut' }
+  if (m === 'bff') return { titre: 'Lots NON bons du 1er coup — fabrication', sous: 'rejetés ou avec déviation · ' + an, liste: detailBrftFab.value, col3: 'Motif' }
+  if (m === 'bfc') return { titre: 'Lots NON bons du 1er coup — conditionnement', sous: 'rejetés ou avec déviation · ' + an, liste: detailBrftCond.value, col3: 'Motif' }
+  if (m === 'tf') return { titre: 'Lots en triage — fabrication', sous: 'instantané', liste: detailTriageFab.value, col3: 'Statut' }
+  if (m === 'tc') return { titre: 'Lots en triage — conditionnement', sous: 'instantané', liste: detailTriageCond.value, col3: 'Statut' }
   if (m === 'bfp') return { titre: 'Dossiers fabrication avec réserve — Production', sous: 'vérif. Production · ' + an, liste: detailBrrftFabProd.value, col3: 'État' }
   if (m === 'bcp') return { titre: 'Dossiers conditionnement avec réserve — Production', sous: 'vérif. Production · ' + an, liste: detailBrrftCondProd.value, col3: 'État' }
   if (m === 'bfa') return { titre: 'Dossiers fabrication avec réserve — AQ', sous: 'vérif. AQ · ' + an, liste: detailBrrftFabAQ.value, col3: 'État' }
@@ -641,12 +653,16 @@ onMounted(async () => {
           </section>
         </div>
 
-        <h3 class="struct-h"><span class="struct-b prod2">Production — fabrication &amp; conditionnement</span><span class="struct-d">bon du 1er coup · {{ anneeSel }}</span></h3>
+        <h3 class="struct-h"><span class="struct-b prod2">Production — fabrication &amp; conditionnement</span><span class="struct-d">bon du 1er coup &amp; triage · {{ anneeSel }}</span></h3>
         <div class="q-sub">Fabrication</div>
-        <div class="kpi-grid k2">
-          <div class="kpi kpi-clic" @click="modalQualite = 'brft'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brft)">{{ brft != null ? fmtPct(brft) : '—' }}</span></div>
+        <div class="kpi-grid k3">
+          <div class="kpi kpi-clic" @click="modalQualite = 'bff'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brftFab)">{{ brftFab != null ? fmtPct(brftFab) : '—' }}</span></div>
             <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
+          </div>
+          <div class="kpi kpi-clic" @click="modalQualite = 'tf'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="triageFab > 0 ? 'q-warn' : ''">{{ fmt(triageFab) }}</span></div>
+            <div class="kpi-lbl">Lots en cours de triage</div>
           </div>
           <div class="kpi kpi-clic" @click="modalQualite = 'bfp'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftFabProd)">{{ brrftFabProd != null ? fmtPct(brrftFabProd) : '—' }}</span></div>
@@ -654,9 +670,13 @@ onMounted(async () => {
           </div>
         </div>
         <div class="q-sub">Conditionnement</div>
-        <div class="kpi-grid k2">
-          <div class="kpi kpi-clic" @click="modalQualite = 'triage'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="lotsEnTriage > 0 ? 'q-warn' : ''">{{ fmt(lotsEnTriage) }}</span></div>
+        <div class="kpi-grid k3">
+          <div class="kpi kpi-clic" @click="modalQualite = 'bfc'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brftCond)">{{ brftCond != null ? fmtPct(brftCond) : '—' }}</span></div>
+            <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
+          </div>
+          <div class="kpi kpi-clic" @click="modalQualite = 'tc'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="triageCond > 0 ? 'q-warn' : ''">{{ fmt(triageCond) }}</span></div>
             <div class="kpi-lbl">Lots en cours de triage</div>
           </div>
           <div class="kpi kpi-clic" @click="modalQualite = 'bcp'">
@@ -742,12 +762,16 @@ onMounted(async () => {
           </div>
         </div>
 
-        <h3 class="struct-h"><span class="struct-b prod2">Production — fabrication &amp; conditionnement</span><span class="struct-d">bon du 1er coup · {{ anneeSel }}</span></h3>
+        <h3 class="struct-h"><span class="struct-b prod2">Production — fabrication &amp; conditionnement</span><span class="struct-d">bon du 1er coup &amp; triage · {{ anneeSel }}</span></h3>
         <div class="q-sub">Fabrication</div>
-        <div class="kpi-grid k2">
-          <div class="kpi kpi-clic" @click="modalQualite = 'brft'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brft)">{{ brft != null ? fmtPct(brft) : '—' }}</span></div>
+        <div class="kpi-grid k3">
+          <div class="kpi kpi-clic" @click="modalQualite = 'bff'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brftFab)">{{ brftFab != null ? fmtPct(brftFab) : '—' }}</span></div>
             <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
+          </div>
+          <div class="kpi kpi-clic" @click="modalQualite = 'tf'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="triageFab > 0 ? 'q-warn' : ''">{{ fmt(triageFab) }}</span></div>
+            <div class="kpi-lbl">Lots en cours de triage</div>
           </div>
           <div class="kpi kpi-clic" @click="modalQualite = 'bfp'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftFabProd)">{{ brrftFabProd != null ? fmtPct(brrftFabProd) : '—' }}</span></div>
@@ -755,9 +779,13 @@ onMounted(async () => {
           </div>
         </div>
         <div class="q-sub">Conditionnement</div>
-        <div class="kpi-grid k2">
-          <div class="kpi kpi-clic" @click="modalQualite = 'triage'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="lotsEnTriage > 0 ? 'q-warn' : ''">{{ fmt(lotsEnTriage) }}</span></div>
+        <div class="kpi-grid k3">
+          <div class="kpi kpi-clic" @click="modalQualite = 'bfc'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brftCond)">{{ brftCond != null ? fmtPct(brftCond) : '—' }}</span></div>
+            <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
+          </div>
+          <div class="kpi kpi-clic" @click="modalQualite = 'tc'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="triageCond > 0 ? 'q-warn' : ''">{{ fmt(triageCond) }}</span></div>
             <div class="kpi-lbl">Lots en cours de triage</div>
           </div>
           <div class="kpi kpi-clic" @click="modalQualite = 'bcp'">
