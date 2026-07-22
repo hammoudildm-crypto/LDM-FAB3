@@ -35,7 +35,7 @@ async function charger() {
   msg.value = ''
   chargement.value = true
   const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, ddl_cond_verifie, ddl_cond_verificateur, ddl_cond_date_verification, ddl_cond_date_envoi, produits(designation, code_pf)')
+    .select('id, numero_lot, ddl_cond_verifie, ddl_cond_verificateur, ddl_cond_date_verification, ddl_cond_date_envoi, ddl_cond_reserve, produits(designation, code_pf)')
     .eq('actif', true))
   if (r.error) { msg.value = r.error.message; chargement.value = false; return }
   lots.value = r.data || []
@@ -155,17 +155,20 @@ const dossiersDuMois = computed(() => {
 const verifEnCours = ref(null)
 const nomVerif = ref('')
 const nomAutre = ref('')
+const reserveCond = ref(false)
 function ouvrir(l) { verifEnCours.value = l.id; nomVerif.value = l.ddl_cond_verificateur || ''; nomAutre.value = '' }
 async function valider(l) {
   const nom = (nomVerif.value === '__autre__' ? nomAutre.value : nomVerif.value).trim()
   if (!nom) { msg.value = 'Choisir ou saisir le nom du vérificateur.'; return }
   const r = await supabase.from('ordres_fabrication').update({
     ddl_cond_verifie: true,
+    ddl_cond_reserve: reserveCond.value,
     ddl_cond_verificateur: nom,
     ddl_cond_date_verification: new Date().toISOString().slice(0, 10)
   }).eq('id', l.id)
   if (r.error) { msg.value = r.error.message; return }
   verifEnCours.value = null
+  reserveCond.value = false
   await charger()
 }
 async function devalider(l) {
@@ -246,6 +249,7 @@ async function devalider(l) {
                       <option value="__autre__">Autre…</option>
                     </select>
                     <input v-if="nomVerif === '__autre__'" v-model="nomAutre" placeholder="Nom" @keyup.enter="valider(l)" />
+                    <label class="verif-chk"><input type="checkbox" v-model="reserveCond" /> Avec réserve</label>
                     <button class="btn sm" @click="valider(l)">Valider</button>
                     <button class="link" @click="verifEnCours = null">Annuler</button>
                   </td>
@@ -354,4 +358,6 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .prog-bar { flex: 1; height: 10px; background: #eef2f6; border-radius: 6px; overflow: hidden; }
 .prog-fill { height: 100%; background: #2563eb; border-radius: 6px; }
 .prog-val { flex: 0 0 auto; font-weight: 700; font-size: 14px; color: #0f766e; min-width: 30px; text-align: right; }
+.verif-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #b45309; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.verif-chk input { width: 15px; height: 15px; cursor: pointer; }
 </style>
