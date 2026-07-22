@@ -58,8 +58,8 @@ async function collecte() {
   for (const o of ofs) {
     if (!o.date_fin_fabrication) continue
     const d = new Date(o.date_fin_fabrication), b = Number(o.boites_fabriquees || 0)
-    const fini = o.statut === 'Terminé' || o.statut === 'Libéré'
-    if (d.getFullYear() === annee && fini && b > 0) { fabBoxes += b; fabTheo += Number(o.quantite_theorique || 0); fabLots++ }
+    // Même règle que le tableau de bord : lots avec date de fin de fabrication dans l'année.
+    if (d.getFullYear() === annee && b > 0) { fabBoxes += b; fabTheo += Number(o.quantite_theorique || 0); fabLots++ }
     if (d >= semaine && b > 0) { fabBoxesSem += b; fabLotsSem++ }
   }
   const rdtFab = fabTheo ? (fabBoxes / fabTheo) * 100 : 0
