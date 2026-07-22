@@ -32,14 +32,16 @@ const sig = reactive({ open: false, mode: 'sign', ordre: null, pin: '', pin2: ''
 const form = reactive({
   id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
   date_reception: '', date_fin_validite: '',
-  date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: ''
+  date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: '',
+  deviation: false, en_triage: false
 })
 function resetForm() {
   statutOriginal.value = 'Planifié'
   Object.assign(form, {
     id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
     date_reception: '', date_fin_validite: '',
-    date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: ''
+    date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: '',
+    deviation: false, en_triage: false
   })
 }
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
@@ -147,7 +149,9 @@ async function enregistrer() {
     date_fin_fabrication: dateFin,
     statut: statutFinal,
     equipement_id: form.equipement_id || null,
-    commentaire: form.commentaire.trim() || null
+    commentaire: form.commentaire.trim() || null,
+    deviation: !!form.deviation,
+    en_triage: !!form.en_triage
   }
   const res = form.id
     ? await supabase.from('ordres_fabrication').update(payload).eq('id', form.id)
@@ -183,7 +187,7 @@ function modifier(l) {
     quantite_theorique: l.quantite_theorique ?? '', date_lancement: l.date_lancement || '',
     date_reception: l.date_reception || '', date_fin_validite: l.date_fin_validite || '',
     date_fin_fabrication: l.date_fin_fabrication || '',
-    statut: ['Libéré', 'Rejeté'].includes(l.statut) ? l.statut : '__auto__', equipement_id: l.equipement_id || '', commentaire: l.commentaire || ''
+    statut: ['Libéré', 'Rejeté'].includes(l.statut) ? l.statut : '__auto__', equipement_id: l.equipement_id || '', commentaire: l.commentaire || '', deviation: !!l.deviation, en_triage: !!l.en_triage
   })
 }
 async function desactiver(l) {
@@ -314,6 +318,10 @@ onMounted(async () => {
             </select>
           </label>
           <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
+          <div class="wide chk-row">
+            <label class="chk"><input type="checkbox" v-model="form.deviation" /> Déviation (lot repris / non conforme)</label>
+            <label class="chk"><input type="checkbox" v-model="form.en_triage" /> En cours de triage</label>
+          </div>
           <div class="form-actions">
             <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Créer le lot' }}</button>
             <button v-if="form.id" class="btn ghost" @click="resetForm">Annuler</button>
@@ -503,4 +511,7 @@ button.link.release { color: #166534; }
 .lot-hint b { color: #0f766e; }
 .lot-next { margin-left: 8px; font-size: 12px; font-weight: 600; color: #0f766e; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 1px 7px; cursor: pointer; }
 .lot-next:hover { background: #d1fae5; }
+.chk-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+.chk { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; color: #334155; cursor: pointer; font-weight: 500; }
+.chk input { width: 16px; height: 16px; cursor: pointer; }
 </style>
