@@ -33,7 +33,7 @@ const form = reactive({
   id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
   date_reception: '', date_fin_validite: '',
   date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: '',
-  deviation: false, en_triage: false
+  deviation: false, en_triage: false, deviation_cond: false, en_triage_cond: false
 })
 function resetForm() {
   statutOriginal.value = 'Planifié'
@@ -41,7 +41,7 @@ function resetForm() {
     id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
     date_reception: '', date_fin_validite: '',
     date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: '',
-    deviation: false, en_triage: false
+    deviation: false, en_triage: false, deviation_cond: false, en_triage_cond: false
   })
 }
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
@@ -151,7 +151,9 @@ async function enregistrer() {
     equipement_id: form.equipement_id || null,
     commentaire: form.commentaire.trim() || null,
     deviation: !!form.deviation,
-    en_triage: !!form.en_triage
+    en_triage: !!form.en_triage,
+    deviation_cond: !!form.deviation_cond,
+    en_triage_cond: !!form.en_triage_cond
   }
   const res = form.id
     ? await supabase.from('ordres_fabrication').update(payload).eq('id', form.id)
@@ -187,7 +189,7 @@ function modifier(l) {
     quantite_theorique: l.quantite_theorique ?? '', date_lancement: l.date_lancement || '',
     date_reception: l.date_reception || '', date_fin_validite: l.date_fin_validite || '',
     date_fin_fabrication: l.date_fin_fabrication || '',
-    statut: ['Libéré', 'Rejeté'].includes(l.statut) ? l.statut : '__auto__', equipement_id: l.equipement_id || '', commentaire: l.commentaire || '', deviation: !!l.deviation, en_triage: !!l.en_triage
+    statut: ['Libéré', 'Rejeté'].includes(l.statut) ? l.statut : '__auto__', equipement_id: l.equipement_id || '', commentaire: l.commentaire || '', deviation: !!l.deviation, en_triage: !!l.en_triage, deviation_cond: !!l.deviation_cond, en_triage_cond: !!l.en_triage_cond
   })
 }
 async function desactiver(l) {
@@ -319,8 +321,10 @@ onMounted(async () => {
           </label>
           <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
           <div class="wide chk-row">
-            <label class="chk"><input type="checkbox" v-model="form.deviation" /> Déviation (lot repris / non conforme)</label>
-            <label class="chk"><input type="checkbox" v-model="form.en_triage" /> En cours de triage</label>
+            <label class="chk"><input type="checkbox" v-model="form.deviation" /> Déviation fabrication</label>
+            <label class="chk"><input type="checkbox" v-model="form.deviation_cond" /> Déviation conditionnement</label>
+            <label class="chk"><input type="checkbox" v-model="form.en_triage" /> En triage fabrication</label>
+            <label class="chk"><input type="checkbox" v-model="form.en_triage_cond" /> En triage conditionnement</label>
           </div>
           <div class="form-actions">
             <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Créer le lot' }}</button>
