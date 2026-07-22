@@ -56,7 +56,7 @@ async function charger() {
   if (!rp.error) nbProduits.value = rp.count || 0
 
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, quantite_theorique, boites_fabriquees, deviation, en_triage, ddl_verifie, ddl_reserve, ddl_cond_verifie, ddl_cond_reserve, produits(designation, pcsu)')
+    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, quantite_theorique, boites_fabriquees, deviation, en_triage, ddl_verifie, ddl_reserve, ddl_cond_verifie, ddl_cond_reserve, ddl_aq_verifie, ddl_aq_reserve, ddl_cond_aq_verifie, ddl_cond_aq_reserve, produits(designation, pcsu)')
     .eq('actif', true).order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -129,14 +129,16 @@ const brft = computed(() => {
   return (rft / prod.length) * 100
 })
 // BRRFT = dossiers vérifiés (fab + cond) sans réserve / dossiers vérifiés (année).
-const brrft = computed(() => {
+// BRRFT par niveau (Production / AQ) et par type (fabrication / conditionnement).
+function calcBrrft(kVer, kRes) {
   let ver = 0, sans = 0
-  for (const l of lotsAnnee.value) {
-    if (l.ddl_verifie) { ver++; if (!l.ddl_reserve) sans++ }
-    if (l.ddl_cond_verifie) { ver++; if (!l.ddl_cond_reserve) sans++ }
-  }
+  for (const l of lotsAnnee.value) if (l[kVer]) { ver++; if (!l[kRes]) sans++ }
   return ver ? (sans / ver) * 100 : null
-})
+}
+const brrftFabProd = computed(() => calcBrrft('ddl_verifie', 'ddl_reserve'))
+const brrftCondProd = computed(() => calcBrrft('ddl_cond_verifie', 'ddl_cond_reserve'))
+const brrftFabAQ = computed(() => calcBrrft('ddl_aq_verifie', 'ddl_aq_reserve'))
+const brrftCondAQ = computed(() => calcBrrft('ddl_cond_aq_verifie', 'ddl_cond_aq_reserve'))
 // Lots en triage = instantané (tous les lots actifs cochés « en triage »).
 const lotsEnTriage = computed(() => lots.value.filter(l => l.en_triage).length)
 function clsQualite(v) { return v == null ? '' : (v >= 95 ? 'q-good' : (v >= 85 ? 'q-mid' : 'q-bad')) }
@@ -145,22 +147,27 @@ const detailBRFT = computed(() => lotsAnnee.value
   .filter(l => ['Terminé', 'Libéré', 'Rejeté'].includes(l.statut) && (l.statut === 'Rejeté' || l.deviation))
   .map(l => ({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: l.statut === 'Rejeté' ? 'Rejeté' : 'Déviation' }))
   .sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true })))
-const detailBRRFT = computed(() => {
-  const out = []
-  for (const l of lotsAnnee.value) {
-    if (l.ddl_verifie && l.ddl_reserve) out.push({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: 'Fabrication' })
-    if (l.ddl_cond_verifie && l.ddl_cond_reserve) out.push({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: 'Conditionnement' })
-  }
-  return out.sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
-})
+function detailReserve(kVer, kRes) {
+  return lotsAnnee.value.filter(l => l[kVer] && l[kRes])
+    .map(l => ({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: 'Avec réserve' }))
+    .sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
+}
+const detailBrrftFabProd = computed(() => detailReserve('ddl_verifie', 'ddl_reserve'))
+const detailBrrftCondProd = computed(() => detailReserve('ddl_cond_verifie', 'ddl_cond_reserve'))
+const detailBrrftFabAQ = computed(() => detailReserve('ddl_aq_verifie', 'ddl_aq_reserve'))
+const detailBrrftCondAQ = computed(() => detailReserve('ddl_cond_aq_verifie', 'ddl_cond_aq_reserve'))
 const detailTriage = computed(() => lots.value
   .filter(l => l.en_triage)
   .map(l => ({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: l.statut }))
   .sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true })))
 const modalInfo = computed(() => {
-  if (modalQualite.value === 'brft') return { titre: 'Lots NON bons du 1er coup', sous: 'rejetés ou avec déviation · ' + anneeSel.value, liste: detailBRFT.value, col3: 'Motif' }
-  if (modalQualite.value === 'brrft') return { titre: 'Dossiers avec réserve', sous: 'fabrication ou conditionnement · ' + anneeSel.value, liste: detailBRRFT.value, col3: 'Dossier' }
-  if (modalQualite.value === 'triage') return { titre: 'Lots en cours de triage', sous: 'instantané', liste: detailTriage.value, col3: 'Statut' }
+  const m = modalQualite.value, an = anneeSel.value
+  if (m === 'brft') return { titre: 'Lots NON bons du 1er coup', sous: 'rejetés ou avec déviation · ' + an, liste: detailBRFT.value, col3: 'Motif' }
+  if (m === 'triage') return { titre: 'Lots en cours de triage', sous: 'instantané', liste: detailTriage.value, col3: 'Statut' }
+  if (m === 'bfp') return { titre: 'Dossiers fabrication avec réserve — Production', sous: 'vérif. Production · ' + an, liste: detailBrrftFabProd.value, col3: 'État' }
+  if (m === 'bcp') return { titre: 'Dossiers conditionnement avec réserve — Production', sous: 'vérif. Production · ' + an, liste: detailBrrftCondProd.value, col3: 'État' }
+  if (m === 'bfa') return { titre: 'Dossiers fabrication avec réserve — AQ', sous: 'vérif. AQ · ' + an, liste: detailBrrftFabAQ.value, col3: 'État' }
+  if (m === 'bca') return { titre: 'Dossiers conditionnement avec réserve — AQ', sous: 'vérif. AQ · ' + an, liste: detailBrrftCondAQ.value, col3: 'État' }
   return { titre: '', sous: '', liste: [], col3: '' }
 })
 const nbLots = computed(() => lotsAnnee.value.length)
@@ -634,26 +641,42 @@ onMounted(async () => {
           </section>
         </div>
 
-        <h3 class="struct-h"><span class="struct-b prod2">Production — fabrication &amp; conditionnement</span><span class="struct-d">bon du 1er coup &amp; triage · {{ anneeSel }}</span></h3>
+        <h3 class="struct-h"><span class="struct-b prod2">Production — fabrication &amp; conditionnement</span><span class="struct-d">bon du 1er coup · {{ anneeSel }}</span></h3>
+        <div class="q-sub">Fabrication</div>
         <div class="kpi-grid k2">
           <div class="kpi kpi-clic" @click="modalQualite = 'brft'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brft)">{{ brft != null ? fmtPct(brft) : '—' }}</span></div>
             <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
           </div>
+          <div class="kpi kpi-clic" @click="modalQualite = 'bfp'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftFabProd)">{{ brrftFabProd != null ? fmtPct(brrftFabProd) : '—' }}</span></div>
+            <div class="kpi-lbl">BRRFT — dossier de fabrication</div>
+          </div>
+        </div>
+        <div class="q-sub">Conditionnement</div>
+        <div class="kpi-grid k2">
           <div class="kpi kpi-clic" @click="modalQualite = 'triage'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="lotsEnTriage > 0 ? 'q-warn' : ''">{{ fmt(lotsEnTriage) }}</span></div>
             <div class="kpi-lbl">Lots en cours de triage</div>
           </div>
-        </div>
-        <h3 class="struct-h"><span class="struct-b qa">Assurance qualité</span><span class="struct-d">conformité des dossiers de lot · {{ anneeSel }}</span></h3>
-        <div class="kpi-grid k2">
-          <div class="kpi kpi-clic" @click="modalQualite = 'brrft'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrft)">{{ brrft != null ? fmtPct(brrft) : '—' }}</span></div>
-            <div class="kpi-lbl">BRRFT — dossiers bons du 1<sup>er</sup> coup</div>
+          <div class="kpi kpi-clic" @click="modalQualite = 'bcp'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.cyan"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftCondProd)">{{ brrftCondProd != null ? fmtPct(brrftCondProd) : '—' }}</span></div>
+            <div class="kpi-lbl">BRRFT — dossier de conditionnement</div>
           </div>
-          <div class="kpi kpi-clic" @click="modalQualite = 'brrft'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.rose"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val" :class="detailBRRFT.length > 0 ? 'q-warn' : ''">{{ fmt(detailBRRFT.length) }}</span></div>
-            <div class="kpi-lbl">Dossiers avec réserve</div>
+        </div>
+        <h3 class="struct-h"><span class="struct-b qa">Assurance qualité — vérification des dossiers</span><span class="struct-d">bon du 1er coup · {{ anneeSel }}</span></h3>
+        <div class="q-sub">Fabrication</div>
+        <div class="kpi-grid k2">
+          <div class="kpi kpi-clic" @click="modalQualite = 'bfa'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.violet"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftFabAQ)">{{ brrftFabAQ != null ? fmtPct(brrftFabAQ) : '—' }}</span></div>
+            <div class="kpi-lbl">BRRFT — dossier de fabrication</div>
+          </div>
+        </div>
+        <div class="q-sub">Conditionnement</div>
+        <div class="kpi-grid k2">
+          <div class="kpi kpi-clic" @click="modalQualite = 'bca'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.rose"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftCondAQ)">{{ brrftCondAQ != null ? fmtPct(brrftCondAQ) : '—' }}</span></div>
+            <div class="kpi-lbl">BRRFT — dossier de conditionnement</div>
           </div>
         </div>
 
@@ -719,26 +742,42 @@ onMounted(async () => {
           </div>
         </div>
 
-        <h3 class="struct-h"><span class="struct-b prod2">Production — fabrication &amp; conditionnement</span><span class="struct-d">bon du 1er coup &amp; triage · {{ anneeSel }}</span></h3>
+        <h3 class="struct-h"><span class="struct-b prod2">Production — fabrication &amp; conditionnement</span><span class="struct-d">bon du 1er coup · {{ anneeSel }}</span></h3>
+        <div class="q-sub">Fabrication</div>
         <div class="kpi-grid k2">
           <div class="kpi kpi-clic" @click="modalQualite = 'brft'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brft)">{{ brft != null ? fmtPct(brft) : '—' }}</span></div>
             <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
           </div>
+          <div class="kpi kpi-clic" @click="modalQualite = 'bfp'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftFabProd)">{{ brrftFabProd != null ? fmtPct(brrftFabProd) : '—' }}</span></div>
+            <div class="kpi-lbl">BRRFT — dossier de fabrication</div>
+          </div>
+        </div>
+        <div class="q-sub">Conditionnement</div>
+        <div class="kpi-grid k2">
           <div class="kpi kpi-clic" @click="modalQualite = 'triage'">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="lotsEnTriage > 0 ? 'q-warn' : ''">{{ fmt(lotsEnTriage) }}</span></div>
             <div class="kpi-lbl">Lots en cours de triage</div>
           </div>
-        </div>
-        <h3 class="struct-h"><span class="struct-b qa">Assurance qualité</span><span class="struct-d">conformité des dossiers de lot · {{ anneeSel }}</span></h3>
-        <div class="kpi-grid k2">
-          <div class="kpi kpi-clic" @click="modalQualite = 'brrft'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrft)">{{ brrft != null ? fmtPct(brrft) : '—' }}</span></div>
-            <div class="kpi-lbl">BRRFT — dossiers bons du 1<sup>er</sup> coup</div>
+          <div class="kpi kpi-clic" @click="modalQualite = 'bcp'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.cyan"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftCondProd)">{{ brrftCondProd != null ? fmtPct(brrftCondProd) : '—' }}</span></div>
+            <div class="kpi-lbl">BRRFT — dossier de conditionnement</div>
           </div>
-          <div class="kpi kpi-clic" @click="modalQualite = 'brrft'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.rose"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><span class="kpi-val" :class="detailBRRFT.length > 0 ? 'q-warn' : ''">{{ fmt(detailBRRFT.length) }}</span></div>
-            <div class="kpi-lbl">Dossiers avec réserve</div>
+        </div>
+        <h3 class="struct-h"><span class="struct-b qa">Assurance qualité — vérification des dossiers</span><span class="struct-d">bon du 1er coup · {{ anneeSel }}</span></h3>
+        <div class="q-sub">Fabrication</div>
+        <div class="kpi-grid k2">
+          <div class="kpi kpi-clic" @click="modalQualite = 'bfa'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.violet"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftFabAQ)">{{ brrftFabAQ != null ? fmtPct(brrftFabAQ) : '—' }}</span></div>
+            <div class="kpi-lbl">BRRFT — dossier de fabrication</div>
+          </div>
+        </div>
+        <div class="q-sub">Conditionnement</div>
+        <div class="kpi-grid k2">
+          <div class="kpi kpi-clic" @click="modalQualite = 'bca'">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.rose"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftCondAQ)">{{ brrftCondAQ != null ? fmtPct(brrftCondAQ) : '—' }}</span></div>
+            <div class="kpi-lbl">BRRFT — dossier de conditionnement</div>
           </div>
         </div>
 
@@ -1017,6 +1056,7 @@ table.mini td { padding: 3px 6px; border-bottom: 1px solid #eef2f6; white-space:
 .struct-b.qual { background: #ede9fe; color: #4338ca; }
 .struct-b.prod2 { background: #d1fae5; color: #047857; }
 .struct-b.qa { background: #e0e7ff; color: #4338ca; }
+.q-sub { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #64748b; margin: 2px 0 7px; }
 .q-good { color: #047857 !important; }
 .q-mid { color: #b45309 !important; }
 .q-bad { color: #b91c1c !important; }
