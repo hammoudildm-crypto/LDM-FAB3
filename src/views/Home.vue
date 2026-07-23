@@ -653,53 +653,6 @@ onMounted(async () => {
           </section>
         </div>
 
-        <h3 class="struct-h"><span class="struct-b prod2">Production — fabrication &amp; conditionnement</span><span class="struct-d">bon du 1er coup &amp; triage · {{ anneeSel }}</span></h3>
-        <div class="q-sub">Fabrication</div>
-        <div class="kpi-grid k3">
-          <div class="kpi kpi-clic" @click="modalQualite = 'bff'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brftFab)">{{ brftFab != null ? fmtPct(brftFab) : '—' }}</span></div>
-            <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
-          </div>
-          <div class="kpi kpi-clic" @click="modalQualite = 'tf'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="triageFab > 0 ? 'q-warn' : ''">{{ fmt(triageFab) }}</span></div>
-            <div class="kpi-lbl">Lots en cours de triage</div>
-          </div>
-          <div class="kpi kpi-clic" @click="modalQualite = 'bfp'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftFabProd)">{{ brrftFabProd != null ? fmtPct(brrftFabProd) : '—' }}</span></div>
-            <div class="kpi-lbl">BRRFT — dossier de fabrication</div>
-          </div>
-        </div>
-        <div class="q-sub">Conditionnement</div>
-        <div class="kpi-grid k3">
-          <div class="kpi kpi-clic" @click="modalQualite = 'bfc'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.gauge"></svg></span><span class="kpi-val" :class="clsQualite(brftCond)">{{ brftCond != null ? fmtPct(brftCond) : '—' }}</span></div>
-            <div class="kpi-lbl">BRFT — lots bons du 1<sup>er</sup> coup</div>
-          </div>
-          <div class="kpi kpi-clic" @click="modalQualite = 'tc'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><span class="kpi-val" :class="triageCond > 0 ? 'q-warn' : ''">{{ fmt(triageCond) }}</span></div>
-            <div class="kpi-lbl">Lots en cours de triage</div>
-          </div>
-          <div class="kpi kpi-clic" @click="modalQualite = 'bcp'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.cyan"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftCondProd)">{{ brrftCondProd != null ? fmtPct(brrftCondProd) : '—' }}</span></div>
-            <div class="kpi-lbl">BRRFT — dossier de conditionnement</div>
-          </div>
-        </div>
-        <h3 class="struct-h"><span class="struct-b qa">Assurance qualité — vérification des dossiers</span><span class="struct-d">bon du 1er coup · {{ anneeSel }}</span></h3>
-        <div class="q-sub">Fabrication</div>
-        <div class="kpi-grid k2">
-          <div class="kpi kpi-clic" @click="modalQualite = 'bfa'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.violet"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftFabAQ)">{{ brrftFabAQ != null ? fmtPct(brrftFabAQ) : '—' }}</span></div>
-            <div class="kpi-lbl">BRRFT — dossier de fabrication</div>
-          </div>
-        </div>
-        <div class="q-sub">Conditionnement</div>
-        <div class="kpi-grid k2">
-          <div class="kpi kpi-clic" @click="modalQualite = 'bca'">
-            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.rose"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><span class="kpi-val" :class="clsQualite(brrftCondAQ)">{{ brrftCondAQ != null ? fmtPct(brrftCondAQ) : '—' }}</span></div>
-            <div class="kpi-lbl">BRRFT — dossier de conditionnement</div>
-          </div>
-        </div>
-
         <section class="card">
           <h2 class="card-title">Réalisation du plan — top produits</h2>
           <div v-for="p in realisationPlan" :key="p.code" class="prog-row">
