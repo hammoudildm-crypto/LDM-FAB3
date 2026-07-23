@@ -41,7 +41,7 @@ async function collecte() {
   const semaine = new Date(); semaine.setDate(semaine.getDate() - 7)
 
   const [ofs, conds, produits, planRows, phases, cadences, trsPostes] = await Promise.all([
-    fetchAll('ordres_fabrication', 'id, produit_id, statut, boites_fabriquees, quantite_theorique, date_fin_fabrication, deviation, deviation_cond, en_triage, en_triage_cond, ddl_verifie, ddl_reserve, ddl_cond_verifie, ddl_cond_reserve, ddl_aq_verifie, ddl_aq_reserve, ddl_cond_aq_verifie, ddl_cond_aq_reserve'),
+    fetchAll('ordres_fabrication', 'id, produit_id, statut, boites_fabriquees, quantite_theorique, date_fin_fabrication, deviation, deviation_cond, en_triage, en_triage_cond, triage_fin, triage_cond_fin, ddl_verifie, ddl_reserve, ddl_cond_verifie, ddl_cond_reserve, ddl_aq_verifie, ddl_aq_reserve, ddl_cond_aq_verifie, ddl_cond_aq_reserve'),
     fetchAll('conditionnement', 'ordre_id, quantite_conditionnee, date_conditionnement, date_fin, actif'),
     fetchAll('produits', 'id, unites_par_boite'),
     fetchAll('plan_production', 'annee, quantite_planifiee'),
@@ -131,7 +131,7 @@ async function collecte() {
   const brrftDe = (kv, kr) => { let v = 0, s = 0; for (const o of lotsAn) if (o[kv]) { v++; if (!o[kr]) s++ } return v ? (s / v) * 100 : null }
   const qualite = {
     brftFab: brftDe('deviation'), brftCond: brftDe('deviation_cond'),
-    triageFab: ofs.filter(o => o.en_triage).length, triageCond: ofs.filter(o => o.en_triage_cond).length,
+    triageFab: ofs.filter(o => o.en_triage && !o.triage_fin).length, triageCond: ofs.filter(o => o.en_triage_cond && !o.triage_cond_fin).length,
     brrftFabProd: brrftDe('ddl_verifie', 'ddl_reserve'), brrftCondProd: brrftDe('ddl_cond_verifie', 'ddl_cond_reserve'),
     brrftFabAQ: brrftDe('ddl_aq_verifie', 'ddl_aq_reserve'), brrftCondAQ: brrftDe('ddl_cond_aq_verifie', 'ddl_cond_aq_reserve'),
   }
