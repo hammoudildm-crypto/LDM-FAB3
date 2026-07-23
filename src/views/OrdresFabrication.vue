@@ -33,7 +33,8 @@ const form = reactive({
   id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
   date_reception: '', date_fin_validite: '',
   date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: '',
-  deviation: false, en_triage: false, deviation_cond: false, en_triage_cond: false
+  deviation: false, en_triage: false, deviation_cond: false, en_triage_cond: false,
+  triage_debut: '', triage_fin: '', triage_cond_debut: '', triage_cond_fin: ''
 })
 function resetForm() {
   statutOriginal.value = 'Planifié'
@@ -41,8 +42,14 @@ function resetForm() {
     id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
     date_reception: '', date_fin_validite: '',
     date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: '',
-    deviation: false, en_triage: false, deviation_cond: false, en_triage_cond: false
+    deviation: false, en_triage: false, deviation_cond: false, en_triage_cond: false,
+    triage_debut: '', triage_fin: '', triage_cond_debut: '', triage_cond_fin: ''
   })
+}
+function majTriage(quel) {
+  const auj = new Date().toISOString().slice(0, 10)
+  if (quel === 'fab' && form.en_triage && !form.triage_debut) form.triage_debut = auj
+  if (quel === 'cond' && form.en_triage_cond && !form.triage_cond_debut) form.triage_cond_debut = auj
 }
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
 
@@ -153,7 +160,11 @@ async function enregistrer() {
     deviation: !!form.deviation,
     en_triage: !!form.en_triage,
     deviation_cond: !!form.deviation_cond,
-    en_triage_cond: !!form.en_triage_cond
+    en_triage_cond: !!form.en_triage_cond,
+    triage_debut: form.triage_debut || null,
+    triage_fin: form.triage_fin || null,
+    triage_cond_debut: form.triage_cond_debut || null,
+    triage_cond_fin: form.triage_cond_fin || null
   }
   const res = form.id
     ? await supabase.from('ordres_fabrication').update(payload).eq('id', form.id)
@@ -189,7 +200,8 @@ function modifier(l) {
     quantite_theorique: l.quantite_theorique ?? '', date_lancement: l.date_lancement || '',
     date_reception: l.date_reception || '', date_fin_validite: l.date_fin_validite || '',
     date_fin_fabrication: l.date_fin_fabrication || '',
-    statut: ['Libéré', 'Rejeté'].includes(l.statut) ? l.statut : '__auto__', equipement_id: l.equipement_id || '', commentaire: l.commentaire || '', deviation: !!l.deviation, en_triage: !!l.en_triage, deviation_cond: !!l.deviation_cond, en_triage_cond: !!l.en_triage_cond
+    statut: ['Libéré', 'Rejeté'].includes(l.statut) ? l.statut : '__auto__', equipement_id: l.equipement_id || '', commentaire: l.commentaire || '', deviation: !!l.deviation, en_triage: !!l.en_triage, deviation_cond: !!l.deviation_cond, en_triage_cond: !!l.en_triage_cond,
+    triage_debut: l.triage_debut || '', triage_fin: l.triage_fin || '', triage_cond_debut: l.triage_cond_debut || '', triage_cond_fin: l.triage_cond_fin || ''
   })
 }
 async function desactiver(l) {
@@ -323,8 +335,20 @@ onMounted(async () => {
           <div class="wide chk-row">
             <label class="chk"><input type="checkbox" v-model="form.deviation" /> Déviation fabrication</label>
             <label class="chk"><input type="checkbox" v-model="form.deviation_cond" /> Déviation conditionnement</label>
-            <label class="chk"><input type="checkbox" v-model="form.en_triage" /> En triage fabrication</label>
-            <label class="chk"><input type="checkbox" v-model="form.en_triage_cond" /> En triage conditionnement</label>
+          </div>
+          <div class="wide chk-row">
+            <label class="chk"><input type="checkbox" v-model="form.en_triage" @change="majTriage('fab')" /> En triage fabrication</label>
+            <template v-if="form.en_triage">
+              <label class="tri-d">Début <input type="date" v-model="form.triage_debut" /></label>
+              <label class="tri-d">Fin <input type="date" v-model="form.triage_fin" /></label>
+            </template>
+          </div>
+          <div class="wide chk-row">
+            <label class="chk"><input type="checkbox" v-model="form.en_triage_cond" @change="majTriage('cond')" /> En triage conditionnement</label>
+            <template v-if="form.en_triage_cond">
+              <label class="tri-d">Début <input type="date" v-model="form.triage_cond_debut" /></label>
+              <label class="tri-d">Fin <input type="date" v-model="form.triage_cond_fin" /></label>
+            </template>
           </div>
           <div class="form-actions">
             <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Créer le lot' }}</button>
@@ -518,4 +542,6 @@ button.link.release { color: #166534; }
 .chk-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
 .chk { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; color: #334155; cursor: pointer; font-weight: 500; }
 .chk input { width: 16px; height: 16px; cursor: pointer; }
+.tri-d { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; font-weight: 500; }
+.tri-d input { padding: 4px 8px; font-size: 13px; }
 </style>
