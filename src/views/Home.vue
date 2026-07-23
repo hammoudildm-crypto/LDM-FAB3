@@ -56,7 +56,7 @@ async function charger() {
   if (!rp.error) nbProduits.value = rp.count || 0
 
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, quantite_theorique, boites_fabriquees, deviation, deviation_cond, en_triage, en_triage_cond, ddl_verifie, ddl_reserve, ddl_cond_verifie, ddl_cond_reserve, ddl_aq_verifie, ddl_aq_reserve, ddl_cond_aq_verifie, ddl_cond_aq_reserve, produits(designation, pcsu)')
+    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, quantite_theorique, boites_fabriquees, deviation, deviation_cond, en_triage, en_triage_cond, triage_debut, triage_fin, triage_cond_debut, triage_cond_fin, ddl_verifie, ddl_reserve, ddl_cond_verifie, ddl_cond_reserve, ddl_aq_verifie, ddl_aq_reserve, ddl_cond_aq_verifie, ddl_cond_aq_reserve, produits(designation, pcsu)')
     .eq('actif', true).order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -142,8 +142,9 @@ const brrftCondProd = computed(() => calcBrrft('ddl_cond_verifie', 'ddl_cond_res
 const brrftFabAQ = computed(() => calcBrrft('ddl_aq_verifie', 'ddl_aq_reserve'))
 const brrftCondAQ = computed(() => calcBrrft('ddl_cond_aq_verifie', 'ddl_cond_aq_reserve'))
 // Lots en triage = instantané (tous les lots actifs cochés « en triage »).
-const triageFab = computed(() => lots.value.filter(l => l.en_triage).length)
-const triageCond = computed(() => lots.value.filter(l => l.en_triage_cond).length)
+// « En cours » = coché en triage ET pas encore de date de fin.
+const triageFab = computed(() => lots.value.filter(l => l.en_triage && !l.triage_fin).length)
+const triageCond = computed(() => lots.value.filter(l => l.en_triage_cond && !l.triage_cond_fin).length)
 function clsQualite(v) { return v == null ? '' : (v >= 95 ? 'q-good' : (v >= 85 ? 'q-mid' : 'q-bad')) }
 const modalQualite = ref(null)
 function detailBrft(kDev) {
@@ -163,19 +164,27 @@ const detailBrrftFabProd = computed(() => detailReserve('ddl_verifie', 'ddl_rese
 const detailBrrftCondProd = computed(() => detailReserve('ddl_cond_verifie', 'ddl_cond_reserve'))
 const detailBrrftFabAQ = computed(() => detailReserve('ddl_aq_verifie', 'ddl_aq_reserve'))
 const detailBrrftCondAQ = computed(() => detailReserve('ddl_cond_aq_verifie', 'ddl_cond_aq_reserve'))
-function detailTri(kTri) {
-  return lots.value.filter(l => l[kTri])
-    .map(l => ({ lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v: l.statut }))
+function detailTri(kTri, kDeb, kFin) {
+  return lots.value.filter(l => l[kTri] && !l[kFin])
+    .map(l => {
+      const d = l[kDeb]
+      let v = 'début non renseigné'
+      if (d) {
+        const j = Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86400000))
+        v = new Date(d).toLocaleDateString('fr-FR') + ' · ' + j + ' j'
+      }
+      return { lot: l.numero_lot, prod: l.produits ? l.produits.designation : '', v }
+    })
     .sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
 }
-const detailTriageFab = computed(() => detailTri('en_triage'))
-const detailTriageCond = computed(() => detailTri('en_triage_cond'))
+const detailTriageFab = computed(() => detailTri('en_triage', 'triage_debut', 'triage_fin'))
+const detailTriageCond = computed(() => detailTri('en_triage_cond', 'triage_cond_debut', 'triage_cond_fin'))
 const modalInfo = computed(() => {
   const m = modalQualite.value, an = anneeSel.value
   if (m === 'bff') return { titre: 'Lots NON bons du 1er coup — fabrication', sous: 'rejetés ou avec déviation · ' + an, liste: detailBrftFab.value, col3: 'Motif' }
   if (m === 'bfc') return { titre: 'Lots NON bons du 1er coup — conditionnement', sous: 'rejetés ou avec déviation · ' + an, liste: detailBrftCond.value, col3: 'Motif' }
-  if (m === 'tf') return { titre: 'Lots en triage — fabrication', sous: 'instantané', liste: detailTriageFab.value, col3: 'Statut' }
-  if (m === 'tc') return { titre: 'Lots en triage — conditionnement', sous: 'instantané', liste: detailTriageCond.value, col3: 'Statut' }
+  if (m === 'tf') return { titre: 'Lots en triage — fabrication', sous: 'en cours · non terminés', liste: detailTriageFab.value, col3: 'Début · durée' }
+  if (m === 'tc') return { titre: 'Lots en triage — conditionnement', sous: 'en cours · non terminés', liste: detailTriageCond.value, col3: 'Début · durée' }
   if (m === 'bfp') return { titre: 'Dossiers fabrication avec réserve — Production', sous: 'vérif. Production · ' + an, liste: detailBrrftFabProd.value, col3: 'État' }
   if (m === 'bcp') return { titre: 'Dossiers conditionnement avec réserve — Production', sous: 'vérif. Production · ' + an, liste: detailBrrftCondProd.value, col3: 'État' }
   if (m === 'bfa') return { titre: 'Dossiers fabrication avec réserve — AQ', sous: 'vérif. AQ · ' + an, liste: detailBrrftFabAQ.value, col3: 'État' }
