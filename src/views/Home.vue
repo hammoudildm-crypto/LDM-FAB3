@@ -508,6 +508,19 @@ const ecartBoites = computed(() => tableauEcart(planBoitesParMois.value, gapType
 const ecartCa = computed(() => tableauEcart(planCaParMois.value, gapType.value === 'fab' ? caFabParMois.value : caCondParMois.value))
 const totEcartBoites = computed(() => ecartBoites.value.reduce((s, r) => ({ plan: s.plan + r.plan, reel: s.reel + r.reel }), { plan: 0, reel: 0 }))
 const totEcartCa = computed(() => ecartCa.value.reduce((s, r) => ({ plan: s.plan + r.plan, reel: s.reel + r.reel }), { plan: 0, reel: 0 }))
+// Graphiques Plan vs Réalisé + échelle des barres d'écart
+const moisEcart = computed(() => ecartBoites.value.map(r => r.mois))
+const serieEcartBoites = computed(() => [
+  { label: 'Plan', color: '#94a3b8', dash: true, data: ecartBoites.value.map(r => r.plan) },
+  { label: 'Réalisé', color: '#0f766e', data: ecartBoites.value.map(r => r.reel) }
+])
+const serieEcartCa = computed(() => [
+  { label: 'Plan', color: '#94a3b8', dash: true, data: ecartCa.value.map(r => r.plan) },
+  { label: 'Réalisé', color: '#4338ca', data: ecartCa.value.map(r => r.reel) }
+])
+const maxEcartBoites = computed(() => Math.max(1, ...ecartBoites.value.map(r => Math.abs(r.ecart))))
+const maxEcartCa = computed(() => Math.max(1, ...ecartCa.value.map(r => Math.abs(r.ecart))))
+function largeurEcart(v, max) { return (max > 0 ? Math.min(100, Math.abs(v) / max * 100) : 0) + '%' }
 
 // --- Top produits / donneurs / réalisation (année) — source : conditionnement ---
 const topProduits = computed(() => {
@@ -714,18 +727,25 @@ onMounted(async () => {
               <button type="button" :class="{ on: gapType === 'cond' }" @click="gapType = 'cond'">Conditionnement</button>
             </div>
           </div>
+          <MiniChart v-if="ecartBoites.length" :labels="moisEcart" :format="fmt" :value-format="fmtC" show-values :series="serieEcartBoites" />
           <div class="tbl-wrap">
             <table class="grid">
-              <thead><tr><th>Mois</th><th class="ta-r">Plan</th><th class="ta-r">Réalisé</th><th class="ta-r">Écart</th><th class="ta-r">Écart cumulé</th></tr></thead>
+              <thead><tr><th>Mois</th><th class="ta-r">Plan</th><th class="ta-r">Réalisé</th><th class="ta-r">Écart</th><th class="dv-th">Sous / sur le plan</th><th class="ta-r">Écart cumulé</th></tr></thead>
               <tbody>
                 <tr v-for="r in ecartBoites" :key="r.mois">
                   <td>{{ r.mois }}</td>
                   <td class="ta-r">{{ fmt(r.plan) }}</td>
                   <td class="ta-r">{{ fmt(r.reel) }}</td>
                   <td class="ta-r" :class="r.ecart >= 0 ? 'g-pos' : 'g-neg'">{{ fmtEcart(r.ecart) }}</td>
+                  <td class="dv-cell">
+                    <div class="dv">
+                      <div class="dv-h neg"><span :style="{ width: largeurEcart(r.ecart < 0 ? r.ecart : 0, maxEcartBoites) }"></span></div>
+                      <div class="dv-h pos"><span :style="{ width: largeurEcart(r.ecart > 0 ? r.ecart : 0, maxEcartBoites) }"></span></div>
+                    </div>
+                  </td>
                   <td class="ta-r" :class="r.cumul >= 0 ? 'g-pos' : 'g-neg'">{{ fmtEcart(r.cumul) }}</td>
                 </tr>
-                <tr v-if="!ecartBoites.length"><td colspan="5" class="empty">Aucun plan mensuel pour {{ anneeSel }}.</td></tr>
+                <tr v-if="!ecartBoites.length"><td colspan="6" class="empty">Aucun plan mensuel pour {{ anneeSel }}.</td></tr>
               </tbody>
               <tfoot v-if="ecartBoites.length">
                 <tr class="gap-tot">
@@ -733,12 +753,13 @@ onMounted(async () => {
                   <td class="ta-r">{{ fmt(totEcartBoites.plan) }}</td>
                   <td class="ta-r">{{ fmt(totEcartBoites.reel) }}</td>
                   <td class="ta-r" :class="(totEcartBoites.reel - totEcartBoites.plan) >= 0 ? 'g-pos' : 'g-neg'">{{ fmtEcart(totEcartBoites.reel - totEcartBoites.plan) }}</td>
+                  <td></td>
                   <td class="ta-r"></td>
                 </tr>
               </tfoot>
             </table>
           </div>
-          <p class="gap-note">Écart = réalisé − plan (boîtes). Cumul depuis janvier, arrêté au mois en cours.</p>
+          <p class="gap-note">Écart = réalisé − plan (boîtes). Barre verte = au-dessus du plan, rouge = en dessous. Cumul depuis janvier, arrêté au mois en cours.</p>
         </section>
         <section class="card">
           <h2 class="card-title">Réalisation du plan — top produits</h2>
@@ -911,18 +932,25 @@ onMounted(async () => {
               <button type="button" :class="{ on: gapType === 'cond' }" @click="gapType = 'cond'">Conditionnement</button>
             </div>
           </div>
+          <MiniChart v-if="ecartCa.length" :labels="moisEcart" :format="fmtDA" :value-format="fmtC" show-values :series="serieEcartCa" />
           <div class="tbl-wrap">
             <table class="grid">
-              <thead><tr><th>Mois</th><th class="ta-r">Plan</th><th class="ta-r">Réalisé</th><th class="ta-r">Écart</th><th class="ta-r">Écart cumulé</th></tr></thead>
+              <thead><tr><th>Mois</th><th class="ta-r">Plan</th><th class="ta-r">Réalisé</th><th class="ta-r">Écart</th><th class="dv-th">Sous / sur le plan</th><th class="ta-r">Écart cumulé</th></tr></thead>
               <tbody>
                 <tr v-for="r in ecartCa" :key="r.mois">
                   <td>{{ r.mois }}</td>
                   <td class="ta-r">{{ fmtDA(r.plan) }}</td>
                   <td class="ta-r">{{ fmtDA(r.reel) }}</td>
                   <td class="ta-r" :class="r.ecart >= 0 ? 'g-pos' : 'g-neg'">{{ fmtEcartDA(r.ecart) }}</td>
+                  <td class="dv-cell">
+                    <div class="dv">
+                      <div class="dv-h neg"><span :style="{ width: largeurEcart(r.ecart < 0 ? r.ecart : 0, maxEcartCa) }"></span></div>
+                      <div class="dv-h pos"><span :style="{ width: largeurEcart(r.ecart > 0 ? r.ecart : 0, maxEcartCa) }"></span></div>
+                    </div>
+                  </td>
                   <td class="ta-r" :class="r.cumul >= 0 ? 'g-pos' : 'g-neg'">{{ fmtEcartDA(r.cumul) }}</td>
                 </tr>
-                <tr v-if="!ecartCa.length"><td colspan="5" class="empty">Aucun plan mensuel pour {{ anneeSel }}.</td></tr>
+                <tr v-if="!ecartCa.length"><td colspan="6" class="empty">Aucun plan mensuel pour {{ anneeSel }}.</td></tr>
               </tbody>
               <tfoot v-if="ecartCa.length">
                 <tr class="gap-tot">
@@ -930,12 +958,13 @@ onMounted(async () => {
                   <td class="ta-r">{{ fmtDA(totEcartCa.plan) }}</td>
                   <td class="ta-r">{{ fmtDA(totEcartCa.reel) }}</td>
                   <td class="ta-r" :class="(totEcartCa.reel - totEcartCa.plan) >= 0 ? 'g-pos' : 'g-neg'">{{ fmtEcartDA(totEcartCa.reel - totEcartCa.plan) }}</td>
+                  <td></td>
                   <td class="ta-r"></td>
                 </tr>
               </tfoot>
             </table>
           </div>
-          <p class="gap-note">Écart = réalisé − plan (DA). Cumul depuis janvier, arrêté au mois en cours.</p>
+          <p class="gap-note">Écart = réalisé − plan (DA). Barre verte = au-dessus du plan, rouge = en dessous. Cumul depuis janvier, arrêté au mois en cours.</p>
         </section>
         <section class="card">
           <h2 class="card-title">CA par mois {{ anneeSel }} — Fabrication vs Conditionnement (DA)</h2>
@@ -1183,4 +1212,12 @@ table.mini td { padding: 3px 6px; border-bottom: 1px solid #eef2f6; white-space:
 .g-neg { color: #b91c1c; font-weight: 700; }
 .gap-tot td { font-weight: 700; border-top: 2px solid #e2e8f0; background: #f8fafc; }
 .gap-note { font-size: 12px; color: #64748b; margin: 8px 0 0; font-style: italic; }
+.dv-th { width: 140px; }
+.dv-cell { width: 140px; padding: 6px 10px; }
+.dv { display: flex; align-items: center; width: 124px; }
+.dv-h { flex: 1; height: 10px; display: flex; }
+.dv-h.neg { justify-content: flex-end; border-right: 2px solid #cbd5e1; }
+.dv-h span { display: block; height: 100%; }
+.dv-h.neg span { background: #ef4444; border-radius: 3px 0 0 3px; }
+.dv-h.pos span { background: #10b981; border-radius: 0 3px 3px 0; }
 </style>
