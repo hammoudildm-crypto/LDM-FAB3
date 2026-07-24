@@ -61,7 +61,7 @@ async function charger() {
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
 
-  const rpp = await fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produits(code_pf, designation, pcsu)'))
+  const rpp = await fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(code_pf, designation, pcsu)'))
   if (!rpp.error) planData.value = rpp.data
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
@@ -472,6 +472,43 @@ const caCondParMois = computed(() => {
   return arr
 })
 
+// --- ÉCART AU PLAN (PDP) par mois : boîtes et CA ---
+const planBoitesParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const x of planAnnee.value) {
+    const m = Number(x.mois || 0) - 1
+    if (m < 0 || m > 11) continue
+    a[m] += Number(x.quantite_planifiee || 0)
+  }
+  return a
+})
+const planCaParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const x of planAnnee.value) {
+    const m = Number(x.mois || 0) - 1
+    if (m < 0 || m > 11) continue
+    const pcsu = x.produits ? Number(x.produits.pcsu || 0) : 0
+    a[m] += Number(x.quantite_planifiee || 0) * pcsu
+  }
+  return a
+})
+const gapType = ref('fab')   // 'fab' = fabrication · 'cond' = conditionnement
+// Année en cours : on s'arrête au mois courant (écart à date). Années passées : 12 mois.
+const moisLimite = computed(() => anneeSel.value === anneeCourante ? new Date().getMonth() + 1 : 12)
+function tableauEcart(plan, reel) {
+  const out = []
+  let cp = 0, cr = 0
+  for (let m = 0; m < moisLimite.value; m++) {
+    cp += plan[m]; cr += reel[m]
+    out.push({ mois: MOIS[m], plan: plan[m], reel: reel[m], ecart: reel[m] - plan[m], cumul: cr - cp })
+  }
+  return out
+}
+const ecartBoites = computed(() => tableauEcart(planBoitesParMois.value, gapType.value === 'fab' ? fabParMois.value : prodParMois.value))
+const ecartCa = computed(() => tableauEcart(planCaParMois.value, gapType.value === 'fab' ? caFabParMois.value : caCondParMois.value))
+const totEcartBoites = computed(() => ecartBoites.value.reduce((s, r) => ({ plan: s.plan + r.plan, reel: s.reel + r.reel }), { plan: 0, reel: 0 }))
+const totEcartCa = computed(() => ecartCa.value.reduce((s, r) => ({ plan: s.plan + r.plan, reel: s.reel + r.reel }), { plan: 0, reel: 0 }))
+
 // --- Top produits / donneurs / réalisation (année) — source : conditionnement ---
 const topProduits = computed(() => {
   const m = {}
@@ -552,6 +589,13 @@ function fmtDA(n) {
 }
 function classeStatut(s) {
   return { 'Planifié': 'st-plan', 'En cours': 'st-cours', 'Terminé': 'st-fini', 'Libéré': 'st-lib', 'Rejeté': 'st-rej' }[s] || 'st-plan'
+}
+function fmtEcart(n) { return n == null ? '—' : (n > 0 ? '+' : '') + Math.round(n).toLocaleString('fr-FR') }
+function fmtEcartDA(n) {
+  if (n == null) return '—'
+  const a = Math.abs(n)
+  const v = a >= 1e6 ? (a / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' M DA' : Math.round(a).toLocaleString('fr-FR') + ' DA'
+  return (n > 0 ? '+' : (n < 0 ? '-' : '')) + v
 }
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
 
@@ -662,6 +706,40 @@ onMounted(async () => {
           </section>
         </div>
 
+        <section class="card">
+          <div class="gap-head">
+            <h2 class="card-title">Écart au plan par mois &mdash; {{ anneeSel }} (boîtes)</h2>
+            <div class="gap-tog">
+              <button type="button" :class="{ on: gapType === 'fab' }" @click="gapType = 'fab'">Fabrication</button>
+              <button type="button" :class="{ on: gapType === 'cond' }" @click="gapType = 'cond'">Conditionnement</button>
+            </div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="grid">
+              <thead><tr><th>Mois</th><th class="ta-r">Plan</th><th class="ta-r">Réalisé</th><th class="ta-r">Écart</th><th class="ta-r">Écart cumulé</th></tr></thead>
+              <tbody>
+                <tr v-for="r in ecartBoites" :key="r.mois">
+                  <td>{{ r.mois }}</td>
+                  <td class="ta-r">{{ fmt(r.plan) }}</td>
+                  <td class="ta-r">{{ fmt(r.reel) }}</td>
+                  <td class="ta-r" :class="r.ecart >= 0 ? 'g-pos' : 'g-neg'">{{ fmtEcart(r.ecart) }}</td>
+                  <td class="ta-r" :class="r.cumul >= 0 ? 'g-pos' : 'g-neg'">{{ fmtEcart(r.cumul) }}</td>
+                </tr>
+                <tr v-if="!ecartBoites.length"><td colspan="5" class="empty">Aucun plan mensuel pour {{ anneeSel }}.</td></tr>
+              </tbody>
+              <tfoot v-if="ecartBoites.length">
+                <tr class="gap-tot">
+                  <td>Total</td>
+                  <td class="ta-r">{{ fmt(totEcartBoites.plan) }}</td>
+                  <td class="ta-r">{{ fmt(totEcartBoites.reel) }}</td>
+                  <td class="ta-r" :class="(totEcartBoites.reel - totEcartBoites.plan) >= 0 ? 'g-pos' : 'g-neg'">{{ fmtEcart(totEcartBoites.reel - totEcartBoites.plan) }}</td>
+                  <td class="ta-r"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p class="gap-note">Écart = réalisé − plan (boîtes). Cumul depuis janvier, arrêté au mois en cours.</p>
+        </section>
         <section class="card">
           <h2 class="card-title">Réalisation du plan — top produits</h2>
           <div v-for="p in realisationPlan" :key="p.code" class="prog-row">
@@ -825,6 +903,40 @@ onMounted(async () => {
           </div>
         </div>
 
+        <section class="card">
+          <div class="gap-head">
+            <h2 class="card-title">Écart au plan par mois &mdash; {{ anneeSel }} (CA)</h2>
+            <div class="gap-tog">
+              <button type="button" :class="{ on: gapType === 'fab' }" @click="gapType = 'fab'">Fabrication</button>
+              <button type="button" :class="{ on: gapType === 'cond' }" @click="gapType = 'cond'">Conditionnement</button>
+            </div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="grid">
+              <thead><tr><th>Mois</th><th class="ta-r">Plan</th><th class="ta-r">Réalisé</th><th class="ta-r">Écart</th><th class="ta-r">Écart cumulé</th></tr></thead>
+              <tbody>
+                <tr v-for="r in ecartCa" :key="r.mois">
+                  <td>{{ r.mois }}</td>
+                  <td class="ta-r">{{ fmtDA(r.plan) }}</td>
+                  <td class="ta-r">{{ fmtDA(r.reel) }}</td>
+                  <td class="ta-r" :class="r.ecart >= 0 ? 'g-pos' : 'g-neg'">{{ fmtEcartDA(r.ecart) }}</td>
+                  <td class="ta-r" :class="r.cumul >= 0 ? 'g-pos' : 'g-neg'">{{ fmtEcartDA(r.cumul) }}</td>
+                </tr>
+                <tr v-if="!ecartCa.length"><td colspan="5" class="empty">Aucun plan mensuel pour {{ anneeSel }}.</td></tr>
+              </tbody>
+              <tfoot v-if="ecartCa.length">
+                <tr class="gap-tot">
+                  <td>Total</td>
+                  <td class="ta-r">{{ fmtDA(totEcartCa.plan) }}</td>
+                  <td class="ta-r">{{ fmtDA(totEcartCa.reel) }}</td>
+                  <td class="ta-r" :class="(totEcartCa.reel - totEcartCa.plan) >= 0 ? 'g-pos' : 'g-neg'">{{ fmtEcartDA(totEcartCa.reel - totEcartCa.plan) }}</td>
+                  <td class="ta-r"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p class="gap-note">Écart = réalisé − plan (DA). Cumul depuis janvier, arrêté au mois en cours.</p>
+        </section>
         <section class="card">
           <h2 class="card-title">CA par mois {{ anneeSel }} — Fabrication vs Conditionnement (DA)</h2>
           <MiniChart :labels="MOIS" :format="fmtDA" :value-format="fmtC" show-values
@@ -1061,4 +1173,14 @@ table.mini td { padding: 3px 6px; border-bottom: 1px solid #eef2f6; white-space:
 .q-md-x { background: none; border: 0; font-size: 17px; color: #94a3b8; cursor: pointer; }
 .q-md-body { overflow-y: auto; padding: 6px 18px 16px; }
 .q-lot { font-family: ui-monospace, monospace; font-weight: 700; white-space: nowrap; }
+.gap-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.gap-tog { display: inline-flex; gap: 6px; }
+.gap-tog button { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; font-family: inherit; font-size: 12.5px; font-weight: 600; color: #475569; padding: 5px 11px; cursor: pointer; }
+.gap-tog button.on { background: #0f766e; border-color: #0f766e; color: #fff; }
+.tbl-wrap { overflow-x: auto; }
+.ta-r { text-align: right; }
+.g-pos { color: #047857; font-weight: 700; }
+.g-neg { color: #b91c1c; font-weight: 700; }
+.gap-tot td { font-weight: 700; border-top: 2px solid #e2e8f0; background: #f8fafc; }
+.gap-note { font-size: 12px; color: #64748b; margin: 8px 0 0; font-style: italic; }
 </style>
