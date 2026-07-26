@@ -343,7 +343,7 @@ const attentePeseeList = computed(() => {
     res.push({
       id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '',
       boites: Number(o.quantite_theorique || 0), date: o.date_reception || o.date_lancement,
-      validite: o.date_fin_validite || null, perime: o.date_fin_validite ? (new Date(o.date_fin_validite) < now) : false
+      validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !o.date_fin_fabrication) ? (new Date(o.date_fin_validite) < now) : false
     })
   }
   return res.filter(mL).sort((a, b) => String(a.lot || '').localeCompare(String(b.lot || ''), undefined, { numeric: true }))
