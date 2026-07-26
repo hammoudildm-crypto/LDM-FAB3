@@ -203,7 +203,7 @@ const queuePhase = computed(() => {
     const p = o.produits || {}
     // Fabrication finie = dernière phase de la gamme du produit terminée (critère fiable, pas la date).
     const gDern = gamme.length ? String(gamme[gamme.length - 1]).toLowerCase() : null
-    const fabTerminee = !!(gDern && pl[gDern] && pl[gDern].statut === 'Terminé')
+    const fabTerminee = !!o.date_fin_fabrication || !!(gDern && pl[gDern] && pl[gDern].statut === 'Terminé')
     const base = { id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !fabTerminee) ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
