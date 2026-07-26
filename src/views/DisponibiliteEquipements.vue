@@ -202,7 +202,7 @@ const queuePhase = computed(() => {
     const gamme = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB
     const p = o.produits || {}
     const base = { id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
-      validite: o.date_fin_validite || null, perime: o.date_fin_validite ? (new Date(o.date_fin_validite) < new Date()) : false,
+      validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !o.date_fin_fabrication) ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
     // Règle : le lot est à sa phase la plus AVANCÉE déjà saisie (dans la gamme du produit).
     //   En cours -> en cours à cet atelier ; À faire -> en attente à cet atelier ;
