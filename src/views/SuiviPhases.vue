@@ -244,7 +244,7 @@ function fmtPct(n) { return n == null ? '—' : n.toFixed(1) + ' %' }
 
 async function chargerACompleter() {
   const r = await supabase.from('suivi_phases')
-    .select('id, phase, quantite_entree, quantite_sortie, ordre_id, ordres_fabrication!inner(numero_lot, date_fin_fabrication, produits(code_pf))')
+    .select('id, phase, quantite_entree, quantite_sortie, ordre_id, ordres_fabrication!inner(numero_lot, date_fin_fabrication, produits(code_pf, designation))')
     .eq('actif', true)
     .or('quantite_sortie.is.null,quantite_sortie.eq.0')
     .not('ordres_fabrication.date_fin_fabrication', 'is', null)
@@ -298,7 +298,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
               <tbody>
                 <tr v-for="x in aCompleter" :key="x.id">
                   <td class="ac-mono">{{ x.ordres_fabrication.numero_lot }}</td>
-                  <td>{{ x.ordres_fabrication.produits ? x.ordres_fabrication.produits.code_pf : '—' }}</td>
+                  <td><span v-if="x.ordres_fabrication.produits"><strong>{{ x.ordres_fabrication.produits.code_pf }}</strong><span class="ac-desig">{{ x.ordres_fabrication.produits.designation }}</span></span><span v-else>—</span></td>
                   <td>{{ x.phase }}</td>
                   <td class="ac-r">{{ x.quantite_entree != null ? fmt(x.quantite_entree) : '—' }}</td>
                   <td class="ac-nowrap">{{ x.ordres_fabrication.date_fin_fabrication }}</td>
@@ -486,4 +486,5 @@ button.link.danger { color: #b91c1c; }
 .ac-nowrap { white-space: nowrap; }
 .ac-link { background: none; border: 0; color: #2563eb; font-weight: 600; cursor: pointer; font-size: 13px; }
 .ac-link:hover { text-decoration: underline; }
+.ac-desig { display: block; font-size: 12px; color: #64748b; margin-top: 2px; }
 </style>
