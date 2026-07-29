@@ -75,6 +75,7 @@ function arreterPresence() {
 // --- Navigation par rôle, en groupes repliables ---
 const LINK_ICONS = {
   '/': '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  '/accueil': '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   '/realisation-plan': '<path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/>',
   '/rendement': '<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
   '/ca': '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
@@ -261,6 +262,7 @@ async function signOut() {
         <button class="side-hide" @click="sidebarMasquee = !sidebarMasquee" :title="sidebarMasquee ? 'Épingler la barre' : 'Masquer la barre'">{{ sidebarMasquee ? '»' : '«' }}</button>
       </div>
       <nav class="side-nav">
+        <RouterLink to="/accueil" class="side-link" @click="sidebarOpen = false"><span class="link-in"><span class="link-ic"><svg viewBox="0 0 24 24" v-html="LINK_ICONS['/accueil']"></svg></span>Accueil</span></RouterLink>
         <RouterLink to="/" class="side-link" @click="sidebarOpen = false"><span class="link-in"><span class="link-ic"><svg viewBox="0 0 24 24" v-html="LINK_ICONS['/']"></svg></span>Tableau de bord</span></RouterLink>
         <template v-if="session">
           <template v-for="g in NAV_GROUPS" :key="g.key">
