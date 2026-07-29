@@ -21,10 +21,13 @@
       <div class="add-row">
         <div class="add-field grow">
           <label>Produit</label>
-          <select v-model="selProduit">
-            <option value="">— Choisir un produit —</option>
-            <option v-for="p in produitsTries" :key="p.id" :value="p.id">{{ p.code_pf }} · {{ p.designation }}</option>
-          </select>
+          <div class="prod-pick">
+            <input type="search" v-model="rechercheProduit" class="prod-search" placeholder="Filtrer par code ou désignation…" />
+            <select v-model="selProduit">
+              <option value="">— Choisir un produit ({{ produitsFiltres.length }}) —</option>
+              <option v-for="p in produitsFiltres" :key="p.id" :value="p.id">{{ p.code_pf }} · {{ p.designation }}</option>
+            </select>
+          </div>
         </div>
         <div class="add-field">
           <label>Quantité (boîtes)</label>
@@ -116,6 +119,7 @@ const chargement = ref(true)
 
 const lots = ref([])              // { id, produitId, boites }
 const selProduit = ref('')
+const rechercheProduit = ref('')
 const selBoites = ref('')
 const regimeH = ref(120)
 let seq = 1
@@ -157,6 +161,11 @@ function phaseDeType(type) {
 }
 
 const produitsTries = computed(() => [...produits.value].sort((a, b) => String(a.code_pf || '').localeCompare(String(b.code_pf || ''), undefined, { numeric: true })))
+const produitsFiltres = computed(() => {
+  const q = rechercheProduit.value.trim().toLowerCase()
+  if (!q) return produitsTries.value
+  return produitsTries.value.filter(p => (p.code_pf || '').toLowerCase().includes(q) || (p.designation || '').toLowerCase().includes(q))
+})
 const prodById = computed(() => { const m = {}; for (const p of produits.value) m[p.id] = p; return m })
 const condLignes = computed(() => equipements.value.filter(e => phaseDeType(e.type) === 'conditionnement'))
 const cadMap = computed(() => { const m = {}; for (const c of cadences.value) m[c.equipement_id + '|' + c.produit_id] = Number(c.cadence_nominale || 0); return m })
@@ -228,6 +237,8 @@ const echelle = computed(() => Math.max(regimeH.value, ...plan.value.lignes.map(
 .add-field.grow { flex: 1; min-width: 260px; }
 .add-field label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
 .add-field select, .add-field input { padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13.5px; width: 100%; }
+.prod-pick { display: flex; flex-direction: column; gap: 6px; }
+.prod-search { padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; width: 100%; }
 .btn-add { background: #0f766e; color: #fff; border: 0; border-radius: 9px; font: inherit; font-size: 13.5px; font-weight: 700; padding: 9px 18px; cursor: pointer; }
 .btn-add:disabled { background: #cbd5e1; cursor: not-allowed; }
 
