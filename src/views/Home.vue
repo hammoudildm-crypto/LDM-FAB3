@@ -65,7 +65,7 @@ async function charger() {
   if (!rpp.error) planData.value = rpp.data
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
-    .select('ordre_id, quantite_entree, quantite_conditionnee, date_conditionnement, ordres_fabrication(numero_lot, date_fin_fabrication, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, pcsu, boites_theoriques, donneurs_ordre(nom)))')
+    .select('ordre_id, quantite_entree, quantite_conditionnee, date_conditionnement, date_fin, ordres_fabrication(numero_lot, date_fin_fabrication, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, pcsu, boites_theoriques, donneurs_ordre(nom)))')
     .eq('actif', true))
   if (!rc.error) conditionnements.value = rc.data
 
@@ -393,6 +393,27 @@ const boitesRestantesFab = computed(() => Math.max(0, planTotal.value - fabReali
 // --- Valorisation en CA de chaque carte (boîtes x PCSU du produit) ---
 // Chaque CA est le MIROIR EXACT de sa carte : mêmes lots, mêmes filtres.
 function pcsuLot(l) { return l.produits ? Number(l.produits.pcsu || 0) : 0 }
+
+// --- Réalisation THÉORIQUE : quantité théorique du lot, déclenchée par la fin d'opération ---
+const lotById = computed(() => { const m = {}; for (const l of lots.value) m[l.id] = l; return m })
+// Fabrication finie = date de fin de fabrication (= fin de la dernière phase).
+const lotsFabFinis = computed(() => lots.value.filter(l => l.date_fin_fabrication && new Date(l.date_fin_fabrication).getFullYear() === anneeSel.value))
+const fabTheo = computed(() => lotsFabFinis.value.reduce((s, l) => s + Number(l.quantite_theorique || 0), 0))
+const caFabTheo = computed(() => lotsFabFinis.value.reduce((s, l) => s + Number(l.quantite_theorique || 0) * pcsuLot(l), 0))
+// Conditionnement fini = date de fin du conditionnement (on prend la plus récente par lot).
+const condFinParLot = computed(() => {
+  const m = {}
+  for (const c of conditionnements.value) {
+    if (!c.date_fin) continue
+    if (!m[c.ordre_id] || new Date(c.date_fin) > new Date(m[c.ordre_id])) m[c.ordre_id] = c.date_fin
+  }
+  return m
+})
+const lotsCondFinis = computed(() => Object.entries(condFinParLot.value)
+  .filter(([, d]) => new Date(d).getFullYear() === anneeSel.value)
+  .map(([oid]) => lotById.value[oid]).filter(Boolean))
+const condTheo = computed(() => lotsCondFinis.value.reduce((s, l) => s + Number(l.quantite_theorique || 0), 0))
+const caCondTheo = computed(() => lotsCondFinis.value.reduce((s, l) => s + Number(l.quantite_theorique || 0) * pcsuLot(l), 0))
 const caFabRealisee = computed(() => {
   let t = 0
   for (const l of lotsAnnee.value) {
@@ -719,6 +740,17 @@ onMounted(async () => {
           </section>
         </div>
 
+        <h3 class="struct-h"><span class="struct-b prod2">Réalisation théorique — fin d'opération</span><span class="struct-d">quantité théorique · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k2">
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><span class="kpi-val">{{ fmt(fabTheo) }}</span></div>
+            <div class="kpi-lbl">Fabrication théorique (bts) — à la fin de la dernière phase</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.package"></svg></span><span class="kpi-val">{{ fmt(condTheo) }}</span></div>
+            <div class="kpi-lbl">Conditionnement théorique (bts) — à la fin du conditionnement</div>
+          </div>
+        </div>
         <section class="card">
           <div class="gap-head">
             <h2 class="card-title">Écart au plan par mois &mdash; {{ anneeSel }} (boîtes)</h2>
@@ -924,6 +956,17 @@ onMounted(async () => {
           </div>
         </div>
 
+        <h3 class="struct-h"><span class="struct-b qa">CA théorique — fin d'opération</span><span class="struct-d">quantité théorique × PCSU · {{ anneeSel }}</span></h3>
+        <div class="kpi-grid k2">
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.coins"></svg></span><span class="kpi-val">{{ fmtDA(caFabTheo) }}</span></div>
+            <div class="kpi-lbl">CA fabrication théorique — à la fin de la dernière phase</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.money"></svg></span><span class="kpi-val">{{ fmtDA(caCondTheo) }}</span></div>
+            <div class="kpi-lbl">CA conditionnement théorique — à la fin du conditionnement</div>
+          </div>
+        </div>
         <section class="card">
           <div class="gap-head">
             <h2 class="card-title">Écart au plan par mois &mdash; {{ anneeSel }} (CA)</h2>
