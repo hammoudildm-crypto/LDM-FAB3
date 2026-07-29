@@ -204,7 +204,7 @@ const lignesAnnuelles = computed(() => {
         const boites = tab[mi]; if (!boites) continue
         const cad = cadP[pid]; if (!(cad > 0)) continue
         const p = prodById.value[pid] || {}
-        occH += (boites * num(p.unites_par_boite, 1)) / cad
+        occH += boites / cad   // cadence en boîtes/h -> heures = boîtes / cadence
         if (inclureNett.value) {
           const tl = num(p.taille_lot, 0)
           const nbLots = tl > 0 ? Math.ceil(boites / tl) : 1
