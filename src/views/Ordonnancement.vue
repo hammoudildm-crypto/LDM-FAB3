@@ -4,108 +4,108 @@
       <div>
         <div class="oh-eyebrow">Planification atelier</div>
         <h1 class="oh-title">Ordonnancement — simulateur</h1>
-        <p class="oh-sub">Choisis un atelier, ajoute des produits : le conditionnement associé s'enchaîne après la fabrication.</p>
-      </div>
-      <div class="oh-regime">
-        <label>Régime de la semaine</label>
-        <select v-model.number="regimeH">
-          <option :value="40">1×8 (40 h)</option>
-          <option :value="80">2×8 (80 h)</option>
-          <option :value="120">3×8 (120 h)</option>
-        </select>
+        <p class="oh-sub">Gamme complète datée : chaque lot enchaîne ses phases jusqu'au conditionnement.</p>
       </div>
     </div>
 
-    <!-- Choix de l'atelier -->
+    <!-- Paramètres -->
     <section class="card">
-      <div class="add-field grow">
-        <label>Équipement de fabrication à ordonnancer</label>
-        <select v-model="equipFabSel">
-          <option value="">— Choisir un équipement —</option>
-          <option v-for="e in equipFabTries" :key="e.id" :value="e.id">{{ e.nom || e.code }} ({{ e.phaseNom }})</option>
-        </select>
+      <div class="add-grid">
+        <div class="add-field">
+          <label>Date de départ</label>
+          <input type="date" v-model="dateDepart" />
+        </div>
+        <div class="add-field">
+          <label>Régime</label>
+          <select v-model.number="hpj">
+            <option :value="8">1×8 (8 h/j)</option>
+            <option :value="16">2×8 (16 h/j)</option>
+            <option :value="24">3×8 (24 h/j)</option>
+          </select>
+        </div>
+        <div class="add-field chk-wk">
+          <label>Week-end</label>
+          <label class="wk"><input type="checkbox" v-model="skipWeekend" /> Ne pas travailler le week-end</label>
+        </div>
       </div>
     </section>
 
     <!-- Ajout de produits -->
-    <section class="card" v-if="equipFabSel">
+    <section class="card">
       <div class="add-grid">
         <div class="add-field grow">
-          <label>Produit (fabricable dans cet atelier)</label>
+          <label>Produit</label>
           <input type="search" v-model="rechercheProduit" class="prod-search" placeholder="Filtrer par code ou désignation…" />
           <select v-model="selProduit">
             <option value="">— Choisir un produit ({{ produitsAffiches.length }}) —</option>
             <option v-for="p in produitsAffiches" :key="p.id" :value="p.id">{{ p.code_pf }} · {{ p.designation }}</option>
           </select>
         </div>
-        <div class="add-field">
-          <label>Quantité (boîtes)</label>
-          <input type="number" min="1" v-model="selBoites" @keyup.enter="ajouter" />
-        </div>
-        <button class="btn-add" @click="ajouter" :disabled="!selProduit || !(Number(selBoites) > 0)">Ajouter</button>
+        <div class="add-field"><label>Quantité / lot (boîtes)</label><input type="number" min="1" v-model="selBoites" /></div>
+        <div class="add-field"><label>Nombre de lots</label><input type="number" min="1" v-model="selNb" @keyup.enter="ajouter" /></div>
+        <button class="btn-add" @click="ajouter" :disabled="!selProduit || !(Number(selBoites) > 0) || !(Number(selNb) > 0)">Ajouter</button>
       </div>
       <p v-if="chargement" class="muted">Chargement…</p>
-      <p v-else-if="!produitsAtelier.length" class="muted warn">Aucun produit cadencé sur cet équipement.</p>
-    </section>
-    <section class="card" v-else>
-      <p class="muted">Commence par choisir un équipement de fabrication ci-dessus.</p>
+      <p v-else-if="selProduit && !gammeProduit(selProduit).length" class="muted warn">Aucune phase cadencée trouvée pour ce produit (gamme ou cadences manquantes).</p>
     </section>
 
-    <section v-if="lots.length" class="card">
-      <h2 class="card-title">Produits à ordonnancer ({{ lots.length }})</h2>
+    <!-- Groupes ajoutés -->
+    <section v-if="groupes.length" class="card">
+      <h2 class="card-title">Produits ({{ groupes.length }}) · {{ lotsDeployes.length }} lots au total</h2>
       <div class="tbl-wrap">
         <table class="grid">
-          <thead><tr><th>Produit</th><th class="ta-r">Boîtes</th><th>Fabrication</th><th>Conditionnement associé</th><th class="ta-r">CA</th><th></th></tr></thead>
+          <thead><tr><th>Produit</th><th class="ta-r">Boîtes/lot</th><th class="ta-r">Lots</th><th>Gamme</th><th class="ta-r">CA</th><th></th></tr></thead>
           <tbody>
-            <tr v-for="d in detailLots" :key="d.id">
-              <td><span class="lot-dot" :style="{ background: d.couleur }"></span><strong>{{ d.code }}</strong> <span class="lot-desig">{{ d.desig }}</span></td>
-              <td class="ta-r">{{ fmt(d.boites) }}</td>
-              <td><span :class="{ 'lot-warn': !d.fabNom }">{{ d.fabNom || 'non fabricable ici' }}</span></td>
-              <td><span :class="{ 'lot-warn': !d.condNom }">{{ d.condNom || 'aucune ligne associée' }}</span></td>
-              <td class="ta-r">{{ fmtDA(d.ca) }}</td>
-              <td class="ta-r"><button class="lnk-del" @click="retirer(d.id)">✕</button></td>
+            <tr v-for="g in groupesDetail" :key="g.id">
+              <td><span class="lot-dot" :style="{ background: g.couleur }"></span><strong>{{ g.code }}</strong> <span class="lot-desig">{{ g.desig }}</span></td>
+              <td class="ta-r">{{ fmt(g.boites) }}</td>
+              <td class="ta-r">{{ g.nb }}</td>
+              <td class="gamme-cell">{{ g.gammeNoms }}</td>
+              <td class="ta-r">{{ fmtDA(g.ca) }}</td>
+              <td class="ta-r"><button class="lnk-del" @click="retirer(g.id)">✕</button></td>
             </tr>
           </tbody>
-          <tfoot><tr class="tot"><td>Total</td><td class="ta-r">{{ fmt(totalBoites) }}</td><td></td><td></td><td class="ta-r">{{ fmtDA(totalCA) }}</td><td></td></tr></tfoot>
+          <tfoot><tr class="tot"><td>Total</td><td></td><td class="ta-r">{{ lotsDeployes.length }}</td><td></td><td class="ta-r">{{ fmtDA(totalCA) }}</td><td></td></tr></tfoot>
         </table>
       </div>
     </section>
 
-    <section v-if="lots.length" class="card">
-      <h2 class="card-title">Frise de la semaine</h2>
-
-      <div class="sec-title"><span class="sec-tag fab">Fabrication — {{ equipFabNom }}</span></div>
-      <div class="gantt">
-        <div v-for="l in plan.fab" :key="l.id" class="gline">
-          <div class="gline-head"><span class="gline-nom">{{ l.nom }}<span class="gph">{{ l.phase }}</span></span><span class="gline-load" :class="{ over: l.fin > regimeH }">{{ l.fin.toFixed(1) }} h · {{ Math.round(l.fin / regimeH * 100) }} %</span></div>
-          <div class="gtrack">
-            <div v-for="s in l.lots" :key="s.id" class="gseg" :style="{ left: (s.debut / echelle * 100) + '%', width: (s.duree / echelle * 100) + '%', background: s.couleur }" :title="s.code + ' · ' + s.duree.toFixed(1) + ' h'"><span class="gseg-tx">{{ s.code }}</span></div>
-            <div class="gcap" :style="{ left: (regimeH / echelle * 100) + '%' }"></div>
-          </div>
-        </div>
-        <div v-if="!plan.fab.length" class="muted">Aucun produit fabricable sur cet atelier.</div>
+    <!-- Planning daté -->
+    <section v-if="planning.length" class="card">
+      <h2 class="card-title">Planning — {{ fmtDate(dateIdx(0)) }} → {{ fmtDate(dateIdx(finGlobale)) }}</h2>
+      <div class="tbl-wrap">
+        <table class="grid plan">
+          <thead>
+            <tr>
+              <th>N°</th><th>Produit</th><th class="ta-r">Boîtes</th>
+              <th v-for="k in colonnes" :key="k" colspan="2" class="ph-h">{{ PHASE_NOM[k] }}</th>
+            </tr>
+            <tr class="sub">
+              <th></th><th></th><th></th>
+              <template v-for="k in colonnes" :key="k"><th class="dd">Début</th><th class="dd">Fin</th></template>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in planning" :key="r.id">
+              <td class="num">{{ r.num }}</td>
+              <td><span class="lot-dot" :style="{ background: r.couleur }"></span>{{ r.code }}</td>
+              <td class="ta-r">{{ fmt(r.boites) }}</td>
+              <template v-for="k in colonnes" :key="k">
+                <td class="dcell">{{ r.phases[k] ? fmtDate(dateIdx(r.phases[k].start)) : '' }}</td>
+                <td class="dcell fin">{{ r.phases[k] ? fmtDate(dateIdx(r.phases[k].end)) : '' }}</td>
+              </template>
+            </tr>
+          </tbody>
+        </table>
       </div>
-
-      <div class="sec-title cond"><span class="sec-tag cond">Conditionnement associé</span> <span class="sec-note">démarre après la fabrication du lot</span></div>
-      <div class="gantt">
-        <div v-for="l in plan.cond" :key="l.id" class="gline">
-          <div class="gline-head"><span class="gline-nom">{{ l.nom }}</span><span class="gline-load" :class="{ over: l.fin > regimeH }">{{ l.fin.toFixed(1) }} h · {{ Math.round(l.fin / regimeH * 100) }} %</span></div>
-          <div class="gtrack">
-            <div v-for="s in l.lots" :key="s.id" class="gseg" :style="{ left: (s.debut / echelle * 100) + '%', width: (s.duree / echelle * 100) + '%', background: s.couleur }" :title="s.code + ' · ' + s.duree.toFixed(1) + ' h' + (s.attente > 0.05 ? ' · attend la fab (' + s.attente.toFixed(1) + ' h)' : '')"><span class="gseg-tx">{{ s.code }}</span></div>
-            <div class="gcap" :style="{ left: (regimeH / echelle * 100) + '%' }"></div>
-          </div>
-        </div>
-        <div v-if="!plan.cond.length" class="muted">Aucune ligne de conditionnement associée.</div>
-      </div>
-
-      <div class="gantt-legend"><span class="lg-cap"></span> Repère = capacité semaine ({{ regimeH }} h). Un trou avant un bloc conditionnement = attente de la fin de fabrication.</div>
+      <p class="gantt-legend">Chaque phase démarre après la précédente du lot ET quand l'équipement se libère. Durée = (boîtes × unités/boîte) ÷ cadence, convertie en jours ({{ hpj }} h/j).</p>
     </section>
 
-    <section v-if="lots.length" class="kpi-line">
-      <div class="kpi-mini"><div class="km-val">{{ fmtDA(totalCA) }}</div><div class="km-lbl">CA total semaine</div></div>
-      <div class="kpi-mini"><div class="km-val">{{ finFabMax.toFixed(0) }} h</div><div class="km-lbl">Fin fabrication</div></div>
-      <div class="kpi-mini"><div class="km-val">{{ finCondMax.toFixed(0) }} h</div><div class="km-lbl">Fin conditionnement</div></div>
-      <div class="kpi-mini"><div class="km-val" :class="{ 'km-bad': surcharge > 0 }">{{ surcharge }}</div><div class="km-lbl">Équipement(s) en surcharge</div></div>
+    <section v-if="groupes.length" class="kpi-line">
+      <div class="kpi-mini"><div class="km-val">{{ fmtDA(totalCA) }}</div><div class="km-lbl">CA total</div></div>
+      <div class="kpi-mini"><div class="km-val">{{ lotsDeployes.length }}</div><div class="km-lbl">Lots</div></div>
+      <div class="kpi-mini"><div class="km-val">{{ finGlobale + 1 }} j</div><div class="km-lbl">Jours ouvrés</div></div>
+      <div class="kpi-mini"><div class="km-val">{{ fmtDate(dateIdx(finGlobale)) }}</div><div class="km-lbl">Fin de planning</div></div>
     </section>
   </div>
 </template>
@@ -115,16 +115,22 @@ import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 
 const PALETTE = ['#0f766e', '#4338ca', '#c2410c', '#047857', '#7c3aed', '#0369a1', '#b91c1c', '#a16207', '#be185d', '#15803d']
-const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage: 'Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage Gélules', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
+const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage: 'Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
+const PHASE_ORDRE = ['pesee', 'granulation', 'sechage', 'melange', 'compression', 'remplissage', 'pelliculage', 'conditionnement']
+const NOM_KEY = {}
+for (const [k, v] of Object.entries(PHASE_NOM)) NOM_KEY[v.toLowerCase()] = k
 
-const produits = ref([]), equipements = ref([]), cadences = ref([]), ateliers = ref([]), chargement = ref(true)
-const lots = ref([])
-const equipFabSel = ref(''), selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref('')
-const regimeH = ref(120)
+const produits = ref([]), equipements = ref([]), cadences = ref([]), chargement = ref(true)
+const groupes = ref([])   // { id, produitId, boites, nbLots }
+const dateDepart = ref(new Date().toISOString().slice(0, 10))
+const skipWeekend = ref(true)
+const hpj = ref(24)
+const selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref(''), selNb = ref(1)
 let seq = 1
 
 function fmt(n) { return Math.round(Number(n) || 0).toLocaleString('fr-FR') }
 function fmtDA(n) { const v = Number(n) || 0; return v >= 1e6 ? (v / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' M DA' : Math.round(v).toLocaleString('fr-FR') + ' DA' }
+function fmtDate(d) { return d ? d.toLocaleDateString('fr-FR') : '' }
 
 async function fetchAllPaged(make) {
   const size = 1000; let from = 0, all = []
@@ -133,13 +139,12 @@ async function fetchAllPaged(make) {
 }
 
 onMounted(async () => {
-  const [rp, re, rc, ra] = await Promise.all([
-    fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, pcsu, unites_par_boite').eq('actif', true)),
-    fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id').eq('actif', true)),
-    fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode')),
-    fetchAllPaged(() => supabase.from('ateliers').select('id, code, nom').eq('actif', true))
+  const [rp, re, rc] = await Promise.all([
+    fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, pcsu, unites_par_boite, gamme').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode'))
   ])
-  produits.value = rp; equipements.value = re; cadences.value = rc; ateliers.value = ra; chargement.value = false
+  produits.value = rp; equipements.value = re; cadences.value = rc; chargement.value = false
 })
 
 function phaseDeType(type) {
@@ -154,114 +159,132 @@ function phaseDeType(type) {
   if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)) return 'conditionnement'
   return null
 }
+function phaseKeyFromName(name) {
+  const t = String(name || '').toLowerCase().trim()
+  if (NOM_KEY[t]) return NOM_KEY[t]
+  if (/pes/.test(t)) return 'pesee'
+  if (/granul/.test(t)) return 'granulation'
+  if (/séch|sech/.test(t)) return 'sechage'
+  if (/mélang|melang/.test(t)) return 'melange'
+  if (/gélule|gelule|remplis|capsul/.test(t)) return 'remplissage'
+  if (/compress|compri/.test(t)) return 'compression'
+  if (/pellicul|enrob|dragé|drage/.test(t)) return 'pelliculage'
+  if (/condition/.test(t)) return 'conditionnement'
+  return null
+}
 
 const prodById = computed(() => { const m = {}; for (const p of produits.value) m[p.id] = p; return m })
-const equipById = computed(() => { const m = {}; for (const e of equipements.value) m[e.id] = e; return m })
 const cadMap = computed(() => { const m = {}; for (const c of cadences.value) m[c.equipement_id + '|' + c.produit_id] = Number(c.cadence_nominale || 0); return m })
-const couleurLot = (id) => PALETTE[(id - 1) % PALETTE.length]
-const equipCount = (aid) => equipements.value.filter(e => e.atelier_id === aid).length
+const couleur = (i) => PALETTE[i % PALETTE.length]
 
-const equipFabTries = computed(() => equipements.value
-  .filter(e => { const ph = phaseDeType(e.type); return ph && ph !== 'conditionnement' })
-  .map(e => ({ id: e.id, nom: e.nom, code: e.code, phaseNom: PHASE_NOM[phaseDeType(e.type)] || '?' }))
-  .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true })))
-const equipFabNom = computed(() => { const e = equipById.value[equipFabSel.value]; return e ? (e.nom || e.code) : '' })
-
-// Un seul équipement de fabrication : celui sélectionné.
-const equipAtelierFab = computed(() => { const e = equipById.value[equipFabSel.value]; return e ? [e] : [] })
-
-// Produits cadencés sur l'équipement sélectionné.
-const produitsAtelier = computed(() => {
-  if (!equipFabSel.value) return []
-  const ids = new Set()
-  for (const c of cadences.value) if (c.equipement_id === equipFabSel.value && Number(c.cadence_nominale) > 0) ids.add(c.produit_id)
-  return produits.value.filter(p => ids.has(p.id))
-})
+const produitsTries = computed(() => [...produits.value].sort((a, b) => String(a.code_pf || '').localeCompare(String(b.code_pf || ''), undefined, { numeric: true })))
 const produitsAffiches = computed(() => {
   const q = rechercheProduit.value.trim().toLowerCase()
-  const base = [...produitsAtelier.value].sort((a, b) => String(a.code_pf || '').localeCompare(String(b.code_pf || ''), undefined, { numeric: true }))
-  if (!q) return base
-  return base.filter(p => (p.code_pf || '').toLowerCase().includes(q) || (p.designation || '').toLowerCase().includes(q))
+  if (!q) return produitsTries.value
+  return produitsTries.value.filter(p => (p.code_pf || '').toLowerCase().includes(q) || (p.designation || '').toLowerCase().includes(q))
 })
+
+// Séquence de phases d'un produit = gamme (mappée en clés) + conditionnement final.
+function gammeProduit(produitId) {
+  const p = prodById.value[produitId]
+  const g = (p && Array.isArray(p.gamme)) ? p.gamme : []
+  const keys = []
+  for (const n of g) { const k = phaseKeyFromName(n); if (k && k !== 'conditionnement' && !keys.includes(k)) keys.push(k) }
+  keys.push('conditionnement')
+  return keys
+}
+function gammeNoms(produitId) { return gammeProduit(produitId).map(k => PHASE_NOM[k]).join(' → ') }
 
 function ajouter() {
-  if (!selProduit.value || !(Number(selBoites.value) > 0)) return
-  lots.value.push({ id: seq++, produitId: selProduit.value, boites: Number(selBoites.value) })
-  selBoites.value = ''
+  if (!selProduit.value || !(Number(selBoites.value) > 0) || !(Number(selNb.value) > 0)) return
+  groupes.value.push({ id: seq++, produitId: selProduit.value, boites: Number(selBoites.value), nbLots: Math.min(60, Number(selNb.value)) })
 }
-function retirer(id) { lots.value = lots.value.filter(l => l.id !== id) }
+function retirer(id) { groupes.value = groupes.value.filter(g => g.id !== id) }
 
-function dureeDe(equipId, produitId, boites) {
-  const p = prodById.value[produitId]; if (!p) return 0
-  const cad = cadMap.value[equipId + '|' + produitId]
-  return cad > 0 ? (boites * Number(p.unites_par_boite || 1)) / cad : 0
-}
-
-// Ordonnancement : fabrication sur les équipements de l'atelier (le moins chargé), puis conditionnement associé (après la fab).
-const plan = computed(() => {
-  const fabPool = equipAtelierFab.value
-  const fabRows = {}
-  for (const e of fabPool) fabRows[e.id] = { id: e.id, nom: e.nom || e.code, phase: PHASE_NOM[phaseDeType(e.type)] || '', fin: 0, lots: [] }
-  const fabFin = {}
-  for (const lt of lots.value) {
-    const compat = fabPool.filter(e => cadMap.value[e.id + '|' + lt.produitId] > 0).map(e => fabRows[e.id])
-    if (!compat.length) continue
-    compat.sort((a, b) => a.fin - b.fin)
-    const row = compat[0]
-    const duree = dureeDe(row.id, lt.produitId, lt.boites)
-    const p = prodById.value[lt.produitId] || {}
-    row.lots.push({ id: lt.id, code: p.code_pf, debut: row.fin, duree, couleur: couleurLot(lt.id) })
-    fabFin[lt.id] = row.fin + duree
-    row.fin += duree
-  }
-  const condPool = equipements.value.filter(e => phaseDeType(e.type) === 'conditionnement')
-  const condRows = {}
-  for (const lt of lots.value) {
-    if (fabFin[lt.id] == null) continue
-    const compat = condPool.filter(e => cadMap.value[e.id + '|' + lt.produitId] > 0)
-    if (!compat.length) continue
-    for (const e of compat) if (!condRows[e.id]) condRows[e.id] = { id: e.id, nom: e.nom || e.code, fin: 0, lots: [] }
-    const rows = compat.map(e => condRows[e.id]).sort((a, b) => a.fin - b.fin)
-    const row = rows[0]
-    const duree = dureeDe(row.id, lt.produitId, lt.boites)
-    const debut = Math.max(row.fin, fabFin[lt.id] || 0)
-    const p = prodById.value[lt.produitId] || {}
-    row.lots.push({ id: lt.id, code: p.code_pf, debut, duree, couleur: couleurLot(lt.id), attente: debut - row.fin })
-    row.fin = debut + duree
-  }
-  return { fab: Object.values(fabRows).filter(r => r.lots.length), cond: Object.values(condRows).filter(r => r.lots.length), fabFin }
+// Déploiement en lots individuels (numérotés par produit).
+const lotsDeployes = computed(() => {
+  const out = []
+  groupes.value.forEach((g, gi) => {
+    for (let i = 1; i <= g.nbLots; i++) out.push({ id: g.id * 1000 + i, produitId: g.produitId, boites: g.boites, num: i, couleur: couleur(gi) })
+  })
+  return out
 })
 
-const detailLots = computed(() => lots.value.map(lt => {
-  const p = prodById.value[lt.produitId] || {}
-  const boites = Number(lt.boites || 0)
-  let fabNom = null, condNom = null
-  for (const l of plan.value.fab) { const s = l.lots.find(x => x.id === lt.id); if (s) { fabNom = l.nom; break } }
-  for (const l of plan.value.cond) { const s = l.lots.find(x => x.id === lt.id); if (s) { condNom = l.nom; break } }
-  return { id: lt.id, code: p.code_pf || '?', desig: p.designation || '', boites, ca: boites * Number(p.pcsu || 0), fabNom, condNom, couleur: couleurLot(lt.id) }
-}))
+function dureeJours(equipId, produitId, boites) {
+  const p = prodById.value[produitId]; if (!p) return 1
+  const cad = cadMap.value[equipId + '|' + produitId]
+  if (!(cad > 0)) return 1
+  const heures = (boites * Number(p.unites_par_boite || 1)) / cad
+  return Math.max(1, Math.ceil(heures / hpj.value))
+}
 
-const totalCA = computed(() => detailLots.value.reduce((s, d) => s + d.ca, 0))
-const totalBoites = computed(() => detailLots.value.reduce((s, d) => s + d.boites, 0))
-const finFabMax = computed(() => Math.max(0, ...plan.value.fab.map(l => l.fin)))
-const finCondMax = computed(() => Math.max(0, ...plan.value.cond.map(l => l.fin)))
-const surcharge = computed(() => [...plan.value.fab, ...plan.value.cond].filter(l => l.fin > regimeH.value).length)
-const echelle = computed(() => Math.max(regimeH.value, finFabMax.value, finCondMax.value, 1))
+// Calendrier de jours ouvrés à partir de la date de départ.
+const joursOuvres = computed(() => {
+  const out = []; const d = new Date(dateDepart.value + 'T00:00:00')
+  let guard = 0
+  while (out.length < 900 && guard < 2000) {
+    const wd = d.getDay()
+    if (!skipWeekend.value || (wd !== 0 && wd !== 6)) out.push(new Date(d))
+    d.setDate(d.getDate() + 1); guard++
+  }
+  return out
+})
+function dateIdx(idx) { const a = joursOuvres.value; return a.length ? a[Math.max(0, Math.min(idx, a.length - 1))] : null }
+
+// Ordonnancement : chaque lot enchaîne sa gamme, chaque phase après la précédente ET la libération de l'équipement.
+const planning = computed(() => {
+  const equipFree = {}
+  const rows = []
+  for (const lt of lotsDeployes.value) {
+    const seqPh = gammeProduit(lt.produitId)
+    const p = prodById.value[lt.produitId] || {}
+    let prevEnd = -1
+    const phases = {}
+    for (const k of seqPh) {
+      const compat = equipements.value.filter(e => phaseDeType(e.type) === k && cadMap.value[e.id + '|' + lt.produitId] > 0)
+      if (!compat.length) continue
+      compat.sort((a, b) => (equipFree[a.id] || 0) - (equipFree[b.id] || 0))
+      const eq = compat[0]
+      const duree = dureeJours(eq.id, lt.produitId, lt.boites)
+      const start = Math.max(prevEnd + 1, equipFree[eq.id] || 0)
+      const end = start + duree - 1
+      phases[k] = { start, end, equip: eq.nom || eq.code }
+      equipFree[eq.id] = end + 1
+      prevEnd = end
+    }
+    rows.push({ id: lt.id, num: lt.num, code: p.code_pf, boites: lt.boites, couleur: lt.couleur, phases })
+  }
+  return rows
+})
+
+const colonnes = computed(() => {
+  const used = new Set()
+  for (const r of planning.value) for (const k in r.phases) used.add(k)
+  return PHASE_ORDRE.filter(k => used.has(k))
+})
+const finGlobale = computed(() => {
+  let m = 0
+  for (const r of planning.value) for (const k in r.phases) m = Math.max(m, r.phases[k].end)
+  return m
+})
+
+const groupesDetail = computed(() => groupes.value.map((g, gi) => {
+  const p = prodById.value[g.produitId] || {}
+  return { id: g.id, code: p.code_pf || '?', desig: p.designation || '', boites: g.boites, nb: g.nbLots, gammeNoms: gammeNoms(g.produitId), ca: g.boites * g.nbLots * Number(p.pcsu || 0), couleur: couleur(gi) }
+}))
+const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0))
 </script>
 
 <style scoped>
-.ordo { max-width: 1160px; margin: 0 auto; padding: 6px 4px 24px; }
-.ordo-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
+.ordo { max-width: 1240px; margin: 0 auto; padding: 6px 4px 24px; }
+.ordo-head { margin-bottom: 20px; }
 .oh-eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #0f766e; }
 .oh-title { font-size: 24px; font-weight: 800; letter-spacing: -.02em; color: #1a2233; margin: 3px 0 2px; }
 .oh-sub { font-size: 13.5px; color: #64748b; }
-.oh-regime { display: flex; flex-direction: column; gap: 4px; }
-.oh-regime label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
-.oh-regime select { padding: 7px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
 
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px; margin-bottom: 18px; }
 .card-title { font-size: 15px; font-weight: 800; color: #1a2233; margin: 0 0 14px; }
-.muted { font-size: 13px; color: #94a3b8; margin: 0; }
+.muted { font-size: 13px; color: #94a3b8; margin: 10px 0 0; }
 .muted.warn { color: #b45309; }
 
 .add-grid { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
@@ -270,45 +293,33 @@ const echelle = computed(() => Math.max(regimeH.value, finFabMax.value, finCondM
 .add-field label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
 .add-field select, .add-field input { padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13.5px; width: 100%; }
 .prod-search { margin-bottom: 6px; }
+.wk { font-size: 13px; color: #334155; font-weight: 500; display: inline-flex; align-items: center; gap: 7px; padding: 7px 0; text-transform: none; letter-spacing: 0; }
 .btn-add { background: #0f766e; color: #fff; border: 0; border-radius: 9px; font: inherit; font-size: 13.5px; font-weight: 700; padding: 9px 18px; cursor: pointer; }
 .btn-add:disabled { background: #cbd5e1; cursor: not-allowed; }
 
 .tbl-wrap { overflow-x: auto; }
-.grid { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-.grid th, .grid td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; text-align: left; }
+.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+.grid th, .grid td { padding: 7px 10px; border-bottom: 1px solid #eef2f6; text-align: left; white-space: nowrap; }
 .grid th { font-size: 12px; color: #64748b; font-weight: 700; }
 .ta-r { text-align: right; }
 .lot-dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 7px; vertical-align: middle; }
 .lot-desig { color: #94a3b8; font-size: 12px; }
-.lot-warn { color: #b45309; font-weight: 600; }
+.gamme-cell { font-size: 12px; color: #475569; white-space: normal; }
 .tot td { font-weight: 800; border-top: 2px solid #e2e8f0; background: #f8fafc; }
 .lnk-del { background: none; border: 0; color: #94a3b8; cursor: pointer; font-size: 14px; }
 .lnk-del:hover { color: #b91c1c; }
 
-.sec-title { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
-.sec-title.cond { margin-top: 22px; }
-.sec-tag { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; padding: 3px 10px; border-radius: 999px; }
-.sec-tag.fab { background: #cffafe; color: #155e75; }
-.sec-tag.cond { background: #ede9fe; color: #5b21b6; }
-.sec-note { font-size: 12px; color: #94a3b8; font-style: italic; }
+.plan th.ph-h { text-align: center; background: #f1f5f9; border-left: 2px solid #e2e8f0; }
+.plan tr.sub th.dd { font-size: 10.5px; color: #94a3b8; font-weight: 600; }
+.plan td.num { color: #94a3b8; font-weight: 700; }
+.plan td.dcell { font-size: 12px; color: #334155; }
+.plan td.dcell.fin { color: #64748b; border-right: 2px solid #f1f5f9; }
 
-.gantt { display: flex; flex-direction: column; gap: 11px; }
-.gline-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-.gline-nom { font-size: 13px; font-weight: 700; color: #334155; }
-.gph { font-size: 11px; font-weight: 600; color: #94a3b8; margin-left: 7px; }
-.gline-load { font-size: 12px; font-weight: 700; color: #64748b; }
-.gline-load.over { color: #b91c1c; }
-.gtrack { position: relative; height: 28px; background: #f1f5f9; border-radius: 7px; overflow: hidden; }
-.gseg { position: absolute; top: 0; height: 100%; display: flex; align-items: center; padding: 0 6px; box-sizing: border-box; border-right: 1px solid rgba(255,255,255,.6); overflow: hidden; }
-.gseg-tx { font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.25); }
-.gcap { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #0f172a; z-index: 2; }
-.gantt-legend { font-size: 12px; color: #64748b; margin-top: 14px; display: flex; align-items: center; gap: 7px; }
-.lg-cap { display: inline-block; width: 2px; height: 14px; background: #0f172a; }
+.gantt-legend { font-size: 12px; color: #64748b; margin-top: 12px; font-style: italic; }
 
 .kpi-line { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 @media (max-width: 720px) { .kpi-line { grid-template-columns: repeat(2, 1fr); } .add-field.grow { min-width: 100%; } }
 .kpi-mini { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; }
-.km-val { font-size: 22px; font-weight: 800; color: #0f766e; letter-spacing: -.02em; }
-.km-val.km-bad { color: #b91c1c; }
+.km-val { font-size: 20px; font-weight: 800; color: #0f766e; letter-spacing: -.02em; }
 .km-lbl { font-size: 12px; color: #64748b; margin-top: 2px; }
 </style>
