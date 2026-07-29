@@ -17,10 +17,15 @@ const aCompleter = ref([])
 const filtreAC = ref('')
 const aCompleterFiltre = computed(() => {
   const q = filtreAC.value.trim().toLowerCase()
-  if (!q) return aCompleter.value
-  return aCompleter.value.filter(x => {
+  const base = !q ? aCompleter.value : aCompleter.value.filter(x => {
     const o = x.ordres_fabrication || {}, pr = o.produits || {}
     return (o.numero_lot || '').toLowerCase().includes(q) || (pr.code_pf || '').toLowerCase().includes(q) || (pr.designation || '').toLowerCase().includes(q)
+  })
+  // Tri systématique par n° de lot (regroupe les phases d'un même lot).
+  return base.slice().sort((a, b) => {
+    const la = a.ordres_fabrication ? String(a.ordres_fabrication.numero_lot || '') : ''
+    const lb = b.ordres_fabrication ? String(b.ordres_fabrication.numero_lot || '') : ''
+    return la.localeCompare(lb, undefined, { numeric: true })
   })
 })
 const ouvertACompleter = ref(false)
