@@ -414,6 +414,14 @@ const lotsCondFinis = computed(() => Object.entries(condFinParLot.value)
   .map(([oid]) => lotById.value[oid]).filter(Boolean))
 const condTheo = computed(() => lotsCondFinis.value.reduce((s, l) => s + Number(l.quantite_theorique || 0), 0))
 const caCondTheo = computed(() => lotsCondFinis.value.reduce((s, l) => s + Number(l.quantite_theorique || 0) * pcsuLot(l), 0))
+// Mois en cours (même déclencheur : fin d'opération).
+const estMoisCourant = (dd) => { const d = new Date(dd); return d.getFullYear() === anneeCourante && d.getMonth() === moisCourant }
+const lotsFabFinisMois = computed(() => lots.value.filter(l => l.date_fin_fabrication && estMoisCourant(l.date_fin_fabrication)))
+const fabTheoMois = computed(() => lotsFabFinisMois.value.reduce((s, l) => s + Number(l.quantite_theorique || 0), 0))
+const caFabTheoMois = computed(() => lotsFabFinisMois.value.reduce((s, l) => s + Number(l.quantite_theorique || 0) * pcsuLot(l), 0))
+const lotsCondFinisMois = computed(() => Object.entries(condFinParLot.value).filter(([, d]) => estMoisCourant(d)).map(([oid]) => lotById.value[oid]).filter(Boolean))
+const condTheoMois = computed(() => lotsCondFinisMois.value.reduce((s, l) => s + Number(l.quantite_theorique || 0), 0))
+const caCondTheoMois = computed(() => lotsCondFinisMois.value.reduce((s, l) => s + Number(l.quantite_theorique || 0) * pcsuLot(l), 0))
 const caFabRealisee = computed(() => {
   let t = 0
   for (const l of lotsAnnee.value) {
@@ -740,15 +748,27 @@ onMounted(async () => {
           </section>
         </div>
 
-        <h3 class="struct-h"><span class="struct-b prod2">Réalisation théorique — fin d'opération</span><span class="struct-d">quantité théorique · {{ anneeSel }}</span></h3>
+        <h3 class="struct-h"><span class="struct-b prod2">Réalisation théorique — fin d'opération</span><span class="struct-d">quantité théorique (boîtes)</span></h3>
+        <div class="q-sub">Cumul année {{ anneeSel }}</div>
         <div class="kpi-grid k2">
           <div class="kpi">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><span class="kpi-val">{{ fmt(fabTheo) }}</span></div>
-            <div class="kpi-lbl">Fabrication théorique (bts) — à la fin de la dernière phase</div>
+            <div class="kpi-lbl">Fabrication théorique — fin dernière phase</div>
           </div>
           <div class="kpi">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.package"></svg></span><span class="kpi-val">{{ fmt(condTheo) }}</span></div>
-            <div class="kpi-lbl">Conditionnement théorique (bts) — à la fin du conditionnement</div>
+            <div class="kpi-lbl">Conditionnement théorique — fin conditionnement</div>
+          </div>
+        </div>
+        <div class="q-sub">Mois en cours</div>
+        <div class="kpi-grid k2">
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><span class="kpi-val">{{ fmt(fabTheoMois) }}</span></div>
+            <div class="kpi-lbl">Fabrication théorique — fin dernière phase</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.package"></svg></span><span class="kpi-val">{{ fmt(condTheoMois) }}</span></div>
+            <div class="kpi-lbl">Conditionnement théorique — fin conditionnement</div>
           </div>
         </div>
         <section class="card">
@@ -956,15 +976,27 @@ onMounted(async () => {
           </div>
         </div>
 
-        <h3 class="struct-h"><span class="struct-b qa">CA théorique — fin d'opération</span><span class="struct-d">quantité théorique × PCSU · {{ anneeSel }}</span></h3>
+        <h3 class="struct-h"><span class="struct-b qa">CA théorique — fin d'opération</span><span class="struct-d">quantité théorique × PCSU</span></h3>
+        <div class="q-sub">Cumul année {{ anneeSel }}</div>
         <div class="kpi-grid k2">
           <div class="kpi">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.coins"></svg></span><span class="kpi-val">{{ fmtDA(caFabTheo) }}</span></div>
-            <div class="kpi-lbl">CA fabrication théorique — à la fin de la dernière phase</div>
+            <div class="kpi-lbl">CA fabrication théorique — fin dernière phase</div>
           </div>
           <div class="kpi">
             <div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.money"></svg></span><span class="kpi-val">{{ fmtDA(caCondTheo) }}</span></div>
-            <div class="kpi-lbl">CA conditionnement théorique — à la fin du conditionnement</div>
+            <div class="kpi-lbl">CA conditionnement théorique — fin conditionnement</div>
+          </div>
+        </div>
+        <div class="q-sub">Mois en cours</div>
+        <div class="kpi-grid k2">
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.coins"></svg></span><span class="kpi-val">{{ fmtDA(caFabTheoMois) }}</span></div>
+            <div class="kpi-lbl">CA fabrication théorique — fin dernière phase</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.money"></svg></span><span class="kpi-val">{{ fmtDA(caCondTheoMois) }}</span></div>
+            <div class="kpi-lbl">CA conditionnement théorique — fin conditionnement</div>
           </div>
         </div>
         <section class="card">
