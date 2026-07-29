@@ -51,6 +51,16 @@
           </div>
         </div>
       </div>
+      <div class="trs-reel" v-if="trsChargementReel">Calcul du TRS réel…</div>
+      <div class="trs-reel" v-else-if="trsReel">
+        <div class="tr-main">
+          <span class="tr-lbl">TRS réel mesuré</span>
+          <span class="tr-val" :class="trsCls(trsReel.trs)">{{ (trsReel.trs * 100).toFixed(1) }} %</span>
+          <button class="tr-apply" @click="appliquerTRSReel">Appliquer au champ TRS</button>
+        </div>
+        <div class="tr-detail">Disponibilité {{ (trsReel.dispo * 100).toFixed(0) }} % · Performance {{ (trsReel.perf * 100).toFixed(0) }} % · Qualité {{ (trsReel.qualite * 100).toFixed(0) }} %<span class="tr-src"> — {{ trsReel.nbPostes }} poste(s), {{ fmtD(trsReel.du) }} → {{ fmtD(trsReel.au) }}</span></div>
+      </div>
+      <div class="trs-reel none" v-else-if="selEquip">Aucune saisie TRS pour cet équipement.</div>
       <div class="save-bar">
         <span class="pending" v-if="paramsModifies">Paramètres modifiés</span>
         <span class="pending ok" v-else>Paramètres à jour</span>
@@ -123,7 +133,7 @@ async function fetchAllPaged(make) {
   for (;;) { const r = await make().range(from, from + size - 1); if (r.error) return all; all = all.concat(r.data || []); if (!r.data || r.data.length < size) break; from += size }
   return all
 }
-async function chargerCadences() { cadences.value = await fetchAllPaged(() => supabase.from('cadences_produit').select('id, equipement_id, produit_id, cadence_nominale')) }
+async function chargerCadences() { cadences.value = await fetchAllPaged(() => supabase.from('cadences_produit').select('id, equipement_id, produit_id, cadence_nominale, mode')) }
 async function chargerEquip() { equipements.value = await fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true)) }
 
 onMounted(async () => {
@@ -181,7 +191,43 @@ function chargerEditeur() {
   const e = equipById.value[selEquip.value] || {}
   paramOrig = {}
   for (const k of CHAMPS_P) { const v = (e[k] === null || e[k] === undefined) ? DEF_P[k] : Number(e[k]); paramEdit[k] = v; paramOrig[k] = v }
+  chargerTRSReel(selEquip.value)
 }
+
+// ---- TRS réel mesuré (depuis trs_postes, même formule que Suivi TRS) ----
+const MOTIFS_TRS = ['arret_panne_min', 'arret_format_min', 'arret_nettoyage_min', 'arret_reglage_min', 'arret_maintenance_min', 'arret_attente_min', 'arret_autre_min']
+const trsReel = ref(null)
+const trsChargementReel = ref(false)
+function cadenceDe(eq, pr) {
+  const c = cadences.value.find(c => c.equipement_id === eq && c.produit_id === pr)
+  return { value: c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0, mode: c ? (c.mode || 'debit') : 'debit' }
+}
+async function chargerTRSReel(equipId) {
+  trsReel.value = null
+  if (!equipId) return
+  trsChargementReel.value = true
+  const rows = await fetchAllPaged(() => supabase.from('trs_postes').select('*').eq('actif', true).eq('equipement_id', equipId))
+  trsChargementReel.value = false
+  if (!rows.length) return
+  let ouverture = 0, fonct = 0, theo = 0, prodPerf = 0, ecoule = 0, fonctPerf = 0, prodQual = 0, rebutsQual = 0, du = null, au = null
+  for (const s of rows) {
+    const to = Number(s.temps_ouverture_min) || 0
+    let arr = 0; for (const m of MOTIFS_TRS) arr += Number(s[m]) || 0
+    const tf = Math.max(0, to - arr)
+    ouverture += to; fonct += tf
+    const cd = cadenceDe(s.equipement_id, s.produit_id)
+    if (cd.mode === 'cycle') { ecoule += Number(s.production_realisee) || 0; fonctPerf += tf }
+    else if (cd.value > 0) { theo += (tf / 60) * cd.value; prodPerf += Number(s.production_realisee) || 0; prodQual += Number(s.production_realisee) || 0; rebutsQual += Number(s.rebuts) || 0 }
+    if (s.date) { if (!du || s.date < du) du = s.date; if (!au || s.date > au) au = s.date }
+  }
+  const dispo = ouverture ? fonct / ouverture : 0
+  const perf = theo ? Math.min(1, prodPerf / theo) : (fonctPerf ? Math.min(1, ecoule / fonctPerf) : 0)
+  const qualite = prodQual ? Math.max(0, (prodQual - rebutsQual) / prodQual) : 1
+  trsReel.value = { dispo, perf, qualite, trs: dispo * perf * qualite, nbPostes: rows.length, du, au }
+}
+function appliquerTRSReel() { if (trsReel.value) paramEdit.trs_pct = +(trsReel.value.trs * 100).toFixed(1) }
+function fmtD(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString('fr-FR') }
+function trsCls(t) { return t >= 0.85 ? 'tr-g' : t >= 0.6 ? 'tr-a' : 'tr-r' }
 
 const produitsAffiches = computed(() => {
   const q = filtre.value.trim().toLowerCase()
@@ -258,6 +304,16 @@ const recapEquip = computed(() => equipements.value.map(e => ({ id: e.id, nom: l
 .pfield span { font-size: 12px; font-weight: 600; color: #334155; }
 .pfield em { font-style: normal; color: #94a3b8; font-weight: 400; font-size: 11px; }
 .pfield input { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; text-align: right; }
+.trs-reel { margin-top: 16px; padding: 12px 14px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; }
+.trs-reel.none { background: #f8fafc; border-color: #eef2f6; color: #94a3b8; font-size: 13px; }
+.tr-main { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tr-lbl { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #0f766e; }
+.tr-val { font-size: 20px; font-weight: 800; }
+.tr-val.tr-g { color: #15803d; } .tr-val.tr-a { color: #b45309; } .tr-val.tr-r { color: #b91c1c; }
+.tr-apply { margin-left: auto; background: #fff; border: 1px solid #0f766e; color: #0f766e; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 700; padding: 6px 12px; cursor: pointer; }
+.tr-apply:hover { background: #0f766e; color: #fff; }
+.tr-detail { font-size: 12.5px; color: #334155; margin-top: 6px; }
+.tr-src { color: #94a3b8; }
 
 .ed-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
 .prod-search { padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; min-width: 220px; }
