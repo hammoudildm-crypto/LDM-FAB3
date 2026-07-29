@@ -4,88 +4,79 @@
       <div>
         <div class="ch-eyebrow">Charge & capacité</div>
         <h1 class="ch-title">Suivi de capacité des équipements</h1>
-        <p class="ch-sub">Occupation des ateliers = quantités du plan directeur ÷ cadences, vs capacité disponible.</p>
+        <p class="ch-sub">Occupation = temps de production (plan ÷ cadences) + nettoyage & réglage, vs capacité disponible.</p>
       </div>
     </div>
 
     <section class="card">
       <div class="ctrl">
         <div class="cf"><label>Année</label>
-          <select v-model.number="annee">
-            <option v-for="a in annees" :key="a" :value="a">{{ a }}</option>
-          </select>
+          <select v-model.number="annee"><option v-for="a in annees" :key="a" :value="a">{{ a }}</option></select>
         </div>
         <div class="cf"><label>Régime</label>
-          <select v-model.number="shifts">
-            <option :value="1">1×8 (1 poste)</option>
-            <option :value="2">2×8 (2 postes)</option>
-            <option :value="3">3×8 (3 postes)</option>
+          <select v-model="regime">
+            <option value="auto">Réel (par équipement)</option>
+            <option :value="1">1×8 (forcé)</option>
+            <option :value="2">2×8 (forcé)</option>
+            <option :value="3">3×8 (forcé)</option>
           </select>
         </div>
         <div class="cf chk"><label>Week-end</label>
           <label class="wk"><input type="checkbox" v-model="avecWE" /> Travail le week-end</label>
         </div>
+        <div class="cf chk"><label>Nettoyage & réglage</label>
+          <label class="wk"><input type="checkbox" v-model="inclureNett" /> Inclure dans la charge</label>
+        </div>
         <div class="cf grow legend">
-          <span class="lg lg-g">&lt; 70 %</span>
-          <span class="lg lg-a">70–90 %</span>
-          <span class="lg lg-r">&gt; 90 %</span>
-          <span class="lg lg-x">&gt; 100 % (surcharge)</span>
+          <span class="lg lg-g">&lt; 70 %</span><span class="lg lg-a">70–90 %</span><span class="lg lg-r">&gt; 90 %</span><span class="lg lg-x">&gt; 100 %</span>
         </div>
       </div>
       <p v-if="chargement" class="muted">Chargement…</p>
-      <p v-else-if="!planExiste" class="muted warn">Aucune quantité planifiée pour {{ annee }} dans le plan directeur. Saisis un plan pour {{ annee }} ou change d'année.</p>
+      <p v-else-if="!planExiste" class="muted warn">Aucune quantité planifiée pour {{ annee }} dans le plan directeur.</p>
     </section>
 
-    <!-- Synthèse annuelle -->
     <section v-if="!chargement" class="card">
-      <h2 class="card-title">Occupation annuelle par atelier · {{ joursAnnee }} jours ouvrés · {{ shifts }} poste(s)</h2>
+      <h2 class="card-title">Occupation annuelle par atelier · {{ joursAnnee }} jours ouvrés</h2>
       <div class="tbl-wrap">
         <table class="grid">
           <thead>
             <tr>
-              <th>Atelier</th><th class="ta-c">Machines</th>
-              <th class="ta-r">Charge (j)</th><th class="ta-r">Capacité (j)</th>
-              <th class="taux-h">Taux d'occupation</th>
+              <th>Atelier</th><th class="ta-c">Machines</th><th class="ta-c">h/j effectif</th>
+              <th class="ta-r">Charge (j)</th><th class="ta-r">Capacité (j)</th><th class="taux-h">Taux d'occupation</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="r in lignesAnnuelles" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
               <td><strong>{{ r.nom }}</strong> <span class="phase-tag" v-if="r.phase">{{ PHASE_NOM[r.phase] }}</span></td>
               <td class="ta-c">{{ r.machines }}</td>
+              <td class="ta-c hj">{{ r.hj.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r">{{ r.chargeJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r">{{ r.capaciteJ.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) }}</td>
               <td class="taux-cell">
-                <div class="bar-wrap">
-                  <div class="bar" :class="cls(r.taux)" :style="{ width: Math.min(100, r.taux * 100) + '%' }"></div>
-                </div>
+                <div class="bar-wrap"><div class="bar" :class="cls(r.taux)" :style="{ width: Math.min(100, r.taux * 100) + '%' }"></div></div>
                 <span class="taux-val" :class="clsTxt(r.taux)">{{ (r.taux * 100).toFixed(1) }} %</span>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="note">Charge (j) = jours calendaires de travail nécessaires (réparti sur les machines de l'atelier). Un taux &gt; 100 % signale un goulot : la charge dépasse la capacité de l'année.</p>
+      <p class="note">h/j effectif = postes × TEP (heures utiles par machine et par jour). Charge = production + <template v-if="inclureNett">nettoyage (VDLP/lot) + nettoyage général & réglage (VDLT + REGLAGE / campagne)</template><template v-else>(nettoyage & réglage exclus)</template>. Taux &gt; 100 % = goulot.</p>
     </section>
 
-    <!-- Matrice mensuelle -->
     <section v-if="!chargement && lignesAnnuelles.some(r => r.chargeJ > 0)" class="card">
       <h2 class="card-title">Taux d'occupation mensuel</h2>
       <div class="tbl-wrap">
         <table class="grid matrice">
-          <thead>
-            <tr><th class="sticky-c">Atelier</th><th v-for="(m, i) in MOIS" :key="i" class="ta-c">{{ m }}</th></tr>
-          </thead>
+          <thead><tr><th class="sticky-c">Atelier</th><th v-for="(m, i) in MOIS" :key="i" class="ta-c">{{ m }}</th></tr></thead>
           <tbody>
             <tr v-for="r in lignesAnnuelles" :key="r.id" v-show="r.chargeJ > 0">
               <td class="sticky-c"><strong>{{ r.nom }}</strong></td>
-              <td v-for="(m, i) in MOIS" :key="i" class="cell-taux" :class="cls(r.tauxMois[i])">
-                <span v-if="r.tauxMois[i] > 0">{{ (r.tauxMois[i] * 100).toFixed(0) }}</span>
-              </td>
+              <td v-for="(m, i) in MOIS" :key="i" class="cell-taux" :class="cls(r.tauxMois[i])"><span v-if="r.tauxMois[i] > 0">{{ (r.tauxMois[i] * 100).toFixed(0) }}</span></td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="note">Valeurs en % d'occupation. Cellule vide = pas de charge planifiée ce mois-là.</p>
+      <p class="note">Valeurs en % d'occupation. Cellule vide = pas de charge planifiée.</p>
     </section>
 
     <section v-if="!chargement" class="kpi-line">
@@ -97,7 +88,7 @@
 
     <section v-if="!chargement && ateliersSansCadence.length" class="card avert">
       <h2 class="card-title">Produits planifiés sans cadence</h2>
-      <p class="note">Ces produits ont un plan {{ annee }} mais aucune cadence renseignée pour l'atelier concerné — ils ne sont pas comptés dans la charge. Renseigne-les dans le volet <strong>Cadences</strong>.</p>
+      <p class="note">Ces produits ont un plan {{ annee }} mais aucune cadence renseignée — non comptés dans la charge. Renseigne-les dans le volet <strong>Cadences</strong>.</p>
       <div class="chips">
         <span v-for="(p, i) in ateliersSansCadence.slice(0, 40)" :key="i" class="chip">{{ p }}</span>
         <span v-if="ateliersSansCadence.length > 40" class="chip more">+{{ ateliersSansCadence.length - 40 }}</span>
@@ -116,14 +107,11 @@ const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage: 'Séch
 const produits = ref([]), equipements = ref([]), ateliers = ref([]), cadences = ref([]), plans = ref([])
 const chargement = ref(true)
 const annee = ref(new Date().getFullYear())
-const shifts = ref(3)
+const regime = ref('auto')
 const avecWE = ref(false)
+const inclureNett = ref(true)
 
-const annees = computed(() => {
-  const s = new Set(plans.value.map(p => p.annee).filter(Boolean))
-  s.add(new Date().getFullYear()); s.add(annee.value)
-  return [...s].sort((a, b) => b - a)
-})
+const annees = computed(() => { const s = new Set(plans.value.map(p => p.annee).filter(Boolean)); s.add(new Date().getFullYear()); s.add(annee.value); return [...s].sort((a, b) => b - a) })
 
 async function fetchAllPaged(make) {
   const size = 1000; let from = 0, all = []
@@ -132,14 +120,11 @@ async function fetchAllPaged(make) {
 }
 
 onMounted(async () => {
-  const [rp, re, ra, rc, rpl] = await Promise.all([
-    fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, unites_par_boite, taille_lot').eq('actif', true)),
-    fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id').eq('actif', true)),
-    fetchAllPaged(() => supabase.from('ateliers').select('id, code, nom').eq('actif', true)),
-    fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale')),
-    fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produit_id'))
-  ])
-  produits.value = rp; equipements.value = re; ateliers.value = ra; cadences.value = rc; plans.value = rpl
+  produits.value = await fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, unites_par_boite, taille_lot').eq('actif', true))
+  equipements.value = await fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true))
+  ateliers.value = await fetchAllPaged(() => supabase.from('ateliers').select('id, code, nom').eq('actif', true))
+  cadences.value = await fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale'))
+  plans.value = await fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produit_id'))
   chargement.value = false
 })
 
@@ -155,11 +140,11 @@ function phaseDeType(type) {
   if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)) return 'conditionnement'
   return null
 }
+function num(v, def) { const n = Number(v); return (v === null || v === undefined || isNaN(n)) ? def : n }
 
 const prodById = computed(() => { const m = {}; for (const p of produits.value) m[p.id] = p; return m })
 const cadMap = computed(() => { const m = {}; for (const c of cadences.value) { const v = Number(c.cadence_nominale || 0); if (v > 0) m[c.equipement_id + '|' + c.produit_id] = v } return m })
 
-// Plan agrégé de l'année : planAgg[produitId] = [12 mois de boîtes]
 const planExiste = computed(() => plans.value.some(p => p.annee === annee.value))
 const planAgg = computed(() => {
   const m = {}
@@ -172,93 +157,81 @@ const planAgg = computed(() => {
   return m
 })
 
-// Équipements par atelier + machines + cadence de l'atelier pour un produit (1re machine cadencée)
-const equipParAtelier = computed(() => {
-  const m = {}
-  for (const e of equipements.value) { if (!e.atelier_id) continue; (m[e.atelier_id] = m[e.atelier_id] || []).push(e) }
-  return m
-})
-const machinesAtelier = computed(() => { const m = {}; for (const [aid, list] of Object.entries(equipParAtelier.value)) m[aid] = list.length; return m })
-const phaseAtelier = computed(() => {
-  const m = {}
-  for (const [aid, list] of Object.entries(equipParAtelier.value)) {
-    const cnt = {}
-    for (const e of list) { const k = phaseDeType(e.type); if (k) cnt[k] = (cnt[k] || 0) + 1 }
-    let best = null, bn = 0
-    for (const [k, n] of Object.entries(cnt)) if (n > bn) { bn = n; best = k }
-    m[aid] = best
-  }
-  return m
-})
-// cadenceAtelierProduit[atelierId][produitId] = cadence (max sur les machines de l'atelier)
+const equipParAtelier = computed(() => { const m = {}; for (const e of equipements.value) { if (!e.atelier_id) continue; (m[e.atelier_id] = m[e.atelier_id] || []).push(e) } return m })
+// cadence de l'atelier pour un produit (max sur les machines)
 const cadAtelierProd = computed(() => {
   const m = {}
   for (const [aid, list] of Object.entries(equipParAtelier.value)) {
     const per = {}
-    for (const e of list) {
-      for (const p of produits.value) {
-        const c = cadMap.value[e.id + '|' + p.id]
-        if (c > 0) per[p.id] = Math.max(per[p.id] || 0, c)
-      }
-    }
+    for (const e of list) for (const p of produits.value) { const c = cadMap.value[e.id + '|' + p.id]; if (c > 0) per[p.id] = Math.max(per[p.id] || 0, c) }
     m[aid] = per
   }
   return m
 })
+function equipACadence(e) { for (const p of produits.value) if (cadMap.value[e.id + '|' + p.id] > 0) return true; return false }
+// paramètres Ratio représentatifs par atelier
+const paramsAtelier = computed(() => {
+  const m = {}
+  for (const [aid, list] of Object.entries(equipParAtelier.value)) {
+    let machines = 0
+    for (const e of list) machines += num(e.nb_machines, 1) || 1
+    const rep = list.find(equipACadence) || list[0] || {}
+    const cnt = {}
+    for (const e of list) { const k = phaseDeType(e.type); if (k) cnt[k] = (cnt[k] || 0) + 1 }
+    let phase = null, bn = 0; for (const [k, n] of Object.entries(cnt)) if (n > bn) { bn = n; phase = k }
+    m[aid] = { machines, phase, postes: num(rep.postes, 3), tep: num(rep.tep, 8), vdlp: num(rep.vdlp, 0), vdlt: num(rep.vdlt, 0), reglage: num(rep.reglage, 0) }
+  }
+  return m
+})
 
-function joursOuvresMois(an, moisIdx) {
-  const d = new Date(an, moisIdx, 1); let n = 0
-  while (d.getMonth() === moisIdx) { const wd = d.getDay(); if (avecWE.value || (wd !== 0 && wd !== 6)) n++; d.setDate(d.getDate() + 1) }
-  return n
-}
+function joursOuvresMois(an, moisIdx) { const d = new Date(an, moisIdx, 1); let n = 0; while (d.getMonth() === moisIdx) { const wd = d.getDay(); if (avecWE.value || (wd !== 0 && wd !== 6)) n++; d.setDate(d.getDate() + 1) } return n }
 const joursParMois = computed(() => MOIS.map((_, i) => joursOuvresMois(annee.value, i)))
 const joursAnnee = computed(() => joursParMois.value.reduce((s, n) => s + n, 0))
 
 const lignesAnnuelles = computed(() => {
-  const H = shifts.value * 8
   const out = []
   for (const a of ateliers.value) {
-    const machines = machinesAtelier.value[a.id] || 0
+    const par = paramsAtelier.value[a.id] || { machines: 0, phase: null, postes: 3, tep: 8, vdlp: 0, vdlt: 0, reglage: 0 }
+    const machines = par.machines
+    const postesUsed = regime.value === 'auto' ? par.postes : Number(regime.value)
+    const hj = postesUsed * par.tep   // heures utiles / jour / machine
+    const capaMachineJour = hj * machines  // heures utiles / jour, atelier
     const cadP = cadAtelierProd.value[a.id] || {}
-    const tauxMois = []
-    let chargeJTot = 0
+    const tauxMois = []; let chargeJTot = 0
     for (let mi = 0; mi < 12; mi++) {
       let occH = 0
       for (const [pid, tab] of Object.entries(planAgg.value)) {
         const boites = tab[mi]; if (!boites) continue
         const cad = cadP[pid]; if (!(cad > 0)) continue
         const p = prodById.value[pid] || {}
-        const unites = boites * Number(p.unites_par_boite || 1)
-        occH += unites / cad
+        occH += (boites * num(p.unites_par_boite, 1)) / cad
+        if (inclureNett.value) {
+          const tl = num(p.taille_lot, 0)
+          const nbLots = tl > 0 ? Math.ceil(boites / tl) : 1
+          occH += nbLots * par.vdlp
+          occH += par.vdlt + par.reglage   // une campagne par produit et par mois
+        }
       }
-      const chargeJ = (machines > 0 && H > 0) ? occH / (H * machines) : 0
-      const capaciteJ = joursParMois.value[mi]
+      const chargeJ = capaMachineJour > 0 ? occH / capaMachineJour : 0
       chargeJTot += chargeJ
-      tauxMois.push(capaciteJ > 0 ? chargeJ / capaciteJ : 0)
+      tauxMois.push(joursParMois.value[mi] > 0 ? chargeJ / joursParMois.value[mi] : 0)
     }
-    const capaciteJAn = joursAnnee.value
-    out.push({ id: a.id, nom: a.nom || a.code, phase: phaseAtelier.value[a.id], machines, chargeJ: chargeJTot, capaciteJ: capaciteJAn, taux: capaciteJAn > 0 ? chargeJTot / capaciteJAn : 0, tauxMois })
+    out.push({ id: a.id, nom: a.nom || a.code, phase: par.phase, machines, hj, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
   }
   return out.sort((x, y) => y.taux - x.taux)
 })
 
-const occGlobal = computed(() => {
-  const withLoad = lignesAnnuelles.value.filter(r => r.chargeJ > 0)
-  if (!withLoad.length) return 0
-  return withLoad.reduce((s, r) => s + r.taux, 0) / withLoad.length
-})
+const occGlobal = computed(() => { const w = lignesAnnuelles.value.filter(r => r.chargeJ > 0); return w.length ? w.reduce((s, r) => s + r.taux, 0) / w.length : 0 })
 const nbGoulots = computed(() => lignesAnnuelles.value.filter(r => r.taux > 0.9).length)
 const nbSurcharge = computed(() => lignesAnnuelles.value.filter(r => r.taux > 1).length)
 
-// Produits planifiés mais sans cadence dans l'atelier qui devrait les traiter
 const ateliersSansCadence = computed(() => {
   const manquants = new Set()
   for (const pid of Object.keys(planAgg.value)) {
-    const tab = planAgg.value[pid]; if (!tab.some(v => v > 0)) continue
-    // ce produit a-t-il au moins une cadence quelque part ?
-    let aUneCadence = false
-    for (const a of ateliers.value) { if ((cadAtelierProd.value[a.id] || {})[pid] > 0) { aUneCadence = true; break } }
-    if (!aUneCadence) { const p = prodById.value[pid]; if (p) manquants.add((p.code_pf || '') + ' · ' + (p.designation || '')) }
+    if (!planAgg.value[pid].some(v => v > 0)) continue
+    let ok = false
+    for (const a of ateliers.value) if ((cadAtelierProd.value[a.id] || {})[pid] > 0) { ok = true; break }
+    if (!ok) { const p = prodById.value[pid]; if (p) manquants.add((p.code_pf || '') + ' · ' + (p.designation || '')) }
   }
   return [...manquants].sort()
 })
@@ -297,11 +270,12 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .grid th { font-size: 12px; color: #64748b; font-weight: 700; }
 .ta-r { text-align: right; } .ta-c { text-align: center; }
 .grid tr.vide td { color: #cbd5e1; }
+.hj { color: #64748b; font-size: 12px; }
 .phase-tag { font-size: 10.5px; color: #64748b; background: #f1f5f9; border-radius: 5px; padding: 1px 6px; margin-left: 6px; font-weight: 600; }
 
-.taux-h { width: 320px; }
+.taux-h { width: 300px; }
 .taux-cell { display: flex; align-items: center; gap: 10px; }
-.bar-wrap { flex: 1; height: 12px; background: #f1f5f9; border-radius: 7px; overflow: hidden; min-width: 120px; }
+.bar-wrap { flex: 1; height: 12px; background: #f1f5f9; border-radius: 7px; overflow: hidden; min-width: 110px; }
 .bar { height: 100%; border-radius: 7px; }
 .bar.g { background: #22c55e; } .bar.a { background: #f59e0b; } .bar.r { background: #ef4444; } .bar.x { background: #7f1d1d; }
 .taux-val { font-weight: 700; font-size: 13px; min-width: 52px; text-align: right; }
