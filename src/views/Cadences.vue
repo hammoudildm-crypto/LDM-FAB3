@@ -15,7 +15,7 @@
           <select v-model="selEquip" @change="chargerEditeur">
             <option value="">— Choisir un équipement ({{ equipements.length }}) —</option>
             <optgroup v-for="g in equipParAtelierListe" :key="g.aid" :label="g.nom">
-              <option v-for="e in g.equipements" :key="e.id" :value="e.id">{{ e.nom || e.code }}</option>
+              <option v-for="e in g.equipements" :key="e.id" :value="e.id">{{ libelleEquip(e) }}</option>
             </optgroup>
           </select>
         </div>
@@ -161,7 +161,8 @@ const equipParAtelierListe = computed(() => {
   return Object.values(g).sort((a, b) => a.nom.localeCompare(b.nom))
 })
 
-const equipNom = computed(() => { const e = equipById.value[selEquip.value]; return e ? (e.nom || e.code) : '' })
+function libelleEquip(e) { if (!e) return ''; const c = e.code ? String(e.code) : '', n = e.nom ? String(e.nom) : ''; return (c && n) ? c + ' · ' + n : (c || n) }
+const equipNom = computed(() => libelleEquip(equipById.value[selEquip.value]))
 const phaseCourante = computed(() => { const e = equipById.value[selEquip.value]; return e ? phaseDeType(e.type) : null })
 const estCond = computed(() => phaseCourante.value === 'conditionnement')
 const uniteHint = computed(() => estCond.value ? 'unités / heure (conditionnement)' : 'kg / heure (fabrication)')
@@ -227,7 +228,7 @@ async function enregistrerParams() {
 
 const cadenceParEquip = computed(() => { const m = {}; for (const c of cadences.value) if (Number(c.cadence_nominale) > 0) m[c.equipement_id] = (m[c.equipement_id] || 0) + 1; return m })
 const equipCadenceCount = computed(() => Object.keys(cadenceParEquip.value).length)
-const recapEquip = computed(() => equipements.value.map(e => ({ id: e.id, nom: e.nom || e.code, n: cadenceParEquip.value[e.id] || 0 })).filter(x => x.n > 0).sort((a, b) => b.n - a.n))
+const recapEquip = computed(() => equipements.value.map(e => ({ id: e.id, nom: libelleEquip(e), code: e.code, n: cadenceParEquip.value[e.id] || 0 })).filter(x => x.n > 0).sort((a, b) => b.n - a.n))
 </script>
 
 <style scoped>
