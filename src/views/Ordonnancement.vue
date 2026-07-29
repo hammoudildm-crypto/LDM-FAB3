@@ -19,16 +19,16 @@
     <!-- Choix de l'atelier -->
     <section class="card">
       <div class="add-field grow">
-        <label>Atelier de fabrication à ordonnancer</label>
-        <select v-model="atelierSel">
-          <option value="">— Choisir un atelier —</option>
-          <option v-for="a in ateliersTries" :key="a.id" :value="a.id">{{ a.nom || a.code }} ({{ equipCount(a.id) }} équip.)</option>
+        <label>Équipement de fabrication à ordonnancer</label>
+        <select v-model="equipFabSel">
+          <option value="">— Choisir un équipement —</option>
+          <option v-for="e in equipFabTries" :key="e.id" :value="e.id">{{ e.nom || e.code }} ({{ e.phaseNom }})</option>
         </select>
       </div>
     </section>
 
     <!-- Ajout de produits -->
-    <section class="card" v-if="atelierSel">
+    <section class="card" v-if="equipFabSel">
       <div class="add-grid">
         <div class="add-field grow">
           <label>Produit (fabricable dans cet atelier)</label>
@@ -45,10 +45,10 @@
         <button class="btn-add" @click="ajouter" :disabled="!selProduit || !(Number(selBoites) > 0)">Ajouter</button>
       </div>
       <p v-if="chargement" class="muted">Chargement…</p>
-      <p v-else-if="!produitsAtelier.length" class="muted warn">Aucun produit cadencé sur les équipements de cet atelier.</p>
+      <p v-else-if="!produitsAtelier.length" class="muted warn">Aucun produit cadencé sur cet équipement.</p>
     </section>
     <section class="card" v-else>
-      <p class="muted">Commence par choisir un atelier ci-dessus.</p>
+      <p class="muted">Commence par choisir un équipement de fabrication ci-dessus.</p>
     </section>
 
     <section v-if="lots.length" class="card">
@@ -74,7 +74,7 @@
     <section v-if="lots.length" class="card">
       <h2 class="card-title">Frise de la semaine</h2>
 
-      <div class="sec-title"><span class="sec-tag fab">Fabrication — {{ atelierNom }}</span></div>
+      <div class="sec-title"><span class="sec-tag fab">Fabrication — {{ equipFabNom }}</span></div>
       <div class="gantt">
         <div v-for="l in plan.fab" :key="l.id" class="gline">
           <div class="gline-head"><span class="gline-nom">{{ l.nom }}<span class="gph">{{ l.phase }}</span></span><span class="gline-load" :class="{ over: l.fin > regimeH }">{{ l.fin.toFixed(1) }} h · {{ Math.round(l.fin / regimeH * 100) }} %</span></div>
@@ -119,7 +119,7 @@ const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage: 'Séch
 
 const produits = ref([]), equipements = ref([]), cadences = ref([]), ateliers = ref([]), chargement = ref(true)
 const lots = ref([])
-const atelierSel = ref(''), selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref('')
+const equipFabSel = ref(''), selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref('')
 const regimeH = ref(120)
 let seq = 1
 
@@ -161,17 +161,20 @@ const cadMap = computed(() => { const m = {}; for (const c of cadences.value) m[
 const couleurLot = (id) => PALETTE[(id - 1) % PALETTE.length]
 const equipCount = (aid) => equipements.value.filter(e => e.atelier_id === aid).length
 
-const ateliersTries = computed(() => [...ateliers.value].sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true })))
-const atelierNom = computed(() => { const a = ateliers.value.find(x => x.id === atelierSel.value); return a ? (a.nom || a.code) : '' })
+const equipFabTries = computed(() => equipements.value
+  .filter(e => { const ph = phaseDeType(e.type); return ph && ph !== 'conditionnement' })
+  .map(e => ({ id: e.id, nom: e.nom, code: e.code, phaseNom: PHASE_NOM[phaseDeType(e.type)] || '?' }))
+  .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true })))
+const equipFabNom = computed(() => { const e = equipById.value[equipFabSel.value]; return e ? (e.nom || e.code) : '' })
 
-// Équipements de l'atelier sélectionné (hors conditionnement = fabrication).
-const equipAtelierFab = computed(() => equipements.value.filter(e => e.atelier_id === atelierSel.value && phaseDeType(e.type) !== 'conditionnement'))
+// Un seul équipement de fabrication : celui sélectionné.
+const equipAtelierFab = computed(() => { const e = equipById.value[equipFabSel.value]; return e ? [e] : [] })
 
-// Produits fabricables dans l'atelier (cadence sur un de ses équipements de fab).
+// Produits cadencés sur l'équipement sélectionné.
 const produitsAtelier = computed(() => {
+  if (!equipFabSel.value) return []
   const ids = new Set()
-  const eids = new Set(equipAtelierFab.value.map(e => e.id))
-  for (const c of cadences.value) if (eids.has(c.equipement_id) && Number(c.cadence_nominale) > 0) ids.add(c.produit_id)
+  for (const c of cadences.value) if (c.equipement_id === equipFabSel.value && Number(c.cadence_nominale) > 0) ids.add(c.produit_id)
   return produits.value.filter(p => ids.has(p.id))
 })
 const produitsAffiches = computed(() => {
