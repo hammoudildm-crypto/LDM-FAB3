@@ -300,6 +300,7 @@ async function signOut() {
       <header class="app-topbar">
         <button class="burger" @click="sidebarMasquee = false; sidebarOpen = !sidebarOpen" aria-label="Menu">☰</button>
         <span class="brand-wm tb-brand">Prod<span class="brand-sub">Track</span></span>
+        <RouterLink v-if="route.path !== '/accueil'" to="/accueil" class="tb-accueil" @click="sidebarOpen = false" title="Retour à l'accueil"><span class="tb-accueil-ar">←</span><span class="tb-accueil-tx">Accueil</span></RouterLink>
         <div class="tb-spacer"></div>
         <div class="tb-item" v-if="session && enLigne.length">
           <button class="tb-icon" @click.stop="presenceOuverte = !presenceOuverte" :title="enLigne.length + ' en ligne'"><span class="online-dot"></span>{{ enLigne.length }}</button>
@@ -594,4 +595,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .app-topbar { padding-top: max(env(safe-area-inset-top, 0px), 30px); }
   .sidebar { padding-top: max(env(safe-area-inset-top, 0px), 30px); }
 }
+.tb-accueil { display: inline-flex; align-items: center; gap: 6px; margin-left: 14px; padding: 6px 13px; border-radius: 9px; background: rgba(255,255,255,.12); color: var(--topbar-text); text-decoration: none; font-size: 13px; font-weight: 600; border: 1px solid var(--topbar-border); transition: background .15s; white-space: nowrap; }
+.tb-accueil:hover { background: rgba(255,255,255,.22); }
+.tb-accueil-ar { font-size: 16px; line-height: 1; }
+@media (max-width: 560px) { .tb-accueil { margin-left: 8px; padding: 6px 9px; } .tb-accueil-tx { display: none; } }
 </style>
