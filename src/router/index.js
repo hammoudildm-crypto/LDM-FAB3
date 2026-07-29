@@ -25,6 +25,8 @@ import DisponibiliteEquipements from '../views/DisponibiliteEquipements.vue'
 import AvancementLots from '../views/AvancementLots.vue'
 import ProductionAtelier from '../views/ProductionAtelier.vue'
 import SuiviTRS from '../views/SuiviTRS.vue'
+import SuiviCapacite from '../views/SuiviCapacite.vue'
+import Cadences from '../views/Cadences.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Home },
@@ -51,6 +53,8 @@ const routes = [
   { path: '/avancement', name: 'avancement', component: AvancementLots },
   { path: '/production-atelier', name: 'production-atelier', component: ProductionAtelier },
   { path: '/suivi-trs', name: 'suivi-trs', component: SuiviTRS },
+  { path: '/capacite', name: 'capacite', component: SuiviCapacite },
+  { path: '/cadences', name: 'cadences', component: Cadences },
   { path: '/compte', name: 'compte', component: MonCompte },
   { path: '/login', name: 'login', component: Login },
 ]
