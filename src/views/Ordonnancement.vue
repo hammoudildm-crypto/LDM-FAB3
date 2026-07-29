@@ -141,7 +141,7 @@ async function fetchAllPaged(make) {
 onMounted(async () => {
   const [rp, re, rc] = await Promise.all([
     fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, pcsu, unites_par_boite, gamme').eq('actif', true)),
-    fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true)),
     fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode'))
   ])
   produits.value = rp; equipements.value = re; cadences.value = rc; chargement.value = false
@@ -233,7 +233,11 @@ function dateIdx(idx) { const a = joursOuvres.value; return a.length ? a[Math.ma
 
 // Ordonnancement : chaque lot enchaîne sa gamme, chaque phase après la précédente ET la libération de l'équipement.
 const planning = computed(() => {
-  const equipFree = {}
+  const slots = {}   // equipId -> tableau des prochains jours libres (1 entrée par machine)
+  function slotsDe(e) {
+    if (!slots[e.id]) { const n = Math.max(1, Math.floor(Number(e.nb_machines) || 1)); slots[e.id] = new Array(n).fill(0) }
+    return slots[e.id]
+  }
   const rows = []
   for (const lt of lotsDeployes.value) {
     const seqPh = gammeProduit(lt.produitId)
@@ -243,13 +247,14 @@ const planning = computed(() => {
     for (const k of seqPh) {
       const compat = equipements.value.filter(e => phaseDeType(e.type) === k && cadMap.value[e.id + '|' + lt.produitId] > 0)
       if (!compat.length) continue
-      compat.sort((a, b) => (equipFree[a.id] || 0) - (equipFree[b.id] || 0))
-      const eq = compat[0]
+      // machine (équipement + créneau) qui se libère le plus tôt
+      let eq = null, si = -1, libre = Infinity
+      for (const e of compat) { const arr = slotsDe(e); for (let i = 0; i < arr.length; i++) if (arr[i] < libre) { libre = arr[i]; eq = e; si = i } }
       const duree = dureeJours(eq.id, lt.produitId, lt.boites)
-      const start = Math.max(prevEnd + 1, equipFree[eq.id] || 0)
+      const start = Math.max(prevEnd + 1, slotsDe(eq)[si] || 0)
       const end = start + duree - 1
       phases[k] = { start, end, equip: eq.nom || eq.code }
-      equipFree[eq.id] = end + 1
+      slotsDe(eq)[si] = end + 1
       prevEnd = end
     }
     rows.push({ id: lt.id, num: lt.num, code: p.code_pf, boites: lt.boites, couleur: lt.couleur, phases })
