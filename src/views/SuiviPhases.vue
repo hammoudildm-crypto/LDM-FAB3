@@ -14,6 +14,15 @@ const rechercheLot = ref('')
 const equipements = ref([])
 const lotId = ref('')
 const aCompleter = ref([])
+const filtreAC = ref('')
+const aCompleterFiltre = computed(() => {
+  const q = filtreAC.value.trim().toLowerCase()
+  if (!q) return aCompleter.value
+  return aCompleter.value.filter(x => {
+    const o = x.ordres_fabrication || {}, pr = o.produits || {}
+    return (o.numero_lot || '').toLowerCase().includes(q) || (pr.code_pf || '').toLowerCase().includes(q) || (pr.designation || '').toLowerCase().includes(q)
+  })
+})
 const ouvertACompleter = ref(false)
 const phases = ref([])
 const erreur = ref('')
@@ -292,11 +301,15 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
         </div>
         <div v-show="ouvertACompleter">
           <p class="ac-hint">Lots terminés en fabrication dont une phase n'a pas de quantité sortie. Clique « Corriger » pour ouvrir le lot.</p>
+          <div class="ac-filtre">
+            <input v-model="filtreAC" type="search" placeholder="Filtrer par n° de lot, code ou désignation…" />
+            <span v-if="filtreAC" class="ac-count">{{ aCompleterFiltre.length }} / {{ aCompleter.length }} lot(s)</span>
+          </div>
           <div class="ac-scroll">
             <table class="ac-table">
               <thead><tr><th>Lot</th><th>Produit</th><th>Phase</th><th class="ac-r">Entrée (kg)</th><th>Fin fab.</th><th></th></tr></thead>
               <tbody>
-                <tr v-for="x in aCompleter" :key="x.id">
+                <tr v-for="x in aCompleterFiltre" :key="x.id">
                   <td class="ac-mono">{{ x.ordres_fabrication.numero_lot }}</td>
                   <td><span v-if="x.ordres_fabrication.produits"><strong>{{ x.ordres_fabrication.produits.code_pf }}</strong><span class="ac-desig">{{ x.ordres_fabrication.produits.designation }}</span></span><span v-else>—</span></td>
                   <td>{{ x.phase }}</td>
@@ -304,6 +317,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
                   <td class="ac-nowrap">{{ x.ordres_fabrication.date_fin_fabrication }}</td>
                   <td class="ac-r"><button class="ac-link" @click="allerVersLot(x)">Corriger ›</button></td>
                 </tr>
+                <tr v-if="filtreAC && !aCompleterFiltre.length"><td colspan="6" class="ac-vide">Aucune phase ne correspond au filtre.</td></tr>
               </tbody>
             </table>
           </div>
@@ -487,4 +501,8 @@ button.link.danger { color: #b91c1c; }
 .ac-link { background: none; border: 0; color: #2563eb; font-weight: 600; cursor: pointer; font-size: 13px; }
 .ac-link:hover { text-decoration: underline; }
 .ac-desig { display: block; font-size: 12px; color: #64748b; margin-top: 2px; }
+.ac-filtre { display: flex; align-items: center; gap: 12px; margin: 0 0 11px; flex-wrap: wrap; }
+.ac-filtre input { flex: 1; min-width: 220px; max-width: 380px; padding: 7px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
+.ac-count { font-size: 12.5px; color: #64748b; font-weight: 600; }
+.ac-vide { text-align: center; color: #94a3b8; padding: 14px; font-style: italic; }
 </style>
