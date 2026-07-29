@@ -214,7 +214,7 @@ function dureeJours(equipId, produitId, boites) {
   const p = prodById.value[produitId]; if (!p) return 1
   const cad = cadMap.value[equipId + '|' + produitId]
   if (!(cad > 0)) return 1
-  const heures = (boites * Number(p.unites_par_boite || 1)) / cad
+  const heures = boites / cad   // cadence en boîtes/h
   return Math.max(1, Math.ceil(heures / hpj.value))
 }
 
