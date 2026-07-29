@@ -48,8 +48,7 @@
             <label class="pfield"><span>VDLP <em>(nettoyage partiel / lot)</em></span><input type="number" min="0" step="any" v-model="paramEdit.vdlp" /></label>
             <label class="pfield"><span>VDLT <em>(nettoyage général / campagne)</em></span><input type="number" min="0" step="any" v-model="paramEdit.vdlt" /></label>
             <label class="pfield"><span>REGLAGE <em>(changement format / campagne)</em></span><input type="number" min="0" step="any" v-model="paramEdit.reglage" /></label>
-            <label class="pfield"><span>NETT <em>(nettoyage — réf.)</em></span><input type="number" min="0" step="any" v-model="paramEdit.nett" /></label>
-            <label class="pfield"><span>DHT <em>(réf.)</em></span><input type="number" min="0" step="any" v-model="paramEdit.dht" /></label>
+            <label class="pfield"><span>Holding time <em>de la campagne</em></span><input type="number" min="0" step="any" v-model="paramEdit.dht" /></label>
           </div>
         </div>
       </div>
@@ -115,10 +114,10 @@ const message = ref(''), messageErr = ref(false), messageP = ref(''), messagePEr
 
 const cadEdit = reactive({})
 let original = {}, rowIds = {}
-const paramEdit = reactive({ nb_machines: 1, postes: 3, tep: 8, dht: 0, vdlp: 0, vdlt: 0, nett: 0, reglage: 0 })
+const paramEdit = reactive({ nb_machines: 1, postes: 3, tep: 8, dht: 0, vdlp: 0, vdlt: 0, reglage: 0 })
 let paramOrig = {}
-const CHAMPS_P = ['nb_machines', 'postes', 'tep', 'dht', 'vdlp', 'vdlt', 'nett', 'reglage']
-const DEF_P = { nb_machines: 1, postes: 3, tep: 8, dht: 0, vdlp: 0, vdlt: 0, nett: 0, reglage: 0 }
+const CHAMPS_P = ['nb_machines', 'postes', 'tep', 'dht', 'vdlp', 'vdlt', 'reglage']
+const DEF_P = { nb_machines: 1, postes: 3, tep: 8, dht: 0, vdlp: 0, vdlt: 0, reglage: 0 }
 
 async function fetchAllPaged(make) {
   const size = 1000; let from = 0, all = []
