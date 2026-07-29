@@ -16,7 +16,7 @@ const refreshTick = ref(0)
 const presenceOuverte = ref(false)
 // --- Synchronisation périodique automatique (recharge les pages de consultation) ---
 const AUTO_REFRESH_MS = 300000 // 5 minutes (filet de sécurité ; le temps réel gère l'instantané)
-const ROUTES_SANS_AUTO = ['/ordres', '/suivi', '/conditionnement', '/saisie-trs', '/plan', '/referentiels', '/habilitations', '/effectifs', '/verification-ddl', '/verification-ddl-aq', '/verification-ddl-cond', '/compte', '/login']
+const ROUTES_SANS_AUTO = ['/ordres', '/suivi', '/conditionnement', '/saisie-trs', '/plan', '/referentiels', '/cadences', '/habilitations', '/effectifs', '/verification-ddl', '/verification-ddl-aq', '/verification-ddl-cond', '/compte', '/login']
 let autoRefreshTimer = null
 // Ne jamais recharger pendant qu'un opérateur saisit (champ focalisé) ou qu'une fenêtre est ouverte
 const refreshEnAttente = ref(false)
@@ -98,6 +98,8 @@ const LINK_ICONS = {
   '/effectifs': '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   '/referentiels': '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
   '/habilitations': '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  '/capacite': '<path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/><line x1="3" y1="20" x2="21" y2="20"/>',
+  '/cadences': '<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M19.1 4.9l-2.8 2.8M7.7 16.3l-2.8 2.8"/>',
 }
 const NAV_GROUPS = [
   { key: 'consultation', label: 'Consultation', role: null, icon: '<path d="M3 3v18h18"/><polyline points="7 13 11 9 14 12 20 6"/>', links: [
@@ -108,6 +110,7 @@ const NAV_GROUPS = [
     ['/avancement', 'Suivi du process'],
     ['/production-atelier', 'Production par atelier'],
     ['/suivi-trs', 'Suivi TRS'],
+    ['/capacite', 'Capacité équipements'],
     ['/encours', 'En-cours'],
     ['/dossier', 'Dossier de lot'],
     ['/audit', "Journal d'audit"],
@@ -126,6 +129,7 @@ const NAV_GROUPS = [
   ] },
   { key: 'admin', label: 'Administration', role: 'admin', icon: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>', links: [
     ['/referentiels', 'Référentiels'],
+    ['/cadences', 'Cadences'],
     ['/habilitations', 'Habilitations'],
   ] },
 ]
