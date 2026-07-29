@@ -37,8 +37,10 @@
             <label class="pfield"><span>Machines <em>(EQUIPEMENT)</em></span><input type="number" min="1" step="1" v-model="paramEdit.nb_machines" /></label>
             <label class="pfield"><span>Postes <em>(Shift)</em></span><input type="number" min="1" max="3" step="1" v-model="paramEdit.postes" /></label>
             <label class="pfield"><span>TEP <em>(h effectives / poste)</em></span><input type="number" min="0" step="any" v-model="paramEdit.tep" /></label>
-            <label class="pfield"><span>TRS <em>(%)</em></span><input type="number" min="0" max="100" step="any" v-model="paramEdit.trs_pct" /></label>
+            <div class="pfield"><span>TRS réel <em>(historique)</em></span><div class="trs-disp" :class="trsReel ? trsCls(trsReel.trs) : 'trs-muted'"><template v-if="trsChargementReel">…</template><template v-else-if="trsReel">{{ (trsReel.trs * 100).toFixed(1) }} %</template><template v-else>—</template></div></div>
           </div>
+          <div class="trs-cap" v-if="trsReel">Disponibilité {{ (trsReel.dispo * 100).toFixed(0) }} % · Performance {{ (trsReel.perf * 100).toFixed(0) }} % · Qualité {{ (trsReel.qualite * 100).toFixed(0) }} % — {{ trsReel.nbPostes }} poste(s), {{ fmtD(trsReel.du) }} → {{ fmtD(trsReel.au) }}</div>
+          <div class="trs-cap none" v-else-if="selEquip && !trsChargementReel">Aucune saisie TRS pour cet équipement.</div>
         </div>
         <div class="pgroup">
           <div class="pg-title">Nettoyage & réglage (heures)</div>
@@ -51,16 +53,6 @@
           </div>
         </div>
       </div>
-      <div class="trs-reel" v-if="trsChargementReel">Calcul du TRS réel…</div>
-      <div class="trs-reel" v-else-if="trsReel">
-        <div class="tr-main">
-          <span class="tr-lbl">TRS réel mesuré</span>
-          <span class="tr-val" :class="trsCls(trsReel.trs)">{{ (trsReel.trs * 100).toFixed(1) }} %</span>
-          <button class="tr-apply" @click="appliquerTRSReel">Appliquer au champ TRS</button>
-        </div>
-        <div class="tr-detail">Disponibilité {{ (trsReel.dispo * 100).toFixed(0) }} % · Performance {{ (trsReel.perf * 100).toFixed(0) }} % · Qualité {{ (trsReel.qualite * 100).toFixed(0) }} %<span class="tr-src"> — {{ trsReel.nbPostes }} poste(s), {{ fmtD(trsReel.du) }} → {{ fmtD(trsReel.au) }}</span></div>
-      </div>
-      <div class="trs-reel none" v-else-if="selEquip">Aucune saisie TRS pour cet équipement.</div>
       <div class="save-bar">
         <span class="pending" v-if="paramsModifies">Paramètres modifiés</span>
         <span class="pending ok" v-else>Paramètres à jour</span>
@@ -123,10 +115,10 @@ const message = ref(''), messageErr = ref(false), messageP = ref(''), messagePEr
 
 const cadEdit = reactive({})
 let original = {}, rowIds = {}
-const paramEdit = reactive({ nb_machines: 1, postes: 3, tep: 8, trs_pct: 100, dht: 0, vdlp: 0, vdlt: 0, nett: 0, reglage: 0 })
+const paramEdit = reactive({ nb_machines: 1, postes: 3, tep: 8, dht: 0, vdlp: 0, vdlt: 0, nett: 0, reglage: 0 })
 let paramOrig = {}
-const CHAMPS_P = ['nb_machines', 'postes', 'tep', 'trs_pct', 'dht', 'vdlp', 'vdlt', 'nett', 'reglage']
-const DEF_P = { nb_machines: 1, postes: 3, tep: 8, trs_pct: 100, dht: 0, vdlp: 0, vdlt: 0, nett: 0, reglage: 0 }
+const CHAMPS_P = ['nb_machines', 'postes', 'tep', 'dht', 'vdlp', 'vdlt', 'nett', 'reglage']
+const DEF_P = { nb_machines: 1, postes: 3, tep: 8, dht: 0, vdlp: 0, vdlt: 0, nett: 0, reglage: 0 }
 
 async function fetchAllPaged(make) {
   const size = 1000; let from = 0, all = []
@@ -225,7 +217,6 @@ async function chargerTRSReel(equipId) {
   const qualite = prodQual ? Math.max(0, (prodQual - rebutsQual) / prodQual) : 1
   trsReel.value = { dispo, perf, qualite, trs: dispo * perf * qualite, nbPostes: rows.length, du, au }
 }
-function appliquerTRSReel() { if (trsReel.value) paramEdit.trs_pct = +(trsReel.value.trs * 100).toFixed(1) }
 function fmtD(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString('fr-FR') }
 function trsCls(t) { return t >= 0.85 ? 'tr-g' : t >= 0.6 ? 'tr-a' : 'tr-r' }
 
@@ -304,16 +295,11 @@ const recapEquip = computed(() => equipements.value.map(e => ({ id: e.id, nom: l
 .pfield span { font-size: 12px; font-weight: 600; color: #334155; }
 .pfield em { font-style: normal; color: #94a3b8; font-weight: 400; font-size: 11px; }
 .pfield input { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; text-align: right; }
-.trs-reel { margin-top: 16px; padding: 12px 14px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; }
-.trs-reel.none { background: #f8fafc; border-color: #eef2f6; color: #94a3b8; font-size: 13px; }
-.tr-main { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.tr-lbl { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #0f766e; }
-.tr-val { font-size: 20px; font-weight: 800; }
-.tr-val.tr-g { color: #15803d; } .tr-val.tr-a { color: #b45309; } .tr-val.tr-r { color: #b91c1c; }
-.tr-apply { margin-left: auto; background: #fff; border: 1px solid #0f766e; color: #0f766e; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 700; padding: 6px 12px; cursor: pointer; }
-.tr-apply:hover { background: #0f766e; color: #fff; }
-.tr-detail { font-size: 12.5px; color: #334155; margin-top: 6px; }
-.tr-src { color: #94a3b8; }
+.trs-disp { padding: 7px 10px; border: 1px solid #99f6e4; border-radius: 7px; font-size: 15px; font-weight: 800; text-align: right; background: #f0fdfa; }
+.trs-disp.tr-g { color: #15803d; } .trs-disp.tr-a { color: #b45309; } .trs-disp.tr-r { color: #b91c1c; }
+.trs-disp.trs-muted { color: #cbd5e1; font-weight: 600; background: #f8fafc; border-color: #eef2f6; }
+.trs-cap { font-size: 12px; color: #334155; margin-top: 10px; }
+.trs-cap.none { color: #94a3b8; }
 
 .ed-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
 .prod-search { padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; min-width: 220px; }
