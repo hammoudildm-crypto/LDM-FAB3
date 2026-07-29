@@ -34,6 +34,7 @@ async function fetchAll(table, select) {
 
 const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('fr-FR')
 const pct = (n) => (Number(n) || 0).toFixed(1) + ' %'
+const fmtDA = (n) => { const a = Math.abs(Number(n) || 0); return a >= 1e6 ? (a / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' M DA' : Math.round(a).toLocaleString('fr-FR') + ' DA' }
 
 // --- Calcul des KPI ---
 async function collecte() {
@@ -43,7 +44,7 @@ async function collecte() {
   const [ofs, conds, produits, planRows, phases, cadences, trsPostes] = await Promise.all([
     fetchAll('ordres_fabrication', 'id, produit_id, statut, boites_fabriquees, quantite_theorique, date_fin_fabrication, deviation, deviation_cond, en_triage, en_triage_cond, triage_fin, triage_cond_fin, ddl_verifie, ddl_reserve, ddl_cond_verifie, ddl_cond_reserve, ddl_aq_verifie, ddl_aq_reserve, ddl_cond_aq_verifie, ddl_cond_aq_reserve'),
     fetchAll('conditionnement', 'ordre_id, quantite_conditionnee, date_conditionnement, date_fin, actif'),
-    fetchAll('produits', 'id, unites_par_boite'),
+    fetchAll('produits', 'id, unites_par_boite, pcsu'),
     fetchAll('plan_production', 'annee, quantite_planifiee'),
     fetchAll('suivi_phases', 'ordre_id, quantite_sortie, actif'),
     fetchAll('cadences_produit', 'equipement_id, produit_id, mode, cadence_nominale'),
@@ -136,8 +137,27 @@ async function collecte() {
     brrftFabAQ: brrftDe('ddl_aq_verifie', 'ddl_aq_reserve'), brrftCondAQ: brrftDe('ddl_cond_aq_verifie', 'ddl_cond_aq_reserve'),
   }
 
+  // Réalisation théorique (fin d'opération) — année + mois en cours
+  const moisCourant = new Date().getMonth()
+  const pcsuOf = (o) => { const pp = prodMap[o.produit_id]; return pp ? Number(pp.pcsu || 0) : 0 }
+  let theoFabAn = 0, theoFabMois = 0, caTheoFabAn = 0, caTheoFabMois = 0
+  for (const o of ofs) {
+    if (!o.date_fin_fabrication) continue
+    const d = new Date(o.date_fin_fabrication), q = Number(o.quantite_theorique || 0), pc = pcsuOf(o)
+    if (d.getFullYear() === annee) { theoFabAn += q; caTheoFabAn += q * pc; if (d.getMonth() === moisCourant) { theoFabMois += q; caTheoFabMois += q * pc } }
+  }
+  const cflp = {}
+  for (const c of conds) { if (!c.date_fin) continue; if (!cflp[c.ordre_id] || new Date(c.date_fin) > new Date(cflp[c.ordre_id])) cflp[c.ordre_id] = c.date_fin }
+  let theoCondAn = 0, theoCondMois = 0, caTheoCondAn = 0, caTheoCondMois = 0
+  for (const oid in cflp) {
+    const o = ofMap[oid]; if (!o) continue
+    const d = new Date(cflp[oid]), q = Number(o.quantite_theorique || 0), pc = pcsuOf(o)
+    if (d.getFullYear() === annee) { theoCondAn += q; caTheoCondAn += q * pc; if (d.getMonth() === moisCourant) { theoCondMois += q; caTheoCondMois += q * pc } }
+  }
+  const theo = { fabAn: theoFabAn, fabMois: theoFabMois, condAn: theoCondAn, condMois: theoCondMois, caFabAn: caTheoFabAn, caFabMois: caTheoFabMois, caCondAn: caTheoCondAn, caCondMois: caTheoCondMois }
+
   return {
-    annee, dateGen: new Date(), qualite,
+    annee, dateGen: new Date(), qualite, theo,
     fabBoxes, rdtFab, fabBoxesSem, fabLotsSem,
     condBoxes, rdtCond, condBoxesSem, condLotsSem: condLotsSem.size,
     plan, pctPlanFab: plan ? (fabBoxes / plan) * 100 : 0, pctPlanCond: plan ? (condBoxes / plan) * 100 : 0,
@@ -208,6 +228,16 @@ function construire(pres, d) {
   card(s, 0.9, 4.2, 11.5, 2.0, 'F8FAFC')
   s.addText('Lecture', { x: 1.2, y: 4.4, w: 10.9, h: 0.35, fontFace: HF, fontSize: 15, bold: true, color: TEAL, margin: 0 })
   s.addText('Rendement = boîtes réelles ÷ boîtes théoriques. Vert (≥ 95 %) = bon ; sous 85 %, identifier les pertes. Ne comptent que les lots dont la donnée est complète.', { x: 1.2, y: 4.85, w: 10.9, h: 1.2, fontFace: BF, fontSize: 13, color: TEXT, margin: 0 })
+
+  // ---- SLIDE RÉALISATION THÉORIQUE (fin d'opération) ----
+  {
+    const stt = pres.addSlide(); stt.background = { color: LIGHT }
+    head(stt, 'Fin d\'opération', 'Réalisation théorique — quantité théorique (boîtes)')
+    tuile(stt, 0.9, 1.9, 5.6, 2.0, fmt(d.theo.fabAn), 'Fabrication théo. — cumul année', TEAL, 'CA : ' + fmtDA(d.theo.caFabAn))
+    tuile(stt, 6.8, 1.9, 5.6, 2.0, fmt(d.theo.fabMois), 'Fabrication théo. — mois en cours', TEAL, 'CA : ' + fmtDA(d.theo.caFabMois))
+    tuile(stt, 0.9, 4.1, 5.6, 2.0, fmt(d.theo.condAn), 'Conditionnement théo. — cumul année', INDIGO, 'CA : ' + fmtDA(d.theo.caCondAn))
+    tuile(stt, 6.8, 4.1, 5.6, 2.0, fmt(d.theo.condMois), 'Conditionnement théo. — mois en cours', INDIGO, 'CA : ' + fmtDA(d.theo.caCondMois))
+  }
 
   // ---- SLIDES QUALITÉ ----
   const slideQualite = (titre, brft, triage, brrftProd, brrftAQ) => {
