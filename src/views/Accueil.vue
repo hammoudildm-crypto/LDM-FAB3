@@ -9,33 +9,32 @@
     </header>
 
     <div class="portail-grid">
-      <RouterLink v-for="c in cartes" :key="c.key" :to="c.to" class="pcard" :style="{ '--c': c.couleur }">
-        <div class="ring-wrap">
-          <svg class="ring" viewBox="0 0 120 120">
-            <circle class="ring-bg" cx="60" cy="60" r="52" />
-            <circle class="ring-fg" cx="60" cy="60" r="52" :style="{ stroke: c.couleur, strokeDashoffset: offset(c.pct) }" />
-          </svg>
-          <div class="ring-center">
-            <div class="ring-pct" :style="{ color: c.couleur }">
-              <template v-if="chargement">…</template>
-              <template v-else-if="c.pct != null">{{ Math.round(c.pct) }}<span>%</span></template>
-              <template v-else>—</template>
+      <div v-for="c in cartes" :key="c.key" class="pcard" :style="{ '--c': c.couleur }">
+        <div class="pcard-top">
+          <div class="ring-wrap">
+            <svg class="ring" viewBox="0 0 120 120">
+              <circle class="ring-bg" cx="60" cy="60" r="52" />
+              <circle class="ring-fg" cx="60" cy="60" r="52" :style="{ stroke: c.couleur, strokeDashoffset: offset(c.pct) }" />
+            </svg>
+            <div class="ring-center">
+              <div class="ring-pct" :style="{ color: c.couleur }">
+                <template v-if="chargement">…</template>
+                <template v-else-if="c.pct != null">{{ Math.round(c.pct) }}<span>%</span></template>
+                <template v-else>—</template>
+              </div>
+              <div class="ring-sub">{{ c.sub }}</div>
             </div>
-            <div class="ring-sub">{{ c.sub }}</div>
+          </div>
+          <div class="pcard-head">
+            <div class="pcard-eyebrow">{{ c.eyebrow }}</div>
+            <div class="pcard-title">{{ c.titre }}</div>
+            <div class="pcard-metric">{{ c.metric }}</div>
           </div>
         </div>
-        <div class="pcard-body">
-          <div class="pcard-eyebrow">{{ c.eyebrow }}</div>
-          <div class="pcard-title">{{ c.titre }}</div>
-          <div class="pcard-metric">{{ c.metric }}</div>
-          <div class="pcard-chips">
-            <span v-for="ch in c.chips" :key="ch" class="chip">{{ ch }}</span>
-          </div>
-          <span class="pcard-cta">Ouvrir
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-          </span>
+        <div class="pcard-links">
+          <RouterLink v-for="l in c.links" :key="l[0]" :to="l[0]" class="plink">{{ l[1] }}</RouterLink>
         </div>
-      </RouterLink>
+      </div>
     </div>
   </div>
 </template>
@@ -145,50 +144,69 @@ const dossiersVerifies = computed(() => {
 })
 
 const cartes = computed(() => [
-  { key: 'tdb', to: '/', couleur: '#0f766e', eyebrow: "Vue d'ensemble", titre: 'Tableau de bord', metric: 'Réalisation du plan annuel — fabrication', sub: 'du plan', pct: reaPlan.value, chips: ['Production', 'Qualité', 'Finance'] },
-  { key: 'consult', to: '/dispo-equipements', couleur: '#4338ca', eyebrow: 'Suivi & données', titre: 'Consultation', metric: 'Avancement fabrication — lots terminés / lancés', sub: 'avancés', pct: avancementFab.value, chips: ['Disponibilité ateliers', 'Suivi TRS', 'Avancement lots'] },
-  { key: 'prod', to: '/ordres', couleur: '#c2410c', eyebrow: 'Saisie atelier', titre: 'Production & saisie', metric: 'TRS global de la semaine', sub: 'TRS', pct: trsGlobal.value, chips: ['Ordres', 'Suivi', 'Conditionnement', 'DDL'] },
-  { key: 'admin', to: '/habilitations', couleur: '#047857', eyebrow: 'Paramètres & accès', titre: 'Administration', metric: 'Dossiers de lot vérifiés (Production)', sub: 'vérifiés', pct: dossiersVerifies.value, chips: ['Habilitations', 'Effectifs', 'Référentiels'] }
+  {
+    key: 'tdb', couleur: '#0f766e', eyebrow: "Vue d'ensemble", titre: 'Tableau de bord',
+    metric: 'Réalisation du plan annuel', sub: 'du plan', pct: reaPlan.value,
+    links: [['/', 'Ouvrir le tableau de bord']]
+  },
+  {
+    key: 'consult', couleur: '#4338ca', eyebrow: 'Suivi & données', titre: 'Consultation',
+    metric: 'Avancement fabrication (lots terminés / lancés)', sub: 'avancés', pct: avancementFab.value,
+    links: [
+      ['/realisation-plan', 'Réalisation vs Plan'], ['/rendement', 'Rendement'], ['/ca', "Chiffre d'affaires"],
+      ['/dispo-equipements', 'Disponibilité équipements'], ['/avancement', 'Suivi du process'],
+      ['/production-atelier', 'Production par atelier'], ['/suivi-trs', 'Suivi TRS'],
+      ['/encours', 'En-cours'], ['/dossier', 'Dossier de lot'], ['/audit', "Journal d'audit"]
+    ]
+  },
+  {
+    key: 'prod', couleur: '#c2410c', eyebrow: 'Saisie atelier', titre: 'Production & saisie',
+    metric: 'TRS global de la semaine', sub: 'TRS', pct: trsGlobal.value,
+    links: [
+      ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication'], ['/suivi', 'Suivi fabrication'],
+      ['/conditionnement', 'Conditionnement'], ['/saisie-trs', 'Saisie TRS'],
+      ['/verification-ddl', 'DDL Fab — Production'], ['/verification-ddl-aq', 'DDL Fab — AQ'],
+      ['/verification-ddl-cond', 'DDL Conditionnement'], ['/effectifs', 'Effectifs']
+    ]
+  },
+  {
+    key: 'admin', couleur: '#047857', eyebrow: 'Paramètres & accès', titre: 'Administration',
+    metric: 'Dossiers de lot vérifiés (Production)', sub: 'vérifiés', pct: dossiersVerifies.value,
+    links: [['/referentiels', 'Référentiels'], ['/habilitations', 'Habilitations']]
+  }
 ])
 </script>
 
 <style scoped>
 .portail { max-width: 1120px; margin: 0 auto; padding: 8px 4px 24px; }
 
-.portail-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 24px; }
+.portail-head { margin-bottom: 24px; }
 .ph-eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #0f766e; }
 .ph-title { font-size: 26px; font-weight: 800; letter-spacing: -.02em; color: #1a2233; margin: 3px 0 2px; }
 .ph-sub { font-size: 13.5px; color: #64748b; text-transform: capitalize; }
 
 .portail-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; }
-@media (max-width: 760px) { .portail-grid { grid-template-columns: 1fr; } }
+@media (max-width: 820px) { .portail-grid { grid-template-columns: 1fr; } }
 
-.pcard {
-  background: #fff; border: 1px solid #e2e8f0; border-radius: 18px;
-  padding: 24px 26px 22px; position: relative; overflow: hidden;
-  display: grid; grid-template-columns: auto 1fr; gap: 22px; align-items: center;
-  text-decoration: none; color: inherit;
-  transition: box-shadow .2s, transform .2s;
-}
+.pcard { background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 22px 24px; position: relative; overflow: hidden; display: flex; flex-direction: column; }
 .pcard::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--c); }
-.pcard:hover { box-shadow: 0 14px 34px rgba(15,42,51,.13); transform: translateY(-3px); }
 
-.ring-wrap { position: relative; width: 132px; height: 132px; flex: none; }
-.ring { width: 132px; height: 132px; transform: rotate(-90deg); }
+.pcard-top { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: center; margin-bottom: 16px; }
+.ring-wrap { position: relative; width: 116px; height: 116px; flex: none; }
+.ring { width: 116px; height: 116px; transform: rotate(-90deg); }
 .ring-bg { fill: none; stroke: #eef2f6; stroke-width: 11; }
 .ring-fg { fill: none; stroke-width: 11; stroke-linecap: round; stroke-dasharray: 326.7; transition: stroke-dashoffset 1.4s cubic-bezier(.34,.9,.3,1); }
 .ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
-.ring-pct { font-size: 33px; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
-.ring-pct span { font-size: 16px; font-weight: 700; margin-left: 1px; }
-.ring-sub { font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-top: 5px; }
+.ring-pct { font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
+.ring-pct span { font-size: 15px; font-weight: 700; margin-left: 1px; }
+.ring-sub { font-size: 10.5px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-top: 4px; }
 
-.pcard-body { min-width: 0; }
+.pcard-head { min-width: 0; }
 .pcard-eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--c); margin-bottom: 3px; }
 .pcard-title { font-size: 20px; font-weight: 800; letter-spacing: -.01em; color: #1a2233; margin-bottom: 4px; }
-.pcard-metric { font-size: 13px; color: #64748b; margin-bottom: 12px; }
-.pcard-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-.chip { font-size: 12px; font-weight: 600; color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 999px; padding: 3px 10px; }
-.pcard-cta { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 700; color: var(--c); }
-.pcard-cta svg { width: 15px; height: 15px; transition: transform .2s; }
-.pcard:hover .pcard-cta svg { transform: translateX(4px); }
+.pcard-metric { font-size: 13px; color: #64748b; }
+
+.pcard-links { display: flex; flex-wrap: wrap; gap: 7px; padding-top: 15px; border-top: 1px solid #eef2f6; }
+.plink { display: inline-flex; align-items: center; font-size: 12.5px; font-weight: 600; color: #334155; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 11px; text-decoration: none; transition: background .15s, border-color .15s, color .15s; }
+.plink:hover { background: var(--c); border-color: var(--c); color: #fff; }
 </style>
