@@ -293,8 +293,8 @@ const recapEquip = computed(() => equipements.value.map(e => ({ id: e.id, nom: l
 .pfield { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 130px; }
 .pfield span { font-size: 12px; font-weight: 600; color: #334155; }
 .pfield em { font-style: normal; color: #94a3b8; font-weight: 400; font-size: 11px; }
-.pfield input { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; text-align: right; }
-.trs-disp { padding: 7px 10px; border: 1px solid #99f6e4; border-radius: 7px; font-size: 15px; font-weight: 800; text-align: right; background: #f0fdfa; }
+.pfield input { margin-top: auto; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; text-align: right; }
+.trs-disp { margin-top: auto; padding: 7px 10px; border: 1px solid #99f6e4; border-radius: 7px; font-size: 15px; font-weight: 800; text-align: right; background: #f0fdfa; }
 .trs-disp.tr-g { color: #15803d; } .trs-disp.tr-a { color: #b45309; } .trs-disp.tr-r { color: #b91c1c; }
 .trs-disp.trs-muted { color: #cbd5e1; font-weight: 600; background: #f8fafc; border-color: #eef2f6; }
 .trs-cap { font-size: 12px; color: #334155; margin-top: 10px; }
