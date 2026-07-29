@@ -166,8 +166,8 @@ function libelleEquip(e) { if (!e) return ''; const c = e.code ? String(e.code) 
 const equipNom = computed(() => libelleEquip(equipById.value[selEquip.value]))
 const phaseCourante = computed(() => { const e = equipById.value[selEquip.value]; return e ? phaseDeType(e.type) : null })
 const estCond = computed(() => phaseCourante.value === 'conditionnement')
-const uniteHint = computed(() => estCond.value ? 'unités / heure (conditionnement)' : 'kg / heure (fabrication)')
-const uniteCourte = computed(() => estCond.value ? 'u/h' : 'kg/h')
+const uniteHint = computed(() => 'boîtes / heure')
+const uniteCourte = computed(() => 'boîtes/h')
 
 function chargerEditeur() {
   for (const k of Object.keys(cadEdit)) delete cadEdit[k]
