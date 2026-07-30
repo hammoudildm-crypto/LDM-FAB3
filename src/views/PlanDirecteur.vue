@@ -16,6 +16,12 @@ const erreur = ref('')
 const message = ref('')
 const enCours = ref(false)
 const fichierInput = ref(null)
+const recherche = ref('')
+const produitsAffiches = computed(() => {
+  const q = recherche.value.trim().toLowerCase()
+  if (!q) return produits.value
+  return produits.value.filter(p => (p.code_pf || '').toLowerCase().includes(q) || (p.designation || '').toLowerCase().includes(q))
+})
 
 function initCellules() {
   Object.keys(cellules).forEach(k => delete cellules[k])
@@ -182,6 +188,11 @@ watch(annee, chargerPlan)
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="message" class="ok">{{ message }}</p>
 
+    <div v-if="produits.length" class="search-row">
+      <input type="search" v-model="recherche" class="search-input" placeholder="Rechercher un produit (code ou désignation)…" />
+      <span v-if="recherche" class="search-count">{{ produitsAffiches.length }} produit(s) sur {{ produits.length }}</span>
+    </div>
+
     <div v-if="!produits.length" class="empty-card">
       Aucun produit dans le référentiel. Va d'abord dans <strong>Référentiels</strong> créer tes produits — ils apparaîtront ici en lignes.
     </div>
@@ -198,7 +209,7 @@ watch(annee, chargerPlan)
           </tr>
         </thead>
         <tbody>
-          <tr v-for="p in produits" :key="p.id">
+          <tr v-for="p in produitsAffiches" :key="p.id">
             <td class="sticky">
               <div class="mono">{{ p.code_pf }}</div>
               <div class="desig">{{ p.designation }}</div>
@@ -210,6 +221,7 @@ watch(annee, chargerPlan)
             <td class="right total-col strong">{{ fmt(totalLigne(p)) }}</td>
             <td class="right">{{ fmt(valeurLigne(p)) }}</td>
           </tr>
+          <tr v-if="!produitsAffiches.length"><td :colspan="16" class="no-result">Aucun produit ne correspond à « {{ recherche }} ».</td></tr>
         </tbody>
         <tfoot>
           <tr>
@@ -248,6 +260,11 @@ watch(annee, chargerPlan)
 .btn.ghost.danger:hover:not(:disabled) { background: #fef2f2; }
 
 .empty-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; color: #475569; text-align: center; font-size: 15px; }
+.search-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.search-input { flex: 1; max-width: 420px; padding: 9px 13px; border: 1px solid #cbd5e1; border-radius: 9px; font-size: 14px; }
+.search-input:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.search-count { font-size: 13px; color: #64748b; font-weight: 600; }
+.no-result { text-align: center; color: #94a3b8; padding: 20px; font-size: 14px; }
 
 .table-scroll { overflow: auto; max-height: calc(100vh - 220px); background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
 table.grid { border-collapse: collapse; font-size: 13px; width: 100%; }
