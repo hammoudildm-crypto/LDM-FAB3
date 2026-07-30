@@ -233,7 +233,7 @@ watch(annee, chargerPlan)
 
 .empty-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; color: #475569; text-align: center; font-size: 15px; }
 
-.table-scroll { overflow-x: auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
+.table-scroll { overflow: auto; max-height: calc(100vh - 220px); background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
 table.grid { border-collapse: collapse; font-size: 13px; width: 100%; }
 table.grid th { background: #f8fafc; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
 table.grid td { padding: 6px 8px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
@@ -252,6 +252,8 @@ table.grid td { padding: 6px 8px; border-bottom: 1px solid #eef2f6; white-space:
 
 .sticky { position: sticky; left: 0; background: #fff; z-index: 1; box-shadow: 1px 0 0 #eef2f6; }
 thead .sticky { background: #f8fafc; }
+table.grid thead th { position: sticky; top: 0; z-index: 2; }
+table.grid thead th.sticky { z-index: 3; }
 tfoot td { border-top: 2px solid #e2e8f0; background: #f8fafc; }
 tfoot .sticky { background: #f8fafc; }
 
