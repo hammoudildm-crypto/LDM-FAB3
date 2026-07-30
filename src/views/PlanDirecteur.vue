@@ -25,6 +25,13 @@ function initCellules() {
   }
 }
 
+function viderTout() {
+  if (!confirm('Vider toutes les cases de la grille ' + annee.value + ' ? (rien n\'est supprimé tant que tu ne cliques pas sur Enregistrer le plan)')) return
+  initCellules()
+  erreur.value = ''
+  message.value = 'Grille vidée. Clique Enregistrer le plan pour appliquer, ou change d\'année pour annuler.'
+}
+
 async function chargerProduits() {
   erreur.value = ''
   const r = await supabase.from('produits')
@@ -81,11 +88,15 @@ async function enregistrer() {
       if (v !== '' && v != null) rows.push({ produit_id: p.id, annee: annee.value, mois: m, quantite_planifiee: Number(v) })
     }
   }
-  if (!rows.length) { message.value = 'Rien à enregistrer (toutes les cases sont vides).'; enCours.value = false; return }
-  const res = await supabase.from('plan_production').upsert(rows, { onConflict: 'produit_id,annee,mois' })
+  // Remplace le plan de l'année : suppression puis réinsertion (les cases vidées sont retirées de la base)
+  const del = await supabase.from('plan_production').delete().eq('annee', annee.value)
+  if (del.error) { erreur.value = del.error.message; enCours.value = false; return }
+  if (rows.length) {
+    const ins = await supabase.from('plan_production').insert(rows)
+    if (ins.error) { erreur.value = ins.error.message; enCours.value = false; return }
+  }
   enCours.value = false
-  if (res.error) { erreur.value = res.error.message; return }
-  message.value = 'Plan ' + annee.value + ' enregistré (' + rows.length + ' valeurs).'
+  message.value = rows.length ? ('Plan ' + annee.value + ' enregistré (' + rows.length + ' valeurs).') : ('Plan ' + annee.value + ' vidé — aucune valeur enregistrée.')
 }
 
 // --- Import d'un plan depuis un fichier Excel/CSV (colonne 1 = Code PF, colonnes 2 a 13 = Jan..Dec) ---
@@ -159,6 +170,9 @@ watch(annee, chargerPlan)
           Importer un fichier
         </button>
         <input ref="fichierInput" type="file" accept=".xlsx,.xls,.csv" style="display:none" @change="importerFichier" />
+        <button v-if="peutEditer" class="btn ghost danger" :disabled="enCours || !produits.length" @click="viderTout">
+          Vider la grille
+        </button>
         <button v-if="peutEditer" class="btn" :disabled="enCours || !produits.length" @click="enregistrer">
           {{ enCours ? 'Enregistrement…' : 'Enregistrer le plan' }}
         </button>
@@ -230,6 +244,8 @@ watch(annee, chargerPlan)
 .btn:disabled { opacity: .5; cursor: default; }
 .btn.ghost { background: #fff; color: #0f766e; border: 1px solid #0f766e; }
 .btn.ghost:hover:not(:disabled) { background: #f0fdfa; }
+.btn.ghost.danger { color: #b91c1c; border-color: #fca5a5; }
+.btn.ghost.danger:hover:not(:disabled) { background: #fef2f2; }
 
 .empty-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; color: #475569; text-align: center; font-size: 15px; }
 
