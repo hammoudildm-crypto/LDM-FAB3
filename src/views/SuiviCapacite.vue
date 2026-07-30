@@ -42,7 +42,7 @@
           <thead>
             <tr>
               <th>Équipement</th><th>Phase</th><th class="ta-c">Unité</th><th class="ta-c">Machines</th><th class="ta-c">h/j effectif</th>
-              <th class="ta-r">Charge (j)</th><th class="ta-r">Capacité (j)</th><th class="taux-h">Taux d'occupation</th>
+              <th class="ta-r">Charge globale (j)</th><th class="ta-r">Charge / machine (j)</th><th class="ta-r">Capacité (j)</th><th class="taux-h">Taux d'occupation</th>
             </tr>
           </thead>
           <tbody>
@@ -52,6 +52,7 @@
               <td class="ta-c unite">{{ r.estCond ? 'boîtes/h' : 'kg/h' }}</td>
               <td class="ta-c">{{ r.machines }}</td>
               <td class="ta-c hj">{{ r.hj.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
+              <td class="ta-r glob">{{ r.chargeGlobaleJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r">{{ r.chargeJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r">{{ r.capaciteJ.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) }}</td>
               <td class="taux-cell">
@@ -62,7 +63,7 @@
           </tbody>
         </table>
       </div>
-      <p class="note">Fabrication : charge = kg ÷ cadence (kg/h), kg = boîtes × poids du lot ÷ taille de lot. Conditionnement : charge = boîtes ÷ cadence (boîtes/h). Un produit ne charge une phase que si elle figure dans sa gamme (le conditionnement s'ajoute toujours). <template v-if="inclureNett">+ nettoyage (VDLP/lot) + nettoyage général & réglage (VDLT + REGLAGE / campagne).</template></p>
+      <p class="note">Fabrication : charge = kg ÷ cadence (kg/h), kg = boîtes × poids du lot ÷ taille de lot. Conditionnement : charge = boîtes ÷ cadence (boîtes/h). Un produit ne charge une phase que si elle figure dans sa gamme (le conditionnement s'ajoute toujours). <strong>Charge globale</strong> = charge totale de la phase (tous produits) ; <strong>Charge / machine</strong> = charge globale ÷ nombre de machines identiques — c'est elle qui donne le taux. <template v-if="inclureNett">+ nettoyage (VDLP/lot) + nettoyage général & réglage (VDLT + REGLAGE / campagne).</template></p>
     </section>
 
     <section v-if="!chargement && lignes.some(r => r.chargeJ > 0)" class="card">
@@ -224,7 +225,7 @@ const lignes = computed(() => {
       tauxMois.push(joursParMois.value[mi] > 0 ? chargeJ / joursParMois.value[mi] : 0)
     }
     const lib = libelle(e)
-    out.push({ id: e.id, code: lib.code, nom: lib.nom, phase, estCond, machines, hj: postes * tep, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
+    out.push({ id: e.id, code: lib.code, nom: lib.nom, phase, estCond, machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
   }
   return out.sort((a, b) => b.taux - a.taux)
 })
@@ -288,6 +289,7 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .ta-r { text-align: right; } .ta-c { text-align: center; }
 .grid tr.vide td { color: #cbd5e1; }
 .hj { color: #64748b; font-size: 12px; }
+.glob { color: #94a3b8; }
 .unite { color: #64748b; font-size: 12px; }
 .desig { color: #94a3b8; font-size: 12px; }
 .phase-tag { font-size: 11px; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 5px; padding: 1px 7px; font-weight: 600; }
