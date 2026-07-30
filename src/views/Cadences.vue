@@ -4,7 +4,7 @@
       <div>
         <div class="cadh-eyebrow">Référentiel</div>
         <h1 class="cadh-title">Cadences & paramètres par équipement</h1>
-        <p class="cadh-sub">Cadence par produit + temps de nettoyage, réglage et rendement par équipement. Alimente le suivi de capacité et l'ordonnancement.</p>
+        <p class="cadh-sub">Les machines identiques sont regroupées : cadence et paramètres saisis une fois, appliqués à toutes les fiches du groupe.</p>
       </div>
     </div>
 
@@ -12,14 +12,14 @@
       <div class="ctrl">
         <div class="cf grow">
           <label>Équipement</label>
-          <select v-model="selEquip" @change="chargerEditeur">
-            <option value="">— Choisir un équipement ({{ equipements.length }}) —</option>
-            <optgroup v-for="g in equipParAtelierListe" :key="g.aid" :label="g.nom">
-              <option v-for="e in g.equipements" :key="e.id" :value="e.id">{{ libelleEquip(e) }}</option>
+          <select v-model="selGroupe" @change="chargerEditeur">
+            <option value="">— Choisir un équipement ({{ groupes.length }} groupes) —</option>
+            <optgroup v-for="g in groupesParAtelier" :key="g.aid" :label="g.nom">
+              <option v-for="grp in g.groupes" :key="grp.key" :value="grp.key">{{ grp.nom }}<template v-if="grp.equips.length > 1"> · {{ grp.equips.length }} fiches</template></option>
             </optgroup>
           </select>
         </div>
-        <div class="cf hint" v-if="selEquip">
+        <div class="cf hint" v-if="selGroupe">
           <label>Unité de cadence</label>
           <div class="unite">{{ uniteHint }}</div>
         </div>
@@ -27,20 +27,20 @@
       <p v-if="chargement" class="muted">Chargement…</p>
     </section>
 
-    <!-- Paramètres Ratio de l'équipement -->
-    <section v-if="selEquip && !chargement" class="card">
-      <h2 class="card-title">Paramètres de temps — {{ equipNom }}</h2>
+    <!-- Paramètres du groupe -->
+    <section v-if="selGroupe && !chargement" class="card">
+      <h2 class="card-title">Paramètres de temps — {{ groupeNom }}</h2>
       <div class="params">
         <div class="pgroup">
           <div class="pg-title">Capacité</div>
           <div class="pg-fields">
-            <label class="pfield"><span>Machines <em>(EQUIPEMENT)</em></span><input type="number" min="1" step="1" v-model="paramEdit.nb_machines" /></label>
+            <label class="pfield"><span>Machines <em>(par fiche)</em></span><input type="number" min="1" step="1" v-model="paramEdit.nb_machines" /></label>
             <label class="pfield"><span>Postes <em>(Shift)</em></span><input type="number" min="1" max="3" step="1" v-model="paramEdit.postes" /></label>
             <label class="pfield"><span>TEP <em>(h effectives / poste)</em></span><input type="number" min="0" step="any" v-model="paramEdit.tep" /></label>
             <div class="pfield"><span>TRS réel <em>(historique)</em></span><div class="trs-disp" :class="trsReel ? trsCls(trsReel.trs) : 'trs-muted'"><template v-if="trsChargementReel">…</template><template v-else-if="trsReel">{{ (trsReel.trs * 100).toFixed(1) }} %</template><template v-else>—</template></div></div>
           </div>
           <div class="trs-cap" v-if="trsReel">Disponibilité {{ (trsReel.dispo * 100).toFixed(0) }} % · Performance {{ (trsReel.perf * 100).toFixed(0) }} % · Qualité {{ (trsReel.qualite * 100).toFixed(0) }} % — {{ trsReel.nbPostes }} poste(s), {{ fmtD(trsReel.du) }} → {{ fmtD(trsReel.au) }}</div>
-          <div class="trs-cap none" v-else-if="selEquip && !trsChargementReel">Aucune saisie TRS pour cet équipement.</div>
+          <div class="trs-cap none" v-else-if="selGroupe && !trsChargementReel">Aucune saisie TRS pour ce groupe.</div>
         </div>
         <div class="pgroup">
           <div class="pg-title">Nettoyage & réglage (heures)</div>
@@ -52,6 +52,10 @@
           </div>
         </div>
       </div>
+      <div class="grp-info">
+        <span v-if="nbFiches > 1">Groupe de <strong>{{ nbFiches }} fiches</strong> → total <strong>{{ previewTotalMachines }} machines</strong>. Les paramètres et cadences s'appliquent aux {{ nbFiches }} fiches.</span>
+        <span v-else>Fiche unique → <strong>{{ previewTotalMachines }} machine(s)</strong>.</span>
+      </div>
       <div class="save-bar">
         <span class="pending" v-if="paramsModifies">Paramètres modifiés</span>
         <span class="pending ok" v-else>Paramètres à jour</span>
@@ -61,7 +65,7 @@
     </section>
 
     <!-- Cadences produit -->
-    <section v-if="selEquip && !chargement" class="card">
+    <section v-if="selGroupe && !chargement" class="card">
       <div class="ed-head">
         <h2 class="card-title">Cadences produit — {{ nbRenseignees }} produit(s) cadencé(s)</h2>
         <input type="search" v-model="filtre" class="prod-search" placeholder="Filtrer un produit…" />
@@ -90,11 +94,11 @@
       <p v-if="message" class="msg" :class="{ err: messageErr }">{{ message }}</p>
     </section>
 
-    <section v-if="!chargement && !selEquip" class="card">
+    <section v-if="!chargement && !selGroupe" class="card">
       <h2 class="card-title">Récapitulatif</h2>
-      <p class="muted">{{ cadences.length }} cadence(s) enregistrée(s) au total, sur {{ equipCadenceCount }} équipement(s).</p>
+      <p class="muted">{{ groupes.length }} groupe(s) d'équipements. {{ cadences.length }} cadence(s) enregistrée(s).</p>
       <div class="recap">
-        <div v-for="g in recapEquip" :key="g.id" class="recap-item">
+        <div v-for="g in recapGroupes" :key="g.key" class="recap-item">
           <span class="ri-nom">{{ g.nom }}</span>
           <span class="ri-cnt">{{ g.n }}</span>
         </div>
@@ -109,11 +113,11 @@ import { supabase } from '../supabase'
 
 const produits = ref([]), equipements = ref([]), ateliers = ref([]), cadences = ref([])
 const chargement = ref(true), sauvegarde = ref(false), sauvegardeP = ref(false)
-const selEquip = ref(''), filtre = ref('')
+const selGroupe = ref(''), filtre = ref('')
 const message = ref(''), messageErr = ref(false), messageP = ref(''), messagePErr = ref(false)
 
 const cadEdit = reactive({})
-let original = {}, rowIds = {}
+let original = {}
 const paramEdit = reactive({ nb_machines: 1, postes: 3, tep: 8, dht: 0, vdlp: 0, vdlt: 0, reglage: 0 })
 let paramOrig = {}
 const CHAMPS_P = ['nb_machines', 'postes', 'tep', 'dht', 'vdlp', 'vdlt', 'reglage']
@@ -138,8 +142,7 @@ onMounted(async () => {
 function phaseDeType(type) {
   const t = (type || '').toLowerCase()
   if (/pes[ée]|balance|bascule/.test(t)) return 'pesee'
-  if (/granul/.test(t)) return 'granulation'
-  if (/séch|sech/.test(t)) return 'sechage'
+  if (/granul|séch|sech/.test(t)) return 'granulation'
   if (/mélang|melang/.test(t)) return 'melange'
   if (/gélule|gelule|remplis|encapsul|capsul/.test(t)) return 'remplissage'
   if (/compress|presse|compri/.test(t)) return 'compression'
@@ -147,45 +150,118 @@ function phaseDeType(type) {
   if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)) return 'conditionnement'
   return null
 }
+function baseNom(nom) {
+  return String(nom || '').trim().replace(/\s+(\d{1,2})\s*$/, (m, n) => (Number(n) <= 20 ? '' : m)).trim()
+}
+function num(v, def) { const n = Number(v); return (v === null || v === undefined || isNaN(n)) ? def : n }
 
 const atelierById = computed(() => { const m = {}; for (const a of ateliers.value) m[a.id] = a; return m })
-const equipById = computed(() => { const m = {}; for (const e of equipements.value) m[e.id] = e; return m })
 const produitsTries = computed(() => [...produits.value].sort((a, b) => String(a.code_pf || '').localeCompare(String(b.code_pf || ''), undefined, { numeric: true })))
 
-const equipParAtelierListe = computed(() => {
+// Regroupement des équipements identiques : même phase (type) + même nom de base
+const groupes = computed(() => {
+  const eqs = equipements.value.slice()
+  const kp = (e) => phaseDeType(e.type) || ('t:' + (e.type || '?'))
+  const compte = {}
+  for (const e of eqs) {
+    const nom = (e.nom || e.code || '—').trim()
+    const bk = kp(e) + '|' + baseNom(nom).toLowerCase()
+    if (!compte[bk]) compte[bk] = new Set()
+    compte[bk].add(nom.toLowerCase())
+  }
   const g = {}
-  for (const e of equipements.value) {
-    const aid = e.atelier_id || 'sans'
-    if (!g[aid]) g[aid] = { aid, nom: (atelierById.value[aid] && atelierById.value[aid].nom) || 'Sans atelier', equipements: [] }
-    g[aid].equipements.push(e)
+  for (const e of eqs) {
+    const nom = (e.nom || e.code || '—').trim()
+    const base = baseNom(nom)
+    const partage = (compte[kp(e) + '|' + base.toLowerCase()] || new Set()).size >= 2
+    const label = partage ? base : nom
+    const key = kp(e) + '|' + label.toLowerCase()
+    if (!g[key]) g[key] = { key, nom: label, phase: phaseDeType(e.type), atelier_id: e.atelier_id, equips: [] }
+    g[key].equips.push(e)
+  }
+  return Object.values(g).sort((a, b) => (a.nom || '').localeCompare(b.nom || ''))
+})
+const groupesParAtelier = computed(() => {
+  const g = {}
+  for (const grp of groupes.value) {
+    const aid = grp.atelier_id || 'sans'
+    if (!g[aid]) g[aid] = { aid, nom: (atelierById.value[aid] && atelierById.value[aid].nom) || 'Sans atelier', groupes: [] }
+    g[aid].groupes.push(grp)
   }
   return Object.values(g).sort((a, b) => a.nom.localeCompare(b.nom))
 })
 
-function libelleEquip(e) { if (!e) return ''; const c = e.code ? String(e.code) : '', n = e.nom ? String(e.nom) : ''; return (c && n) ? c + ' · ' + n : (c || n) }
-const equipNom = computed(() => libelleEquip(equipById.value[selEquip.value]))
-const phaseCourante = computed(() => { const e = equipById.value[selEquip.value]; return e ? phaseDeType(e.type) : null })
+const groupeSel = computed(() => groupes.value.find(g => g.key === selGroupe.value) || null)
+const equipsSel = computed(() => groupeSel.value ? groupeSel.value.equips : [])
+const groupeNom = computed(() => groupeSel.value ? groupeSel.value.nom : '')
+const nbFiches = computed(() => equipsSel.value.length)
+const previewTotalMachines = computed(() => (Number(paramEdit.nb_machines) || 1) * nbFiches.value)
+const phaseCourante = computed(() => groupeSel.value ? groupeSel.value.phase : null)
 const estCond = computed(() => phaseCourante.value === 'conditionnement')
 const uniteHint = computed(() => estCond.value ? 'boîtes / heure (conditionnement)' : 'kg / heure (fabrication)')
 const uniteCourte = computed(() => estCond.value ? 'boîtes/h' : 'kg/h')
 
 function chargerEditeur() {
   for (const k of Object.keys(cadEdit)) delete cadEdit[k]
-  original = {}; rowIds = {}; message.value = ''; messageP.value = ''
-  if (!selEquip.value) return
-  for (const c of cadences.value) {
-    if (c.equipement_id !== selEquip.value) continue
-    const v = Number(c.cadence_nominale || 0)
-    cadEdit[c.produit_id] = v ? String(v) : ''
-    original[c.produit_id] = v; rowIds[c.produit_id] = c.id
+  original = {}; message.value = ''; messageP.value = ''
+  const eqs = equipsSel.value
+  if (!eqs.length) return
+  // cadences : valeur du groupe = max sur les fiches
+  for (const p of produits.value) {
+    let v = 0
+    for (const e of eqs) { const c = cadences.value.find(c => c.equipement_id === e.id && c.produit_id === p.id); if (c && Number(c.cadence_nominale) > v) v = Number(c.cadence_nominale) }
+    if (v > 0) { cadEdit[p.id] = String(v); original[p.id] = v }
   }
-  const e = equipById.value[selEquip.value] || {}
+  // paramètres : fiche représentative
+  const rep = eqs[0] || {}
   paramOrig = {}
-  for (const k of CHAMPS_P) { const v = (e[k] === null || e[k] === undefined) ? DEF_P[k] : Number(e[k]); paramEdit[k] = v; paramOrig[k] = v }
-  chargerTRSReel(selEquip.value)
+  for (const k of CHAMPS_P) { const val = (rep[k] === null || rep[k] === undefined) ? DEF_P[k] : Number(rep[k]); paramEdit[k] = val; paramOrig[k] = val }
+  chargerTRSReel(eqs.map(e => e.id))
 }
 
-// ---- TRS réel mesuré (depuis trs_postes, même formule que Suivi TRS) ----
+const produitsAffiches = computed(() => {
+  const q = filtre.value.trim().toLowerCase()
+  if (!q) return produitsTries.value
+  return produitsTries.value.filter(p => (p.code_pf || '').toLowerCase().includes(q) || (p.designation || '').toLowerCase().includes(q))
+})
+const nbRenseignees = computed(() => produits.value.filter(p => Number(cadEdit[p.id]) > 0).length)
+function estModifie(pid) { return (Number(cadEdit[pid]) || 0) !== (original[pid] || 0) }
+const nbChangements = computed(() => produits.value.filter(p => estModifie(p.id)).length)
+const paramsModifies = computed(() => CHAMPS_P.some(k => (Number(paramEdit[k]) || 0) !== (paramOrig[k] || 0)))
+
+async function enregistrer() {
+  if (!nbChangements.value) return
+  sauvegarde.value = true; message.value = ''; messageErr.value = false
+  let nUp = 0, nIns = 0, nDel = 0
+  try {
+    for (const p of produits.value) {
+      const nv = Number(cadEdit[p.id]) || 0, ov = original[p.id] || 0
+      if (nv === ov) continue
+      for (const e of equipsSel.value) {
+        const existing = cadences.value.find(c => c.equipement_id === e.id && c.produit_id === p.id)
+        if (nv > 0 && existing) { const r = await supabase.from('cadences_produit').update({ cadence_nominale: nv }).eq('id', existing.id); if (r.error) throw r.error; nUp++ }
+        else if (nv > 0) { const r = await supabase.from('cadences_produit').insert({ equipement_id: e.id, produit_id: p.id, cadence_nominale: nv }); if (r.error) throw r.error; nIns++ }
+        else if (nv === 0 && existing) { const r = await supabase.from('cadences_produit').delete().eq('id', existing.id); if (r.error) throw r.error; nDel++ }
+      }
+    }
+    await chargerCadences(); chargerEditeur()
+    message.value = `Enregistré sur ${equipsSel.value.length} fiche(s) : ${nUp} mise(s) à jour, ${nIns} ajout(s), ${nDel} suppression(s).`
+  } catch (e) { messageErr.value = true; message.value = 'Erreur : ' + (e.message || e) } finally { sauvegarde.value = false }
+}
+
+async function enregistrerParams() {
+  if (!paramsModifies.value) return
+  sauvegardeP.value = true; messageP.value = ''; messagePErr.value = false
+  const patch = {}
+  for (const k of CHAMPS_P) patch[k] = Number(paramEdit[k]) || 0
+  try {
+    for (const e of equipsSel.value) { const r = await supabase.from('equipements').update(patch).eq('id', e.id); if (r.error) throw r.error }
+    await chargerEquip(); chargerEditeur()
+    messageP.value = `Paramètres enregistrés sur ${equipsSel.value.length} fiche(s).`
+  } catch (e) { messagePErr.value = true; messageP.value = 'Erreur : ' + (e.message || e) + ' — as-tu exécuté le SQL d\'ajout des colonnes ?' } finally { sauvegardeP.value = false }
+}
+
+// TRS réel mesuré (agrégé sur toutes les fiches du groupe)
 const MOTIFS_TRS = ['arret_panne_min', 'arret_format_min', 'arret_nettoyage_min', 'arret_reglage_min', 'arret_maintenance_min', 'arret_attente_min', 'arret_autre_min']
 const trsReel = ref(null)
 const trsChargementReel = ref(false)
@@ -193,11 +269,11 @@ function cadenceDe(eq, pr) {
   const c = cadences.value.find(c => c.equipement_id === eq && c.produit_id === pr)
   return { value: c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0, mode: c ? (c.mode || 'debit') : 'debit' }
 }
-async function chargerTRSReel(equipId) {
+async function chargerTRSReel(equipIds) {
   trsReel.value = null
-  if (!equipId) return
+  if (!equipIds || !equipIds.length) return
   trsChargementReel.value = true
-  const rows = await fetchAllPaged(() => supabase.from('trs_postes').select('*').eq('actif', true).eq('equipement_id', equipId))
+  const rows = await fetchAllPaged(() => supabase.from('trs_postes').select('*').eq('actif', true).in('equipement_id', equipIds))
   trsChargementReel.value = false
   if (!rows.length) return
   let ouverture = 0, fonct = 0, theo = 0, prodPerf = 0, ecoule = 0, fonctPerf = 0, prodQual = 0, rebutsQual = 0, du = null, au = null
@@ -219,52 +295,12 @@ async function chargerTRSReel(equipId) {
 function fmtD(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString('fr-FR') }
 function trsCls(t) { return t >= 0.85 ? 'tr-g' : t >= 0.6 ? 'tr-a' : 'tr-r' }
 
-const produitsAffiches = computed(() => {
-  const q = filtre.value.trim().toLowerCase()
-  if (!q) return produitsTries.value
-  return produitsTries.value.filter(p => (p.code_pf || '').toLowerCase().includes(q) || (p.designation || '').toLowerCase().includes(q))
-})
-const nbRenseignees = computed(() => produits.value.filter(p => Number(cadEdit[p.id]) > 0).length)
-function estModifie(pid) { return (Number(cadEdit[pid]) || 0) !== (original[pid] || 0) }
-const nbChangements = computed(() => produits.value.filter(p => estModifie(p.id)).length)
-const paramsModifies = computed(() => CHAMPS_P.some(k => (Number(paramEdit[k]) || 0) !== (paramOrig[k] || 0)))
-
-async function enregistrer() {
-  if (!nbChangements.value) return
-  sauvegarde.value = true; message.value = ''; messageErr.value = false
-  const inserts = [], updates = [], deletes = []
-  for (const p of produits.value) {
-    const nv = Number(cadEdit[p.id]) || 0, ov = original[p.id] || 0
-    if (nv === ov) continue
-    if (nv > 0 && rowIds[p.id]) updates.push({ id: rowIds[p.id], cadence_nominale: nv })
-    else if (nv > 0) inserts.push({ equipement_id: selEquip.value, produit_id: p.id, cadence_nominale: nv })
-    else if (nv === 0 && rowIds[p.id]) deletes.push(rowIds[p.id])
-  }
-  try {
-    for (const u of updates) { const r = await supabase.from('cadences_produit').update({ cadence_nominale: u.cadence_nominale }).eq('id', u.id); if (r.error) throw r.error }
-    if (inserts.length) { const r = await supabase.from('cadences_produit').insert(inserts); if (r.error) throw r.error }
-    if (deletes.length) { const r = await supabase.from('cadences_produit').delete().in('id', deletes); if (r.error) throw r.error }
-    await chargerCadences(); chargerEditeur()
-    message.value = `Enregistré : ${updates.length} mise(s) à jour, ${inserts.length} ajout(s), ${deletes.length} suppression(s).`
-  } catch (e) { messageErr.value = true; message.value = 'Erreur : ' + (e.message || e) } finally { sauvegarde.value = false }
-}
-
-async function enregistrerParams() {
-  if (!paramsModifies.value) return
-  sauvegardeP.value = true; messageP.value = ''; messagePErr.value = false
-  const patch = {}
-  for (const k of CHAMPS_P) patch[k] = Number(paramEdit[k]) || 0
-  try {
-    const r = await supabase.from('equipements').update(patch).eq('id', selEquip.value)
-    if (r.error) throw r.error
-    await chargerEquip(); chargerEditeur()
-    messageP.value = 'Paramètres enregistrés.'
-  } catch (e) { messagePErr.value = true; messageP.value = 'Erreur : ' + (e.message || e) + ' — as-tu exécuté le SQL d\'ajout des colonnes ?' } finally { sauvegardeP.value = false }
-}
-
-const cadenceParEquip = computed(() => { const m = {}; for (const c of cadences.value) if (Number(c.cadence_nominale) > 0) m[c.equipement_id] = (m[c.equipement_id] || 0) + 1; return m })
-const equipCadenceCount = computed(() => Object.keys(cadenceParEquip.value).length)
-const recapEquip = computed(() => equipements.value.map(e => ({ id: e.id, nom: libelleEquip(e), code: e.code, n: cadenceParEquip.value[e.id] || 0 })).filter(x => x.n > 0).sort((a, b) => b.n - a.n))
+// Récapitulatif par groupe
+const recapGroupes = computed(() => groupes.value.map(g => {
+  const prods = new Set()
+  for (const e of g.equips) for (const c of cadences.value) if (c.equipement_id === e.id && Number(c.cadence_nominale) > 0) prods.add(c.produit_id)
+  return { key: g.key, nom: g.nom, n: prods.size }
+}).filter(x => x.n > 0).sort((a, b) => b.n - a.n))
 </script>
 
 <style scoped>
@@ -299,6 +335,8 @@ const recapEquip = computed(() => equipements.value.map(e => ({ id: e.id, nom: l
 .trs-disp.trs-muted { color: #cbd5e1; font-weight: 600; background: #f8fafc; border-color: #eef2f6; }
 .trs-cap { font-size: 12px; color: #334155; margin-top: 10px; }
 .trs-cap.none { color: #94a3b8; }
+
+.grp-info { margin-top: 16px; font-size: 12.5px; color: #334155; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 9px; padding: 9px 12px; }
 
 .ed-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
 .prod-search { padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; min-width: 220px; }
