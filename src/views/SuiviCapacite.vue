@@ -184,16 +184,32 @@ function joursOuvresMois(an, moisIdx) { const d = new Date(an, moisIdx, 1); let 
 const joursParMois = computed(() => MOIS.map((_, i) => joursOuvresMois(annee.value, i)))
 const joursAnnee = computed(() => joursParMois.value.reduce((s, n) => s + n, 0))
 
-// Regroupe les équipements identiques : même phase + même nom -> une seule ligne
+// Nom de base : retire un indice d'unité en fin de nom (ex "cabine de pesée 2" -> "cabine de pesée").
+// On ne retire qu'un nombre <= 20 précédé d'un espace, pour ne pas toucher aux numéros de modèle (FE55, TR100, 520...).
+function baseNom(nom) {
+  return String(nom || '').trim().replace(/\s+(\d{1,2})\s*$/, (m, n) => (Number(n) <= 20 ? '' : m)).trim()
+}
+// Regroupe les équipements identiques : même phase + même nom de base (avec siblings) -> une seule ligne
 const groupesEquip = computed(() => {
-  const g = {}
-  for (const e of equipements.value) {
-    if (!equipAvecCadence.value.has(e.id)) continue
+  const eqs = equipements.value.filter(e => equipAvecCadence.value.has(e.id) && phaseDeType(e.type))
+  // compter les noms distincts partageant une même base (par phase)
+  const compte = {}
+  for (const e of eqs) {
     const phase = phaseDeType(e.type)
-    if (!phase) continue
     const nom = (e.nom || e.code || '—').trim()
-    const key = phase + '|' + nom.toLowerCase()
-    if (!g[key]) g[key] = { key, nom, phase, equips: [] }
+    const bk = phase + '|' + baseNom(nom).toLowerCase()
+    if (!compte[bk]) compte[bk] = new Set()
+    compte[bk].add(nom.toLowerCase())
+  }
+  const g = {}
+  for (const e of eqs) {
+    const phase = phaseDeType(e.type)
+    const nom = (e.nom || e.code || '—').trim()
+    const base = baseNom(nom)
+    const partage = (compte[phase + '|' + base.toLowerCase()] || new Set()).size >= 2
+    const label = partage ? base : nom
+    const key = phase + '|' + label.toLowerCase()
+    if (!g[key]) g[key] = { key, nom: label, phase, equips: [] }
     g[key].equips.push(e)
   }
   return Object.values(g)
