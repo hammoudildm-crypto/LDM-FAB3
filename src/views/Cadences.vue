@@ -34,7 +34,8 @@
         <div class="pgroup">
           <div class="pg-title">Capacité</div>
           <div class="pg-fields">
-            <label class="pfield"><span>Machines <em>(du groupe)</em></span><input type="number" min="1" step="1" v-model="paramEdit.nb_machines" /></label>
+            <label class="pfield" v-if="nbFiches <= 1"><span>Machines <em>(du groupe)</em></span><input type="number" min="1" step="1" v-model="paramEdit.nb_machines" /></label>
+            <div class="pfield" v-else><span>Machines <em>(total, {{ nbFiches }} fiches)</em></span><div class="mach-disp">{{ totalMachinesReel }}</div></div>
             <label class="pfield"><span>Postes <em>(Shift)</em></span><input type="number" min="1" max="3" step="1" v-model="paramEdit.postes" /></label>
             <label class="pfield"><span>TEP <em>(h effectives / poste)</em></span><input type="number" min="0" step="any" v-model="paramEdit.tep" /></label>
             <div class="pfield"><span>TRS réel <em>(historique)</em></span><div class="trs-disp" :class="trsReel ? trsCls(trsReel.trs) : 'trs-muted'"><template v-if="trsChargementReel">…</template><template v-else-if="trsReel">{{ (trsReel.trs * 100).toFixed(1) }} %</template><template v-else>—</template></div></div>
@@ -52,8 +53,8 @@
           </div>
         </div>
       </div>
-      <div class="grp-info" :class="{ warn: nbFiches > 1 }">
-        <span v-if="nbFiches > 1">⚠ Ce groupe contient <strong>{{ nbFiches }} fiches distinctes</strong>. Pour un compte propre, garde <strong>une seule fiche</strong> (désactive les autres dans Référentiels) et mets Machines = le nombre total. Sinon la valeur est écrite sur chacune des {{ nbFiches }} fiches.</span>
+      <div class="grp-info">
+        <span v-if="nbFiches > 1">Ce groupe réunit <strong>{{ nbFiches }} fiches</strong> : le suivi compte déjà <strong>{{ totalMachinesReel }} machines</strong> (somme des fiches) — c'est correct tel quel. Les cadences et paramètres saisis s'appliquent aux {{ nbFiches }} fiches. Pour saisir le nombre de machines à la main, fusionne-les en une seule fiche.</span>
         <span v-else>Fiche unique → <strong>{{ Number(paramEdit.nb_machines) || 1 }} machine(s)</strong> prises en compte dans le suivi de capacité.</span>
       </div>
       <div class="save-bar">
@@ -196,6 +197,7 @@ const equipsSel = computed(() => groupeSel.value ? groupeSel.value.equips : [])
 const groupeNom = computed(() => groupeSel.value ? groupeSel.value.nom : '')
 const nbFiches = computed(() => equipsSel.value.length)
 const previewTotalMachines = computed(() => (Number(paramEdit.nb_machines) || 1) * nbFiches.value)
+const totalMachinesReel = computed(() => equipsSel.value.reduce((s, e) => s + Math.max(1, num(e.nb_machines, 1)), 0))
 const phaseCourante = computed(() => groupeSel.value ? groupeSel.value.phase : null)
 const estCond = computed(() => phaseCourante.value === 'conditionnement')
 const uniteHint = computed(() => estCond.value ? 'boîtes / heure (conditionnement)' : 'kg / heure (fabrication)')
@@ -337,6 +339,7 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 .trs-cap.none { color: #94a3b8; }
 
 .grp-info { margin-top: 16px; font-size: 12.5px; color: #334155; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 9px; padding: 9px 12px; }
+.mach-disp { margin-top: auto; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font-size: 15px; font-weight: 800; text-align: right; color: #0f766e; background: #f0fdfa; }
 .grp-info.warn { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
 
 .ed-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
