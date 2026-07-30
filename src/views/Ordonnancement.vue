@@ -41,9 +41,9 @@
             <option v-for="p in produitsAffiches" :key="p.id" :value="p.id">{{ p.code_pf }} · {{ p.designation }}</option>
           </select>
         </div>
-        <div class="add-field"><label>Quantité / lot (boîtes)</label><input type="number" min="1" v-model="selBoites" /></div>
-        <div class="add-field"><label>Nombre de lots</label><input type="number" min="1" v-model="selNb" @keyup.enter="ajouter" /></div>
-        <button class="btn-add" @click="ajouter" :disabled="!selProduit || !(Number(selBoites) > 0) || !(Number(selNb) > 0)">Ajouter</button>
+        <div class="add-field"><label>Quantité (boîtes)</label><input type="number" min="1" v-model="selBoites" @keyup.enter="ajouter" /></div>
+        <div class="add-field"><label>Lots (auto)</label><div class="lots-auto">{{ lotsAuto || '—' }}<span v-if="tailleLotSel" class="tl-hint">taille lot {{ fmt(tailleLotSel) }}</span></div></div>
+        <button class="btn-add" @click="ajouter" :disabled="!selProduit || !(Number(selBoites) > 0)">Ajouter</button>
       </div>
       <p v-if="chargement" class="muted">Chargement…</p>
       <p v-else-if="selProduit && !gammeProduit(selProduit).length" class="muted warn">Aucune phase cadencée trouvée pour ce produit (gamme ou cadences manquantes).</p>
@@ -54,7 +54,7 @@
       <h2 class="card-title">Produits ({{ groupes.length }}) · {{ lotsDeployes.length }} lots au total</h2>
       <div class="tbl-wrap">
         <table class="grid">
-          <thead><tr><th>Produit</th><th class="ta-r">Boîtes/lot</th><th class="ta-r">Lots</th><th>Gamme</th><th class="ta-r">CA</th><th></th></tr></thead>
+          <thead><tr><th>Produit</th><th class="ta-r">Boîtes (total)</th><th class="ta-r">Lots</th><th>Gamme</th><th class="ta-r">CA</th><th></th></tr></thead>
           <tbody>
             <tr v-for="g in groupesDetail" :key="g.id">
               <td><span class="lot-dot" :style="{ background: g.couleur }"></span><strong>{{ g.code }}</strong> <span class="lot-desig">{{ g.desig }}</span></td>
@@ -125,7 +125,7 @@ const groupes = ref([])   // { id, produitId, boites, nbLots }
 const dateDepart = ref(new Date().toISOString().slice(0, 10))
 const skipWeekend = ref(true)
 const hpj = ref(24)
-const selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref(''), selNb = ref(1)
+const selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref('')
 let seq = 1
 
 function fmt(n) { return Math.round(Number(n) || 0).toLocaleString('fr-FR') }
@@ -140,7 +140,7 @@ async function fetchAllPaged(make) {
 
 onMounted(async () => {
   const [rp, re, rc] = await Promise.all([
-    fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, pcsu, unites_par_boite, gamme').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, pcsu, unites_par_boite, taille_lot, poids_lot_kg, gamme').eq('actif', true)),
     fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true)),
     fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode'))
   ])
@@ -195,9 +195,16 @@ function gammeProduit(produitId) {
 }
 function gammeNoms(produitId) { return gammeProduit(produitId).map(k => PHASE_NOM[k]).join(' → ') }
 
+const tailleLotSel = computed(() => { const p = prodById.value[selProduit.value]; return p ? (Number(p.taille_lot) || 0) : 0 })
+const lotsAuto = computed(() => { const b = Number(selBoites.value) || 0, tl = tailleLotSel.value; return (b > 0 && tl > 0) ? Math.ceil(b / tl) : 0 })
+
 function ajouter() {
-  if (!selProduit.value || !(Number(selBoites.value) > 0) || !(Number(selNb.value) > 0)) return
-  groupes.value.push({ id: seq++, produitId: selProduit.value, boites: Number(selBoites.value), nbLots: Math.min(60, Number(selNb.value)) })
+  if (!selProduit.value || !(Number(selBoites.value) > 0)) return
+  const p = prodById.value[selProduit.value] || {}
+  const tl = Number(p.taille_lot) || 0
+  const total = Number(selBoites.value)
+  const nb = tl > 0 ? Math.min(60, Math.ceil(total / tl)) : 1
+  groupes.value.push({ id: seq++, produitId: selProduit.value, totalBoites: total, boitesParLot: tl > 0 ? tl : total, nbLots: nb })
 }
 function retirer(id) { groupes.value = groupes.value.filter(g => g.id !== id) }
 
@@ -205,16 +212,23 @@ function retirer(id) { groupes.value = groupes.value.filter(g => g.id !== id) }
 const lotsDeployes = computed(() => {
   const out = []
   groupes.value.forEach((g, gi) => {
-    for (let i = 1; i <= g.nbLots; i++) out.push({ id: g.id * 1000 + i, produitId: g.produitId, boites: g.boites, num: i, couleur: couleur(gi) })
+    let reste = g.totalBoites
+    for (let i = 1; i <= g.nbLots; i++) {
+      const b = Math.min(g.boitesParLot, reste); reste -= b
+      out.push({ id: g.id * 1000 + i, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi) })
+    }
   })
   return out
 })
 
-function dureeJours(equipId, produitId, boites) {
+function dureeJours(equip, produitId, boites) {
   const p = prodById.value[produitId]; if (!p) return 1
-  const cad = cadMap.value[equipId + '|' + produitId]
+  const cad = cadMap.value[equip.id + '|' + produitId]
   if (!(cad > 0)) return 1
-  const heures = boites / cad   // cadence en boîtes/h
+  const estCond = phaseDeType(equip.type) === 'conditionnement'
+  let qty = boites   // conditionnement : boîtes/h
+  if (!estCond) { const tl = Number(p.taille_lot) || 0, plk = Number(p.poids_lot_kg) || 0; if (tl > 0 && plk > 0) qty = boites * plk / tl }   // fabrication : kg/h
+  const heures = qty / cad
   return Math.max(1, Math.ceil(heures / hpj.value))
 }
 
@@ -250,7 +264,7 @@ const planning = computed(() => {
       // machine (équipement + créneau) qui se libère le plus tôt
       let eq = null, si = -1, libre = Infinity
       for (const e of compat) { const arr = slotsDe(e); for (let i = 0; i < arr.length; i++) if (arr[i] < libre) { libre = arr[i]; eq = e; si = i } }
-      const duree = dureeJours(eq.id, lt.produitId, lt.boites)
+      const duree = dureeJours(eq, lt.produitId, lt.boites)
       const start = Math.max(prevEnd + 1, slotsDe(eq)[si] || 0)
       const end = start + duree - 1
       phases[k] = { start, end, equip: eq.nom || eq.code }
@@ -275,7 +289,7 @@ const finGlobale = computed(() => {
 
 const groupesDetail = computed(() => groupes.value.map((g, gi) => {
   const p = prodById.value[g.produitId] || {}
-  return { id: g.id, code: p.code_pf || '?', desig: p.designation || '', boites: g.boites, nb: g.nbLots, gammeNoms: gammeNoms(g.produitId), ca: g.boites * g.nbLots * Number(p.pcsu || 0), couleur: couleur(gi) }
+  return { id: g.id, code: p.code_pf || '?', desig: p.designation || '', boites: g.totalBoites, nb: g.nbLots, gammeNoms: gammeNoms(g.produitId), ca: g.totalBoites * Number(p.pcsu || 0), couleur: couleur(gi) }
 }))
 const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0))
 </script>
@@ -301,6 +315,8 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .wk { font-size: 13px; color: #334155; font-weight: 500; display: inline-flex; align-items: center; gap: 7px; padding: 7px 0; text-transform: none; letter-spacing: 0; }
 .btn-add { background: #0f766e; color: #fff; border: 0; border-radius: 9px; font: inherit; font-size: 13.5px; font-weight: 700; padding: 9px 18px; cursor: pointer; }
 .btn-add:disabled { background: #cbd5e1; cursor: not-allowed; }
+.lots-auto { padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: 700; color: #0f766e; background: #f0fdfa; display: flex; align-items: center; gap: 8px; min-height: 37px; box-sizing: border-box; }
+.tl-hint { font-size: 11px; font-weight: 500; color: #94a3b8; }
 
 .tbl-wrap { overflow-x: auto; }
 .grid { width: 100%; border-collapse: collapse; font-size: 13px; }
