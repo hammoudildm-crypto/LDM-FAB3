@@ -4,7 +4,7 @@
       <div>
         <div class="ch-eyebrow">Charge & capacité</div>
         <h1 class="ch-title">Suivi de capacité des équipements</h1>
-        <p class="ch-sub">Occupation = temps de production (plan ÷ cadences) + nettoyage & réglage, vs capacité disponible.</p>
+        <p class="ch-sub">Occupation par équipement, selon la gamme des produits du plan directeur et les cadences.</p>
       </div>
     </div>
 
@@ -36,18 +36,20 @@
     </section>
 
     <section v-if="!chargement" class="card">
-      <h2 class="card-title">Occupation annuelle par atelier · {{ joursAnnee }} jours ouvrés</h2>
+      <h2 class="card-title">Occupation annuelle par équipement · {{ joursAnnee }} jours ouvrés</h2>
       <div class="tbl-wrap">
         <table class="grid">
           <thead>
             <tr>
-              <th>Atelier</th><th class="ta-c">Machines</th><th class="ta-c">h/j effectif</th>
+              <th>Équipement</th><th>Phase</th><th class="ta-c">Unité</th><th class="ta-c">Machines</th><th class="ta-c">h/j effectif</th>
               <th class="ta-r">Charge (j)</th><th class="ta-r">Capacité (j)</th><th class="taux-h">Taux d'occupation</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="r in lignesAnnuelles" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
-              <td><strong>{{ r.nom }}</strong> <span class="phase-tag" v-if="r.phase">{{ PHASE_NOM[r.phase] }}</span></td>
+            <tr v-for="r in lignes" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
+              <td><strong>{{ r.code }}</strong> <span class="desig">{{ r.nom }}</span></td>
+              <td><span class="phase-tag">{{ PHASE_NOM[r.phase] || r.phase }}</span></td>
+              <td class="ta-c unite">{{ r.estCond ? 'boîtes/h' : 'kg/h' }}</td>
               <td class="ta-c">{{ r.machines }}</td>
               <td class="ta-c hj">{{ r.hj.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r">{{ r.chargeJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
@@ -60,17 +62,17 @@
           </tbody>
         </table>
       </div>
-      <p class="note">h/j effectif = postes × TEP (heures utiles par machine et par jour). Charge = production + <template v-if="inclureNett">nettoyage (VDLP/lot) + nettoyage général & réglage (VDLT + REGLAGE / campagne)</template><template v-else>(nettoyage & réglage exclus)</template>. Taux &gt; 100 % = goulot.</p>
+      <p class="note">Fabrication : charge = kg ÷ cadence (kg/h), kg = boîtes × poids du lot ÷ taille de lot. Conditionnement : charge = boîtes ÷ cadence (boîtes/h). Un produit ne charge une phase que si elle figure dans sa gamme (le conditionnement s'ajoute toujours). <template v-if="inclureNett">+ nettoyage (VDLP/lot) + nettoyage général & réglage (VDLT + REGLAGE / campagne).</template></p>
     </section>
 
-    <section v-if="!chargement && lignesAnnuelles.some(r => r.chargeJ > 0)" class="card">
+    <section v-if="!chargement && lignes.some(r => r.chargeJ > 0)" class="card">
       <h2 class="card-title">Taux d'occupation mensuel</h2>
       <div class="tbl-wrap">
         <table class="grid matrice">
-          <thead><tr><th class="sticky-c">Atelier</th><th v-for="(m, i) in MOIS" :key="i" class="ta-c">{{ m }}</th></tr></thead>
+          <thead><tr><th class="sticky-c">Équipement</th><th v-for="(m, i) in MOIS" :key="i" class="ta-c">{{ m }}</th></tr></thead>
           <tbody>
-            <tr v-for="r in lignesAnnuelles" :key="r.id" v-show="r.chargeJ > 0">
-              <td class="sticky-c"><strong>{{ r.nom }}</strong></td>
+            <tr v-for="r in lignes" :key="r.id" v-show="r.chargeJ > 0">
+              <td class="sticky-c"><strong>{{ r.code }}</strong></td>
               <td v-for="(m, i) in MOIS" :key="i" class="cell-taux" :class="cls(r.tauxMois[i])"><span v-if="r.tauxMois[i] > 0">{{ (r.tauxMois[i] * 100).toFixed(0) }}</span></td>
             </tr>
           </tbody>
@@ -81,18 +83,21 @@
 
     <section v-if="!chargement" class="kpi-line">
       <div class="kpi-mini"><div class="km-val">{{ (occGlobal * 100).toFixed(0) }} %</div><div class="km-lbl">Occupation moyenne</div></div>
-      <div class="kpi-mini"><div class="km-val">{{ nbGoulots }}</div><div class="km-lbl">Ateliers &gt; 90 %</div></div>
-      <div class="kpi-mini"><div class="km-val">{{ nbSurcharge }}</div><div class="km-lbl">Ateliers en surcharge</div></div>
+      <div class="kpi-mini"><div class="km-val">{{ nbGoulots }}</div><div class="km-lbl">Équipements &gt; 90 %</div></div>
+      <div class="kpi-mini"><div class="km-val">{{ nbSurcharge }}</div><div class="km-lbl">En surcharge</div></div>
       <div class="kpi-mini"><div class="km-val">{{ joursAnnee }}</div><div class="km-lbl">Jours ouvrés {{ annee }}</div></div>
     </section>
 
-    <section v-if="!chargement && ateliersSansCadence.length" class="card avert">
+    <section v-if="!chargement && produitsSansCadence.length" class="card avert">
       <h2 class="card-title">Produits planifiés sans cadence</h2>
-      <p class="note">Ces produits ont un plan {{ annee }} mais aucune cadence renseignée — non comptés dans la charge. Renseigne-les dans le volet <strong>Cadences</strong>.</p>
-      <div class="chips">
-        <span v-for="(p, i) in ateliersSansCadence.slice(0, 40)" :key="i" class="chip">{{ p }}</span>
-        <span v-if="ateliersSansCadence.length > 40" class="chip more">+{{ ateliersSansCadence.length - 40 }}</span>
-      </div>
+      <p class="note">Plan {{ annee }} mais aucune cadence — non comptés. À renseigner dans <strong>Cadences</strong>.</p>
+      <div class="chips"><span v-for="(p, i) in produitsSansCadence.slice(0, 30)" :key="i" class="chip">{{ p }}</span><span v-if="produitsSansCadence.length > 30" class="chip more">+{{ produitsSansCadence.length - 30 }}</span></div>
+    </section>
+
+    <section v-if="!chargement && produitsSansPoids.length" class="card avert">
+      <h2 class="card-title">Produits de fabrication sans poids de lot</h2>
+      <p class="note">Ces produits ont une phase de fabrication planifiée (cadence en kg/h) mais aucun <strong>poids de lot (kg)</strong> — leur charge de fabrication n'est pas comptée. Exécute le SQL <em>poids_lot_kg</em> ou renseigne le poids.</p>
+      <div class="chips"><span v-for="(p, i) in produitsSansPoids.slice(0, 30)" :key="i" class="chip">{{ p }}</span><span v-if="produitsSansPoids.length > 30" class="chip more">+{{ produitsSansPoids.length - 30 }}</span></div>
     </section>
   </div>
 </template>
@@ -103,8 +108,10 @@ import { supabase } from '../supabase'
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
 const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage: 'Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
+const NOM_KEY = {}
+for (const [k, v] of Object.entries(PHASE_NOM)) NOM_KEY[v.toLowerCase()] = k
 
-const produits = ref([]), equipements = ref([]), ateliers = ref([]), cadences = ref([]), plans = ref([])
+const produits = ref([]), equipements = ref([]), cadences = ref([]), plans = ref([])
 const chargement = ref(true)
 const annee = ref(new Date().getFullYear())
 const regime = ref('auto')
@@ -120,9 +127,8 @@ async function fetchAllPaged(make) {
 }
 
 onMounted(async () => {
-  produits.value = await fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, unites_par_boite, taille_lot').eq('actif', true))
+  produits.value = await fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, unites_par_boite, taille_lot, poids_lot_kg, gamme').eq('actif', true))
   equipements.value = await fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true))
-  ateliers.value = await fetchAllPaged(() => supabase.from('ateliers').select('id, code, nom').eq('actif', true))
   cadences.value = await fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale'))
   plans.value = await fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produit_id'))
   chargement.value = false
@@ -140,10 +146,26 @@ function phaseDeType(type) {
   if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)) return 'conditionnement'
   return null
 }
+function phaseKeyFromName(name) {
+  const t = String(name || '').toLowerCase().trim()
+  if (NOM_KEY[t]) return NOM_KEY[t]
+  if (/pes/.test(t)) return 'pesee'
+  if (/granul/.test(t)) return 'granulation'
+  if (/séch|sech/.test(t)) return 'sechage'
+  if (/mélang|melang/.test(t)) return 'melange'
+  if (/gélule|gelule|remplis|capsul/.test(t)) return 'remplissage'
+  if (/compress|compri/.test(t)) return 'compression'
+  if (/pellicul|enrob|dragé|drage/.test(t)) return 'pelliculage'
+  if (/condition/.test(t)) return 'conditionnement'
+  return null
+}
 function num(v, def) { const n = Number(v); return (v === null || v === undefined || isNaN(n)) ? def : n }
+function libelle(e) { const c = e.code ? String(e.code) : '', n = e.nom ? String(e.nom) : ''; return { code: c || n, nom: c && n ? n : '' } }
 
 const prodById = computed(() => { const m = {}; for (const p of produits.value) m[p.id] = p; return m })
 const cadMap = computed(() => { const m = {}; for (const c of cadences.value) { const v = Number(c.cadence_nominale || 0); if (v > 0) m[c.equipement_id + '|' + c.produit_id] = v } return m })
+const equipAvecCadence = computed(() => { const s = new Set(); for (const c of cadences.value) if (Number(c.cadence_nominale) > 0) s.add(c.equipement_id); return s })
+const gammeKeys = computed(() => { const m = {}; for (const p of produits.value) { const set = new Set(); const g = Array.isArray(p.gamme) ? p.gamme : []; for (const n of g) { const k = phaseKeyFromName(n); if (k) set.add(k) } m[p.id] = set } return m })
 
 const planExiste = computed(() => plans.value.some(p => p.annee === annee.value))
 const planAgg = computed(() => {
@@ -157,83 +179,78 @@ const planAgg = computed(() => {
   return m
 })
 
-const equipParAtelier = computed(() => { const m = {}; for (const e of equipements.value) { if (!e.atelier_id) continue; (m[e.atelier_id] = m[e.atelier_id] || []).push(e) } return m })
-// cadence de l'atelier pour un produit (max sur les machines)
-const cadAtelierProd = computed(() => {
-  const m = {}
-  for (const [aid, list] of Object.entries(equipParAtelier.value)) {
-    const per = {}
-    for (const e of list) for (const p of produits.value) { const c = cadMap.value[e.id + '|' + p.id]; if (c > 0) per[p.id] = Math.max(per[p.id] || 0, c) }
-    m[aid] = per
-  }
-  return m
-})
-function equipACadence(e) { for (const p of produits.value) if (cadMap.value[e.id + '|' + p.id] > 0) return true; return false }
-// paramètres Ratio représentatifs par atelier
-const paramsAtelier = computed(() => {
-  const m = {}
-  for (const [aid, list] of Object.entries(equipParAtelier.value)) {
-    let machines = 0
-    for (const e of list) machines += num(e.nb_machines, 1) || 1
-    const rep = list.find(equipACadence) || list[0] || {}
-    const cnt = {}
-    for (const e of list) { const k = phaseDeType(e.type); if (k) cnt[k] = (cnt[k] || 0) + 1 }
-    let phase = null, bn = 0; for (const [k, n] of Object.entries(cnt)) if (n > bn) { bn = n; phase = k }
-    m[aid] = { machines, phase, postes: num(rep.postes, 3), tep: num(rep.tep, 8), vdlp: num(rep.vdlp, 0), vdlt: num(rep.vdlt, 0), reglage: num(rep.reglage, 0) }
-  }
-  return m
-})
-
 function joursOuvresMois(an, moisIdx) { const d = new Date(an, moisIdx, 1); let n = 0; while (d.getMonth() === moisIdx) { const wd = d.getDay(); if (avecWE.value || (wd !== 0 && wd !== 6)) n++; d.setDate(d.getDate() + 1) } return n }
 const joursParMois = computed(() => MOIS.map((_, i) => joursOuvresMois(annee.value, i)))
 const joursAnnee = computed(() => joursParMois.value.reduce((s, n) => s + n, 0))
 
-const lignesAnnuelles = computed(() => {
+const lignes = computed(() => {
   const out = []
-  for (const a of ateliers.value) {
-    const par = paramsAtelier.value[a.id] || { machines: 0, phase: null, postes: 3, tep: 8, vdlp: 0, vdlt: 0, reglage: 0 }
-    const machines = par.machines
-    const postesUsed = regime.value === 'auto' ? par.postes : Number(regime.value)
-    const hj = postesUsed * par.tep   // heures utiles / jour / machine
-    const capaMachineJour = hj * machines  // heures utiles / jour, atelier
-    const cadP = cadAtelierProd.value[a.id] || {}
+  for (const e of equipements.value) {
+    if (!equipAvecCadence.value.has(e.id)) continue
+    const phase = phaseDeType(e.type)
+    if (!phase) continue
+    const estCond = phase === 'conditionnement'
+    const machines = Math.max(1, num(e.nb_machines, 1))
+    const postes = regime.value === 'auto' ? num(e.postes, 3) : Number(regime.value)
+    const tep = num(e.tep, 8)
+    const vdlp = num(e.vdlp, 0), vdlt = num(e.vdlt, 0), reglage = num(e.reglage, 0)
+    const capaJour = postes * tep * machines
     const tauxMois = []; let chargeJTot = 0
     for (let mi = 0; mi < 12; mi++) {
       let occH = 0
       for (const [pid, tab] of Object.entries(planAgg.value)) {
         const boites = tab[mi]; if (!boites) continue
-        const cad = cadP[pid]; if (!(cad > 0)) continue
+        const cad = cadMap.value[e.id + '|' + pid]; if (!(cad > 0)) continue
+        const gk = gammeKeys.value[pid]
+        const inGamme = estCond || !gk || gk.size === 0 || gk.has(phase)
+        if (!inGamme) continue
         const p = prodById.value[pid] || {}
-        occH += boites / cad   // cadence en boîtes/h -> heures = boîtes / cadence
+        let qty
+        if (estCond) qty = boites
+        else {
+          const tl = num(p.taille_lot, 0), plk = num(p.poids_lot_kg, 0)
+          if (!(tl > 0 && plk > 0)) continue   // poids manquant
+          qty = boites * plk / tl               // kg
+        }
+        occH += qty / cad
         if (inclureNett.value) {
           const tl = num(p.taille_lot, 0)
           const nbLots = tl > 0 ? Math.ceil(boites / tl) : 1
-          occH += nbLots * par.vdlp
-          occH += par.vdlt + par.reglage   // une campagne par produit et par mois
+          occH += nbLots * vdlp + vdlt + reglage
         }
       }
-      const chargeJ = capaMachineJour > 0 ? occH / capaMachineJour : 0
+      const chargeJ = capaJour > 0 ? occH / capaJour : 0
       chargeJTot += chargeJ
       tauxMois.push(joursParMois.value[mi] > 0 ? chargeJ / joursParMois.value[mi] : 0)
     }
-    out.push({ id: a.id, nom: a.nom || a.code, phase: par.phase, machines, hj, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
+    const lib = libelle(e)
+    out.push({ id: e.id, code: lib.code, nom: lib.nom, phase, estCond, machines, hj: postes * tep, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
   }
-  return out.sort((x, y) => y.taux - x.taux)
+  return out.sort((a, b) => b.taux - a.taux)
 })
 
-const occGlobal = computed(() => { const w = lignesAnnuelles.value.filter(r => r.chargeJ > 0); return w.length ? w.reduce((s, r) => s + r.taux, 0) / w.length : 0 })
-const nbGoulots = computed(() => lignesAnnuelles.value.filter(r => r.taux > 0.9).length)
-const nbSurcharge = computed(() => lignesAnnuelles.value.filter(r => r.taux > 1).length)
+const occGlobal = computed(() => { const w = lignes.value.filter(r => r.chargeJ > 0); return w.length ? w.reduce((s, r) => s + r.taux, 0) / w.length : 0 })
+const nbGoulots = computed(() => lignes.value.filter(r => r.taux > 0.9).length)
+const nbSurcharge = computed(() => lignes.value.filter(r => r.taux > 1).length)
 
-const ateliersSansCadence = computed(() => {
-  const manquants = new Set()
+const produitsSansCadence = computed(() => {
+  const s = new Set()
   for (const pid of Object.keys(planAgg.value)) {
     if (!planAgg.value[pid].some(v => v > 0)) continue
-    let ok = false
-    for (const a of ateliers.value) if ((cadAtelierProd.value[a.id] || {})[pid] > 0) { ok = true; break }
-    if (!ok) { const p = prodById.value[pid]; if (p) manquants.add((p.code_pf || '') + ' · ' + (p.designation || '')) }
+    if (!equipements.value.some(e => cadMap.value[e.id + '|' + pid] > 0)) { const p = prodById.value[pid]; if (p) s.add((p.code_pf || '') + ' · ' + (p.designation || '')) }
   }
-  return [...manquants].sort()
+  return [...s].sort()
+})
+const produitsSansPoids = computed(() => {
+  const s = new Set()
+  for (const pid of Object.keys(planAgg.value)) {
+    if (!planAgg.value[pid].some(v => v > 0)) continue
+    const p = prodById.value[pid]; if (!p) continue
+    let besoin = false
+    for (const e of equipements.value) { const ph = phaseDeType(e.type); if (ph && ph !== 'conditionnement' && cadMap.value[e.id + '|' + pid] > 0) { besoin = true; break } }
+    if (besoin && !(num(p.poids_lot_kg, 0) > 0)) s.add((p.code_pf || '') + ' · ' + (p.designation || ''))
+  }
+  return [...s].sort()
 })
 
 function cls(t) { if (!t) return ''; if (t > 1) return 'x'; if (t > 0.9) return 'r'; if (t >= 0.7) return 'a'; return 'g' }
@@ -271,11 +288,13 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .ta-r { text-align: right; } .ta-c { text-align: center; }
 .grid tr.vide td { color: #cbd5e1; }
 .hj { color: #64748b; font-size: 12px; }
-.phase-tag { font-size: 10.5px; color: #64748b; background: #f1f5f9; border-radius: 5px; padding: 1px 6px; margin-left: 6px; font-weight: 600; }
+.unite { color: #64748b; font-size: 12px; }
+.desig { color: #94a3b8; font-size: 12px; }
+.phase-tag { font-size: 11px; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 5px; padding: 1px 7px; font-weight: 600; }
 
-.taux-h { width: 300px; }
+.taux-h { width: 260px; }
 .taux-cell { display: flex; align-items: center; gap: 10px; }
-.bar-wrap { flex: 1; height: 12px; background: #f1f5f9; border-radius: 7px; overflow: hidden; min-width: 110px; }
+.bar-wrap { flex: 1; height: 12px; background: #f1f5f9; border-radius: 7px; overflow: hidden; min-width: 100px; }
 .bar { height: 100%; border-radius: 7px; }
 .bar.g { background: #22c55e; } .bar.a { background: #f59e0b; } .bar.r { background: #ef4444; } .bar.x { background: #7f1d1d; }
 .taux-val { font-weight: 700; font-size: 13px; min-width: 52px; text-align: right; }
