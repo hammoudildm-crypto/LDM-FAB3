@@ -108,7 +108,7 @@ import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
-const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage: 'Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
+const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation / Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
 const NOM_KEY = {}
 for (const [k, v] of Object.entries(PHASE_NOM)) NOM_KEY[v.toLowerCase()] = k
 
@@ -138,8 +138,7 @@ onMounted(async () => {
 function phaseDeType(type) {
   const t = (type || '').toLowerCase()
   if (/pes[ée]|balance|bascule/.test(t)) return 'pesee'
-  if (/granul/.test(t)) return 'granulation'
-  if (/séch|sech/.test(t)) return 'sechage'
+  if (/granul|séch|sech/.test(t)) return 'granulation'
   if (/mélang|melang/.test(t)) return 'melange'
   if (/gélule|gelule|remplis|encapsul|capsul/.test(t)) return 'remplissage'
   if (/compress|presse|compri/.test(t)) return 'compression'
@@ -151,8 +150,7 @@ function phaseKeyFromName(name) {
   const t = String(name || '').toLowerCase().trim()
   if (NOM_KEY[t]) return NOM_KEY[t]
   if (/pes/.test(t)) return 'pesee'
-  if (/granul/.test(t)) return 'granulation'
-  if (/séch|sech/.test(t)) return 'sechage'
+  if (/granul|séch|sech/.test(t)) return 'granulation'
   if (/mélang|melang/.test(t)) return 'melange'
   if (/gélule|gelule|remplis|capsul/.test(t)) return 'remplissage'
   if (/compress|compri/.test(t)) return 'compression'
