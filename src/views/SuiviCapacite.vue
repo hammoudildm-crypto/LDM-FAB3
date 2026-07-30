@@ -47,7 +47,7 @@
           </thead>
           <tbody>
             <tr v-for="r in lignes" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
-              <td><strong>{{ r.code }}</strong> <span class="desig">{{ r.nom }}</span></td>
+              <td><strong>{{ r.nom }}</strong></td>
               <td><span class="phase-tag">{{ PHASE_NOM[r.phase] || r.phase }}</span></td>
               <td class="ta-c unite">{{ r.estCond ? 'boîtes/h' : 'kg/h' }}</td>
               <td class="ta-c">{{ r.machines }}</td>
@@ -73,7 +73,7 @@
           <thead><tr><th class="sticky-c">Équipement</th><th v-for="(m, i) in MOIS" :key="i" class="ta-c">{{ m }}</th></tr></thead>
           <tbody>
             <tr v-for="r in lignes" :key="r.id" v-show="r.chargeJ > 0">
-              <td class="sticky-c"><strong>{{ r.code }}</strong></td>
+              <td class="sticky-c"><strong>{{ r.nom }}</strong></td>
               <td v-for="(m, i) in MOIS" :key="i" class="cell-taux" :class="cls(r.tauxMois[i])"><span v-if="r.tauxMois[i] > 0">{{ (r.tauxMois[i] * 100).toFixed(0) }}</span></td>
             </tr>
           </tbody>
@@ -184,24 +184,40 @@ function joursOuvresMois(an, moisIdx) { const d = new Date(an, moisIdx, 1); let 
 const joursParMois = computed(() => MOIS.map((_, i) => joursOuvresMois(annee.value, i)))
 const joursAnnee = computed(() => joursParMois.value.reduce((s, n) => s + n, 0))
 
-const lignes = computed(() => {
-  const out = []
+// Regroupe les équipements identiques : même phase + même nom -> une seule ligne
+const groupesEquip = computed(() => {
+  const g = {}
   for (const e of equipements.value) {
     if (!equipAvecCadence.value.has(e.id)) continue
     const phase = phaseDeType(e.type)
     if (!phase) continue
+    const nom = (e.nom || e.code || '—').trim()
+    const key = phase + '|' + nom.toLowerCase()
+    if (!g[key]) g[key] = { key, nom, phase, equips: [] }
+    g[key].equips.push(e)
+  }
+  return Object.values(g)
+})
+
+const lignes = computed(() => {
+  const out = []
+  for (const grp of groupesEquip.value) {
+    const phase = grp.phase
     const estCond = phase === 'conditionnement'
-    const machines = Math.max(1, num(e.nb_machines, 1))
-    const postes = regime.value === 'auto' ? num(e.postes, 3) : Number(regime.value)
-    const tep = num(e.tep, 8)
-    const vdlp = num(e.vdlp, 0), vdlt = num(e.vdlt, 0), reglage = num(e.reglage, 0)
+    let machines = 0
+    for (const e of grp.equips) machines += Math.max(1, num(e.nb_machines, 1))
+    const rep = grp.equips[0]
+    const postes = regime.value === 'auto' ? num(rep.postes, 3) : Number(regime.value)
+    const tep = num(rep.tep, 8)
+    const vdlp = num(rep.vdlp, 0), vdlt = num(rep.vdlt, 0), reglage = num(rep.reglage, 0)
     const capaJour = postes * tep * machines
+    const cadGroupe = (pid) => { let c = 0; for (const e of grp.equips) { const v = cadMap.value[e.id + '|' + pid]; if (v > 0 && v > c) c = v } return c }
     const tauxMois = []; let chargeJTot = 0
     for (let mi = 0; mi < 12; mi++) {
       let occH = 0
       for (const [pid, tab] of Object.entries(planAgg.value)) {
         const boites = tab[mi]; if (!boites) continue
-        const cad = cadMap.value[e.id + '|' + pid]; if (!(cad > 0)) continue
+        const cad = cadGroupe(pid); if (!(cad > 0)) continue
         const gk = gammeKeys.value[pid]
         const inGamme = estCond || !gk || gk.size === 0 || gk.has(phase)
         if (!inGamme) continue
@@ -224,8 +240,7 @@ const lignes = computed(() => {
       chargeJTot += chargeJ
       tauxMois.push(joursParMois.value[mi] > 0 ? chargeJ / joursParMois.value[mi] : 0)
     }
-    const lib = libelle(e)
-    out.push({ id: e.id, code: lib.code, nom: lib.nom, phase, estCond, machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
+    out.push({ id: grp.key, nom: grp.nom, phase, estCond, machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
   }
   return out.sort((a, b) => b.taux - a.taux)
 })
