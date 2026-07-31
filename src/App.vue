@@ -99,6 +99,7 @@ const LINK_ICONS = {
   '/referentiels': '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
   '/habilitations': '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   '/capacite': '<path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/><line x1="3" y1="20" x2="21" y2="20"/>',
+  '/qse': '<circle cx="12" cy="8" r="6"/><path d="M15.5 13.5 17 22l-5-3-5 3 1.5-8.5"/>',
   '/cadences': '<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M19.1 4.9l-2.8 2.8M7.7 16.3l-2.8 2.8"/>',
 }
 const NAV_GROUPS = [
@@ -111,6 +112,7 @@ const NAV_GROUPS = [
     ['/production-atelier', 'Production par atelier'],
     ['/suivi-trs', 'Suivi TRS'],
     ['/capacite', 'Capacité équipements'],
+    ['/qse', 'Indicateurs QSE'],
     ['/encours', 'En-cours'],
     ['/dossier', 'Dossier de lot'],
     ['/audit', "Journal d'audit"],
@@ -146,7 +148,7 @@ function toggleGroup(key) {
 // Sous-menus repliés par défaut ; on les ouvre/ferme uniquement au clic sur le menu principal
 
 const PROD = ['/plan', '/ordres', '/suivi', '/encours', '/conditionnement', '/dossier']
-const PILOT = ['/ca', '/realisation-plan', '/rendement', '/dispo-equipements', '/avancement', '/production-atelier', '/saisie-trs', '/suivi-trs', '/effectifs', '/verification-ddl', '/verification-ddl-aq', '/verification-ddl-cond', '/audit', '/habilitations']
+const PILOT = ['/ca', '/realisation-plan', '/rendement', '/dispo-equipements', '/avancement', '/production-atelier', '/saisie-trs', '/suivi-trs', '/qse', '/effectifs', '/verification-ddl', '/verification-ddl-aq', '/verification-ddl-cond', '/audit', '/habilitations']
 const prodActive = computed(() => PROD.includes(route.path))
 const pilotActive = computed(() => PILOT.includes(route.path))
 
