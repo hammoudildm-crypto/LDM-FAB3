@@ -145,34 +145,46 @@ async function chargerSource() {
 const autoParSource = computed(() => {
   const an = annee.value
   const ofById = {}; for (const o of ofs.value) ofById[o.id] = o
-  const prodParLot = {}
+  // Boîtes conditionnées + date de conditionnement (dernière) par lot
+  const condBoites = {}, condDate = {}
   for (const c of conds.value) {
     const o = ofById[c.ordre_id]; if (!o) continue
     const upb = Number(o.produits && o.produits.unites_par_boite || 1) || 1
-    prodParLot[c.ordre_id] = (prodParLot[c.ordre_id] || 0) + Math.floor(Number(c.quantite_conditionnee || 0) / upb)
+    condBoites[c.ordre_id] = (condBoites[c.ordre_id] || 0) + Math.floor(Number(c.quantite_conditionnee || 0) / upb)
+    if (c.date_conditionnement && (!condDate[c.ordre_id] || c.date_conditionnement > condDate[c.ordre_id])) condDate[c.ordre_id] = c.date_conditionnement
   }
-  const condDate = {}
-  for (const c of conds.value) { if (!c.date_conditionnement) continue; if (!condDate[c.ordre_id] || c.date_conditionnement > condDate[c.ordre_id]) condDate[c.ordre_id] = c.date_conditionnement }
-  // Rendement (%) au mois de conditionnement, lots valides (50–110 %)
-  const rTheo = new Array(12).fill(0), rProd = new Array(12).fill(0)
+  const Z = () => new Array(12).fill(0)
+  const plan = Z()
+  for (const p of plans.value) { if (Number(p.annee) === an && p.mois >= 1 && p.mois <= 12) plan[p.mois - 1] += Number(p.quantite_planifiee || 0) }
+  // FABRICATION — au mois de fin de fabrication
+  const fTheo = Z(), fFab = Z(), realFab = Z(), devFab = Z()
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    const d = new Date(o.date_fin_fabrication); if (d.getFullYear() !== an) continue
+    const m = d.getMonth(), theo = Number(o.quantite_theorique || 0), fab = Number(o.boites_fabriquees || 0)
+    realFab[m] += fab
+    if (o.deviation) devFab[m]++
+    if (theo > 0 && fab > 0) { const r = fab / theo * 100; if (r >= 50 && r <= 110) { fFab[m] += fab; fTheo[m] += theo } }
+  }
+  // CONDITIONNEMENT — au mois de conditionnement
+  const cCond = Z(), cFab = Z(), realCond = Z(), devCond = Z()
   for (const o of ofs.value) {
     const dc = condDate[o.id]; if (!dc) continue
     const d = new Date(dc); if (d.getFullYear() !== an) continue
-    const theo = Number(o.quantite_theorique || 0); if (theo <= 0) continue
-    const prod = prodParLot[o.id] || 0; if (prod <= 0) continue
-    const rdt = prod / theo * 100; if (rdt < 50 || rdt > 110) continue
-    rProd[d.getMonth()] += prod; rTheo[d.getMonth()] += theo
+    const m = d.getMonth(), fab = Number(o.boites_fabriquees || 0), cond = condBoites[o.id] || 0
+    realCond[m] += cond
+    if (o.deviation_cond) devCond[m]++
+    if (fab > 0 && cond > 0) { const r = cond / fab * 100; if (r >= 50 && r <= 110) { cCond[m] += cond; cFab[m] += fab } }
   }
-  const rendement = rTheo.map((t, i) => t > 0 ? +(rProd[i] / t * 100).toFixed(1) : null)
-  // Réalisation du plan (%) : boîtes fabriquées / planifiées, au mois de fin de fabrication
-  const plan = new Array(12).fill(0), real = new Array(12).fill(0)
-  for (const p of plans.value) { if (Number(p.annee) === an && p.mois >= 1 && p.mois <= 12) plan[p.mois - 1] += Number(p.quantite_planifiee || 0) }
-  for (const o of ofs.value) { if (!o.date_fin_fabrication) continue; const d = new Date(o.date_fin_fabrication); if (d.getFullYear() !== an) continue; real[d.getMonth()] += Number(o.boites_fabriquees || 0) }
-  const realisation_plan = plan.map((pl, i) => pl > 0 ? +(real[i] / pl * 100).toFixed(1) : null)
-  // Déviations : nombre de lots avec déviation (fab ou cond) au mois de fin de fabrication
-  const dev = new Array(12).fill(0)
-  for (const o of ofs.value) { if (!o.date_fin_fabrication) continue; const d = new Date(o.date_fin_fabrication); if (d.getFullYear() !== an) continue; if (o.deviation || o.deviation_cond) dev[d.getMonth()]++ }
-  return { rendement, realisation_plan, deviations: dev }
+  const pct = (num, den) => den > 0 ? +(num / den * 100).toFixed(1) : null
+  return {
+    rendement_fab: fTheo.map((t, i) => pct(fFab[i], t)),
+    rendement_cond: cFab.map((t, i) => pct(cCond[i], t)),
+    realisation_fab: plan.map((pl, i) => pct(realFab[i], pl)),
+    realisation_cond: plan.map((pl, i) => pct(realCond[i], pl)),
+    deviations_fab: devFab,
+    deviations_cond: devCond
+  }
 })
 function estAuto(ind) { return ind.source && ind.source !== 'manuel' }
 function valeurAuto(ind, m) { const arr = autoParSource.value[ind.source]; const v = arr ? arr[m - 1] : null; return v == null ? '' : v }
