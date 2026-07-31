@@ -45,19 +45,20 @@
           <tbody>
             <tr v-for="ind in indicateursDomaine(dom.cle)" :key="ind.id">
               <td class="sticky">
-                <div class="ind-lib">{{ ind.libelle }}</div>
+                <div class="ind-lib">{{ ind.libelle }}<span v-if="estAuto(ind)" class="auto-badge">auto</span></div>
                 <div class="ind-unite">{{ ind.unite }} · {{ ind.sens === 'bas' ? '↓ mieux' : '↑ mieux' }}</div>
               </td>
               <td class="right cible">{{ ind.cible == null ? '—' : fmt(ind.cible) }}</td>
               <td v-for="m in 12" :key="m" class="cell">
-                <input v-model="cellules[ind.id][m]" type="number" step="any" inputmode="decimal" :disabled="!peutEditer" />
+                <input v-if="!estAuto(ind)" v-model="cellules[ind.id][m]" type="number" step="any" inputmode="decimal" :disabled="!peutEditer" />
+                <span v-else class="auto-val">{{ valeurAuto(ind, m) === '' ? '·' : fmt(valeurAuto(ind, m)) }}</span>
               </td>
               <td class="right annuel strong">
                 <span v-if="cumul(ind) != null">{{ fmt(cumul(ind)) }}</span><span v-else>—</span>
                 <span class="agg">{{ ind.agregat === 'somme' ? 'Σ' : 'x̄' }}</span>
               </td>
               <td class="center spark">
-                <svg v-if="sparkline(ind.id)" viewBox="0 0 120 26" class="spark-svg" preserveAspectRatio="none"><polyline :points="sparkline(ind.id)" fill="none" :stroke="dom.couleur" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" /></svg>
+                <svg v-if="sparkline(ind)" viewBox="0 0 120 26" class="spark-svg" preserveAspectRatio="none"><polyline :points="sparkline(ind)" fill="none" :stroke="dom.couleur" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" /></svg>
                 <span v-else class="muted-xs">—</span>
               </td>
               <td class="center">
@@ -84,7 +85,7 @@
       </div>
     </section>
 
-    <p class="hint">Le <strong>statut</strong> compare le cumul annuel (Σ = somme, x̄ = moyenne) à la cible, selon le sens de l'indicateur. Saisis les valeurs mensuelles puis clique <strong>Enregistrer</strong>. Un indicateur sans cible n'a pas de statut.</p>
+    <p class="hint">Le <strong>statut</strong> compare le cumul annuel (Σ = somme, x̄ = moyenne) à la cible, selon le sens de l'indicateur. Saisis les valeurs mensuelles puis clique <strong>Enregistrer</strong>. Un indicateur sans cible n'a pas de statut. Les indicateurs marqués <strong>auto</strong> (rendement, réalisation du plan, déviations) sont calculés depuis les données de production — pas de saisie.</p>
   </div>
 </template>
 
@@ -106,6 +107,13 @@ const annee = ref(anneeCourante)
 const indicateurs = ref([])
 const cellules = reactive({})
 const erreur = ref(''), message = ref(''), enCours = ref(false), chargement = ref(true)
+const ofs = ref([]), conds = ref([]), plans = ref([])
+
+async function fetchAllPaged(make) {
+  const size = 1000; let from = 0, all = []
+  for (;;) { const r = await make().range(from, from + size - 1); if (r.error) return all; all = all.concat(r.data || []); if (!r.data || r.data.length < size) break; from += size }
+  return all
+}
 
 const formAdd = reactive({})
 for (const d of DOMAINES) formAdd[d.cle] = { libelle: '', unite: '', cible: '', sens: 'haut', agregat: 'moyenne' }
@@ -124,11 +132,57 @@ async function chargerValeurs() {
   if (r.error) { erreur.value = r.error.message; return }
   for (const row of r.data) { if (cellules[row.indicateur_id]) cellules[row.indicateur_id][row.mois] = row.valeur }
 }
+async function chargerSource() {
+  const [ro, rc, rp] = await Promise.all([
+    fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, quantite_theorique, boites_fabriquees, date_fin_fabrication, deviation, deviation_cond, produits(unites_par_boite)').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, quantite_conditionnee, date_conditionnement').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee'))
+  ])
+  ofs.value = ro; conds.value = rc; plans.value = rp
+}
+
+// Valeurs calculées automatiquement pour l'année, par source
+const autoParSource = computed(() => {
+  const an = annee.value
+  const ofById = {}; for (const o of ofs.value) ofById[o.id] = o
+  const prodParLot = {}
+  for (const c of conds.value) {
+    const o = ofById[c.ordre_id]; if (!o) continue
+    const upb = Number(o.produits && o.produits.unites_par_boite || 1) || 1
+    prodParLot[c.ordre_id] = (prodParLot[c.ordre_id] || 0) + Math.floor(Number(c.quantite_conditionnee || 0) / upb)
+  }
+  const condDate = {}
+  for (const c of conds.value) { if (!c.date_conditionnement) continue; if (!condDate[c.ordre_id] || c.date_conditionnement > condDate[c.ordre_id]) condDate[c.ordre_id] = c.date_conditionnement }
+  // Rendement (%) au mois de conditionnement, lots valides (50–110 %)
+  const rTheo = new Array(12).fill(0), rProd = new Array(12).fill(0)
+  for (const o of ofs.value) {
+    const dc = condDate[o.id]; if (!dc) continue
+    const d = new Date(dc); if (d.getFullYear() !== an) continue
+    const theo = Number(o.quantite_theorique || 0); if (theo <= 0) continue
+    const prod = prodParLot[o.id] || 0; if (prod <= 0) continue
+    const rdt = prod / theo * 100; if (rdt < 50 || rdt > 110) continue
+    rProd[d.getMonth()] += prod; rTheo[d.getMonth()] += theo
+  }
+  const rendement = rTheo.map((t, i) => t > 0 ? +(rProd[i] / t * 100).toFixed(1) : null)
+  // Réalisation du plan (%) : boîtes fabriquées / planifiées, au mois de fin de fabrication
+  const plan = new Array(12).fill(0), real = new Array(12).fill(0)
+  for (const p of plans.value) { if (Number(p.annee) === an && p.mois >= 1 && p.mois <= 12) plan[p.mois - 1] += Number(p.quantite_planifiee || 0) }
+  for (const o of ofs.value) { if (!o.date_fin_fabrication) continue; const d = new Date(o.date_fin_fabrication); if (d.getFullYear() !== an) continue; real[d.getMonth()] += Number(o.boites_fabriquees || 0) }
+  const realisation_plan = plan.map((pl, i) => pl > 0 ? +(real[i] / pl * 100).toFixed(1) : null)
+  // Déviations : nombre de lots avec déviation (fab ou cond) au mois de fin de fabrication
+  const dev = new Array(12).fill(0)
+  for (const o of ofs.value) { if (!o.date_fin_fabrication) continue; const d = new Date(o.date_fin_fabrication); if (d.getFullYear() !== an) continue; if (o.deviation || o.deviation_cond) dev[d.getMonth()]++ }
+  return { rendement, realisation_plan, deviations: dev }
+})
+function estAuto(ind) { return ind.source && ind.source !== 'manuel' }
+function valeurAuto(ind, m) { const arr = autoParSource.value[ind.source]; const v = arr ? arr[m - 1] : null; return v == null ? '' : v }
+function valeurCell(ind, m) { return estAuto(ind) ? valeurAuto(ind, m) : (cellules[ind.id] ? cellules[ind.id][m] : '') }
 
 onMounted(async () => {
   await chargerIndicateurs()
   initCellules()
   await chargerValeurs()
+  await chargerSource()
   chargement.value = false
 })
 watch(annee, async () => { erreur.value = ''; message.value = ''; initCellules(); await chargerValeurs() })
@@ -138,7 +192,7 @@ function fmt(n) { return n == null || n === '' ? '' : Number(n).toLocaleString('
 
 function cumul(ind) {
   const vals = []
-  for (let m = 1; m <= 12; m++) { const v = cellules[ind.id] ? cellules[ind.id][m] : ''; if (v !== '' && v != null) vals.push(Number(v)) }
+  for (let m = 1; m <= 12; m++) { const v = valeurCell(ind, m); if (v !== '' && v != null) vals.push(Number(v)) }
   if (!vals.length) return null
   if (ind.agregat === 'somme') return vals.reduce((s, x) => s + x, 0)
   return vals.reduce((s, x) => s + x, 0) / vals.length
@@ -151,9 +205,9 @@ function statut(ind) {
 }
 function statutLabel(ind) { const s = statut(ind); return s === 'ok' ? 'Atteint' : s === 'ko' ? 'Non atteint' : '—' }
 
-function sparkline(indId) {
+function sparkline(ind) {
   const vals = []
-  for (let m = 1; m <= 12; m++) { const v = cellules[indId] ? cellules[indId][m] : ''; vals.push(v === '' || v == null ? null : Number(v)) }
+  for (let m = 1; m <= 12; m++) { const v = valeurCell(ind, m); vals.push(v === '' || v == null ? null : Number(v)) }
   const nums = vals.filter(v => v != null)
   if (nums.length < 2) return ''
   const min = Math.min(...nums), max = Math.max(...nums), range = (max - min) || 1
@@ -201,6 +255,7 @@ async function enregistrer() {
   erreur.value = ''; message.value = ''; enCours.value = true
   const rows = []
   for (const ind of indicateurs.value) {
+    if (estAuto(ind)) continue
     for (let m = 1; m <= 12; m++) {
       const v = cellules[ind.id] ? cellules[ind.id][m] : ''
       if (v !== '' && v != null) rows.push({ indicateur_id: ind.id, annee: annee.value, mois: m, valeur: Number(v) })
@@ -264,6 +319,8 @@ thead th.sticky { z-index: 3; background: #f8fafc; }
 
 .spark-svg { width: 110px; height: 24px; display: block; margin: 0 auto; }
 .muted-xs { color: #cbd5e1; font-size: 12px; }
+.auto-val { display: inline-block; width: 66px; text-align: right; font-size: 12.5px; color: #475569; font-weight: 600; padding: 5px 6px; }
+.auto-badge { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #6366f1; background: #eef2ff; border-radius: 4px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; }
 
 .statut { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
 .statut.ok { background: #dcfce7; color: #15803d; }
