@@ -134,7 +134,7 @@ async function chargerValeurs() {
 }
 async function chargerSource() {
   const [ro, rc, rp] = await Promise.all([
-    fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, quantite_theorique, boites_fabriquees, date_fin_fabrication, deviation, deviation_cond, produits(unites_par_boite)').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, quantite_theorique, boites_fabriquees, date_fin_fabrication, deviation, deviation_cond, produits(unites_par_boite, taille_lot, poids_lot_kg)').eq('actif', true)),
     fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, quantite_conditionnee, date_conditionnement').eq('actif', true)),
     fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee'))
   ])
@@ -156,24 +156,27 @@ const autoParSource = computed(() => {
   const Z = () => new Array(12).fill(0)
   const plan = Z()
   for (const p of plans.value) { if (Number(p.annee) === an && p.mois >= 1 && p.mois <= 12) plan[p.mois - 1] += Number(p.quantite_planifiee || 0) }
+  const kgBoite = (o) => { const p = o.produits || {}; const tl = Number(p.taille_lot || 0), plk = Number(p.poids_lot_kg || 0); return (tl > 0 && plk > 0) ? plk / tl : 0 }
   // FABRICATION — au mois de fin de fabrication
-  const fTheo = Z(), fFab = Z(), realFab = Z(), devFab = Z()
+  const fTheo = Z(), fFab = Z(), realFab = Z(), devFab = Z(), dFab = Z(), nFab = Z()
   for (const o of ofs.value) {
     if (!o.date_fin_fabrication) continue
     const d = new Date(o.date_fin_fabrication); if (d.getFullYear() !== an) continue
     const m = d.getMonth(), theo = Number(o.quantite_theorique || 0), fab = Number(o.boites_fabriquees || 0)
-    realFab[m] += fab
+    realFab[m] += fab; nFab[m]++
     if (o.deviation) devFab[m]++
+    dFab[m] += Math.max(0, theo - fab) * kgBoite(o)   // perte de fabrication en kg
     if (theo > 0 && fab > 0) { const r = fab / theo * 100; if (r >= 50 && r <= 110) { fFab[m] += fab; fTheo[m] += theo } }
   }
   // CONDITIONNEMENT — au mois de conditionnement
-  const cCond = Z(), cFab = Z(), realCond = Z(), devCond = Z()
+  const cCond = Z(), cFab = Z(), realCond = Z(), devCond = Z(), dCond = Z(), nCond = Z()
   for (const o of ofs.value) {
     const dc = condDate[o.id]; if (!dc) continue
     const d = new Date(dc); if (d.getFullYear() !== an) continue
     const m = d.getMonth(), fab = Number(o.boites_fabriquees || 0), cond = condBoites[o.id] || 0
-    realCond[m] += cond
+    realCond[m] += cond; nCond[m]++
     if (o.deviation_cond) devCond[m]++
+    dCond[m] += Math.max(0, fab - cond) * kgBoite(o)   // perte de conditionnement en kg
     if (fab > 0 && cond > 0) { const r = cond / fab * 100; if (r >= 50 && r <= 110) { cCond[m] += cond; cFab[m] += fab } }
   }
   const pct = (num, den) => den > 0 ? +(num / den * 100).toFixed(1) : null
@@ -183,7 +186,9 @@ const autoParSource = computed(() => {
     realisation_fab: plan.map((pl, i) => pct(realFab[i], pl)),
     realisation_cond: plan.map((pl, i) => pct(realCond[i], pl)),
     deviations_fab: devFab,
-    deviations_cond: devCond
+    deviations_cond: devCond,
+    dechets_fab: dFab.map((v, i) => nFab[i] > 0 ? +v.toFixed(1) : null),
+    dechets_cond: dCond.map((v, i) => nCond[i] > 0 ? +v.toFixed(1) : null)
   }
 })
 function estAuto(ind) { return ind.source && ind.source !== 'manuel' }
