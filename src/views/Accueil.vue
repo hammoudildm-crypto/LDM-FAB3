@@ -1,16 +1,22 @@
 <template>
   <div class="portail">
     <header class="portail-head">
-      <div>
+      <div class="ph-left">
         <div class="ph-eyebrow">Espace de travail</div>
-        <h1 class="ph-title">Bonjour 👋</h1>
-        <p class="ph-sub">{{ dateJour }} · indicateurs en direct</p>
+        <h1 class="ph-title">Bonjour <span class="wave">👋</span></h1>
+        <p class="ph-sub">{{ dateJour }}</p>
       </div>
+      <div class="ph-live"><span class="live-dot"></span> Indicateurs en direct</div>
     </header>
 
     <div class="portail-grid">
-      <div v-for="c in cartes" :key="c.key" class="pcard" :style="{ '--c': c.couleur }">
-        <div class="pcard-top">
+      <article v-for="c in cartes" :key="c.key" class="pcard" :style="{ '--c': c.couleur, '--cl': c.clair }">
+        <div class="pcard-body">
+          <div class="pcard-head">
+            <div class="pcard-eyebrow">{{ c.eyebrow }}</div>
+            <h2 class="pcard-title">{{ c.titre }}</h2>
+            <p class="pcard-metric">{{ c.metric }}</p>
+          </div>
           <div class="ring-wrap">
             <svg class="ring" viewBox="0 0 120 120">
               <circle class="ring-bg" cx="60" cy="60" r="52" />
@@ -25,16 +31,11 @@
               <div class="ring-sub">{{ c.sub }}</div>
             </div>
           </div>
-          <div class="pcard-head">
-            <div class="pcard-eyebrow">{{ c.eyebrow }}</div>
-            <div class="pcard-title">{{ c.titre }}</div>
-            <div class="pcard-metric">{{ c.metric }}</div>
-          </div>
         </div>
-        <div class="pcard-links">
+        <nav class="pcard-links">
           <RouterLink v-for="l in c.links" :key="l[0]" :to="l[0]" class="plink">{{ l[1] }}</RouterLink>
-        </div>
-      </div>
+        </nav>
+      </article>
     </div>
   </div>
 </template>
@@ -145,12 +146,12 @@ const dossiersVerifies = computed(() => {
 
 const cartes = computed(() => [
   {
-    key: 'tdb', couleur: '#0f766e', eyebrow: "Vue d'ensemble", titre: 'Tableau de bord',
+    key: 'tdb', couleur: '#0f766e', clair: '#f0fdfa', eyebrow: "Vue d'ensemble", titre: 'Tableau de bord',
     metric: 'Réalisation du plan annuel', sub: 'du plan', pct: reaPlan.value,
     links: [['/', 'Ouvrir le tableau de bord']]
   },
   {
-    key: 'consult', couleur: '#4338ca', eyebrow: 'Suivi & données', titre: 'Consultation',
+    key: 'consult', couleur: '#4338ca', clair: '#eef2ff', eyebrow: 'Suivi & données', titre: 'Consultation',
     metric: 'Avancement fabrication (lots terminés / lancés)', sub: 'avancés', pct: avancementFab.value,
     links: [
       ['/realisation-plan', 'Réalisation vs Plan'], ['/rendement', 'Rendement'], ['/ca', "Chiffre d'affaires"],
@@ -160,7 +161,7 @@ const cartes = computed(() => [
     ]
   },
   {
-    key: 'prod', couleur: '#c2410c', eyebrow: 'Saisie atelier', titre: 'Production & saisie',
+    key: 'prod', couleur: '#c2410c', clair: '#fff7ed', eyebrow: 'Saisie atelier', titre: 'Production & saisie',
     metric: 'TRS global de la semaine', sub: 'TRS', pct: trsGlobal.value,
     links: [
       ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication'], ['/suivi', 'Suivi fabrication'],
@@ -170,7 +171,7 @@ const cartes = computed(() => [
     ]
   },
   {
-    key: 'admin', couleur: '#047857', eyebrow: 'Paramètres & accès', titre: 'Administration',
+    key: 'admin', couleur: '#047857', clair: '#f0fdf4', eyebrow: 'Paramètres & accès', titre: 'Administration',
     metric: 'Dossiers de lot vérifiés (Production)', sub: 'vérifiés', pct: dossiersVerifies.value,
     links: [['/referentiels', 'Référentiels'], ['/habilitations', 'Habilitations']]
   }
@@ -178,35 +179,47 @@ const cartes = computed(() => [
 </script>
 
 <style scoped>
-.portail { max-width: 1120px; margin: 0 auto; padding: 8px 4px 24px; }
+.portail { max-width: 1180px; margin: 0 auto; padding: 10px 4px 28px; }
 
-.portail-head { margin-bottom: 24px; }
-.ph-eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #0f766e; }
-.ph-title { font-size: 26px; font-weight: 800; letter-spacing: -.02em; color: #1a2233; margin: 3px 0 2px; }
-.ph-sub { font-size: 13.5px; color: #64748b; text-transform: capitalize; }
+.portail-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 26px; flex-wrap: wrap; }
+.ph-eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #0f766e; }
+.ph-title { font-size: 30px; font-weight: 800; letter-spacing: -.025em; color: #0f1729; margin: 4px 0 3px; }
+.wave { display: inline-block; transform-origin: 70% 70%; animation: wave 2.6s ease-in-out infinite; }
+@keyframes wave { 0%,60%,100% { transform: rotate(0); } 10% { transform: rotate(14deg); } 20% { transform: rotate(-8deg); } 30% { transform: rotate(14deg); } 40% { transform: rotate(-4deg); } 50% { transform: rotate(10deg); } }
+.ph-sub { font-size: 14px; color: #64748b; text-transform: capitalize; }
+.ph-live { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 999px; padding: 7px 15px; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; animation: pulse 2s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,.5); } 70% { box-shadow: 0 0 0 8px rgba(16,185,129,0); } 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); } }
 
-.portail-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; }
-@media (max-width: 820px) { .portail-grid { grid-template-columns: 1fr; } }
+.portail-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+@media (max-width: 880px) { .portail-grid { grid-template-columns: 1fr; } }
 
-.pcard { background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 22px 24px; position: relative; overflow: hidden; display: flex; flex-direction: column; }
-.pcard::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--c); }
+.pcard { background: #fff; border: 1px solid #e6ebf1; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 1px 2px rgba(16,24,40,.04); transition: transform .22s cubic-bezier(.34,.9,.3,1), box-shadow .22s; }
+.pcard:hover { transform: translateY(-3px); box-shadow: 0 14px 30px -10px rgba(16,24,40,.18); }
+.pcard::before { content: ""; display: block; height: 3px; background: linear-gradient(90deg, var(--c), var(--cl)); }
 
-.pcard-top { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: center; margin-bottom: 16px; }
-.ring-wrap { position: relative; width: 116px; height: 116px; flex: none; }
-.ring { width: 116px; height: 116px; transform: rotate(-90deg); }
-.ring-bg { fill: none; stroke: #eef2f6; stroke-width: 11; }
-.ring-fg { fill: none; stroke-width: 11; stroke-linecap: round; stroke-dasharray: 326.7; transition: stroke-dashoffset 1.4s cubic-bezier(.34,.9,.3,1); }
-.ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
-.ring-pct { font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
-.ring-pct span { font-size: 15px; font-weight: 700; margin-left: 1px; }
-.ring-sub { font-size: 10.5px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-top: 4px; }
-
+.pcard-body { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 22px 24px 18px; }
 .pcard-head { min-width: 0; }
-.pcard-eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--c); margin-bottom: 3px; }
-.pcard-title { font-size: 20px; font-weight: 800; letter-spacing: -.01em; color: #1a2233; margin-bottom: 4px; }
-.pcard-metric { font-size: 13px; color: #64748b; }
+.pcard-eyebrow { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--c); margin-bottom: 6px; }
+.pcard-title { font-size: 21px; font-weight: 800; letter-spacing: -.02em; color: #0f1729; margin: 0 0 6px; }
+.pcard-metric { font-size: 13px; color: #64748b; margin: 0; line-height: 1.45; }
 
-.pcard-links { display: flex; flex-wrap: wrap; gap: 7px; padding-top: 15px; border-top: 1px solid #eef2f6; }
-.plink { display: inline-flex; align-items: center; font-size: 12.5px; font-weight: 600; color: #334155; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 11px; text-decoration: none; transition: background .15s, border-color .15s, color .15s; }
-.plink:hover { background: var(--c); border-color: var(--c); color: #fff; }
+.ring-wrap { position: relative; width: 104px; height: 104px; flex: none; }
+.ring { width: 104px; height: 104px; transform: rotate(-90deg); }
+.ring-bg { fill: none; stroke: #eef2f6; stroke-width: 9; }
+.ring-fg { fill: none; stroke-width: 9; stroke-linecap: round; stroke-dasharray: 326.7; transition: stroke-dashoffset 1.4s cubic-bezier(.34,.9,.3,1); filter: drop-shadow(0 2px 3px rgba(16,24,40,.14)); }
+.ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.ring-pct { font-size: 27px; font-weight: 800; line-height: 1; letter-spacing: -.03em; }
+.ring-pct span { font-size: 14px; font-weight: 700; margin-left: 1px; }
+.ring-sub { font-size: 9.5px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
+
+.pcard-links { display: flex; flex-wrap: wrap; gap: 7px; padding: 16px 24px 22px; border-top: 1px solid #f1f5f9; margin-top: auto; background: linear-gradient(180deg, #fff, var(--cl)); }
+.plink { display: inline-flex; align-items: center; font-size: 12.5px; font-weight: 600; color: #334155; background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; padding: 6px 12px; text-decoration: none; transition: transform .15s, background .15s, border-color .15s, color .15s, box-shadow .15s; }
+.plink:hover { background: var(--c); border-color: var(--c); color: #fff; transform: translateY(-1px); box-shadow: 0 5px 12px -4px rgba(16,24,40,.28); }
+.plink:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wave, .live-dot { animation: none; }
+  .pcard, .plink, .ring-fg { transition: none; }
+}
 </style>
