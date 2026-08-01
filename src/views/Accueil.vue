@@ -157,6 +157,7 @@ const cartes = computed(() => [
       ['/realisation-plan', 'Réalisation vs Plan'], ['/rendement', 'Rendement'], ['/ca', "Chiffre d'affaires"],
       ['/dispo-equipements', 'Disponibilité équipements'], ['/avancement', 'Suivi du process'],
       ['/production-atelier', 'Production par atelier'], ['/suivi-trs', 'Suivi TRS'],
+      ['/capacite', 'Capacité équipements'], ['/qse', 'Indicateurs QSE'],
       ['/encours', 'En-cours'], ['/dossier', 'Dossier de lot'], ['/audit', "Journal d'audit"]
     ]
   },
@@ -164,7 +165,7 @@ const cartes = computed(() => [
     key: 'prod', couleur: '#c2410c', clair: '#fff7ed', eyebrow: 'Saisie atelier', titre: 'Production & saisie',
     metric: 'TRS global de la semaine', sub: 'TRS', pct: trsGlobal.value,
     links: [
-      ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication'], ['/suivi', 'Suivi fabrication'],
+      ['/ordonnancement', 'Ordonnancement'], ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication'], ['/suivi', 'Suivi fabrication'],
       ['/conditionnement', 'Conditionnement'], ['/saisie-trs', 'Saisie TRS'],
       ['/verification-ddl', 'DDL Fab — Production'], ['/verification-ddl-aq', 'DDL Fab — AQ'],
       ['/verification-ddl-cond', 'DDL Conditionnement'], ['/effectifs', 'Effectifs']
@@ -173,7 +174,7 @@ const cartes = computed(() => [
   {
     key: 'admin', couleur: '#047857', clair: '#f0fdf4', eyebrow: 'Paramètres & accès', titre: 'Administration',
     metric: 'Dossiers de lot vérifiés (Production)', sub: 'vérifiés', pct: dossiersVerifies.value,
-    links: [['/referentiels', 'Référentiels'], ['/habilitations', 'Habilitations']]
+    links: [['/referentiels', 'Référentiels'], ['/cadences', 'Cadences'], ['/habilitations', 'Habilitations']]
   }
 ])
 </script>
