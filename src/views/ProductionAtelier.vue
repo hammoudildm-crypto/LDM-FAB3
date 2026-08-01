@@ -106,7 +106,7 @@ const matrice = computed(() => {
   return m
 })
 
-function totalLigne(ph) { return matrice.value[ph].reduce((s, x) => s + x, 0) }
+function totalLigne(ph) { return (matrice.value[ph] || []).reduce((s, x) => s + x, 0) }
 const totalColonne = computed(() => {
   const t = Array(12).fill(0)
   for (const ph of PHASES) for (let i = 0; i < 12; i++) t[i] += matrice.value[ph][i]
@@ -147,7 +147,7 @@ const matriceMultiAn = computed(() => {
 function seriesAtelier(ph) {
   return ANNEES_COMP.map((y, i) => ({ label: String(y), color: COULEURS_ANNEES[i] || '#0f766e', data: matriceMultiAn.value[ph][y] }))
 }
-function totalAtelierAnnee(ph, y) { return matriceMultiAn.value[ph][y].reduce((s, x) => s + x, 0) }
+function totalAtelierAnnee(ph, y) { return ((matriceMultiAn.value[ph] || {})[y] || []).reduce((s, x) => s + x, 0) }
 
 // --- PRÉVISIONNEL DE FIN D'ANNÉE ---------------------------------
 // Méthode : réalisé des mois clôturés, rapporté à l'année entière via le
@@ -191,7 +191,7 @@ const planParAtelier = computed(() => {
   return res
 })
 function projectionAtelier(ph) {
-  const data = matriceMultiAn.value[ph][anneeCourante] || Array(12).fill(0)
+  const data = (matriceMultiAn.value[ph] || {})[anneeCourante] || Array(12).fill(0)
   const mc = moisCourant
   const realiseTotal = data.reduce((s, x) => s + x, 0)      // réalisé (mois courant partiel inclus)
   let realiseClos = 0
@@ -212,10 +212,8 @@ function projectionAtelier(ph) {
   return { ph, realise: realiseTotal, projTotal, reste: Math.max(0, projTotal - realiseTotal), methode, vsN1, plan, pctPlan }
 }
 const projectionsTable = computed(() => {
-  // Séchage = mêmes chiffres que Granulation (granulation humide : mêmes lots).
-  const gran = projectionAtelier('Granulation')
   return PHASES
-    .map(ph => ph === 'Séchage' ? { ...gran, ph: 'Séchage' } : projectionAtelier(ph))
+    .map(ph => projectionAtelier(ph))
     .filter(r => r.realise > 0 || r.projTotal > 0 || r.plan > 0)
 })
 const atelierSel = ref('Compression')
