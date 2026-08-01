@@ -55,7 +55,10 @@
 
     <!-- Groupes ajoutés -->
     <section v-if="groupes.length" class="card">
-      <h2 class="card-title">Produits ({{ groupes.length }}) · {{ lotsDeployes.length }} lots au total</h2>
+      <div class="card-head-row">
+        <h2 class="card-title">Produits ({{ groupes.length }}) · {{ lotsDeployes.length }} lots au total</h2>
+        <button class="btn-reset" @click="remiseAZero">Remise à zéro</button>
+      </div>
       <div class="tbl-wrap">
         <table class="grid">
           <thead><tr><th class="ta-c">Prio.</th><th>Produit</th><th class="ta-r">Boîtes (total)</th><th class="ta-r">Lots</th><th>Gamme</th><th class="ta-r">CA</th><th></th></tr></thead>
@@ -151,7 +154,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { supabase } from '../supabase'
 
 const PALETTE = ['#0f766e', '#4338ca', '#c2410c', '#047857', '#7c3aed', '#0369a1', '#b91c1c', '#a16207', '#be185d', '#15803d']
@@ -186,7 +189,11 @@ onMounted(async () => {
     fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode'))
   ])
   produits.value = rp; equipements.value = re; cadences.value = rc; chargement.value = false
+  chargerLocal()
 })
+
+// Sauvegarde automatique à chaque changement
+watch([groupes, dateDepart, skipWeekend, hpj, prioAutoCA], sauvegarderLocal, { deep: true })
 
 function phaseDeType(type) {
   const t = (type || '').toLowerCase()
@@ -250,6 +257,34 @@ function ajouter() {
 function retirer(id) { groupes.value = groupes.value.filter(g => g.id !== id) }
 function setPriorite(id, val) { const g = groupes.value.find(x => x.id === id); if (g) g.priorite = Math.max(1, Number(val) || 1) }
 function caDe(g) { const p = prodById.value[g.produitId] || {}; return (Number(g.totalBoites) || 0) * (Number(p.pcsu) || 0) }
+
+// --- Persistance locale du scénario ---
+const LS_KEY = 'ldm_ordo_scenario_v1'
+function sauvegarderLocal() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      groupes: groupes.value, dateDepart: dateDepart.value, skipWeekend: skipWeekend.value,
+      hpj: hpj.value, prioAutoCA: prioAutoCA.value, seq
+    }))
+  } catch (e) { /* stockage indisponible */ }
+}
+function chargerLocal() {
+  try {
+    const raw = localStorage.getItem(LS_KEY); if (!raw) return
+    const d = JSON.parse(raw)
+    if (Array.isArray(d.groupes)) groupes.value = d.groupes
+    if (d.dateDepart) dateDepart.value = d.dateDepart
+    if (typeof d.skipWeekend === 'boolean') skipWeekend.value = d.skipWeekend
+    if (d.hpj) hpj.value = d.hpj
+    if (typeof d.prioAutoCA === 'boolean') prioAutoCA.value = d.prioAutoCA
+    if (d.seq) seq = Math.max(seq, Number(d.seq) || 1)
+  } catch (e) { /* ignore */ }
+}
+function remiseAZero() {
+  if (!confirm('Vider le scénario (produits, quantités, priorités) ? Cette action est définitive.')) return
+  groupes.value = []
+  try { localStorage.removeItem(LS_KEY) } catch (e) {}
+}
 // Priorité effective : automatique par CA décroissant, ou manuelle
 const prioriteEffective = computed(() => {
   const m = {}
@@ -436,6 +471,9 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .prio-inp { width: 46px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 12.5px; text-align: center; }
 .prio-cell { font-weight: 700; color: #0f766e; }
 .prio-auto { display: inline-block; min-width: 24px; font-weight: 800; color: #0f766e; background: #f0fdfa; border-radius: 6px; padding: 2px 8px; }
+.card-head-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.btn-reset { background: #fff; color: #b91c1c; border: 1px solid #fca5a5; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; cursor: pointer; }
+.btn-reset:hover { background: #fef2f2; }
 .cond-atelier { margin-bottom: 18px; }
 .ca-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 12px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px 8px 0 0; flex-wrap: wrap; }
 .ca-head strong { font-size: 14px; color: #0f766e; }
