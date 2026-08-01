@@ -158,6 +158,8 @@ function phaseKeyFromName(name) {
   if (/condition/.test(t)) return 'conditionnement'
   return null
 }
+// Ordre de la gamme de fabrication (pour trier les ateliers)
+const ORDRE_GAMME = { pesee: 1, granulation: 2, melange: 3, compression: 4, remplissage: 5, pelliculage: 6, conditionnement: 7 }
 function num(v, def) { const n = Number(v); return (v === null || v === undefined || isNaN(n)) ? def : n }
 function libelle(e) { const c = e.code ? String(e.code) : '', n = e.nom ? String(e.nom) : ''; return { code: c || n, nom: c && n ? n : '' } }
 
@@ -256,7 +258,7 @@ const lignes = computed(() => {
     }
     out.push({ id: grp.key, nom: grp.nom, phase, estCond, machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
   }
-  return out.sort((a, b) => b.taux - a.taux)
+  return out.sort((a, b) => (ORDRE_GAMME[a.phase] || 99) - (ORDRE_GAMME[b.phase] || 99) || b.taux - a.taux)
 })
 
 const occGlobal = computed(() => { const w = lignes.value.filter(r => r.chargeJ > 0); return w.length ? w.reduce((s, r) => s + r.taux, 0) / w.length : 0 })
