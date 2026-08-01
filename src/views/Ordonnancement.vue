@@ -4,7 +4,7 @@
       <div>
         <div class="oh-eyebrow">Planification atelier</div>
         <h1 class="oh-title">Ordonnancement — simulateur</h1>
-        <p class="oh-sub">Gamme complète datée : chaque lot enchaîne ses phases jusqu'au conditionnement.</p>
+        <p class="oh-sub">Ordonnancement par priorité : chaque lot enchaîne sa gamme jusqu'au conditionnement ; dates de début et fin de fabrication calculées.</p>
       </div>
     </div>
 
@@ -54,9 +54,10 @@
       <h2 class="card-title">Produits ({{ groupes.length }}) · {{ lotsDeployes.length }} lots au total</h2>
       <div class="tbl-wrap">
         <table class="grid">
-          <thead><tr><th>Produit</th><th class="ta-r">Boîtes (total)</th><th class="ta-r">Lots</th><th>Gamme</th><th class="ta-r">CA</th><th></th></tr></thead>
+          <thead><tr><th class="ta-c">Prio.</th><th>Produit</th><th class="ta-r">Boîtes (total)</th><th class="ta-r">Lots</th><th>Gamme</th><th class="ta-r">CA</th><th></th></tr></thead>
           <tbody>
             <tr v-for="g in groupesDetail" :key="g.id">
+              <td class="ta-c"><input type="number" min="1" class="prio-inp" :value="g.priorite" @change="setPriorite(g.id, $event.target.value)" /></td>
               <td><span class="lot-dot" :style="{ background: g.couleur }"></span><strong>{{ g.code }}</strong> <span class="lot-desig">{{ g.desig }}</span></td>
               <td class="ta-r">{{ fmt(g.boites) }}</td>
               <td class="ta-r">{{ g.nb }}</td>
@@ -65,7 +66,7 @@
               <td class="ta-r"><button class="lnk-del" @click="retirer(g.id)">✕</button></td>
             </tr>
           </tbody>
-          <tfoot><tr class="tot"><td>Total</td><td></td><td class="ta-r">{{ lotsDeployes.length }}</td><td></td><td class="ta-r">{{ fmtDA(totalCA) }}</td><td></td></tr></tfoot>
+          <tfoot><tr class="tot"><td></td><td>Total</td><td></td><td class="ta-r">{{ lotsDeployes.length }}</td><td></td><td class="ta-r">{{ fmtDA(totalCA) }}</td><td></td></tr></tfoot>
         </table>
       </div>
     </section>
@@ -77,19 +78,25 @@
         <table class="grid plan">
           <thead>
             <tr>
-              <th>N°</th><th>Produit</th><th class="ta-r">Boîtes</th>
+              <th>N°</th><th class="ta-c">Prio.</th><th>Produit</th><th class="ta-r">Boîtes</th>
+              <th colspan="2" class="ph-h sumh">Fabrication</th><th class="ph-h sumh">Cond.</th>
               <th v-for="k in colonnes" :key="k" colspan="2" class="ph-h">{{ PHASE_NOM[k] }}</th>
             </tr>
             <tr class="sub">
-              <th></th><th></th><th></th>
+              <th></th><th></th><th></th><th></th>
+              <th class="dd">Début</th><th class="dd">Fin</th><th class="dd">Fin</th>
               <template v-for="k in colonnes" :key="k"><th class="dd">Début</th><th class="dd">Fin</th></template>
             </tr>
           </thead>
           <tbody>
             <tr v-for="r in planning" :key="r.id">
               <td class="num">{{ r.num }}</td>
+              <td class="ta-c prio-cell">{{ r.prio }}</td>
               <td><span class="lot-dot" :style="{ background: r.couleur }"></span>{{ r.code }}</td>
               <td class="ta-r">{{ fmt(r.boites) }}</td>
+              <td class="dcell sum">{{ r.debutFab != null ? fmtDate(dateIdx(r.debutFab)) : '' }}</td>
+              <td class="dcell sum fin">{{ r.finFab != null ? fmtDate(dateIdx(r.finFab)) : '' }}</td>
+              <td class="dcell sum fin">{{ r.finCond != null ? fmtDate(dateIdx(r.finCond)) : '' }}</td>
               <template v-for="k in colonnes" :key="k">
                 <td class="dcell">{{ r.phases[k] ? fmtDate(dateIdx(r.phases[k].start)) : '' }}</td>
                 <td class="dcell fin">{{ r.phases[k] ? fmtDate(dateIdx(r.phases[k].end)) : '' }}</td>
@@ -98,7 +105,7 @@
           </tbody>
         </table>
       </div>
-      <p class="gantt-legend">Chaque phase démarre après la précédente du lot ET quand l'équipement se libère. Durée = (boîtes × unités/boîte) ÷ cadence, convertie en jours ({{ hpj }} h/j).</p>
+      <p class="gantt-legend">Les lots sont ordonnancés par priorité (1 = prioritaire, servi en premier). Chaque phase démarre après la précédente du lot ET quand l'équipement se libère. Durée = boîtes ÷ cadence (kg/h en fabrication, boîtes/h en conditionnement), en jours ({{ hpj }} h/j). Le conditionnement occupe ses ateliers selon la gamme.</p>
     </section>
 
     <section v-if="groupes.length" class="kpi-line">
@@ -204,20 +211,22 @@ function ajouter() {
   const tl = Number(p.taille_lot) || 0
   const total = Number(selBoites.value)
   const nb = tl > 0 ? Math.min(60, Math.ceil(total / tl)) : 1
-  groupes.value.push({ id: seq++, produitId: selProduit.value, totalBoites: total, boitesParLot: tl > 0 ? tl : total, nbLots: nb })
+  groupes.value.push({ id: seq++, produitId: selProduit.value, totalBoites: total, boitesParLot: tl > 0 ? tl : total, nbLots: nb, priorite: groupes.value.length + 1 })
 }
 function retirer(id) { groupes.value = groupes.value.filter(g => g.id !== id) }
+function setPriorite(id, val) { const g = groupes.value.find(x => x.id === id); if (g) g.priorite = Math.max(1, Number(val) || 1) }
 
 // Déploiement en lots individuels (numérotés par produit).
 const lotsDeployes = computed(() => {
   const out = []
-  groupes.value.forEach((g, gi) => {
+  const ordered = groupes.value.map((g, gi) => ({ g, gi })).sort((a, b) => ((Number(a.g.priorite) || 999) - (Number(b.g.priorite) || 999)) || (a.gi - b.gi))
+  for (const { g, gi } of ordered) {
     let reste = g.totalBoites
     for (let i = 1; i <= g.nbLots; i++) {
       const b = Math.min(g.boitesParLot, reste); reste -= b
-      out.push({ id: g.id * 1000 + i, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi) })
+      out.push({ id: g.id * 1000 + i, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi), prio: Number(g.priorite) || 999 })
     }
-  })
+  }
   return out
 })
 
@@ -271,7 +280,11 @@ const planning = computed(() => {
       slotsDe(eq)[si] = end + 1
       prevEnd = end
     }
-    rows.push({ id: lt.id, num: lt.num, code: p.code_pf, boites: lt.boites, couleur: lt.couleur, phases })
+    const fabK = Object.keys(phases).filter(k => k !== 'conditionnement')
+    const debutFab = fabK.length ? Math.min(...fabK.map(k => phases[k].start)) : null
+    const finFab = fabK.length ? Math.max(...fabK.map(k => phases[k].end)) : null
+    const cd = phases['conditionnement']
+    rows.push({ id: lt.id, num: lt.num, code: p.code_pf, boites: lt.boites, couleur: lt.couleur, prio: lt.prio, phases, debutFab, finFab, finCond: cd ? cd.end : null })
   }
   return rows
 })
@@ -289,8 +302,8 @@ const finGlobale = computed(() => {
 
 const groupesDetail = computed(() => groupes.value.map((g, gi) => {
   const p = prodById.value[g.produitId] || {}
-  return { id: g.id, code: p.code_pf || '?', desig: p.designation || '', boites: g.totalBoites, nb: g.nbLots, gammeNoms: gammeNoms(g.produitId), ca: g.totalBoites * Number(p.pcsu || 0), couleur: couleur(gi) }
-}))
+  return { id: g.id, code: p.code_pf || '?', desig: p.designation || '', boites: g.totalBoites, nb: g.nbLots, gammeNoms: gammeNoms(g.produitId), ca: g.totalBoites * Number(p.pcsu || 0), couleur: couleur(gi), priorite: g.priorite }
+}).sort((a, b) => ((Number(a.priorite) || 999) - (Number(b.priorite) || 999)) || (a.id - b.id)))
 const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0))
 </script>
 
@@ -337,6 +350,10 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .plan td.dcell.fin { color: #64748b; border-right: 2px solid #f1f5f9; }
 
 .gantt-legend { font-size: 12px; color: #64748b; margin-top: 12px; font-style: italic; }
+.prio-inp { width: 46px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 12.5px; text-align: center; }
+.prio-cell { font-weight: 700; color: #0f766e; }
+.sumh { background: #f0fdfa !important; color: #0f766e !important; }
+.dcell.sum { background: #f0fdfa; font-weight: 600; color: #0f766e; }
 
 .kpi-line { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 @media (max-width: 720px) { .kpi-line { grid-template-columns: repeat(2, 1fr); } .add-field.grow { min-width: 100%; } }
