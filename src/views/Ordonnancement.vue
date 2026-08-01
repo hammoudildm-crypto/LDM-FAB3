@@ -39,6 +39,11 @@
           <label>Périmètre</label>
           <label class="wk"><input type="checkbox" v-model="condSeul" /> Conditionnement uniquement (vrac déjà fabriqué)</label>
         </div>
+        <div class="add-field" v-if="condSeul && optimisationCond">
+          <label>Occupation ↔ Campagnes</label>
+          <input type="range" min="0" max="1" step="0.1" v-model.number="preferCampagne" class="slider-pc" />
+          <div class="slider-lbl">{{ preferCampagne < 0.34 ? 'Occupation max' : preferCampagne > 0.66 ? 'Campagnes (moins de nettoyages)' : 'Équilibré' }}</div>
+        </div>
       </div>
     </section>
 
@@ -123,7 +128,7 @@
     <!-- Planning daté -->
     <section v-if="planning.length" class="card">
       <h2 class="card-title">Planning — {{ fmtDate(dateIdx(0)) }} → {{ fmtDate(dateIdx(finGlobale)) }}</h2>
-      <p v-if="optimisationCond" class="opt-banner">Stratégie retenue : <strong>{{ strategieChoisie }}</strong> — temps mort conditionnement : <strong>{{ condIdle }} j</strong> · taux d'alimentation <strong>{{ (tauxAlim * 100).toFixed(0) }} %</strong>.</p>
+      <p v-if="optimisationCond" class="opt-banner">Stratégie : <strong>{{ strategieChoisie }}</strong> — temps mort <strong>{{ condIdle }} j</strong> · <strong>{{ condNettoyages }}</strong> nettoyage(s) (<strong>{{ condJoursNett }} j</strong>) · alimentation <strong>{{ (tauxAlim * 100).toFixed(0) }} %</strong>.</p>
       <div class="tbl-wrap">
         <table class="grid plan">
           <thead>
@@ -216,6 +221,7 @@
       <div class="kpi-mini"><div class="km-val">{{ lotsDeployes.length }}</div><div class="km-lbl">Lots</div></div>
       <div class="kpi-mini"><div class="km-val">{{ finGlobale + 1 }} j</div><div class="km-lbl">Jours ouvrés</div></div>
       <div class="kpi-mini" v-if="tauxAlim > 0"><div class="km-val">{{ (tauxAlim * 100).toFixed(0) }} %</div><div class="km-lbl">Alim. conditionnement</div></div>
+      <div class="kpi-mini" v-if="optimisationCond && condSeul"><div class="km-val">{{ condNettoyages }}</div><div class="km-lbl">Nettoyages</div></div>
       <div class="kpi-mini"><div class="km-val">{{ fmtDate(dateIdx(finGlobale)) }}</div><div class="km-lbl">Fin de planning</div></div>
     </section>
   </div>
@@ -238,6 +244,7 @@ const skipWeekend = ref(true)
 const prioAutoCA = ref(true)
 const optimisationCond = ref(false)
 const condSeul = ref(false)
+const preferCampagne = ref(0.5)
 const hpj = ref(24)
 const selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref('')
 let seq = 1
@@ -455,6 +462,9 @@ function simuler(lots) {
     if (!slots[e.id]) { const n = Math.max(1, Math.floor(Number(e.nb_machines) || 1)); slots[e.id] = new Array(n).fill(0) }
     return slots[e.id]
   }
+  const slotsProd = {}
+  function prodsDe(e) { if (!slotsProd[e.id]) { const n = Math.max(1, Math.floor(Number(e.nb_machines) || 1)); slotsProd[e.id] = new Array(n).fill(null) } return slotsProd[e.id] }
+  let nettoyages = 0, joursNett = 0
   const rows = []
   for (const lt of lots) {
     const seqPh = gammeProduit(lt.produitId)
@@ -469,10 +479,13 @@ function simuler(lots) {
       let eq = null, si = -1, libre = Infinity
       for (const e of compat) { const arr = slotsDe(e); for (let i = 0; i < arr.length; i++) if (arr[i] < libre) { libre = arr[i]; eq = e; si = i } }
       const duree = dureeJours(eq, lt.produitId, lt.boites)
-      const start = Math.max(prevEnd + 1, slotsDe(eq)[si] || 0)
+      let clean = 0
+      if (k === 'conditionnement') { const last = prodsDe(eq)[si]; if (last !== null && last !== lt.produitId) { clean = Math.ceil(((Number(eq.vdlt) || 0) + (Number(eq.reglage) || 0)) / hpj.value); if (clean > 0) { nettoyages++; joursNett += clean } } }
+      const start = Math.max(prevEnd + 1, (slotsDe(eq)[si] || 0) + clean)
       const end = start + duree - 1
       phases[k] = { start, end, equip: eq.nom || eq.code }
       slotsDe(eq)[si] = end + 1
+      if (k === 'conditionnement') prodsDe(eq)[si] = lt.produitId
       prevEnd = end
     }
     const fabK = Object.keys(phases).filter(k => k !== 'conditionnement')
@@ -492,7 +505,7 @@ function simuler(lots) {
   }
   let idle = 0, busy = 0, span = 0
   for (const a of Object.values(condByEq)) { const sp = a.max - a.min + 1; idle += Math.max(0, sp - a.busy); busy += a.busy; span += sp }
-  return { rows, fin, condIdle: idle, condBusy: busy, condSpan: span }
+  return { rows, fin, condIdle: idle, condBusy: busy, condSpan: span, nettoyages, joursNett }
 }
 
 // Ordre entrelacé : round-robin des lots entre produits (respecte l'ordre de priorité des produits)
@@ -517,12 +530,15 @@ function simulerGreedyCond(lots) {
   for (const e of equipements.value) {
     if (phaseDeType(e.type) !== 'conditionnement') continue
     const n = Math.max(1, Math.floor(Number(e.nb_machines) || 1))
-    for (let i = 0; i < n; i++) machines.push({ equipId: e.id, equip: e, equipNom: e.nom || e.code, free: 0 })
+    const chH = (Number(e.vdlt) || 0) + (Number(e.reglage) || 0)
+    for (let i = 0; i < n; i++) machines.push({ equipId: e.id, equip: e, equipNom: e.nom || e.code, free: 0, lastProd: null, chH })
   }
   const caDe = (lt) => { const pr = prodById.value[lt.produitId] || {}; return lt.boites * (Number(pr.pcsu) || 0) }
   const readyOf = (lt) => lt.dateFixe ? idxDeDate(lt.dateFixe) : 0
   const rows = []
   const remaining = lots.slice()
+  const pc = preferCampagne.value
+  let nettoyages = 0, joursNett = 0
   while (remaining.length && machines.length) {
     machines.sort((a, b) => a.free - b.free)
     const m = machines[0]
@@ -532,15 +548,20 @@ function simulerGreedyCond(lots) {
       if (!(cadMap.value[m.equipId + '|' + lt.produitId] > 0)) continue
       const chx = choixEquip[lt.groupeId + '|conditionnement']
       if (chx && chx !== m.equipId) continue
-      const c = caDe(lt)
+      const same = m.lastProd === lt.produitId
+      const c = caDe(lt) * (same ? (1 + 3 * pc) : 1)
       if (c > bestCA) { bestCA = c; best = i }
     }
     if (best < 0) { machines.shift(); continue }
     const lt = remaining.splice(best, 1)[0]
+    const productChange = m.lastProd !== null && m.lastProd !== lt.produitId
+    const clean = productChange ? Math.ceil(m.chH / hpj.value) : 0
+    if (clean > 0) { nettoyages++; joursNett += clean }
     const duree = dureeJours(m.equip, lt.produitId, lt.boites)
-    const start = Math.max(m.free, readyOf(lt))
+    const start = Math.max(m.free + clean, readyOf(lt))
     const end = start + duree - 1
     m.free = end + 1
+    m.lastProd = lt.produitId
     const pr = prodById.value[lt.produitId] || {}
     rows.push({ id: lt.id, num: lt.num, numeroLot: lt.numeroLot, code: pr.code_pf, desig: pr.designation, boites: lt.boites, couleur: lt.couleur, prio: lt.prio, phases: { conditionnement: { start, end, equip: m.equipNom } }, debutFab: null, finFab: null, finCond: end })
   }
@@ -555,7 +576,7 @@ function simulerGreedyCond(lots) {
   }
   let idle = 0, busy = 0, span = 0
   for (const a of Object.values(condByEq)) { const sp = a.max - a.min + 1; idle += Math.max(0, sp - a.busy); busy += a.busy; span += sp }
-  return { rows, fin, condIdle: idle, condBusy: busy, condSpan: span }
+  return { rows, fin, condIdle: idle, condBusy: busy, condSpan: span, nettoyages, joursNett }
 }
 
 const resultatSimu = computed(() => {
@@ -563,12 +584,14 @@ const resultatSimu = computed(() => {
   if (!optimisationCond.value) return prio
   const cands = [prio, { ...simuler(ordreEntrelace()), strategie: 'Entrelacé' }]
   if (condSeul.value) cands.push({ ...simulerGreedyCond(lotsDeployes.value), strategie: 'Sous-campagnes' })
-  return cands.sort((a, b) => (a.condIdle - b.condIdle) || (a.fin - b.fin))[0]
+  return cands.sort((a, b) => ((a.condIdle + (a.joursNett || 0)) - (b.condIdle + (b.joursNett || 0))) || (a.fin - b.fin))[0]
 })
 const planning = computed(() => resultatSimu.value.rows)
 const condIdle = computed(() => resultatSimu.value.condIdle)
 const strategieChoisie = computed(() => resultatSimu.value.strategie)
 const tauxAlim = computed(() => { const r = resultatSimu.value; return r.condSpan > 0 ? r.condBusy / r.condSpan : 0 })
+const condNettoyages = computed(() => resultatSimu.value.nettoyages || 0)
+const condJoursNett = computed(() => resultatSimu.value.joursNett || 0)
 
 const colonnes = computed(() => {
   const used = new Set()
@@ -733,6 +756,8 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .aff-ph-lbl { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
 .aff-ph select { padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; min-width: 170px; }
 .opt-banner { font-size: 13px; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+.slider-pc { width: 170px; accent-color: #0f766e; }
+.slider-lbl { font-size: 11px; color: #64748b; margin-top: 3px; }
 .cond-atelier { margin-bottom: 18px; }
 .ca-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 12px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px 8px 0 0; flex-wrap: wrap; }
 .ca-head strong { font-size: 14px; color: #0f766e; }
