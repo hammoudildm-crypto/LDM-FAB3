@@ -1,12 +1,15 @@
 <template>
-  <div class="portail">
+  <div class="portail" :class="{ dark }">
     <header class="portail-head">
       <div class="ph-left">
         <div class="ph-eyebrow">Espace de travail</div>
         <h1 class="ph-title">Bonjour <span class="wave">👋</span></h1>
         <p class="ph-sub">{{ dateJour }}</p>
       </div>
-      <div class="ph-live"><span class="live-dot"></span> Indicateurs en direct</div>
+      <div class="ph-right">
+        <div class="ph-live"><span class="live-dot"></span> Indicateurs en direct</div>
+        <button class="theme-btn" @click="toggleDark" :title="dark ? 'Passer en clair' : 'Passer en sombre'">{{ dark ? '☀' : '🌙' }}</button>
+      </div>
     </header>
 
     <div class="portail-grid">
@@ -37,6 +40,10 @@ import { supabase } from '../supabase'
 
 const anneeCourante = new Date().getFullYear()
 const dateJour = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
+const dark = ref(false)
+try { dark.value = localStorage.getItem('accueil_dark') === '1' } catch (e) {}
+function toggleDark() { dark.value = !dark.value; try { localStorage.setItem('accueil_dark', dark.value ? '1' : '0') } catch (e) {} }
 
 const ordres = ref([])
 const plan = ref([])
@@ -207,4 +214,22 @@ const cartes = computed(() => [
   .wave, .live-dot { animation: none; }
   .pcard, .plink { transition: none; }
 }
+
+/* Bouton de thème */
+.portail { transition: background .3s; }
+.ph-right { display: flex; align-items: center; gap: 12px; }
+.theme-btn { width: 38px; height: 38px; border-radius: 999px; border: 1px solid #e2e8f0; background: #f1f5f9; font-size: 16px; line-height: 1; cursor: pointer; transition: background .15s, border-color .15s; }
+.theme-btn:hover { background: #e2e8f0; }
+
+/* Thème sombre (inspiré Square CRM) */
+.portail.dark { background: #0f1220; border-radius: 18px; padding: 22px 20px 30px; min-height: calc(100vh - 120px); }
+.portail.dark .ph-title { color: #f1f5f9; }
+.portail.dark .ph-sub { color: #94a3b8; }
+.portail.dark .theme-btn { background: #232838; border-color: #333a4f; }
+.portail.dark .theme-btn:hover { background: #2c3244; }
+.portail.dark .pcard { background: #1b1e2b; border-color: #2a2f42; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+.portail.dark .pcard:hover { box-shadow: 0 18px 36px -12px rgba(0,0,0,.55); }
+.portail.dark .pcard-links { background: #171a26; }
+.portail.dark .plink { background: #232838; color: #cbd5e1; border-color: #333a4f; }
+.portail.dark .plink:hover { background: var(--c); border-color: var(--c); color: #fff; }
 </style>
