@@ -129,7 +129,7 @@
       <h2 class="card-title">Vue Gantt — enchaînement des lots</h2>
       <div class="gantt">
         <div v-for="r in planning" :key="r.id" class="g-row">
-          <div class="g-lbl"><span class="lot-dot" :style="{ background: r.couleur }"></span>{{ r.num }}·{{ r.code }}</div>
+          <div class="g-lbl" :title="r.code + ' — ' + r.desig"><span class="lot-dot" :style="{ background: r.couleur }"></span><strong>{{ r.num }}·{{ r.code }}</strong> <span class="g-desig">{{ r.desig }}</span></div>
           <div class="g-track">
             <div v-for="k in Object.keys(r.phases)" :key="k" class="g-bar" :class="{ cond: k === 'conditionnement' }"
                  :style="{ left: barLeft(r.phases[k]), width: barWidth(r.phases[k]), background: r.couleur }"
@@ -524,7 +524,8 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .manq-ph { font-weight: 700; color: #b45309; }
 .gantt { display: flex; flex-direction: column; gap: 4px; overflow-x: auto; }
 .g-row { display: flex; align-items: center; gap: 8px; min-height: 24px; }
-.g-lbl { width: 140px; flex-shrink: 0; font-size: 11.5px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-lbl { width: 210px; flex-shrink: 0; font-size: 11.5px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-desig { color: #94a3b8; }
 .g-track { position: relative; flex: 1; height: 20px; min-width: 520px; background: #f8fafc; border-radius: 4px; }
 .g-bar { position: absolute; top: 2px; height: 16px; border-radius: 3px; opacity: .82; display: flex; align-items: center; overflow: hidden; }
 .g-bar.cond { opacity: 1; border: 2px solid #1e293b; box-sizing: border-box; }
