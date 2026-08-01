@@ -31,6 +31,10 @@
           <label>Priorité</label>
           <label class="wk"><input type="checkbox" v-model="prioAutoCA" /> Automatique par CA le plus élevé</label>
         </div>
+        <div class="add-field chk-wk">
+          <label>Conditionnement</label>
+          <label class="wk"><input type="checkbox" v-model="optimisationCond" /> Optimiser l'alimentation (éviter les temps morts)</label>
+        </div>
       </div>
     </section>
 
@@ -115,6 +119,7 @@
     <!-- Planning daté -->
     <section v-if="planning.length" class="card">
       <h2 class="card-title">Planning — {{ fmtDate(dateIdx(0)) }} → {{ fmtDate(dateIdx(finGlobale)) }}</h2>
+      <p v-if="optimisationCond" class="opt-banner">Stratégie retenue : <strong>{{ strategieChoisie }}</strong> — temps mort conditionnement : <strong>{{ condIdle }} j</strong> · taux d'alimentation <strong>{{ (tauxAlim * 100).toFixed(0) }} %</strong>.</p>
       <div class="tbl-wrap">
         <table class="grid plan">
           <thead>
@@ -206,6 +211,7 @@
       <div class="kpi-mini"><div class="km-val">{{ fmtDA(totalCA) }}</div><div class="km-lbl">CA total</div></div>
       <div class="kpi-mini"><div class="km-val">{{ lotsDeployes.length }}</div><div class="km-lbl">Lots</div></div>
       <div class="kpi-mini"><div class="km-val">{{ finGlobale + 1 }} j</div><div class="km-lbl">Jours ouvrés</div></div>
+      <div class="kpi-mini" v-if="tauxAlim > 0"><div class="km-val">{{ (tauxAlim * 100).toFixed(0) }} %</div><div class="km-lbl">Alim. conditionnement</div></div>
       <div class="kpi-mini"><div class="km-val">{{ fmtDate(dateIdx(finGlobale)) }}</div><div class="km-lbl">Fin de planning</div></div>
     </section>
   </div>
@@ -226,6 +232,7 @@ const groupes = ref([])   // { id, produitId, boites, nbLots }
 const dateDepart = ref(new Date().toISOString().slice(0, 10))
 const skipWeekend = ref(true)
 const prioAutoCA = ref(true)
+const optimisationCond = ref(false)
 const hpj = ref(24)
 const selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref('')
 let seq = 1
@@ -426,14 +433,15 @@ const joursOuvres = computed(() => {
 function dateIdx(idx) { const a = joursOuvres.value; return a.length ? a[Math.max(0, Math.min(idx, a.length - 1))] : null }
 
 // Ordonnancement : chaque lot enchaîne sa gamme, chaque phase après la précédente ET la libération de l'équipement.
-const planning = computed(() => {
-  const slots = {}   // equipId -> tableau des prochains jours libres (1 entrée par machine)
+// Ordonnance une liste de lots et mesure le temps mort du conditionnement
+function simuler(lots) {
+  const slots = {}
   function slotsDe(e) {
     if (!slots[e.id]) { const n = Math.max(1, Math.floor(Number(e.nb_machines) || 1)); slots[e.id] = new Array(n).fill(0) }
     return slots[e.id]
   }
   const rows = []
-  for (const lt of lotsDeployes.value) {
+  for (const lt of lots) {
     const seqPh = gammeProduit(lt.produitId)
     const p = prodById.value[lt.produitId] || {}
     let prevEnd = -1
@@ -443,7 +451,6 @@ const planning = computed(() => {
       const chx = choixEquip[lt.groupeId + '|' + k]
       if (chx) { const f = compat.filter(e => e.id === chx); if (f.length) compat = f }
       if (!compat.length) continue
-      // machine (équipement + créneau) qui se libère le plus tôt
       let eq = null, si = -1, libre = Infinity
       for (const e of compat) { const arr = slotsDe(e); for (let i = 0; i < arr.length; i++) if (arr[i] < libre) { libre = arr[i]; eq = e; si = i } }
       const duree = dureeJours(eq, lt.produitId, lt.boites)
@@ -459,8 +466,45 @@ const planning = computed(() => {
     const cd = phases['conditionnement']
     rows.push({ id: lt.id, num: lt.num, code: p.code_pf, desig: p.designation, boites: lt.boites, couleur: lt.couleur, prio: lt.prio, phases, debutFab, finFab, finCond: cd ? cd.end : null })
   }
-  return rows
+  let fin = 0; for (const r of rows) for (const k in r.phases) fin = Math.max(fin, r.phases[k].end)
+  const condByEq = {}
+  for (const r of rows) {
+    const cd = r.phases['conditionnement']; if (!cd) continue
+    if (!condByEq[cd.equip]) condByEq[cd.equip] = { busy: 0, min: cd.start, max: cd.end }
+    const a = condByEq[cd.equip]; a.busy += cd.end - cd.start + 1
+    if (cd.start < a.min) a.min = cd.start
+    if (cd.end > a.max) a.max = cd.end
+  }
+  let idle = 0, busy = 0, span = 0
+  for (const a of Object.values(condByEq)) { const sp = a.max - a.min + 1; idle += Math.max(0, sp - a.busy); busy += a.busy; span += sp }
+  return { rows, fin, condIdle: idle, condBusy: busy, condSpan: span }
+}
+
+// Ordre entrelacé : round-robin des lots entre produits (respecte l'ordre de priorité des produits)
+function ordreEntrelace() {
+  const pe = prioriteEffective.value
+  const gs = groupes.value.map((g, gi) => ({ g, gi })).sort((a, b) => ((pe[a.g.id] || 999) - (pe[b.g.id] || 999)) || (a.gi - b.gi))
+  const parG = gs.map(({ g, gi }) => {
+    const arr = []; let reste = g.totalBoites
+    for (let i = 1; i <= g.nbLots; i++) { const b = Math.min(g.boitesParLot, reste); reste -= b; arr.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi), prio: pe[g.id] || 999 }) }
+    return arr
+  })
+  const maxL = parG.reduce((m, a) => Math.max(m, a.length), 0)
+  const out = []
+  for (let i = 0; i < maxL; i++) for (const arr of parG) if (arr[i]) out.push(arr[i])
+  return out
+}
+
+const resultatSimu = computed(() => {
+  const prio = { ...simuler(lotsDeployes.value), strategie: 'Priorité' }
+  if (!optimisationCond.value) return prio
+  const entre = { ...simuler(ordreEntrelace()), strategie: 'Entrelacé' }
+  return [prio, entre].sort((a, b) => (a.condIdle - b.condIdle) || (a.fin - b.fin))[0]
 })
+const planning = computed(() => resultatSimu.value.rows)
+const condIdle = computed(() => resultatSimu.value.condIdle)
+const strategieChoisie = computed(() => resultatSimu.value.strategie)
+const tauxAlim = computed(() => { const r = resultatSimu.value; return r.condSpan > 0 ? r.condBusy / r.condSpan : 0 })
 
 const colonnes = computed(() => {
   const used = new Set()
@@ -623,6 +667,7 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .aff-ph { display: flex; flex-direction: column; gap: 3px; }
 .aff-ph-lbl { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
 .aff-ph select { padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; min-width: 170px; }
+.opt-banner { font-size: 13px; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
 .cond-atelier { margin-bottom: 18px; }
 .ca-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 12px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px 8px 0 0; flex-wrap: wrap; }
 .ca-head strong { font-size: 14px; color: #0f766e; }
