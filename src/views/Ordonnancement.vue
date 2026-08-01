@@ -83,6 +83,26 @@
       </div>
     </section>
 
+    <!-- Affectation des équipements (machines identiques) -->
+    <section v-if="groupes.length && aDesChoix" class="card">
+      <h2 class="card-title">Affectation des équipements</h2>
+      <p class="muted aff-intro">Pour les phases où plusieurs équipements identiques existent, choisis lequel utilise le produit. « Auto » = le simulateur prend le plus tôt disponible.</p>
+      <div v-for="g in groupesDetail" :key="g.id" class="aff-prod">
+        <div class="aff-nom"><span class="lot-dot" :style="{ background: g.couleur }"></span><strong>{{ g.code }}</strong> <span class="lot-desig">{{ g.desig }}</span></div>
+        <div class="aff-phases">
+          <template v-for="k in gammeProduit(g.produitId)" :key="k">
+            <label v-if="equipsPhase(g.produitId, k).length > 1" class="aff-ph">
+              <span class="aff-ph-lbl">{{ PHASE_NOM[k] }}</span>
+              <select v-model="choixEquip[g.id + '|' + k]">
+                <option value="">Auto (le plus tôt libre)</option>
+                <option v-for="e in equipsPhase(g.produitId, k)" :key="e.id" :value="e.id">{{ e.nom || e.code }}</option>
+              </select>
+            </label>
+          </template>
+        </div>
+      </div>
+    </section>
+
     <!-- Phases non planifiées -->
     <section v-if="phasesManquantes.length" class="card warn-card">
       <h2 class="card-title">⚠ Phases non planifiées ({{ phasesManquantes.length }})</h2>
@@ -192,7 +212,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, reactive } from 'vue'
 import { supabase } from '../supabase'
 
 const PALETTE = ['#0f766e', '#4338ca', '#c2410c', '#047857', '#7c3aed', '#0369a1', '#b91c1c', '#a16207', '#be185d', '#15803d']
@@ -282,6 +302,10 @@ function gammeProduit(produitId) {
   return keys
 }
 function gammeNoms(produitId) { return gammeProduit(produitId).map(k => PHASE_NOM[k]).join(' → ') }
+// Choix d'équipement par (groupe|phase) ; vide = auto (le plus tôt libre)
+const choixEquip = reactive({})
+function equipsPhase(produitId, k) { return equipements.value.filter(e => phaseDeType(e.type) === k && cadMap.value[e.id + '|' + produitId] > 0) }
+const aDesChoix = computed(() => groupes.value.some(g => gammeProduit(g.produitId).some(k => equipsPhase(g.produitId, k).length > 1)))
 
 const tailleLotSel = computed(() => { const p = prodById.value[selProduit.value]; return p ? (Number(p.taille_lot) || 0) : 0 })
 const lotsAuto = computed(() => { const b = Number(selBoites.value) || 0, tl = tailleLotSel.value; return (b > 0 && tl > 0) ? Math.ceil(b / tl) : 0 })
@@ -371,7 +395,7 @@ const lotsDeployes = computed(() => {
     let reste = g.totalBoites
     for (let i = 1; i <= g.nbLots; i++) {
       const b = Math.min(g.boitesParLot, reste); reste -= b
-      out.push({ id: g.id * 1000 + i, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi), prio: pe[g.id] || 999 })
+      out.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi), prio: pe[g.id] || 999 })
     }
   }
   return out
@@ -415,7 +439,9 @@ const planning = computed(() => {
     let prevEnd = -1
     const phases = {}
     for (const k of seqPh) {
-      const compat = equipements.value.filter(e => phaseDeType(e.type) === k && cadMap.value[e.id + '|' + lt.produitId] > 0)
+      let compat = equipements.value.filter(e => phaseDeType(e.type) === k && cadMap.value[e.id + '|' + lt.produitId] > 0)
+      const chx = choixEquip[lt.groupeId + '|' + k]
+      if (chx) { const f = compat.filter(e => e.id === chx); if (f.length) compat = f }
       if (!compat.length) continue
       // machine (équipement + créneau) qui se libère le plus tôt
       let eq = null, si = -1, libre = Infinity
@@ -510,7 +536,7 @@ const groupesDetail = computed(() => {
   const pe = prioriteEffective.value
   return groupes.value.map((g, gi) => {
     const p = prodById.value[g.produitId] || {}
-    return { id: g.id, code: p.code_pf || '?', desig: p.designation || '', boites: g.totalBoites, nb: g.nbLots, gammeNoms: gammeNoms(g.produitId), ca: g.totalBoites * Number(p.pcsu || 0), couleur: couleur(gi), priorite: pe[g.id] || 999 }
+    return { id: g.id, produitId: g.produitId, code: p.code_pf || '?', desig: p.designation || '', boites: g.totalBoites, nb: g.nbLots, gammeNoms: gammeNoms(g.produitId), ca: g.totalBoites * Number(p.pcsu || 0), couleur: couleur(gi), priorite: pe[g.id] || 999 }
   }).sort((a, b) => ((a.priorite || 999) - (b.priorite || 999)) || (a.id - b.id))
 })
 const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0))
@@ -589,6 +615,14 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .g-bar { position: absolute; top: 2px; height: 16px; border-radius: 3px; opacity: .82; display: flex; align-items: center; overflow: hidden; }
 .g-bar.cond { opacity: 1; border: 2px solid #1e293b; box-sizing: border-box; }
 .gb-t { font-size: 9px; color: #fff; font-weight: 700; padding: 0 3px; white-space: nowrap; }
+.aff-intro { margin-bottom: 12px; }
+.aff-prod { padding: 10px 0; border-bottom: 1px solid #eef2f6; }
+.aff-prod:last-child { border-bottom: 0; }
+.aff-nom { font-size: 13.5px; color: #1b2733; margin-bottom: 8px; }
+.aff-phases { display: flex; flex-wrap: wrap; gap: 12px; }
+.aff-ph { display: flex; flex-direction: column; gap: 3px; }
+.aff-ph-lbl { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
+.aff-ph select { padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; min-width: 170px; }
 .cond-atelier { margin-bottom: 18px; }
 .ca-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 12px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px 8px 0 0; flex-wrap: wrap; }
 .ca-head strong { font-size: 14px; color: #0f766e; }
