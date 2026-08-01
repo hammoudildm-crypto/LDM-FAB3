@@ -153,6 +153,7 @@ function phaseDeType(type) {
   if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)) return 'conditionnement'
   return null
 }
+const ORDRE_GAMME = { pesee: 1, granulation: 2, melange: 3, compression: 4, remplissage: 5, pelliculage: 6, conditionnement: 7 }
 function baseNom(nom) {
   return String(nom || '').trim().replace(/\s+(\d{1,2})\s*$/, (m, n) => (Number(n) <= 20 ? '' : m)).trim()
 }
@@ -182,16 +183,18 @@ const groupes = computed(() => {
     if (!g[key]) g[key] = { key, nom: label, phase: phaseDeType(e.type), atelier_id: e.atelier_id, equips: [] }
     g[key].equips.push(e)
   }
-  return Object.values(g).sort((a, b) => (a.nom || '').localeCompare(b.nom || ''))
+  return Object.values(g).sort((a, b) => (ORDRE_GAMME[a.phase] || 99) - (ORDRE_GAMME[b.phase] || 99) || (a.nom || '').localeCompare(b.nom || ''))
 })
 const groupesParAtelier = computed(() => {
   const g = {}
   for (const grp of groupes.value) {
     const aid = grp.atelier_id || 'sans'
-    if (!g[aid]) g[aid] = { aid, nom: (atelierById.value[aid] && atelierById.value[aid].nom) || 'Sans atelier', groupes: [] }
+    if (!g[aid]) g[aid] = { aid, nom: (atelierById.value[aid] && atelierById.value[aid].nom) || 'Sans atelier', groupes: [], phaseMin: 99 }
     g[aid].groupes.push(grp)
+    const o = ORDRE_GAMME[grp.phase] || 99
+    if (o < g[aid].phaseMin) g[aid].phaseMin = o
   }
-  return Object.values(g).sort((a, b) => a.nom.localeCompare(b.nom))
+  return Object.values(g).sort((a, b) => (a.phaseMin - b.phaseMin) || a.nom.localeCompare(b.nom))
 })
 
 const groupeSel = computed(() => groupes.value.find(g => g.key === selGroupe.value) || null)
