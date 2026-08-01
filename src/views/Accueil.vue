@@ -10,26 +10,16 @@
     </header>
 
     <div class="portail-grid">
-      <article v-for="c in cartes" :key="c.key" class="pcard" :style="{ '--c': c.couleur, '--cl': c.clair }">
-        <div class="pcard-body">
-          <div class="pcard-head">
-            <div class="pcard-eyebrow">{{ c.eyebrow }}</div>
-            <h2 class="pcard-title">{{ c.titre }}</h2>
-            <p class="pcard-metric">{{ c.metric }}</p>
+      <article v-for="c in cartes" :key="c.key" class="pcard" :style="{ '--c': c.couleur, '--cd': c.fonce, '--cl': c.clair }">
+        <div class="pcard-kpi">
+          <div class="kpi-info">
+            <div class="kpi-eyebrow">{{ c.eyebrow }}</div>
+            <div class="kpi-titre">{{ c.titre }}</div>
+            <div class="kpi-metric">{{ c.metric }}</div>
           </div>
-          <div class="ring-wrap">
-            <svg class="ring" viewBox="0 0 120 120">
-              <circle class="ring-bg" cx="60" cy="60" r="52" />
-              <circle class="ring-fg" cx="60" cy="60" r="52" :style="{ stroke: c.couleur, strokeDashoffset: offset(c.pct) }" />
-            </svg>
-            <div class="ring-center">
-              <div class="ring-pct" :style="{ color: c.couleur }">
-                <template v-if="chargement">…</template>
-                <template v-else-if="c.pct != null">{{ Math.round(c.pct) }}<span>%</span></template>
-                <template v-else>—</template>
-              </div>
-              <div class="ring-sub">{{ c.sub }}</div>
-            </div>
+          <div class="kpi-num">
+            <div class="kpi-val"><template v-if="chargement">…</template><template v-else-if="c.pct != null">{{ Math.round(c.pct) }}<span>%</span></template><template v-else>—</template></div>
+            <div class="kpi-sub">{{ c.sub }}</div>
           </div>
         </div>
         <nav class="pcard-links">
@@ -146,12 +136,12 @@ const dossiersVerifies = computed(() => {
 
 const cartes = computed(() => [
   {
-    key: 'tdb', couleur: '#0f766e', clair: '#f0fdfa', eyebrow: "Vue d'ensemble", titre: 'Tableau de bord',
+    key: 'tdb', couleur: '#0f766e', clair: '#f0fdfa', fonce: '#0c5f59', eyebrow: "Vue d'ensemble", titre: 'Tableau de bord',
     metric: 'Réalisation du plan annuel', sub: 'du plan', pct: reaPlan.value,
     links: [['/', 'Ouvrir le tableau de bord']]
   },
   {
-    key: 'consult', couleur: '#4338ca', clair: '#eef2ff', eyebrow: 'Suivi & données', titre: 'Consultation',
+    key: 'consult', couleur: '#4338ca', clair: '#eef2ff', fonce: '#3730a3', eyebrow: 'Suivi & données', titre: 'Consultation',
     metric: 'Avancement fabrication (lots terminés / lancés)', sub: 'avancés', pct: avancementFab.value,
     links: [
       ['/realisation-plan', 'Réalisation vs Plan'], ['/rendement', 'Rendement'], ['/ca', "Chiffre d'affaires"],
@@ -162,7 +152,7 @@ const cartes = computed(() => [
     ]
   },
   {
-    key: 'prod', couleur: '#c2410c', clair: '#fff7ed', eyebrow: 'Saisie atelier', titre: 'Production & saisie',
+    key: 'prod', couleur: '#c2410c', clair: '#fff7ed', fonce: '#9a3412', eyebrow: 'Saisie atelier', titre: 'Production & saisie',
     metric: 'TRS global de la semaine', sub: 'TRS', pct: trsGlobal.value,
     links: [
       ['/ordonnancement', 'Ordonnancement'], ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication'], ['/suivi', 'Suivi fabrication'],
@@ -172,7 +162,7 @@ const cartes = computed(() => [
     ]
   },
   {
-    key: 'admin', couleur: '#047857', clair: '#f0fdf4', eyebrow: 'Paramètres & accès', titre: 'Administration',
+    key: 'admin', couleur: '#047857', clair: '#f0fdf4', fonce: '#065f46', eyebrow: 'Paramètres & accès', titre: 'Administration',
     metric: 'Dossiers de lot vérifiés (Production)', sub: 'vérifiés', pct: dossiersVerifies.value,
     links: [['/referentiels', 'Référentiels'], ['/cadences', 'Cadences'], ['/habilitations', 'Habilitations']]
   }
@@ -195,32 +185,26 @@ const cartes = computed(() => [
 .portail-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
 @media (max-width: 880px) { .portail-grid { grid-template-columns: 1fr; } }
 
-.pcard { background: #fff; border: 1px solid #e6ebf1; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 1px 2px rgba(16,24,40,.04); transition: transform .22s cubic-bezier(.34,.9,.3,1), box-shadow .22s; }
-.pcard:hover { transform: translateY(-3px); box-shadow: 0 14px 30px -10px rgba(16,24,40,.18); }
-.pcard::before { content: ""; display: block; height: 3px; background: linear-gradient(90deg, var(--c), var(--cl)); }
+.pcard { background: #fff; border: 1px solid #e6ebf1; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 1px 2px rgba(16,24,40,.05); transition: transform .22s cubic-bezier(.34,.9,.3,1), box-shadow .22s; }
+.pcard:hover { transform: translateY(-3px); box-shadow: 0 16px 34px -12px rgba(16,24,40,.22); }
 
-.pcard-body { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 22px 24px 18px; }
-.pcard-head { min-width: 0; }
-.pcard-eyebrow { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--c); margin-bottom: 6px; }
-.pcard-title { font-size: 21px; font-weight: 800; letter-spacing: -.02em; color: #0f1729; margin: 0 0 6px; }
-.pcard-metric { font-size: 13px; color: #64748b; margin: 0; line-height: 1.45; }
+.pcard-kpi { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 22px 24px; background: linear-gradient(135deg, var(--c), var(--cd)); color: #fff; }
+.kpi-info { min-width: 0; }
+.kpi-eyebrow { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; opacity: .82; }
+.kpi-titre { font-size: 20px; font-weight: 800; letter-spacing: -.02em; margin: 5px 0 4px; }
+.kpi-metric { font-size: 12.5px; opacity: .82; line-height: 1.4; }
+.kpi-num { text-align: right; flex: none; }
+.kpi-val { font-size: 48px; font-weight: 800; line-height: .95; letter-spacing: -.04em; }
+.kpi-val span { font-size: 22px; font-weight: 700; margin-left: 1px; }
+.kpi-sub { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .82; margin-top: 6px; }
 
-.ring-wrap { position: relative; width: 104px; height: 104px; flex: none; }
-.ring { width: 104px; height: 104px; transform: rotate(-90deg); }
-.ring-bg { fill: none; stroke: #eef2f6; stroke-width: 9; }
-.ring-fg { fill: none; stroke-width: 9; stroke-linecap: round; stroke-dasharray: 326.7; transition: stroke-dashoffset 1.4s cubic-bezier(.34,.9,.3,1); filter: drop-shadow(0 2px 3px rgba(16,24,40,.14)); }
-.ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
-.ring-pct { font-size: 27px; font-weight: 800; line-height: 1; letter-spacing: -.03em; }
-.ring-pct span { font-size: 14px; font-weight: 700; margin-left: 1px; }
-.ring-sub { font-size: 9.5px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
-
-.pcard-links { display: flex; flex-wrap: wrap; gap: 7px; padding: 16px 24px 22px; border-top: 1px solid #f1f5f9; margin-top: auto; background: linear-gradient(180deg, #fff, var(--cl)); }
+.pcard-links { display: flex; flex-wrap: wrap; gap: 7px; padding: 16px 20px 20px; margin-top: auto; background: var(--cl); }
 .plink { display: inline-flex; align-items: center; font-size: 12.5px; font-weight: 600; color: #334155; background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; padding: 6px 12px; text-decoration: none; transition: transform .15s, background .15s, border-color .15s, color .15s, box-shadow .15s; }
 .plink:hover { background: var(--c); border-color: var(--c); color: #fff; transform: translateY(-1px); box-shadow: 0 5px 12px -4px rgba(16,24,40,.28); }
 .plink:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
   .wave, .live-dot { animation: none; }
-  .pcard, .plink, .ring-fg { transition: none; }
+  .pcard, .plink { transition: none; }
 }
 </style>
