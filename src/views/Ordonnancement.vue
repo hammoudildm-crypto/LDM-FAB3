@@ -112,28 +112,33 @@
       <p class="gantt-legend">Les lots sont ordonnancés par priorité — automatique par CA (le plus gros CA servi en premier) ou manuelle. Chaque phase démarre après la précédente du lot ET quand l'équipement se libère. Durée = boîtes ÷ cadence (kg/h en fabrication, boîtes/h en conditionnement), en jours ({{ hpj }} h/j). Le conditionnement occupe ses ateliers selon la gamme.</p>
     </section>
 
-    <!-- Occupation des ateliers de conditionnement -->
-    <section v-if="occConditionnement.length" class="card">
-      <h2 class="card-title">Occupation des ateliers de conditionnement</h2>
-      <div v-for="a in occConditionnement" :key="a.equip" class="cond-atelier">
-        <div class="ca-head">
-          <strong>{{ a.equip }}</strong>
-          <span class="ca-tot">{{ fmt(a.totalBoites) }} boîtes · {{ fmt(a.totalJours) }} j · {{ fmtDate(dateIdx(a.debut)) }} → {{ fmtDate(dateIdx(a.fin)) }}</span>
+    <!-- Occupation des équipements (fabrication + conditionnement) -->
+    <section v-if="occParEquip.length" class="card">
+      <h2 class="card-title">Occupation des équipements sur la période</h2>
+
+      <template v-for="grp in [{ t: 'Fabrication', list: occFabrication }, { t: 'Conditionnement', list: occConditionnement }]" :key="grp.t">
+        <h3 class="occ-sub" v-if="grp.list.length">{{ grp.t }}</h3>
+        <div v-for="a in grp.list" :key="a.equip + a.phase" class="cond-atelier">
+          <div class="ca-head">
+            <div class="ca-id"><strong>{{ a.equip }}</strong><span class="ca-phase">{{ PHASE_NOM[a.phase] }}</span><span class="ca-mach">{{ a.machines }} machine(s)</span></div>
+            <div class="ca-r"><span class="ca-taux" :class="tauxCls(a.taux)">Taux {{ (a.taux * 100).toFixed(0) }} %</span><span class="ca-tot">{{ fmt(a.totalBoites) }} bts · {{ fmt(a.totalJours) }} j · {{ fmtDate(dateIdx(a.debut)) }} → {{ fmtDate(dateIdx(a.fin)) }}</span></div>
+          </div>
+          <table class="grid">
+            <thead><tr><th>Produit</th><th class="ta-r">Boîtes</th><th class="ta-r">Lots</th><th class="ta-r">Jours d'occupation</th></tr></thead>
+            <tbody>
+              <tr v-for="pr in a.produits" :key="pr.code">
+                <td><span class="lot-dot" :style="{ background: pr.couleur }"></span>{{ pr.code }}</td>
+                <td class="ta-r">{{ fmt(pr.boites) }}</td>
+                <td class="ta-r">{{ pr.lots }}</td>
+                <td class="ta-r">{{ fmt(pr.jours) }}</td>
+              </tr>
+            </tbody>
+            <tfoot><tr class="tot"><td>Total</td><td class="ta-r">{{ fmt(a.totalBoites) }}</td><td></td><td class="ta-r">{{ fmt(a.totalJours) }}</td></tr></tfoot>
+          </table>
         </div>
-        <table class="grid">
-          <thead><tr><th>Produit</th><th class="ta-r">Boîtes</th><th class="ta-r">Lots</th><th class="ta-r">Jours d'occupation</th></tr></thead>
-          <tbody>
-            <tr v-for="pr in a.produits" :key="pr.code">
-              <td><span class="lot-dot" :style="{ background: pr.couleur }"></span>{{ pr.code }}</td>
-              <td class="ta-r">{{ fmt(pr.boites) }}</td>
-              <td class="ta-r">{{ pr.lots }}</td>
-              <td class="ta-r">{{ fmt(pr.jours) }}</td>
-            </tr>
-          </tbody>
-          <tfoot><tr class="tot"><td>Total</td><td class="ta-r">{{ fmt(a.totalBoites) }}</td><td></td><td class="ta-r">{{ fmt(a.totalJours) }}</td></tr></tfoot>
-        </table>
-      </div>
-      <p class="gantt-legend">Jours = somme des durées de conditionnement des lots de ce produit sur cet équipement (durée d'un lot = boîtes ÷ cadence conditionnement, en jours).</p>
+      </template>
+
+      <p class="gantt-legend">Taux d'occupation = jours occupés ÷ jours disponibles sur la période ({{ finGlobale + 1 }} jours ouvrés × nombre de machines). Jours d'occupation d'un produit = somme des durées de ses lots sur cet équipement (durée d'un lot = boîtes ÷ cadence, en jours).</p>
     </section>
 
     <section v-if="groupes.length" class="kpi-line">
@@ -342,26 +347,38 @@ const finGlobale = computed(() => {
   return m
 })
 
-// Occupation des ateliers de conditionnement, par produit
-const occConditionnement = computed(() => {
+// Occupation par équipement (toutes phases) + taux = jours occupés ÷ jours disponibles sur la période
+const occParEquip = computed(() => {
   const map = {}
   for (const r of planning.value) {
-    const cd = r.phases['conditionnement']; if (!cd) continue
-    const jours = cd.end - cd.start + 1
-    if (!map[cd.equip]) map[cd.equip] = { equip: cd.equip, prods: {}, debut: cd.start, fin: cd.end }
-    const a = map[cd.equip]
-    if (cd.start < a.debut) a.debut = cd.start
-    if (cd.end > a.fin) a.fin = cd.end
-    if (!a.prods[r.code]) a.prods[r.code] = { code: r.code, couleur: r.couleur, boites: 0, lots: 0, jours: 0 }
-    a.prods[r.code].boites += r.boites
-    a.prods[r.code].lots += 1
-    a.prods[r.code].jours += jours
+    for (const k in r.phases) {
+      const ph = r.phases[k]
+      const key = ph.equip + '||' + k
+      if (!map[key]) map[key] = { equip: ph.equip, phase: k, prods: {}, debut: ph.start, fin: ph.end }
+      const a = map[key]
+      if (ph.start < a.debut) a.debut = ph.start
+      if (ph.end > a.fin) a.fin = ph.end
+      const jours = ph.end - ph.start + 1
+      if (!a.prods[r.code]) a.prods[r.code] = { code: r.code, couleur: r.couleur, boites: 0, lots: 0, jours: 0 }
+      a.prods[r.code].boites += r.boites
+      a.prods[r.code].lots += 1
+      a.prods[r.code].jours += jours
+    }
   }
+  const machParNom = {}
+  for (const e of equipements.value) { const n = e.nom || e.code; machParNom[n] = Math.max(machParNom[n] || 0, Math.max(1, Math.floor(Number(e.nb_machines) || 1))) }
+  const periode = finGlobale.value + 1
   return Object.values(map).map(a => {
     const produits = Object.values(a.prods).sort((x, y) => y.jours - x.jours)
-    return { equip: a.equip, produits, debut: a.debut, fin: a.fin, totalJours: produits.reduce((s, p) => s + p.jours, 0), totalBoites: produits.reduce((s, p) => s + p.boites, 0) }
+    const totalJours = produits.reduce((s, p) => s + p.jours, 0)
+    const machines = machParNom[a.equip] || 1
+    const dispo = periode * machines
+    return { equip: a.equip, phase: a.phase, produits, debut: a.debut, fin: a.fin, totalJours, totalBoites: produits.reduce((s, p) => s + p.boites, 0), machines, taux: dispo > 0 ? totalJours / dispo : 0 }
   }).sort((x, y) => y.totalJours - x.totalJours)
 })
+const occFabrication = computed(() => occParEquip.value.filter(a => a.phase !== 'conditionnement'))
+const occConditionnement = computed(() => occParEquip.value.filter(a => a.phase === 'conditionnement'))
+function tauxCls(t) { return t > 0.9 ? 'tx-r' : t >= 0.7 ? 'tx-a' : 'tx-g' }
 
 const groupesDetail = computed(() => {
   const pe = prioriteEffective.value
@@ -424,6 +441,13 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .ca-head strong { font-size: 14px; color: #0f766e; }
 .ca-tot { font-size: 12px; color: #475569; }
 .cond-atelier .grid { border: 1px solid #e2e8f0; border-top: 0; }
+.occ-sub { font-size: 12px; font-weight: 800; color: #1a2233; margin: 16px 0 10px; text-transform: uppercase; letter-spacing: .05em; }
+.ca-id { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.ca-r { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.ca-phase { font-size: 11px; font-weight: 700; color: #0f766e; background: #ccfbf1; border-radius: 5px; padding: 1px 7px; }
+.ca-mach { font-size: 11.5px; color: #64748b; }
+.ca-taux { font-size: 12px; font-weight: 800; padding: 2px 9px; border-radius: 20px; }
+.ca-taux.tx-g { background: #dcfce7; color: #15803d; } .ca-taux.tx-a { background: #fef3c7; color: #b45309; } .ca-taux.tx-r { background: #fee2e2; color: #b91c1c; }
 .sumh { background: #f0fdfa !important; color: #0f766e !important; }
 .dcell.sum { background: #f0fdfa; font-weight: 600; color: #0f766e; }
 
