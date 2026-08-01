@@ -188,7 +188,7 @@ const joursAnnee = computed(() => joursParMois.value.reduce((s, n) => s + n, 0))
 
 // Nom d'unité : retire le préfixe d'opération (ex "Granulation COMASA" / "Séchage COMASA" -> "COMASA")
 // puis un indice d'unité en fin (<= 20), sans toucher aux numéros de modèle (FE55, TR100, 520...).
-const PREFIXE_OP = /^(granulation|s[ée]chage|s[ée]choir|m[ée]lange|pes[ée]e|compression|remplissage|encapsulation|pelliculage|enrobage|conditionnement)\s+/i
+const PREFIXE_OP = /^(granulation|s[ée]chage|s[ée]choir|m[ée]lange|pes[ée]e|compression|remplissage|encapsulation|pelliculage|enrobage|conditionnement)\s+(?!et\s)/i
 function baseNom(nom) {
   const n = String(nom || '').trim().replace(PREFIXE_OP, '')
   return n.replace(/\s+(\d{1,2})\s*$/, (m, d) => (Number(d) <= 20 ? '' : m)).trim()
@@ -259,6 +259,7 @@ const lignes = computed(() => {
     let phaseLabel = phases.map(ph => PHASE_NOM[ph] || ph).join(' / ')
     let nomAffiche = grp.nom
     if (phases.includes('granulation') && phases.includes('sechage')) { phaseLabel = 'Granulation et Séchage'; nomAffiche = 'Granulation et Séchage ' + grp.nom }
+    else if (phases.length === 1 && phases[0] === 'granulation' && grp.equips.some(e => /s[ée]ch/i.test((e.type || '') + ' ' + (e.nom || e.code || '')))) phaseLabel = 'Granulation et Séchage'
     out.push({ id: grp.key, nom: nomAffiche, phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
   }
   return out.sort((a, b) => (ORDRE_GAMME[a.phase] || 99) - (ORDRE_GAMME[b.phase] || 99) || b.taux - a.taux)
