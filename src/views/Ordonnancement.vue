@@ -35,6 +35,10 @@
           <label>Conditionnement</label>
           <label class="wk"><input type="checkbox" v-model="optimisationCond" /> Optimiser l'alimentation (éviter les temps morts)</label>
         </div>
+        <div class="add-field chk-wk">
+          <label>Périmètre</label>
+          <label class="wk"><input type="checkbox" v-model="condSeul" /> Conditionnement uniquement (vrac déjà fabriqué)</label>
+        </div>
       </div>
     </section>
 
@@ -54,7 +58,7 @@
         <button class="btn-add" @click="ajouter" :disabled="!selProduit || !(Number(selBoites) > 0)">Ajouter</button>
       </div>
       <div class="add-import" v-if="nbLotsEnCours">
-        <button class="btn-import" @click="importerLotsEnCours">↓ Importer les lots en cours ({{ nbLotsEnCours }} lots · {{ lotsEnCoursParProduit.length }} produits)</button>
+        <button class="btn-import" @click="importerLotsEnCours">↓ Importer {{ condSeul ? 'le vrac prêt à conditionner' : 'les lots en cours' }} ({{ nbLotsEnCours }} lots · {{ lotsImportables.length }} produits)</button>
         <span class="import-hint">depuis « Disponibilité des produits par atelier »</span>
       </div>
       <p v-if="msgImport" class="msg-import">{{ msgImport }}</p>
@@ -227,12 +231,13 @@ const PHASE_ORDRE = ['pesee', 'granulation', 'sechage', 'melange', 'compression'
 const NOM_KEY = {}
 for (const [k, v] of Object.entries(PHASE_NOM)) NOM_KEY[v.toLowerCase()] = k
 
-const produits = ref([]), equipements = ref([]), cadences = ref([]), ofs = ref([]), chargement = ref(true)
+const produits = ref([]), equipements = ref([]), cadences = ref([]), ofs = ref([]), conds = ref([]), chargement = ref(true)
 const groupes = ref([])   // { id, produitId, boites, nbLots }
 const dateDepart = ref(new Date().toISOString().slice(0, 10))
 const skipWeekend = ref(true)
 const prioAutoCA = ref(true)
 const optimisationCond = ref(false)
+const condSeul = ref(false)
 const hpj = ref(24)
 const selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref('')
 let seq = 1
@@ -249,13 +254,14 @@ async function fetchAllPaged(make) {
 }
 
 onMounted(async () => {
-  const [rp, re, rc, ro] = await Promise.all([
+  const [rp, re, rc, ro, rk] = await Promise.all([
     fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, pcsu, unites_par_boite, taille_lot, poids_lot_kg, gamme').eq('actif', true)),
     fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true)),
     fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode')),
-    fetchAllPaged(() => supabase.from('ordres_fabrication').select('produit_id, quantite_theorique, date_fin_fabrication, date_lancement').eq('actif', true))
+    fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, produit_id, quantite_theorique, boites_fabriquees, date_fin_fabrication, date_lancement').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id').eq('actif', true))
   ])
-  produits.value = rp; equipements.value = re; cadences.value = rc; ofs.value = ro; chargement.value = false
+  produits.value = rp; equipements.value = re; cadences.value = rc; ofs.value = ro; conds.value = rk; chargement.value = false
   chargerLocal()
 })
 
@@ -301,6 +307,7 @@ const produitsAffiches = computed(() => {
 
 // Séquence de phases d'un produit = gamme (mappée en clés) + conditionnement final.
 function gammeProduit(produitId) {
+  if (condSeul.value) return ['conditionnement']
   const p = prodById.value[produitId]
   const g = (p && Array.isArray(p.gamme)) ? p.gamme : []
   const keys = []
@@ -370,10 +377,27 @@ const lotsEnCoursParProduit = computed(() => {
   }
   return Object.values(m).filter(x => prodById.value[x.produitId])
 })
-const nbLotsEnCours = computed(() => lotsEnCoursParProduit.value.reduce((s, x) => s + x.lots, 0))
+// Vrac prêt à conditionner : fabriqué (date_fin_fab) et pas encore conditionné
+const condOrdreIds = computed(() => { const set = new Set(); for (const c of conds.value) if (c.ordre_id) set.add(c.ordre_id); return set })
+const vracParProduit = computed(() => {
+  const done = condOrdreIds.value, m = {}
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    if (done.has(o.id)) continue
+    if (!o.produit_id) continue
+    const b = Number(o.boites_fabriquees) || Number(o.quantite_theorique) || 0
+    if (!m[o.produit_id]) m[o.produit_id] = { produitId: o.produit_id, boites: 0, lots: 0, minDate: null }
+    m[o.produit_id].boites += b
+    m[o.produit_id].lots += 1
+    if (o.date_fin_fabrication && (!m[o.produit_id].minDate || o.date_fin_fabrication < m[o.produit_id].minDate)) m[o.produit_id].minDate = o.date_fin_fabrication
+  }
+  return Object.values(m).filter(x => prodById.value[x.produitId])
+})
+const lotsImportables = computed(() => condSeul.value ? vracParProduit.value : lotsEnCoursParProduit.value)
+const nbLotsEnCours = computed(() => lotsImportables.value.reduce((s, x) => s + x.lots, 0))
 function importerLotsEnCours() {
   let nP = 0, plusTot = null
-  for (const x of lotsEnCoursParProduit.value) {
+  for (const x of lotsImportables.value) {
     if (groupes.value.some(g => g.produitId === x.produitId)) continue
     const p = prodById.value[x.produitId]; if (!p) continue
     const tl = Number(p.taille_lot) || 0
