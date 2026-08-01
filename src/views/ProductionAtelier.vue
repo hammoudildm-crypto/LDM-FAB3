@@ -12,7 +12,7 @@ for (let a = anneeCourante - 4; a <= anneeCourante + 1; a++) ANNEES.push(a)
 const anneeSel = ref(anneeCourante)
 
 // Ateliers de fabrication (phases) + Conditionnement en dernière ligne
-const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Livraison Vrac', 'Conditionnement']
+const PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Livraison Vrac', 'Conditionnement']
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
 const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
@@ -66,6 +66,7 @@ async function charger() {
 const liveParAn = computed(() => {
   const m = {}, vus = {}
   const ajouter = (ph, ordreId, d) => {
+    if (/^(granulation|s[ée]chage)$/i.test(String(ph).trim())) ph = 'Granulation et Séchage'
     if (!d || ordreId == null || !PHASES.includes(ph)) return
     const dt = new Date(d), y = dt.getFullYear(), mo = dt.getMonth()
     if (!m[ph]) m[ph] = {}
@@ -82,10 +83,12 @@ const liveParAn = computed(() => {
 // Données HISTORIQUE importées (table production_historique)
 const histParAn = computed(() => {
   const m = {}
+  const norm = (e) => /^(granulation|s[ée]chage)$/i.test(String(e).trim()) ? 'Granulation et Séchage' : e
   for (const r of hist.value) {
-    if (!m[r.etape]) m[r.etape] = {}
-    if (!m[r.etape][r.annee]) m[r.etape][r.annee] = Array(12).fill(0)
-    if (r.mois >= 1 && r.mois <= 12) m[r.etape][r.annee][r.mois - 1] = r.nb_lots
+    const etape = norm(r.etape)
+    if (!m[etape]) m[etape] = {}
+    if (!m[etape][r.annee]) m[etape][r.annee] = Array(12).fill(0)
+    if (r.mois >= 1 && r.mois <= 12) m[etape][r.annee][r.mois - 1] = Math.max(m[etape][r.annee][r.mois - 1] || 0, r.nb_lots)
   }
   return m
 })
