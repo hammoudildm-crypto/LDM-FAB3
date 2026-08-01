@@ -47,6 +47,7 @@
               <td class="sticky">
                 <div class="ind-lib">{{ ind.libelle }}<span v-if="estAuto(ind)" class="auto-badge">auto</span></div>
                 <div class="ind-unite">{{ ind.unite }} · {{ ind.sens === 'bas' ? '↓ mieux' : '↑ mieux' }}</div>
+                <div v-if="ind.formule" class="ind-formule">{{ ind.formule }}</div>
               </td>
               <td class="right cible">{{ ind.cible == null ? '—' : fmt(ind.cible) }}</td>
               <td v-for="m in 12" :key="m" class="cell">
@@ -77,6 +78,7 @@
 
       <div v-if="peutEditer" class="add-ind">
         <input v-model="formAdd[dom.cle].libelle" placeholder="Nouvel indicateur…" class="ai ai-lib" />
+        <input v-model="formAdd[dom.cle].formule" placeholder="Formule / descriptif (optionnel)" class="ai ai-form" />
         <input v-model="formAdd[dom.cle].unite" placeholder="Unité (%, kg…)" class="ai ai-u" />
         <input v-model="formAdd[dom.cle].cible" type="number" step="any" placeholder="Cible" class="ai ai-c" />
         <select v-model="formAdd[dom.cle].sens" class="ai ai-s"><option value="haut">↑ mieux</option><option value="bas">↓ mieux</option></select>
@@ -116,7 +118,7 @@ async function fetchAllPaged(make) {
 }
 
 const formAdd = reactive({})
-for (const d of DOMAINES) formAdd[d.cle] = { libelle: '', unite: '', cible: '', sens: 'haut', agregat: 'moyenne' }
+for (const d of DOMAINES) formAdd[d.cle] = { libelle: '', unite: '', cible: '', sens: 'haut', agregat: 'moyenne', formule: '' }
 
 function initCellules() {
   Object.keys(cellules).forEach(k => delete cellules[k])
@@ -250,12 +252,12 @@ async function ajouterIndicateur(cle) {
   enCours.value = true; erreur.value = ''; message.value = ''
   const r = await supabase.from('qse_indicateurs').insert({
     domaine: cle, libelle: f.libelle.trim(), unite: (f.unite || '').trim() || null,
-    cible: f.cible === '' || f.cible == null ? null : Number(f.cible), sens: f.sens, agregat: f.agregat,
+    cible: f.cible === '' || f.cible == null ? null : Number(f.cible), sens: f.sens, agregat: f.agregat, formule: (f.formule || '').trim() || null,
     ordre: indicateursDomaine(cle).length + 1
   })
   enCours.value = false
   if (r.error) { erreur.value = r.error.message; return }
-  f.libelle = ''; f.unite = ''; f.cible = ''; f.sens = 'haut'; f.agregat = 'moyenne'
+  f.libelle = ''; f.unite = ''; f.cible = ''; f.sens = 'haut'; f.agregat = 'moyenne'; f.formule = ''
   await chargerIndicateurs(); initCellules(); await chargerValeurs()
   message.value = 'Indicateur ajouté.'
 }
@@ -318,10 +320,11 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 13px; min-width:
 table.grid th, table.grid td { border-bottom: 1px solid #eef2f6; padding: 7px 9px; white-space: nowrap; }
 table.grid th { background: #f8fafc; font-size: 11.5px; font-weight: 700; color: #64748b; text-align: left; position: sticky; top: 0; z-index: 2; }
 .right { text-align: right; } .center { text-align: center; }
-.sticky { position: sticky; left: 0; background: #fff; z-index: 1; box-shadow: 1px 0 0 #eef2f6; min-width: 190px; }
+.sticky { position: sticky; left: 0; background: #fff; z-index: 1; box-shadow: 1px 0 0 #eef2f6; min-width: 230px; max-width: 280px; }
 thead th.sticky { z-index: 3; background: #f8fafc; }
 .ind-lib { font-weight: 600; color: #1b2733; white-space: normal; }
 .ind-unite { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+.ind-formule { font-size: 10.5px; color: #94a3b8; margin-top: 3px; font-style: italic; line-height: 1.35; white-space: normal; }
 .cible { color: #475569; font-weight: 600; }
 .annuel { background: #fafbfc; }
 .annuel.strong { font-weight: 800; color: #1b2733; }
@@ -351,7 +354,7 @@ thead th.sticky { z-index: 3; background: #f8fafc; }
 
 .add-ind { display: flex; gap: 8px; align-items: center; padding: 12px 18px; background: #f8fafc; border-top: 1px solid #eef2f6; flex-wrap: wrap; }
 .ai { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; }
-.ai-lib { flex: 1; min-width: 200px; } .ai-u { width: 110px; } .ai-c { width: 90px; text-align: right; } .ai-s { width: 120px; }
+.ai-lib { flex: 1; min-width: 200px; } .ai-form { flex: 1; min-width: 200px; } .ai-u { width: 110px; } .ai-c { width: 90px; text-align: right; } .ai-s { width: 120px; }
 .btn-mini { background: var(--dc); color: #fff; border: 0; border-radius: 7px; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; cursor: pointer; white-space: nowrap; }
 .btn-mini:disabled { background: #cbd5e1; cursor: default; }
 
