@@ -523,11 +523,60 @@ function ordreEntrelace() {
   return out
 }
 
+// Conditionnement seul : greedy « line-pull » — chaque ligne libre prend le lot au plus fort CA compatible.
+// Découpe librement les campagnes pour occuper toutes les lignes en continu.
+function simulerGreedyCond(lots) {
+  const machines = []
+  for (const e of equipements.value) {
+    if (phaseDeType(e.type) !== 'conditionnement') continue
+    const n = Math.max(1, Math.floor(Number(e.nb_machines) || 1))
+    for (let i = 0; i < n; i++) machines.push({ equipId: e.id, equip: e, equipNom: e.nom || e.code, free: 0 })
+  }
+  const caDe = (lt) => { const pr = prodById.value[lt.produitId] || {}; return lt.boites * (Number(pr.pcsu) || 0) }
+  const readyOf = (lt) => lt.dateFixe ? idxDeDate(lt.dateFixe) : 0
+  const rows = []
+  const remaining = lots.slice()
+  while (remaining.length && machines.length) {
+    machines.sort((a, b) => a.free - b.free)
+    const m = machines[0]
+    let best = -1, bestCA = -Infinity
+    for (let i = 0; i < remaining.length; i++) {
+      const lt = remaining[i]
+      if (!(cadMap.value[m.equipId + '|' + lt.produitId] > 0)) continue
+      const chx = choixEquip[lt.groupeId + '|conditionnement']
+      if (chx && chx !== m.equipId) continue
+      const c = caDe(lt)
+      if (c > bestCA) { bestCA = c; best = i }
+    }
+    if (best < 0) { machines.shift(); continue }
+    const lt = remaining.splice(best, 1)[0]
+    const duree = dureeJours(m.equip, lt.produitId, lt.boites)
+    const start = Math.max(m.free, readyOf(lt))
+    const end = start + duree - 1
+    m.free = end + 1
+    const pr = prodById.value[lt.produitId] || {}
+    rows.push({ id: lt.id, num: lt.num, code: pr.code_pf, desig: pr.designation, boites: lt.boites, couleur: lt.couleur, prio: lt.prio, phases: { conditionnement: { start, end, equip: m.equipNom } }, debutFab: null, finFab: null, finCond: end })
+  }
+  let fin = 0; for (const r of rows) for (const k in r.phases) fin = Math.max(fin, r.phases[k].end)
+  const condByEq = {}
+  for (const r of rows) {
+    const cd = r.phases['conditionnement']; if (!cd) continue
+    if (!condByEq[cd.equip]) condByEq[cd.equip] = { busy: 0, min: cd.start, max: cd.end }
+    const a = condByEq[cd.equip]; a.busy += cd.end - cd.start + 1
+    if (cd.start < a.min) a.min = cd.start
+    if (cd.end > a.max) a.max = cd.end
+  }
+  let idle = 0, busy = 0, span = 0
+  for (const a of Object.values(condByEq)) { const sp = a.max - a.min + 1; idle += Math.max(0, sp - a.busy); busy += a.busy; span += sp }
+  return { rows, fin, condIdle: idle, condBusy: busy, condSpan: span }
+}
+
 const resultatSimu = computed(() => {
   const prio = { ...simuler(lotsDeployes.value), strategie: 'Priorité' }
   if (!optimisationCond.value) return prio
-  const entre = { ...simuler(ordreEntrelace()), strategie: 'Entrelacé' }
-  return [prio, entre].sort((a, b) => (a.condIdle - b.condIdle) || (a.fin - b.fin))[0]
+  const cands = [prio, { ...simuler(ordreEntrelace()), strategie: 'Entrelacé' }]
+  if (condSeul.value) cands.push({ ...simulerGreedyCond(lotsDeployes.value), strategie: 'Sous-campagnes' })
+  return cands.sort((a, b) => (a.condIdle - b.condIdle) || (a.fin - b.fin))[0]
 })
 const planning = computed(() => resultatSimu.value.rows)
 const condIdle = computed(() => resultatSimu.value.condIdle)
