@@ -534,6 +534,21 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .doc-title { border-bottom
 html:is([data-theme="sombre"], [data-theme="minuit"]) .block { border-bottom-color: #1f2940 !important; }
 html:is([data-theme="sombre"], [data-theme="minuit"]) .lot-info { border-top-color: #1f2940 !important; }
 
+/* ===== Mode sombre — nouvelles vues (Accueil, Capacité, Cadences, QSE, Ordonnancement) ===== */
+html:is([data-theme="sombre"], [data-theme="minuit"]) :is(.portail, .cap, .cad, .qse, .ordo) { color: #e6edf6; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) :is(.portail, .cap, .cad, .qse, .ordo) :is(h1, h2, h3, .card-title, .pcard-title, .ph-title, .kpi-titre, .prog-nom, .aff-nom) { color: #e6edf6 !important; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) :is(.portail, .cap, .cad, .qse, .ordo) :is(.ph-sub, .muted, .sub, .g-lbl, .g-desig, .km-lbl, .ps-count, .import-hint, .slider-lbl, .aff-ph-lbl, .desig, .lot-desig) { color: #94a3b8 !important; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) :is(.pcard, .dom, .kpi-mini, .aff-prod, .no-res) { background: #161f33 !important; border-color: #2a3650 !important; box-shadow: none !important; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .pcard-links { background: #0f1830 !important; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .plink { background: #1a2440 !important; color: #cbd5e1 !important; border-color: #2a3650 !important; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .plink:hover { background: var(--c) !important; border-color: var(--c) !important; color: #fff !important; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .g-track { background: #0f1830 !important; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .opt-banner { background: #0c2a28 !important; border-color: #155e56 !important; color: #5eead4 !important; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .warn-card { background: #2a1f0a !important; border-color: #7c5310 !important; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .warn-txt { color: #fdba74 !important; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .btn-import { background: #0c2733 !important; color: #67e8f9 !important; border-color: #155e75 !important; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .lot-num { background: #1e2a55 !important; color: #a5b4fc !important; }
+
 @media print {
   .sidebar, .mobile-top, .side-backdrop { display: none !important; }
   .app-main, main { margin: 0; padding: 0; max-width: none; }
