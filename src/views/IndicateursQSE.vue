@@ -145,9 +145,11 @@ async function chargerSource() {
 
 // Rattachement au mois via lecture directe de la date (indépendant du fuseau horaire)
 function moisAnnee(dateStr) {
-  const s = String(dateStr || ''); if (s.length < 7) return null
-  const y = +s.slice(0, 4), m = +s.slice(5, 7)
-  return (y && m >= 1 && m <= 12) ? [y, m - 1] : null
+  const s = String(dateStr || ''); if (!s) return null
+  // Date simple 'AAAA-MM-JJ' : lecture directe, sans fuseau
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) { const y = +s.slice(0, 4), m = +s.slice(5, 7); return (y && m >= 1 && m <= 12) ? [y, m - 1] : null }
+  // Timestamp : on prend le mois LOCAL de l'instant
+  const d = new Date(s); return isNaN(d) ? null : [d.getFullYear(), d.getMonth()]
 }
 // Valeurs calculées automatiquement pour l'année, par source
 const autoParSource = computed(() => {
