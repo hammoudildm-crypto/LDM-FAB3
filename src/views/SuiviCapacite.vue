@@ -257,8 +257,9 @@ const lignes = computed(() => {
       tauxMois.push(joursParMois.value[mi] > 0 ? chargeJ / joursParMois.value[mi] : 0)
     }
     let phaseLabel = phases.map(ph => PHASE_NOM[ph] || ph).join(' / ')
-    if (phases.includes('granulation') && phases.includes('sechage')) phaseLabel = 'Granulation et Séchage'
-    out.push({ id: grp.key, nom: grp.nom, phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
+    let nomAffiche = grp.nom
+    if (phases.includes('granulation') && phases.includes('sechage')) { phaseLabel = 'Granulation et Séchage'; nomAffiche = 'Granulation et Séchage ' + grp.nom }
+    out.push({ id: grp.key, nom: nomAffiche, phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
   }
   return out.sort((a, b) => (ORDRE_GAMME[a.phase] || 99) - (ORDRE_GAMME[b.phase] || 99) || b.taux - a.taux)
 })
