@@ -6,7 +6,7 @@ import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
 
-const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+const PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
 const STATUTS = ['À faire', 'En cours', 'Terminé']
 
 const lots = ref([])
@@ -84,7 +84,7 @@ function remplirQuantites() {
   const upb = lot.produits ? Number(lot.produits.unites_par_boite || 0) : 0
   const qth = Number(lot.quantite_theorique || 0)
   const theoKg = (qth > 0 && mm > 0 && upb > 0) ? Math.round(qth * upb * mm / 1e6 * 100) / 100 : null
-  const gamme = (lot.produits && Array.isArray(lot.produits.gamme) && lot.produits.gamme.length) ? lot.produits.gamme : PHASES
+  const gamme = normGamme((lot.produits && Array.isArray(lot.produits.gamme) && lot.produits.gamme.length) ? lot.produits.gamme : PHASES)
   const idx = gamme.indexOf(form.phase)
   let entree
   if (idx <= 0) {
@@ -137,7 +137,17 @@ async function chargerPhases() {
   phases.value = r.data
 }
 
-const ORDRE_PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+const ORDRE_PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+// Fusionne les étapes Granulation et Séchage d'une gamme en une seule opération « Granulation et Séchage »
+function normGamme(g) {
+  if (!Array.isArray(g)) return g
+  const out = []
+  for (const ph of g) {
+    const p = /^(granulation|s[ée]chage)$/i.test(String(ph).trim()) ? 'Granulation et Séchage' : ph
+    if (!out.includes(p)) out.push(p)
+  }
+  return out
+}
 // Entrée effective : la quantité entrée saisie, sinon la sortie de la phase précédente (repli)
 function entreeEffective(p) {
   if (p.quantite_entree != null && p.quantite_entree !== '') return Number(p.quantite_entree)
@@ -191,7 +201,7 @@ async function enregistrer() {
   if (res.error) { erreur.value = res.error.message; return }
   // Clôture de la VRAIE phase finale (gamme du produit) -> date fin fab + statut Terminé
   let finDeFab = false
-  const gamme = lotSelectionne.value && lotSelectionne.value.produits ? lotSelectionne.value.produits.gamme : null
+  const gamme = normGamme(lotSelectionne.value && lotSelectionne.value.produits ? lotSelectionne.value.produits.gamme : null)
   const phaseFin = phaseFinaleGamme(gamme)
   const estPhaseFinale = phaseFin
     ? form.phase === phaseFin
@@ -224,7 +234,7 @@ async function majDatesLot(oid) {
   let minD = null
   for (const p of rows) { const d = p.date_debut || p.date_phase; if (d && (!minD || d < minD)) minD = d }
   const lot = lots.value.find(l => l.id === oid)
-  const gamme = lot && lot.produits ? lot.produits.gamme : null
+  const gamme = normGamme(lot && lot.produits ? lot.produits.gamme : null)
   const phaseFin = phaseFinaleGamme(gamme)
   const finale = rows.find(p => p.statut === 'Terminé' && (phaseFin ? p.phase === phaseFin : ['Compression', 'Remplissage Gélules', 'Pelliculage'].includes(p.phase)))
   await supabase.from('ordres_fabrication').update({
