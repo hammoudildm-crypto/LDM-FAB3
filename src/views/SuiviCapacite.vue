@@ -48,7 +48,7 @@
           <tbody>
             <tr v-for="r in lignes" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
               <td><strong>{{ r.nom }}</strong></td>
-              <td><span class="phase-tag">{{ PHASE_NOM[r.phase] || r.phase }}</span></td>
+              <td><span class="phase-tag">{{ r.phaseLabel || PHASE_NOM[r.phase] || r.phase }}</span></td>
               <td class="ta-c unite">{{ r.estCond ? 'boîtes/h' : 'kg/h' }}</td>
               <td class="ta-c">{{ r.machines }}</td>
               <td class="ta-c hj">{{ r.hj.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
@@ -108,7 +108,7 @@ import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
-const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation / Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
+const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage: 'Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
 const NOM_KEY = {}
 for (const [k, v] of Object.entries(PHASE_NOM)) NOM_KEY[v.toLowerCase()] = k
 
@@ -138,7 +138,8 @@ onMounted(async () => {
 function phaseDeType(type) {
   const t = (type || '').toLowerCase()
   if (/pes[ée]|balance|bascule/.test(t)) return 'pesee'
-  if (/granul|séch|sech/.test(t)) return 'granulation'
+  if (/granul/.test(t)) return 'granulation'
+  if (/s[ée]ch/.test(t)) return 'sechage'
   if (/mélang|melang/.test(t)) return 'melange'
   if (/gélule|gelule|remplis|encapsul|capsul/.test(t)) return 'remplissage'
   if (/compress|presse|compri/.test(t)) return 'compression'
@@ -150,7 +151,8 @@ function phaseKeyFromName(name) {
   const t = String(name || '').toLowerCase().trim()
   if (NOM_KEY[t]) return NOM_KEY[t]
   if (/pes/.test(t)) return 'pesee'
-  if (/granul|séch|sech/.test(t)) return 'granulation'
+  if (/granul/.test(t)) return 'granulation'
+  if (/s[ée]ch/.test(t)) return 'sechage'
   if (/mélang|melang/.test(t)) return 'melange'
   if (/gélule|gelule|remplis|capsul/.test(t)) return 'remplissage'
   if (/compress|compri/.test(t)) return 'compression'
@@ -159,7 +161,7 @@ function phaseKeyFromName(name) {
   return null
 }
 // Ordre de la gamme de fabrication (pour trier les ateliers)
-const ORDRE_GAMME = { pesee: 1, granulation: 2, melange: 3, compression: 4, remplissage: 5, pelliculage: 6, conditionnement: 7 }
+const ORDRE_GAMME = { pesee: 1, granulation: 2, sechage: 3, melange: 4, compression: 5, remplissage: 6, pelliculage: 7, conditionnement: 8 }
 function num(v, def) { const n = Number(v); return (v === null || v === undefined || isNaN(n)) ? def : n }
 function libelle(e) { const c = e.code ? String(e.code) : '', n = e.nom ? String(e.nom) : ''; return { code: c || n, nom: c && n ? n : '' } }
 
@@ -184,32 +186,23 @@ function joursOuvresMois(an, moisIdx) { const d = new Date(an, moisIdx, 1); let 
 const joursParMois = computed(() => MOIS.map((_, i) => joursOuvresMois(annee.value, i)))
 const joursAnnee = computed(() => joursParMois.value.reduce((s, n) => s + n, 0))
 
-// Nom de base : retire un indice d'unité en fin de nom (ex "cabine de pesée 2" -> "cabine de pesée").
-// On ne retire qu'un nombre <= 20 précédé d'un espace, pour ne pas toucher aux numéros de modèle (FE55, TR100, 520...).
+// Nom d'unité : retire le préfixe d'opération (ex "Granulation COMASA" / "Séchage COMASA" -> "COMASA")
+// puis un indice d'unité en fin (<= 20), sans toucher aux numéros de modèle (FE55, TR100, 520...).
+const PREFIXE_OP = /^(granulation|s[ée]chage|s[ée]choir|m[ée]lange|pes[ée]e|compression|remplissage|encapsulation|pelliculage|enrobage|conditionnement)\s+/i
 function baseNom(nom) {
-  return String(nom || '').trim().replace(/\s+(\d{1,2})\s*$/, (m, n) => (Number(n) <= 20 ? '' : m)).trim()
+  const n = String(nom || '').trim().replace(PREFIXE_OP, '')
+  return n.replace(/\s+(\d{1,2})\s*$/, (m, d) => (Number(d) <= 20 ? '' : m)).trim()
 }
-// Regroupe les équipements identiques : même phase + même nom de base (avec siblings) -> une seule ligne
+// Regroupe par unité physique : même nom de base (toutes opérations confondues) -> une seule ligne.
+// Une unité multi-opérations (COMASA = granulation + séchage) cumule le temps de ses opérations.
 const groupesEquip = computed(() => {
   const eqs = equipements.value.filter(e => equipAvecCadence.value.has(e.id) && phaseDeType(e.type))
-  // compter les noms distincts partageant une même base (par phase)
-  const compte = {}
-  for (const e of eqs) {
-    const phase = phaseDeType(e.type)
-    const nom = (e.nom || e.code || '—').trim()
-    const bk = phase + '|' + baseNom(nom).toLowerCase()
-    if (!compte[bk]) compte[bk] = new Set()
-    compte[bk].add(nom.toLowerCase())
-  }
   const g = {}
   for (const e of eqs) {
-    const phase = phaseDeType(e.type)
     const nom = (e.nom || e.code || '—').trim()
-    const base = baseNom(nom)
-    const partage = (compte[phase + '|' + base.toLowerCase()] || new Set()).size >= 2
-    const label = partage ? base : nom
-    const key = phase + '|' + label.toLowerCase()
-    if (!g[key]) g[key] = { key, nom: label, phase, equips: [] }
+    const base = baseNom(nom) || nom
+    const key = base.toLowerCase()
+    if (!g[key]) g[key] = { key, nom: base, equips: [] }
     g[key].equips.push(e)
   }
   return Object.values(g)
@@ -218,36 +211,43 @@ const groupesEquip = computed(() => {
 const lignes = computed(() => {
   const out = []
   for (const grp of groupesEquip.value) {
-    const phase = grp.phase
-    const estCond = phase === 'conditionnement'
-    let machines = 0
-    for (const e of grp.equips) machines += Math.max(1, num(e.nb_machines, 1))
+    // équipements de l'unité regroupés par opération (phase)
+    const parPhase = {}
+    for (const e of grp.equips) {
+      const ph = phaseDeType(e.type)
+      if (!parPhase[ph]) parPhase[ph] = { equips: [], machines: 0 }
+      parPhase[ph].equips.push(e)
+      parPhase[ph].machines += Math.max(1, num(e.nb_machines, 1))
+    }
+    const phases = Object.keys(parPhase).sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99))
+    const machines = Math.max(1, ...phases.map(ph => parPhase[ph].machines))   // nb d'unités physiques
     const rep = grp.equips[0]
     const postes = regime.value === 'auto' ? num(rep.postes, 3) : Number(regime.value)
     const tep = num(rep.tep, 8)
     const vdlp = num(rep.vdlp, 0), vdlt = num(rep.vdlt, 0), reglage = num(rep.reglage, 0)
     const capaJour = postes * tep * machines
-    const cadGroupe = (pid) => { let c = 0; for (const e of grp.equips) { const v = cadMap.value[e.id + '|' + pid]; if (v > 0 && v > c) c = v } return c }
+    const cadPhase = (ph, pid) => { let c = 0; for (const e of parPhase[ph].equips) { const v = cadMap.value[e.id + '|' + pid]; if (v > 0 && v > c) c = v } return c }
     const tauxMois = []; let chargeJTot = 0
     for (let mi = 0; mi < 12; mi++) {
       let occH = 0
       for (const [pid, tab] of Object.entries(planAgg.value)) {
         const boites = tab[mi]; if (!boites) continue
-        const cad = cadGroupe(pid); if (!(cad > 0)) continue
         const gk = gammeKeys.value[pid]
-        const inGamme = estCond || !gk || gk.size === 0 || gk.has(phase)
-        if (!inGamme) continue
         const p = prodById.value[pid] || {}
-        let qty
-        if (estCond) qty = boites
-        else {
-          const tl = num(p.taille_lot, 0), plk = num(p.poids_lot_kg, 0)
-          if (!(tl > 0 && plk > 0)) continue   // poids manquant
-          qty = boites * plk / tl               // kg
+        const tl = num(p.taille_lot, 0), plk = num(p.poids_lot_kg, 0)
+        let utilise = false
+        for (const ph of phases) {   // cumule le temps de chaque opération de l'unité
+          const estCond = ph === 'conditionnement'
+          const inGamme = estCond || !gk || gk.size === 0 || gk.has(ph) || (ph === 'sechage' && gk.has('granulation'))
+          if (!inGamme) continue
+          const cad = cadPhase(ph, pid); if (!(cad > 0)) continue
+          let qty
+          if (estCond) qty = boites
+          else { if (!(tl > 0 && plk > 0)) continue; qty = boites * plk / tl }
+          occH += qty / cad
+          utilise = true
         }
-        occH += qty / cad
-        if (inclureNett.value) {
-          const tl = num(p.taille_lot, 0)
+        if (inclureNett.value && utilise) {
           const nbLots = tl > 0 ? Math.ceil(boites / tl) : 1
           occH += nbLots * vdlp + vdlt + reglage
         }
@@ -256,7 +256,9 @@ const lignes = computed(() => {
       chargeJTot += chargeJ
       tauxMois.push(joursParMois.value[mi] > 0 ? chargeJ / joursParMois.value[mi] : 0)
     }
-    out.push({ id: grp.key, nom: grp.nom, phase, estCond, machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
+    let phaseLabel = phases.map(ph => PHASE_NOM[ph] || ph).join(' / ')
+    if (phases.includes('granulation') && phases.includes('sechage')) phaseLabel = 'Granulation et Séchage'
+    out.push({ id: grp.key, nom: grp.nom, phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
   }
   return out.sort((a, b) => (ORDRE_GAMME[a.phase] || 99) - (ORDRE_GAMME[b.phase] || 99) || b.taux - a.taux)
 })
