@@ -99,7 +99,7 @@
             <tr v-for="r in planning" :key="r.id">
               <td class="num">{{ r.num }}</td>
               <td class="ta-c prio-cell">{{ r.prio }}</td>
-              <td><span class="lot-dot" :style="{ background: r.couleur }"></span>{{ r.code }}</td>
+              <td><span class="lot-dot" :style="{ background: r.couleur }"></span><strong>{{ r.code }}</strong> <span class="lot-desig">{{ r.desig }}</span></td>
               <td class="ta-r">{{ fmt(r.boites) }}</td>
               <td class="dcell sum">{{ r.debutFab != null ? fmtDate(dateIdx(r.debutFab)) : '' }}</td>
               <td class="dcell sum fin">{{ r.finFab != null ? fmtDate(dateIdx(r.finFab)) : '' }}</td>
@@ -130,7 +130,7 @@
             <thead><tr><th>Produit</th><th class="ta-r">Boîtes</th><th class="ta-r">Lots</th><th class="ta-r">Jours d'occupation</th></tr></thead>
             <tbody>
               <tr v-for="pr in a.produits" :key="pr.code">
-                <td><span class="lot-dot" :style="{ background: pr.couleur }"></span>{{ pr.code }}</td>
+                <td><span class="lot-dot" :style="{ background: pr.couleur }"></span><strong>{{ pr.code }}</strong> <span class="lot-desig">{{ pr.desig }}</span></td>
                 <td class="ta-r">{{ fmt(pr.boites) }}</td>
                 <td class="ta-r">{{ pr.lots }}</td>
                 <td class="ta-r">{{ fmt(pr.jours) }}</td>
@@ -366,7 +366,7 @@ const planning = computed(() => {
     const debutFab = fabK.length ? Math.min(...fabK.map(k => phases[k].start)) : null
     const finFab = fabK.length ? Math.max(...fabK.map(k => phases[k].end)) : null
     const cd = phases['conditionnement']
-    rows.push({ id: lt.id, num: lt.num, code: p.code_pf, boites: lt.boites, couleur: lt.couleur, prio: lt.prio, phases, debutFab, finFab, finCond: cd ? cd.end : null })
+    rows.push({ id: lt.id, num: lt.num, code: p.code_pf, desig: p.designation, boites: lt.boites, couleur: lt.couleur, prio: lt.prio, phases, debutFab, finFab, finCond: cd ? cd.end : null })
   }
   return rows
 })
@@ -394,7 +394,7 @@ const occParEquip = computed(() => {
       if (ph.start < a.debut) a.debut = ph.start
       if (ph.end > a.fin) a.fin = ph.end
       const jours = ph.end - ph.start + 1
-      if (!a.prods[r.code]) a.prods[r.code] = { code: r.code, couleur: r.couleur, boites: 0, lots: 0, jours: 0 }
+      if (!a.prods[r.code]) a.prods[r.code] = { code: r.code, desig: r.desig, couleur: r.couleur, boites: 0, lots: 0, jours: 0 }
       a.prods[r.code].boites += r.boites
       a.prods[r.code].lots += 1
       a.prods[r.code].jours += jours
