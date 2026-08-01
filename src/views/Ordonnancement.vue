@@ -27,6 +27,10 @@
           <label>Week-end</label>
           <label class="wk"><input type="checkbox" v-model="skipWeekend" /> Ne pas travailler le week-end</label>
         </div>
+        <div class="add-field chk-wk">
+          <label>Priorité</label>
+          <label class="wk"><input type="checkbox" v-model="prioAutoCA" /> Automatique par CA le plus élevé</label>
+        </div>
       </div>
     </section>
 
@@ -57,7 +61,7 @@
           <thead><tr><th class="ta-c">Prio.</th><th>Produit</th><th class="ta-r">Boîtes (total)</th><th class="ta-r">Lots</th><th>Gamme</th><th class="ta-r">CA</th><th></th></tr></thead>
           <tbody>
             <tr v-for="g in groupesDetail" :key="g.id">
-              <td class="ta-c"><input type="number" min="1" class="prio-inp" :value="g.priorite" @change="setPriorite(g.id, $event.target.value)" /></td>
+              <td class="ta-c"><span v-if="prioAutoCA" class="prio-auto">{{ g.priorite }}</span><input v-else type="number" min="1" class="prio-inp" :value="g.priorite" @change="setPriorite(g.id, $event.target.value)" /></td>
               <td><span class="lot-dot" :style="{ background: g.couleur }"></span><strong>{{ g.code }}</strong> <span class="lot-desig">{{ g.desig }}</span></td>
               <td class="ta-r">{{ fmt(g.boites) }}</td>
               <td class="ta-r">{{ g.nb }}</td>
@@ -105,7 +109,7 @@
           </tbody>
         </table>
       </div>
-      <p class="gantt-legend">Les lots sont ordonnancés par priorité (1 = prioritaire, servi en premier). Chaque phase démarre après la précédente du lot ET quand l'équipement se libère. Durée = boîtes ÷ cadence (kg/h en fabrication, boîtes/h en conditionnement), en jours ({{ hpj }} h/j). Le conditionnement occupe ses ateliers selon la gamme.</p>
+      <p class="gantt-legend">Les lots sont ordonnancés par priorité — automatique par CA (le plus gros CA servi en premier) ou manuelle. Chaque phase démarre après la précédente du lot ET quand l'équipement se libère. Durée = boîtes ÷ cadence (kg/h en fabrication, boîtes/h en conditionnement), en jours ({{ hpj }} h/j). Le conditionnement occupe ses ateliers selon la gamme.</p>
     </section>
 
     <section v-if="groupes.length" class="kpi-line">
@@ -131,6 +135,7 @@ const produits = ref([]), equipements = ref([]), cadences = ref([]), chargement 
 const groupes = ref([])   // { id, produitId, boites, nbLots }
 const dateDepart = ref(new Date().toISOString().slice(0, 10))
 const skipWeekend = ref(true)
+const prioAutoCA = ref(true)
 const hpj = ref(24)
 const selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref('')
 let seq = 1
@@ -215,16 +220,29 @@ function ajouter() {
 }
 function retirer(id) { groupes.value = groupes.value.filter(g => g.id !== id) }
 function setPriorite(id, val) { const g = groupes.value.find(x => x.id === id); if (g) g.priorite = Math.max(1, Number(val) || 1) }
+function caDe(g) { const p = prodById.value[g.produitId] || {}; return (Number(g.totalBoites) || 0) * (Number(p.pcsu) || 0) }
+// Priorité effective : automatique par CA décroissant, ou manuelle
+const prioriteEffective = computed(() => {
+  const m = {}
+  if (prioAutoCA.value) {
+    const ranked = [...groupes.value].sort((a, b) => caDe(b) - caDe(a))
+    ranked.forEach((g, i) => { m[g.id] = i + 1 })
+  } else {
+    for (const g of groupes.value) m[g.id] = Number(g.priorite) || 999
+  }
+  return m
+})
 
 // Déploiement en lots individuels (numérotés par produit).
 const lotsDeployes = computed(() => {
   const out = []
-  const ordered = groupes.value.map((g, gi) => ({ g, gi })).sort((a, b) => ((Number(a.g.priorite) || 999) - (Number(b.g.priorite) || 999)) || (a.gi - b.gi))
+  const pe = prioriteEffective.value
+  const ordered = groupes.value.map((g, gi) => ({ g, gi })).sort((a, b) => ((pe[a.g.id] || 999) - (pe[b.g.id] || 999)) || (a.gi - b.gi))
   for (const { g, gi } of ordered) {
     let reste = g.totalBoites
     for (let i = 1; i <= g.nbLots; i++) {
       const b = Math.min(g.boitesParLot, reste); reste -= b
-      out.push({ id: g.id * 1000 + i, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi), prio: Number(g.priorite) || 999 })
+      out.push({ id: g.id * 1000 + i, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi), prio: pe[g.id] || 999 })
     }
   }
   return out
@@ -300,10 +318,13 @@ const finGlobale = computed(() => {
   return m
 })
 
-const groupesDetail = computed(() => groupes.value.map((g, gi) => {
-  const p = prodById.value[g.produitId] || {}
-  return { id: g.id, code: p.code_pf || '?', desig: p.designation || '', boites: g.totalBoites, nb: g.nbLots, gammeNoms: gammeNoms(g.produitId), ca: g.totalBoites * Number(p.pcsu || 0), couleur: couleur(gi), priorite: g.priorite }
-}).sort((a, b) => ((Number(a.priorite) || 999) - (Number(b.priorite) || 999)) || (a.id - b.id)))
+const groupesDetail = computed(() => {
+  const pe = prioriteEffective.value
+  return groupes.value.map((g, gi) => {
+    const p = prodById.value[g.produitId] || {}
+    return { id: g.id, code: p.code_pf || '?', desig: p.designation || '', boites: g.totalBoites, nb: g.nbLots, gammeNoms: gammeNoms(g.produitId), ca: g.totalBoites * Number(p.pcsu || 0), couleur: couleur(gi), priorite: pe[g.id] || 999 }
+  }).sort((a, b) => ((a.priorite || 999) - (b.priorite || 999)) || (a.id - b.id))
+})
 const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0))
 </script>
 
@@ -352,6 +373,7 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .gantt-legend { font-size: 12px; color: #64748b; margin-top: 12px; font-style: italic; }
 .prio-inp { width: 46px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 12.5px; text-align: center; }
 .prio-cell { font-weight: 700; color: #0f766e; }
+.prio-auto { display: inline-block; min-width: 24px; font-weight: 800; color: #0f766e; background: #f0fdfa; border-radius: 6px; padding: 2px 8px; }
 .sumh { background: #f0fdfa !important; color: #0f766e !important; }
 .dcell.sum { background: #f0fdfa; font-weight: 600; color: #0f766e; }
 
