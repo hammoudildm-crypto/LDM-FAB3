@@ -253,7 +253,7 @@ onMounted(async () => {
     fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, pcsu, unites_par_boite, taille_lot, poids_lot_kg, gamme').eq('actif', true)),
     fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true)),
     fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode')),
-    fetchAllPaged(() => supabase.from('ordres_fabrication').select('produit_id, quantite_theorique, date_fin_fabrication').eq('actif', true))
+    fetchAllPaged(() => supabase.from('ordres_fabrication').select('produit_id, quantite_theorique, date_fin_fabrication, date_lancement').eq('actif', true))
   ])
   produits.value = rp; equipements.value = re; cadences.value = rc; ofs.value = ro; chargement.value = false
   chargerLocal()
@@ -323,7 +323,7 @@ function ajouter() {
   const tl = Number(p.taille_lot) || 0
   const total = Number(selBoites.value)
   const nb = tl > 0 ? Math.min(60, Math.ceil(total / tl)) : 1
-  groupes.value.push({ id: seq++, produitId: selProduit.value, totalBoites: total, boitesParLot: tl > 0 ? tl : total, nbLots: nb, priorite: groupes.value.length + 1 })
+  groupes.value.push({ id: seq++, produitId: selProduit.value, totalBoites: total, boitesParLot: tl > 0 ? tl : total, nbLots: nb, priorite: groupes.value.length + 1, dateFixe: null })
 }
 function retirer(id) { groupes.value = groupes.value.filter(g => g.id !== id) }
 function setPriorite(id, val) { const g = groupes.value.find(x => x.id === id); if (g) g.priorite = Math.max(1, Number(val) || 1) }
@@ -363,23 +363,26 @@ const lotsEnCoursParProduit = computed(() => {
   for (const o of ofs.value) {
     if (o.date_fin_fabrication) continue
     if (!o.produit_id) continue
-    if (!m[o.produit_id]) m[o.produit_id] = { produitId: o.produit_id, boites: 0, lots: 0 }
+    if (!m[o.produit_id]) m[o.produit_id] = { produitId: o.produit_id, boites: 0, lots: 0, minDate: null }
     m[o.produit_id].boites += Number(o.quantite_theorique) || 0
     m[o.produit_id].lots += 1
+    if (o.date_lancement && (!m[o.produit_id].minDate || o.date_lancement < m[o.produit_id].minDate)) m[o.produit_id].minDate = o.date_lancement
   }
   return Object.values(m).filter(x => prodById.value[x.produitId])
 })
 const nbLotsEnCours = computed(() => lotsEnCoursParProduit.value.reduce((s, x) => s + x.lots, 0))
 function importerLotsEnCours() {
-  let nP = 0
+  let nP = 0, plusTot = null
   for (const x of lotsEnCoursParProduit.value) {
     if (groupes.value.some(g => g.produitId === x.produitId)) continue
     const p = prodById.value[x.produitId]; if (!p) continue
     const tl = Number(p.taille_lot) || 0
-    groupes.value.push({ id: seq++, produitId: x.produitId, totalBoites: x.boites, boitesParLot: tl > 0 ? tl : x.boites, nbLots: tl > 0 ? Math.min(60, Math.ceil(x.boites / tl)) : 1, priorite: groupes.value.length + 1 })
+    groupes.value.push({ id: seq++, produitId: x.produitId, totalBoites: x.boites, boitesParLot: tl > 0 ? tl : x.boites, nbLots: tl > 0 ? Math.min(60, Math.ceil(x.boites / tl)) : 1, priorite: groupes.value.length + 1, dateFixe: x.minDate || null })
+    if (x.minDate && (!plusTot || x.minDate < plusTot)) plusTot = x.minDate
     nP++
   }
-  msgImport.value = nP ? (nP + ' produit(s) importé(s) depuis la production en cours.') : 'Rien à importer (produits déjà présents, ou aucune fabrication en cours).'
+  if (plusTot && plusTot < dateDepart.value) dateDepart.value = plusTot
+  msgImport.value = nP ? (nP + ' produit(s) importé(s) — calés sur leur date de lancement réelle.') : 'Rien à importer (produits déjà présents, ou aucune fabrication en cours).'
 }
 // Priorité effective : automatique par CA décroissant, ou manuelle
 const prioriteEffective = computed(() => {
@@ -402,7 +405,7 @@ const lotsDeployes = computed(() => {
     let reste = g.totalBoites
     for (let i = 1; i <= g.nbLots; i++) {
       const b = Math.min(g.boitesParLot, reste); reste -= b
-      out.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi), prio: pe[g.id] || 999 })
+      out.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi), prio: pe[g.id] || 999, dateFixe: g.dateFixe })
     }
   }
   return out
@@ -431,6 +434,7 @@ const joursOuvres = computed(() => {
   return out
 })
 function dateIdx(idx) { const a = joursOuvres.value; return a.length ? a[Math.max(0, Math.min(idx, a.length - 1))] : null }
+function idxDeDate(ds) { if (!ds) return 0; const a = joursOuvres.value, t = new Date(ds + 'T00:00:00'); for (let i = 0; i < a.length; i++) if (a[i] >= t) return i; return 0 }
 
 // Ordonnancement : chaque lot enchaîne sa gamme, chaque phase après la précédente ET la libération de l'équipement.
 // Ordonnance une liste de lots et mesure le temps mort du conditionnement
@@ -444,7 +448,7 @@ function simuler(lots) {
   for (const lt of lots) {
     const seqPh = gammeProduit(lt.produitId)
     const p = prodById.value[lt.produitId] || {}
-    let prevEnd = -1
+    let prevEnd = lt.dateFixe ? Math.max(-1, idxDeDate(lt.dateFixe) - 1) : -1
     const phases = {}
     for (const k of seqPh) {
       let compat = equipements.value.filter(e => phaseDeType(e.type) === k && cadMap.value[e.id + '|' + lt.produitId] > 0)
@@ -486,7 +490,7 @@ function ordreEntrelace() {
   const gs = groupes.value.map((g, gi) => ({ g, gi })).sort((a, b) => ((pe[a.g.id] || 999) - (pe[b.g.id] || 999)) || (a.gi - b.gi))
   const parG = gs.map(({ g, gi }) => {
     const arr = []; let reste = g.totalBoites
-    for (let i = 1; i <= g.nbLots; i++) { const b = Math.min(g.boitesParLot, reste); reste -= b; arr.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi), prio: pe[g.id] || 999 }) }
+    for (let i = 1; i <= g.nbLots; i++) { const b = Math.min(g.boitesParLot, reste); reste -= b; arr.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi), prio: pe[g.id] || 999, dateFixe: g.dateFixe }) }
     return arr
   })
   const maxL = parG.reduce((m, a) => Math.max(m, a.length), 0)
