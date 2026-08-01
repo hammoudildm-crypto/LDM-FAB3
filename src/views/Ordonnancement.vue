@@ -124,6 +124,24 @@
       <p class="gantt-legend">Les lots sont ordonnancés par priorité — automatique par CA (le plus gros CA servi en premier) ou manuelle. Chaque phase démarre après la précédente du lot ET quand l'équipement se libère. Durée = boîtes ÷ cadence (kg/h en fabrication, boîtes/h en conditionnement), en jours ({{ hpj }} h/j). Le conditionnement occupe ses ateliers selon la gamme.</p>
     </section>
 
+    <!-- Vue Gantt -->
+    <section v-if="planning.length" class="card">
+      <h2 class="card-title">Vue Gantt — enchaînement des lots</h2>
+      <div class="gantt">
+        <div v-for="r in planning" :key="r.id" class="g-row">
+          <div class="g-lbl"><span class="lot-dot" :style="{ background: r.couleur }"></span>{{ r.num }}·{{ r.code }}</div>
+          <div class="g-track">
+            <div v-for="k in Object.keys(r.phases)" :key="k" class="g-bar" :class="{ cond: k === 'conditionnement' }"
+                 :style="{ left: barLeft(r.phases[k]), width: barWidth(r.phases[k]), background: r.couleur }"
+                 :title="PHASE_NOM[k] + ' : ' + fmtDate(dateIdx(r.phases[k].start)) + ' → ' + fmtDate(dateIdx(r.phases[k].end))">
+              <span class="gb-t">{{ PHASE_NOM[k].slice(0, 4) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="gantt-legend">Chaque barre = une phase d'un lot. Le <strong>conditionnement</strong> (barre bordée de noir) démarre dès la fin de la dernière phase de fabrication du <strong>même lot</strong> — il chevauche donc la fabrication des lots suivants. Un lot n'attend que si sa ligne de conditionnement est déjà occupée par un lot précédent (augmente le nombre de machines de la ligne pour paralléliser).</p>
+    </section>
+
     <!-- Occupation des équipements (fabrication + conditionnement) -->
     <section v-if="occParEquip.length" class="card">
       <h2 class="card-title">Occupation des équipements sur la période</h2>
@@ -404,6 +422,8 @@ const finGlobale = computed(() => {
   for (const r of planning.value) for (const k in r.phases) m = Math.max(m, r.phases[k].end)
   return m
 })
+function barLeft(ph) { const per = finGlobale.value + 1; return (per > 0 ? (ph.start / per) * 100 : 0) + '%' }
+function barWidth(ph) { const per = finGlobale.value + 1; return (per > 0 ? ((ph.end - ph.start + 1) / per) * 100 : 0) + '%' }
 
 // Occupation par équipement (toutes phases) + taux = jours occupés ÷ jours disponibles sur la période
 const occParEquip = computed(() => {
@@ -502,6 +522,13 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .manq-list { margin: 0; padding-left: 20px; }
 .manq-list li { font-size: 13px; color: #334155; margin: 3px 0; }
 .manq-ph { font-weight: 700; color: #b45309; }
+.gantt { display: flex; flex-direction: column; gap: 4px; overflow-x: auto; }
+.g-row { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.g-lbl { width: 140px; flex-shrink: 0; font-size: 11.5px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-track { position: relative; flex: 1; height: 20px; min-width: 520px; background: #f8fafc; border-radius: 4px; }
+.g-bar { position: absolute; top: 2px; height: 16px; border-radius: 3px; opacity: .82; display: flex; align-items: center; overflow: hidden; }
+.g-bar.cond { opacity: 1; border: 2px solid #1e293b; box-sizing: border-box; }
+.gb-t { font-size: 9px; color: #fff; font-weight: 700; padding: 0 3px; white-space: nowrap; }
 .cond-atelier { margin-bottom: 18px; }
 .ca-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 12px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px 8px 0 0; flex-wrap: wrap; }
 .ca-head strong { font-size: 14px; color: #0f766e; }
