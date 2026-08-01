@@ -112,6 +112,30 @@
       <p class="gantt-legend">Les lots sont ordonnancés par priorité — automatique par CA (le plus gros CA servi en premier) ou manuelle. Chaque phase démarre après la précédente du lot ET quand l'équipement se libère. Durée = boîtes ÷ cadence (kg/h en fabrication, boîtes/h en conditionnement), en jours ({{ hpj }} h/j). Le conditionnement occupe ses ateliers selon la gamme.</p>
     </section>
 
+    <!-- Occupation des ateliers de conditionnement -->
+    <section v-if="occConditionnement.length" class="card">
+      <h2 class="card-title">Occupation des ateliers de conditionnement</h2>
+      <div v-for="a in occConditionnement" :key="a.equip" class="cond-atelier">
+        <div class="ca-head">
+          <strong>{{ a.equip }}</strong>
+          <span class="ca-tot">{{ fmt(a.totalBoites) }} boîtes · {{ fmt(a.totalJours) }} j · {{ fmtDate(dateIdx(a.debut)) }} → {{ fmtDate(dateIdx(a.fin)) }}</span>
+        </div>
+        <table class="grid">
+          <thead><tr><th>Produit</th><th class="ta-r">Boîtes</th><th class="ta-r">Lots</th><th class="ta-r">Jours d'occupation</th></tr></thead>
+          <tbody>
+            <tr v-for="pr in a.produits" :key="pr.code">
+              <td><span class="lot-dot" :style="{ background: pr.couleur }"></span>{{ pr.code }}</td>
+              <td class="ta-r">{{ fmt(pr.boites) }}</td>
+              <td class="ta-r">{{ pr.lots }}</td>
+              <td class="ta-r">{{ fmt(pr.jours) }}</td>
+            </tr>
+          </tbody>
+          <tfoot><tr class="tot"><td>Total</td><td class="ta-r">{{ fmt(a.totalBoites) }}</td><td></td><td class="ta-r">{{ fmt(a.totalJours) }}</td></tr></tfoot>
+        </table>
+      </div>
+      <p class="gantt-legend">Jours = somme des durées de conditionnement des lots de ce produit sur cet équipement (durée d'un lot = boîtes ÷ cadence conditionnement, en jours).</p>
+    </section>
+
     <section v-if="groupes.length" class="kpi-line">
       <div class="kpi-mini"><div class="km-val">{{ fmtDA(totalCA) }}</div><div class="km-lbl">CA total</div></div>
       <div class="kpi-mini"><div class="km-val">{{ lotsDeployes.length }}</div><div class="km-lbl">Lots</div></div>
@@ -318,6 +342,27 @@ const finGlobale = computed(() => {
   return m
 })
 
+// Occupation des ateliers de conditionnement, par produit
+const occConditionnement = computed(() => {
+  const map = {}
+  for (const r of planning.value) {
+    const cd = r.phases['conditionnement']; if (!cd) continue
+    const jours = cd.end - cd.start + 1
+    if (!map[cd.equip]) map[cd.equip] = { equip: cd.equip, prods: {}, debut: cd.start, fin: cd.end }
+    const a = map[cd.equip]
+    if (cd.start < a.debut) a.debut = cd.start
+    if (cd.end > a.fin) a.fin = cd.end
+    if (!a.prods[r.code]) a.prods[r.code] = { code: r.code, couleur: r.couleur, boites: 0, lots: 0, jours: 0 }
+    a.prods[r.code].boites += r.boites
+    a.prods[r.code].lots += 1
+    a.prods[r.code].jours += jours
+  }
+  return Object.values(map).map(a => {
+    const produits = Object.values(a.prods).sort((x, y) => y.jours - x.jours)
+    return { equip: a.equip, produits, debut: a.debut, fin: a.fin, totalJours: produits.reduce((s, p) => s + p.jours, 0), totalBoites: produits.reduce((s, p) => s + p.boites, 0) }
+  }).sort((x, y) => y.totalJours - x.totalJours)
+})
+
 const groupesDetail = computed(() => {
   const pe = prioriteEffective.value
   return groupes.value.map((g, gi) => {
@@ -374,6 +419,11 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .prio-inp { width: 46px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 12.5px; text-align: center; }
 .prio-cell { font-weight: 700; color: #0f766e; }
 .prio-auto { display: inline-block; min-width: 24px; font-weight: 800; color: #0f766e; background: #f0fdfa; border-radius: 6px; padding: 2px 8px; }
+.cond-atelier { margin-bottom: 18px; }
+.ca-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 12px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px 8px 0 0; flex-wrap: wrap; }
+.ca-head strong { font-size: 14px; color: #0f766e; }
+.ca-tot { font-size: 12px; color: #475569; }
+.cond-atelier .grid { border: 1px solid #e2e8f0; border-top: 0; }
 .sumh { background: #f0fdfa !important; color: #0f766e !important; }
 .dcell.sum { background: #f0fdfa; font-weight: 600; color: #0f766e; }
 
