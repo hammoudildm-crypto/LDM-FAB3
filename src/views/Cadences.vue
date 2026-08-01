@@ -67,9 +67,10 @@
 
     <!-- Cadences produit -->
     <section v-if="selGroupe && !chargement" class="card">
-      <div class="ed-head">
-        <h2 class="card-title">Cadences produit — {{ nbRenseignees }} produit(s) cadencé(s)</h2>
-        <input type="search" v-model="filtre" class="prod-search" placeholder="Filtrer un produit…" />
+      <h2 class="card-title">Cadences produit — {{ nbRenseignees }} produit(s) cadencé(s)</h2>
+      <div class="prod-search-row">
+        <input type="search" v-model="filtre" class="prod-search-big" placeholder="Rechercher un produit (code ou désignation)…" />
+        <span v-if="filtre" class="ps-count">{{ produitsAffiches.length }} produit(s) sur {{ produits.length }}</span>
       </div>
       <div class="tbl-wrap">
         <table class="grid">
@@ -84,6 +85,7 @@
                 <input type="number" min="0" step="any" class="cad-inp" :class="{ rempli: Number(cadEdit[p.id]) > 0 }" v-model="cadEdit[p.id]" placeholder="—" />
               </td>
             </tr>
+            <tr v-if="!produitsAffiches.length"><td colspan="3" class="no-res">Aucun produit ne correspond à « {{ filtre }} ».</td></tr>
           </tbody>
         </table>
       </div>
@@ -344,6 +346,11 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 
 .ed-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
 .prod-search { padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; min-width: 220px; }
+.prod-search-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.prod-search-big { flex: 1; max-width: 460px; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 9px; font: inherit; font-size: 14px; }
+.prod-search-big:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.ps-count { font-size: 13px; color: #64748b; font-weight: 600; }
+.no-res { text-align: center; color: #94a3b8; padding: 18px; font-size: 13.5px; }
 
 .tbl-wrap { overflow-x: auto; }
 .grid { width: 100%; border-collapse: collapse; font-size: 13px; }
