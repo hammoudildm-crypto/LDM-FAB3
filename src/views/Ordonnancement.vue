@@ -127,7 +127,13 @@
     <!-- Vue Gantt -->
     <section v-if="planning.length" class="card">
       <h2 class="card-title">Vue Gantt — enchaînement des lots</h2>
-      <div class="gantt">
+      <div class="gantt" :style="gridStyle">
+        <div class="g-axis-row">
+          <div class="g-lbl-sp"></div>
+          <div class="g-axis">
+            <div v-for="t in axisTicks" :key="t.d" class="g-tick" :style="{ left: t.left }"><span>{{ t.label }}</span></div>
+          </div>
+        </div>
         <div v-for="r in planning" :key="r.id" class="g-row">
           <div class="g-lbl" :title="r.code + ' — ' + r.desig"><span class="lot-dot" :style="{ background: r.couleur }"></span><strong>{{ r.num }}·{{ r.code }}</strong> <span class="g-desig">{{ r.desig }}</span></div>
           <div class="g-track">
@@ -424,6 +430,16 @@ const finGlobale = computed(() => {
 })
 function barLeft(ph) { const per = finGlobale.value + 1; return (per > 0 ? (ph.start / per) * 100 : 0) + '%' }
 function barWidth(ph) { const per = finGlobale.value + 1; return (per > 0 ? ((ph.end - ph.start + 1) / per) * 100 : 0) + '%' }
+const axisTicks = computed(() => {
+  const per = finGlobale.value + 1; if (per <= 0) return []
+  const step = Math.max(1, Math.round(per / 10)), out = []
+  for (let d = 0; d < per; d += step) {
+    const date = dateIdx(d)
+    out.push({ d, left: (d / per) * 100 + '%', label: date ? date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '' })
+  }
+  return out
+})
+const gridStyle = computed(() => { const per = finGlobale.value + 1, step = Math.max(1, Math.round(per / 10)); return { '--grid': (per > 0 ? (step / per) * 100 : 10) + '%' } })
 
 // Occupation par équipement (toutes phases) + taux = jours occupés ÷ jours disponibles sur la période
 const occParEquip = computed(() => {
@@ -526,7 +542,13 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .g-row { display: flex; align-items: center; gap: 8px; min-height: 24px; }
 .g-lbl { width: 210px; flex-shrink: 0; font-size: 11.5px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-desig { color: #94a3b8; }
-.g-track { position: relative; flex: 1; height: 20px; min-width: 520px; background: #f8fafc; border-radius: 4px; }
+.g-track { position: relative; flex: 1; height: 20px; min-width: 520px; background-color: #f8fafc; background-image: repeating-linear-gradient(to right, #e5eaf0 0 1px, transparent 1px var(--grid, 10%)); border-radius: 4px; }
+.g-axis-row { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 6px; }
+.g-lbl-sp { width: 210px; flex-shrink: 0; }
+.g-axis { position: relative; flex: 1; height: 16px; min-width: 520px; border-bottom: 1px solid #cbd5e1; }
+.g-tick { position: absolute; bottom: 0; transform: translateX(-50%); }
+.g-tick span { font-size: 9.5px; color: #64748b; white-space: nowrap; }
+.g-tick::after { content: ''; position: absolute; bottom: -4px; left: 50%; width: 1px; height: 4px; background: #cbd5e1; }
 .g-bar { position: absolute; top: 2px; height: 16px; border-radius: 3px; opacity: .82; display: flex; align-items: center; overflow: hidden; }
 .g-bar.cond { opacity: 1; border: 2px solid #1e293b; box-sizing: border-box; }
 .gb-t { font-size: 9px; color: #fff; font-weight: 700; padding: 0 3px; white-space: nowrap; }
