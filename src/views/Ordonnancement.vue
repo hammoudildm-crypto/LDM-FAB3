@@ -99,7 +99,7 @@
               <span class="aff-ph-lbl">{{ PHASE_NOM[k] }}</span>
               <select v-model="choixEquip[g.id + '|' + k]">
                 <option value="">Auto (le plus tôt libre)</option>
-                <option v-for="e in equipsPhase(g.produitId, k)" :key="e.id" :value="e.id">{{ e.nom || e.code }}</option>
+                <option v-for="e in equipsPhase(g.produitId, k)" :key="e.id" :value="e.id">{{ e.code }}{{ e.nom ? ' · ' + e.nom : '' }}</option>
               </select>
             </label>
           </template>
