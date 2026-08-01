@@ -136,7 +136,7 @@ async function chargerValeurs() {
 }
 async function chargerSource() {
   const [ro, rc, rp] = await Promise.all([
-    fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, quantite_theorique, boites_fabriquees, date_fin_fabrication, deviation, deviation_cond, produits(unites_par_boite, taille_lot, poids_lot_kg)').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, statut, quantite_theorique, boites_fabriquees, date_fin_fabrication, deviation, deviation_cond, en_triage, en_triage_cond, produits(unites_par_boite, taille_lot, poids_lot_kg)').eq('actif', true)),
     fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, quantite_conditionnee, date_conditionnement').eq('actif', true)),
     fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee'))
   ])
@@ -182,6 +182,17 @@ const autoParSource = computed(() => {
     if (fab > 0 && cond > 0) { const r = cond / fab * 100; if (r >= 50 && r <= 110) { cCond[m] += cond; cFab[m] += fab } }
   }
   const pct = (num, den) => den > 0 ? +(num / den * 100).toFixed(1) : null
+  // Lots conformes du 1er coup : libéré + sans déviation ni triage (fab & cond) ÷ lots décidés, au mois de conditionnement
+  const rftNum = Z(), rftDen = Z()
+  for (const o of ofs.value) {
+    const md = condDate[o.id] || o.date_fin_fabrication; if (!md) continue
+    const d = new Date(md); if (d.getFullYear() !== an) continue
+    if (o.statut !== 'Libéré' && o.statut !== 'Rejeté') continue
+    const m = d.getMonth()
+    rftDen[m]++
+    if (o.statut === 'Libéré' && !o.deviation && !o.deviation_cond && !o.en_triage && !o.en_triage_cond) rftNum[m]++
+  }
+  const conformite_1er = rftDen.map((_, i) => pct(rftNum[i], rftDen[i]))
   return {
     rendement_fab: fTheo.map((t, i) => pct(fFab[i], t)),
     rendement_cond: cFab.map((t, i) => pct(cCond[i], t)),
@@ -190,7 +201,8 @@ const autoParSource = computed(() => {
     deviations_fab: devFab,
     deviations_cond: devCond,
     dechets_fab: dFab.map((v, i) => nFab[i] > 0 ? +v.toFixed(1) : null),
-    dechets_cond: dCond.map((v, i) => nCond[i] > 0 ? +v.toFixed(1) : null)
+    dechets_cond: dCond.map((v, i) => nCond[i] > 0 ? +v.toFixed(1) : null),
+    conformite_1er
   }
 })
 function estAuto(ind) { return ind.source && ind.source !== 'manuel' }
