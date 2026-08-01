@@ -324,6 +324,21 @@ async function desactiverA(a) {
   await chargerTout()
 }
 
+// --- Tri des équipements selon la gamme de fabrication ---
+function ordreGammeType(type) {
+  const t = (type || '').toLowerCase()
+  if (/pes[ée]|balance|bascule/.test(t)) return 1
+  if (/granul|s[ée]ch/.test(t)) return 2
+  if (/m[ée]lang/.test(t)) return 3
+  if (/compress|presse|compri/.test(t)) return 4
+  if (/g[ée]lule|remplis|encapsul|capsul/.test(t)) return 5
+  if (/pellicul|enrob|coat|drag/.test(t)) return 6
+  if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|[ée]tui|fardel|encart|mise en bo/.test(t)) return 7
+  return 99
+}
+const equipementsTries = computed(() => [...equipements.value].sort((a, b) =>
+  (ordreGammeType(a.type) - ordreGammeType(b.type)) || String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true })))
+
 // --- Actions Équipement ---
 async function enregistrerE() {
   erreur.value = ''
@@ -461,7 +476,7 @@ onMounted(async () => {
         <table class="grid">
           <thead><tr><th>Code</th><th>Nom</th><th>Atelier</th><th>Type</th><th class="right">Actions</th></tr></thead>
           <tbody>
-            <tr v-for="e in equipements" :key="e.id">
+            <tr v-for="e in equipementsTries" :key="e.id">
               <td class="mono">{{ e.code }}</td>
               <td>{{ e.nom }}</td>
               <td>{{ atelierDe(e) ? atelierDe(e).code : '—' }}</td>
