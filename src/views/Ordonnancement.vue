@@ -49,6 +49,11 @@
         <div class="add-field"><label>Lots (auto)</label><div class="lots-auto">{{ lotsAuto || '—' }}<span v-if="tailleLotSel" class="tl-hint">taille lot {{ fmt(tailleLotSel) }}</span></div></div>
         <button class="btn-add" @click="ajouter" :disabled="!selProduit || !(Number(selBoites) > 0)">Ajouter</button>
       </div>
+      <div class="add-import" v-if="nbLotsEnCours">
+        <button class="btn-import" @click="importerLotsEnCours">↓ Importer les lots en cours ({{ nbLotsEnCours }} lots · {{ lotsEnCoursParProduit.length }} produits)</button>
+        <span class="import-hint">depuis « Disponibilité des produits par atelier »</span>
+      </div>
+      <p v-if="msgImport" class="msg-import">{{ msgImport }}</p>
       <p v-if="chargement" class="muted">Chargement…</p>
       <p v-else-if="selProduit && !gammeProduit(selProduit).length" class="muted warn">Aucune phase cadencée trouvée pour ce produit (gamme ou cadences manquantes).</p>
     </section>
@@ -196,7 +201,7 @@ const PHASE_ORDRE = ['pesee', 'granulation', 'sechage', 'melange', 'compression'
 const NOM_KEY = {}
 for (const [k, v] of Object.entries(PHASE_NOM)) NOM_KEY[v.toLowerCase()] = k
 
-const produits = ref([]), equipements = ref([]), cadences = ref([]), chargement = ref(true)
+const produits = ref([]), equipements = ref([]), cadences = ref([]), ofs = ref([]), chargement = ref(true)
 const groupes = ref([])   // { id, produitId, boites, nbLots }
 const dateDepart = ref(new Date().toISOString().slice(0, 10))
 const skipWeekend = ref(true)
@@ -204,6 +209,7 @@ const prioAutoCA = ref(true)
 const hpj = ref(24)
 const selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref('')
 let seq = 1
+const msgImport = ref('')
 
 function fmt(n) { return Math.round(Number(n) || 0).toLocaleString('fr-FR') }
 function fmtDA(n) { const v = Number(n) || 0; return v >= 1e6 ? (v / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' M DA' : Math.round(v).toLocaleString('fr-FR') + ' DA' }
@@ -216,12 +222,13 @@ async function fetchAllPaged(make) {
 }
 
 onMounted(async () => {
-  const [rp, re, rc] = await Promise.all([
+  const [rp, re, rc, ro] = await Promise.all([
     fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, pcsu, unites_par_boite, taille_lot, poids_lot_kg, gamme').eq('actif', true)),
     fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true)),
-    fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode'))
+    fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode')),
+    fetchAllPaged(() => supabase.from('ordres_fabrication').select('produit_id, quantite_theorique, date_fin_fabrication').eq('actif', true))
   ])
-  produits.value = rp; equipements.value = re; cadences.value = rc; chargement.value = false
+  produits.value = rp; equipements.value = re; cadences.value = rc; ofs.value = ro; chargement.value = false
   chargerLocal()
 })
 
@@ -317,6 +324,31 @@ function remiseAZero() {
   if (!confirm('Vider le scénario (produits, quantités, priorités) ? Cette action est définitive.')) return
   groupes.value = []
   try { localStorage.removeItem(LS_KEY) } catch (e) {}
+}
+
+// Lots en cours (non terminés en fabrication) regroupés par produit — depuis Disponibilité par atelier
+const lotsEnCoursParProduit = computed(() => {
+  const m = {}
+  for (const o of ofs.value) {
+    if (o.date_fin_fabrication) continue
+    if (!o.produit_id) continue
+    if (!m[o.produit_id]) m[o.produit_id] = { produitId: o.produit_id, boites: 0, lots: 0 }
+    m[o.produit_id].boites += Number(o.quantite_theorique) || 0
+    m[o.produit_id].lots += 1
+  }
+  return Object.values(m).filter(x => prodById.value[x.produitId])
+})
+const nbLotsEnCours = computed(() => lotsEnCoursParProduit.value.reduce((s, x) => s + x.lots, 0))
+function importerLotsEnCours() {
+  let nP = 0
+  for (const x of lotsEnCoursParProduit.value) {
+    if (groupes.value.some(g => g.produitId === x.produitId)) continue
+    const p = prodById.value[x.produitId]; if (!p) continue
+    const tl = Number(p.taille_lot) || 0
+    groupes.value.push({ id: seq++, produitId: x.produitId, totalBoites: x.boites, boitesParLot: tl > 0 ? tl : x.boites, nbLots: tl > 0 ? Math.min(60, Math.ceil(x.boites / tl)) : 1, priorite: groupes.value.length + 1 })
+    nP++
+  }
+  msgImport.value = nP ? (nP + ' produit(s) importé(s) depuis la production en cours.') : 'Rien à importer (produits déjà présents, ou aucune fabrication en cours).'
 }
 // Priorité effective : automatique par CA décroissant, ou manuelle
 const prioriteEffective = computed(() => {
@@ -533,6 +565,11 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .card-head-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
 .btn-reset { background: #fff; color: #b91c1c; border: 1px solid #fca5a5; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; cursor: pointer; }
 .btn-reset:hover { background: #fef2f2; }
+.add-import { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.btn-import { background: #ecfeff; color: #0e7490; border: 1px solid #67e8f9; border-radius: 9px; font: inherit; font-size: 13.5px; font-weight: 600; padding: 8px 16px; cursor: pointer; }
+.btn-import:hover { background: #cffafe; }
+.import-hint { font-size: 12px; color: #64748b; font-style: italic; }
+.msg-import { font-size: 13px; color: #15803d; margin-top: 8px; font-weight: 600; }
 .warn-card { border-color: #fcd34d; background: #fffbeb; }
 .warn-txt { font-size: 13px; color: #92400e; margin-bottom: 10px; }
 .manq-list { margin: 0; padding-left: 20px; }
