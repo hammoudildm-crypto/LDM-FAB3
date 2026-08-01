@@ -182,15 +182,14 @@ const autoParSource = computed(() => {
     if (fab > 0 && cond > 0) { const r = cond / fab * 100; if (r >= 50 && r <= 110) { cCond[m] += cond; cFab[m] += fab } }
   }
   const pct = (num, den) => den > 0 ? +(num / den * 100).toFixed(1) : null
-  // Lots conformes du 1er coup : libéré + sans déviation ni triage (fab & cond) ÷ lots décidés, au mois de conditionnement
+  // Lots conformes du 1er coup : lots TERMINÉS sans déviation ni triage (fab & cond) ÷ lots terminés, au mois de fin de fabrication
   const rftNum = Z(), rftDen = Z()
   for (const o of ofs.value) {
-    const md = condDate[o.id] || o.date_fin_fabrication; if (!md) continue
-    const d = new Date(md); if (d.getFullYear() !== an) continue
-    if (o.statut !== 'Libéré' && o.statut !== 'Rejeté') continue
+    if (!o.date_fin_fabrication) continue
+    const d = new Date(o.date_fin_fabrication); if (d.getFullYear() !== an) continue
     const m = d.getMonth()
     rftDen[m]++
-    if (o.statut === 'Libéré' && !o.deviation && !o.deviation_cond && !o.en_triage && !o.en_triage_cond) rftNum[m]++
+    if (!o.deviation && !o.deviation_cond && !o.en_triage && !o.en_triage_cond) rftNum[m]++
   }
   const conformite_1er = rftDen.map((_, i) => pct(rftNum[i], rftDen[i]))
   return {
