@@ -143,6 +143,12 @@ async function chargerSource() {
   ofs.value = ro; conds.value = rc; plans.value = rp
 }
 
+// Rattachement au mois via lecture directe de la date (indépendant du fuseau horaire)
+function moisAnnee(dateStr) {
+  const s = String(dateStr || ''); if (s.length < 7) return null
+  const y = +s.slice(0, 4), m = +s.slice(5, 7)
+  return (y && m >= 1 && m <= 12) ? [y, m - 1] : null
+}
 // Valeurs calculées automatiquement pour l'année, par source
 const autoParSource = computed(() => {
   const an = annee.value
@@ -163,8 +169,8 @@ const autoParSource = computed(() => {
   const fTheo = Z(), fFab = Z(), realFab = Z(), devFab = Z(), dFab = Z(), nFab = Z()
   for (const o of ofs.value) {
     if (!o.date_fin_fabrication) continue
-    const d = new Date(o.date_fin_fabrication); if (d.getFullYear() !== an) continue
-    const m = d.getMonth(), theo = Number(o.quantite_theorique || 0), fab = Number(o.boites_fabriquees || 0)
+    const ym = moisAnnee(o.date_fin_fabrication); if (!ym || ym[0] !== an) continue
+    const m = ym[1], theo = Number(o.quantite_theorique || 0), fab = Number(o.boites_fabriquees || 0)
     realFab[m] += fab; nFab[m]++
     if (o.deviation) devFab[m]++
     dFab[m] += Math.max(0, theo - fab) * kgBoite(o)   // perte de fabrication en kg
@@ -174,8 +180,8 @@ const autoParSource = computed(() => {
   const cCond = Z(), cFab = Z(), realCond = Z(), devCond = Z(), dCond = Z(), nCond = Z()
   for (const o of ofs.value) {
     const dc = condDate[o.id]; if (!dc) continue
-    const d = new Date(dc); if (d.getFullYear() !== an) continue
-    const m = d.getMonth(), fab = Number(o.boites_fabriquees || 0), cond = condBoites[o.id] || 0
+    const ym = moisAnnee(dc); if (!ym || ym[0] !== an) continue
+    const m = ym[1], fab = Number(o.boites_fabriquees || 0), cond = condBoites[o.id] || 0
     realCond[m] += cond; nCond[m]++
     if (o.deviation_cond) devCond[m]++
     dCond[m] += Math.max(0, fab - cond) * kgBoite(o)   // perte de conditionnement en kg
@@ -186,8 +192,8 @@ const autoParSource = computed(() => {
   const rftNum = Z(), rftDen = Z()
   for (const o of ofs.value) {
     if (!o.date_fin_fabrication) continue
-    const d = new Date(o.date_fin_fabrication); if (d.getFullYear() !== an) continue
-    const m = d.getMonth()
+    const ym = moisAnnee(o.date_fin_fabrication); if (!ym || ym[0] !== an) continue
+    const m = ym[1]
     rftDen[m]++
     if (!o.deviation && !o.deviation_cond && !o.en_triage && !o.en_triage_cond) rftNum[m]++
   }
