@@ -78,6 +78,15 @@
       </div>
     </section>
 
+    <!-- Phases non planifiées -->
+    <section v-if="phasesManquantes.length" class="card warn-card">
+      <h2 class="card-title">⚠ Phases non planifiées ({{ phasesManquantes.length }})</h2>
+      <p class="warn-txt">Ces phases de la gamme n'ont <strong>pas d'équipement avec une cadence</strong> pour le produit → elles sont ignorées dans le planning (c'est pourquoi certaines colonnes manquent). Ajoute la cadence dans le volet <strong>Cadences</strong> pour l'équipement concerné.</p>
+      <ul class="manq-list">
+        <li v-for="m in phasesManquantes" :key="m.code + m.phase"><strong>{{ m.code }}</strong> <span class="lot-desig">{{ m.desig }}</span> — <span class="manq-ph">{{ m.phase }}</span></li>
+      </ul>
+    </section>
+
     <!-- Planning daté -->
     <section v-if="planning.length" class="card">
       <h2 class="card-title">Planning — {{ fmtDate(dateIdx(0)) }} → {{ fmtDate(dateIdx(finGlobale)) }}</h2>
@@ -203,7 +212,7 @@ function phaseDeType(type) {
   if (/mélang|melang/.test(t)) return 'melange'
   if (/gélule|gelule|remplis|encapsul|capsul/.test(t)) return 'remplissage'
   if (/compress|presse|compri/.test(t)) return 'compression'
-  if (/pellicul|enrob|coat|dragé|drage/.test(t)) return 'pelliculage'
+  if (/p[eé]llicul|enrob|coat|drag/.test(t)) return 'pelliculage'
   if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)) return 'conditionnement'
   return null
 }
@@ -216,7 +225,7 @@ function phaseKeyFromName(name) {
   if (/mélang|melang/.test(t)) return 'melange'
   if (/gélule|gelule|remplis|capsul/.test(t)) return 'remplissage'
   if (/compress|compri/.test(t)) return 'compression'
-  if (/pellicul|enrob|dragé|drage/.test(t)) return 'pelliculage'
+  if (/p[eé]llicul|enrob|drag/.test(t)) return 'pelliculage'
   if (/condition/.test(t)) return 'conditionnement'
   return null
 }
@@ -376,6 +385,20 @@ const colonnes = computed(() => {
   for (const r of planning.value) for (const k in r.phases) used.add(k)
   return PHASE_ORDRE.filter(k => used.has(k))
 })
+
+// Phases de la gamme non planifiées faute d'équipement + cadence
+const phasesManquantes = computed(() => {
+  const out = [], seen = new Set()
+  for (const lt of lotsDeployes.value) {
+    const seq = gammeProduit(lt.produitId)
+    const p = prodById.value[lt.produitId] || {}
+    for (const k of seq) {
+      const ok = equipements.value.some(e => phaseDeType(e.type) === k && cadMap.value[e.id + '|' + lt.produitId] > 0)
+      if (!ok) { const key = lt.produitId + '|' + k; if (!seen.has(key)) { seen.add(key); out.push({ code: p.code_pf, desig: p.designation, phase: PHASE_NOM[k] }) } }
+    }
+  }
+  return out
+})
 const finGlobale = computed(() => {
   let m = 0
   for (const r of planning.value) for (const k in r.phases) m = Math.max(m, r.phases[k].end)
@@ -474,6 +497,11 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .card-head-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
 .btn-reset { background: #fff; color: #b91c1c; border: 1px solid #fca5a5; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; cursor: pointer; }
 .btn-reset:hover { background: #fef2f2; }
+.warn-card { border-color: #fcd34d; background: #fffbeb; }
+.warn-txt { font-size: 13px; color: #92400e; margin-bottom: 10px; }
+.manq-list { margin: 0; padding-left: 20px; }
+.manq-list li { font-size: 13px; color: #334155; margin: 3px 0; }
+.manq-ph { font-weight: 700; color: #b45309; }
 .cond-atelier { margin-bottom: 18px; }
 .ca-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 12px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px 8px 0 0; flex-wrap: wrap; }
 .ca-head strong { font-size: 14px; color: #0f766e; }
