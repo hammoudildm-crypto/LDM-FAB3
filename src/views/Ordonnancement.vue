@@ -58,7 +58,7 @@
         <button class="btn-add" @click="ajouter" :disabled="!selProduit || !(Number(selBoites) > 0)">Ajouter</button>
       </div>
       <div class="add-import" v-if="nbLotsEnCours">
-        <button class="btn-import" @click="importerLotsEnCours">↓ Importer {{ condSeul ? 'le vrac prêt à conditionner' : 'les lots en cours' }} ({{ nbLotsEnCours }} lots · {{ lotsImportables.length }} produits)</button>
+        <button class="btn-import" @click="importerLotsEnCours">↓ Importer {{ condSeul ? 'le vrac prêt à conditionner' : 'les lots en cours' }} ({{ nbLotsEnCours }} lots · {{ nbProduitsImport }} produits)</button>
         <span class="import-hint">depuis « Disponibilité des produits par atelier »</span>
       </div>
       <p v-if="msgImport" class="msg-import">{{ msgImport }}</p>
@@ -78,7 +78,7 @@
           <tbody>
             <tr v-for="g in groupesDetail" :key="g.id">
               <td class="ta-c"><span v-if="prioAutoCA" class="prio-auto">{{ g.priorite }}</span><input v-else type="number" min="1" class="prio-inp" :value="g.priorite" @change="setPriorite(g.id, $event.target.value)" /></td>
-              <td><span class="lot-dot" :style="{ background: g.couleur }"></span><strong>{{ g.code }}</strong> <span class="lot-desig">{{ g.desig }}</span></td>
+              <td><span class="lot-dot" :style="{ background: g.couleur }"></span><span v-if="g.numeroLot" class="lot-num">Lot {{ g.numeroLot }}</span> <strong>{{ g.code }}</strong> <span class="lot-desig">{{ g.desig }}</span></td>
               <td class="ta-r">{{ fmt(g.boites) }}</td>
               <td class="ta-r">{{ g.nb }}</td>
               <td class="gamme-cell">{{ g.gammeNoms }}</td>
@@ -140,7 +140,7 @@
           </thead>
           <tbody>
             <tr v-for="r in planning" :key="r.id">
-              <td class="num">{{ r.num }}</td>
+              <td class="num">{{ r.numeroLot || r.num }}</td>
               <td class="ta-c prio-cell">{{ r.prio }}</td>
               <td><span class="lot-dot" :style="{ background: r.couleur }"></span><strong>{{ r.code }}</strong> <span class="lot-desig">{{ r.desig }}</span></td>
               <td class="ta-r">{{ fmt(r.boites) }}</td>
@@ -169,7 +169,7 @@
           </div>
         </div>
         <div v-for="r in planning" :key="r.id" class="g-row">
-          <div class="g-lbl" :title="r.code + ' — ' + r.desig"><span class="lot-dot" :style="{ background: r.couleur }"></span><strong>{{ r.num }}·{{ r.code }}</strong> <span class="g-desig">{{ r.desig }}</span></div>
+          <div class="g-lbl" :title="r.code + ' — ' + r.desig"><span class="lot-dot" :style="{ background: r.couleur }"></span><strong>{{ r.numeroLot || r.num }}·{{ r.code }}</strong> <span class="g-desig">{{ r.desig }}</span></div>
           <div class="g-track">
             <div v-for="k in Object.keys(r.phases)" :key="k" class="g-bar" :class="{ cond: k === 'conditionnement' }"
                  :style="{ left: barLeft(r.phases[k]), width: barWidth(r.phases[k]), background: r.couleur }"
@@ -258,7 +258,7 @@ onMounted(async () => {
     fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, pcsu, unites_par_boite, taille_lot, poids_lot_kg, gamme').eq('actif', true)),
     fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true)),
     fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode')),
-    fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, produit_id, quantite_theorique, boites_fabriquees, date_fin_fabrication, date_lancement').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, produit_id, quantite_theorique, boites_fabriquees, date_fin_fabrication, date_lancement').eq('actif', true)),
     fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id').eq('actif', true))
   ])
   produits.value = rp; equipements.value = re; cadences.value = rc; ofs.value = ro; conds.value = rk; chargement.value = false
@@ -330,7 +330,7 @@ function ajouter() {
   const tl = Number(p.taille_lot) || 0
   const total = Number(selBoites.value)
   const nb = tl > 0 ? Math.min(60, Math.ceil(total / tl)) : 1
-  groupes.value.push({ id: seq++, produitId: selProduit.value, totalBoites: total, boitesParLot: tl > 0 ? tl : total, nbLots: nb, priorite: groupes.value.length + 1, dateFixe: null })
+  groupes.value.push({ id: seq++, ofId: null, numeroLot: null, produitId: selProduit.value, totalBoites: total, boitesParLot: tl > 0 ? tl : total, nbLots: nb, priorite: groupes.value.length + 1, dateFixe: null })
 }
 function retirer(id) { groupes.value = groupes.value.filter(g => g.id !== id) }
 function setPriorite(id, val) { const g = groupes.value.find(x => x.id === id); if (g) g.priorite = Math.max(1, Number(val) || 1) }
@@ -365,48 +365,35 @@ function remiseAZero() {
 }
 
 // Lots en cours (non terminés en fabrication) regroupés par produit — depuis Disponibilité par atelier
-const lotsEnCoursParProduit = computed(() => {
-  const m = {}
-  for (const o of ofs.value) {
-    if (o.date_fin_fabrication) continue
-    if (!o.produit_id) continue
-    if (!m[o.produit_id]) m[o.produit_id] = { produitId: o.produit_id, boites: 0, lots: 0, minDate: null }
-    m[o.produit_id].boites += Number(o.quantite_theorique) || 0
-    m[o.produit_id].lots += 1
-    if (o.date_lancement && (!m[o.produit_id].minDate || o.date_lancement < m[o.produit_id].minDate)) m[o.produit_id].minDate = o.date_lancement
-  }
-  return Object.values(m).filter(x => prodById.value[x.produitId])
-})
-// Vrac prêt à conditionner : fabriqué (date_fin_fab) et pas encore conditionné
+// Lots réels importables (individuels, avec numéro de lot)
 const condOrdreIds = computed(() => { const set = new Set(); for (const c of conds.value) if (c.ordre_id) set.add(c.ordre_id); return set })
-const vracParProduit = computed(() => {
-  const done = condOrdreIds.value, m = {}
+const lotsImportablesRaw = computed(() => {
+  const done = condOrdreIds.value, out = []
   for (const o of ofs.value) {
-    if (!o.date_fin_fabrication) continue
-    if (done.has(o.id)) continue
-    if (!o.produit_id) continue
-    const b = Number(o.boites_fabriquees) || Number(o.quantite_theorique) || 0
-    if (!m[o.produit_id]) m[o.produit_id] = { produitId: o.produit_id, boites: 0, lots: 0, minDate: null }
-    m[o.produit_id].boites += b
-    m[o.produit_id].lots += 1
-    if (o.date_fin_fabrication && (!m[o.produit_id].minDate || o.date_fin_fabrication < m[o.produit_id].minDate)) m[o.produit_id].minDate = o.date_fin_fabrication
+    if (!o.produit_id || !prodById.value[o.produit_id]) continue
+    if (condSeul.value) {
+      if (!o.date_fin_fabrication || done.has(o.id)) continue
+      out.push({ id: o.id, numeroLot: o.numero_lot, produitId: o.produit_id, boites: Number(o.boites_fabriquees) || Number(o.quantite_theorique) || 0, date: o.date_fin_fabrication })
+    } else {
+      if (o.date_fin_fabrication) continue
+      out.push({ id: o.id, numeroLot: o.numero_lot, produitId: o.produit_id, boites: Number(o.quantite_theorique) || 0, date: o.date_lancement })
+    }
   }
-  return Object.values(m).filter(x => prodById.value[x.produitId])
+  return out
 })
-const lotsImportables = computed(() => condSeul.value ? vracParProduit.value : lotsEnCoursParProduit.value)
-const nbLotsEnCours = computed(() => lotsImportables.value.reduce((s, x) => s + x.lots, 0))
+const nbLotsEnCours = computed(() => lotsImportablesRaw.value.length)
+const nbProduitsImport = computed(() => new Set(lotsImportablesRaw.value.map(x => x.produitId)).size)
 function importerLotsEnCours() {
   let nP = 0, plusTot = null
-  for (const x of lotsImportables.value) {
-    if (groupes.value.some(g => g.produitId === x.produitId)) continue
+  for (const x of lotsImportablesRaw.value) {
+    if (groupes.value.some(g => g.ofId === x.id)) continue
     const p = prodById.value[x.produitId]; if (!p) continue
-    const tl = Number(p.taille_lot) || 0
-    groupes.value.push({ id: seq++, produitId: x.produitId, totalBoites: x.boites, boitesParLot: tl > 0 ? tl : x.boites, nbLots: tl > 0 ? Math.min(60, Math.ceil(x.boites / tl)) : 1, priorite: groupes.value.length + 1, dateFixe: x.minDate || null })
-    if (x.minDate && (!plusTot || x.minDate < plusTot)) plusTot = x.minDate
+    groupes.value.push({ id: seq++, ofId: x.id, numeroLot: x.numeroLot || null, produitId: x.produitId, totalBoites: x.boites, boitesParLot: x.boites, nbLots: 1, priorite: groupes.value.length + 1, dateFixe: x.date || null })
+    if (x.date && (!plusTot || x.date < plusTot)) plusTot = x.date
     nP++
   }
   if (plusTot && plusTot < dateDepart.value) dateDepart.value = plusTot
-  msgImport.value = nP ? (nP + ' produit(s) importé(s) — calés sur leur date de lancement réelle.') : 'Rien à importer (produits déjà présents, ou aucune fabrication en cours).'
+  msgImport.value = nP ? (nP + ' lot(s) importé(s)' + (condSeul.value ? ' — vrac à conditionner' : ' — calés sur leur date de lancement') + '.') : 'Rien à importer (déjà importés, ou aucun lot disponible).'
 }
 // Priorité effective : automatique par CA décroissant, ou manuelle
 const prioriteEffective = computed(() => {
@@ -429,7 +416,7 @@ const lotsDeployes = computed(() => {
     let reste = g.totalBoites
     for (let i = 1; i <= g.nbLots; i++) {
       const b = Math.min(g.boitesParLot, reste); reste -= b
-      out.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi), prio: pe[g.id] || 999, dateFixe: g.dateFixe })
+      out.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, numeroLot: g.numeroLot, couleur: couleur(gi), prio: pe[g.id] || 999, dateFixe: g.dateFixe })
     }
   }
   return out
@@ -492,7 +479,7 @@ function simuler(lots) {
     const debutFab = fabK.length ? Math.min(...fabK.map(k => phases[k].start)) : null
     const finFab = fabK.length ? Math.max(...fabK.map(k => phases[k].end)) : null
     const cd = phases['conditionnement']
-    rows.push({ id: lt.id, num: lt.num, code: p.code_pf, desig: p.designation, boites: lt.boites, couleur: lt.couleur, prio: lt.prio, phases, debutFab, finFab, finCond: cd ? cd.end : null })
+    rows.push({ id: lt.id, num: lt.num, numeroLot: lt.numeroLot, code: p.code_pf, desig: p.designation, boites: lt.boites, couleur: lt.couleur, prio: lt.prio, phases, debutFab, finFab, finCond: cd ? cd.end : null })
   }
   let fin = 0; for (const r of rows) for (const k in r.phases) fin = Math.max(fin, r.phases[k].end)
   const condByEq = {}
@@ -514,7 +501,7 @@ function ordreEntrelace() {
   const gs = groupes.value.map((g, gi) => ({ g, gi })).sort((a, b) => ((pe[a.g.id] || 999) - (pe[b.g.id] || 999)) || (a.gi - b.gi))
   const parG = gs.map(({ g, gi }) => {
     const arr = []; let reste = g.totalBoites
-    for (let i = 1; i <= g.nbLots; i++) { const b = Math.min(g.boitesParLot, reste); reste -= b; arr.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, couleur: couleur(gi), prio: pe[g.id] || 999, dateFixe: g.dateFixe }) }
+    for (let i = 1; i <= g.nbLots; i++) { const b = Math.min(g.boitesParLot, reste); reste -= b; arr.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, numeroLot: g.numeroLot, couleur: couleur(gi), prio: pe[g.id] || 999, dateFixe: g.dateFixe }) }
     return arr
   })
   const maxL = parG.reduce((m, a) => Math.max(m, a.length), 0)
@@ -555,7 +542,7 @@ function simulerGreedyCond(lots) {
     const end = start + duree - 1
     m.free = end + 1
     const pr = prodById.value[lt.produitId] || {}
-    rows.push({ id: lt.id, num: lt.num, code: pr.code_pf, desig: pr.designation, boites: lt.boites, couleur: lt.couleur, prio: lt.prio, phases: { conditionnement: { start, end, equip: m.equipNom } }, debutFab: null, finFab: null, finCond: end })
+    rows.push({ id: lt.id, num: lt.num, numeroLot: lt.numeroLot, code: pr.code_pf, desig: pr.designation, boites: lt.boites, couleur: lt.couleur, prio: lt.prio, phases: { conditionnement: { start, end, equip: m.equipNom } }, debutFab: null, finFab: null, finCond: end })
   }
   let fin = 0; for (const r of rows) for (const k in r.phases) fin = Math.max(fin, r.phases[k].end)
   const condByEq = {}
@@ -657,7 +644,7 @@ const groupesDetail = computed(() => {
   const pe = prioriteEffective.value
   return groupes.value.map((g, gi) => {
     const p = prodById.value[g.produitId] || {}
-    return { id: g.id, produitId: g.produitId, code: p.code_pf || '?', desig: p.designation || '', boites: g.totalBoites, nb: g.nbLots, gammeNoms: gammeNoms(g.produitId), ca: g.totalBoites * Number(p.pcsu || 0), couleur: couleur(gi), priorite: pe[g.id] || 999 }
+    return { id: g.id, produitId: g.produitId, numeroLot: g.numeroLot, code: p.code_pf || '?', desig: p.designation || '', boites: g.totalBoites, nb: g.nbLots, gammeNoms: gammeNoms(g.produitId), ca: g.totalBoites * Number(p.pcsu || 0), couleur: couleur(gi), priorite: pe[g.id] || 999 }
   }).sort((a, b) => ((a.priorite || 999) - (b.priorite || 999)) || (a.id - b.id))
 })
 const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0))
@@ -736,6 +723,7 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .g-bar { position: absolute; top: 2px; height: 16px; border-radius: 3px; opacity: .82; display: flex; align-items: center; overflow: hidden; }
 .g-bar.cond { opacity: 1; border: 2px solid #1e293b; box-sizing: border-box; }
 .gb-t { font-size: 9px; color: #fff; font-weight: 700; padding: 0 3px; white-space: nowrap; }
+.lot-num { font-size: 11px; font-weight: 700; color: #4338ca; background: #eef2ff; border-radius: 5px; padding: 1px 6px; }
 .aff-intro { margin-bottom: 12px; }
 .aff-prod { padding: 10px 0; border-bottom: 1px solid #eef2f6; }
 .aff-prod:last-child { border-bottom: 0; }
