@@ -9,6 +9,10 @@
       <div class="ph-live"><span class="live-dot"></span> Indicateurs en direct</div>
     </header>
 
+    <div class="organiser">
+      <span class="org-hint">✋ Glisse un lien d'une carte à l'autre pour réorganiser tes pages.</span>
+      <button type="button" class="reinit-btn" @click="reinit">↺ Réinitialiser l'organisation</button>
+    </div>
     <div class="portail-grid">
       <article v-for="c in cartes" :key="c.key" class="pcard" :style="{ '--c': c.couleur, '--cd': c.fonce, '--cl': c.clair }">
         <div class="pcard-kpi">
@@ -25,8 +29,8 @@
             <div class="kpi-sub">{{ c.sub }}</div>
           </div>
         </div>
-        <nav class="pcard-links">
-          <RouterLink v-for="l in c.links" :key="l[0]" :to="l[0]" class="plink">{{ l[1] }}</RouterLink>
+        <nav class="pcard-links" @dragover.prevent @drop="onDrop(c.key)" :class="{ 'drop-actif': drag.path && drag.from !== c.key }">
+          <a v-for="l in (arrangement[c.key] || c.links)" :key="l[0]" href="javascript:void(0)" class="plink" draggable="true" @dragstart="onDragStart(c.key, l)" @dragend="finDrag" @click="aller(l[0])" :class="{ 'plink-drag': drag.path === l[0] }">{{ l[1] }}</a>
         </nav>
       </article>
     </div>
@@ -34,8 +38,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { RouterLink } from 'vue-router'
+import { ref, computed, reactive, onMounted } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 
 const anneeCourante = new Date().getFullYear()
@@ -170,6 +174,43 @@ const cartes = computed(() => [
     links: [['/referentiels', 'Référentiels'], ['/cadences', 'Cadences'], ['/habilitations', 'Habilitations']]
   }
 ])
+
+const router = useRouter()
+function aller(p) { router.push(p) }
+
+// --- Réorganisation des liens par glisser-déposer ---
+const LS_ARRANGE = 'accueil_liens_v1'
+const arrangement = ref({})
+function initArrangement() {
+  const base = {}
+  for (const c of cartes.value) base[c.key] = c.links.map(l => [l[0], l[1]])
+  let saved = null
+  try { saved = JSON.parse(localStorage.getItem(LS_ARRANGE) || 'null') } catch (e) {}
+  if (saved && typeof saved === 'object') {
+    const vus = new Set(); const arr = {}
+    for (const c of cartes.value) {
+      arr[c.key] = (Array.isArray(saved[c.key]) ? saved[c.key] : []).filter(l => Array.isArray(l) && l[0])
+      arr[c.key].forEach(l => vus.add(l[0]))
+    }
+    for (const c of cartes.value) for (const l of c.links) if (!vus.has(l[0])) arr[c.key].push([l[0], l[1]])
+    arrangement.value = arr
+  } else { arrangement.value = base }
+}
+function persister() { try { localStorage.setItem(LS_ARRANGE, JSON.stringify(arrangement.value)) } catch (e) {} }
+function reinit() { try { localStorage.removeItem(LS_ARRANGE) } catch (e) {} ; initArrangement() }
+const drag = reactive({ path: null, label: null, from: null })
+function onDragStart(cardKey, l) { drag.path = l[0]; drag.label = l[1]; drag.from = cardKey }
+function finDrag() { drag.path = null; drag.label = null; drag.from = null }
+function onDrop(cardKey) {
+  if (!drag.path || drag.from === cardKey) { finDrag(); return }
+  const arr = {}
+  for (const k in arrangement.value) arr[k] = arrangement.value[k].filter(l => l[0] !== drag.path)
+  if (!arr[cardKey]) arr[cardKey] = []
+  arr[cardKey].push([drag.path, drag.label])
+  arrangement.value = arr
+  persister(); finDrag()
+}
+onMounted(initArrangement)
 </script>
 
 <style scoped>
@@ -204,7 +245,15 @@ const cartes = computed(() => [
 .kpi-val span { font-size: 22px; font-weight: 700; margin-left: 1px; }
 .kpi-sub { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .82; margin-top: 6px; }
 
-.pcard-links { display: flex; flex-wrap: wrap; gap: 7px; padding: 16px 20px 20px; margin-top: auto; background: var(--cl); }
+.pcard-links { display: flex; flex-wrap: wrap; gap: 7px; padding: 16px 20px 20px; margin-top: auto; background: var(--cl); min-height: 40px; }
+.plink { cursor: grab; }
+.plink:active { cursor: grabbing; }
+.plink-drag { opacity: .35; }
+.pcard-links.drop-actif { outline: 2px dashed var(--c); outline-offset: 3px; border-radius: 12px; }
+.organiser { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.org-hint { font-size: 12.5px; color: #64748b; }
+.reinit-btn { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 999px; font: inherit; font-size: 12px; font-weight: 600; padding: 6px 13px; cursor: pointer; }
+.reinit-btn:hover { background: #e2e8f0; }
 .plink { display: inline-flex; align-items: center; font-size: 12.5px; font-weight: 600; color: #334155; background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; padding: 6px 12px; text-decoration: none; transition: transform .15s, background .15s, border-color .15s, color .15s, box-shadow .15s; }
 .plink:hover { background: var(--c); border-color: var(--c); color: #fff; transform: translateY(-1px); box-shadow: 0 5px 12px -4px rgba(16,24,40,.28); }
 .plink:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
