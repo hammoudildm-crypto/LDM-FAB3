@@ -107,7 +107,9 @@ export function useFileAttente(sources) {
       if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
       const pl = plAll[o.id] || {}
       const stat = (nom) => (pl[phaseKey(nom)] || {}).statut
-      const gamme = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB
+      const gammeB = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB
+      const gamme = []; let _pk = null
+      for (const _ph of gammeB) { const _k = phaseKey(_ph); if (_k && _k === _pk) continue; gamme.push(_ph); _pk = _k }
       // Règle : le lot est à sa phase la plus AVANCÉE déjà saisie (dans la gamme du produit).
       //   En cours -> en cours ; À faire -> en attente ; Terminé -> en attente de la phase suivante,
       //   et si c'était la dernière phase de fabrication -> conditionnement.
