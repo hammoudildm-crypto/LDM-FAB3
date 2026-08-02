@@ -134,6 +134,40 @@ const produitsForm = computed(() => {
     String(pr.code_pf || '').toLowerCase().includes(q) || String(pr.designation || '').toLowerCase().includes(q))
 })
 
+// --- Saisie groupée des OF ---
+const batchOpen = ref(false)
+const batchRows = ref([])
+const gen = reactive({ produit_id: '', quantite: '', nombre: 1, date_reception: '', date_lancement: '' })
+function prochainLibre() {
+  const pris = new Set([...lots.value.map(l => String(l.numero_lot || '').trim()), ...batchRows.value.map(r => String(r.numero_lot || '').trim())])
+  let n = Number(dernierLot.value || 0) + 1
+  while (pris.has(String(n))) n++
+  return String(n)
+}
+function ajouterBatch() {
+  if (!gen.produit_id) { erreur.value = 'Choisis un produit pour la génération.'; return }
+  const pr = produits.value.find(p => p.id === gen.produit_id)
+  const qte = gen.quantite !== '' ? gen.quantite : (pr && pr.taille_lot != null ? pr.taille_lot : '')
+  const n = Math.max(1, Math.floor(Number(gen.nombre) || 1))
+  for (let i = 0; i < n; i++) batchRows.value.push({ numero_lot: prochainLibre(), produit_id: gen.produit_id, quantite_theorique: qte, date_reception: gen.date_reception || '', date_lancement: gen.date_lancement || '' })
+  erreur.value = ''
+}
+function ajouterLigneBatch() { batchRows.value.push({ numero_lot: prochainLibre(), produit_id: '', quantite_theorique: '', date_reception: '', date_lancement: '' }) }
+function retirerBatch(i) { batchRows.value.splice(i, 1) }
+async function enregistrerBatch() {
+  erreur.value = ''; message.value = ''
+  const valides = batchRows.value.filter(r => String(r.numero_lot || '').trim() && r.produit_id)
+  if (!valides.length) { erreur.value = 'Aucune ligne valide (numéro de lot + produit requis).'; return }
+  const nums = valides.map(r => String(r.numero_lot).trim())
+  if (new Set(nums).size !== nums.length) { erreur.value = 'Des numéros de lot sont en double dans la saisie.'; return }
+  const payload = valides.map(r => ({ numero_lot: String(r.numero_lot).trim(), produit_id: r.produit_id, quantite_theorique: toNum(r.quantite_theorique), date_reception: r.date_reception || null, date_lancement: r.date_lancement || null, statut: 'Planifié' }))
+  const res = await supabase.from('ordres_fabrication').insert(payload)
+  if (res.error) { const m = res.error.message || ''; erreur.value = (res.error.code === '23505' || /duplicate/i.test(m)) ? 'Un ou plusieurs numéros de lot existent déjà (choisis des numéros uniques).' : m; return }
+  message.value = valides.length + ' OF créés.'
+  batchRows.value = []; batchOpen.value = false
+  await chargerTout()
+}
+
 async function enregistrer() {
   erreur.value = ''
   message.value = ''
@@ -304,6 +338,45 @@ onMounted(async () => {
     </div>
 
     <template v-else>
+      <div v-if="peutEditer" class="batch-toggle">
+        <button type="button" class="btn-groupe" @click="batchOpen = !batchOpen">{{ batchOpen ? '✕ Fermer la saisie groupée' : '⊞ Saisie groupée de plusieurs OF' }}</button>
+      </div>
+      <section v-if="peutEditer && batchOpen" class="card batch-card">
+        <h2 class="card-title">Saisie groupée des OF</h2>
+        <div class="gen-row">
+          <label>Produit
+            <select v-model="gen.produit_id">
+              <option value="">— choisir —</option>
+              <option v-for="pr in produits" :key="pr.id" :value="pr.id">{{ pr.code_pf }} — {{ pr.designation }}</option>
+            </select>
+          </label>
+          <label>Quantité<input type="number" v-model="gen.quantite" placeholder="taille de lot" style="width:110px" /></label>
+          <label>Nombre d'OF<input type="number" min="1" v-model.number="gen.nombre" style="width:90px" /></label>
+          <label>Réception<input type="date" v-model="gen.date_reception" /></label>
+          <label>Lancement<input type="date" v-model="gen.date_lancement" /></label>
+          <button type="button" class="btn-add" @click="ajouterBatch">+ Générer les lignes</button>
+        </div>
+        <table v-if="batchRows.length" class="grid batch-grid">
+          <thead><tr><th>N° lot</th><th>Produit</th><th>Quantité</th><th>Réception</th><th>Lancement</th><th></th></tr></thead>
+          <tbody>
+            <tr v-for="(r, i) in batchRows" :key="i">
+              <td><input v-model="r.numero_lot" class="b-inp" /></td>
+              <td><select v-model="r.produit_id" class="b-sel"><option value="">—</option><option v-for="pr in produits" :key="pr.id" :value="pr.id">{{ pr.code_pf }}</option></select></td>
+              <td><input type="number" v-model="r.quantite_theorique" class="b-inp" /></td>
+              <td><input type="date" v-model="r.date_reception" class="b-inp" /></td>
+              <td><input type="date" v-model="r.date_lancement" class="b-inp" /></td>
+              <td><button type="button" class="b-del" @click="retirerBatch(i)">✕</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="muted" style="padding:10px 0">Génère des lignes ci-dessus, ou ajoute-les une par une.</p>
+        <div class="batch-actions">
+          <button type="button" class="btn-ghost2" @click="ajouterLigneBatch">+ Ligne vide</button>
+          <button type="button" class="btn-save2" :disabled="!batchRows.length" @click="enregistrerBatch">Enregistrer les {{ batchRows.length }} OF</button>
+          <span v-if="erreur" class="b-err">{{ erreur }}</span>
+          <span v-if="message" class="b-ok">{{ message }}</span>
+        </div>
+      </section>
       <section class="card" v-if="peutEditer" ref="formCard">
         <h2 class="card-title">{{ form.id ? 'Modifier le lot' : 'Nouveau lot' }}</h2>
         <div class="form-grid">
@@ -467,6 +540,26 @@ onMounted(async () => {
 
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 22px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card-title { margin: 0 0 14px; font-size: 17px; }
+.batch-toggle { margin-bottom: 14px; }
+.btn-groupe { background: #0f766e; color: #fff; border: none; border-radius: 9px; font: inherit; font-size: 14px; font-weight: 600; padding: 9px 18px; cursor: pointer; }
+.btn-groupe:hover { background: #0c5f59; }
+.batch-card { border: 2px solid #99f6e4; }
+.gen-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 14px; background: #f0fdfa; border-radius: 10px; margin-bottom: 14px; }
+.gen-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #334155; }
+.gen-row input, .gen-row select { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; }
+.gen-row select { min-width: 220px; }
+.btn-add { background: #0f766e; color: #fff; border: none; border-radius: 8px; font: inherit; font-weight: 600; padding: 8px 16px; cursor: pointer; }
+.batch-grid { width: 100%; }
+.batch-grid th { text-align: left; font-size: 11.5px; color: #64748b; padding: 6px 8px; }
+.batch-grid td { padding: 4px 6px; }
+.b-inp, .b-sel { width: 100%; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 13px; }
+.b-del { background: #fee2e2; color: #b91c1c; border: none; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-weight: 700; }
+.batch-actions { display: flex; gap: 10px; margin-top: 14px; align-items: center; flex-wrap: wrap; }
+.btn-save2 { background: #0f766e; color: #fff; border: none; border-radius: 8px; font: inherit; font-weight: 600; padding: 9px 20px; cursor: pointer; }
+.btn-save2:disabled { opacity: .5; cursor: not-allowed; }
+.btn-ghost2 { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; padding: 8px 16px; cursor: pointer; }
+.b-err { color: #b91c1c; font-size: 13px; font-weight: 600; }
+.b-ok { color: #15803d; font-size: 13px; font-weight: 600; }
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .card-head .card-title { margin: 0; }
 .count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
