@@ -207,7 +207,9 @@ const queuePhase = computed(() => {
     if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
     const pl = phasesLot.value[o.id] || {}
     const stat = (nom) => (pl[phaseKey(nom)] || {}).statut
-    const gamme = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB
+    const gammeB = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB
+    const gamme = []; let _pk = null
+    for (const _ph of gammeB) { const _k = phaseKey(_ph); if (_k && _k === _pk) continue; gamme.push(_ph); _pk = _k }
     const p = o.produits || {}
     // Fabrication finie = dernière phase de la gamme du produit terminée (critère fiable, pas la date).
     const kDern = gamme.length ? phaseKey(gamme[gamme.length - 1]) : null
