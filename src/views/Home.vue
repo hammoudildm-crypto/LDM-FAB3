@@ -548,6 +548,11 @@ const serieEcartCa = computed(() => [
   { label: 'Réalisé', color: '#4338ca', data: ecartCa.value.map(r => r.reel) }
 ])
 const maxEcartBoites = computed(() => Math.max(1, ...ecartBoites.value.map(r => Math.abs(r.ecart))))
+// Taux d'atteinte du plan par mois (réalisé / plan)
+const tauxMois = computed(() => ecartBoites.value.map(r => r.plan > 0 ? Math.round((r.reel / r.plan) * 100) : null))
+const serieTaux = computed(() => [{ label: "Taux d'atteinte", color: '#c2410c', low: '#dc2626', threshold: 100, data: tauxMois.value }])
+const maxTaux = computed(() => Math.max(120, ...tauxMois.value.filter(v => v != null)))
+const fmtTaux = (v) => v == null ? '—' : v + '%'
 const maxEcartCa = computed(() => Math.max(1, ...ecartCa.value.map(r => Math.abs(r.ecart))))
 function largeurEcart(v, max) { return (max > 0 ? Math.min(100, Math.abs(v) / max * 100) : 0) + '%' }
 
@@ -780,6 +785,8 @@ onMounted(async () => {
             </div>
           </div>
           <MiniChart v-if="ecartBoites.length" :labels="moisEcart" :format="fmt" :value-format="fmtC" show-values :series="serieEcartBoites" />
+          <div v-if="ecartBoites.length" style="font-size:12.5px;font-weight:600;color:#64748b;margin:16px 0 4px">Taux d'atteinte du plan par mois (%) — objectif 100 %</div>
+          <MiniChart v-if="ecartBoites.length" :labels="moisEcart" :format="fmtTaux" :value-format="fmtTaux" show-values :series="serieTaux" :show-switch="false" :max="maxTaux" />
           <div class="tbl-wrap">
             <table class="grid">
               <thead><tr><th>Mois</th><th class="ta-r">Plan</th><th class="ta-r">Réalisé</th><th class="ta-r">Écart</th><th class="dv-th">Sous / sur le plan</th><th class="ta-r">Écart cumulé</th></tr></thead>
