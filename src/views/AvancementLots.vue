@@ -6,7 +6,7 @@ import { ICONS, TINTS } from '../icons.js'
 import { useFileAttente } from '../useFileAttente.js'
 
 // Gamme de fabrication (mêmes libellés que dans le suivi des phases)
-const PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Conditionnement']
+const PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Conditionnement']
 // Regroupement identique à la page Disponibilité équipements
 const PHASES_CARTES = ['En attente de pesée', 'Granulation et séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Conditionnement']
 const COURT = ['Pesée', 'Gran.', 'Séch.', 'Mél.', 'Comp.', 'Rempl.', 'Pell.', 'Cond.']
@@ -64,8 +64,9 @@ const phasesByLot = computed(() => {
   const m = {}
   for (const r of phases.value) {
     if (!m[r.ordre_id]) m[r.ordre_id] = {}
-    const cur = m[r.ordre_id][r.phase]
-    if (!cur || rank(r.statut) > rank(cur.statut)) m[r.ordre_id][r.phase] = r
+    const ph = normPh(r.phase)
+    const cur = m[r.ordre_id][ph]
+    if (!cur || rank(r.statut) > rank(cur.statut)) m[r.ordre_id][ph] = r
   }
   return m
 })
@@ -76,13 +77,17 @@ const { condComplet, ordresConditionnes, lotEtape } = useFileAttente({ ofs: lots
 
 // Étiquettes courtes par nom de phase
 const COURT_MAP = {
-  'Pesée': 'Pesée', 'Granulation': 'Gran.', 'Séchage': 'Séch.', 'Mélange': 'Mél.',
+  'Pesée': 'Pesée', 'Granulation et Séchage': 'Gr+Séch', 'Granulation': 'Gran.', 'Séchage': 'Séch.', 'Mélange': 'Mél.',
   'Compression': 'Comp.', 'Remplissage Gélules': 'Rempl.', 'Pelliculage': 'Pell.', 'Conditionnement': 'Cond.'
+}
+// Fusionne « Granulation » / « Séchage » -> « Granulation et Séchage »
+function normPh(nom) {
+  return /^(granulation|s[ée]chage)$/i.test(String(nom || '').trim()) ? 'Granulation et Séchage' : nom
 }
 const CANON = PHASES.slice(0, 7)  // 7 phases de fabrication (sans Conditionnement)
 // Route réelle du lot = gamme du produit (ordre canonique) + Conditionnement ; repli = toutes les phases
 function routeLot(lot) {
-  const g = lot.produits && Array.isArray(lot.produits.gamme) ? lot.produits.gamme : null
+  const g = lot.produits && Array.isArray(lot.produits.gamme) ? lot.produits.gamme.map(normPh) : null
   const fab = (g && g.length) ? CANON.filter(ph => g.includes(ph)) : CANON
   return [...fab, 'Conditionnement']
 }
