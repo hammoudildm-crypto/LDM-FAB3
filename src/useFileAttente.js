@@ -157,6 +157,7 @@ export function useFileAttente(sources) {
       if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
       const pl = plAll[o.id] || {}
       if ((pl['pesee'] || {}).statut === 'Terminé') continue
+      if (Object.keys(pl).some(k => k !== 'pesee')) continue   // a déjà une phase au-delà de la pesée -> plus en attente de pesée
       res.push(o.id)
     }
     return res
