@@ -40,7 +40,17 @@ const produitsFiltresCad = computed(() => {
 const erreur = ref('')
 
 const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet']
-const GAMME_PHASES = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+const GAMME_PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+// Fusionne les anciennes étapes « Granulation » + « Séchage » en une seule « Granulation et Séchage »
+function normGammeR(g) {
+  if (!Array.isArray(g)) return []
+  const out = []
+  for (const ph of g) {
+    const p = /^(granulation|s[ée]chage)$/i.test(String(ph).trim()) ? 'Granulation et Séchage' : ph
+    if (!out.includes(p)) out.push(p)
+  }
+  return out
+}
 function phaseFinaleP(g) {
   if (!Array.isArray(g) || !g.length) return null
   for (let i = GAMME_PHASES.length - 1; i >= 0; i--) if (g.includes(GAMME_PHASES[i])) return GAMME_PHASES[i]
@@ -277,7 +287,7 @@ async function enregistrerP() {
     duree_vie_mois: toNum(formP.duree_vie_mois),
     aql: formP.aql.trim() || null,
     pcsu: toNum(formP.pcsu),
-    gamme: Array.isArray(formP.gamme) ? formP.gamme : []
+    gamme: normGammeR(formP.gamme)
   }
   const res = formP.id
     ? await supabase.from('produits').update(payload).eq('id', formP.id)
@@ -292,7 +302,7 @@ function modifierP(p) {
     donneur_ordre_id: p.donneur_ordre_id || '',
     unites_par_boite: p.unites_par_boite ?? '', poids_unitaire_mg: p.poids_unitaire_mg ?? '', taille_lot: p.taille_lot ?? '',
     duree_vie_mois: p.duree_vie_mois ?? '', aql: p.aql || '', pcsu: p.pcsu ?? '',
-    gamme: Array.isArray(p.gamme) ? [...p.gamme] : []
+    gamme: normGammeR(p.gamme)
   })
 }
 async function desactiverP(p) {
