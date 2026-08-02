@@ -137,7 +137,7 @@ const produitsForm = computed(() => {
 // --- Saisie groupée des OF ---
 const batchOpen = ref(false)
 const batchRows = ref([])
-const gen = reactive({ produit_id: '', quantite: '', nombre: 1, lotDepart: '', date_reception: '', date_lancement: '' })
+const gen = reactive({ produit_id: '', quantite: '', nombre: 1, lotDepart: '', equipement_id: '', date_reception: '', date_lancement: '' })
 const rechGen = ref('')
 const produitsGen = computed(() => {
   const q = rechGen.value.trim().toLowerCase()
@@ -162,11 +162,11 @@ function ajouterBatch() {
   const depart = String(gen.lotDepart).trim() !== '' && !isNaN(Number(gen.lotDepart)) ? Number(gen.lotDepart) : null
   for (let i = 0; i < n; i++) {
     const lot = depart != null ? String(depart + i) : prochainLibre()
-    batchRows.value.push({ numero_lot: lot, produit_id: gen.produit_id, quantite_theorique: qte, date_reception: gen.date_reception || '', date_lancement: gen.date_lancement || '' })
+    batchRows.value.push({ numero_lot: lot, produit_id: gen.produit_id, quantite_theorique: qte, equipement_id: gen.equipement_id || '', date_reception: gen.date_reception || '', date_lancement: gen.date_lancement || '' })
   }
   erreur.value = ''
 }
-function ajouterLigneBatch() { batchRows.value.push({ numero_lot: prochainLibre(), produit_id: '', quantite_theorique: '', date_reception: '', date_lancement: '' }) }
+function ajouterLigneBatch() { batchRows.value.push({ numero_lot: prochainLibre(), produit_id: '', quantite_theorique: '', equipement_id: '', date_reception: '', date_lancement: '' }) }
 function retirerBatch(i) { batchRows.value.splice(i, 1) }
 async function enregistrerBatch() {
   erreur.value = ''; message.value = ''
@@ -174,7 +174,7 @@ async function enregistrerBatch() {
   if (!valides.length) { erreur.value = 'Aucune ligne valide (numéro de lot + produit requis).'; return }
   const nums = valides.map(r => String(r.numero_lot).trim())
   if (new Set(nums).size !== nums.length) { erreur.value = 'Des numéros de lot sont en double dans la saisie.'; return }
-  const payload = valides.map(r => ({ numero_lot: String(r.numero_lot).trim(), produit_id: r.produit_id, quantite_theorique: toNum(r.quantite_theorique), date_reception: r.date_reception || null, date_lancement: r.date_lancement || null, statut: 'Planifié' }))
+  const payload = valides.map(r => ({ numero_lot: String(r.numero_lot).trim(), produit_id: r.produit_id, quantite_theorique: toNum(r.quantite_theorique), equipement_id: r.equipement_id || null, date_reception: r.date_reception || null, date_lancement: r.date_lancement || null, statut: 'Planifié' }))
   const res = await supabase.from('ordres_fabrication').insert(payload)
   if (res.error) { const m = res.error.message || ''; erreur.value = (res.error.code === '23505' || /duplicate/i.test(m)) ? 'Un ou plusieurs numéros de lot existent déjà (choisis des numéros uniques).' : m; return }
   message.value = valides.length + ' OF créés.'
@@ -369,17 +369,24 @@ onMounted(async () => {
           <label>Quantité<input type="number" v-model="gen.quantite" :readonly="estFige(gen.produit_id)" :class="{ fige: estFige(gen.produit_id) }" placeholder="taille de lot" style="width:110px" /></label>
           <label>Nombre d'OF<input type="number" min="1" v-model.number="gen.nombre" style="width:90px" /></label>
           <label>N° de départ<input type="number" v-model="gen.lotDepart" :placeholder="prochainLot || 'auto'" style="width:110px" /></label>
+          <label>Ligne de conditionnement (finale)
+            <select v-model="gen.equipement_id">
+              <option value="">— aucune —</option>
+              <option v-for="e in equipementsCond" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
+            </select>
+          </label>
           <label>Réception<input type="date" v-model="gen.date_reception" /></label>
           <label>Lancement<input type="date" v-model="gen.date_lancement" /></label>
           <button type="button" class="btn-add" @click="ajouterBatch">+ Générer les lignes</button>
         </div>
         <table v-if="batchRows.length" class="grid batch-grid">
-          <thead><tr><th>N° lot</th><th>Produit</th><th>Quantité</th><th>Réception</th><th>Lancement</th><th></th></tr></thead>
+          <thead><tr><th>N° lot</th><th>Produit</th><th>Quantité</th><th>Ligne cond.</th><th>Réception</th><th>Lancement</th><th></th></tr></thead>
           <tbody>
             <tr v-for="(r, i) in batchRows" :key="i">
               <td><input v-model="r.numero_lot" class="b-inp" /></td>
               <td><select v-model="r.produit_id" @change="onRowProduit(r)" class="b-sel"><option value="">—</option><option v-for="pr in produits" :key="pr.id" :value="pr.id">{{ pr.code_pf }}</option></select></td>
               <td><input type="number" v-model="r.quantite_theorique" :readonly="estFige(r.produit_id)" class="b-inp" :class="{ fige: estFige(r.produit_id) }" /></td>
+              <td><select v-model="r.equipement_id" class="b-sel"><option value="">—</option><option v-for="e in equipementsCond" :key="e.id" :value="e.id">{{ e.code }}</option></select></td>
               <td><input type="date" v-model="r.date_reception" class="b-inp" /></td>
               <td><input type="date" v-model="r.date_lancement" class="b-inp" /></td>
               <td><button type="button" class="b-del" @click="retirerBatch(i)">✕</button></td>
