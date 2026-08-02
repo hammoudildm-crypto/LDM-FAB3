@@ -185,6 +185,7 @@ const CANON_FAB = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression
 // Statut de chaque phase par lot (depuis suivi_phases)
 const phasesLot = computed(() => {
   const m = {}
+  const sechEtat = {}
   for (const sp of suivi.value) {
     const id = sp.ordre_id, k = phaseKey(sp.phase)
     if (!k) continue
@@ -192,6 +193,17 @@ const phasesLot = computed(() => {
     const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut || null }
     const cur = m[id][k]
     if (!cur || sp.statut === 'Terminé') m[id][k] = rec
+    const nl = String(sp.phase || '').toLowerCase()
+    if (/s[ée]ch/.test(nl) && !/granul/.test(nl)) {
+      if (!sechEtat[id]) sechEtat[id] = { present: false, termine: false }
+      sechEtat[id].present = true
+      if (sp.statut === 'Terminé') sechEtat[id].termine = true
+    }
+  }
+  // Fusion : « Granulation et Séchage » terminé SEULEMENT si le séchage (saisi à part) est terminé
+  for (const id in m) {
+    const g = m[id].granulation
+    if (g && g.statut === 'Terminé') { const se = sechEtat[id]; if (se && se.present && !se.termine) m[id].granulation = { statut: 'En cours', date: g.date } }
   }
   return m
 })
