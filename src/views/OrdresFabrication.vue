@@ -138,6 +138,12 @@ const produitsForm = computed(() => {
 const batchOpen = ref(false)
 const batchRows = ref([])
 const gen = reactive({ produit_id: '', quantite: '', nombre: 1, date_reception: '', date_lancement: '' })
+const rechGen = ref('')
+const produitsGen = computed(() => {
+  const q = rechGen.value.trim().toLowerCase()
+  if (!q) return produits.value
+  return produits.value.filter(pr => String(pr.code_pf || '').toLowerCase().includes(q) || String(pr.designation || '').toLowerCase().includes(q))
+})
 function prochainLibre() {
   const pris = new Set([...lots.value.map(l => String(l.numero_lot || '').trim()), ...batchRows.value.map(r => String(r.numero_lot || '').trim())])
   let n = Number(dernierLot.value || 0) + 1
@@ -345,10 +351,12 @@ onMounted(async () => {
         <h2 class="card-title">Saisie groupée des OF</h2>
         <div class="gen-row">
           <label>Produit
+            <input v-model="rechGen" type="search" placeholder="Filtrer par code ou désignation…" class="gen-search" />
             <select v-model="gen.produit_id">
               <option value="">— choisir —</option>
-              <option v-for="pr in produits" :key="pr.id" :value="pr.id">{{ pr.code_pf }} — {{ pr.designation }}</option>
+              <option v-for="pr in produitsGen" :key="pr.id" :value="pr.id">{{ pr.code_pf }} — {{ pr.designation }}</option>
             </select>
+            <span v-if="rechGen" class="gen-count">{{ produitsGen.length }} produit(s)</span>
           </label>
           <label>Quantité<input type="number" v-model="gen.quantite" placeholder="taille de lot" style="width:110px" /></label>
           <label>Nombre d'OF<input type="number" min="1" v-model.number="gen.nombre" style="width:90px" /></label>
@@ -548,6 +556,8 @@ onMounted(async () => {
 .gen-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #334155; }
 .gen-row input, .gen-row select { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; }
 .gen-row select { min-width: 220px; }
+.gen-search { padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 12.5px; width: 240px; }
+.gen-count { font-size: 11px; color: #64748b; font-weight: 500; }
 .btn-add { background: #0f766e; color: #fff; border: none; border-radius: 8px; font: inherit; font-weight: 600; padding: 8px 16px; cursor: pointer; }
 .batch-grid { width: 100%; }
 .batch-grid th { text-align: left; font-size: 11.5px; color: #64748b; padding: 6px 8px; }
