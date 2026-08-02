@@ -20,6 +20,8 @@ const filtreStatut = ref('')
 const rechercheLot = ref('')
 const anneeF = ref(0)
 const moisF = ref(0)
+const lotDeb = ref('')
+const lotFin = ref('')
 const LIMITE = 300
 const rechProduit = ref('')
 const erreur = ref('')
@@ -98,6 +100,7 @@ const anneesLot = computed(() => {
   for (const l of lots.value) { const d = refDateLot(l); if (d) set.add(new Date(d).getFullYear()) }
   return [...set].sort((a, b) => b - a)
 })
+const numLot = (v) => { const n = parseInt(String(v == null ? '' : v).replace(/\D/g, ''), 10); return isNaN(n) ? null : n }
 const lotsFiltres = computed(() => {
   const q = rechercheLot.value.trim().toLowerCase()
   return lots.value.filter(l => {
@@ -105,6 +108,13 @@ const lotsFiltres = computed(() => {
     const d = refDateLot(l)
     if (anneeF.value && (!d || new Date(d).getFullYear() !== anneeF.value)) return false
     if (moisF.value && (!d || (new Date(d).getMonth() + 1) !== moisF.value)) return false
+    if (lotDeb.value !== '' || lotFin.value !== '') {
+      const n = numLot(l.numero_lot)
+      if (n == null) return false
+      const deb = numLot(lotDeb.value), fin = numLot(lotFin.value)
+      if (deb != null && n < deb) return false
+      if (fin != null && n > fin) return false
+    }
     if (q) {
       const pr = l.produits
       const code = pr ? String(pr.code_pf || '') : ''
@@ -485,6 +495,8 @@ onMounted(async () => {
           <span class="count">{{ lotsFiltres.length }}</span>
           <div class="head-tools">
             <input v-model="rechercheLot" type="search" class="recherche" placeholder="Rechercher (n° lot, code, désignation)…" />
+            <input v-model="lotDeb" type="number" class="filtre-lot" placeholder="Lot début" title="N° de lot de début" />
+            <input v-model="lotFin" type="number" class="filtre-lot" placeholder="Lot fin" title="N° de lot de fin" />
             <select v-model.number="anneeF" class="filtre2">
               <option :value="0">Toutes années</option>
               <option v-for="a in anneesLot" :key="a" :value="a">{{ a }}</option>
@@ -627,6 +639,7 @@ onMounted(async () => {
 .bulk-bar select { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; min-width: 220px; }
 .btn-affect { background: #0f766e; color: #fff; border: none; border-radius: 8px; font: inherit; font-weight: 600; padding: 9px 18px; cursor: pointer; }
 .chk-col { width: 34px; text-align: center; }
+.filtre-lot { width: 100px; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; }
 .row-sel { background: #ecfeff; }
 .batch-actions { display: flex; gap: 10px; margin-top: 14px; align-items: center; flex-wrap: wrap; }
 .btn-save2 { background: #0f766e; color: #fff; border: none; border-radius: 8px; font: inherit; font-weight: 600; padding: 9px 20px; cursor: pointer; }
