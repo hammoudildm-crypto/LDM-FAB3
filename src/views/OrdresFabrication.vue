@@ -182,6 +182,31 @@ async function enregistrerBatch() {
   await chargerTout()
 }
 
+// --- Affectation groupée de la ligne de conditionnement ---
+const selection = ref(new Set())
+const ligneGroupe = ref('')
+const msgGroupe = ref('')
+const nbSel = computed(() => selection.value.size)
+function toggleSel(id) { const st = new Set(selection.value); st.has(id) ? st.delete(id) : st.add(id); selection.value = st }
+function toutSel() {
+  const ids = lotsAffiches.value.map(l => l.id)
+  const tous = ids.length && ids.every(id => selection.value.has(id))
+  const st = new Set(selection.value)
+  if (tous) ids.forEach(id => st.delete(id)); else ids.forEach(id => st.add(id))
+  selection.value = st
+}
+async function affecterLigneGroupe() {
+  msgGroupe.value = ''
+  const ids = [...selection.value]
+  if (!ids.length) { msgGroupe.value = 'Sélectionne au moins un OF.'; return }
+  const res = await supabase.from('ordres_fabrication').update({ equipement_id: ligneGroupe.value || null }).in('id', ids)
+  if (res.error) { msgGroupe.value = 'Erreur : ' + res.error.message; return }
+  msgGroupe.value = ids.length + ' OF affectés à la ligne.'
+  selection.value = new Set()
+  await chargerTout()
+  setTimeout(() => { msgGroupe.value = '' }, 4000)
+}
+
 async function enregistrer() {
   erreur.value = ''
   message.value = ''
@@ -476,16 +501,31 @@ onMounted(async () => {
           <button class="btn-exp" @click="exporterCSV" :disabled="!lotsFiltres.length">Exporter CSV</button>
         </div>
 
+        <p v-if="msgGroupe" class="b-ok" style="margin:0 0 10px">{{ msgGroupe }}</p>
+        <div v-if="nbSel" class="bulk-bar">
+          <span class="bulk-n">{{ nbSel }} OF sélectionné(s)</span>
+          <label>Ligne de conditionnement (finale)
+            <select v-model="ligneGroupe">
+              <option value="">— aucune —</option>
+              <option v-for="e in equipementsCond" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
+            </select>
+          </label>
+          <button type="button" class="btn-affect" @click="affecterLigneGroupe">Affecter à {{ nbSel }} OF</button>
+          <button type="button" class="btn-ghost2" @click="selection = new Set()">Désélectionner</button>
+        </div>
+
         <div class="table-scroll">
           <table class="grid">
             <thead>
               <tr>
+                <th class="chk-col"><input type="checkbox" :checked="lotsAffiches.length && lotsAffiches.every(l => selection.has(l.id))" @change="toutSel" title="Tout sélectionner" /></th>
                 <th>N° lot</th><th>Produit</th><th class="right">Qté théo.</th>
                 <th>Lancement</th><th>Statut</th><th>Ligne</th><th class="right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="l in lotsAffiches" :key="l.id">
+              <tr v-for="l in lotsAffiches" :key="l.id" :class="{ 'row-sel': selection.has(l.id) }">
+                <td class="chk-col"><input type="checkbox" :checked="selection.has(l.id)" @change="toggleSel(l.id)" /></td>
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td>
                   <span class="mono">{{ l.produits ? l.produits.code_pf : '—' }}</span>
@@ -581,6 +621,13 @@ onMounted(async () => {
 .b-inp, .b-sel { width: 100%; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 13px; }
 .b-del { background: #fee2e2; color: #b91c1c; border: none; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-weight: 700; }
 .fige { background: #eef2f6 !important; color: #64748b; cursor: not-allowed; }
+.bulk-bar { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; padding: 12px 16px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; margin-bottom: 12px; }
+.bulk-n { font-weight: 700; color: #0f766e; padding-bottom: 8px; }
+.bulk-bar label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #334155; }
+.bulk-bar select { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; min-width: 220px; }
+.btn-affect { background: #0f766e; color: #fff; border: none; border-radius: 8px; font: inherit; font-weight: 600; padding: 9px 18px; cursor: pointer; }
+.chk-col { width: 34px; text-align: center; }
+.row-sel { background: #ecfeff; }
 .batch-actions { display: flex; gap: 10px; margin-top: 14px; align-items: center; flex-wrap: wrap; }
 .btn-save2 { background: #0f766e; color: #fff; border: none; border-radius: 8px; font: inherit; font-weight: 600; padding: 9px 20px; cursor: pointer; }
 .btn-save2:disabled { opacity: .5; cursor: not-allowed; }
