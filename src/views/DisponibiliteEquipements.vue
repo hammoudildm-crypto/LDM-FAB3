@@ -217,12 +217,9 @@ const queuePhase = computed(() => {
     const base = { id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !fabTerminee) ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
-    // Règle : le lot est à sa phase la plus AVANCÉE déjà saisie (dans la gamme du produit).
-    //   En cours -> en cours à cet atelier ; À faire -> en attente à cet atelier ;
-    //   Terminé -> en attente de la phase SUIVANTE de la gamme ; si c'était la dernière -> conditionnement.
-    let lastIdx = -1
-    for (let i = 0; i < gamme.length; i++) { if (pl[phaseKey(gamme[i])]) lastIdx = i }
-    if (lastIdx < 0) {
+    // Règle : le lot est à sa PREMIÈRE phase de gamme NON terminée.
+    //   Conditionnement uniquement si TOUTES les phases de la gamme sont terminées.
+    if (Object.keys(pl).length === 0) {
       if (o.date_fin_fabrication) {
         (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_fin_fabrication })
       } else {
@@ -231,21 +228,18 @@ const queuePhase = computed(() => {
       }
       continue
     }
-    const nomAv = gamme[lastIdx]
-    const recAv = pl[phaseKey(nomAv)]
-    const stAv = recAv ? recAv.statut : undefined
-    if (stAv === 'Terminé') {
-      if (lastIdx >= gamme.length - 1) {
-        (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: (recAv && recAv.date) || o.date_fin_fabrication || o.date_lancement })
-      } else {
-        const kSuiv = phaseKey(gamme[lastIdx + 1])
-        if (kSuiv && q[kSuiv]) q[kSuiv].attente.push({ ...base, date: (recAv && recAv.date) || o.date_lancement })
-      }
+    let curIdx = -1
+    for (let i = 0; i < gamme.length; i++) {
+      const kk = phaseKey(gamme[i]); const rr = kk ? pl[kk] : null
+      if (!rr || rr.statut !== 'Terminé') { curIdx = i; break }
+    }
+    if (curIdx < 0) {
+      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_fin_fabrication || o.date_lancement })
     } else {
-      const kAv = phaseKey(nomAv)
-      if (kAv && q[kAv]) {
-        if (stAv === 'En cours') q[kAv].cours.push({ ...base, date: (recAv && recAv.date) || o.date_lancement })
-        else q[kAv].attente.push({ ...base, date: (recAv && recAv.date) || o.date_lancement })
+      const kCur = phaseKey(gamme[curIdx]); const rCur = kCur ? pl[kCur] : null
+      if (kCur && q[kCur]) {
+        if (rCur && rCur.statut === 'En cours') q[kCur].cours.push({ ...base, date: (rCur && rCur.date) || o.date_lancement })
+        else q[kCur].attente.push({ ...base, date: (rCur && rCur.date) || o.date_lancement })
       }
     }
   }
