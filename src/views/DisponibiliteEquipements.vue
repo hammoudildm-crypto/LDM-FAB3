@@ -349,7 +349,8 @@ const attentePeseeList = computed(() => {
     if (cc.has(o.id)) continue
     if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
     const pl = phasesLot.value[o.id] || {}
-    if ((pl['pesée'] || {}).statut === 'Terminé') continue // pesée effectuée -> le lot disparaît
+    if ((pl['pesee'] || {}).statut === 'Terminé') continue // pesée effectuée -> le lot disparaît
+    if (Object.keys(pl).some(k => k !== 'pesee')) continue // a une phase au-delà de la pesée -> plus en attente de pesée
     const p = o.produits || {}
     res.push({
       id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '',
