@@ -65,23 +65,47 @@ onMounted(charger)
 const anYear = (d) => d ? new Date(d).getFullYear() : null
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
-const CANON_FAB = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+const CANON_FAB = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+function phaseKey(nom) {
+  const t = String(nom || '').trim().toLowerCase()
+  if (!t) return null
+  if (/pes[ée]|balance/.test(t)) return 'pesee'
+  if (/granul|s[ée]ch/.test(t)) return 'granulation'
+  if (/m[ée]lang/.test(t)) return 'melange'
+  if (/compress|comprim/.test(t)) return 'compression'
+  if (/g[ée]lule|remplis|encapsul/.test(t)) return 'remplissage'
+  if (/pellicul|enrob/.test(t)) return 'pelliculage'
+  if (/condition/.test(t)) return 'conditionnement'
+  return t
+}
+const rangSt = (st) => st === 'Terminé' ? 3 : st === 'En cours' ? 2 : 1
 const phasesParLot = computed(() => {
   const m = {}
   for (const sp of phases.value) {
+    const k = phaseKey(sp.phase)
+    if (!k) continue
     if (!m[sp.ordre_id]) m[sp.ordre_id] = {}
-    m[sp.ordre_id][String(sp.phase || '').toLowerCase()] = { statut: sp.statut, date: sp.date_phase || sp.date_debut }
+    const cur = m[sp.ordre_id][k]
+    // clé fusionnée : garder le MOINS avancé (finie seulement si tout est fini)
+    if (!cur || rangSt(sp.statut) < rangSt(cur.statut)) m[sp.ordre_id][k] = { statut: sp.statut, date: sp.date_phase || sp.date_debut }
   }
   return m
 })
 // Date de fin de fabrication : la date renseignée, sinon la date de la DERNIÈRE phase de gamme si Terminé
 function dateFinFab(l) {
-  const g = (l.produits && Array.isArray(l.produits.gamme) && l.produits.gamme.length) ? l.produits.gamme : CANON_FAB
-  const rec = phasesParLot.value[l.id] && phasesParLot.value[l.id][String(g[g.length - 1]).toLowerCase()]
-  // Si la dernière phase de gamme est enregistrée, elle décide (Terminé => finie, sinon PAS finie même si date posée).
-  // Si elle n'est pas encore saisie, on se fie à la date de fin de fabrication.
-  if (rec) return rec.statut === 'Terminé' ? (rec.date || l.date_fin_fabrication) : null
-  return l.date_fin_fabrication || null
+  const pl = phasesParLot.value[l.id] || {}
+  const gB = (l.produits && Array.isArray(l.produits.gamme) && l.produits.gamme.length) ? l.produits.gamme : CANON_FAB
+  const g = []; let pk = null
+  for (const ph of gB) { const k = phaseKey(ph); if (k && k === pk) continue; g.push(ph); pk = k }
+  if (g.length === 0) return null
+  // STRICT : dossier prêt SEULEMENT si CHAQUE phase de la gamme est saisie ET Terminé (étape finale incluse).
+  let derniere = null
+  for (const ph of g) {
+    const rec = pl[phaseKey(ph)]
+    if (!rec || rec.statut !== 'Terminé') return null
+    if (rec.date) derniere = rec.date
+  }
+  return derniere || l.date_fin_fabrication || null
 }
 const produits = computed(() => lots.value.filter(l => {
   const d = dateFinFab(l)
