@@ -203,7 +203,11 @@ const phasesLot = computed(() => {
   // Fusion : « Granulation et Séchage » terminé SEULEMENT si le séchage (saisi à part) est terminé
   for (const id in m) {
     const g = m[id].granulation
-    if (g && g.statut === 'Terminé') { const se = sechEtat[id]; if (se && se.present && !se.termine) m[id].granulation = { statut: 'En cours', date: g.date } }
+    if (g && g.statut === 'Terminé') {
+      const se = sechEtat[id]
+      const apres = m[id].compression || m[id].remplissage || m[id].pelliculage || m[id].conditionnement
+      if (se && se.present && !se.termine && !apres) m[id].granulation = { statut: 'En cours', date: g.date }
+    }
   }
   return m
 })
