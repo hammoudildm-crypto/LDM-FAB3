@@ -113,9 +113,7 @@ export function useFileAttente(sources) {
       // Règle : le lot est à sa phase la plus AVANCÉE déjà saisie (dans la gamme du produit).
       //   En cours -> en cours ; À faire -> en attente ; Terminé -> en attente de la phase suivante,
       //   et si c'était la dernière phase de fabrication -> conditionnement.
-      let lastIdx = -1
-      for (let i = 0; i < gamme.length; i++) { if (pl[phaseKey(gamme[i])]) lastIdx = i }
-      if (lastIdx < 0) {
+      if (Object.keys(pl).length === 0) {
         if (o.date_fin_fabrication) {
           (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ id: o.id, date: o.date_fin_fabrication })
         } else {
@@ -124,21 +122,18 @@ export function useFileAttente(sources) {
         }
         continue
       }
-      const nomAv = gamme[lastIdx]
-      const recAv = pl[phaseKey(nomAv)]
-      const stAv = recAv ? recAv.statut : undefined
-      if (stAv === 'Terminé') {
-        if (lastIdx >= gamme.length - 1) {
-          (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ id: o.id, date: (recAv && recAv.date) || o.date_fin_fabrication || o.date_lancement })
-        } else {
-          const kSuiv = phaseKey(gamme[lastIdx + 1])
-          if (kSuiv && q[kSuiv]) q[kSuiv].attente.push({ id: o.id, date: (recAv && recAv.date) || o.date_lancement })
-        }
+      let curIdx = -1
+      for (let i = 0; i < gamme.length; i++) {
+        const kk = phaseKey(gamme[i]); const rr = kk ? pl[kk] : null
+        if (!rr || rr.statut !== 'Terminé') { curIdx = i; break }
+      }
+      if (curIdx < 0) {
+        (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ id: o.id, date: o.date_fin_fabrication || o.date_lancement })
       } else {
-        const kAv = phaseKey(nomAv)
-        if (kAv && q[kAv]) {
-          if (stAv === 'En cours') q[kAv].cours.push({ id: o.id, date: (recAv && recAv.date) || o.date_lancement })
-          else q[kAv].attente.push({ id: o.id, date: (recAv && recAv.date) || o.date_lancement })
+        const kCur = phaseKey(gamme[curIdx]); const rCur = kCur ? pl[kCur] : null
+        if (kCur && q[kCur]) {
+          if (rCur && rCur.statut === 'En cours') q[kCur].cours.push({ id: o.id, date: (rCur && rCur.date) || o.date_lancement })
+          else q[kCur].attente.push({ id: o.id, date: (rCur && rCur.date) || o.date_lancement })
         }
       }
     }
