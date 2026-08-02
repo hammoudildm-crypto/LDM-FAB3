@@ -23,6 +23,13 @@ export const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage:
 // Libellé de phase (minuscule) -> clé
 export const NOM_KEY = {}
 for (const [k, v] of Object.entries(PHASE_NOM)) NOM_KEY[v.toLowerCase()] = k
+// Nom de phase (gamme ou suivi) -> clé. « Granulation », « Séchage » et « Granulation et Séchage » -> 'granulation' (fusionnés).
+export function phaseKey(nom) {
+  const t = String(nom || '').trim().toLowerCase()
+  if (!t) return null
+  if (/granul|s[ée]ch/.test(t)) return 'granulation'
+  return NOM_KEY[t] || null
+}
 // Gamme canonique de fabrication (repli quand le produit n'a pas de gamme)
 export const CANON_FAB = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
 // Carte d'affichage regroupée (Granulation + Séchage fusionnés en une carte)
@@ -76,11 +83,12 @@ export function useFileAttente(sources) {
   const phasesLot = computed(() => {
     const m = {}
     for (const sp of suivi()) {
-      const id = sp.ordre_id, nom = (sp.phase || '').toLowerCase()
+      const id = sp.ordre_id, k = phaseKey(sp.phase)
+      if (!k) continue
       if (!m[id]) m[id] = {}
       const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut || null }
-      const cur = m[id][nom]
-      if (!cur || sp.statut === 'Terminé') m[id][nom] = rec
+      const cur = m[id][k]
+      if (!cur || sp.statut === 'Terminé') m[id][k] = rec
     }
     return m
   })
@@ -98,34 +106,34 @@ export function useFileAttente(sources) {
       if ((!o.date_lancement && !o.date_fin_fabrication) || condFini.has(o.id)) continue
       if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
       const pl = plAll[o.id] || {}
-      const stat = (nom) => (pl[(nom || '').toLowerCase()] || {}).statut
+      const stat = (nom) => (pl[phaseKey(nom)] || {}).statut
       const gamme = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB
       // Règle : le lot est à sa phase la plus AVANCÉE déjà saisie (dans la gamme du produit).
       //   En cours -> en cours ; À faire -> en attente ; Terminé -> en attente de la phase suivante,
       //   et si c'était la dernière phase de fabrication -> conditionnement.
       let lastIdx = -1
-      for (let i = 0; i < gamme.length; i++) { if (pl[gamme[i].toLowerCase()]) lastIdx = i }
+      for (let i = 0; i < gamme.length; i++) { if (pl[phaseKey(gamme[i])]) lastIdx = i }
       if (lastIdx < 0) {
         if (o.date_fin_fabrication) {
           (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ id: o.id, date: o.date_fin_fabrication })
         } else {
-          const k0 = NOM_KEY[gamme[0].toLowerCase()]
+          const k0 = phaseKey(gamme[0])
           if (k0 && q[k0]) q[k0].attente.push({ id: o.id, date: o.date_lancement })
         }
         continue
       }
       const nomAv = gamme[lastIdx]
-      const recAv = pl[nomAv.toLowerCase()]
+      const recAv = pl[phaseKey(nomAv)]
       const stAv = recAv ? recAv.statut : undefined
       if (stAv === 'Terminé') {
         if (lastIdx >= gamme.length - 1) {
           (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ id: o.id, date: (recAv && recAv.date) || o.date_fin_fabrication || o.date_lancement })
         } else {
-          const kSuiv = NOM_KEY[gamme[lastIdx + 1].toLowerCase()]
+          const kSuiv = phaseKey(gamme[lastIdx + 1])
           if (kSuiv && q[kSuiv]) q[kSuiv].attente.push({ id: o.id, date: (recAv && recAv.date) || o.date_lancement })
         }
       } else {
-        const kAv = NOM_KEY[nomAv.toLowerCase()]
+        const kAv = phaseKey(nomAv)
         if (kAv && q[kAv]) {
           if (stAv === 'En cours') q[kAv].cours.push({ id: o.id, date: (recAv && recAv.date) || o.date_lancement })
           else q[kAv].attente.push({ id: o.id, date: (recAv && recAv.date) || o.date_lancement })
@@ -148,7 +156,7 @@ export function useFileAttente(sources) {
       if (cc.has(o.id)) continue
       if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
       const pl = plAll[o.id] || {}
-      if ((pl['pesée'] || {}).statut === 'Terminé') continue
+      if ((pl['pesee'] || {}).statut === 'Terminé') continue
       res.push(o.id)
     }
     return res
