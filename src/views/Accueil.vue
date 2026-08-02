@@ -12,10 +12,13 @@
     <div class="portail-grid">
       <article v-for="c in cartes" :key="c.key" class="pcard" :style="{ '--c': c.couleur, '--cd': c.fonce, '--cl': c.clair }">
         <div class="pcard-kpi">
-          <div class="kpi-info">
-            <div class="kpi-eyebrow">{{ c.eyebrow }}</div>
-            <div class="kpi-titre">{{ c.titre }}</div>
-            <div class="kpi-metric">{{ c.metric }}</div>
+          <div class="kpi-left">
+            <span class="kpi-ic" v-html="c.icon"></span>
+            <div class="kpi-info">
+              <div class="kpi-eyebrow">{{ c.eyebrow }}</div>
+              <div class="kpi-titre">{{ c.titre }}</div>
+              <div class="kpi-metric">{{ c.metric }}</div>
+            </div>
           </div>
           <div class="kpi-num">
             <div class="kpi-val"><template v-if="chargement">…</template><template v-else-if="c.pct != null">{{ Math.round(c.pct) }}<span>%</span></template><template v-else>—</template></div>
@@ -136,12 +139,12 @@ const dossiersVerifies = computed(() => {
 
 const cartes = computed(() => [
   {
-    key: 'tdb', couleur: '#0f766e', clair: '#f0fdfa', fonce: '#0c5f59', eyebrow: "Vue d'ensemble", titre: 'Tableau de bord',
+    key: 'tdb', couleur: '#0f766e', clair: '#f0fdfa', fonce: '#0c5f59', eyebrow: "Vue d'ensemble", titre: 'Tableau de bord', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>',
     metric: 'Réalisation du plan annuel', sub: 'du plan', pct: reaPlan.value,
     links: [['/', 'Ouvrir le tableau de bord']]
   },
   {
-    key: 'consult', couleur: '#4338ca', clair: '#eef2ff', fonce: '#3730a3', eyebrow: 'Suivi & données', titre: 'Consultation',
+    key: 'consult', couleur: '#4338ca', clair: '#eef2ff', fonce: '#3730a3', eyebrow: 'Suivi & données', titre: 'Consultation', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
     metric: 'Avancement fabrication (lots terminés / lancés)', sub: 'avancés', pct: avancementFab.value,
     links: [
       ['/realisation-plan', 'Réalisation vs Plan'], ['/rendement', 'Rendement'], ['/ca', "Chiffre d'affaires"],
@@ -152,7 +155,7 @@ const cartes = computed(() => [
     ]
   },
   {
-    key: 'prod', couleur: '#c2410c', clair: '#fff7ed', fonce: '#9a3412', eyebrow: 'Saisie atelier', titre: 'Production & saisie',
+    key: 'prod', couleur: '#c2410c', clair: '#fff7ed', fonce: '#9a3412', eyebrow: 'Saisie atelier', titre: 'Production & saisie', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
     metric: 'TRS global de la semaine', sub: 'TRS', pct: trsGlobal.value,
     links: [
       ['/ordonnancement', 'Ordonnancement'], ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication'], ['/suivi', 'Suivi fabrication'],
@@ -162,7 +165,7 @@ const cartes = computed(() => [
     ]
   },
   {
-    key: 'admin', couleur: '#047857', clair: '#f0fdf4', fonce: '#065f46', eyebrow: 'Paramètres & accès', titre: 'Administration',
+    key: 'admin', couleur: '#047857', clair: '#f0fdf4', fonce: '#065f46', eyebrow: 'Paramètres & accès', titre: 'Administration', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="2" y1="14" x2="6" y2="14"/><line x1="10" y1="8" x2="14" y2="8"/><line x1="18" y1="16" x2="22" y2="16"/></svg>',
     metric: 'Dossiers de lot vérifiés (Production)', sub: 'vérifiés', pct: dossiersVerifies.value,
     links: [['/referentiels', 'Référentiels'], ['/cadences', 'Cadences'], ['/habilitations', 'Habilitations']]
   }
@@ -189,6 +192,9 @@ const cartes = computed(() => [
 .pcard:hover { transform: translateY(-3px); box-shadow: 0 16px 34px -12px rgba(16,24,40,.22); }
 
 .pcard-kpi { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 22px 24px; background: linear-gradient(135deg, var(--c), var(--cd)); color: #fff; }
+.kpi-left { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.kpi-ic { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; flex: none; border-radius: 12px; background: rgba(255,255,255,.18); }
+.kpi-ic svg { width: 23px; height: 23px; }
 .kpi-info { min-width: 0; }
 .kpi-eyebrow { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; opacity: .82; }
 .kpi-titre { font-size: 20px; font-weight: 800; letter-spacing: -.02em; margin: 5px 0 4px; }
