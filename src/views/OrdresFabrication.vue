@@ -137,7 +137,7 @@ const produitsForm = computed(() => {
 // --- Saisie groupée des OF ---
 const batchOpen = ref(false)
 const batchRows = ref([])
-const gen = reactive({ produit_id: '', quantite: '', nombre: 1, date_reception: '', date_lancement: '' })
+const gen = reactive({ produit_id: '', quantite: '', nombre: 1, lotDepart: '', date_reception: '', date_lancement: '' })
 const rechGen = ref('')
 const produitsGen = computed(() => {
   const q = rechGen.value.trim().toLowerCase()
@@ -150,12 +150,20 @@ function prochainLibre() {
   while (pris.has(String(n))) n++
   return String(n)
 }
+function tailleDe(pid) { const pr = produits.value.find(p => p.id === pid); return (pr && pr.taille_lot != null && pr.taille_lot !== '') ? pr.taille_lot : '' }
+function estFige(pid) { return tailleDe(pid) !== '' }
+function onGenProduit() { const t = tailleDe(gen.produit_id); if (t !== '') gen.quantite = t }
+function onRowProduit(r) { const t = tailleDe(r.produit_id); if (t !== '') r.quantite_theorique = t }
 function ajouterBatch() {
   if (!gen.produit_id) { erreur.value = 'Choisis un produit pour la génération.'; return }
-  const pr = produits.value.find(p => p.id === gen.produit_id)
-  const qte = gen.quantite !== '' ? gen.quantite : (pr && pr.taille_lot != null ? pr.taille_lot : '')
+  const t = tailleDe(gen.produit_id)
+  const qte = t !== '' ? t : gen.quantite   // quantité figée sur la taille de lot si le produit en a une
   const n = Math.max(1, Math.floor(Number(gen.nombre) || 1))
-  for (let i = 0; i < n; i++) batchRows.value.push({ numero_lot: prochainLibre(), produit_id: gen.produit_id, quantite_theorique: qte, date_reception: gen.date_reception || '', date_lancement: gen.date_lancement || '' })
+  const depart = String(gen.lotDepart).trim() !== '' && !isNaN(Number(gen.lotDepart)) ? Number(gen.lotDepart) : null
+  for (let i = 0; i < n; i++) {
+    const lot = depart != null ? String(depart + i) : prochainLibre()
+    batchRows.value.push({ numero_lot: lot, produit_id: gen.produit_id, quantite_theorique: qte, date_reception: gen.date_reception || '', date_lancement: gen.date_lancement || '' })
+  }
   erreur.value = ''
 }
 function ajouterLigneBatch() { batchRows.value.push({ numero_lot: prochainLibre(), produit_id: '', quantite_theorique: '', date_reception: '', date_lancement: '' }) }
@@ -352,14 +360,15 @@ onMounted(async () => {
         <div class="gen-row">
           <label>Produit
             <input v-model="rechGen" type="search" placeholder="Filtrer par code ou désignation…" class="gen-search" />
-            <select v-model="gen.produit_id">
+            <select v-model="gen.produit_id" @change="onGenProduit">
               <option value="">— choisir —</option>
               <option v-for="pr in produitsGen" :key="pr.id" :value="pr.id">{{ pr.code_pf }} — {{ pr.designation }}</option>
             </select>
             <span v-if="rechGen" class="gen-count">{{ produitsGen.length }} produit(s)</span>
           </label>
-          <label>Quantité<input type="number" v-model="gen.quantite" placeholder="taille de lot" style="width:110px" /></label>
+          <label>Quantité<input type="number" v-model="gen.quantite" :readonly="estFige(gen.produit_id)" :class="{ fige: estFige(gen.produit_id) }" placeholder="taille de lot" style="width:110px" /></label>
           <label>Nombre d'OF<input type="number" min="1" v-model.number="gen.nombre" style="width:90px" /></label>
+          <label>N° de départ<input type="number" v-model="gen.lotDepart" :placeholder="prochainLot || 'auto'" style="width:110px" /></label>
           <label>Réception<input type="date" v-model="gen.date_reception" /></label>
           <label>Lancement<input type="date" v-model="gen.date_lancement" /></label>
           <button type="button" class="btn-add" @click="ajouterBatch">+ Générer les lignes</button>
@@ -369,8 +378,8 @@ onMounted(async () => {
           <tbody>
             <tr v-for="(r, i) in batchRows" :key="i">
               <td><input v-model="r.numero_lot" class="b-inp" /></td>
-              <td><select v-model="r.produit_id" class="b-sel"><option value="">—</option><option v-for="pr in produits" :key="pr.id" :value="pr.id">{{ pr.code_pf }}</option></select></td>
-              <td><input type="number" v-model="r.quantite_theorique" class="b-inp" /></td>
+              <td><select v-model="r.produit_id" @change="onRowProduit(r)" class="b-sel"><option value="">—</option><option v-for="pr in produits" :key="pr.id" :value="pr.id">{{ pr.code_pf }}</option></select></td>
+              <td><input type="number" v-model="r.quantite_theorique" :readonly="estFige(r.produit_id)" class="b-inp" :class="{ fige: estFige(r.produit_id) }" /></td>
               <td><input type="date" v-model="r.date_reception" class="b-inp" /></td>
               <td><input type="date" v-model="r.date_lancement" class="b-inp" /></td>
               <td><button type="button" class="b-del" @click="retirerBatch(i)">✕</button></td>
@@ -564,6 +573,7 @@ onMounted(async () => {
 .batch-grid td { padding: 4px 6px; }
 .b-inp, .b-sel { width: 100%; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 13px; }
 .b-del { background: #fee2e2; color: #b91c1c; border: none; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-weight: 700; }
+.fige { background: #eef2f6 !important; color: #64748b; cursor: not-allowed; }
 .batch-actions { display: flex; gap: 10px; margin-top: 14px; align-items: center; flex-wrap: wrap; }
 .btn-save2 { background: #0f766e; color: #fff; border: none; border-radius: 8px; font: inherit; font-weight: 600; padding: 9px 20px; cursor: pointer; }
 .btn-save2:disabled { opacity: .5; cursor: not-allowed; }
