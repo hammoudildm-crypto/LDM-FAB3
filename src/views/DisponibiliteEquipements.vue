@@ -373,6 +373,22 @@ const attentePeseeList = computed(() => {
   return res.filter(mL).sort((a, b) => String(a.lot || '').localeCompare(String(b.lot || ''), undefined, { numeric: true }))
 })
 
+// OF planifiés, pas encore reçus (ni démarrés) -> en attente de réception
+const attenteReceptionList = computed(() => {
+  const rq = recherche.value.trim().toLowerCase()
+  const mL = (l) => !rq || (l.lot || '').toLowerCase().includes(rq) || (l.code || '').toLowerCase().includes(rq) || (l.desig || '').toLowerCase().includes(rq)
+  const cc = condComplet.value
+  const res = []
+  for (const o of ofs.value) {
+    if (o.date_reception || o.date_lancement || o.date_fin_fabrication) continue
+    if (cc.has(o.id)) continue
+    if (o.statut === 'Libéré' || o.statut === 'Rejeté' || o.statut === 'Terminé') continue
+    const p = o.produits || {}
+    res.push({ id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), validite: o.date_fin_validite || null })
+  }
+  return res.filter(mL).sort((a, b) => String(a.lot || '').localeCompare(String(b.lot || ''), undefined, { numeric: true }))
+})
+
 function joursDepuis(d) { if (!d) return '—'; const j = Math.floor((Date.now() - new Date(d)) / 86400000); return j <= 0 ? 'auj.' : j + ' j' }
 function ageClass(d) {
   if (!d) return ''
@@ -520,6 +536,33 @@ onMounted(async () => {
         <p v-if="vueFile.length === 0" class="muted">Aucun lot en production actuellement (un lot apparaît dès qu'il est lancé et suivi phase par phase).</p>
 
         <div class="file-board">
+        <section class="atelier">
+          <h2 class="atelier-titre"><span class="at-name">Réception OF planifiés</span>
+            <span class="at-sum">{{ attenteReceptionList.length }} en attente de réception</span>
+          </h2>
+          <div class="eq-grid">
+            <div class="card phase-card reception" :class="{ rupture: !attenteReceptionList.length }">
+              <div class="eq-head">
+                <div class="eq-ident">
+                  <span class="eq-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.clipboard"></svg></span>
+                  <div><div class="eq-code">En attente de réception</div><div class="eq-nom">OF planifiés, non reçus</div></div>
+                </div>
+              </div>
+              <div class="q-block">
+                <div class="q-title attente">À recevoir — {{ attenteReceptionList.length }} OF</div>
+                <div v-if="attenteReceptionList.length" class="prod-scroll">
+                  <table class="grid"><tbody>
+                    <tr v-for="l in attenteReceptionList" :key="l.id" class="lot-row" @click="ouvrirLot(l, 'pesee')" title="Ouvrir le suivi de fabrication de ce lot">
+                      <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
+                      <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
+                    </tr>
+                  </tbody></table>
+                </div>
+                <p v-else class="empty">Aucun OF planifié en attente de réception.</p>
+              </div>
+            </div>
+          </div>
+        </section>
         <section class="atelier">
           <h2 class="atelier-titre"><span class="at-name">Réception OF</span>
             <span class="at-sum">{{ attentePeseeList.length }} en attente de pesée</span>
