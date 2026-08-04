@@ -152,6 +152,15 @@ const serieGlobal = computed(() => [
   { label: 'Fabriqué', color: '#0f766e', data: fabParMois.value },
   { label: 'Conditionné', color: '#c2410c', data: condParMois.value }
 ])
+const vueGlob = ref('produit')
+const detailAnnuel = computed(() => {
+  const acc = {}
+  const rec = (pr) => { if (!pr) return null; const k = pr.code_pf || '—'; if (!acc[k]) acc[k] = { code: k, desig: pr.designation || '', taille: num(pr.taille_lot), pcsu: num(pr.pcsu), plan: 0, fab: 0, cond: 0 }; return acc[k] }
+  for (const r of planRows.value) { if (Number(r.annee) !== anneeSel.value) continue; const e = rec(r.produits); if (e) e.plan += num(r.quantite_planifiee) }
+  for (const o of ofs.value) { if (!o.date_fin_fabrication) continue; const d = new Date(o.date_fin_fabrication); if (d.getFullYear() !== anneeSel.value) continue; const e = rec(o.produits); if (e) e.fab += num(o.boites_fabriquees) }
+  for (const c of condRows.value) { if (!c.date_conditionnement) continue; const d = new Date(c.date_conditionnement); if (d.getFullYear() !== anneeSel.value) continue; const e = rec(c.ordres_fabrication ? c.ordres_fabrication.produits : null); if (e) e.cond += condBoites(c) }
+  return Object.values(acc).filter(r => r.plan > 0 || r.fab > 0 || r.cond > 0).sort((a, b) => (b.fab + b.cond + b.plan) - (a.fab + a.cond + a.plan))
+})
 
 const planTotal = computed(() => planParMois.value.reduce((s, x) => s + x, 0))
 const fabTotal = computed(() => fabParMois.value.reduce((s, x) => s + x, 0))
@@ -485,10 +494,55 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
           <div class="glob-k"><span class="glob-lbl">Fabriqué</span><span class="glob-v">{{ fmt(fabTotal) }}</span><span class="glob-u">{{ tauxTxt(fabTotal, planTotal) }} du plan · {{ fmtDA(fabCA) }}</span></div>
           <div class="glob-k"><span class="glob-lbl">Conditionné</span><span class="glob-v">{{ fmt(condTotal) }}</span><span class="glob-u">{{ tauxTxt(condTotal, planTotal) }} du plan · {{ fmtDA(condCA) }}</span></div>
         </div>
-        <div class="glob-chart">
+        <div class="glob-tabs">
+          <button type="button" :class="{ on: vueGlob === 'produit' }" @click="vueGlob = 'produit'">Par produit (année)</button>
+          <button type="button" :class="{ on: vueGlob === 'mois' }" @click="vueGlob = 'mois'">Par mois</button>
+        </div>
+        <div v-if="vueGlob === 'produit'" class="rp-scroll">
+          <table class="grid rp-detail">
+            <thead>
+              <tr>
+                <th rowspan="2">Code produit</th><th rowspan="2">Désignation</th>
+                <th colspan="2" class="grp grp-plan">Plan</th>
+                <th colspan="4" class="grp grp-fab">Fabriqué</th>
+                <th colspan="4" class="grp grp-cond">Conditionné</th>
+              </tr>
+              <tr class="sub2">
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th>
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th><th class="rp-num">CA</th><th class="rp-num">Taux</th>
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th><th class="rp-num">CA</th><th class="rp-num">Taux</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in detailAnnuel" :key="r.code">
+                <td class="rp-code">{{ r.code }}</td>
+                <td class="rp-des">{{ r.desig }}</td>
+                <td class="rp-num">{{ r.plan ? fmt(r.plan) : '—' }}</td>
+                <td class="rp-num">{{ lotsTxt(r.plan, r.taille) }}</td>
+                <td class="rp-num">{{ r.fab ? fmt(r.fab) : '—' }}</td>
+                <td class="rp-num">{{ lotsTxt(r.fab, r.taille) }}</td>
+                <td class="rp-num">{{ fmtCA(r.fab * r.pcsu) }}</td>
+                <td class="rp-num" :class="r.plan > 0 ? (r.fab / r.plan >= 1 ? 'taux-ok' : 'taux-bas') : ''">{{ tauxTxt(r.fab, r.plan) }}</td>
+                <td class="rp-num">{{ r.cond ? fmt(r.cond) : '—' }}</td>
+                <td class="rp-num">{{ lotsTxt(r.cond, r.taille) }}</td>
+                <td class="rp-num">{{ fmtCA(r.cond * r.pcsu) }}</td>
+                <td class="rp-num" :class="r.plan > 0 ? (r.cond / r.plan >= 1 ? 'taux-ok' : 'taux-bas') : ''">{{ tauxTxt(r.cond, r.plan) }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="tot">
+                <td colspan="2">Total {{ anneeSel }}</td>
+                <td class="rp-num">{{ fmt(planTotal) }}</td><td class="rp-num">—</td>
+                <td class="rp-num">{{ fmt(fabTotal) }}</td><td class="rp-num">—</td><td class="rp-num">{{ fmtCA(fabCA) }}</td><td class="rp-num">{{ tauxTxt(fabTotal, planTotal) }}</td>
+                <td class="rp-num">{{ fmt(condTotal) }}</td><td class="rp-num">—</td><td class="rp-num">{{ fmtCA(condCA) }}</td><td class="rp-num">{{ tauxTxt(condTotal, planTotal) }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div v-else class="glob-chart">
           <MiniChart :labels="MOIS" :format="fmt" :value-format="fmt" show-values :series="serieGlobal" />
         </div>
-        <div class="rp-scroll">
+        <div v-if="vueGlob === 'mois'" class="rp-scroll">
           <table class="grid rp-detail">
             <thead><tr><th>Mois</th><th class="rp-num">Plan</th><th class="rp-num">Fabriqué</th><th class="rp-num">Taux fab.</th><th class="rp-num">Conditionné</th><th class="rp-num">Taux cond.</th></tr></thead>
             <tbody>
@@ -633,6 +687,9 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .glob-v { font-size: 26px; font-weight: 800; }
 .glob-u { font-size: 12px; color: #94a3b8; }
 .glob-chart { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 20px; }
+.glob-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.glob-tabs button { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; padding: 8px 16px; cursor: pointer; color: #475569; }
+.glob-tabs button.on { background: #0f766e; color: #fff; border-color: #0f766e; }
 .rp-detail thead th { text-align: left; font-size: 11.5px; color: #64748b; font-weight: 600; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
 .rp-detail thead th.rp-num { text-align: right; }
 .rp-modal { background: #fff; border-radius: 14px; width: min(580px, 100%); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
