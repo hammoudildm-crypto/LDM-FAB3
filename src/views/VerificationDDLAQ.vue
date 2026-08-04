@@ -107,8 +107,10 @@ function dateFinFab(l) {
   }
   return derniere || l.date_fin_fabrication || null
 }
+// Un dossier déjà vérifié (Production ou AQ) reste visible même si le recomptage strict des phases échoue
+function dateDDL(l) { return dateFinFab(l) || ((l.ddl_verifie || l.ddl_aq_verifie) ? (l.date_fin_fabrication || l.date_lancement) : null) }
 const produits = computed(() => lots.value.filter(l => {
-  const d = dateFinFab(l)
+  const d = dateDDL(l)
   return d && (anneeSel.value === 0 || anYear(d) === anneeSel.value)
 }))
 const verifies = computed(() => produits.value.filter(l => l.ddl_aq_verifie))
@@ -126,7 +128,7 @@ const moisSel = ref(null)
 function ouvrirMois(i) { moisSel.value = i }
 const lotsDuMois = computed(() => {
   if (moisSel.value == null) return []
-  return attente.value.filter(l => { const d = dateFinFab(l); return d && new Date(d).getMonth() === moisSel.value })
+  return attente.value.filter(l => { const d = dateDDL(l); return d && new Date(d).getMonth() === moisSel.value })
 })
 const verifParMois = computed(() => {
   const a = Array(12).fill(0)
@@ -322,7 +324,7 @@ async function devalider(l) {
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td class="desig">{{ prodNom(l) }}</td>
                 <td>{{ l.ddl_aq_verificateur || '—' }}</td>
-                <td class="right nowrap">{{ fmtDate(dateFinFab(l)) }}</td>
+                <td class="right nowrap">{{ fmtDate(dateDDL(l)) }}</td>
                 <td class="right"><button class="link" @click="ouvrir(l)">Vérifier</button></td>
               </tr>
               <tr v-if="verifEnCours === l.id">
@@ -412,7 +414,7 @@ async function devalider(l) {
               <tr v-for="l in lotsDuMois" :key="l.id">
                 <td class="strong">{{ l.numero_lot }}</td>
                 <td>{{ l.produits ? l.produits.designation : '—' }}</td>
-                <td class="right nowrap">{{ fmtDate(dateFinFab(l)) }}</td>
+                <td class="right nowrap">{{ fmtDate(dateDDL(l)) }}</td>
               </tr>
             </tbody>
           </table>
