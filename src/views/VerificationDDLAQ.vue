@@ -323,7 +323,7 @@ async function devalider(l) {
                 <td class="desig">{{ prodNom(l) }}</td>
                 <td>{{ l.ddl_aq_verificateur || '—' }}</td>
                 <td class="right nowrap">{{ fmtDate(dateFinFab(l)) }}</td>
-                <td class="right"><button v-if="peutEditer" class="link" @click="ouvrir(l)">Vérifier</button></td>
+                <td class="right"><button class="link" @click="ouvrir(l)">Vérifier</button></td>
               </tr>
               <tr v-if="verifEnCours === l.id">
                 <td colspan="5">
@@ -368,8 +368,8 @@ async function devalider(l) {
               <td>{{ l.ddl_aq_verificateur || '—' }}</td>
               <td class="right nowrap">{{ fmtDate(l.ddl_aq_date_verification) }}</td>
               <td class="right nowrap">
-                <button v-if="estAdmin" class="link" @click="ouvrir(l)">Modifier</button>
-                <button v-if="peutEditer" class="link danger" @click="devalider(l)">Annuler</button>
+                <button class="link" @click="ouvrir(l)">Modifier</button>
+                <button class="link danger" @click="devalider(l)">Annuler</button>
               </td>
             </tr>
             <tr v-if="verifEnCours === l.id">
