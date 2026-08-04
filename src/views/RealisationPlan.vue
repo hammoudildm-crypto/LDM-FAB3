@@ -114,36 +114,37 @@ const detailBarre = computed(() => {
   const m = modalRP.value
   if (!m) return []
   const acc = {}
-  const add = (p, q) => {
-    if (!p || !(q > 0)) return
+  const rec = (p) => {
+    if (!p) return null
     const k = p.code_pf || '—'
-    if (!acc[k]) acc[k] = { code: k, desig: p.designation || '', taille: num(p.taille_lot), q: 0 }
-    acc[k].q += q
+    if (!acc[k]) acc[k] = { code: k, desig: p.designation || '', taille: num(p.taille_lot), pcsu: num(p.pcsu), plan: 0, fab: 0, cond: 0 }
+    return acc[k]
   }
-  if (m.si === 0) {
-    for (const r of planRows.value) {
-      if (Number(r.annee) !== anneeSel.value || Number(r.mois) !== m.mois + 1) continue
-      add(r.produits, num(r.quantite_planifiee))
-    }
-  } else if (m.si === 1) {
-    for (const o of ofs.value) {
-      if (!o.date_fin_fabrication) continue
-      const d = new Date(o.date_fin_fabrication)
-      if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
-      add(o.produits, num(o.boites_fabriquees))
-    }
-  } else {
-    for (const c of condRows.value) {
-      if (!c.date_conditionnement) continue
-      const d = new Date(c.date_conditionnement)
-      if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
-      add(c.ordres_fabrication ? c.ordres_fabrication.produits : null, condBoites(c))
-    }
+  for (const r of planRows.value) {
+    if (Number(r.annee) !== anneeSel.value || Number(r.mois) !== m.mois + 1) continue
+    const e = rec(r.produits); if (e) e.plan += num(r.quantite_planifiee)
   }
-  return Object.values(acc).sort((a, b) => b.q - a.q)
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    const d = new Date(o.date_fin_fabrication)
+    if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
+    const e = rec(o.produits); if (e) e.fab += num(o.boites_fabriquees)
+  }
+  for (const c of condRows.value) {
+    if (!c.date_conditionnement) continue
+    const d = new Date(c.date_conditionnement)
+    if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
+    const e = rec(c.ordres_fabrication ? c.ordres_fabrication.produits : null); if (e) e.cond += condBoites(c)
+  }
+  return Object.values(acc).filter(r => r.plan > 0 || r.fab > 0 || r.cond > 0).sort((a, b) => (b.fab + b.cond + b.plan) - (a.fab + a.cond + a.plan))
 })
-const totalBarre = computed(() => detailBarre.value.reduce((s, r) => s + r.q, 0))
-const totalLotsBarre = computed(() => detailBarre.value.reduce((s, r) => s + (r.taille > 0 ? Math.round(r.q / r.taille) : 0), 0))
+const totPlan = computed(() => detailBarre.value.reduce((s, r) => s + r.plan, 0))
+const totFab = computed(() => detailBarre.value.reduce((s, r) => s + r.fab, 0))
+const totCond = computed(() => detailBarre.value.reduce((s, r) => s + r.cond, 0))
+const totFabCA = computed(() => detailBarre.value.reduce((s, r) => s + r.fab * r.pcsu, 0))
+const totCondCA = computed(() => detailBarre.value.reduce((s, r) => s + r.cond * r.pcsu, 0))
+const lotsTxt = (b, t) => t > 0 ? fmt(Math.round(b / t)) : '—'
+const fmtCA = (v) => v > 0 ? fmt(Math.round(v)) + ' DA' : '—'
 
 const planTotal = computed(() => planParMois.value.reduce((s, x) => s + x, 0))
 const fabTotal = computed(() => fabParMois.value.reduce((s, x) => s + x, 0))
@@ -414,30 +415,51 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
       </div>
     </section>
   </div>
-    <div v-if="modalRP" class="modal-overlay" @click="modalRP = null">
-      <div class="rp-modal" @click.stop>
-        <div class="rp-md-head">
-          <h3>{{ MOIS_LONG[modalRP.mois] }} {{ anneeSel }}</h3>
-          <button class="rp-md-x" @click="modalRP = null">✕</button>
-        </div>
-        <div class="rp-tabs">
-          <button v-for="(s, i) in SERIES_RP" :key="s" :class="{ on: modalRP.si === i }" @click="modalRP.si = i">{{ s }}</button>
-        </div>
-        <div class="rp-md-sub">{{ detailBarre.length }} produit(s) · <strong>{{ fmt(totalBarre) }}</strong> boîtes · <strong>{{ fmt(totalLotsBarre) }}</strong> lots</div>
-        <div class="rp-md-body">
-          <div v-if="!detailBarre.length" class="empty">Aucune donnée pour ce mois.</div>
-          <table v-else class="grid rp-detail">
+    <div v-if="modalRP" class="rp-fullpage">
+      <div class="rp-md-head">
+        <button class="rp-back" @click="modalRP = null">← Retour</button>
+        <h3>Détail par produit — {{ MOIS_LONG[modalRP.mois] }} {{ anneeSel }}</h3>
+        <span class="rp-md-sub">{{ detailBarre.length }} produit(s)</span>
+      </div>
+      <div class="rp-md-body">
+        <div v-if="!detailBarre.length" class="empty">Aucune donnée pour ce mois.</div>
+        <div v-else class="rp-scroll">
+          <table class="grid rp-detail">
             <thead>
-              <tr><th>Code produit</th><th>Désignation</th><th class="rp-num">Quantité (boîtes)</th><th class="rp-num">En lots</th></tr>
+              <tr>
+                <th rowspan="2">Code produit</th><th rowspan="2">Désignation</th>
+                <th colspan="2" class="grp grp-plan">Plan</th>
+                <th colspan="3" class="grp grp-fab">Fabriqué</th>
+                <th colspan="3" class="grp grp-cond">Conditionné</th>
+              </tr>
+              <tr class="sub2">
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th>
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th><th class="rp-num">CA</th>
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th><th class="rp-num">CA</th>
+              </tr>
             </thead>
             <tbody>
               <tr v-for="r in detailBarre" :key="r.code">
                 <td class="rp-code">{{ r.code }}</td>
                 <td class="rp-des">{{ r.desig }}</td>
-                <td class="rp-num">{{ fmt(r.q) }}</td>
-                <td class="rp-num">{{ r.taille > 0 ? fmt(Math.round(r.q / r.taille)) + ' lots' : '—' }}</td>
+                <td class="rp-num">{{ r.plan ? fmt(r.plan) : '—' }}</td>
+                <td class="rp-num">{{ lotsTxt(r.plan, r.taille) }}</td>
+                <td class="rp-num">{{ r.fab ? fmt(r.fab) : '—' }}</td>
+                <td class="rp-num">{{ lotsTxt(r.fab, r.taille) }}</td>
+                <td class="rp-num">{{ fmtCA(r.fab * r.pcsu) }}</td>
+                <td class="rp-num">{{ r.cond ? fmt(r.cond) : '—' }}</td>
+                <td class="rp-num">{{ lotsTxt(r.cond, r.taille) }}</td>
+                <td class="rp-num">{{ fmtCA(r.cond * r.pcsu) }}</td>
               </tr>
             </tbody>
+            <tfoot>
+              <tr class="tot">
+                <td colspan="2">Total</td>
+                <td class="rp-num">{{ fmt(totPlan) }}</td><td class="rp-num">—</td>
+                <td class="rp-num">{{ fmt(totFab) }}</td><td class="rp-num">—</td><td class="rp-num">{{ fmtCA(totFabCA) }}</td>
+                <td class="rp-num">{{ fmt(totCond) }}</td><td class="rp-num">—</td><td class="rp-num">{{ fmtCA(totCondCA) }}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -538,6 +560,24 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
   .serie-val { width: 70px; }
 }
 .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.rp-fullpage { position: fixed; inset: 0; background: #f8fafc; z-index: 200; display: flex; flex-direction: column; }
+.rp-fullpage .rp-md-head { display: flex; align-items: center; gap: 16px; padding: 16px 26px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+.rp-fullpage .rp-md-head h3 { margin: 0; font-size: 18px; }
+.rp-back { background: #0f766e; color: #fff; border: none; border-radius: 8px; font: inherit; font-weight: 600; padding: 8px 16px; cursor: pointer; }
+.rp-back:hover { background: #0c5f59; }
+.rp-fullpage .rp-md-sub { margin-left: auto; color: #64748b; font-size: 13px; }
+.rp-fullpage .rp-md-body { flex: 1; overflow: auto; padding: 22px 26px; }
+.rp-scroll { overflow-x: auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
+.rp-detail { width: 100%; border-collapse: collapse; }
+.rp-detail thead th { text-align: left; font-size: 11.5px; color: #64748b; font-weight: 600; padding: 7px 12px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+.rp-detail thead th.rp-num { text-align: right; }
+.rp-detail .grp { text-align: center; border-bottom: 2px solid currentColor; }
+.grp-plan { color: #4338ca; } .grp-fab { color: #0f766e; } .grp-cond { color: #c2410c; }
+.rp-detail .sub2 th { font-size: 11px; font-weight: 500; }
+.rp-detail tbody td { padding: 6px 12px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+.rp-detail .rp-num { text-align: right; white-space: nowrap; }
+.rp-detail .rp-code { font-family: ui-monospace, monospace; font-weight: 600; }
+.rp-detail tfoot .tot td { font-weight: 700; border-top: 2px solid #cbd5e1; padding: 9px 12px; font-size: 13px; background: #f8fafc; }
 .rp-detail thead th { text-align: left; font-size: 11.5px; color: #64748b; font-weight: 600; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
 .rp-detail thead th.rp-num { text-align: right; }
 .rp-modal { background: #fff; border-radius: 14px; width: min(580px, 100%); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
