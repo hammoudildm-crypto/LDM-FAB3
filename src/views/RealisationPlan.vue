@@ -146,6 +146,12 @@ const totCondCA = computed(() => detailBarre.value.reduce((s, r) => s + r.cond *
 const lotsTxt = (b, t) => t > 0 ? fmt(Math.round(b / t)) : '—'
 const fmtCA = (v) => v > 0 ? fmt(Math.round(v)) + ' DA' : '—'
 const tauxTxt = (r, plan) => plan > 0 ? Math.round(r / plan * 100) + '%' : '—'
+const modalGlobal = ref(false)
+const serieGlobal = computed(() => [
+  { label: 'Plan', color: '#4338ca', dash: true, data: planParMois.value },
+  { label: 'Fabriqué', color: '#0f766e', data: fabParMois.value },
+  { label: 'Conditionné', color: '#c2410c', data: condParMois.value }
+])
 
 const planTotal = computed(() => planParMois.value.reduce((s, x) => s + x, 0))
 const fabTotal = computed(() => fabParMois.value.reduce((s, x) => s + x, 0))
@@ -284,8 +290,8 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
     <p v-if="msg" class="alert">{{ msg }}</p>
 
     <div class="kpi-grid k4">
-      <div class="kpi">
-        <div class="kpi-tag plan-tag">Plan</div>
+      <div class="kpi kpi-clic" @click="modalGlobal = true" title="Voir la comparaison mensuelle complète">
+        <div class="kpi-tag plan-tag">Plan <span class="kpi-go">→ mensuel</span></div>
         <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(planTotal) }}</div></div>
         <div class="kpi-lbl">boîtes · {{ fmtDA(planCA) }}</div>
       </div>
@@ -467,6 +473,41 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
         </div>
       </div>
     </div>
+    <div v-if="modalGlobal" class="rp-fullpage">
+      <div class="rp-md-head">
+        <button class="rp-back" @click="modalGlobal = false">← Retour</button>
+        <h3>Comparaison mensuelle (boîtes) — {{ anneeSel }}</h3>
+        <span class="rp-md-sub">Plan · Fabriqué · Conditionné</span>
+      </div>
+      <div class="rp-md-body">
+        <div class="glob-kpis">
+          <div class="glob-k"><span class="glob-lbl">Plan</span><span class="glob-v">{{ fmt(planTotal) }}</span><span class="glob-u">boîtes · {{ fmtDA(planCA) }}</span></div>
+          <div class="glob-k"><span class="glob-lbl">Fabriqué</span><span class="glob-v">{{ fmt(fabTotal) }}</span><span class="glob-u">{{ tauxTxt(fabTotal, planTotal) }} du plan · {{ fmtDA(fabCA) }}</span></div>
+          <div class="glob-k"><span class="glob-lbl">Conditionné</span><span class="glob-v">{{ fmt(condTotal) }}</span><span class="glob-u">{{ tauxTxt(condTotal, planTotal) }} du plan · {{ fmtDA(condCA) }}</span></div>
+        </div>
+        <div class="glob-chart">
+          <MiniChart :labels="MOIS" :format="fmt" :value-format="fmt" show-values :series="serieGlobal" />
+        </div>
+        <div class="rp-scroll">
+          <table class="grid rp-detail">
+            <thead><tr><th>Mois</th><th class="rp-num">Plan</th><th class="rp-num">Fabriqué</th><th class="rp-num">Taux fab.</th><th class="rp-num">Conditionné</th><th class="rp-num">Taux cond.</th></tr></thead>
+            <tbody>
+              <tr v-for="(lib, i) in MOIS" :key="i">
+                <td>{{ MOIS_LONG[i] }}</td>
+                <td class="rp-num">{{ planParMois[i] ? fmt(planParMois[i]) : '—' }}</td>
+                <td class="rp-num">{{ fabParMois[i] ? fmt(fabParMois[i]) : '—' }}</td>
+                <td class="rp-num" :class="planParMois[i] > 0 ? (fabParMois[i] / planParMois[i] >= 1 ? 'taux-ok' : 'taux-bas') : ''">{{ tauxTxt(fabParMois[i], planParMois[i]) }}</td>
+                <td class="rp-num">{{ condParMois[i] ? fmt(condParMois[i]) : '—' }}</td>
+                <td class="rp-num" :class="planParMois[i] > 0 ? (condParMois[i] / planParMois[i] >= 1 ? 'taux-ok' : 'taux-bas') : ''">{{ tauxTxt(condParMois[i], planParMois[i]) }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="tot"><td>Total {{ anneeSel }}</td><td class="rp-num">{{ fmt(planTotal) }}</td><td class="rp-num">{{ fmt(fabTotal) }}</td><td class="rp-num">{{ tauxTxt(fabTotal, planTotal) }}</td><td class="rp-num">{{ fmt(condTotal) }}</td><td class="rp-num">{{ tauxTxt(condTotal, planTotal) }}</td></tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
 </template>
 
 <style scoped>
@@ -583,6 +624,15 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .rp-detail tfoot .tot td { font-weight: 700; border-top: 2px solid #cbd5e1; padding: 9px 12px; font-size: 13px; background: #f8fafc; }
 .taux-ok { color: #15803d; font-weight: 700; }
 .taux-bas { color: #dc2626; font-weight: 700; }
+.kpi-clic { cursor: pointer; transition: box-shadow .15s ease, transform .15s ease; }
+.kpi-clic:hover { box-shadow: 0 8px 20px rgba(67,56,202,.18); transform: translateY(-2px); }
+.kpi-go { font-size: 10px; font-weight: 700; opacity: .8; }
+.glob-kpis { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.glob-k { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 22px; display: flex; flex-direction: column; gap: 2px; min-width: 170px; }
+.glob-lbl { font-size: 12px; font-weight: 700; color: #64748b; }
+.glob-v { font-size: 26px; font-weight: 800; }
+.glob-u { font-size: 12px; color: #94a3b8; }
+.glob-chart { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 20px; }
 .rp-detail thead th { text-align: left; font-size: 11.5px; color: #64748b; font-weight: 600; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
 .rp-detail thead th.rp-num { text-align: right; }
 .rp-modal { background: #fff; border-radius: 14px; width: min(580px, 100%); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
