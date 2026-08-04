@@ -112,7 +112,10 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
+
+const routeCad = useRoute()
 
 const produits = ref([]), equipements = ref([]), ateliers = ref([]), cadences = ref([])
 const chargement = ref(true), sauvegarde = ref(false), sauvegardeP = ref(false)
@@ -134,6 +137,7 @@ async function fetchAllPaged(make) {
 async function chargerCadences() { cadences.value = await fetchAllPaged(() => supabase.from('cadences_produit').select('id, equipement_id, produit_id, cadence_nominale, mode')) }
 async function chargerEquip() { equipements.value = await fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true)) }
 
+onMounted(() => { if (routeCad.query.produit) filtre.value = String(routeCad.query.produit) })
 onMounted(async () => {
   produits.value = await fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot').eq('actif', true))
   ateliers.value = await fetchAllPaged(() => supabase.from('ateliers').select('id, code, nom').eq('actif', true))
