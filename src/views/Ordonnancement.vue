@@ -121,7 +121,7 @@
       <h2 class="card-title">⚠ Phases non planifiées ({{ phasesManquantes.length }})</h2>
       <p class="warn-txt">Ces phases de la gamme n'ont <strong>pas d'équipement avec une cadence</strong> pour le produit → elles sont ignorées dans le planning (c'est pourquoi certaines colonnes manquent). Ajoute la cadence dans le volet <strong>Cadences</strong> pour l'équipement concerné.</p>
       <ul class="manq-list">
-        <li v-for="m in phasesManquantes" :key="m.code + m.phase"><strong>{{ m.code }}</strong> <span class="lot-desig">{{ m.desig }}</span> — <span class="manq-ph">{{ m.phase }}</span></li>
+        <li v-for="m in phasesManquantes" :key="m.code + m.phase" class="manq-item" @click="allerCadences(m)" title="Ouvrir Cadences pour définir la cadence de ce produit"><strong>{{ m.code }}</strong> <span class="lot-desig">{{ m.desig }}</span> — <span class="manq-ph">{{ m.phase }}</span> <span class="manq-go">→ définir la cadence</span></li>
       </ul>
     </section>
 
@@ -229,7 +229,11 @@
 
 <script setup>
 import { ref, computed, onMounted, watch, reactive } from 'vue'
+import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
+
+const routerOrd = useRouter()
+function allerCadences(m) { routerOrd.push({ path: '/cadences', query: { produit: m.code } }) }
 
 const PALETTE = ['#0f766e', '#4338ca', '#c2410c', '#047857', '#7c3aed', '#0369a1', '#b91c1c', '#a16207', '#be185d', '#15803d']
 const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage: 'Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
@@ -729,6 +733,9 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .msg-import { font-size: 13px; color: #15803d; margin-top: 8px; font-weight: 600; }
 .warn-card { border-color: #fcd34d; background: #fffbeb; }
 .warn-txt { font-size: 13px; color: #92400e; margin-bottom: 10px; }
+.manq-item { cursor: pointer; padding: 4px 6px; border-radius: 6px; transition: background .12s ease; }
+.manq-item:hover { background: #fff7ed; }
+.manq-go { color: #c2410c; font-weight: 600; font-size: 12px; margin-left: 4px; }
 .manq-list { margin: 0; padding-left: 20px; }
 .manq-list li { font-size: 13px; color: #334155; margin: 3px 0; }
 .manq-ph { font-weight: 700; color: #b45309; }
