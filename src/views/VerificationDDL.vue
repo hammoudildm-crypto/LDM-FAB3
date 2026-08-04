@@ -107,8 +107,9 @@ function dateFinFab(l) {
   }
   return derniere || l.date_fin_fabrication || null
 }
+function dateDDL(l) { return dateFinFab(l) || (l.ddl_verifie ? (l.date_fin_fabrication || l.date_lancement) : null) }
 const produits = computed(() => lots.value.filter(l => {
-  const d = dateFinFab(l)
+  const d = dateDDL(l)
   return d && (anneeSel.value === 0 || anYear(d) === anneeSel.value)
 }))
 const verifies = computed(() => produits.value.filter(l => l.ddl_verifie))
@@ -322,7 +323,7 @@ async function devalider(l) {
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td class="desig">{{ prodNom(l) }}</td>
                 <td>{{ l.ddl_verificateur || '—' }}</td>
-                <td class="right nowrap">{{ fmtDate(dateFinFab(l)) }}</td>
+                <td class="right nowrap">{{ fmtDate(dateDDL(l)) }}</td>
                 <td class="right"><button v-if="peutEditer" class="link" @click="ouvrir(l)">Vérifier</button></td>
               </tr>
               <tr v-if="verifEnCours === l.id">
@@ -412,7 +413,7 @@ async function devalider(l) {
               <tr v-for="l in lotsDuMois" :key="l.id">
                 <td class="strong">{{ l.numero_lot }}</td>
                 <td>{{ l.produits ? l.produits.designation : '—' }}</td>
-                <td class="right nowrap">{{ fmtDate(dateFinFab(l)) }}</td>
+                <td class="right nowrap">{{ fmtDate(dateDDL(l)) }}</td>
               </tr>
             </tbody>
           </table>
