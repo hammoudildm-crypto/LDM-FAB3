@@ -33,7 +33,7 @@ async function fetchAllPaged(make) {
 async function charger() {
   msg.value = ''
   const rp = await fetchAllPaged(() => supabase.from('plan_production')
-    .select('annee, mois, quantite_planifiee, produits(code_pf, designation, pcsu)'))
+    .select('annee, mois, quantite_planifiee, produits(code_pf, designation, pcsu, taille_lot)'))
   if (rp.error) { msg.value = rp.error.message; return }
   planRows.value = rp.data
 
@@ -43,13 +43,13 @@ async function charger() {
   realRows.value = rr.data
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
-    .select('quantite_conditionnee, date_conditionnement, ordres_fabrication(date_fin_fabrication, produits(code_pf, designation, pcsu, unites_par_boite))')
+    .select('quantite_conditionnee, date_conditionnement, ordres_fabrication(date_fin_fabrication, produits(code_pf, designation, pcsu, unites_par_boite, taille_lot))')
     .eq('actif', true))
   if (rc.error) { msg.value = rc.error.message; return }
   condRows.value = rc.data
 
   const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('boites_fabriquees, date_fin_fabrication, produits(code_pf, designation, pcsu)')
+    .select('boites_fabriquees, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot)')
     .eq('actif', true))
   if (ro.error) { msg.value = ro.error.message; return }
   ofs.value = ro.data
@@ -117,7 +117,7 @@ const detailBarre = computed(() => {
   const add = (p, q) => {
     if (!p || !(q > 0)) return
     const k = p.code_pf || '—'
-    if (!acc[k]) acc[k] = { code: k, desig: p.designation || '', q: 0 }
+    if (!acc[k]) acc[k] = { code: k, desig: p.designation || '', taille: num(p.taille_lot), q: 0 }
     acc[k].q += q
   }
   if (m.si === 0) {
@@ -143,6 +143,7 @@ const detailBarre = computed(() => {
   return Object.values(acc).sort((a, b) => b.q - a.q)
 })
 const totalBarre = computed(() => detailBarre.value.reduce((s, r) => s + r.q, 0))
+const totalLotsBarre = computed(() => detailBarre.value.reduce((s, r) => s + (r.taille > 0 ? Math.round(r.q / r.taille) : 0), 0))
 
 const planTotal = computed(() => planParMois.value.reduce((s, x) => s + x, 0))
 const fabTotal = computed(() => fabParMois.value.reduce((s, x) => s + x, 0))
@@ -422,15 +423,19 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
         <div class="rp-tabs">
           <button v-for="(s, i) in SERIES_RP" :key="s" :class="{ on: modalRP.si === i }" @click="modalRP.si = i">{{ s }}</button>
         </div>
-        <div class="rp-md-sub">{{ detailBarre.length }} produit(s) · {{ fmt(totalBarre) }} boîtes</div>
+        <div class="rp-md-sub">{{ detailBarre.length }} produit(s) · <strong>{{ fmt(totalBarre) }}</strong> boîtes · <strong>{{ fmt(totalLotsBarre) }}</strong> lots</div>
         <div class="rp-md-body">
           <div v-if="!detailBarre.length" class="empty">Aucune donnée pour ce mois.</div>
-          <table v-else class="grid">
+          <table v-else class="grid rp-detail">
+            <thead>
+              <tr><th>Code produit</th><th>Désignation</th><th class="rp-num">Quantité (boîtes)</th><th class="rp-num">En lots</th></tr>
+            </thead>
             <tbody>
               <tr v-for="r in detailBarre" :key="r.code">
                 <td class="rp-code">{{ r.code }}</td>
                 <td class="rp-des">{{ r.desig }}</td>
                 <td class="rp-num">{{ fmt(r.q) }}</td>
+                <td class="rp-num">{{ r.taille > 0 ? fmt(Math.round(r.q / r.taille)) + ' lots' : '—' }}</td>
               </tr>
             </tbody>
           </table>
@@ -533,6 +538,8 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
   .serie-val { width: 70px; }
 }
 .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.rp-detail thead th { text-align: left; font-size: 11.5px; color: #64748b; font-weight: 600; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
+.rp-detail thead th.rp-num { text-align: right; }
 .rp-modal { background: #fff; border-radius: 14px; width: min(580px, 100%); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
 .rp-md-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; }
 .rp-md-head h3 { margin: 0; font-size: 15.5px; }
