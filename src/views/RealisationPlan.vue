@@ -145,6 +145,7 @@ const totFabCA = computed(() => detailBarre.value.reduce((s, r) => s + r.fab * r
 const totCondCA = computed(() => detailBarre.value.reduce((s, r) => s + r.cond * r.pcsu, 0))
 const lotsTxt = (b, t) => t > 0 ? fmt(Math.round(b / t)) : '—'
 const fmtCA = (v) => v > 0 ? fmt(Math.round(v)) + ' DA' : '—'
+const tauxTxt = (r, plan) => plan > 0 ? Math.round(r / plan * 100) + '%' : '—'
 
 const planTotal = computed(() => planParMois.value.reduce((s, x) => s + x, 0))
 const fabTotal = computed(() => fabParMois.value.reduce((s, x) => s + x, 0))
@@ -429,13 +430,13 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
               <tr>
                 <th rowspan="2">Code produit</th><th rowspan="2">Désignation</th>
                 <th colspan="2" class="grp grp-plan">Plan</th>
-                <th colspan="3" class="grp grp-fab">Fabriqué</th>
-                <th colspan="3" class="grp grp-cond">Conditionné</th>
+                <th colspan="4" class="grp grp-fab">Fabriqué</th>
+                <th colspan="4" class="grp grp-cond">Conditionné</th>
               </tr>
               <tr class="sub2">
                 <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th>
-                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th><th class="rp-num">CA</th>
-                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th><th class="rp-num">CA</th>
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th><th class="rp-num">CA</th><th class="rp-num">Taux</th>
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th><th class="rp-num">CA</th><th class="rp-num">Taux</th>
               </tr>
             </thead>
             <tbody>
@@ -447,17 +448,19 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
                 <td class="rp-num">{{ r.fab ? fmt(r.fab) : '—' }}</td>
                 <td class="rp-num">{{ lotsTxt(r.fab, r.taille) }}</td>
                 <td class="rp-num">{{ fmtCA(r.fab * r.pcsu) }}</td>
+                <td class="rp-num" :class="r.plan > 0 ? (r.fab / r.plan >= 1 ? 'taux-ok' : 'taux-bas') : ''">{{ tauxTxt(r.fab, r.plan) }}</td>
                 <td class="rp-num">{{ r.cond ? fmt(r.cond) : '—' }}</td>
                 <td class="rp-num">{{ lotsTxt(r.cond, r.taille) }}</td>
                 <td class="rp-num">{{ fmtCA(r.cond * r.pcsu) }}</td>
+                <td class="rp-num" :class="r.plan > 0 ? (r.cond / r.plan >= 1 ? 'taux-ok' : 'taux-bas') : ''">{{ tauxTxt(r.cond, r.plan) }}</td>
               </tr>
             </tbody>
             <tfoot>
               <tr class="tot">
                 <td colspan="2">Total</td>
                 <td class="rp-num">{{ fmt(totPlan) }}</td><td class="rp-num">—</td>
-                <td class="rp-num">{{ fmt(totFab) }}</td><td class="rp-num">—</td><td class="rp-num">{{ fmtCA(totFabCA) }}</td>
-                <td class="rp-num">{{ fmt(totCond) }}</td><td class="rp-num">—</td><td class="rp-num">{{ fmtCA(totCondCA) }}</td>
+                <td class="rp-num">{{ fmt(totFab) }}</td><td class="rp-num">—</td><td class="rp-num">{{ fmtCA(totFabCA) }}</td><td class="rp-num">{{ tauxTxt(totFab, totPlan) }}</td>
+                <td class="rp-num">{{ fmt(totCond) }}</td><td class="rp-num">—</td><td class="rp-num">{{ fmtCA(totCondCA) }}</td><td class="rp-num">{{ tauxTxt(totCond, totPlan) }}</td>
               </tr>
             </tfoot>
           </table>
@@ -578,6 +581,8 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .rp-detail .rp-num { text-align: right; white-space: nowrap; }
 .rp-detail .rp-code { font-family: ui-monospace, monospace; font-weight: 600; }
 .rp-detail tfoot .tot td { font-weight: 700; border-top: 2px solid #cbd5e1; padding: 9px 12px; font-size: 13px; background: #f8fafc; }
+.taux-ok { color: #15803d; font-weight: 700; }
+.taux-bas { color: #dc2626; font-weight: 700; }
 .rp-detail thead th { text-align: left; font-size: 11.5px; color: #64748b; font-weight: 600; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
 .rp-detail thead th.rp-num { text-align: right; }
 .rp-modal { background: #fff; border-radius: 14px; width: min(580px, 100%); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
