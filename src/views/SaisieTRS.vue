@@ -4,6 +4,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(false))
+const lotPartage = inject('lotPartage', null)
 
 const equipements = ref([])
 const produits = ref([])
@@ -69,6 +70,7 @@ async function chargerCadence() {
   if (!r.error && r.data && r.data.length) cadenceObj.value = r.data[0]
 }
 watch([equipId, produitId], chargerCadence)
+if (lotPartage) watch(() => lotPartage.value && lotPartage.value.produitId, (pid) => { if (pid) { rechercheProduit.value = ''; produitId.value = pid } })
 const cadence = computed(() => cadenceObj.value && cadenceObj.value.cadence_nominale != null ? Number(cadenceObj.value.cadence_nominale) : 0)
 const cadenceMode = computed(() => cadenceObj.value ? (cadenceObj.value.mode || 'debit') : 'debit')
 const uniteCad = computed(() => cadenceObj.value && cadenceObj.value.unite_cadence ? cadenceObj.value.unite_cadence : 'unités/h')
