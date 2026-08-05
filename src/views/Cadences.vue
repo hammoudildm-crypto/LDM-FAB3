@@ -10,7 +10,8 @@
 
     <div class="cad-tabs">
       <button type="button" :class="{ on: vueMode === 'editeur' }" @click="vueMode = 'editeur'">Éditeur</button>
-      <button type="button" :class="{ on: vueMode === 'matrice' }" @click="vueMode = 'matrice'">Matrice produits × équipements</button>
+      <button type="button" :class="{ on: vueMode === 'matrice' }" @click="vueMode = 'matrice'">Matrice cadences</button>
+      <button type="button" :class="{ on: vueMode === 'params' }" @click="vueMode = 'params'">Paramètres de temps</button>
     </div>
 
     <template v-if="vueMode === 'editeur'">
@@ -115,7 +116,7 @@
     </section>
     </template>
 
-    <template v-else>
+    <template v-else-if="vueMode === 'matrice'">
       <section class="card mat-card">
         <div class="mat-head">
           <input type="search" v-model="filtre" class="prod-search-big" placeholder="Filtrer les produits (code ou désignation)…" />
@@ -136,6 +137,31 @@
               <tr v-for="p in produitsMatrice" :key="p.id">
                 <td class="mat-prod"><span class="mat-code">{{ p.code_pf }}</span><span class="mat-des">{{ p.designation }}</span></td>
                 <td v-for="g in groupes" :key="g.key" class="mat-cell" :class="{ vide: !cadenceCell(p.id, g) }"><input type="number" step="any" min="0" class="mat-in" :value="cadenceCell(p.id, g) || ''" @change="sauverCellule(p.id, g, $event.target.value)" @keyup.enter="$event.target.blur()" placeholder="·" /></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </template>
+
+    <template v-if="vueMode === 'params'">
+      <section class="card mat-card">
+        <div class="mat-head">
+          <span class="mat-count">{{ groupes.length }} équipement(s) — saisissez les paramètres de temps directement (heures)</span>
+          <span v-if="msgMat" class="mat-msg">{{ msgMat }}</span>
+        </div>
+        <div class="mat-scroll">
+          <table class="mat-table">
+            <thead>
+              <tr>
+                <th class="mat-corner">Équipement</th>
+                <th v-for="c in COLS_PARAM" :key="c.k" class="mat-col2">{{ c.l }}<div class="mat-unit">{{ c.u || '—' }}</div></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="g in groupes" :key="g.key">
+                <td class="mat-prod" :class="'ph-' + (g.phase || 'x')"><span class="mat-code">{{ g.nom }}</span><span class="mat-des">{{ PHASE_LBL[g.phase] || '' }}</span></td>
+                <td v-for="c in COLS_PARAM" :key="c.k" class="mat-cell"><input type="number" step="any" min="0" class="mat-in" :value="paramCell(g, c.k)" @change="sauverParam(g, c.k, $event.target.value)" @keyup.enter="$event.target.blur()" placeholder="·" /></td>
               </tr>
             </tbody>
           </table>
@@ -228,6 +254,27 @@ async function sauverCellule(pid, grp, valeur) {
     }
     msgMat.value = 'Enregistré ✓'; setTimeout(() => { msgMat.value = '' }, 1800)
   } catch (err) { msgMat.value = 'Erreur : ' + (err.message || err) }
+}
+const COLS_PARAM = [
+  { k: 'nb_machines', l: 'Machines', u: '' },
+  { k: 'postes', l: 'Postes', u: '' },
+  { k: 'tep', l: 'TEP', u: 'h/poste' },
+  { k: 'vdlp', l: 'VDLP', u: 'h' },
+  { k: 'vdlt', l: 'VDLT', u: 'h' },
+  { k: 'reglage', l: 'Réglage', u: 'h' },
+  { k: 'dht', l: 'Holding', u: 'h' }
+]
+const PHASE_LBL = { pesee: 'Pesée', granulation: 'Granulation et Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
+function paramCell(grp, k) { const e = grp.equips[0]; return e && e[k] != null ? e[k] : '' }
+async function sauverParam(grp, k, valeur) {
+  const v = String(valeur).trim()
+  const nv = v === '' ? (k === 'nb_machines' || k === 'postes' ? 1 : 0) : Number(v)
+  if (isNaN(nv) || nv < 0) { msgMat.value = 'Valeur invalide'; setTimeout(() => { msgMat.value = '' }, 1800); return }
+  const ids = grp.equips.map(e => e.id)
+  const r = await supabase.from('equipements').update({ [k]: nv }).in('id', ids)
+  if (r.error) { msgMat.value = 'Erreur : ' + r.error.message; return }
+  for (const e of grp.equips) e[k] = nv
+  msgMat.value = 'Enregistré ✓'; setTimeout(() => { msgMat.value = '' }, 1800)
 }
 
 // Regroupement des équipements identiques : même phase (type) + même nom de base
@@ -430,6 +477,7 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 .mat-corner { position: sticky; left: 0; top: 0; z-index: 4; background: #f1f5f9; text-align: left; font-weight: 700; }
 .mat-col { position: sticky; top: 0; z-index: 2; background: #f1f5f9; cursor: pointer; text-align: center; font-weight: 700; color: #334155; min-width: 92px; }
 .mat-col:hover { background: #ccfbf1; }
+.mat-col2 { position: sticky; top: 0; z-index: 2; background: #f1f5f9; text-align: center; font-weight: 700; color: #334155; min-width: 84px; }
 .mat-unit { font-size: 10px; font-weight: 500; color: #94a3b8; margin-top: 1px; }
 .mat-prod { position: sticky; left: 0; z-index: 1; background: #fff; }
 .mat-code { font-family: ui-monospace, monospace; font-weight: 700; color: #0f766e; display: block; }
