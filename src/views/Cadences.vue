@@ -8,6 +8,12 @@
       </div>
     </div>
 
+    <div class="cad-tabs">
+      <button type="button" :class="{ on: vueMode === 'editeur' }" @click="vueMode = 'editeur'">Éditeur</button>
+      <button type="button" :class="{ on: vueMode === 'matrice' }" @click="vueMode = 'matrice'">Matrice produits × équipements</button>
+    </div>
+
+    <template v-if="vueMode === 'editeur'">
     <section class="card">
       <div class="ctrl">
         <div class="cf grow">
@@ -107,6 +113,34 @@
         </div>
       </div>
     </section>
+    </template>
+
+    <template v-else>
+      <section class="card mat-card">
+        <div class="mat-head">
+          <input type="search" v-model="filtre" class="prod-search-big" placeholder="Filtrer les produits (code ou désignation)…" />
+          <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupes.length }} équipement(s) — cliquez un équipement pour l'éditer</span>
+        </div>
+        <div class="mat-scroll">
+          <table class="mat-table">
+            <thead>
+              <tr>
+                <th class="mat-corner">Produit</th>
+                <th v-for="g in groupes" :key="g.key" class="mat-col" :class="'ph-' + (g.phase || 'x')" @click="ouvrirGroupe(g)" :title="'Éditer ' + g.nom">
+                  {{ g.nom }}<div class="mat-unit">{{ uniteGroupe(g) }}</div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in produitsMatrice" :key="p.id">
+                <td class="mat-prod"><span class="mat-code">{{ p.code_pf }}</span><span class="mat-des">{{ p.designation }}</span></td>
+                <td v-for="g in groupes" :key="g.key" class="mat-cell" :class="{ vide: !cadenceCell(p.id, g) }">{{ cadenceCell(p.id, g) ? fmtCad(cadenceCell(p.id, g)) : '·' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </template>
   </div>
 </template>
 
@@ -165,6 +199,20 @@ function num(v, def) { const n = Number(v); return (v === null || v === undefine
 
 const atelierById = computed(() => { const m = {}; for (const a of ateliers.value) m[a.id] = a; return m })
 const produitsTries = computed(() => [...produits.value].sort((a, b) => String(a.code_pf || '').localeCompare(String(b.code_pf || ''), undefined, { numeric: true })))
+const vueMode = ref('editeur')
+function cadenceCell(pid, grp) {
+  let v = 0
+  for (const e of grp.equips) { const c = cadences.value.find(c => c.equipement_id === e.id && c.produit_id === pid); if (c && Number(c.cadence_nominale) > v) v = Number(c.cadence_nominale) }
+  return v
+}
+function uniteGroupe(grp) { return grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h' }
+const fmtCad = (v) => Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 })
+function ouvrirGroupe(g) { selGroupe.value = g.key; chargerEditeur(); vueMode.value = 'editeur' }
+const produitsMatrice = computed(() => {
+  const q = filtre.value.trim().toLowerCase()
+  if (!q) return produitsTries.value
+  return produitsTries.value.filter(p => String(p.code_pf || '').toLowerCase().includes(q) || String(p.designation || '').toLowerCase().includes(q))
+})
 
 // Regroupement des équipements identiques : même phase (type) + même nom de base
 const groupes = computed(() => {
@@ -355,6 +403,26 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 .prod-search { padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; min-width: 220px; }
 .prod-search-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .prod-search-big { flex: 1; max-width: 460px; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 9px; font: inherit; font-size: 14px; }
+.cad-tabs { display: flex; gap: 8px; margin: 0 0 16px; }
+.cad-tabs button { background: #fff; border: 1px solid #cbd5e1; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 600; padding: 9px 18px; cursor: pointer; color: #475569; }
+.cad-tabs button.on { background: #0f766e; color: #fff; border-color: #0f766e; }
+.mat-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+.mat-count { font-size: 13px; color: #64748b; }
+.mat-scroll { overflow: auto; max-height: 72vh; border: 1px solid #e2e8f0; border-radius: 10px; }
+.mat-table { border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+.mat-table th, .mat-table td { padding: 7px 11px; white-space: nowrap; border-bottom: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; }
+.mat-corner { position: sticky; left: 0; top: 0; z-index: 4; background: #f1f5f9; text-align: left; font-weight: 700; }
+.mat-col { position: sticky; top: 0; z-index: 2; background: #f1f5f9; cursor: pointer; text-align: center; font-weight: 700; color: #334155; min-width: 92px; }
+.mat-col:hover { background: #ccfbf1; }
+.mat-unit { font-size: 10px; font-weight: 500; color: #94a3b8; margin-top: 1px; }
+.mat-prod { position: sticky; left: 0; z-index: 1; background: #fff; }
+.mat-code { font-family: ui-monospace, monospace; font-weight: 700; color: #0f766e; display: block; }
+.mat-des { font-size: 11px; color: #64748b; display: block; }
+.mat-cell { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: #0f172a; }
+.mat-cell.vide { color: #cbd5e1; font-weight: 400; text-align: center; }
+.mat-table tbody tr:hover td { background: #f8fafc; }
+.mat-table tbody tr:hover .mat-prod { background: #f0fdfa; }
+.ph-granulation { border-top: 3px solid #0f766e; } .ph-melange { border-top: 3px solid #4338ca; } .ph-compression { border-top: 3px solid #c2410c; } .ph-pelliculage { border-top: 3px solid #7c3aed; } .ph-conditionnement { border-top: 3px solid #0891b2; } .ph-remplissage { border-top: 3px solid #ca8a04; } .ph-pesee { border-top: 3px solid #64748b; }
 .prod-search-big:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .ps-count { font-size: 13px; color: #64748b; font-weight: 600; }
 .no-res { text-align: center; color: #94a3b8; padding: 18px; font-size: 13.5px; }
