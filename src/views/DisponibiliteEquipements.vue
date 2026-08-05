@@ -340,7 +340,7 @@ const kpisFile = computed(() => {
   let attFab = 0, coursFab = 0, secs = 0
   for (const ph of vueFile.value) { attFab += ph.attente.length; coursFab += ph.cours.length; if (ph.attente.length === 0 && ph.cours.length === 0) secs++ }
   let attCond = 0, coursCond = 0
-  for (const g of vueCondLignes.value) { attCond += g.attente.length; coursCond += g.cours.length }
+  for (const g of vueCondLignes.value) { attCond += g.attente.length; coursCond += g.cours.length; if (g.reserve && g.tot === 0) secs++ }
   const pesee = attentePeseeList.value.length
   return [
     { v: fmt(pesee + attFab + attCond), l: 'Lots en attente (toutes étapes)', tint: TINTS.amber, ic: ICONS.hourglass },
