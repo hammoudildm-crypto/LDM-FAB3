@@ -70,7 +70,7 @@ async function chargerCadence() {
   if (!r.error && r.data && r.data.length) cadenceObj.value = r.data[0]
 }
 watch([equipId, produitId], chargerCadence)
-if (lotPartage) watch(() => lotPartage.value && lotPartage.value.produitId, (pid) => { if (pid) { rechercheProduit.value = ''; produitId.value = pid } })
+if (lotPartage) watch(() => lotPartage.value && lotPartage.value.produitId, (pid) => { if (pid) { rechercheProduit.value = ''; produitId.value = pid } }, { immediate: true })
 const cadence = computed(() => cadenceObj.value && cadenceObj.value.cadence_nominale != null ? Number(cadenceObj.value.cadence_nominale) : 0)
 const cadenceMode = computed(() => cadenceObj.value ? (cadenceObj.value.mode || 'debit') : 'debit')
 const uniteCad = computed(() => cadenceObj.value && cadenceObj.value.unite_cadence ? cadenceObj.value.unite_cadence : 'unités/h')
