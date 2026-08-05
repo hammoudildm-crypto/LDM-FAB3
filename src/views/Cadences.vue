@@ -119,7 +119,8 @@
       <section class="card mat-card">
         <div class="mat-head">
           <input type="search" v-model="filtre" class="prod-search-big" placeholder="Filtrer les produits (code ou désignation)…" />
-          <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupes.length }} équipement(s) — cliquez un équipement pour l'éditer</span>
+          <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupes.length }} équipement(s) — saisissez la cadence directement dans les cases</span>
+          <span v-if="msgMat" class="mat-msg">{{ msgMat }}</span>
         </div>
         <div class="mat-scroll">
           <table class="mat-table">
@@ -134,7 +135,7 @@
             <tbody>
               <tr v-for="p in produitsMatrice" :key="p.id">
                 <td class="mat-prod"><span class="mat-code">{{ p.code_pf }}</span><span class="mat-des">{{ p.designation }}</span></td>
-                <td v-for="g in groupes" :key="g.key" class="mat-cell" :class="{ vide: !cadenceCell(p.id, g) }">{{ cadenceCell(p.id, g) ? fmtCad(cadenceCell(p.id, g)) : '·' }}</td>
+                <td v-for="g in groupes" :key="g.key" class="mat-cell" :class="{ vide: !cadenceCell(p.id, g) }"><input type="number" step="any" min="0" class="mat-in" :value="cadenceCell(p.id, g) || ''" @change="sauverCellule(p.id, g, $event.target.value)" @keyup.enter="$event.target.blur()" placeholder="·" /></td>
               </tr>
             </tbody>
           </table>
@@ -213,6 +214,21 @@ const produitsMatrice = computed(() => {
   if (!q) return produitsTries.value
   return produitsTries.value.filter(p => String(p.code_pf || '').toLowerCase().includes(q) || String(p.designation || '').toLowerCase().includes(q))
 })
+const msgMat = ref('')
+async function sauverCellule(pid, grp, valeur) {
+  const v = String(valeur).trim()
+  const nv = v === '' ? 0 : Number(v)
+  if (isNaN(nv) || nv < 0) { msgMat.value = 'Valeur invalide'; setTimeout(() => { msgMat.value = '' }, 1800); return }
+  try {
+    for (const e of grp.equips) {
+      const existing = cadences.value.find(c => c.equipement_id === e.id && c.produit_id === pid)
+      if (nv > 0 && existing) { const r = await supabase.from('cadences_produit').update({ cadence_nominale: nv }).eq('id', existing.id); if (r.error) throw r.error; existing.cadence_nominale = nv }
+      else if (nv > 0) { const r = await supabase.from('cadences_produit').insert({ equipement_id: e.id, produit_id: pid, cadence_nominale: nv }).select('id').single(); if (r.error) throw r.error; if (r.data) cadences.value.push({ id: r.data.id, equipement_id: e.id, produit_id: pid, cadence_nominale: nv }) }
+      else if (nv === 0 && existing) { const r = await supabase.from('cadences_produit').delete().eq('id', existing.id); if (r.error) throw r.error; const i = cadences.value.indexOf(existing); if (i >= 0) cadences.value.splice(i, 1) }
+    }
+    msgMat.value = 'Enregistré ✓'; setTimeout(() => { msgMat.value = '' }, 1800)
+  } catch (err) { msgMat.value = 'Erreur : ' + (err.message || err) }
+}
 
 // Regroupement des équipements identiques : même phase (type) + même nom de base
 const groupes = computed(() => {
@@ -420,6 +436,11 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 .mat-des { font-size: 11px; color: #64748b; display: block; }
 .mat-cell { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: #0f172a; }
 .mat-cell.vide { color: #cbd5e1; font-weight: 400; text-align: center; }
+.mat-cell { padding: 3px 5px; }
+.mat-in { width: 76px; padding: 5px 7px; border: 1px solid transparent; border-radius: 6px; font: inherit; font-size: 12.5px; text-align: right; background: transparent; font-variant-numeric: tabular-nums; font-weight: 600; color: #0f172a; }
+.mat-in:hover { border-color: #cbd5e1; background: #fff; }
+.mat-in:focus { outline: none; border-color: #0f766e; background: #fff; box-shadow: 0 0 0 2px rgba(15,118,110,.15); }
+.mat-msg { font-size: 13px; font-weight: 700; color: #15803d; }
 .mat-table tbody tr:hover td { background: #f8fafc; }
 .mat-table tbody tr:hover .mat-prod { background: #f0fdfa; }
 .ph-granulation { border-top: 3px solid #0f766e; } .ph-melange { border-top: 3px solid #4338ca; } .ph-compression { border-top: 3px solid #c2410c; } .ph-pelliculage { border-top: 3px solid #7c3aed; } .ph-conditionnement { border-top: 3px solid #0891b2; } .ph-remplissage { border-top: 3px solid #ca8a04; } .ph-pesee { border-top: 3px solid #64748b; }
