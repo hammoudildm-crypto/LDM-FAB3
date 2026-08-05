@@ -162,8 +162,8 @@ const cartes = computed(() => [
     key: 'prod', couleur: '#c2410c', clair: '#fff7ed', fonce: '#9a3412', eyebrow: 'Saisie atelier', titre: 'Production & saisie', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
     metric: 'TRS global de la semaine', sub: 'TRS', pct: trsGlobal.value,
     links: [
-      ['/ordonnancement', 'Ordonnancement'], ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication'], ['/suivi', 'Suivi fabrication'],
-      ['/conditionnement', 'Conditionnement'], ['/saisie-trs', 'Saisie TRS'],
+      ['/ordonnancement', 'Ordonnancement'], ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication'], ['/suivi', 'Suivi fab. & Saisie TRS'],
+      ['/conditionnement', 'Conditionnement'],
       ['/verification-ddl', 'DDL Fab — Production'], ['/verification-ddl-aq', 'DDL Fab — AQ'],
       ['/verification-ddl-cond', 'DDL Conditionnement'], ['/effectifs', 'Effectifs']
     ]
@@ -183,13 +183,16 @@ const LS_ARRANGE = 'accueil_liens_v1'
 const arrangement = ref({})
 function initArrangement() {
   const base = {}
-  for (const c of cartes.value) base[c.key] = c.links.map(l => [l[0], l[1]])
+  const labels = {}
+  for (const c of cartes.value) { base[c.key] = c.links.map(l => [l[0], l[1]]); for (const l of c.links) labels[l[0]] = l[1] }
   let saved = null
   try { saved = JSON.parse(localStorage.getItem(LS_ARRANGE) || 'null') } catch (e) {}
   if (saved && typeof saved === 'object') {
     const vus = new Set(); const arr = {}
     for (const c of cartes.value) {
-      arr[c.key] = (Array.isArray(saved[c.key]) ? saved[c.key] : []).filter(l => Array.isArray(l) && l[0])
+      arr[c.key] = (Array.isArray(saved[c.key]) ? saved[c.key] : [])
+        .filter(l => Array.isArray(l) && l[0] && labels[l[0]] != null)
+        .map(l => [l[0], labels[l[0]]])
       arr[c.key].forEach(l => vus.add(l[0]))
     }
     for (const c of cartes.value) for (const l of c.links) if (!vus.has(l[0])) arr[c.key].push([l[0], l[1]])
