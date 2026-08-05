@@ -5,6 +5,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
+const lotPartage = inject('lotPartage', null)
 
 const PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
 const STATUTS = ['À faire', 'En cours', 'Terminé']
@@ -46,6 +47,9 @@ function resetForm() {
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
 
 const lotSelectionne = computed(() => lots.value.find(l => l.id === lotId.value) || null)
+watch(lotId, () => {
+  if (lotPartage && lotSelectionne.value) lotPartage.value = { produitId: lotSelectionne.value.produit_id || '', numeroLot: lotSelectionne.value.numero_lot || '' }
+})
 const lotsFiltres = computed(() => {
   const q = rechercheLot.value.trim().toLowerCase()
   if (!q) return lots.value
@@ -114,7 +118,7 @@ async function fetchAllPaged(make) {
 async function chargerBase() {
   erreur.value = ''
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, quantite_theorique, statut, produits(code_pf, designation, gamme, poids_unitaire_mg, unites_par_boite)')
+    .select('id, numero_lot, produit_id, quantite_theorique, statut, produits(code_pf, designation, gamme, poids_unitaire_mg, unites_par_boite)')
     .eq('actif', true).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
