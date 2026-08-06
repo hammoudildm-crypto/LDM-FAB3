@@ -192,13 +192,13 @@ async function chargerAlertes() {
   const auj = new Date()
   const limite = new Date(auj.getTime() + 3 * 86400000).toISOString().slice(0, 10)
   const r = await supabase.from('ordres_fabrication')
-    .select('id, numero_lot, date_fin_validite, produits(code_pf, designation)')
+    .select('id, numero_lot, statut, date_fin_validite, produits(code_pf, designation)')
     .eq('actif', true)
     .not('date_fin_validite', 'is', null)
     .is('date_fin_fabrication', null)
     .lte('date_fin_validite', limite)
   if (r.error) { console.error('alertes:', r.error.message); return }
-  alertes.value = (r.data || []).map(o => ({
+  alertes.value = (r.data || []).filter(o => !/rejet/i.test(String(o.statut || ''))).map(o => ({
     id: o.id, lot: o.numero_lot || '—',
     code: o.produits ? o.produits.code_pf : '',
     desig: o.produits ? o.produits.designation : '',
