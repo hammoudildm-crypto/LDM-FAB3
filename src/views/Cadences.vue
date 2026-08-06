@@ -9,114 +9,11 @@
     </div>
 
     <div class="cad-tabs">
-      <button type="button" :class="{ on: vueMode === 'editeur' }" @click="vueMode = 'editeur'">Éditeur</button>
       <button type="button" :class="{ on: vueMode === 'matrice' }" @click="vueMode = 'matrice'">Matrice cadences</button>
       <button type="button" :class="{ on: vueMode === 'params' }" @click="vueMode = 'params'">Paramètres de temps</button>
     </div>
 
-    <template v-if="vueMode === 'editeur'">
-    <section class="card">
-      <div class="ctrl">
-        <div class="cf grow">
-          <label>Équipement</label>
-          <select v-model="selGroupe" @change="chargerEditeur">
-            <option value="">— Choisir un équipement ({{ groupes.length }} groupes) —</option>
-            <optgroup v-for="g in groupesParAtelier" :key="g.aid" :label="g.nom">
-              <option v-for="grp in g.groupes" :key="grp.key" :value="grp.key">{{ grp.nom }}<template v-if="grp.equips.length > 1"> · {{ grp.equips.length }} fiches</template></option>
-            </optgroup>
-          </select>
-        </div>
-        <div class="cf hint" v-if="selGroupe">
-          <label>Unité de cadence</label>
-          <div class="unite">{{ uniteHint }}</div>
-        </div>
-      </div>
-      <p v-if="chargement" class="muted">Chargement…</p>
-    </section>
-
-    <!-- Paramètres du groupe -->
-    <section v-if="selGroupe && !chargement" class="card">
-      <h2 class="card-title">Paramètres de temps — {{ groupeNom }}</h2>
-      <div class="params">
-        <div class="pgroup">
-          <div class="pg-title">Capacité</div>
-          <div class="pg-fields">
-            <label class="pfield" v-if="nbFiches <= 1"><span>Machines <em>(du groupe)</em></span><input type="number" min="1" step="1" v-model="paramEdit.nb_machines" /></label>
-            <div class="pfield" v-else><span>Machines <em>(total, {{ nbFiches }} fiches)</em></span><div class="mach-disp">{{ totalMachinesReel }}</div></div>
-            <label class="pfield"><span>Postes <em>(Shift)</em></span><input type="number" min="1" max="3" step="1" v-model="paramEdit.postes" /></label>
-            <label class="pfield"><span>TEP <em>(h effectives / poste)</em></span><input type="number" min="0" step="any" v-model="paramEdit.tep" /></label>
-            <div class="pfield"><span>TRS réel <em>(historique)</em></span><div class="trs-disp" :class="trsReel ? trsCls(trsReel.trs) : 'trs-muted'"><template v-if="trsChargementReel">…</template><template v-else-if="trsReel">{{ (trsReel.trs * 100).toFixed(1) }} %</template><template v-else>—</template></div></div>
-          </div>
-          <div class="trs-cap" v-if="trsReel">Disponibilité {{ (trsReel.dispo * 100).toFixed(0) }} % · Performance {{ (trsReel.perf * 100).toFixed(0) }} % · Qualité {{ (trsReel.qualite * 100).toFixed(0) }} % — {{ trsReel.nbPostes }} poste(s), {{ fmtD(trsReel.du) }} → {{ fmtD(trsReel.au) }}</div>
-          <div class="trs-cap none" v-else-if="selGroupe && !trsChargementReel">Aucune saisie TRS pour ce groupe.</div>
-        </div>
-        <div class="pgroup">
-          <div class="pg-title">Nettoyage & réglage (heures)</div>
-          <div class="pg-fields">
-            <label class="pfield"><span>VDLP <em>(nettoyage partiel / lot)</em></span><input type="number" min="0" step="any" v-model="paramEdit.vdlp" /></label>
-            <label class="pfield"><span>VDLT <em>(nettoyage général / campagne)</em></span><input type="number" min="0" step="any" v-model="paramEdit.vdlt" /></label>
-            <label class="pfield"><span>REGLAGE <em>(changement format / campagne)</em></span><input type="number" min="0" step="any" v-model="paramEdit.reglage" /></label>
-            <label class="pfield"><span>Holding time <em>de la campagne</em></span><input type="number" min="0" step="any" v-model="paramEdit.dht" /></label>
-          </div>
-        </div>
-      </div>
-      <div class="grp-info">
-        <span v-if="nbFiches > 1">Ce groupe réunit <strong>{{ nbFiches }} fiches</strong> : le suivi compte déjà <strong>{{ totalMachinesReel }} machines</strong> (somme des fiches) — c'est correct tel quel. Les cadences et paramètres saisis s'appliquent aux {{ nbFiches }} fiches. Pour saisir le nombre de machines à la main, fusionne-les en une seule fiche.</span>
-        <span v-else>Fiche unique → <strong>{{ Number(paramEdit.nb_machines) || 1 }} machine(s)</strong> prises en compte dans le suivi de capacité.</span>
-      </div>
-      <div class="save-bar">
-        <span class="pending" v-if="paramsModifies">Paramètres modifiés</span>
-        <span class="pending ok" v-else>Paramètres à jour</span>
-        <button class="btn-save" :disabled="!paramsModifies || sauvegardeP" @click="enregistrerParams">{{ sauvegardeP ? 'Enregistrement…' : 'Enregistrer les paramètres' }}</button>
-      </div>
-      <p v-if="messageP" class="msg" :class="{ err: messagePErr }">{{ messageP }}</p>
-    </section>
-
-    <!-- Cadences produit -->
-    <section v-if="selGroupe && !chargement" class="card">
-      <h2 class="card-title">Cadences produit — {{ nbRenseignees }} produit(s) cadencé(s)</h2>
-      <div class="prod-search-row">
-        <input type="search" v-model="filtre" class="prod-search-big" placeholder="Rechercher un produit (code ou désignation)…" />
-        <span v-if="filtre" class="ps-count">{{ produitsAffiches.length }} produit(s) sur {{ produits.length }}</span>
-      </div>
-      <div class="tbl-wrap">
-        <table class="grid">
-          <thead>
-            <tr><th>Produit</th><th class="ta-r">Taille lot</th><th class="ta-c">Cadence ({{ uniteCourte }})</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in produitsAffiches" :key="p.id" :class="{ modif: estModifie(p.id) }">
-              <td><strong>{{ p.code_pf }}</strong> <span class="desig">{{ p.designation }}</span></td>
-              <td class="ta-r">{{ p.taille_lot ? Number(p.taille_lot).toLocaleString('fr-FR') : '—' }}</td>
-              <td class="ta-c">
-                <input type="number" min="0" step="any" class="cad-inp" :class="{ rempli: Number(cadEdit[p.id]) > 0 }" v-model="cadEdit[p.id]" placeholder="—" />
-              </td>
-            </tr>
-            <tr v-if="!produitsAffiches.length"><td colspan="3" class="no-res">Aucun produit ne correspond à « {{ filtre }} ».</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="save-bar">
-        <span class="pending" v-if="nbChangements">{{ nbChangements }} modification(s) en attente</span>
-        <span class="pending ok" v-else>Aucune modification</span>
-        <button class="btn-save" :disabled="!nbChangements || sauvegarde" @click="enregistrer">{{ sauvegarde ? 'Enregistrement…' : 'Enregistrer' }}</button>
-      </div>
-      <p v-if="message" class="msg" :class="{ err: messageErr }">{{ message }}</p>
-    </section>
-
-    <section v-if="!chargement && !selGroupe" class="card">
-      <h2 class="card-title">Récapitulatif</h2>
-      <p class="muted">{{ groupes.length }} groupe(s) d'équipements. {{ cadences.length }} cadence(s) enregistrée(s).</p>
-      <div class="recap">
-        <div v-for="g in recapGroupes" :key="g.key" class="recap-item">
-          <span class="ri-nom">{{ g.nom }}</span>
-          <span class="ri-cnt">{{ g.n }}</span>
-        </div>
-      </div>
-    </section>
-    </template>
-
-    <template v-else-if="vueMode === 'matrice'">
+<template v-if="vueMode === 'matrice'">
       <section class="card mat-card">
         <div class="mat-head">
           <input type="search" v-model="filtre" class="prod-search-big" placeholder="Filtrer les produits (code ou désignation)…" />
@@ -128,7 +25,7 @@
             <thead>
               <tr>
                 <th class="mat-corner">Produit</th>
-                <th v-for="g in groupes" :key="g.key" class="mat-col" :class="'ph-' + (g.phase || 'x')" @click="ouvrirGroupe(g)" :title="'Éditer ' + g.nom">
+                <th v-for="g in groupes" :key="g.key" class="mat-col" :class="'ph-' + (g.phase || 'x')">
                   {{ g.nom }}<div class="mat-unit">{{ uniteGroupe(g) }}</div>
                 </th>
               </tr>
@@ -226,7 +123,7 @@ function num(v, def) { const n = Number(v); return (v === null || v === undefine
 
 const atelierById = computed(() => { const m = {}; for (const a of ateliers.value) m[a.id] = a; return m })
 const produitsTries = computed(() => [...produits.value].sort((a, b) => String(a.code_pf || '').localeCompare(String(b.code_pf || ''), undefined, { numeric: true })))
-const vueMode = ref('editeur')
+const vueMode = ref('matrice')
 function cadenceCell(pid, grp) {
   let v = 0
   for (const e of grp.equips) { const c = cadences.value.find(c => c.equipement_id === e.id && c.produit_id === pid); if (c && Number(c.cadence_nominale) > v) v = Number(c.cadence_nominale) }
@@ -475,7 +372,7 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 .mat-table { border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
 .mat-table th, .mat-table td { padding: 7px 11px; white-space: nowrap; border-bottom: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; }
 .mat-corner { position: sticky; left: 0; top: 0; z-index: 4; background: #f1f5f9; text-align: left; font-weight: 700; }
-.mat-col { position: sticky; top: 0; z-index: 2; background: #f1f5f9; cursor: pointer; text-align: center; font-weight: 700; color: #334155; min-width: 92px; }
+.mat-col { position: sticky; top: 0; z-index: 2; background: #f1f5f9; cursor: default; text-align: center; font-weight: 700; color: #334155; min-width: 92px; }
 .mat-col:hover { background: #ccfbf1; }
 .mat-col2 { position: sticky; top: 0; z-index: 2; background: #f1f5f9; text-align: center; font-weight: 700; color: #334155; min-width: 84px; }
 .mat-unit { font-size: 10px; font-weight: 500; color: #94a3b8; margin-top: 1px; }
