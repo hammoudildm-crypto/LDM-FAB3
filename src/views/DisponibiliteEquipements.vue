@@ -537,7 +537,7 @@ onMounted(async () => {
 
         <div class="file-board">
         <section class="atelier">
-          <h2 class="atelier-titre"><span class="at-name">Réception OF planifiés</span>
+          <h2 class="atelier-titre"><span class="at-name">OF planifiés</span>
             <span class="at-sum">{{ attenteReceptionList.length }} en attente de réception</span>
           </h2>
           <div class="eq-grid">
