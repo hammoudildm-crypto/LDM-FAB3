@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Home from '../views/Home.vue'
+import Hub from '../views/Hub.vue'
 import Accueil from '../views/Accueil.vue'
 import Ordonnancement from '../views/Ordonnancement.vue'
 import Login from '../views/Login.vue'
@@ -31,8 +32,9 @@ import IndicateursQSE from '../views/IndicateursQSE.vue'
 import Cadences from '../views/Cadences.vue'
 
 const routes = [
-  { path: '/', name: 'home', component: Home },
-  { path: '/accueil', name: 'accueil', component: Accueil },
+  { path: '/', name: 'home', component: Hub },
+  { path: '/tableau-de-bord', name: 'tableau-de-bord', component: Home },
+  { path: '/accueil', redirect: '/' },
   { path: '/ordonnancement', name: 'ordonnancement', component: Ordonnancement },
   { path: '/referentiels', name: 'referentiels', component: Referentiels },
   { path: '/plan', name: 'plan', component: PlanDirecteur },
