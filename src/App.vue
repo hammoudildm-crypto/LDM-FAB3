@@ -10,7 +10,7 @@ const navRef = ref(null)
 const themeRef = ref(null)
 const openMenu = ref(null)
 const sidebarOpen = ref(false)
-const sidebarMasquee = ref(false)
+const sidebarMasquee = ref(true)
 watch(sidebarMasquee, v => { try { localStorage.setItem('ldmfab-sidebar-masquee', v ? '1' : '0') } catch (e) { /* ignore */ } })
 const refreshTick = ref(0)
 const presenceOuverte = ref(false)
@@ -279,7 +279,6 @@ async function signOut() {
         <button class="side-hide" @click="sidebarMasquee = !sidebarMasquee" :title="sidebarMasquee ? 'Épingler la barre' : 'Masquer la barre'">{{ sidebarMasquee ? '»' : '«' }}</button>
       </div>
       <nav class="side-nav">
-        <RouterLink to="/accueil" class="side-link" @click="sidebarOpen = false"><span class="link-in"><span class="link-ic"><svg viewBox="0 0 24 24" v-html="LINK_ICONS['/accueil']"></svg></span>Accueil</span></RouterLink>
         <RouterLink to="/tableau-de-bord" class="side-link" @click="sidebarOpen = false"><span class="link-in"><span class="link-ic"><svg viewBox="0 0 24 24" v-html="LINK_ICONS['/']"></svg></span>Tableau de bord</span></RouterLink>
         <template v-if="session">
           <template v-for="g in NAV_GROUPS" :key="g.key">
@@ -317,7 +316,6 @@ async function signOut() {
       <header class="app-topbar">
         <button class="burger" @click="sidebarMasquee = false; sidebarOpen = !sidebarOpen" aria-label="Menu">☰</button>
         <RouterLink to="/" class="brand-wm tb-brand" @click="sidebarOpen = false" title="Retour à l'accueil"><span class="tb-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="none"><path d="M4 16 L10 11 L15 14 L20 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="16" r="1.7" fill="#fff"/><circle cx="10" cy="11" r="1.7" fill="#fff"/><circle cx="15" cy="14" r="1.7" fill="#fff"/><circle cx="20" cy="6" r="1.7" fill="#fff"/></svg></span>Prod<span class="brand-sub">Track</span></RouterLink>
-        <RouterLink v-if="route.path !== '/accueil'" to="/accueil" class="tb-accueil" @click="sidebarOpen = false" title="Retour à l'accueil"><span class="tb-accueil-ar">←</span><span class="tb-accueil-tx">Accueil</span></RouterLink>
         <div class="tb-spacer"></div>
         <div class="tb-item" v-if="session && enLigne.length">
           <button class="tb-icon" @click.stop="presenceOuverte = !presenceOuverte" :title="enLigne.length + ' en ligne'"><span class="online-dot"></span>{{ enLigne.length }}</button>
