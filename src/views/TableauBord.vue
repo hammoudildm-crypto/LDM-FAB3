@@ -113,7 +113,7 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('conditionnement')
         .select('quantite_conditionnee, date_conditionnement, equipements(nom), ordres_fabrication(numero_lot, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
       fetchAllPaged(() => supabase.from('plan_production')
-        .select('annee, quantite_planifiee, produits(code_pf, designation, donneurs_ordre(nom))'))
+        .select('annee, quantite_planifiee, equipements(nom), produits(code_pf, designation, donneurs_ordre(nom))'))
     ])
     fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp
   } catch (e) { console.error(e) } finally { chargement.value = false }
@@ -161,10 +161,10 @@ function cleProduit(p) {
 function cleGroupe(r) { return grp.value === 'equip' ? (r.equip || 'Non attribué') : (cleProduit(r.produit) || 'Non attribué') }
 const planParGroupe = computed(() => {
   const acc = {}
-  if (grp.value === 'equip') return acc
   for (const r of planRaw.value) {
     if (Number(r.annee) !== annee.value) continue
-    const cle = cleProduit(r.produits); if (cle == null) continue
+    const cle = grp.value === 'equip' ? (r.equipements ? r.equipements.nom : null) : cleProduit(r.produits)
+    if (cle == null) continue
     acc[cle] = (acc[cle] || 0) + num(r.quantite_planifiee)
   }
   return acc
