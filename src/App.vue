@@ -270,7 +270,7 @@ async function signOut() {
       </div>
       <nav class="side-nav">
         <RouterLink to="/accueil" class="side-link" @click="sidebarOpen = false"><span class="link-in"><span class="link-ic"><svg viewBox="0 0 24 24" v-html="LINK_ICONS['/accueil']"></svg></span>Accueil</span></RouterLink>
-        <RouterLink to="/" class="side-link" @click="sidebarOpen = false"><span class="link-in"><span class="link-ic"><svg viewBox="0 0 24 24" v-html="LINK_ICONS['/']"></svg></span>Tableau de bord</span></RouterLink>
+        <RouterLink to="/tableau-de-bord" class="side-link" @click="sidebarOpen = false"><span class="link-in"><span class="link-ic"><svg viewBox="0 0 24 24" v-html="LINK_ICONS['/']"></svg></span>Tableau de bord</span></RouterLink>
         <template v-if="session">
           <template v-for="g in NAV_GROUPS" :key="g.key">
             <div v-if="groupVisible(g)" class="nav-group" :class="{ open: openGroups.has(g.key) }">
