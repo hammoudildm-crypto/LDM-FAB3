@@ -108,7 +108,7 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('ordres_fabrication')
         .select('numero_lot, boites_fabriquees, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('conditionnement')
-        .select('quantite_conditionnee, date_conditionnement, ordres_fabrication(numero_lot, produits(code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom)))'))
+        .select('quantite_conditionnee, date_conditionnement, ordres_fabrication(numero_lot, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))'))
     ])
     fabRaw.value = rf; condRaw.value = rc
   } catch (e) { console.error(e) } finally { chargement.value = false }
@@ -122,7 +122,11 @@ const fabData = computed(() => fabRaw.value
 
 const condData = computed(() => condRaw.value
   .filter(c => c.date_conditionnement && anYear(c.date_conditionnement) === annee.value)
-  .map(c => ({ lot: c.ordres_fabrication ? c.ordres_fabrication.numero_lot : null, boites: c.quantite_conditionnee, produit: c.ordres_fabrication ? c.ordres_fabrication.produits : null })))
+  .map(c => {
+    const of = c.ordres_fabrication; const p = of ? of.produits : null
+    const upb = p ? num(p.unites_par_boite) : 0
+    return { lot: of ? of.numero_lot : null, boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p }
+  }))
 
 const annees = computed(() => {
   const s = new Set()
