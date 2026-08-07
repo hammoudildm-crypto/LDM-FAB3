@@ -139,6 +139,16 @@ function groupVisible(g) {
   if (g.role === 'admin') return estAdmin.value
   return true
 }
+// Palette du hub généralisée : couleur par catégorie de page
+const CAT_COULEUR = {
+  '/referentiels': '#64748b', '/cadences': '#64748b', '/habilitations': '#64748b', '/effectifs': '#64748b',
+  '/ordonnancement': '#6366f1', '/plan': '#6366f1', '/ordres': '#6366f1',
+  '/dispo-equipements': '#0ea5e9', '/avancement': '#0ea5e9', '/production-atelier': '#0ea5e9', '/suivi-trs': '#0ea5e9', '/capacite': '#0ea5e9', '/encours': '#0ea5e9', '/dossier': '#0ea5e9',
+  '/suivi': '#14b8a6', '/conditionnement': '#14b8a6',
+  '/verification-ddl': '#f43f5e', '/verification-ddl-aq': '#f43f5e', '/verification-ddl-cond': '#f43f5e', '/audit': '#f43f5e',
+  '/tableau-de-bord': '#22c55e', '/realisation-plan': '#22c55e', '/rendement': '#22c55e', '/ca': '#22c55e', '/qse': '#22c55e'
+}
+const couleurPage = computed(() => CAT_COULEUR[route.path] || '#5b9bd5')
 const openGroups = ref(new Set())
 function toggleGroup(key) {
   // Accordéon : un seul groupe ouvert à la fois
@@ -303,7 +313,7 @@ async function signOut() {
       <p v-if="!alertes.length" class="notif-empty">Aucune alerte de validité.</p>
     </div>
 
-    <div class="app-main">
+    <div class="app-main" :style="{ '--cat': couleurPage }">
       <header class="app-topbar">
         <button class="burger" @click="sidebarMasquee = false; sidebarOpen = !sidebarOpen" aria-label="Menu">☰</button>
         <RouterLink to="/" class="brand-wm tb-brand" @click="sidebarOpen = false" title="Retour à l'accueil"><span class="tb-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="none"><path d="M4 16 L10 11 L15 14 L20 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="16" r="1.7" fill="#fff"/><circle cx="10" cy="11" r="1.7" fill="#fff"/><circle cx="15" cy="14" r="1.7" fill="#fff"/><circle cx="20" cy="6" r="1.7" fill="#fff"/></svg></span>Prod<span class="brand-sub">Track</span></RouterLink>
@@ -625,4 +635,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .tb-brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; cursor: pointer; transition: opacity .15s ease; }
 .tb-mark { width: 28px; height: 28px; border-radius: 8px; display: inline-grid; place-items: center; background: linear-gradient(140deg, var(--accent-bright), #14b8a6); box-shadow: 0 2px 7px rgba(20,184,166,.4); flex-shrink: 0; }
 .brand-link:hover, .tb-brand:hover { opacity: .72; }
+.app-topbar { border-bottom: 3px solid var(--cat, #5b9bd5); transition: border-color .25s ease; }
+.side-link.router-link-active { box-shadow: inset 3px 0 0 var(--cat, #5b9bd5); }
+.side-link.router-link-active .link-ic svg { stroke: var(--cat, #5b9bd5); }
 </style>
