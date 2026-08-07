@@ -200,7 +200,7 @@ function fmtPct(p) { return (p == null ? '—' : p.toFixed(1) + ' %') }
 function fmtDate(d) {
   if (!d) return '—'
   const x = new Date(d); if (isNaN(x)) return '—'
-  return x.toLocaleDateString('fr-FR')
+  return (/[T ]\d{2}:/.test(String(d)) ? x.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' ' : '') + x.toLocaleDateString('fr-FR')
 }
 function exporterHistoriqueCSV() {
   const list = [...verifiesFiltres.value].sort((a, b) =>
