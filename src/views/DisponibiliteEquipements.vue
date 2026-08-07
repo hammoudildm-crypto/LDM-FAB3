@@ -397,7 +397,7 @@ function ageClass(d) {
   if (j >= 3) return 'age-warn'
   return ''
 }
-function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
+function fmtDate(d) { if (!d) return '—'; const x = new Date(d); if (isNaN(x)) return String(d); return (/[T ]\\d{2}:/.test(String(d)) ? x.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' ' : '') + x.toLocaleDateString('fr-FR') }
 function ouvrirLot(l, phaseKey) {
   if (phaseKey === 'conditionnement') router.push({ path: '/conditionnement', query: { lot: l.id } })
   else router.push({ path: '/suivi', query: { lot: l.id } })
@@ -863,4 +863,5 @@ onMounted(async () => {
 .empty { font-size: 11px; color: #94a3b8; margin: 3px 0 0; }
 /* Cadre interne harmonisé : le bloc vide a le même encadré que le tableau (.prod-scroll) */
 .q-block .empty { border: 1px solid #eef2f6; border-radius: 7px; background: #f8fafc; padding: 12px 10px; text-align: center; margin: 0; }
+/* redeploy 2026-08-06 */
 </style>
