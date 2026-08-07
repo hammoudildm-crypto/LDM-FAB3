@@ -33,7 +33,7 @@ async function fetchAllPaged(make) {
 async function charger() {
   msg.value = ''
   const rp = await fetchAllPaged(() => supabase.from('plan_production')
-    .select('annee, mois, quantite_planifiee, produits(code_pf, designation, pcsu, taille_lot)'))
+    .select('annee, mois, quantite_planifiee, equipements(nom), produits(code_pf, designation, pcsu, taille_lot)'))
   if (rp.error) { msg.value = rp.error.message; return }
   planRows.value = rp.data
 
@@ -43,13 +43,13 @@ async function charger() {
   realRows.value = rr.data
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
-    .select('quantite_conditionnee, date_conditionnement, ordres_fabrication(date_fin_fabrication, produits(code_pf, designation, pcsu, unites_par_boite, taille_lot))')
+    .select('quantite_conditionnee, date_conditionnement, equipements(nom), ordres_fabrication(date_fin_fabrication, produits(code_pf, designation, pcsu, unites_par_boite, taille_lot))')
     .eq('actif', true))
   if (rc.error) { msg.value = rc.error.message; return }
   condRows.value = rc.data
 
   const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('boites_fabriquees, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot)')
+    .select('boites_fabriquees, date_fin_fabrication, equipements(nom), produits(code_pf, designation, pcsu, taille_lot)')
     .eq('actif', true))
   if (ro.error) { msg.value = ro.error.message; return }
   ofs.value = ro.data
@@ -147,6 +147,36 @@ const lotsTxt = (b, t) => t > 0 ? fmt(Math.round(b / t)) : '—'
 const fmtCA = (v) => v > 0 ? fmt(Math.round(v)) + ' DA' : '—'
 const tauxTxt = (r, plan) => plan > 0 ? Math.round(r / plan * 100) + '%' : '—'
 const modalGlobal = ref(false)
+const ongletEquip = ref('fab')
+const detailEquip = computed(() => {
+  const acc = {}
+  const rec = (nom) => { const k = nom || 'Non attribué'; if (!acc[k]) acc[k] = { nom: k, plan: 0, boites: 0, lots: 0, ca: 0 }; return acc[k] }
+  for (const r of planRows.value) {
+    if (Number(r.annee) !== anneeSel.value) continue
+    rec(r.equipements ? r.equipements.nom : null).plan += num(r.quantite_planifiee)
+  }
+  if (ongletEquip.value === 'fab') {
+    for (const o of ofs.value) {
+      if (!o.date_fin_fabrication || new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+      const e = rec(o.equipements ? o.equipements.nom : null)
+      const b = num(o.boites_fabriquees), p = o.produits, t = num(p && p.taille_lot), pc = num(p && p.pcsu)
+      e.boites += b; e.lots += t > 0 ? b / t : 0; e.ca += b * pc
+    }
+  } else {
+    for (const c of condRows.value) {
+      if (!c.date_conditionnement || new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
+      const e = rec(c.equipements ? c.equipements.nom : null)
+      const p = c.ordres_fabrication ? c.ordres_fabrication.produits : null
+      const b = condBoites(c), t = num(p && p.taille_lot), pc = num(p && p.pcsu)
+      e.boites += b; e.lots += t > 0 ? b / t : 0; e.ca += b * pc
+    }
+  }
+  return Object.values(acc).map(e => ({ ...e, lots: Math.round(e.lots), taux: e.plan > 0 ? Math.round(e.boites / e.plan * 100) : null })).sort((a, b) => b.boites - a.boites)
+})
+const totEqPlan = computed(() => detailEquip.value.reduce((s, e) => s + e.plan, 0))
+const totEqBoites = computed(() => detailEquip.value.reduce((s, e) => s + e.boites, 0))
+const totEqLots = computed(() => detailEquip.value.reduce((s, e) => s + e.lots, 0))
+const totEqCA = computed(() => detailEquip.value.reduce((s, e) => s + e.ca, 0))
 const serieGlobal = computed(() => [
   { label: 'Plan', color: '#4338ca', dash: true, data: planParMois.value },
   { label: 'Fabriqué', color: '#0f766e', data: fabParMois.value },
@@ -431,6 +461,42 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
       </div>
     </section>
   </div>
+    <section class="card" style="margin-top: 22px">
+      <div class="rp-eq-head">
+        <h3 class="card-title">Détail par équipement</h3>
+        <div class="rp-eq-tabs">
+          <button type="button" :class="{ on: ongletEquip === 'fab' }" @click="ongletEquip = 'fab'">Fabrication</button>
+          <button type="button" :class="{ on: ongletEquip === 'cond' }" @click="ongletEquip = 'cond'">Conditionnement</button>
+        </div>
+      </div>
+      <div v-if="!detailEquip.length" class="empty">Aucune donnée pour {{ anneeSel }}.</div>
+      <div v-else class="rp-scroll">
+        <table class="grid rp-detail">
+          <thead><tr><th>Équipement</th><th class="rp-num">Plan</th><th class="rp-num">{{ ongletEquip === 'fab' ? 'Fabriqué' : 'Conditionné' }}</th><th class="rp-num">Taux</th><th class="rp-num">Lots</th><th class="rp-num">CA</th></tr></thead>
+          <tbody>
+            <tr v-for="e in detailEquip" :key="e.nom">
+              <td class="rp-code">{{ e.nom }}</td>
+              <td class="rp-num">{{ e.plan ? fmt(e.plan) : '—' }}</td>
+              <td class="rp-num">{{ fmt(e.boites) }}</td>
+              <td class="rp-num" :class="e.taux != null ? (e.taux >= 100 ? 'taux-ok' : 'taux-bas') : ''">{{ e.taux != null ? e.taux + '%' : '—' }}</td>
+              <td class="rp-num">{{ fmt(e.lots) }}</td>
+              <td class="rp-num">{{ fmtCA(e.ca) }}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr class="tot">
+              <td>Total {{ anneeSel }}</td>
+              <td class="rp-num">{{ totEqPlan ? fmt(totEqPlan) : '—' }}</td>
+              <td class="rp-num">{{ fmt(totEqBoites) }}</td>
+              <td class="rp-num">{{ totEqPlan > 0 ? Math.round(totEqBoites / totEqPlan * 100) + '%' : '—' }}</td>
+              <td class="rp-num">{{ fmt(totEqLots) }}</td>
+              <td class="rp-num">{{ fmtCA(totEqCA) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
     <div v-if="modalRP" class="rp-fullpage">
       <div class="rp-md-head">
         <button class="rp-back" @click="modalRP = null">← Retour</button>
@@ -591,7 +657,12 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .prod-search { font-size: 13px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 240px; max-width: 100%; }
 .prod-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
-.card-title { margin: 0; font-size: 16px; }
+".card-title { margin: 0; font-size: 16px; }
+.rp-eq-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.rp-eq-tabs { display: flex; gap: 8px; }
+.rp-eq-tabs button { background: #fff; border: 1.5px solid #e2e8f0; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; cursor: pointer; color: #64748b; }
+.rp-eq-tabs button.on:nth-child(1) { background: #14b8a6; border-color: #14b8a6; color: #fff; }
+.rp-eq-tabs button.on:nth-child(2) { background: #0ea5e9; border-color: #0ea5e9; color: #fff; }
 .legend { display: flex; gap: 16px; font-size: 12px; color: #475569; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
