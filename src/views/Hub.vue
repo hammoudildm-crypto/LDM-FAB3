@@ -73,20 +73,26 @@ const modules = [
 ]
 
 const groupes = [
-  { label: 'Consultation', c: '#0369a1', links: [
-    ['/realisation-plan', 'Réalisation vs Plan'], ['/rendement', 'Rendement'], ['/ca', "Chiffre d'affaires"],
+  { label: 'Pilotage & indicateurs', c: '#4338ca', links: [
+    ['/tableau-de-bord', 'Tableau de bord'], ['/realisation-plan', 'Réalisation vs Plan'], ['/rendement', 'Rendement'],
+    ['/ca', "Chiffre d'affaires"], ['/qse', 'Indicateurs QSE']
+  ] },
+  { label: 'Suivi de production', c: '#0369a1', links: [
     ['/dispo-equipements', 'Disponibilité équipements'], ['/avancement', 'Suivi du process'], ['/production-atelier', 'Production par atelier'],
-    ['/suivi-trs', 'Suivi TRS'], ['/capacite', 'Capacité équipements'], ['/qse', 'Indicateurs QSE'],
-    ['/encours', 'En-cours'], ['/dossier', 'Dossier de lot'], ['/audit', "Journal d'audit"]
+    ['/suivi-trs', 'Suivi TRS'], ['/capacite', 'Capacité équipements'], ['/encours', 'En-cours'], ['/dossier', 'Dossier de lot']
   ] },
-  { label: 'Production & saisie', c: '#0f766e', links: [
-    ['/ordonnancement', 'Ordonnancement'], ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication'],
-    ['/suivi', 'Suivi fab. & Saisie TRS'], ['/conditionnement', 'Conditionnement'],
+  { label: 'Ordonnancement & OF', c: '#7c3aed', links: [
+    ['/ordonnancement', 'Ordonnancement'], ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication']
+  ] },
+  { label: 'Saisie & exécution', c: '#0f766e', links: [
+    ['/suivi', 'Suivi fab. & Saisie TRS'], ['/conditionnement', 'Conditionnement']
+  ] },
+  { label: 'Qualité — DDL & audit', c: '#be123c', links: [
     ['/verification-ddl', 'DDL Fab — Production'], ['/verification-ddl-aq', 'DDL Fab — AQ'], ['/verification-ddl-cond', 'DDL Conditionnement'],
-    ['/effectifs', 'Effectifs']
+    ['/audit', "Journal d'audit"]
   ] },
-  { label: 'Administration', c: '#be123c', links: [
-    ['/referentiels', 'Référentiels'], ['/cadences', 'Cadences'], ['/habilitations', 'Habilitations']
+  { label: 'Configuration', c: '#b45309', links: [
+    ['/referentiels', 'Référentiels'], ['/cadences', 'Cadences'], ['/habilitations', 'Habilitations'], ['/effectifs', 'Effectifs']
   ] }
 ]
 </script>
