@@ -58,7 +58,7 @@ onUnmounted(() => clearInterval(timer))
 
 const A = 'fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"'
 const modules = [
-  { label: 'Tableau de bord', path: '/', x: 50, y: 19,
+  { label: 'Tableau de bord', path: '/tableau-de-bord', x: 50, y: 19,
     icon: `<g ${A}><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></g>` },
   { label: 'Disponibilité', path: '/dispo-equipements', x: 81, y: 36,
     icon: `<g ${A}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></g>` },
