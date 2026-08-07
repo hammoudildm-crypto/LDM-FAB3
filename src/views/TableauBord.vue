@@ -99,9 +99,9 @@ const annee = ref(new Date().getFullYear())
 const chargement = ref(true)
 const groupes = [
   { k: 'lab', lbl: 'Laboratoire' }, { k: 'forme', lbl: 'Forme' },
-  { k: 'produit', lbl: 'Produit' }, { k: 'lot', lbl: 'Lot' }
+  { k: 'produit', lbl: 'Produit' }, { k: 'equip', lbl: 'Équipement' }
 ]
-const LIB = { lab: 'Laboratoire', forme: 'Forme galénique', produit: 'Produit', lot: 'Lot' }
+const LIB = { lab: 'Laboratoire', forme: 'Forme galénique', produit: 'Produit', equip: 'Équipement' }
 const libGroupe = computed(() => LIB[grp.value])
 
 const fabRaw = ref([]); const condRaw = ref([]); const planRaw = ref([])
@@ -109,9 +109,9 @@ onMounted(async () => {
   try {
     const [rf, rc, rp] = await Promise.all([
       fetchAllPaged(() => supabase.from('ordres_fabrication')
-        .select('numero_lot, boites_fabriquees, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
+        .select('numero_lot, boites_fabriquees, date_fin_fabrication, equipements(nom), produits(code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('conditionnement')
-        .select('quantite_conditionnee, date_conditionnement, ordres_fabrication(numero_lot, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
+        .select('quantite_conditionnee, date_conditionnement, equipements(nom), ordres_fabrication(numero_lot, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
       fetchAllPaged(() => supabase.from('plan_production')
         .select('annee, quantite_planifiee, produits(code_pf, designation, donneurs_ordre(nom))'))
     ])
@@ -123,14 +123,14 @@ const anYear = (d) => d ? new Date(d).getFullYear() : null
 
 const fabData = computed(() => fabRaw.value
   .filter(o => o.date_fin_fabrication && anYear(o.date_fin_fabrication) === annee.value)
-  .map(o => ({ lot: o.numero_lot, boites: o.boites_fabriquees, produit: o.produits })))
+  .map(o => ({ lot: o.numero_lot, equip: o.equipements ? o.equipements.nom : null, boites: o.boites_fabriquees, produit: o.produits })))
 
 const condData = computed(() => condRaw.value
   .filter(c => c.date_conditionnement && anYear(c.date_conditionnement) === annee.value)
   .map(c => {
     const of = c.ordres_fabrication; const p = of ? of.produits : null
     const upb = p ? num(p.unites_par_boite) : 0
-    return { lot: of ? of.numero_lot : null, boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p }
+    return { lot: of ? of.numero_lot : null, equip: c.equipements ? c.equipements.nom : null, boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p }
   }))
 
 const annees = computed(() => {
@@ -158,10 +158,10 @@ function cleProduit(p) {
   if (grp.value === 'produit') return (p.code_pf || '?') + ' — ' + (p.designation || '')
   return null
 }
-function cleGroupe(r) { return grp.value === 'lot' ? (r.lot || '—') : (cleProduit(r.produit) || 'Non attribué') }
+function cleGroupe(r) { return grp.value === 'equip' ? (r.equip || 'Non attribué') : (cleProduit(r.produit) || 'Non attribué') }
 const planParGroupe = computed(() => {
   const acc = {}
-  if (grp.value === 'lot') return acc
+  if (grp.value === 'equip') return acc
   for (const r of planRaw.value) {
     if (Number(r.annee) !== annee.value) continue
     const cle = cleProduit(r.produits); if (cle == null) continue
