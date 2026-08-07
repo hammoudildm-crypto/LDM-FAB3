@@ -11,6 +11,8 @@ const ANNEES = [anneeCourante - 1, anneeCourante, anneeCourante + 1, anneeCouran
 
 const annee = ref(anneeCourante)
 const produits = ref([])
+const equipements = ref([])
+const condEquip = reactive({})
 const cellules = reactive({})   // cellules[produit_id][mois] = '' | nombre
 const erreur = ref('')
 const message = ref('')
@@ -45,6 +47,8 @@ async function chargerProduits() {
     .eq('actif', true).order('code_pf')
   if (r.error) { erreur.value = r.error.message; return }
   produits.value = r.data
+  const re = await supabase.from('equipements').select('id, nom, type').eq('actif', true).order('nom')
+  if (!re.error) equipements.value = (re.data || [])
   initCellules()
 }
 
@@ -53,10 +57,11 @@ async function chargerPlan() {
   message.value = ''
   initCellules()
   const r = await supabase.from('plan_production')
-    .select('produit_id, mois, quantite_planifiee').eq('annee', annee.value)
+    .select('produit_id, mois, quantite_planifiee, equipement_id').eq('annee', annee.value)
   if (r.error) { erreur.value = r.error.message; return }
   for (const row of r.data) {
     if (cellules[row.produit_id]) cellules[row.produit_id][row.mois] = row.quantite_planifiee
+    if (row.equipement_id) condEquip[row.produit_id] = row.equipement_id
   }
 }
 
@@ -91,7 +96,7 @@ async function enregistrer() {
   for (const p of produits.value) {
     for (let m = 1; m <= 12; m++) {
       const v = cellules[p.id][m]
-      if (v !== '' && v != null) rows.push({ produit_id: p.id, annee: annee.value, mois: m, quantite_planifiee: Number(v) })
+      if (v !== '' && v != null) rows.push({ produit_id: p.id, annee: annee.value, mois: m, quantite_planifiee: Number(v), equipement_id: condEquip[p.id] || null })
     }
   }
   // Remplace le plan de l'année : suppression puis réinsertion (les cases vidées sont retirées de la base)
@@ -203,6 +208,7 @@ watch(annee, chargerPlan)
           <tr>
             <th class="sticky">Produit</th>
             <th>Donneur d'ordre</th>
+            <th>Ligne cond.</th>
             <th v-for="(lib, i) in MOIS" :key="i" class="right">{{ lib }}</th>
             <th class="right total-col">Total</th>
             <th class="right">Valeur (DA)</th>
@@ -215,17 +221,19 @@ watch(annee, chargerPlan)
               <div class="desig">{{ p.designation }}</div>
             </td>
             <td class="do">{{ p.donneurs_ordre ? p.donneurs_ordre.nom : '—' }}</td>
+            <td class="cond-cell"><select v-model.number="condEquip[p.id]" :disabled="!peutEditer"><option :value="undefined">—</option><option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.nom }}</option></select></td>
             <td v-for="m in 12" :key="m" class="cell">
               <input v-model="cellules[p.id][m]" type="number" min="0" inputmode="numeric" :disabled="!peutEditer" />
             </td>
             <td class="right total-col strong">{{ fmt(totalLigne(p)) }}</td>
             <td class="right">{{ fmt(valeurLigne(p)) }}</td>
           </tr>
-          <tr v-if="!produitsAffiches.length"><td :colspan="16" class="no-result">Aucun produit ne correspond à « {{ recherche }} ».</td></tr>
+          <tr v-if="!produitsAffiches.length"><td :colspan="17" class="no-result">Aucun produit ne correspond à « {{ recherche }} ».</td></tr>
         </tbody>
         <tfoot>
           <tr>
             <td class="sticky strong">Total</td>
+            <td></td>
             <td></td>
             <td v-for="m in 12" :key="m" class="right strong">{{ fmt(totalMois(m)) }}</td>
             <td class="right strong total-col">{{ fmt(totalGeneral) }}</td>
@@ -291,4 +299,6 @@ tfoot td { border-top: 2px solid #e2e8f0; background: #f8fafc; }
 tfoot .sticky { background: #f8fafc; }
 
 .hint { color: #64748b; font-size: 13px; margin-top: 12px; }
+.cond-cell select { padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 12px; max-width: 150px; }
+/* build 2026-08-07 : colonne ligne cond. */
 </style>
