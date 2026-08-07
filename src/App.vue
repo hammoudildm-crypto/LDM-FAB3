@@ -306,7 +306,7 @@ async function signOut() {
     <div class="app-main">
       <header class="app-topbar">
         <button class="burger" @click="sidebarMasquee = false; sidebarOpen = !sidebarOpen" aria-label="Menu">☰</button>
-        <RouterLink to="/" class="brand-wm tb-brand" @click="sidebarOpen = false" title="Retour à l'accueil">Prod<span class="brand-sub">Track</span></RouterLink>
+        <RouterLink to="/" class="brand-wm tb-brand" @click="sidebarOpen = false" title="Retour à l'accueil"><span class="tb-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="none"><path d="M4 16 L10 11 L15 14 L20 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="16" r="1.7" fill="#fff"/><circle cx="10" cy="11" r="1.7" fill="#fff"/><circle cx="15" cy="14" r="1.7" fill="#fff"/><circle cx="20" cy="6" r="1.7" fill="#fff"/></svg></span>Prod<span class="brand-sub">Track</span></RouterLink>
         <RouterLink v-if="route.path !== '/accueil'" to="/accueil" class="tb-accueil" @click="sidebarOpen = false" title="Retour à l'accueil"><span class="tb-accueil-ar">←</span><span class="tb-accueil-tx">Accueil</span></RouterLink>
         <div class="tb-spacer"></div>
         <div class="tb-item" v-if="session && enLigne.length">
@@ -622,6 +622,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .tb-accueil-ar { font-size: 16px; line-height: 1; }
 @media (max-width: 560px) { .tb-accueil { margin-left: 8px; padding: 6px 9px; } .tb-accueil-tx { display: none; } }
 .brand-link { display: flex; align-items: center; gap: 10px; text-decoration: none; cursor: pointer; }
-.tb-brand { text-decoration: none; cursor: pointer; transition: opacity .15s ease; }
+.tb-brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; cursor: pointer; transition: opacity .15s ease; }
+.tb-mark { width: 28px; height: 28px; border-radius: 8px; display: inline-grid; place-items: center; background: linear-gradient(140deg, var(--accent-bright), #14b8a6); box-shadow: 0 2px 7px rgba(20,184,166,.4); flex-shrink: 0; }
 .brand-link:hover, .tb-brand:hover { opacity: .72; }
 </style>
