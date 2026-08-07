@@ -21,10 +21,10 @@
 
     <!-- Synthèse -->
     <div class="tb-kpis">
-      <div class="tb-kpi"><span class="k-lbl">Boîtes</span><span class="k-val">{{ fmt(totBoites) }}</span></div>
-      <div class="tb-kpi"><span class="k-lbl">Lots</span><span class="k-val">{{ fmt(totLots) }}</span></div>
+      <div class="tb-kpi"><span class="k-lbl">Plan (boîtes)</span><span class="k-val">{{ totPlan ? fmt(totPlan) : '—' }}</span></div>
+      <div class="tb-kpi"><span class="k-lbl">{{ onglet === 'fab' ? 'Fabriqué' : 'Conditionné' }}</span><span class="k-val">{{ fmt(totBoites) }}</span></div>
+      <div class="tb-kpi"><span class="k-lbl">Taux</span><span class="k-val" :class="tauxGlobal != null && tauxGlobal < 100 ? 'v-bas' : ''">{{ tauxGlobal != null ? tauxGlobal + '%' : '—' }}</span></div>
       <div class="tb-kpi"><span class="k-lbl">Chiffre d'affaires</span><span class="k-val">{{ fmtCA(totCA) }}</span></div>
-      <div class="tb-kpi"><span class="k-lbl">{{ libGroupe }}</span><span class="k-val">{{ donnees.length }}</span></div>
     </div>
 
     <!-- Regroupement -->
@@ -41,28 +41,31 @@
         <thead>
           <tr>
             <th>{{ libGroupe }}</th>
-            <th class="num">Boîtes</th>
+            <th class="num">Plan</th>
+            <th class="num">{{ onglet === 'fab' ? 'Fabriqué' : 'Conditionné' }}</th>
+            <th class="num">Taux</th>
             <th class="num">Lots</th>
             <th class="num">Chiffre d'affaires</th>
-            <th class="w-bar">Part</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="r in donnees" :key="r.cle">
             <td class="g-nom">{{ r.cle }}</td>
+            <td class="num">{{ r.plan ? fmt(r.plan) : '—' }}</td>
             <td class="num">{{ fmt(r.boites) }}</td>
+            <td class="num"><span v-if="r.taux != null" class="taux" :class="r.taux >= 100 ? 'ok' : 'bas'">{{ r.taux }}%</span><span v-else class="muted">—</span></td>
             <td class="num">{{ fmt(r.lots) }}</td>
             <td class="num ca">{{ fmtCA(r.ca) }}</td>
-            <td class="w-bar"><span class="bar"><span class="bar-in" :style="{ width: (r.boites / maxBoites * 100) + '%' }"></span></span></td>
           </tr>
         </tbody>
         <tfoot>
           <tr class="tot">
             <td>Total {{ annee }}</td>
+            <td class="num">{{ totPlan ? fmt(totPlan) : '—' }}</td>
             <td class="num">{{ fmt(totBoites) }}</td>
+            <td class="num">{{ tauxGlobal != null ? tauxGlobal + '%' : '—' }}</td>
             <td class="num">{{ fmt(totLots) }}</td>
             <td class="num ca">{{ fmtCA(totCA) }}</td>
-            <td class="w-bar"></td>
           </tr>
         </tfoot>
       </table>
@@ -228,6 +231,11 @@ const tauxGlobal = computed(() => totPlan.value > 0 ? Math.round(totBoites.value
 .g-nom { font-weight: 600; color: #1e293b; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .ca { font-weight: 700; color: #0f766e; }
+.taux { font-weight: 800; }
+.taux.ok { color: #15803d; }
+.taux.bas { color: #dc2626; }
+.muted { color: #cbd5e1; }
+.k-val.v-bas { color: #dc2626; }
 .w-bar { width: 150px; }
 .bar { display: block; height: 8px; background: #eef2f7; border-radius: 4px; overflow: hidden; }
 .bar-in { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #14b8a6, #0ea5e9); }
