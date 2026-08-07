@@ -657,7 +657,7 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .prod-search { font-size: 13px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 240px; max-width: 100%; }
 .prod-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
-".card-title { margin: 0; font-size: 16px; }
+.card-title { margin: 0; font-size: 16px; }
 .rp-eq-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
 .rp-eq-tabs { display: flex; gap: 8px; }
 .rp-eq-tabs button { background: #fff; border: 1.5px solid #e2e8f0; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; cursor: pointer; color: #64748b; }
