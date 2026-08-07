@@ -1,6 +1,9 @@
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, inject } from 'vue'
 import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
+
+const peutEditer = inject('peutEditer', ref(true))
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 const anneeCourante = new Date().getFullYear()
@@ -8,10 +11,19 @@ const ANNEES = [anneeCourante - 1, anneeCourante, anneeCourante + 1, anneeCouran
 
 const annee = ref(anneeCourante)
 const produits = ref([])
+const equipements = ref([])
+const condEquip = reactive({})
 const cellules = reactive({})   // cellules[produit_id][mois] = '' | nombre
 const erreur = ref('')
 const message = ref('')
 const enCours = ref(false)
+const fichierInput = ref(null)
+const recherche = ref('')
+const produitsAffiches = computed(() => {
+  const q = recherche.value.trim().toLowerCase()
+  if (!q) return produits.value
+  return produits.value.filter(p => (p.code_pf || '').toLowerCase().includes(q) || (p.designation || '').toLowerCase().includes(q))
+})
 
 function initCellules() {
   Object.keys(cellules).forEach(k => delete cellules[k])
@@ -21,6 +33,13 @@ function initCellules() {
   }
 }
 
+function viderTout() {
+  if (!confirm('Vider toutes les cases de la grille ' + annee.value + ' ? (rien n\'est supprimé tant que tu ne cliques pas sur Enregistrer le plan)')) return
+  initCellules()
+  erreur.value = ''
+  message.value = 'Grille vidée. Clique Enregistrer le plan pour appliquer, ou change d\'année pour annuler.'
+}
+
 async function chargerProduits() {
   erreur.value = ''
   const r = await supabase.from('produits')
@@ -28,6 +47,8 @@ async function chargerProduits() {
     .eq('actif', true).order('code_pf')
   if (r.error) { erreur.value = r.error.message; return }
   produits.value = r.data
+  const re = await supabase.from('equipements').select('id, nom, type').eq('actif', true).order('nom')
+  if (!re.error) equipements.value = (re.data || []).filter(e => /conditionn/i.test(e.type || ''))
   initCellules()
 }
 
@@ -36,10 +57,11 @@ async function chargerPlan() {
   message.value = ''
   initCellules()
   const r = await supabase.from('plan_production')
-    .select('produit_id, mois, quantite_planifiee').eq('annee', annee.value)
+    .select('produit_id, mois, quantite_planifiee, equipement_id').eq('annee', annee.value)
   if (r.error) { erreur.value = r.error.message; return }
   for (const row of r.data) {
     if (cellules[row.produit_id]) cellules[row.produit_id][row.mois] = row.quantite_planifiee
+    if (row.equipement_id) condEquip[row.produit_id] = row.equipement_id
   }
 }
 
@@ -74,16 +96,71 @@ async function enregistrer() {
   for (const p of produits.value) {
     for (let m = 1; m <= 12; m++) {
       const v = cellules[p.id][m]
-      if (v !== '' && v != null) rows.push({ produit_id: p.id, annee: annee.value, mois: m, quantite_planifiee: Number(v) })
+      if (v !== '' && v != null) rows.push({ produit_id: p.id, annee: annee.value, mois: m, quantite_planifiee: Number(v), equipement_id: condEquip[p.id] || null })
     }
   }
-  if (!rows.length) { message.value = 'Rien à enregistrer (toutes les cases sont vides).'; enCours.value = false; return }
-  const res = await supabase.from('plan_production').upsert(rows, { onConflict: 'produit_id,annee,mois' })
+  // Remplace le plan de l'année : suppression puis réinsertion (les cases vidées sont retirées de la base)
+  const del = await supabase.from('plan_production').delete().eq('annee', annee.value)
+  if (del.error) { erreur.value = del.error.message; enCours.value = false; return }
+  if (rows.length) {
+    const ins = await supabase.from('plan_production').insert(rows)
+    if (ins.error) { erreur.value = ins.error.message; enCours.value = false; return }
+  }
   enCours.value = false
-  if (res.error) { erreur.value = res.error.message; return }
-  message.value = 'Plan ' + annee.value + ' enregistré (' + rows.length + ' valeurs).'
+  message.value = rows.length ? ('Plan ' + annee.value + ' enregistré (' + rows.length + ' valeurs).') : ('Plan ' + annee.value + ' vidé — aucune valeur enregistrée.')
 }
 
+// --- Import d'un plan depuis un fichier Excel/CSV (colonne 1 = Code PF, colonnes 2 a 13 = Jan..Dec) ---
+let xlsxPromise = null
+function chargerXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX)
+  if (xlsxPromise) return xlsxPromise
+  xlsxPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+    s.onload = () => resolve(window.XLSX)
+    s.onerror = () => reject(new Error('Librairie Excel non chargee (verifie la connexion).'))
+    document.head.appendChild(s)
+  })
+  return xlsxPromise
+}
+function declencherImport() { erreur.value = ''; message.value = ''; if (fichierInput.value) fichierInput.value.click() }
+async function importerFichier(e) {
+  const file = e.target.files && e.target.files[0]
+  e.target.value = ''
+  if (!file) return
+  erreur.value = ''; message.value = ''; enCours.value = true
+  try {
+    const XLSX = await chargerXLSX()
+    const buf = await file.arrayBuffer()
+    const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    const lignes = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false })
+    const parCode = {}
+    for (const p of produits.value) parCode[String(p.code_pf).trim().toLowerCase()] = p.id
+    let maj = 0, ignores = 0
+    const inconnus = []
+    for (const row of lignes) {
+      if (!row || !row.length) continue
+      const code = String(row[0] == null ? '' : row[0]).trim()
+      if (!code) continue
+      const pid = parCode[code.toLowerCase()]
+      if (!pid) { ignores++; if (inconnus.length < 6) inconnus.push(code); continue }
+      for (let m = 1; m <= 12; m++) {
+        const cell = row[m]
+        if (cell === undefined || cell === null || cell === '') continue
+        const n = Number(String(cell).replace(/\s/g, '').replace(',', '.'))
+        if (!isNaN(n)) { cellules[pid][m] = n; maj++ }
+      }
+    }
+    if (!maj) erreur.value = 'Aucune donnee reconnue. Attendu : colonne 1 = Code PF, colonnes 2 a 13 = Jan..Dec.' + (inconnus.length ? ' Codes non trouves : ' + inconnus.join(', ') : '')
+    else message.value = maj + ' valeur(s) importee(s) dans la grille ' + annee.value + '. Verifie puis clique Enregistrer le plan.' + (ignores ? ' — ' + ignores + ' ligne(s) ignoree(s)' + (inconnus.length ? ' (codes inconnus : ' + inconnus.join(', ') + ')' : '') : '')
+  } catch (err) {
+    erreur.value = 'Import impossible : ' + (err && err.message ? err.message : err)
+  } finally {
+    enCours.value = false
+  }
+}
 function fmt(n) { return n == null ? '' : Number(n).toLocaleString('fr-FR') }
 
 onMounted(async () => { await chargerProduits(); await chargerPlan() })
@@ -92,25 +169,34 @@ watch(annee, chargerPlan)
 
 <template>
   <div class="pdp-page">
-    <header class="pdp-head">
-      <div>
-        <h1>Plan directeur de production</h1>
-        <p class="sub">Plan de fabrication par produit et par mois (quantités en unités / boîtes).</p>
-      </div>
+    <PageHeader title="Plan directeur de production" tone="indigo"
+      subtitle="Plan de fabrication par produit et par mois (quantités en unités / boîtes).">
       <div class="controls">
         <label class="annee">Année
           <select v-model.number="annee">
             <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
           </select>
         </label>
-        <button class="btn" :disabled="enCours || !produits.length" @click="enregistrer">
+        <button v-if="peutEditer" class="btn ghost" :disabled="enCours || !produits.length" @click="declencherImport">
+          Importer un fichier
+        </button>
+        <input ref="fichierInput" type="file" accept=".xlsx,.xls,.csv" style="display:none" @change="importerFichier" />
+        <button v-if="peutEditer" class="btn ghost danger" :disabled="enCours || !produits.length" @click="viderTout">
+          Vider la grille
+        </button>
+        <button v-if="peutEditer" class="btn" :disabled="enCours || !produits.length" @click="enregistrer">
           {{ enCours ? 'Enregistrement…' : 'Enregistrer le plan' }}
         </button>
       </div>
-    </header>
+    </PageHeader>
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="message" class="ok">{{ message }}</p>
+
+    <div v-if="produits.length" class="search-row">
+      <input type="search" v-model="recherche" class="search-input" placeholder="Rechercher un produit (code ou désignation)…" />
+      <span v-if="recherche" class="search-count">{{ produitsAffiches.length }} produit(s) sur {{ produits.length }}</span>
+    </div>
 
     <div v-if="!produits.length" class="empty-card">
       Aucun produit dans le référentiel. Va d'abord dans <strong>Référentiels</strong> créer tes produits — ils apparaîtront ici en lignes.
@@ -122,28 +208,32 @@ watch(annee, chargerPlan)
           <tr>
             <th class="sticky">Produit</th>
             <th>Donneur d'ordre</th>
+            <th>Ligne cond.</th>
             <th v-for="(lib, i) in MOIS" :key="i" class="right">{{ lib }}</th>
             <th class="right total-col">Total</th>
             <th class="right">Valeur (DA)</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="p in produits" :key="p.id">
+          <tr v-for="p in produitsAffiches" :key="p.id">
             <td class="sticky">
               <div class="mono">{{ p.code_pf }}</div>
               <div class="desig">{{ p.designation }}</div>
             </td>
             <td class="do">{{ p.donneurs_ordre ? p.donneurs_ordre.nom : '—' }}</td>
+            <td class="cond-cell"><select v-model.number="condEquip[p.id]" :disabled="!peutEditer"><option :value="undefined">—</option><option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.nom }}</option></select></td>
             <td v-for="m in 12" :key="m" class="cell">
-              <input v-model="cellules[p.id][m]" type="number" min="0" inputmode="numeric" />
+              <input v-model="cellules[p.id][m]" type="number" min="0" inputmode="numeric" :disabled="!peutEditer" />
             </td>
             <td class="right total-col strong">{{ fmt(totalLigne(p)) }}</td>
             <td class="right">{{ fmt(valeurLigne(p)) }}</td>
           </tr>
+          <tr v-if="!produitsAffiches.length"><td :colspan="17" class="no-result">Aucun produit ne correspond à « {{ recherche }} ».</td></tr>
         </tbody>
         <tfoot>
           <tr>
             <td class="sticky strong">Total</td>
+            <td></td>
             <td></td>
             <td v-for="m in 12" :key="m" class="right strong">{{ fmt(totalMois(m)) }}</td>
             <td class="right strong total-col">{{ fmt(totalGeneral) }}</td>
@@ -153,7 +243,7 @@ watch(annee, chargerPlan)
       </table>
     </div>
 
-    <p class="hint">Astuce : laisse une case vide ou mets <strong>0</strong> s'il n'y a pas de production planifiée. Clique <strong>Enregistrer le plan</strong> pour sauvegarder toute la grille. La valeur est calculée à partir du PCSU de chaque produit.</p>
+    <p class="hint">Astuce : laisse une case vide ou mets <strong>0</strong> s'il n'y a pas de production planifiée. Clique <strong>Enregistrer le plan</strong> pour sauvegarder toute la grille. La valeur est calculée à partir du PCSU de chaque produit.<br><strong>Importer un fichier</strong> : Excel/CSV avec <strong>Code PF</strong> en colonne 1 et les mois <strong>Jan → Déc</strong> en colonnes 2 à 13 ; les valeurs remplissent la grille de l'année choisie (clique ensuite Enregistrer).</p>
   </div>
 </template>
 
@@ -172,17 +262,29 @@ watch(annee, chargerPlan)
 .btn { background: #0f766e; color: #fff; border: 0; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
 .btn:hover:not(:disabled) { background: #0c5f59; }
 .btn:disabled { opacity: .5; cursor: default; }
+.btn.ghost { background: #fff; color: #0f766e; border: 1px solid #0f766e; }
+.btn.ghost:hover:not(:disabled) { background: #f0fdfa; }
+.btn.ghost.danger { color: #b91c1c; border-color: #fca5a5; }
+.btn.ghost.danger:hover:not(:disabled) { background: #fef2f2; }
 
 .empty-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; color: #475569; text-align: center; font-size: 15px; }
+.search-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.search-input { flex: 1; max-width: 420px; padding: 9px 13px; border: 1px solid #cbd5e1; border-radius: 9px; font-size: 14px; }
+.search-input:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.search-count { font-size: 13px; color: #64748b; font-weight: 600; }
+.no-result { text-align: center; color: #94a3b8; padding: 20px; font-size: 14px; }
 
-.table-scroll { overflow-x: auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
+.table-scroll { overflow: auto; max-height: calc(100vh - 220px); background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
 table.grid { border-collapse: collapse; font-size: 13px; width: 100%; }
 table.grid th { background: #f8fafc; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
 table.grid td { padding: 6px 8px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
 .right { text-align: right; }
 .cell { padding: 4px; }
-.cell input { width: 68px; font-size: 13px; padding: 6px; border: 1px solid #d8dee6; border-radius: 6px; text-align: right; color: #1b2733; }
+.cell input { width: 92px; font-size: 13px; padding: 6px 7px; border: 1px solid #d8dee6; border-radius: 6px; text-align: right; color: #1b2733; }
+.cell input::-webkit-outer-spin-button, .cell input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.cell input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .cell input:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.cell input:disabled { background: #f8fafc; color: #475569; cursor: default; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
 .desig { color: #64748b; font-size: 12px; }
 .do { color: #475569; }
@@ -191,8 +293,11 @@ table.grid td { padding: 6px 8px; border-bottom: 1px solid #eef2f6; white-space:
 
 .sticky { position: sticky; left: 0; background: #fff; z-index: 1; box-shadow: 1px 0 0 #eef2f6; }
 thead .sticky { background: #f8fafc; }
+table.grid thead th { position: sticky; top: 0; z-index: 2; }
+table.grid thead th.sticky { z-index: 3; }
 tfoot td { border-top: 2px solid #e2e8f0; background: #f8fafc; }
 tfoot .sticky { background: #f8fafc; }
 
 .hint { color: #64748b; font-size: 13px; margin-top: 12px; }
+.cond-cell select { padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 12px; max-width: 150px; }
 </style>
