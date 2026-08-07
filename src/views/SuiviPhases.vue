@@ -266,7 +266,7 @@ async function desactiver(p) {
 function classeStatut(s) {
   return { 'À faire': 'st-todo', 'En cours': 'st-cours', 'Terminé': 'st-fini' }[s] || 'st-todo'
 }
-function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—' }
+function fmtDate(d) { if (!d) return '—'; const x = new Date(d); if (isNaN(x)) return String(d); return (/[T ]\\d{2}:/.test(String(d)) ? x.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' ' : '') + x.toLocaleDateString('fr-FR') }
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 function fmtPct(n) { return n == null ? '—' : n.toFixed(1) + ' %' }
 
