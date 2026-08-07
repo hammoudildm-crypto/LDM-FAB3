@@ -101,16 +101,18 @@ const groupes = [
 const LIB = { lab: 'Laboratoire', forme: 'Forme galénique', produit: 'Produit', lot: 'Lot' }
 const libGroupe = computed(() => LIB[grp.value])
 
-const fabRaw = ref([]); const condRaw = ref([])
+const fabRaw = ref([]); const condRaw = ref([]); const planRaw = ref([])
 onMounted(async () => {
   try {
-    const [rf, rc] = await Promise.all([
+    const [rf, rc, rp] = await Promise.all([
       fetchAllPaged(() => supabase.from('ordres_fabrication')
         .select('numero_lot, boites_fabriquees, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('conditionnement')
-        .select('quantite_conditionnee, date_conditionnement, ordres_fabrication(numero_lot, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))'))
+        .select('quantite_conditionnee, date_conditionnement, ordres_fabrication(numero_lot, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
+      fetchAllPaged(() => supabase.from('plan_production')
+        .select('annee, quantite_planifiee, produits(code_pf, designation, donneurs_ordre(nom))'))
     ])
-    fabRaw.value = rf; condRaw.value = rc
+    fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp
   } catch (e) { console.error(e) } finally { chargement.value = false }
 })
 
@@ -146,13 +148,24 @@ function formeDe(desig) {
   if (/suppos|ovule/.test(d)) return 'Suppositoire / Ovule'
   return 'Autre'
 }
-function cleGroupe(r) {
-  const p = r.produit || {}
+function cleProduit(p) {
+  if (!p) return null
   if (grp.value === 'lab') return (p.donneurs_ordre && p.donneurs_ordre.nom) || 'Non attribué'
   if (grp.value === 'forme') return formeDe(p.designation)
   if (grp.value === 'produit') return (p.code_pf || '?') + ' — ' + (p.designation || '')
-  return r.lot || '—'
+  return null
 }
+function cleGroupe(r) { return grp.value === 'lot' ? (r.lot || '—') : (cleProduit(r.produit) || 'Non attribué') }
+const planParGroupe = computed(() => {
+  const acc = {}
+  if (grp.value === 'lot') return acc
+  for (const r of planRaw.value) {
+    if (Number(r.annee) !== annee.value) continue
+    const cle = cleProduit(r.produits); if (cle == null) continue
+    acc[cle] = (acc[cle] || 0) + num(r.quantite_planifiee)
+  }
+  return acc
+})
 
 const donnees = computed(() => {
   const src = onglet.value === 'fab' ? fabData.value : condData.value
@@ -166,13 +179,19 @@ const donnees = computed(() => {
     acc[cle].lots += t > 0 ? b / t : 0
     acc[cle].ca += b * pc
   }
-  return Object.values(acc).map(g => ({ ...g, lots: Math.round(g.lots) })).sort((a, b) => b.boites - a.boites)
+  const pg = planParGroupe.value
+  return Object.values(acc).map(g => {
+    const plan = pg[g.cle] || 0
+    return { ...g, lots: Math.round(g.lots), plan, taux: plan > 0 ? Math.round(g.boites / plan * 100) : null }
+  }).sort((a, b) => b.boites - a.boites)
 })
 
 const totBoites = computed(() => donnees.value.reduce((s, g) => s + g.boites, 0))
 const totLots = computed(() => donnees.value.reduce((s, g) => s + g.lots, 0))
 const totCA = computed(() => donnees.value.reduce((s, g) => s + g.ca, 0))
 const maxBoites = computed(() => Math.max(1, ...donnees.value.map(g => g.boites)))
+const totPlan = computed(() => donnees.value.reduce((s, g) => s + g.plan, 0))
+const tauxGlobal = computed(() => totPlan.value > 0 ? Math.round(totBoites.value / totPlan.value * 100) : null)
 </script>
 
 <style scoped>
