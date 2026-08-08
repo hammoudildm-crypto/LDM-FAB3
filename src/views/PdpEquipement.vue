@@ -119,7 +119,7 @@ const boxesOf = (list) => list.reduce((s, o) => s + num(o.quantite_theorique), 0
 const annee = ref(new Date().getFullYear())
 const vue = ref('cond')
 const chargement = ref(true)
-const equipements = ref([]); const ofsRaw = ref([]); const planRaw = ref([]); const suivi = ref([])
+const equipements = ref([]); const ofsRaw = ref([]); const planRaw = ref([]); const suivi = ref([]); const condRaw = ref([])
 const auj = new Date()
 const moisAuj = computed(() => annee.value === auj.getFullYear() ? auj.getMonth() : 11)
 const objectifPct = computed(() => {
@@ -142,13 +142,14 @@ async function fetchAllPaged(make) {
 }
 onMounted(async () => {
   try {
-    const [re, ro, rp, rs] = await Promise.all([
+    const [re, ro, rp, rs, rc] = await Promise.all([
       fetchAllPaged(() => supabase.from('equipements').select('id, nom').eq('actif', true).order('nom')),
       fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, equipement_id, produits(code_pf, designation, gamme, taille_lot)')),
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, equipement_id, produits(gamme, taille_lot)')),
-      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
+      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true)),
+      fetchAllPaged(() => supabase.from('conditionnement').select('quantite_conditionnee, date_conditionnement, statut, equipement_id, ordres_fabrication(id, produits(unites_par_boite))'))
     ])
-    equipements.value = re; ofsRaw.value = ro; planRaw.value = rp; suivi.value = rs
+    equipements.value = re; ofsRaw.value = ro; planRaw.value = rp; suivi.value = rs; condRaw.value = rc
   } catch (e) { console.error(e) } finally { chargement.value = false }
 })
 
@@ -170,8 +171,21 @@ const phasesLot = computed(() => {
   return m
 })
 
+// Statut de conditionnement par OF (depuis la table conditionnement)
+const condInfoByOf = computed(() => {
+  const m = {}
+  for (const c of condRaw.value) {
+    const of = c.ordres_fabrication; if (!of || !of.id) continue
+    if (!m[of.id]) m[of.id] = { any: false, encours: false }
+    m[of.id].any = true
+    if (/en cours/i.test(c.statut || '')) m[of.id].encours = true
+  }
+  return m
+})
 function classifOF(o) {
   if (/rejet/i.test(o.statut || '')) return 'rejete'
+  const ci = condInfoByOf.value[o.id]
+  if (ci && ci.any) return ci.encours ? 'encours' : 'termine'  // conditionnement saisi : en cours ou terminé
   const pl = phasesLot.value[o.id] || {}
   const p = o.produits || {}
   const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : CANON_FAB
@@ -179,9 +193,7 @@ function classifOF(o) {
   for (const ph of gamme) { const k = phaseKey(ph); if (k && k !== 'conditionnement' && !seen.has(k)) { seen.add(k); fabKeys.push(k) } }
   const fabDone = fabKeys.length > 0 && fabKeys.every(k => (pl[k] || {}).statut === 'Terminé')
   const fabStarted = fabKeys.some(k => { const st = (pl[k] || {}).statut; return st === 'Terminé' || st === 'En cours' })
-  const condSt = (pl['conditionnement'] || {}).statut
-  if (condSt === 'Terminé' || /lib[eé]r|termin/i.test(o.statut || '')) return 'termine'
-  if (condSt === 'En cours') return 'encours'
+  if (/lib[eé]r|termin/i.test(o.statut || '')) return 'termine'
   if (fabDone) return 'pret'
   if (fabStarted) return 'pipe'
   return 'planifie'
@@ -190,16 +202,28 @@ function classifOF(o) {
 // Conditionnement : par ligne (equipement_id)
 const parEquip = computed(() => {
   const m = {}
-  const get = (id, nom) => { if (!m[id]) m[id] = { id, nom: nom || 'Équipement ' + id, encours: [], pret: [], pipe: [], planifie: [], planB: 0, planL: 0, realB: 0, realL: 0, planMB: 0, realMB: 0, planML: 0, realML: 0 }; return m[id] }
+  const get = (id, nom) => { if (!m[id]) m[id] = { id, nom: nom || 'Équipement ' + id, encours: [], pret: [], pipe: [], planifie: [], planB: 0, planL: 0, realB: 0, realL: 0, planMB: 0, realMB: 0, planML: 0, realML: 0, _lots: new Set(), _lotsM: new Set() }; return m[id] }
   for (const e of equipements.value) get(e.id, e.nom)
   const mA = moisAuj.value
+  // File d'attente (Maintenant/Prêts/Pipe/Planifiés) depuis les OF
   for (const o of ofsRaw.value) {
     if (!o.equipement_id) continue
     const g = m[o.equipement_id] || get(o.equipement_id, null)
     const cls = classifOF(o)
     if (cls === 'encours' || cls === 'pret' || cls === 'pipe' || cls === 'planifie') g[cls].push(o)
-    const d = o.date_fin_fabrication
-    if (d) { const dt = new Date(d); if (!isNaN(dt) && dt.getFullYear() === annee.value) { const b = num(o.boites_fabriquees) || num(o.quantite_theorique); g.realB += b; g.realL += 1; if (dt.getMonth() === mA) { g.realMB += b; g.realML += 1 } } }
+  }
+  // Réalisé = boîtes CONDITIONNÉES (table conditionnement), par ligne de conditionnement
+  for (const c of condRaw.value) {
+    if (!c.equipement_id) continue
+    const g = m[c.equipement_id] || get(c.equipement_id, null)
+    const of = c.ordres_fabrication; const pr = of ? of.produits : null
+    const upb = pr ? num(pr.unites_par_boite) : 0
+    const b = upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0
+    const dt = c.date_conditionnement ? new Date(c.date_conditionnement) : null
+    if (!dt || isNaN(dt) || dt.getFullYear() !== annee.value) continue
+    g.realB += b
+    if (of && of.id) g._lots.add(of.id)
+    if (dt.getMonth() === mA) { g.realMB += b; if (of && of.id) g._lotsM.add(of.id) }
   }
   for (const r of planRaw.value) {
     if (Number(r.annee) !== annee.value || !r.equipement_id) continue
@@ -209,7 +233,7 @@ const parEquip = computed(() => {
     if ((Number(r.mois) || 1) - 1 === mA) { g.planMB += b; g.planML += l }
   }
   return Object.values(m)
-    .map(g => ({ ...g, planL: Math.round(g.planL), planML: Math.round(g.planML) }))
+    .map(g => ({ ...g, realL: g._lots.size, realML: g._lotsM.size, planL: Math.round(g.planL), planML: Math.round(g.planML) }))
     .filter(g => g.encours.length || g.pret.length || g.pipe.length || g.planifie.length || g.planB || g.realB)
     .sort((a, b) => b.realB - a.realB)
 })
