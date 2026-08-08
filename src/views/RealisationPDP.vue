@@ -256,7 +256,7 @@ function cmpCls(real, plan) { if (!plan) return real ? '' : 'z'; const t = real 
 @media (max-width: 760px) { .rp { padding: 16px; } }
 .mat-tg { display: inline-flex; background: #eef2f7; border-radius: 10px; padding: 3px; margin: 6px 6px 12px; }
 .mat-tg button { background: none; border: none; font: inherit; font-size: 12.5px; font-weight: 700; color: #64748b; padding: 6px 14px; border-radius: 8px; cursor: pointer; }
-".mat-tg button.on { background: #fff; color: #0f172a; box-shadow: 0 2px 6px rgba(30,41,59,.1); }
+.mat-tg button.on { background: #fff; color: #0f172a; box-shadow: 0 2px 6px rgba(30,41,59,.1); }
 .cmp-ok { background: #dcfce7; color: #15803d; font-weight: 700; }
 .cmp-mid { background: #fef9c3; color: #a16207; font-weight: 700; }
 .cmp-low { background: #fee2e2; color: #b91c1c; font-weight: 700; }
