@@ -11,6 +11,21 @@
       </div>
     </header>
 
+    <div class="pdp-hero">
+      <div class="hero-l">
+        <div class="hero-pct"><span class="hp-val">{{ tauxGlobal }}%</span><div class="hp-txt"><span>réalisé — {{ mesure === 'boites' ? 'boîtes' : 'lots' }}</span><b :class="ecart >= 0 ? 'up' : 'down'">{{ Math.abs(ecart) }} pts {{ ecart >= 0 ? 'au-dessus' : 'sous' }} l'objectif</b></div></div>
+        <div class="hero-bar-wrap">
+          <div class="hero-bar"><span class="hb-fill" :style="{ width: Math.min(tauxGlobal, 100) + '%' }"></span><span class="hb-obj" :style="{ left: Math.min(objectifPct, 100) + '%' }"></span></div>
+          <span class="hb-obj-lbl" :style="{ left: Math.min(objectifPct, 100) + '%' }">objectif {{ objectifPct }}%</span>
+        </div>
+        <div class="hero-stat" :class="statut.cls"><i></i>{{ statut.txt }}</div>
+      </div>
+      <div class="hero-r">
+        <div class="syn-card"><div class="syn-nums"><b>{{ fmt(realTot) }}</b><span>/ {{ fmt(planTot) }}</span></div><div class="syn-lbl">Année {{ annee }}</div><div class="syn-pct" :class="ecart >= 0 ? 'up' : 'down'">{{ tauxGlobal }}%</div></div>
+        <div class="syn-card"><div class="syn-nums"><b>{{ fmt(realMois) }}</b><span>/ {{ fmt(planMois) }}</span></div><div class="syn-lbl">{{ MOIS[bilan.moisAuj] }} {{ annee }}</div><div class="syn-pct">{{ tauxMois }}%</div></div>
+      </div>
+    </div>
+
     <div class="rp-toggles">
       <div class="tg">
         <button :class="{ on: mesure === 'boites' }" @click="mesure = 'boites'">Boîtes</button>
@@ -116,7 +131,7 @@ onMounted(async () => {
   try {
     const [rp, ro, rs] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme, taille_lot)')),
-      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, quantite_theorique, boites_fabriquees, date_lancement, produits(gamme, taille_lot)')),
+      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, produits(gamme, taille_lot)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
     ])
     planRaw.value = rp; ofsRaw.value = ro; suivi.value = rs
@@ -218,6 +233,46 @@ const totGlobalVal = computed(() => {
 })
 function cellTxt(v) { if (matMode.value === 'taux') return v == null ? '·' : v + '%'; return v ? fmt(v) : '·' }
 function cmpCls(real, plan) { if (!plan) return real ? '' : 'z'; const t = real / plan * 100; return t >= 100 ? 'cmp-ok' : t >= 80 ? 'cmp-mid' : 'cmp-low' }
+const auj = new Date()
+const objectifPct = computed(() => {
+  if (annee.value < auj.getFullYear()) return 100
+  if (annee.value > auj.getFullYear()) return 0
+  const s0 = new Date(annee.value, 0, 1), e0 = new Date(annee.value + 1, 0, 1)
+  return Math.round((auj - s0) / (e0 - s0) * 100)
+})
+const bilan = computed(() => {
+  const moisAuj = (annee.value === auj.getFullYear()) ? auj.getMonth() : 11
+  let planB = 0, planL = 0, realB = 0, realL = 0, planMB = 0, planML = 0, realMB = 0, realML = 0
+  for (const r of planRaw.value) {
+    if (Number(r.annee) !== annee.value) continue
+    const p = r.produits; if (!p) continue
+    const b = num(r.quantite_planifiee), t = num(p.taille_lot), l = t > 0 ? b / t : 0
+    planB += b; planL += l
+    if ((Number(r.mois) || 1) - 1 === moisAuj) { planMB += b; planML += l }
+  }
+  for (const o of ofsRaw.value) {
+    const d = o.date_fin_fabrication; if (!d) continue
+    const dt = new Date(d); if (isNaN(dt) || dt.getFullYear() !== annee.value) continue
+    const b = num(o.boites_fabriquees) || num(o.quantite_theorique)
+    realB += b; realL += 1
+    if (dt.getMonth() === moisAuj) { realMB += b; realML += 1 }
+  }
+  return { planB, planL, realB, realL, planMB, planML, realMB, realML, moisAuj }
+})
+const planTot = computed(() => mesure.value === 'boites' ? bilan.value.planB : bilan.value.planL)
+const realTot = computed(() => mesure.value === 'boites' ? bilan.value.realB : bilan.value.realL)
+const tauxGlobal = computed(() => planTot.value > 0 ? Math.round(realTot.value / planTot.value * 100) : 0)
+const ecart = computed(() => tauxGlobal.value - objectifPct.value)
+const planMois = computed(() => mesure.value === 'boites' ? bilan.value.planMB : bilan.value.planML)
+const realMois = computed(() => mesure.value === 'boites' ? bilan.value.realMB : bilan.value.realML)
+const tauxMois = computed(() => planMois.value > 0 ? Math.round(realMois.value / planMois.value * 100) : 0)
+const statut = computed(() => {
+  const e = ecart.value
+  if (e >= 0) return { txt: 'Dans les temps', cls: 'ok' }
+  if (e >= -10) return { txt: 'Léger retard', cls: 'mid' }
+  if (e >= -25) return { txt: 'Retard modéré — action prioritaire', cls: 'warn' }
+  return { txt: 'Retard important — action urgente', cls: 'bad' }
+})
 </script>
 
 <style scoped>
@@ -261,4 +316,30 @@ function cmpCls(real, plan) { if (!plan) return real ? '' : 'z'; const t = real 
 .cmp-mid { background: #fef9c3; color: #a16207; font-weight: 700; }
 .cmp-low { background: #fee2e2; color: #b91c1c; font-weight: 700; }
 .rp-matrix .cell i, .rp-table i { font-style: normal; color: #94a3b8; font-weight: 400; font-size: .88em; }
+.pdp-hero { display: flex; gap: 18px; background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px 24px; margin-bottom: 18px; box-shadow: 0 8px 22px rgba(30,41,59,.06); flex-wrap: wrap; }
+.hero-l { flex: 1; min-width: 320px; }
+.hero-pct { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.hp-val { font-size: 40px; font-weight: 800; color: #0f172a; line-height: 1; }
+.hp-txt { display: flex; flex-direction: column; font-size: 13px; color: #64748b; }
+.hp-txt b { font-weight: 700; margin-top: 2px; }
+.up { color: #15803d; } .down { color: #dc2626; }
+.hero-bar-wrap { position: relative; margin-bottom: 34px; }
+.hero-bar { position: relative; height: 12px; background: #eef2f7; border-radius: 6px; }
+.hb-fill { position: absolute; left: 0; top: 0; height: 100%; background: linear-gradient(90deg, #3b82f6, #6366f1); border-radius: 6px; }
+.hb-obj { position: absolute; top: -4px; width: 2px; height: 20px; background: #0f172a; transform: translateX(-1px); }
+.hb-obj-lbl { position: absolute; top: 22px; font-size: 11px; font-weight: 600; color: #475569; transform: translateX(-50%); white-space: nowrap; }
+.hero-stat { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 9px; }
+.hero-stat i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.hero-stat.ok { background: #dcfce7; color: #15803d; }
+.hero-stat.mid { background: #fef9c3; color: #a16207; }
+.hero-stat.warn { background: #ffedd5; color: #c2410c; }
+.hero-stat.bad { background: #fee2e2; color: #b91c1c; }
+.hero-r { display: flex; gap: 12px; }
+.syn-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; min-width: 130px; display: flex; flex-direction: column; justify-content: center; }
+.syn-nums { display: flex; align-items: baseline; gap: 5px; }
+.syn-nums b { font-size: 22px; font-weight: 800; color: #0f172a; }
+.syn-nums span { font-size: 12px; color: #94a3b8; }
+.syn-lbl { font-size: 11px; color: #64748b; margin-top: 3px; }
+.syn-pct { font-size: 14px; font-weight: 800; color: #334155; margin-top: 6px; }
+@media (max-width: 720px) { .hero-r { width: 100%; } .syn-card { flex: 1; } }
 </style>
