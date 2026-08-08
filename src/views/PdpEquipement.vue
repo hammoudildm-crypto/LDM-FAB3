@@ -248,7 +248,7 @@ const parPhaseFab = computed(() => {
     if (Number(r.annee) !== annee.value) continue
     const p = r.produits; if (!p) continue
     const b = num(r.quantite_planifiee), t = num(p.taille_lot), l = t > 0 ? b / t : 0
-    const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : CANON_FAB
+    const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
     const seen = new Set()
     for (const phn of gamme) { const k = phaseKey(phn); if (!k || k === 'conditionnement' || seen.has(k)) continue; seen.add(k)
       const g = get(k); g.planB += b; g.planL += l
@@ -259,7 +259,7 @@ const parPhaseFab = computed(() => {
     if (/rejet/i.test(o.statut || '')) continue
     const pl = phasesLot.value[o.id] || {}
     const p = o.produits || {}
-    const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : CANON_FAB
+    const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
     const fabKeys = []; const seen = new Set()
     for (const phn of gamme) { const k = phaseKey(phn); if (k && k !== 'conditionnement' && !seen.has(k)) { seen.add(k); fabKeys.push(k) } }
     const started = fabKeys.some(k => { const st = (pl[k] || {}).statut; return st === 'Terminé' || st === 'En cours' })
