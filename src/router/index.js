@@ -2,6 +2,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import Home from '../views/Home.vue'
 import TableauBord from '../views/TableauBord.vue'
 import SuiviTempsReel from '../views/SuiviTempsReel.vue'
+import RealisationPDP from '../views/RealisationPDP.vue'
 import Hub from '../views/Hub.vue'
 import Accueil from '../views/Accueil.vue'
 import Ordonnancement from '../views/Ordonnancement.vue'
@@ -37,6 +38,7 @@ const routes = [
   { path: '/', name: 'home', component: Hub },
   { path: '/tableau-de-bord', name: 'tableau-de-bord', component: TableauBord },
   { path: '/temps-reel', name: 'temps-reel', component: SuiviTempsReel },
+  { path: '/realisation-pdp', name: 'realisation-pdp', component: RealisationPDP },
   { path: '/tableau-de-bord-classique', name: 'tb-classique', component: Home },
   { path: '/accueil', redirect: '/' },
   { path: '/ordonnancement', name: 'ordonnancement', component: Ordonnancement },
