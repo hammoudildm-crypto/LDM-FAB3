@@ -26,6 +26,19 @@
       </div>
     </div>
 
+    <section class="rp-card pdp-chart">
+      <div class="pc-head"><h3 class="card-title">{{ mesure === 'boites' ? 'Boîtes' : 'Lots' }} par mois — réalisé vs prévu — {{ annee }}</h3><div class="pc-leg"><span class="lg r">Réalisé</span><span class="lg p">Prévu</span></div></div>
+      <div class="pc-bars">
+        <div v-for="(m, i) in MOIS" :key="i" class="pc-col">
+          <div class="pc-pair">
+            <span class="pc-bar r" :style="{ height: (serieMois.real[i] / serieMois.max * 100) + '%' }" :title="m + ' — Réalisé ' + fmt(serieMois.real[i])"></span>
+            <span class="pc-bar p" :style="{ height: (serieMois.plan[i] / serieMois.max * 100) + '%' }" :title="m + ' — Prévu ' + fmt(serieMois.plan[i])"></span>
+          </div>
+          <span class="pc-lbl">{{ m }}</span>
+        </div>
+      </div>
+    </section>
+
     <div class="rp-toggles">
       <div class="tg">
         <button :class="{ on: mesure === 'boites' }" @click="mesure = 'boites'">Boîtes</button>
@@ -164,7 +177,7 @@ const planData = computed(() => {
     const p = r.produits; if (!p) continue
     const b = num(r.quantite_planifiee), t = num(p.taille_lot), lots = t > 0 ? b / t : 0
     const mi = (Number(r.mois) || 1) - 1
-    const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : CANON_FAB
+    const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
     const seen = new Set()
     for (const ph of gamme) {
       const k = phaseKey(ph); if (!k || seen.has(k)) continue; seen.add(k)
@@ -273,6 +286,24 @@ const statut = computed(() => {
   if (e >= -25) return { txt: 'Retard modéré — action prioritaire', cls: 'warn' }
   return { txt: 'Retard important — action urgente', cls: 'bad' }
 })
+const serieMois = computed(() => {
+  const plan = Array(12).fill(0), real = Array(12).fill(0)
+  for (const r of planRaw.value) {
+    if (Number(r.annee) !== annee.value) continue
+    const p = r.produits; if (!p) continue
+    const v = mesure.value === 'boites' ? num(r.quantite_planifiee) : (num(p.taille_lot) > 0 ? num(r.quantite_planifiee) / num(p.taille_lot) : 0)
+    const mi = (Number(r.mois) || 1) - 1
+    if (mi >= 0 && mi < 12) plan[mi] += v
+  }
+  for (const o of ofsRaw.value) {
+    const d = o.date_fin_fabrication; if (!d) continue
+    const dt = new Date(d); if (isNaN(dt) || dt.getFullYear() !== annee.value) continue
+    const mi = dt.getMonth()
+    const v = mesure.value === 'boites' ? (num(o.boites_fabriquees) || num(o.quantite_theorique)) : 1
+    if (mi >= 0 && mi < 12) real[mi] += v
+  }
+  return { plan, real, max: Math.max(1, ...plan, ...real) }
+})
 </script>
 
 <style scoped>
@@ -342,4 +373,18 @@ const statut = computed(() => {
 .syn-lbl { font-size: 11px; color: #64748b; margin-top: 3px; }
 .syn-pct { font-size: 14px; font-weight: 800; color: #334155; margin-top: 6px; }
 @media (max-width: 720px) { .hero-r { width: 100%; } .syn-card { flex: 1; } }
+.pdp-chart { padding: 16px 20px; margin-bottom: 18px; }
+.pc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
+.pc-leg { display: flex; gap: 14px; font-size: 12px; }
+.lg { display: inline-flex; align-items: center; gap: 6px; color: #64748b; }
+.lg::before { content: ''; width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.lg.r::before { background: #6366f1; }
+.lg.p::before { background: #cbd5e1; }
+.pc-bars { display: flex; align-items: flex-end; gap: 6px; height: 130px; }
+.pc-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.pc-pair { flex: 1; display: flex; align-items: flex-end; gap: 3px; width: 100%; justify-content: center; }
+.pc-bar { width: 42%; max-width: 16px; border-radius: 3px 3px 0 0; min-height: 2px; }
+.pc-bar.r { background: linear-gradient(#6366f1, #818cf8); }
+.pc-bar.p { background: #cbd5e1; }
+.pc-lbl { font-size: 10px; color: #94a3b8; margin-top: 5px; }
 </style>
