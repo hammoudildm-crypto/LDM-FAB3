@@ -12,6 +12,7 @@ const ateliers = ref([])
 const ofs = ref([])
 const conds = ref([])
 const suivi = ref([])
+const planRows = ref([])
 const ongletDispo = ref('file')
 const erreur = ref('')
 const chargement = ref(true)
@@ -88,6 +89,9 @@ async function charger() {
     .select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
   if (rs.error) { erreur.value = rs.error.message; chargement.value = false; return }
   suivi.value = rs.data || []
+
+  const rpl = await fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produits(gamme)'))
+  if (!rpl.error) planRows.value = rpl.data || []
 
   chargement.value = false
 }
@@ -213,6 +217,33 @@ const phasesLot = computed(() => {
 })
 
 // File par phase : lots à l'étape courante (en attente = étape précédente finie ; en cours = démarrée)
+const anneeCourante = new Date().getFullYear()
+const planParPhase = computed(() => {
+  const acc = {}
+  for (const r of planRows.value) {
+    if (Number(r.annee) !== anneeCourante) continue
+    const p = r.produits; if (!p) continue
+    const g = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : CANON_FAB
+    const vus = new Set(); for (const ph of g) { const k = phaseKey(ph); if (k) vus.add(k) }
+    for (const k of vus) acc[k] = (acc[k] || 0) + Number(r.quantite_planifiee || 0)
+  }
+  return acc
+})
+const realiseParPhase = computed(() => {
+  const acc = {}
+  for (const o of ofs.value) {
+    const d = o.date_lancement
+    if (!d || new Date(d).getFullYear() !== anneeCourante) continue
+    const pl = phasesLot.value[o.id] || {}
+    const b = Number(o.quantite_theorique || 0)
+    for (const k in pl) { const st = pl[k].statut; if (st === 'Terminé' || st === 'En cours') acc[k] = (acc[k] || 0) + b }
+  }
+  return acc
+})
+function infoPhase(k) {
+  const plan = planParPhase.value[k] || 0, realise = realiseParPhase.value[k] || 0
+  return { plan, realise, taux: plan > 0 ? Math.round(realise / plan * 100) : null }
+}
 const queuePhase = computed(() => {
   const q = {}
   for (const ph of PHASES) q[ph.key] = { attente: [], cours: [] }
@@ -285,7 +316,7 @@ const vueFile = computed(() => {
     const ph = PHASES.find(p => p.key === k)
     const attente = (q[k] ? q[k].attente : []).filter(mL)
     const cours = (q[k] ? q[k].cours : []).filter(mL)
-    return { key: k, phase: ph, attente, cours, volAttente: attente.reduce((s, l) => s + l.boites, 0), volCours: cours.reduce((s, l) => s + l.boites, 0) }
+    return { key: k, phase: ph, attente, cours, volAttente: attente.reduce((s, l) => s + l.boites, 0), volCours: cours.reduce((s, l) => s + l.boites, 0), ...infoPhase(k) }
   }).filter(x => x.phase)
   // Fusionner Granulation + Séchage en une seule colonne (même opération)
   const gran = liste.find(x => x.key === 'granulation')
@@ -299,7 +330,7 @@ const vueFile = computed(() => {
       key: 'gran_sech',
       phase: { key: 'gran_sech', label: 'Granulation et séchage', ordre: ref.phase.ordre, ic: ref.phase.ic, tint: ref.phase.tint },
       attente, cours,
-      volAttente: attente.reduce((s, l) => s + l.boites, 0), volCours: cours.reduce((s, l) => s + l.boites, 0)
+      volAttente: attente.reduce((s, l) => s + l.boites, 0), volCours: cours.reduce((s, l) => s + l.boites, 0), ...infoPhase('granulation')
     }
     const rest = liste.filter(x => x.key !== 'granulation' && x.key !== 'sechage')
     rest.push(merged)
@@ -592,7 +623,7 @@ onMounted(async () => {
           </div>
         </section>
         <section v-for="ph in vueFile" :key="ph.key" class="atelier">
-          <h2 class="atelier-titre"><span class="at-name">Atelier de {{ ph.phase.label }}</span>
+          <h2 class="atelier-titre"><span class="at-name">Atelier de {{ ph.phase.label }}</span><span v-if="ph.plan" class="at-plan">Plan {{ fmtC(ph.plan) }} · Réalisé {{ fmtC(ph.realise) }} · <span :class="ph.taux >= 100 ? 'tx-ok' : 'tx-bas'">{{ ph.taux }}%</span></span>
             <span class="at-sum">{{ ph.attente.length }} en attente · {{ ph.cours.length }} en cours</span>
           </h2>
           <div class="eq-grid">
@@ -791,6 +822,9 @@ onMounted(async () => {
 
 .atelier { margin-bottom: 26px; }
 .atelier-titre { font-size: 13px; font-weight: 700; margin: 0 0 7px; color: #0f172a; border-left: 3px solid #0f766e; padding-left: 8px; line-height: 1.25; }
+.at-plan { display: block; font-size: 11px; font-weight: 600; color: #64748b; margin-top: 3px; }
+.tx-ok { color: #15803d; font-weight: 800; }
+.tx-bas { color: #dc2626; font-weight: 800; }
 /* Réserve 2 lignes pour le nom -> titres 1 ligne alignés sur les titres 2 lignes (cartes homogènes) */
 .at-name { display: block; min-height: 2.5em; }
 .at-sum { display: block; font-size: 10.5px; font-weight: 500; color: #64748b; margin: 2px 0 0 11px; }
