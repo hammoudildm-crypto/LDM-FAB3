@@ -62,9 +62,9 @@
             <div v-else class="now-vide">Aucun lot en cours</div>
           </div>
           <div class="eq-stats">
-            <div class="st"><span class="st-n">{{ g.encours.length }}</span><span class="st-l">En cours</span><span class="st-b">{{ fmt(boxesOf(g.encours)) }} b.</span></div>
+            <div class="st"><span class="st-n">{{ g.pipe.length }}</span><span class="st-l">Dans le pipe</span><span class="st-b">{{ fmt(boxesOf(g.pipe)) }} b.</span></div>
+            <div class="st"><span class="st-n">{{ g.planifie.length }}</span><span class="st-l">Planifiés</span><span class="st-b">{{ fmt(boxesOf(g.planifie)) }} b.</span></div>
             <div class="st"><span class="st-n">{{ g.termine }}</span><span class="st-l">Terminés {{ annee }}</span><span class="st-b">{{ fmt(g.realB) }} b.</span></div>
-            <div class="st"><span class="st-n">{{ pct(g.realB, g.planB) }}%</span><span class="st-l">Taux année</span><span class="st-b">{{ fmt(g.planB) }} plan</span></div>
           </div>
           <div class="eq-prog">
             <div class="pgroup">
@@ -241,7 +241,7 @@ const parEquip = computed(() => {
 // Fabrication : par phase (gamme + suivi_phases)
 const parPhaseFab = computed(() => {
   const m = {}
-  const get = (k) => { if (!m[k]) { const ph = PHASES.find(p => p.key === k); m[k] = { key: k, label: ph ? ph.label : k, color: ph ? ph.color : '#94a3b8', encours: [], termine: 0, planB: 0, planL: 0, realB: 0, realL: 0, planMB: 0, realMB: 0, planML: 0, realML: 0 } } return m[k] }
+  const get = (k) => { if (!m[k]) { const ph = PHASES.find(p => p.key === k); m[k] = { key: k, label: ph ? ph.label : k, color: ph ? ph.color : '#94a3b8', encours: [], pipe: [], planifie: [], termine: 0, planB: 0, planL: 0, realB: 0, realL: 0, planMB: 0, realMB: 0, planML: 0, realML: 0 } } return m[k] }
   const mA = moisAuj.value
   for (const ph of PHASES) get(ph.key)
   for (const r of planRaw.value) {
@@ -256,23 +256,30 @@ const parPhaseFab = computed(() => {
     }
   }
   for (const o of ofsRaw.value) {
+    if (/rejet/i.test(o.statut || '')) continue
     const pl = phasesLot.value[o.id] || {}
-    const t = num(o.produits && o.produits.taille_lot)
+    const p = o.produits || {}
+    const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : CANON_FAB
+    const fabKeys = []; const seen = new Set()
+    for (const phn of gamme) { const k = phaseKey(phn); if (k && k !== 'conditionnement' && !seen.has(k)) { seen.add(k); fabKeys.push(k) } }
+    const started = fabKeys.some(k => { const st = (pl[k] || {}).statut; return st === 'Terminé' || st === 'En cours' })
+    const t = num(p.taille_lot)
     const b = num(o.quantite_theorique) || num(o.boites_fabriquees), l = t > 0 ? b / t : 0
-    for (const k in pl) {
-      if (k === 'conditionnement') continue
+    for (const k of fabKeys) {
       const g = m[k]; if (!g) continue
-      const rec = pl[k]
-      if (rec.statut === 'En cours') g.encours.push(o)
-      if (rec.statut === 'Terminé') {
+      const rec = pl[k]; const st = rec ? rec.statut : null
+      if (st === 'En cours') g.encours.push(o)
+      else if (st === 'Terminé') {
         const dt = rec.date ? new Date(rec.date) : null
         if (dt && !isNaN(dt) && dt.getFullYear() === annee.value) { g.realB += b; g.realL += 1; g.termine++; if (dt.getMonth() === mA) { g.realMB += b; g.realML += 1 } }
+      } else {
+        if (started) g.pipe.push(o); else g.planifie.push(o)
       }
     }
   }
   return PHASES.map(ph => m[ph.key])
     .map(g => ({ ...g, planL: Math.round(g.planL), planML: Math.round(g.planML), realL: Math.round(g.realL), realML: Math.round(g.realML) }))
-    .filter(g => g.encours.length || g.termine || g.planB)
+    .filter(g => g.encours.length || g.pipe.length || g.planifie.length || g.termine || g.planB)
 })
 </script>
 
