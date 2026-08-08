@@ -3,7 +3,7 @@
     <header class="pe-head">
       <div>
         <h1 class="pe-title">PDP Production par équipement</h1>
-        <p class="pe-sub">Lots par ligne : en cours, prêts, dans le pipe, planifiés — et avancement du PDP</p>
+        <p class="pe-sub">Conditionnement par ligne · Fabrication par phase — avancement du PDP</p>
       </div>
       <div class="pe-year">
         <label>Année</label>
@@ -11,42 +11,76 @@
       </div>
     </header>
 
+    <div class="pe-tabs">
+      <button :class="{ on: vue === 'cond' }" @click="vue = 'cond'">Conditionnement</button>
+      <button :class="{ on: vue === 'fab' }" @click="vue = 'fab'">Fabrication</button>
+    </div>
+
     <div v-if="chargement" class="pe-empty">Chargement…</div>
-    <div v-else-if="!parEquip.length" class="pe-empty">Aucun équipement avec des lots ou un plan pour {{ annee }}.</div>
 
-    <div v-else class="pe-grid">
-      <div v-for="g in parEquip" :key="g.id" class="eq">
-        <div class="eq-head">
-          <span class="eq-badge">{{ g.pret.length + g.pipe.length + g.planifie.length + g.encours.length }}</span>
-          <span class="eq-nom">{{ g.nom }}</span>
-        </div>
-
-        <div class="eq-now">
-          <div class="now-lbl">Maintenant</div>
-          <div v-if="g.encours.length" class="now-lot"><b class="now-num">{{ g.encours[0].numero_lot || '—' }}</b><span class="now-prod">{{ prodTxt(g.encours[0]) }}</span></div>
-          <div v-else class="now-vide">Aucun lot en conditionnement</div>
-        </div>
-
-        <div class="eq-stats">
-          <div class="st"><span class="st-n">{{ g.pret.length }}</span><span class="st-l">Prêts</span><span class="st-b">{{ fmt(boxesOf(g.pret)) }} b.</span></div>
-          <div class="st"><span class="st-n">{{ g.pipe.length }}</span><span class="st-l">Dans le pipe</span><span class="st-b">{{ fmt(boxesOf(g.pipe)) }} b.</span></div>
-          <div class="st"><span class="st-n">{{ g.planifie.length }}</span><span class="st-l">Planifiés</span><span class="st-b">{{ fmt(boxesOf(g.planifie)) }} b.</span></div>
-        </div>
-
-        <div class="eq-prog">
-          <div class="pgroup">
-            <div class="pg-lbl">Année {{ annee }}</div>
-            <div class="pg-row"><span class="pg-m">Boîtes</span><div class="pg-bar"><span :class="pct(g.realB, g.planB) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(pct(g.realB, g.planB), 100) + '%' }"></span></div><span class="pg-v">{{ fmt(g.realB) }}/{{ fmt(g.planB) }} <b>{{ pct(g.realB, g.planB) }}%</b></span></div>
-            <div class="pg-row"><span class="pg-m">Lots</span><div class="pg-bar"><span :class="pct(g.realL, g.planL) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(pct(g.realL, g.planL), 100) + '%' }"></span></div><span class="pg-v">{{ fmt(g.realL) }}/{{ fmt(g.planL) }} <b>{{ pct(g.realL, g.planL) }}%</b></span></div>
+    <!-- CONDITIONNEMENT : par ligne -->
+    <template v-else-if="vue === 'cond'">
+      <div v-if="!parEquip.length" class="pe-empty">Aucune ligne de conditionnement avec lots ou plan pour {{ annee }}.</div>
+      <div v-else class="pe-grid">
+        <div v-for="g in parEquip" :key="g.id" class="eq">
+          <div class="eq-head"><span class="eq-badge">{{ g.pret.length + g.pipe.length + g.planifie.length + g.encours.length }}</span><span class="eq-nom">{{ g.nom }}</span></div>
+          <div class="eq-now">
+            <div class="now-lbl">Maintenant</div>
+            <div v-if="g.encours.length" class="now-lot"><b class="now-num">{{ g.encours[0].numero_lot || '—' }}</b><span class="now-prod">{{ prodTxt(g.encours[0]) }}</span></div>
+            <div v-else class="now-vide">Aucun lot en conditionnement</div>
           </div>
-          <div class="pgroup">
-            <div class="pg-lbl">{{ MOIS[moisAuj] }} {{ annee }}</div>
-            <div class="pg-row"><span class="pg-m">Boîtes</span><div class="pg-bar"><span :style="{ width: Math.min(pct(g.realMB, g.planMB), 100) + '%' }"></span></div><span class="pg-v">{{ fmt(g.realMB) }}/{{ fmt(g.planMB) }} <b>{{ pct(g.realMB, g.planMB) }}%</b></span></div>
-            <div class="pg-row"><span class="pg-m">Lots</span><div class="pg-bar"><span :style="{ width: Math.min(pct(g.realML, g.planML), 100) + '%' }"></span></div><span class="pg-v">{{ fmt(g.realML) }}/{{ fmt(g.planML) }} <b>{{ pct(g.realML, g.planML) }}%</b></span></div>
+          <div class="eq-stats">
+            <div class="st"><span class="st-n">{{ g.pret.length }}</span><span class="st-l">Prêts</span><span class="st-b">{{ fmt(boxesOf(g.pret)) }} b.</span></div>
+            <div class="st"><span class="st-n">{{ g.pipe.length }}</span><span class="st-l">Dans le pipe</span><span class="st-b">{{ fmt(boxesOf(g.pipe)) }} b.</span></div>
+            <div class="st"><span class="st-n">{{ g.planifie.length }}</span><span class="st-l">Planifiés</span><span class="st-b">{{ fmt(boxesOf(g.planifie)) }} b.</span></div>
+          </div>
+          <div class="eq-prog">
+            <div class="pgroup">
+              <div class="pg-lbl">Année {{ annee }}</div>
+              <div class="pg-row"><span class="pg-m">Boîtes</span><div class="pg-bar"><span :class="pct(g.realB, g.planB) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(pct(g.realB, g.planB), 100) + '%' }"></span></div><span class="pg-v">{{ fmt(g.realB) }}/{{ fmt(g.planB) }} <b>{{ pct(g.realB, g.planB) }}%</b></span></div>
+              <div class="pg-row"><span class="pg-m">Lots</span><div class="pg-bar"><span :class="pct(g.realL, g.planL) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(pct(g.realL, g.planL), 100) + '%' }"></span></div><span class="pg-v">{{ fmt(g.realL) }}/{{ fmt(g.planL) }} <b>{{ pct(g.realL, g.planL) }}%</b></span></div>
+            </div>
+            <div class="pgroup">
+              <div class="pg-lbl">{{ MOIS[moisAuj] }} {{ annee }}</div>
+              <div class="pg-row"><span class="pg-m">Boîtes</span><div class="pg-bar"><span :style="{ width: Math.min(pct(g.realMB, g.planMB), 100) + '%' }"></span></div><span class="pg-v">{{ fmt(g.realMB) }}/{{ fmt(g.planMB) }} <b>{{ pct(g.realMB, g.planMB) }}%</b></span></div>
+              <div class="pg-row"><span class="pg-m">Lots</span><div class="pg-bar"><span :style="{ width: Math.min(pct(g.realML, g.planML), 100) + '%' }"></span></div><span class="pg-v">{{ fmt(g.realML) }}/{{ fmt(g.planML) }} <b>{{ pct(g.realML, g.planML) }}%</b></span></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </template>
+
+    <!-- FABRICATION : par phase -->
+    <template v-else>
+      <div v-if="!parPhaseFab.length" class="pe-empty">Aucune phase de fabrication avec activité pour {{ annee }}.</div>
+      <div v-else class="pe-grid">
+        <div v-for="g in parPhaseFab" :key="g.key" class="eq" :style="{ '--pc': g.color }">
+          <div class="eq-head"><span class="eq-badge" :style="{ background: g.color }">{{ g.encours.length }}</span><span class="eq-nom">{{ g.label }}</span></div>
+          <div class="eq-now">
+            <div class="now-lbl">En cours à cette phase</div>
+            <div v-if="g.encours.length" class="now-lot"><b class="now-num">{{ g.encours.length }} lot(s)</b><span class="now-prod">{{ g.encours.slice(0, 3).map(o => o.numero_lot).join(', ') }}{{ g.encours.length > 3 ? '…' : '' }}</span></div>
+            <div v-else class="now-vide">Aucun lot en cours</div>
+          </div>
+          <div class="eq-stats">
+            <div class="st"><span class="st-n">{{ g.encours.length }}</span><span class="st-l">En cours</span><span class="st-b">{{ fmt(boxesOf(g.encours)) }} b.</span></div>
+            <div class="st"><span class="st-n">{{ g.termine }}</span><span class="st-l">Terminés {{ annee }}</span><span class="st-b">{{ fmt(g.realB) }} b.</span></div>
+            <div class="st"><span class="st-n">{{ pct(g.realB, g.planB) }}%</span><span class="st-l">Taux année</span><span class="st-b">{{ fmt(g.planB) }} plan</span></div>
+          </div>
+          <div class="eq-prog">
+            <div class="pgroup">
+              <div class="pg-lbl">Année {{ annee }}</div>
+              <div class="pg-row"><span class="pg-m">Boîtes</span><div class="pg-bar"><span :class="pct(g.realB, g.planB) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(pct(g.realB, g.planB), 100) + '%' }"></span></div><span class="pg-v">{{ fmt(g.realB) }}/{{ fmt(g.planB) }} <b>{{ pct(g.realB, g.planB) }}%</b></span></div>
+              <div class="pg-row"><span class="pg-m">Lots</span><div class="pg-bar"><span :class="pct(g.realL, g.planL) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(pct(g.realL, g.planL), 100) + '%' }"></span></div><span class="pg-v">{{ fmt(g.realL) }}/{{ fmt(g.planL) }} <b>{{ pct(g.realL, g.planL) }}%</b></span></div>
+            </div>
+            <div class="pgroup">
+              <div class="pg-lbl">{{ MOIS[moisAuj] }} {{ annee }}</div>
+              <div class="pg-row"><span class="pg-m">Boîtes</span><div class="pg-bar"><span :style="{ width: Math.min(pct(g.realMB, g.planMB), 100) + '%' }"></span></div><span class="pg-v">{{ fmt(g.realMB) }}/{{ fmt(g.planMB) }} <b>{{ pct(g.realMB, g.planMB) }}%</b></span></div>
+              <div class="pg-row"><span class="pg-m">Lots</span><div class="pg-bar"><span :style="{ width: Math.min(pct(g.realML, g.planML), 100) + '%' }"></span></div><span class="pg-v">{{ fmt(g.realML) }}/{{ fmt(g.planML) }} <b>{{ pct(g.realML, g.planML) }}%</b></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -59,6 +93,14 @@ const fmt = (v) => Math.round(num(v)).toLocaleString('fr-FR')
 const pct = (r, p) => p > 0 ? Math.round(num(r) / num(p) * 100) : 0
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
 const CANON_FAB = ['Pesée', 'Granulation', 'Mélange', 'Compression', 'Pelliculage']
+const PHASES = [
+  { key: 'pesee', label: 'Pesée', color: '#64748b' },
+  { key: 'granulation', label: 'Granulation / Séchage', color: '#14b8a6' },
+  { key: 'melange', label: 'Mélange', color: '#0ea5e9' },
+  { key: 'compression', label: 'Compression', color: '#8b5cf6' },
+  { key: 'remplissage', label: 'Remplissage gélules', color: '#6366f1' },
+  { key: 'pelliculage', label: 'Pelliculage', color: '#f59e0b' }
+]
 function phaseKey(nom) {
   const t = String(nom || '').trim().toLowerCase()
   if (!t) return null
@@ -75,6 +117,7 @@ const prodTxt = (o) => { const p = o && o.produits; return p ? ((p.code_pf || ''
 const boxesOf = (list) => list.reduce((s, o) => s + num(o.quantite_theorique), 0)
 
 const annee = ref(new Date().getFullYear())
+const vue = ref('cond')
 const chargement = ref(true)
 const equipements = ref([]); const ofsRaw = ref([]); const planRaw = ref([]); const suivi = ref([])
 const auj = new Date()
@@ -102,8 +145,8 @@ onMounted(async () => {
     const [re, ro, rp, rs] = await Promise.all([
       fetchAllPaged(() => supabase.from('equipements').select('id, nom').eq('actif', true).order('nom')),
       fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, equipement_id, produits(code_pf, designation, gamme, taille_lot)')),
-      fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, equipement_id, produits(taille_lot)')),
-      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut').eq('actif', true))
+      fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, equipement_id, produits(gamme, taille_lot)')),
+      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
     ])
     equipements.value = re; ofsRaw.value = ro; planRaw.value = rp; suivi.value = rs
   } catch (e) { console.error(e) } finally { chargement.value = false }
@@ -121,7 +164,8 @@ const phasesLot = computed(() => {
   for (const sp of suivi.value) {
     const k = phaseKey(sp.phase); if (!k) continue
     if (!m[sp.ordre_id]) m[sp.ordre_id] = {}
-    if (!m[sp.ordre_id][k] || sp.statut === 'Terminé') m[sp.ordre_id][k] = { statut: sp.statut }
+    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut }
+    if (!m[sp.ordre_id][k] || sp.statut === 'Terminé') m[sp.ordre_id][k] = rec
   }
   return m
 })
@@ -143,6 +187,7 @@ function classifOF(o) {
   return 'planifie'
 }
 
+// Conditionnement : par ligne (equipement_id)
 const parEquip = computed(() => {
   const m = {}
   const get = (id, nom) => { if (!m[id]) m[id] = { id, nom: nom || 'Équipement ' + id, encours: [], pret: [], pipe: [], planifie: [], planB: 0, planL: 0, realB: 0, realL: 0, planMB: 0, realMB: 0, planML: 0, realML: 0 }; return m[id] }
@@ -168,16 +213,57 @@ const parEquip = computed(() => {
     .filter(g => g.encours.length || g.pret.length || g.pipe.length || g.planifie.length || g.planB || g.realB)
     .sort((a, b) => b.realB - a.realB)
 })
+
+// Fabrication : par phase (gamme + suivi_phases)
+const parPhaseFab = computed(() => {
+  const m = {}
+  const get = (k) => { if (!m[k]) { const ph = PHASES.find(p => p.key === k); m[k] = { key: k, label: ph ? ph.label : k, color: ph ? ph.color : '#94a3b8', encours: [], termine: 0, planB: 0, planL: 0, realB: 0, realL: 0, planMB: 0, realMB: 0, planML: 0, realML: 0 } } return m[k] }
+  const mA = moisAuj.value
+  for (const ph of PHASES) get(ph.key)
+  for (const r of planRaw.value) {
+    if (Number(r.annee) !== annee.value) continue
+    const p = r.produits; if (!p) continue
+    const b = num(r.quantite_planifiee), t = num(p.taille_lot), l = t > 0 ? b / t : 0
+    const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : CANON_FAB
+    const seen = new Set()
+    for (const phn of gamme) { const k = phaseKey(phn); if (!k || k === 'conditionnement' || seen.has(k)) continue; seen.add(k)
+      const g = get(k); g.planB += b; g.planL += l
+      if ((Number(r.mois) || 1) - 1 === mA) { g.planMB += b; g.planML += l }
+    }
+  }
+  for (const o of ofsRaw.value) {
+    const pl = phasesLot.value[o.id] || {}
+    const t = num(o.produits && o.produits.taille_lot)
+    const b = num(o.quantite_theorique) || num(o.boites_fabriquees), l = t > 0 ? b / t : 0
+    for (const k in pl) {
+      if (k === 'conditionnement') continue
+      const g = m[k]; if (!g) continue
+      const rec = pl[k]
+      if (rec.statut === 'En cours') g.encours.push(o)
+      if (rec.statut === 'Terminé') {
+        const dt = rec.date ? new Date(rec.date) : null
+        if (dt && !isNaN(dt) && dt.getFullYear() === annee.value) { g.realB += b; g.realL += 1; g.termine++; if (dt.getMonth() === mA) { g.realMB += b; g.realML += 1 } }
+      }
+    }
+  }
+  return PHASES.map(ph => m[ph.key])
+    .map(g => ({ ...g, planL: Math.round(g.planL), planML: Math.round(g.planML), realL: Math.round(g.realL), realML: Math.round(g.realML) }))
+    .filter(g => g.encours.length || g.termine || g.planB)
+})
 </script>
 
 <style scoped>
 .pe { padding: 24px 30px 50px; max-width: 1260px; margin: 0 auto; color: #1e293b; font-family: 'Segoe UI', system-ui, sans-serif; }
-.pe-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.pe-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
 .pe-title { margin: 0; font-size: 24px; font-weight: 800; color: #0f172a; }
 .pe-sub { margin: 4px 0 0; font-size: 13px; color: #64748b; }
 .pe-year { display: flex; align-items: center; gap: 8px; }
 .pe-year label { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #94a3b8; }
 .pe-year select { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 9px; font: inherit; font-size: 14px; font-weight: 600; }
+.pe-tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+.pe-tabs button { background: #fff; border: 1.5px solid #e2e8f0; border-radius: 11px; font: inherit; font-size: 14px; font-weight: 700; padding: 11px 22px; cursor: pointer; color: #64748b; }
+.pe-tabs button:nth-child(1).on { background: #0ea5e9; border-color: #0ea5e9; color: #fff; }
+.pe-tabs button:nth-child(2).on { background: #14b8a6; border-color: #14b8a6; color: #fff; }
 .pe-empty { padding: 50px; text-align: center; color: #94a3b8; font-size: 14px; }
 
 .pe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
@@ -185,22 +271,18 @@ const parEquip = computed(() => {
 .eq-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .eq-badge { background: #0f172a; color: #fff; font-size: 13px; font-weight: 800; min-width: 34px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; padding: 0 8px; }
 .eq-nom { font-size: 16px; font-weight: 800; color: #0f172a; }
-
 .eq-now { background: #f8fafc; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
 .now-lbl { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #94a3b8; }
 .now-lot { margin-top: 4px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .now-num { font-family: ui-monospace, monospace; font-size: 15px; color: #0f172a; }
 .now-prod { font-size: 12px; color: #64748b; }
 .now-vide { margin-top: 4px; font-size: 12.5px; color: #cbd5e1; font-style: italic; }
-
 .eq-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
 .st { text-align: center; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 9px; padding: 9px 6px; }
 .st-n { display: block; font-size: 20px; font-weight: 800; color: #0f172a; }
 .st-l { display: block; font-size: 10.5px; font-weight: 600; color: #64748b; margin-top: 1px; }
 .st-b { display: block; font-size: 10px; color: #94a3b8; margin-top: 2px; }
-
 .eq-prog { display: flex; flex-direction: column; gap: 12px; }
-.pgroup { }
 .pg-lbl { font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px; }
 .pg-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .pg-m { font-size: 11px; color: #94a3b8; width: 38px; }
