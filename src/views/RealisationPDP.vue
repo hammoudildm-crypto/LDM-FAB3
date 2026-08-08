@@ -42,6 +42,7 @@
 
     <!-- MENSUEL -->
     <div v-else class="rp-card rp-scroll">
+      <div class="mat-tg"><button :class="{ on: matMode === 'real' }" @click="matMode = 'real'">Réalisé</button><button :class="{ on: matMode === 'plan' }" @click="matMode = 'plan'">Plan</button><button :class="{ on: matMode === 'taux' }" @click="matMode = 'taux'">Taux</button><button :class="{ on: matMode === 'comparer' }" @click="matMode = 'comparer'">Comparer</button></div>
       <table class="rp-table rp-matrix">
         <thead>
           <tr><th>Phase</th><th v-for="(m, i) in MOIS" :key="i" class="num mois">{{ m }}</th><th class="num tot-col">Total</th></tr>
@@ -49,16 +50,16 @@
         <tbody>
           <tr v-for="ph in phasesActives" :key="ph.key">
             <td class="ph-nom"><span class="ph-dot" :style="{ background: ph.color }"></span>{{ ph.label }}</td>
-            <td v-for="(m, i) in MOIS" :key="i" class="num cell" :class="{ z: !moisReal(ph.key, i) }">{{ moisReal(ph.key, i) ? fmt(moisReal(ph.key, i)) : '·' }}</td>
-            <td class="num tot-col">{{ fmt(valReal(ph.key)) }}</td>
+            <td v-for="(m, i) in MOIS" :key="i" class="num cell" :class="matMode === 'comparer' ? cmpCls(moisReal(ph.key, i), moisPlan(ph.key, i)) : { z: !moisVal(ph.key, i) }"><template v-if="matMode === 'comparer'"><span v-if="moisReal(ph.key, i) || moisPlan(ph.key, i)">{{ fmt(moisReal(ph.key, i)) }}<i>/{{ fmt(moisPlan(ph.key, i)) }}</i></span><span v-else>·</span></template><template v-else>{{ cellTxt(moisVal(ph.key, i)) }}</template></td>
+            <td class="num tot-col"><template v-if="matMode === 'comparer'">{{ fmt(valReal(ph.key)) }}<i>/{{ fmt(valPlan(ph.key)) }}</i></template><template v-else>{{ cellTxt(totPhase(ph.key)) }}</template></td>
           </tr>
           <tr v-if="!phasesActives.length"><td :colspan="14" class="rp-empty">Aucune donnée pour {{ annee }}.</td></tr>
         </tbody>
         <tfoot v-if="phasesActives.length">
-          <tr class="tot"><td>Total réalisé</td><td v-for="(m, i) in MOIS" :key="i" class="num">{{ fmt(totMois(i)) }}</td><td class="num tot-col">{{ fmt(totGlobal) }}</td></tr>
+          <tr class="tot"><td>{{ matMode === 'plan' ? 'Total plan' : matMode === 'taux' ? 'Taux global' : matMode === 'comparer' ? 'Réalisé / Plan' : 'Total réalisé' }}</td><td v-for="(m, i) in MOIS" :key="i" class="num"><template v-if="matMode === 'comparer'">{{ fmt(totMois(i)) }}<i>/{{ fmt(totMoisPlan(i)) }}</i></template><template v-else>{{ cellTxt(totMoisVal(i)) }}</template></td><td class="num tot-col"><template v-if="matMode === 'comparer'">{{ fmt(totGlobal) }}<i>/{{ fmt(totPlanGlobal) }}</i></template><template v-else>{{ cellTxt(totGlobalVal) }}</template></td></tr>
         </tfoot>
       </table>
-      <p class="rp-hint">Vue mensuelle = <b>réalisé</b> par mois (mois où chaque lot a atteint la phase). Le plan mensuel est visible dans l'onglet Annuel via le taux.</p>
+      <p class="rp-hint">Vue mensuelle : <b>Réalisé</b>, <b>Plan</b> ou <b>Taux</b> par phase et par mois (bascule ci-dessus). Le mois du réalisé = celui où le lot a atteint la phase.</p>
     </div>
   </div>
 </template>
@@ -191,6 +192,32 @@ const moisReal = (k, i) => { const a = realData.value.mois[k]; return a ? M(a[i]
 const phasesActives = computed(() => PHASES.filter(ph => planData.value.an[ph.key] || realData.value.an[ph.key]))
 const totMois = (i) => phasesActives.value.reduce((s, ph) => s + moisReal(ph.key, i), 0)
 const totGlobal = computed(() => phasesActives.value.reduce((s, ph) => s + valReal(ph.key), 0))
+const matMode = ref('real')
+const moisPlan = (k, i) => { const a = planData.value.mois[k]; return a ? M(a[i]) : 0 }
+function moisVal(k, i) {
+  if (matMode.value === 'plan') return moisPlan(k, i)
+  if (matMode.value === 'taux') { const pl = moisPlan(k, i); return pl > 0 ? Math.round(moisReal(k, i) / pl * 100) : null }
+  return moisReal(k, i)
+}
+function totPhase(k) {
+  if (matMode.value === 'plan') return valPlan(k)
+  if (matMode.value === 'taux') return taux(k)
+  return valReal(k)
+}
+const totMoisPlan = (i) => phasesActives.value.reduce((s, ph) => s + moisPlan(ph.key, i), 0)
+function totMoisVal(i) {
+  if (matMode.value === 'plan') return totMoisPlan(i)
+  if (matMode.value === 'taux') { const pl = totMoisPlan(i); return pl > 0 ? Math.round(totMois(i) / pl * 100) : null }
+  return totMois(i)
+}
+const totPlanGlobal = computed(() => phasesActives.value.reduce((s, ph) => s + valPlan(ph.key), 0))
+const totGlobalVal = computed(() => {
+  if (matMode.value === 'plan') return totPlanGlobal.value
+  if (matMode.value === 'taux') return totPlanGlobal.value > 0 ? Math.round(totGlobal.value / totPlanGlobal.value * 100) : null
+  return totGlobal.value
+})
+function cellTxt(v) { if (matMode.value === 'taux') return v == null ? '·' : v + '%'; return v ? fmt(v) : '·' }
+function cmpCls(real, plan) { if (!plan) return real ? '' : 'z'; const t = real / plan * 100; return t >= 100 ? 'cmp-ok' : t >= 80 ? 'cmp-mid' : 'cmp-low' }
 </script>
 
 <style scoped>
@@ -227,4 +254,11 @@ const totGlobal = computed(() => phasesActives.value.reduce((s, ph) => s + valRe
 .rp-hint { font-size: 11.5px; color: #94a3b8; margin: 10px 6px 4px; }
 
 @media (max-width: 760px) { .rp { padding: 16px; } }
+.mat-tg { display: inline-flex; background: #eef2f7; border-radius: 10px; padding: 3px; margin: 6px 6px 12px; }
+.mat-tg button { background: none; border: none; font: inherit; font-size: 12.5px; font-weight: 700; color: #64748b; padding: 6px 14px; border-radius: 8px; cursor: pointer; }
+".mat-tg button.on { background: #fff; color: #0f172a; box-shadow: 0 2px 6px rgba(30,41,59,.1); }
+.cmp-ok { background: #dcfce7; color: #15803d; font-weight: 700; }
+.cmp-mid { background: #fef9c3; color: #a16207; font-weight: 700; }
+.cmp-low { background: #fee2e2; color: #b91c1c; font-weight: 700; }
+.rp-matrix .cell i, .rp-table i { font-style: normal; color: #94a3b8; font-weight: 400; font-size: .88em; }
 </style>
