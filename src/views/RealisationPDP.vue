@@ -693,4 +693,42 @@ const serieMois = computed(() => {
 .rp-rest { position: absolute; top: 0; left: 222px; right: 0; bottom: 0; display: flex; gap: 12px; align-items: stretch; }
 .rp-rest .rp-main, .rp-rest .rp-right { min-height: 0; overflow-y: auto; }
 @media (max-width: 980px) { .rp-rest { position: static; left: 0; flex-direction: column; } .rp-rest .rp-main, .rp-rest .rp-right { overflow: visible; } }
+/* Réduction supplémentaire */
+.rp { padding: 4px 8px 8px; }
+.rp-title { font-size: 14px; }
+.rp-head { margin-bottom: 5px; }
+.pdp-hero { padding: 7px 10px; margin-bottom: 5px; }
+.hp-val { font-size: 18px; }
+.hp-txt { font-size: 9.5px; }
+.hero-pct { margin-bottom: 4px; }
+.hero-bar-wrap { margin-bottom: 8px; }
+.hero-bar { height: 6px; }
+.hb-obj-lbl { font-size: 9px; top: 8px; }
+.hero-stat { padding: 3px 8px; font-size: 9.5px; }
+.syn-card { padding: 5px 8px; min-width: 78px; }
+.syn-nums b { font-size: 13px; }
+.rp-side { padding: 7px; }
+.rp-side .side-sec { margin-bottom: 6px; }
+.side-lbl { font-size: 9px; margin-bottom: 3px; }
+.side-tg button { padding: 4px 5px; font-size: 10.5px; }
+.side-phases { gap: 2px; }
+.side-phases button { padding: 3px 6px; font-size: 10px; }
+.side-select { padding: 4px 6px; font-size: 11px; }
+.side-leg { gap: 4px; }
+.leg-row { font-size: 10.5px; gap: 6px; }
+.leg-sw { width: 12px; height: 12px; }
+.leg-note { font-size: 9.5px; }
+.rp-table thead th { padding: 4px 8px; font-size: 9.5px; }
+.rp-table tbody td { padding: 3px 8px; font-size: 11px; }
+.v-l { font-size: 8.5px; }
+.rp-right .pc-bars { height: 60px; }
+.card-title { font-size: 12px; }
+.mini b { font-size: 14px; }
+.lp-lot { padding: 3px 6px; font-size: 10px; }
+.mois-sel { margin-bottom: 6px; }
+.mois-sel select { padding: 4px 8px; font-size: 12px; }
+/* Sidebar élargie : note Comparer sur une ligne */
+.rp-side { flex: 0 0 260px; }
+.rp-rest { left: 272px; }
+.leg-note { white-space: nowrap; }
 </style>
