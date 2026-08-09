@@ -47,6 +47,7 @@
           <div class="side-lbl">Phase</div>
           <div class="side-phases">
             <button v-for="ph in phasesActives" :key="ph.key" :class="{ on: filtrePhase === ph.key }" @click="filtrePhase = filtrePhase === ph.key ? null : ph.key"><span class="ph-dot" :style="{ background: ph.color }"></span>{{ ph.label }}</button>
+            <button :class="{ on: filtrePhase === 'vracs' }" @click="filtrePhase = filtrePhase === 'vracs' ? null : 'vracs'"><span class="ph-dot" style="background: #f59e0b"></span>Vracs</button>
           </div>
         </div>
         <div class="side-sec">
@@ -103,8 +104,14 @@
     </div>
 
     <section v-if="filtrePhase" class="rp-card lots-phase">
-      <h3 class="card-title">Lots — {{ labelPhase(filtrePhase) }}</h3>
-      <div class="lp-cols">
+      <h3 class="card-title">Lots — {{ filtrePhase === 'vracs' ? 'Vracs (prêts pour conditionnement)' : labelPhase(filtrePhase) }}</h3>
+      <div v-if="filtrePhase === 'vracs'" class="lp-cols vracs-single">
+        <div class="lp-col">
+          <div class="lp-head prt"><span class="lp-dot"></span>Vracs prêts <b>{{ lotsVracs.length }}</b></div>
+          <div class="lp-list"><div v-for="o in lotsVracs" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!lotsVracs.length" class="lp-vide">Aucun</div></div>
+        </div>
+      </div>
+      <div v-else class="lp-cols">
         <div class="lp-col">
           <div class="lp-head enc"><span class="lp-dot"></span>En cours <b>{{ lotsPhaseSel.encours.length }}</b></div>
           <div class="lp-list"><div v-for="o in lotsPhaseSel.encours" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!lotsPhaseSel.encours.length" class="lp-vide">Aucun</div></div>
@@ -134,7 +141,7 @@
             </div>
           </div>
         </section>
-        <div v-if="filtrePhase" class="rp-card ph-plan">
+        <div v-if="filtrePhase && filtrePhase !== 'vracs'" class="rp-card ph-plan">
           <h3 class="card-title">{{ labelPhase(filtrePhase) }}</h3>
           <div class="pp-grid">
             <div class="pp-row"><span class="pp-lbl">Plan</span><span class="pp-val">{{ fmt(planB(filtrePhase)) }} <i>b</i></span></div>
@@ -195,7 +202,7 @@ const annee = ref(new Date().getFullYear())
 const mesure = ref('boites')
 const vue = ref('annuel')
 const chargement = ref(true)
-const planRaw = ref([]); const ofsRaw = ref([]); const suivi = ref([])
+const planRaw = ref([]); const ofsRaw = ref([]); const suivi = ref([]); const condRaw = ref([])
 
 async function fetchAllPaged(make) {
   const out = []; let from = 0; const size = 1000
@@ -210,12 +217,13 @@ async function fetchAllPaged(make) {
 }
 onMounted(async () => {
   try {
-    const [rp, ro, rs] = await Promise.all([
+    const [rp, ro, rs, rc] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme, taille_lot)')),
       fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, date_reception, produits(code_pf, designation, gamme, taille_lot)')),
-      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
+      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true)),
+      fetchAllPaged(() => supabase.from('conditionnement').select('ordres_fabrication(id)'))
     ])
-    planRaw.value = rp; ofsRaw.value = ro; suivi.value = rs
+    planRaw.value = rp; ofsRaw.value = ro; suivi.value = rs; condRaw.value = rc
   } catch (e) { console.error(e) } finally { chargement.value = false }
 })
 
@@ -300,7 +308,7 @@ const moisReal = (k, i) => { const a = realData.value.mois[k]; return a ? M(a[i]
 const phasesActives = computed(() => PHASES.filter(ph => planData.value.an[ph.key] || realData.value.an[ph.key]))
 const filtrePhase = ref(null)
 const moisSel = ref(new Date().getMonth())
-const phasesAffichees = computed(() => filtrePhase.value ? phasesActives.value.filter(p => p.key === filtrePhase.value) : phasesActives.value)
+const phasesAffichees = computed(() => (filtrePhase.value && filtrePhase.value !== 'vracs') ? phasesActives.value.filter(p => p.key === filtrePhase.value) : phasesActives.value)
 const prodTxt = (o) => { const p = o && o.produits; return p ? ((p.code_pf || '') + ' — ' + (p.designation || '')) : '' }
 const labelPhase = (k) => { const ph = PHASES.find(p => p.key === k); return ph ? ph.label : k }
 const lotsParPhase = computed(() => {
@@ -332,6 +340,23 @@ const lotsParPhase = computed(() => {
   return m
 })
 const lotsPhaseSel = computed(() => (filtrePhase.value && lotsParPhase.value[filtrePhase.value]) || { encours: [], attente: [], planifie: [] })
+const condOfSet = computed(() => { const s = new Set(); for (const c of condRaw.value) { const of = c.ordres_fabrication; if (of && of.id) s.add(of.id) } return s })
+const lotsVracs = computed(() => {
+  const out = []; const cond = condOfSet.value
+  for (const o of ofsRaw.value) {
+    if (/rejet|lib[eé]r|clotur/i.test(o.statut || '')) continue
+    if (cond.has(o.id)) continue
+    const pl = phasesLot.value[o.id] || {}
+    const p = o.produits || {}
+    const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
+    const fabKeys = []; const seen = new Set()
+    for (const phn of gamme) { const k = phaseKey(phn); if (k && k !== 'conditionnement' && !seen.has(k)) { seen.add(k); fabKeys.push(k) } }
+    if (!fabKeys.length) continue
+    if (!fabKeys.every(k => (pl[k] || {}).df)) continue
+    out.push(o)
+  }
+  return out
+})
 const totMois = (i) => phasesAffichees.value.reduce((s, ph) => s + moisReal(ph.key, i), 0)
 const totGlobal = computed(() => phasesAffichees.value.reduce((s, ph) => s + valReal(ph.key), 0))
 const matMode = ref('real')
@@ -749,4 +774,6 @@ const serieMois = computed(() => {
 .lots-phase .lp-list::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; border: 2px solid #f8fafc; }
 .lots-phase .lp-list::-webkit-scrollbar-thumb:hover { background: #64748b; }
 .lots-phase .lp-list::-webkit-scrollbar-track { background: #eef2f7; border-radius: 5px; }
+.vracs-single { grid-template-columns: 1fr !important; }
+.lp-head.prt .lp-dot { background: #f59e0b; }
 </style>
