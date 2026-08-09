@@ -898,4 +898,37 @@ onMounted(async () => {
 /* Cadre interne harmonisé : le bloc vide a le même encadré que le tableau (.prod-scroll) */
 .q-block .empty { border: 1px solid #eef2f6; border-radius: 7px; background: #f8fafc; padding: 12px 10px; text-align: center; margin: 0; }
 /* redeploy 2026-08-06 */
+/* Ultra compact */
+.de-head h1 { font-size: 15px; }
+.sub { font-size: 10px; margin-top: 2px; }
+.de-head { margin-bottom: 6px; }
+.annee-sel select { padding: 5px 8px; font-size: 12px; }
+.err { padding: 6px 10px; font-size: 12px; }
+.note { padding: 4px 8px; margin: 0 0 6px; font-size: 10px; }
+.kpi { padding: 8px 11px; border-radius: 10px; }
+.kpi-val { font-size: 16px; }
+.kpi-lbl { font-size: 9.5px; margin-top: 2px; }
+.flow { padding: 7px 10px; gap: 4px; margin-bottom: 8px; }
+.flow-step { font-size: 10.5px; padding: 3px 8px; }
+.searchbar input[type=text] { padding: 6px 10px; font-size: 12px; }
+.chk { font-size: 11.5px; }
+.atelier-titre { font-size: 12px; margin: 0 0 5px; }
+.at-plan { font-size: 10px; }
+.at-sum { font-size: 9.5px; }
+.board-h { font-size: 13px; margin: 12px 0 7px; }
+.cond-plan-h { font-size: 14px; margin: 12px 0 5px; }
+.de-tabs { margin: 0 0 8px; padding: 3px; }
+.de-tabs button { font-size: 12px; padding: 6px 12px; }
+.phase-card { padding: 7px 9px !important; gap: 4px; }
+.q-title { font-size: 9.5px; margin-bottom: 3px; }
+.card { padding: 9px 11px; }
+.eq-code { font-size: 12px; }
+.eq-nom { font-size: 9.5px; }
+.eq-stats { font-size: 11px; padding: 5px 0 6px; gap: 10px; }
+.eq-stats strong { font-size: 12px; }
+.phase-badge { font-size: 10px; padding: 2px 8px; }
+.grid th { font-size: 10px; padding: 4px 6px; }
+.grid td { padding: 2px 6px; font-size: 10.5px; }
+.lot-sub { font-size: 9.5px; }
+.q-block .empty { padding: 8px; }
 </style>
