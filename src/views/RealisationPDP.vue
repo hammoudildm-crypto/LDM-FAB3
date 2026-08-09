@@ -46,8 +46,7 @@
         <div class="side-sec">
           <div class="side-lbl">Phase</div>
           <div class="side-phases">
-            <button :class="{ on: filtrePhase === null }" @click="filtrePhase = null">Toutes</button>
-            <button v-for="ph in phasesActives" :key="ph.key" :class="{ on: filtrePhase === ph.key }" @click="filtrePhase = ph.key"><span class="ph-dot" :style="{ background: ph.color }"></span>{{ ph.label }}</button>
+            <button v-for="ph in phasesActives" :key="ph.key" :class="{ on: filtrePhase === ph.key }" @click="filtrePhase = filtrePhase === ph.key ? null : ph.key"><span class="ph-dot" :style="{ background: ph.color }"></span>{{ ph.label }}</button>
           </div>
         </div>
         <div class="side-sec">
@@ -67,15 +66,16 @@
     <!-- ANNUEL -->
     <div v-else-if="vue === 'annuel'" class="rp-card">
       <table class="rp-table">
-        <thead><tr><th>Phase</th><th class="num">Plan</th><th class="num">Réalisé</th><th class="num">Taux</th></tr></thead>
+        <thead><tr><th>Phase</th><th class="num">Plan</th><th class="num">Réalisé</th><th class="num">Taux</th><th class="w-cbar">Comparer (Réalisé / Plan)</th></tr></thead>
         <tbody>
           <tr v-for="ph in phasesAffichees" :key="ph.key">
             <td class="ph-nom"><span class="ph-dot" :style="{ background: ph.color }"></span>{{ ph.label }}</td>
             <td class="num">{{ fmt(valPlan(ph.key)) }}</td>
             <td class="num">{{ fmt(valReal(ph.key)) }}</td>
             <td class="num"><span v-if="taux(ph.key) != null" class="tx" :class="taux(ph.key) >= 100 ? 'ok' : 'bas'">{{ taux(ph.key) }}%</span><span v-else class="muted">—</span></td>
+            <td class="w-cbar"><span class="cbar"><span class="cbar-in" :class="(taux(ph.key) || 0) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(taux(ph.key) || 0, 100) + '%' }"></span></span></td>
           </tr>
-          <tr v-if="!phasesAffichees.length"><td colspan="4" class="rp-empty">Aucune donnée pour {{ annee }}.</td></tr>
+          <tr v-if="!phasesAffichees.length"><td colspan="5" class="rp-empty">Aucune donnée pour {{ annee }}.</td></tr>
         </tbody>
       </table>
     </div>
@@ -447,4 +447,8 @@ const serieMois = computed(() => {
 .rp-right .pc-bar { max-width: 8px; }
 .rp-right .pc-lbl { font-size: 8px; }
 @media (max-width: 980px) { .rp-right { flex: none; width: 100%; } .rp-right .pdp-chart { position: static; } .rp-right .pc-bar { max-width: 16px; } .rp-right .pc-lbl { font-size: 10px; } }
+.w-cbar { width: 170px; }
+.cbar { display: block; height: 9px; background: #eef2f7; border-radius: 5px; overflow: hidden; }
+.cbar-in { display: block; height: 100%; border-radius: 5px; min-width: 2px; }
+.cbar-in.ok { background: #22c55e; } .cbar-in.bas { background: #f59e0b; }
 </style>
