@@ -674,4 +674,8 @@ const serieMois = computed(() => {
 .rp-right { display: flex; flex-direction: column; }
 .rp-right .pdp-chart { position: static; }
 .rp-right .ph-plan { flex: 1; }
+/* Remplir toute la hauteur : haut ET bas alignés */
+.rp-main { display: flex; flex-direction: column; }
+.rp-main > *:last-child { flex: 1; }
+.rp-right > *:last-child { flex: 1; }
 </style>
