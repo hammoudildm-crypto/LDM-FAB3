@@ -668,4 +668,10 @@ const serieMois = computed(() => {
 .mois-sel { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 4px; }
 .mois-sel label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #94a3b8; }
 .mois-sel select { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; }
+/* Colonnes à hauteur égale (cartes au même niveau) */
+.rp-layout { align-items: stretch; }
+.rp-side { position: static; }
+.rp-right { display: flex; flex-direction: column; }
+.rp-right .pdp-chart { position: static; }
+.rp-right .ph-plan { flex: 1; }
 </style>
