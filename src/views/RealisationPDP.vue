@@ -735,4 +735,18 @@ const serieMois = computed(() => {
 .rp-rest .rp-main { overflow: hidden; }
 .rp-main > .rp-card:not(.lots-phase) { flex: 0 0 auto; }
 .rp-main > .lots-phase { flex: 1; min-height: 0; }
+/* Contraindre la hauteur pour que les listes défilent + curseur visible */
+.lots-phase .lp-cols { min-height: 0; }
+.lots-phase .lp-col { min-height: 0; overflow: hidden; }
+.lots-phase .lp-list { min-height: 0; }
+.lp-list::-webkit-scrollbar { width: 8px; }
+.lp-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.lp-list::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.lp-list::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+/* Hauteur max robuste sur les 3 listes -> défilement + curseur visible */
+.lots-phase .lp-list { max-height: calc(100vh - 440px); min-height: 60px; overflow-y: auto !important; }
+.lots-phase .lp-list::-webkit-scrollbar { width: 10px; }
+.lots-phase .lp-list::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; border: 2px solid #f8fafc; }
+.lots-phase .lp-list::-webkit-scrollbar-thumb:hover { background: #64748b; }
+.lots-phase .lp-list::-webkit-scrollbar-track { background: #eef2f7; border-radius: 5px; }
 </style>
