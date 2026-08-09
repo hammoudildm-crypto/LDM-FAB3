@@ -5,10 +5,7 @@
         <h1 class="rp-title">Réalisation du PDP par phase</h1>
         <p class="rp-sub">Avancement du plan directeur, par phase de fabrication</p>
       </div>
-      <div class="rp-year">
-        <label>Année</label>
-        <select v-model.number="annee"><option v-for="a in annees" :key="a" :value="a">{{ a }}</option></select>
-      </div>
+
     </header>
 
     <div class="pdp-hero">
@@ -42,6 +39,10 @@
     <div class="rp-layout">
       <aside class="rp-side">
         <div class="side-sec">
+          <div class="side-lbl">Année</div>
+          <select class="side-select" v-model.number="annee"><option v-for="a in annees" :key="a" :value="a">{{ a }}</option></select>
+        </div>
+        <div class="side-sec">
           <div class="side-lbl">Mesure</div>
           <div class="side-tg">
             <button :class="{ on: mesure === 'boites' }" @click="mesure = 'boites'">Boîtes</button>
@@ -55,6 +56,22 @@
             <button :class="{ on: vue === 'mensuel' }" @click="vue = 'mensuel'">Mensuel</button>
           </div>
         </div>
+        <div class="side-sec">
+          <div class="side-lbl">Phase</div>
+          <div class="side-phases">
+            <button :class="{ on: filtrePhase === null }" @click="filtrePhase = null">Toutes</button>
+            <button v-for="ph in phasesActives" :key="ph.key" :class="{ on: filtrePhase === ph.key }" @click="filtrePhase = ph.key"><span class="ph-dot" :style="{ background: ph.color }"></span>{{ ph.label }}</button>
+          </div>
+        </div>
+        <div class="side-sec">
+          <div class="side-lbl">Légende</div>
+          <div class="side-leg">
+            <div class="leg-row"><span class="leg-sw ok"></span>Taux &ge; objectif</div>
+            <div class="leg-row"><span class="leg-sw mid"></span>80&ndash;99 % (Comparer)</div>
+            <div class="leg-row"><span class="leg-sw bas"></span>Taux &lt; objectif</div>
+            <div class="leg-note">Mode « Comparer » : Réalisé / Plan par case.</div>
+          </div>
+        </div>
       </aside>
       <div class="rp-main">
 
@@ -65,13 +82,13 @@
       <table class="rp-table">
         <thead><tr><th>Phase</th><th class="num">Plan</th><th class="num">Réalisé</th><th class="num">Taux</th></tr></thead>
         <tbody>
-          <tr v-for="ph in phasesActives" :key="ph.key">
+          <tr v-for="ph in phasesAffichees" :key="ph.key">
             <td class="ph-nom"><span class="ph-dot" :style="{ background: ph.color }"></span>{{ ph.label }}</td>
             <td class="num">{{ fmt(valPlan(ph.key)) }}</td>
             <td class="num">{{ fmt(valReal(ph.key)) }}</td>
             <td class="num"><span v-if="taux(ph.key) != null" class="tx" :class="taux(ph.key) >= 100 ? 'ok' : 'bas'">{{ taux(ph.key) }}%</span><span v-else class="muted">—</span></td>
           </tr>
-          <tr v-if="!phasesActives.length"><td colspan="4" class="rp-empty">Aucune donnée pour {{ annee }}.</td></tr>
+          <tr v-if="!phasesAffichees.length"><td colspan="4" class="rp-empty">Aucune donnée pour {{ annee }}.</td></tr>
         </tbody>
       </table>
     </div>
@@ -84,14 +101,14 @@
           <tr><th>Phase</th><th v-for="(m, i) in MOIS" :key="i" class="num mois">{{ m }}</th><th class="num tot-col">Total</th></tr>
         </thead>
         <tbody>
-          <tr v-for="ph in phasesActives" :key="ph.key">
+          <tr v-for="ph in phasesAffichees" :key="ph.key">
             <td class="ph-nom"><span class="ph-dot" :style="{ background: ph.color }"></span>{{ ph.label }}</td>
             <td v-for="(m, i) in MOIS" :key="i" class="num cell" :class="matMode === 'comparer' ? cmpCls(moisReal(ph.key, i), moisPlan(ph.key, i)) : { z: !moisVal(ph.key, i) }"><template v-if="matMode === 'comparer'"><span v-if="moisReal(ph.key, i) || moisPlan(ph.key, i)">{{ fmt(moisReal(ph.key, i)) }}<i>/{{ fmt(moisPlan(ph.key, i)) }}</i></span><span v-else>·</span></template><template v-else>{{ cellTxt(moisVal(ph.key, i)) }}</template></td>
             <td class="num tot-col"><template v-if="matMode === 'comparer'">{{ fmt(valReal(ph.key)) }}<i>/{{ fmt(valPlan(ph.key)) }}</i></template><template v-else>{{ cellTxt(totPhase(ph.key)) }}</template></td>
           </tr>
-          <tr v-if="!phasesActives.length"><td :colspan="14" class="rp-empty">Aucune donnée pour {{ annee }}.</td></tr>
+          <tr v-if="!phasesAffichees.length"><td :colspan="14" class="rp-empty">Aucune donnée pour {{ annee }}.</td></tr>
         </tbody>
-        <tfoot v-if="phasesActives.length">
+        <tfoot v-if="phasesAffichees.length">
           <tr class="tot"><td>{{ matMode === 'plan' ? 'Total plan' : matMode === 'taux' ? 'Taux global' : matMode === 'comparer' ? 'Réalisé / Plan' : 'Total réalisé' }}</td><td v-for="(m, i) in MOIS" :key="i" class="num"><template v-if="matMode === 'comparer'">{{ fmt(totMois(i)) }}<i>/{{ fmt(totMoisPlan(i)) }}</i></template><template v-else>{{ cellTxt(totMoisVal(i)) }}</template></td><td class="num tot-col"><template v-if="matMode === 'comparer'">{{ fmt(totGlobal) }}<i>/{{ fmt(totPlanGlobal) }}</i></template><template v-else>{{ cellTxt(totGlobalVal) }}</template></td></tr>
         </tfoot>
       </table>
@@ -228,8 +245,10 @@ const taux = (k) => { const p = valPlan(k); return p > 0 ? Math.round(valReal(k)
 const moisReal = (k, i) => { const a = realData.value.mois[k]; return a ? M(a[i]) : 0 }
 
 const phasesActives = computed(() => PHASES.filter(ph => planData.value.an[ph.key] || realData.value.an[ph.key]))
-const totMois = (i) => phasesActives.value.reduce((s, ph) => s + moisReal(ph.key, i), 0)
-const totGlobal = computed(() => phasesActives.value.reduce((s, ph) => s + valReal(ph.key), 0))
+const filtrePhase = ref(null)
+const phasesAffichees = computed(() => filtrePhase.value ? phasesActives.value.filter(p => p.key === filtrePhase.value) : phasesActives.value)
+const totMois = (i) => phasesAffichees.value.reduce((s, ph) => s + moisReal(ph.key, i), 0)
+const totGlobal = computed(() => phasesAffichees.value.reduce((s, ph) => s + valReal(ph.key), 0))
 const matMode = ref('real')
 const moisPlan = (k, i) => { const a = planData.value.mois[k]; return a ? M(a[i]) : 0 }
 function moisVal(k, i) {
@@ -242,13 +261,13 @@ function totPhase(k) {
   if (matMode.value === 'taux') return taux(k)
   return valReal(k)
 }
-const totMoisPlan = (i) => phasesActives.value.reduce((s, ph) => s + moisPlan(ph.key, i), 0)
+const totMoisPlan = (i) => phasesAffichees.value.reduce((s, ph) => s + moisPlan(ph.key, i), 0)
 function totMoisVal(i) {
   if (matMode.value === 'plan') return totMoisPlan(i)
   if (matMode.value === 'taux') { const pl = totMoisPlan(i); return pl > 0 ? Math.round(totMois(i) / pl * 100) : null }
   return totMois(i)
 }
-const totPlanGlobal = computed(() => phasesActives.value.reduce((s, ph) => s + valPlan(ph.key), 0))
+const totPlanGlobal = computed(() => phasesAffichees.value.reduce((s, ph) => s + valPlan(ph.key), 0))
 const totGlobalVal = computed(() => {
   if (matMode.value === 'plan') return totPlanGlobal.value
   if (matMode.value === 'taux') return totPlanGlobal.value > 0 ? Math.round(totGlobal.value / totPlanGlobal.value * 100) : null
@@ -406,4 +425,14 @@ const serieMois = computed(() => {
 .side-tg button.on { background: #6366f1; border-color: #6366f1; color: #fff; }
 .rp-main { flex: 1; min-width: 0; }
 @media (max-width: 760px) { .rp-layout { flex-direction: column; } .rp-side { flex: none; width: 100%; position: static; } .side-tg { flex-direction: row; } .side-tg button { flex: 1; text-align: center; } }
+.side-select { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 9px; font: inherit; font-size: 14px; font-weight: 600; }
+.side-phases { display: flex; flex-direction: column; gap: 4px; }
+.side-phases button { display: flex; align-items: center; gap: 7px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 600; color: #475569; padding: 7px 10px; cursor: pointer; text-align: left; }
+.side-phases button.on { background: #eef2ff; border-color: #6366f1; color: #4338ca; }
+.ph-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.side-leg { display: flex; flex-direction: column; gap: 6px; }
+.leg-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #64748b; }
+.leg-sw { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+.leg-sw.ok { background: #dcfce7; } .leg-sw.bas { background: #fee2e2; } .leg-sw.mid { background: #fef9c3; }
+.leg-note { font-size: 11px; color: #94a3b8; margin-top: 2px; line-height: 1.4; }
 </style>
