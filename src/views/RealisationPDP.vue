@@ -130,7 +130,7 @@
                 <span class="pc-bar r" :style="{ height: (serieMois.real[i] / serieMois.max * 100) + '%' }" :title="m + ' — Réalisé ' + fmt(serieMois.real[i])"></span>
                 <span class="pc-bar p" :style="{ height: (serieMois.plan[i] / serieMois.max * 100) + '%' }" :title="m + ' — Prévu ' + fmt(serieMois.plan[i])"></span>
               </div>
-              <span class="pc-lbl">{{ m }}</span>
+              <span class="pc-lbl">{{ m.charAt(0) }}</span>
             </div>
           </div>
         </section>
