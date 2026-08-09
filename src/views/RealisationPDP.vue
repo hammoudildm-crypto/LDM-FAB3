@@ -39,16 +39,24 @@
       </div>
     </section>
 
-    <div class="rp-toggles">
-      <div class="tg">
-        <button :class="{ on: mesure === 'boites' }" @click="mesure = 'boites'">Boîtes</button>
-        <button :class="{ on: mesure === 'lots' }" @click="mesure = 'lots'">Lots</button>
-      </div>
-      <div class="tg">
-        <button :class="{ on: vue === 'annuel' }" @click="vue = 'annuel'">Annuel</button>
-        <button :class="{ on: vue === 'mensuel' }" @click="vue = 'mensuel'">Mensuel</button>
-      </div>
-    </div>
+    <div class="rp-layout">
+      <aside class="rp-side">
+        <div class="side-sec">
+          <div class="side-lbl">Mesure</div>
+          <div class="side-tg">
+            <button :class="{ on: mesure === 'boites' }" @click="mesure = 'boites'">Boîtes</button>
+            <button :class="{ on: mesure === 'lots' }" @click="mesure = 'lots'">Lots</button>
+          </div>
+        </div>
+        <div class="side-sec">
+          <div class="side-lbl">Période</div>
+          <div class="side-tg">
+            <button :class="{ on: vue === 'annuel' }" @click="vue = 'annuel'">Annuel</button>
+            <button :class="{ on: vue === 'mensuel' }" @click="vue = 'mensuel'">Mensuel</button>
+          </div>
+        </div>
+      </aside>
+      <div class="rp-main">
 
     <div v-if="chargement" class="rp-empty">Chargement…</div>
 
@@ -88,6 +96,8 @@
         </tfoot>
       </table>
       <p class="rp-hint">Vue mensuelle : <b>Réalisé</b>, <b>Plan</b> ou <b>Taux</b> par phase et par mois (bascule ci-dessus). Le mois du réalisé = celui où le lot a atteint la phase.</p>
+    </div>
+      </div>
     </div>
   </div>
 </template>
@@ -387,4 +397,13 @@ const serieMois = computed(() => {
 .pc-bar.r { background: linear-gradient(#6366f1, #818cf8); }
 .pc-bar.p { background: #cbd5e1; }
 .pc-lbl { font-size: 10px; color: #94a3b8; margin-top: 5px; }
+.rp-layout { display: flex; gap: 18px; align-items: flex-start; }
+.rp-side { flex: 0 0 180px; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; box-shadow: 0 6px 18px rgba(30,41,59,.05); position: sticky; top: 16px; }
+.side-sec { margin-bottom: 18px; } .side-sec:last-child { margin-bottom: 0; }
+.side-lbl { font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #94a3b8; margin-bottom: 8px; }
+.side-tg { display: flex; flex-direction: column; gap: 6px; }
+.side-tg button { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 9px; font: inherit; font-size: 13.5px; font-weight: 600; color: #64748b; padding: 9px 12px; cursor: pointer; text-align: left; }
+.side-tg button.on { background: #6366f1; border-color: #6366f1; color: #fff; }
+.rp-main { flex: 1; min-width: 0; }
+@media (max-width: 760px) { .rp-layout { flex-direction: column; } .rp-side { flex: none; width: 100%; position: static; } .side-tg { flex-direction: row; } .side-tg button { flex: 1; text-align: center; } }
 </style>
