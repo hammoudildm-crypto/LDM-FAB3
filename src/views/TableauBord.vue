@@ -245,4 +245,21 @@ const tauxGlobal = computed(() => totPlan.value > 0 ? Math.round(totBoites.value
   .tb { padding: 18px; } .tb-kpis { grid-template-columns: repeat(2, 1fr); }
   .w-bar { display: none; }
 }
+/* Compact */
+.tb { padding: 12px 20px 20px; }
+.tb-head { margin-bottom: 10px; }
+.tb-title { font-size: 18px; }
+.tb-sub { font-size: 11px; margin-top: 2px; }
+.tb-year select { padding: 6px 10px; font-size: 13px; }
+.tb-tabs { gap: 6px; margin-bottom: 10px; }
+.tb-tab { font-size: 13px; padding: 9px; }
+.tb-kpis { gap: 10px; margin-bottom: 12px; }
+.tb-kpi { padding: 10px 14px; }
+.tb-kpi .k-val, .tb-kpi b, .tb-kpi strong { font-size: 19px; }
+.tb-grp { margin-bottom: 10px; }
+.tb-grp button { font-size: 11.5px; padding: 5px 12px; }
+.tb-table thead th { padding: 7px 12px; font-size: 10.5px; }
+.tb-table tbody td { padding: 6px 12px; font-size: 12px; }
+.tb-table tfoot .tot td { padding: 7px 12px; }
+.tb-empty { padding: 26px; font-size: 13px; }
 </style>
