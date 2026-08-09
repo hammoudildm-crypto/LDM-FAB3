@@ -143,7 +143,7 @@ async function fetchAllPaged(make) {
 onMounted(async () => {
   try {
     const [re, ro, rp, rs, rc] = await Promise.all([
-      fetchAllPaged(() => supabase.from('equipements').select('id, nom').eq('actif', true).order('nom')),
+      fetchAllPaged(() => supabase.from('equipements').select('id, nom, type').eq('actif', true).order('nom')),
       fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, equipement_id, produits(code_pf, designation, gamme, taille_lot)')),
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, equipement_id, produits(gamme, taille_lot)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true)),
@@ -200,21 +200,24 @@ function classifOF(o) {
 }
 
 // Conditionnement : par ligne (equipement_id)
+const FAB_PH = new Set(['pesee', 'granulation', 'melange', 'compression', 'remplissage', 'pelliculage'])
 const parEquip = computed(() => {
   const m = {}
+  const typeById = {}; for (const e of equipements.value) typeById[e.id] = e.type
+  const estCond = (id) => id != null && !FAB_PH.has(phaseKey(typeById[id]))
   const get = (id, nom) => { if (!m[id]) m[id] = { id, nom: nom || 'Équipement ' + id, encours: [], pret: [], pipe: [], planifie: [], planB: 0, planL: 0, realB: 0, realL: 0, planMB: 0, realMB: 0, planML: 0, realML: 0, _lots: new Set(), _lotsM: new Set() }; return m[id] }
-  for (const e of equipements.value) get(e.id, e.nom)
+  for (const e of equipements.value) { if (estCond(e.id)) get(e.id, e.nom) }
   const mA = moisAuj.value
   // File d'attente (Maintenant/Prêts/Pipe/Planifiés) depuis les OF
   for (const o of ofsRaw.value) {
-    if (!o.equipement_id) continue
+    if (!o.equipement_id || !estCond(o.equipement_id)) continue
     const g = m[o.equipement_id] || get(o.equipement_id, null)
     const cls = classifOF(o)
     if (cls === 'encours' || cls === 'pret' || cls === 'pipe' || cls === 'planifie') g[cls].push(o)
   }
   // Réalisé = boîtes CONDITIONNÉES (table conditionnement), par ligne de conditionnement
   for (const c of condRaw.value) {
-    if (!c.equipement_id) continue
+    if (!c.equipement_id || !estCond(c.equipement_id)) continue
     const g = m[c.equipement_id] || get(c.equipement_id, null)
     const of = c.ordres_fabrication; const pr = of ? of.produits : null
     const upb = pr ? num(pr.unites_par_boite) : 0
@@ -226,7 +229,7 @@ const parEquip = computed(() => {
     if (dt.getMonth() === mA) { g.realMB += b; if (of && of.id) g._lotsM.add(of.id) }
   }
   for (const r of planRaw.value) {
-    if (Number(r.annee) !== annee.value || !r.equipement_id) continue
+    if (Number(r.annee) !== annee.value || !r.equipement_id || !estCond(r.equipement_id)) continue
     const g = m[r.equipement_id] || get(r.equipement_id, null)
     const b = num(r.quantite_planifiee), t = num(r.produits && r.produits.taille_lot), l = t > 0 ? b / t : 0
     g.planB += b; g.planL += l
