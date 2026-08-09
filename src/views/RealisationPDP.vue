@@ -575,4 +575,7 @@ const serieMois = computed(() => {
 /* Filtres Mesure/Période côte à côte */
 .side-tg { flex-direction: row; gap: 5px; }
 .side-tg button { flex: 1; text-align: center; padding: 6px 4px; font-size: 12px; }
+/* Colonne gauche plus large + phases sur une ligne */
+.rp-side { flex: 0 0 210px; }
+.side-phases button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>
