@@ -59,6 +59,7 @@
           </div>
         </div>
       </aside>
+      <div class="rp-rest">
       <div class="rp-main">
 
     <div v-if="chargement" class="rp-empty">Chargement…</div>
@@ -153,6 +154,7 @@
             <div class="mini pla"><b>{{ lotsPhaseSel.planifie.length }}</b>Planifiés</div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   </div>
@@ -686,4 +688,9 @@ const serieMois = computed(() => {
 /* Grille des lots : rangée qui remplit la hauteur -> listes jusqu'en bas */
 .lots-phase .lp-cols { grid-auto-rows: 1fr; align-items: stretch; }
 .lots-phase .lp-list { overflow-y: auto; }
+/* Colonne de gauche = référence de hauteur */
+.rp-layout { position: relative; align-items: flex-start; }
+.rp-rest { position: absolute; top: 0; left: 222px; right: 0; bottom: 0; display: flex; gap: 12px; align-items: stretch; }
+.rp-rest .rp-main, .rp-rest .rp-right { min-height: 0; overflow-y: auto; }
+@media (max-width: 980px) { .rp-rest { position: static; left: 0; flex-direction: column; } .rp-rest .rp-main, .rp-rest .rp-right { overflow: visible; } }
 </style>
