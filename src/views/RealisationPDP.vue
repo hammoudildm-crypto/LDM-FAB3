@@ -70,10 +70,10 @@
         <tbody>
           <tr v-for="ph in phasesAffichees" :key="ph.key">
             <td class="ph-nom"><span class="ph-dot" :style="{ background: ph.color }"></span>{{ ph.label }}</td>
-            <td class="num">{{ fmt(valPlan(ph.key)) }}</td>
-            <td class="num">{{ fmt(valReal(ph.key)) }}</td>
-            <td class="num"><span v-if="taux(ph.key) != null" class="tx" :class="taux(ph.key) >= 100 ? 'ok' : 'bas'">{{ taux(ph.key) }}%</span><span v-else class="muted">—</span></td>
-            <td class="w-cbar"><span class="cbar"><span class="cbar-in" :class="(taux(ph.key) || 0) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(taux(ph.key) || 0, 100) + '%' }"></span></span></td>
+            <td class="num"><span class="v-b">{{ fmt(planB(ph.key)) }}</span><span class="v-l">{{ fmt(planL(ph.key)) }} lots</span></td>
+            <td class="num"><span class="v-b">{{ fmt(realB(ph.key)) }}</span><span class="v-l">{{ fmt(realL(ph.key)) }} lots</span></td>
+            <td class="num"><span v-if="tauxB(ph.key) != null" class="tx v-b" :class="tauxB(ph.key) >= 100 ? 'ok' : 'bas'">{{ tauxB(ph.key) }}%</span><span v-else class="v-b muted">—</span><span class="v-l">{{ tauxL(ph.key) != null ? tauxL(ph.key) + '% lots' : '— lots' }}</span></td>
+            <td class="w-cbar"><span class="cbar"><span class="cbar-in" :class="(tauxB(ph.key) || 0) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(tauxB(ph.key) || 0, 100) + '%' }"></span></span></td>
           </tr>
           <tr v-if="!phasesAffichees.length"><td colspan="5" class="rp-empty">Aucune donnée pour {{ annee }}.</td></tr>
         </tbody>
@@ -262,6 +262,12 @@ const M = (o) => o ? (mesure.value === 'boites' ? o.boites : o.lots) : 0
 const valPlan = (k) => M(planData.value.an[k])
 const valReal = (k) => M(realData.value.an[k])
 const taux = (k) => { const p = valPlan(k); return p > 0 ? Math.round(valReal(k) / p * 100) : null }
+const planB = (k) => (planData.value.an[k] || {}).boites || 0
+const planL = (k) => Math.round((planData.value.an[k] || {}).lots || 0)
+const realB = (k) => (realData.value.an[k] || {}).boites || 0
+const realL = (k) => Math.round((realData.value.an[k] || {}).lots || 0)
+const tauxB = (k) => { const pb = planB(k); return pb > 0 ? Math.round(realB(k) / pb * 100) : null }
+const tauxL = (k) => { const pl = planL(k); return pl > 0 ? Math.round(realL(k) / pl * 100) : null }
 const moisReal = (k, i) => { const a = realData.value.mois[k]; return a ? M(a[i]) : 0 }
 
 const phasesActives = computed(() => PHASES.filter(ph => planData.value.an[ph.key] || realData.value.an[ph.key]))
@@ -614,4 +620,6 @@ const serieMois = computed(() => {
 .lots-phase { margin-top: 8px; }
 .lp-list { max-height: 150px; }
 .lp-lot { padding: 4px 7px; font-size: 10.5px; }
+.v-b { display: block; }
+.v-l { display: block; font-size: 9px; color: #94a3b8; font-weight: 400; margin-top: 1px; }
 </style>
