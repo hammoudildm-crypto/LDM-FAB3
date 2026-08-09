@@ -285,15 +285,17 @@ const lotsParPhase = computed(() => {
     const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
     const fabKeys = []; const seen = new Set()
     for (const phn of gamme) { const k = phaseKey(phn); if (k && k !== 'conditionnement' && !seen.has(k)) { seen.add(k); fabKeys.push(k) } }
-    const started = !!(o.date_lancement || o.date_fin_fabrication)
-    for (const k of fabKeys) {
-      const st = (pl[k] || {}).statut
-      if (st === 'Terminé') continue
-      const g = get(k)
-      if (st === 'En cours') g.encours.push(o)
-      else if (started) g.attente.push(o)
-      else g.planifie.push(o)
-    }
+    const lance = !!(o.date_lancement || o.date_fin_fabrication)
+    // position du lot = première phase non terminée (là où il en est vraiment)
+    let pos = -1
+    for (let i = 0; i < fabKeys.length; i++) { if ((pl[fabKeys[i]] || {}).statut !== 'Terminé') { pos = i; break } }
+    if (pos < 0) continue
+    const k = fabKeys[pos]
+    const st = (pl[k] || {}).statut
+    const g = get(k)
+    if (st === 'En cours') g.encours.push(o)
+    else if (lance) g.attente.push(o)
+    else g.planifie.push(o)
   }
   return m
 })
