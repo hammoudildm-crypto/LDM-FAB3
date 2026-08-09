@@ -101,6 +101,24 @@
       </table>
       <p class="rp-hint">Vue mensuelle : <b>Réalisé</b>, <b>Plan</b> ou <b>Taux</b> par phase et par mois (bascule ci-dessus). Le mois du réalisé = celui où le lot a atteint la phase.</p>
     </div>
+
+    <section v-if="filtrePhase" class="rp-card lots-phase">
+      <h3 class="card-title">Lots — {{ labelPhase(filtrePhase) }}</h3>
+      <div class="lp-cols">
+        <div class="lp-col">
+          <div class="lp-head enc"><span class="lp-dot"></span>En cours <b>{{ lotsPhaseSel.encours.length }}</b></div>
+          <div class="lp-list"><div v-for="o in lotsPhaseSel.encours" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!lotsPhaseSel.encours.length" class="lp-vide">Aucun</div></div>
+        </div>
+        <div class="lp-col">
+          <div class="lp-head att"><span class="lp-dot"></span>En attente <b>{{ lotsPhaseSel.attente.length }}</b></div>
+          <div class="lp-list"><div v-for="o in lotsPhaseSel.attente" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!lotsPhaseSel.attente.length" class="lp-vide">Aucun</div></div>
+        </div>
+        <div class="lp-col">
+          <div class="lp-head pla"><span class="lp-dot"></span>Planifiés <b>{{ lotsPhaseSel.planifie.length }}</b></div>
+          <div class="lp-list"><div v-for="o in lotsPhaseSel.planifie" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!lotsPhaseSel.planifie.length" class="lp-vide">Aucun</div></div>
+        </div>
+      </div>
+    </section>
       </div>
       <div class="rp-right">
         <section class="rp-card pdp-chart">
@@ -173,7 +191,7 @@ onMounted(async () => {
   try {
     const [rp, ro, rs] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme, taille_lot)')),
-      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, produits(gamme, taille_lot)')),
+      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, produits(code_pf, designation, gamme, taille_lot)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
     ])
     planRaw.value = rp; ofsRaw.value = ro; suivi.value = rs
@@ -249,6 +267,31 @@ const moisReal = (k, i) => { const a = realData.value.mois[k]; return a ? M(a[i]
 const phasesActives = computed(() => PHASES.filter(ph => planData.value.an[ph.key] || realData.value.an[ph.key]))
 const filtrePhase = ref(null)
 const phasesAffichees = computed(() => filtrePhase.value ? phasesActives.value.filter(p => p.key === filtrePhase.value) : phasesActives.value)
+const prodTxt = (o) => { const p = o && o.produits; return p ? ((p.code_pf || '') + ' — ' + (p.designation || '')) : '' }
+const labelPhase = (k) => { const ph = PHASES.find(p => p.key === k); return ph ? ph.label : k }
+const lotsParPhase = computed(() => {
+  const m = {}
+  const get = (k) => { if (!m[k]) m[k] = { encours: [], attente: [], planifie: [] }; return m[k] }
+  for (const o of ofsRaw.value) {
+    if (/rejet/i.test(o.statut || '')) continue
+    const pl = phasesLot.value[o.id] || {}
+    const p = o.produits || {}
+    const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
+    const fabKeys = []; const seen = new Set()
+    for (const phn of gamme) { const k = phaseKey(phn); if (k && k !== 'conditionnement' && !seen.has(k)) { seen.add(k); fabKeys.push(k) } }
+    const started = fabKeys.some(k => { const st = (pl[k] || {}).statut; return st === 'Terminé' || st === 'En cours' })
+    for (const k of fabKeys) {
+      const st = (pl[k] || {}).statut
+      if (st === 'Terminé') continue
+      const g = get(k)
+      if (st === 'En cours') g.encours.push(o)
+      else if (started) g.attente.push(o)
+      else g.planifie.push(o)
+    }
+  }
+  return m
+})
+const lotsPhaseSel = computed(() => (filtrePhase.value && lotsParPhase.value[filtrePhase.value]) || { encours: [], attente: [], planifie: [] })
 const totMois = (i) => phasesAffichees.value.reduce((s, ph) => s + moisReal(ph.key, i), 0)
 const totGlobal = computed(() => phasesAffichees.value.reduce((s, ph) => s + valReal(ph.key), 0))
 const matMode = ref('real')
@@ -451,4 +494,16 @@ const serieMois = computed(() => {
 .cbar { display: block; height: 9px; background: #eef2f7; border-radius: 5px; overflow: hidden; }
 .cbar-in { display: block; height: 100%; border-radius: 5px; min-width: 2px; }
 .cbar-in.ok { background: #22c55e; } .cbar-in.bas { background: #f59e0b; }
+.lots-phase { margin-top: 16px; }
+.lp-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+.lp-col { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; }
+.lp-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700; color: #334155; margin-bottom: 8px; }
+.lp-head b { margin-left: auto; }
+.lp-dot { width: 9px; height: 9px; border-radius: 50%; }
+.lp-head.enc .lp-dot { background: #14b8a6; } .lp-head.att .lp-dot { background: #f59e0b; } .lp-head.pla .lp-dot { background: #64748b; }
+.lp-list { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+.lp-lot { background: #fff; border: 1px solid #eef2f7; border-radius: 7px; padding: 6px 9px; font-size: 11.5px; color: #475569; line-height: 1.3; }
+.lp-num { font-family: ui-monospace, monospace; font-weight: 700; color: #0f172a; }
+.lp-vide { color: #cbd5e1; font-size: 12px; padding: 6px; text-align: center; }
+@media (max-width: 640px) { .lp-cols { grid-template-columns: 1fr; } }
 </style>
