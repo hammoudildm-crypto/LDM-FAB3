@@ -273,13 +273,13 @@ const lotsParPhase = computed(() => {
   const m = {}
   const get = (k) => { if (!m[k]) m[k] = { encours: [], attente: [], planifie: [] }; return m[k] }
   for (const o of ofsRaw.value) {
-    if (/rejet/i.test(o.statut || '')) continue
+    if (/rejet|lib[eé]r|termin|clotur/i.test(o.statut || '')) continue
     const pl = phasesLot.value[o.id] || {}
     const p = o.produits || {}
     const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
     const fabKeys = []; const seen = new Set()
     for (const phn of gamme) { const k = phaseKey(phn); if (k && k !== 'conditionnement' && !seen.has(k)) { seen.add(k); fabKeys.push(k) } }
-    const started = fabKeys.some(k => { const st = (pl[k] || {}).statut; return st === 'Terminé' || st === 'En cours' })
+    const started = !!(o.date_lancement || o.date_fin_fabrication)
     for (const k of fabKeys) {
       const st = (pl[k] || {}).statut
       if (st === 'Terminé') continue
