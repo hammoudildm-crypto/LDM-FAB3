@@ -572,4 +572,7 @@ const serieMois = computed(() => {
 .lp-col { padding: 8px; }
 .lp-list { max-height: 170px; }
 .lp-lot { padding: 5px 8px; font-size: 11px; }
+/* Filtres Mesure/Période côte à côte */
+.side-tg { flex-direction: row; gap: 5px; }
+.side-tg button { flex: 1; text-align: center; padding: 6px 4px; font-size: 12px; }
 </style>
