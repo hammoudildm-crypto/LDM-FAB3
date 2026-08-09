@@ -191,8 +191,8 @@ onMounted(async () => {
   try {
     const [rp, ro, rs] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme, taille_lot)')),
-      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, produits(code_pf, designation, gamme, taille_lot)')),
-      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
+      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, date_reception, produits(code_pf, designation, gamme, taille_lot)')),
+      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut, date_lancement, date_fin_fabrication').eq('actif', true))
     ])
     planRaw.value = rp; ofsRaw.value = ro; suivi.value = rs
   } catch (e) { console.error(e) } finally { chargement.value = false }
@@ -210,7 +210,7 @@ const phasesLot = computed(() => {
   for (const sp of suivi.value) {
     const k = phaseKey(sp.phase); if (!k) continue
     if (!m[sp.ordre_id]) m[sp.ordre_id] = {}
-    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut }
+    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut, dl: sp.date_lancement, df: sp.date_fin_fabrication }
     if (!m[sp.ordre_id][k] || sp.statut === 'Terminé') m[sp.ordre_id][k] = rec
   }
   return m
@@ -285,17 +285,21 @@ const lotsParPhase = computed(() => {
     const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
     const fabKeys = []; const seen = new Set()
     for (const phn of gamme) { const k = phaseKey(phn); if (k && k !== 'conditionnement' && !seen.has(k)) { seen.add(k); fabKeys.push(k) } }
-    const lance = !!(o.date_lancement || o.date_fin_fabrication)
-    // position du lot = première phase non terminée (là où il en est vraiment)
+    // position = première phase non terminée (sans date de fin)
     let pos = -1
-    for (let i = 0; i < fabKeys.length; i++) { if ((pl[fabKeys[i]] || {}).statut !== 'Terminé') { pos = i; break } }
+    for (let i = 0; i < fabKeys.length; i++) { const q = pl[fabKeys[i]] || {}; if (!q.df && q.statut !== 'Terminé') { pos = i; break } }
     if (pos < 0) continue
     const k = fabKeys[pos]
-    const st = (pl[k] || {}).statut
+    const ph = pl[k] || {}
     const g = get(k)
-    if (st === 'En cours') g.encours.push(o)
-    else if (pos > 0 || lance) g.attente.push(o)
-    else g.planifie.push(o)
+    if (ph.dl || ph.statut === 'En cours') g.encours.push(o)        // phase démarrée : date de lancement, pas de date de fin
+    else if (o.date_reception) g.attente.push(o)                    // OF réceptionné, phase pas démarrée
+    else g.planifie.push(o)                                          // OF non réceptionné (planifié) sur sa phase courante
+    // Planifié = tous les OF qui passeront par une phase en aval non terminée (fin de phase non mentionnée)
+    for (let i = pos + 1; i < fabKeys.length; i++) {
+      const q = pl[fabKeys[i]] || {}
+      if (!q.df && q.statut !== 'Terminé') get(fabKeys[i]).planifie.push(o)
+    }
   }
   return m
 })
