@@ -931,4 +931,30 @@ onMounted(async () => {
 .grid td { padding: 2px 6px; font-size: 10.5px; }
 .lot-sub { font-size: 9.5px; }
 .q-block .empty { padding: 8px; }
+/* Encore plus compact */
+.de-head h1 { font-size: 13px; }
+.sub { display: none; }
+.de-head { margin-bottom: 5px; }
+.kpi { padding: 6px 9px; }
+.kpi-val { font-size: 14px; }
+.kpi-lbl { font-size: 9px; }
+.flow { padding: 5px 8px; margin-bottom: 6px; gap: 3px; }
+.flow-step { font-size: 9.5px; padding: 2px 6px; }
+.searchbar input[type=text] { padding: 5px 8px; font-size: 11px; }
+.atelier-titre { font-size: 11px; margin: 0 0 4px; }
+.at-plan { font-size: 9.5px; }
+.at-sum { font-size: 9px; }
+.board-h { font-size: 12px; margin: 9px 0 5px; }
+.cond-plan-h { font-size: 12px; margin: 9px 0 4px; }
+.de-tabs button { font-size: 11px; padding: 5px 10px; }
+.phase-card { padding: 5px 7px !important; gap: 3px; }
+.card { padding: 6px 9px; }
+.eq-code { font-size: 11px; }
+.eq-nom { font-size: 9px; }
+.eq-stats { font-size: 10px; padding: 4px 0 5px; gap: 8px; }
+.eq-stats strong { font-size: 11px; }
+.phase-badge { font-size: 9.5px; padding: 2px 7px; }
+.grid th { font-size: 9.5px; padding: 3px 5px; }
+.grid td { padding: 2px 5px; font-size: 10px; }
+.lot-sub { font-size: 9px; }
 </style>
