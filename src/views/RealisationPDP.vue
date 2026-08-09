@@ -80,26 +80,25 @@
       </table>
     </div>
 
-    <!-- MENSUEL -->
-    <div v-else class="rp-card rp-scroll">
-      <div class="mat-tg"><button :class="{ on: matMode === 'real' }" @click="matMode = 'real'">Réalisé</button><button :class="{ on: matMode === 'plan' }" @click="matMode = 'plan'">Plan</button><button :class="{ on: matMode === 'taux' }" @click="matMode = 'taux'">Taux</button><button :class="{ on: matMode === 'comparer' }" @click="matMode = 'comparer'">Comparer</button></div>
-      <table class="rp-table rp-matrix">
-        <thead>
-          <tr><th>Phase</th><th v-for="(m, i) in MOIS" :key="i" class="num mois">{{ m }}</th><th class="num tot-col">Total</th></tr>
-        </thead>
+    <!-- MENSUEL : mois sélectionné, même tableau que l'annuel -->
+    <div v-else class="rp-card">
+      <div class="mois-sel">
+        <label>Mois</label>
+        <select v-model.number="moisSel"><option v-for="(m, i) in MOIS" :key="i" :value="i">{{ m }} {{ annee }}</option></select>
+      </div>
+      <table class="rp-table">
+        <thead><tr><th>Phase</th><th class="num">Plan</th><th class="num">Réalisé</th><th class="num">Taux</th><th class="w-cbar">Comparer (Réalisé / Plan)</th></tr></thead>
         <tbody>
           <tr v-for="ph in phasesAffichees" :key="ph.key">
             <td class="ph-nom"><span class="ph-dot" :style="{ background: ph.color }"></span>{{ ph.label }}</td>
-            <td v-for="(m, i) in MOIS" :key="i" class="num cell" :class="matMode === 'comparer' ? cmpCls(moisReal(ph.key, i), moisPlan(ph.key, i)) : { z: !moisVal(ph.key, i) }"><template v-if="matMode === 'comparer'"><span v-if="moisReal(ph.key, i) || moisPlan(ph.key, i)">{{ fmt(moisReal(ph.key, i)) }}<i>/{{ fmt(moisPlan(ph.key, i)) }}</i></span><span v-else>·</span></template><template v-else>{{ cellTxt(moisVal(ph.key, i)) }}</template></td>
-            <td class="num tot-col"><template v-if="matMode === 'comparer'">{{ fmt(valReal(ph.key)) }}<i>/{{ fmt(valPlan(ph.key)) }}</i></template><template v-else>{{ cellTxt(totPhase(ph.key)) }}</template></td>
+            <td class="num"><span class="v-b">{{ fmt(planBM(ph.key)) }}</span><span class="v-l">{{ fmt(planLM(ph.key)) }} lots</span></td>
+            <td class="num"><span class="v-b">{{ fmt(realBM(ph.key)) }}</span><span class="v-l">{{ fmt(realLM(ph.key)) }} lots</span></td>
+            <td class="num"><span v-if="tauxBM(ph.key) != null" class="tx v-b" :class="tauxBM(ph.key) >= 100 ? 'ok' : 'bas'">{{ tauxBM(ph.key) }}%</span><span v-else class="v-b muted">—</span><span class="v-l">{{ tauxLM(ph.key) != null ? tauxLM(ph.key) + '% lots' : '— lots' }}</span></td>
+            <td class="w-cbar"><span class="cbar"><span class="cbar-in" :class="(tauxBM(ph.key) || 0) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(tauxBM(ph.key) || 0, 100) + '%' }"></span></span></td>
           </tr>
-          <tr v-if="!phasesAffichees.length"><td :colspan="14" class="rp-empty">Aucune donnée pour {{ annee }}.</td></tr>
+          <tr v-if="!phasesAffichees.length"><td colspan="5" class="rp-empty">Aucune donnée pour {{ MOIS[moisSel] }} {{ annee }}.</td></tr>
         </tbody>
-        <tfoot v-if="phasesAffichees.length">
-          <tr class="tot"><td>{{ matMode === 'plan' ? 'Total plan' : matMode === 'taux' ? 'Taux global' : matMode === 'comparer' ? 'Réalisé / Plan' : 'Total réalisé' }}</td><td v-for="(m, i) in MOIS" :key="i" class="num"><template v-if="matMode === 'comparer'">{{ fmt(totMois(i)) }}<i>/{{ fmt(totMoisPlan(i)) }}</i></template><template v-else>{{ cellTxt(totMoisVal(i)) }}</template></td><td class="num tot-col"><template v-if="matMode === 'comparer'">{{ fmt(totGlobal) }}<i>/{{ fmt(totPlanGlobal) }}</i></template><template v-else>{{ cellTxt(totGlobalVal) }}</template></td></tr>
-        </tfoot>
       </table>
-      <p class="rp-hint">Vue mensuelle : <b>Réalisé</b>, <b>Plan</b> ou <b>Taux</b> par phase et par mois (bascule ci-dessus). Le mois du réalisé = celui où le lot a atteint la phase.</p>
     </div>
 
     <section v-if="filtrePhase" class="rp-card lots-phase">
@@ -288,10 +287,17 @@ const realB = (k) => (realData.value.an[k] || {}).boites || 0
 const realL = (k) => Math.round((realData.value.an[k] || {}).lots || 0)
 const tauxB = (k) => { const pb = planB(k); return pb > 0 ? Math.round(realB(k) / pb * 100) : null }
 const tauxL = (k) => { const pl = planL(k); return pl > 0 ? Math.round(realL(k) / pl * 100) : null }
+const planBM = (k) => { const a = planData.value.mois[k]; return a && a[moisSel.value] ? a[moisSel.value].boites : 0 }
+const planLM = (k) => { const a = planData.value.mois[k]; return a && a[moisSel.value] ? Math.round(a[moisSel.value].lots) : 0 }
+const realBM = (k) => { const a = realData.value.mois[k]; return a && a[moisSel.value] ? a[moisSel.value].boites : 0 }
+const realLM = (k) => { const a = realData.value.mois[k]; return a && a[moisSel.value] ? Math.round(a[moisSel.value].lots) : 0 }
+const tauxBM = (k) => { const pb = planBM(k); return pb > 0 ? Math.round(realBM(k) / pb * 100) : null }
+const tauxLM = (k) => { const pl = planLM(k); return pl > 0 ? Math.round(realLM(k) / pl * 100) : null }
 const moisReal = (k, i) => { const a = realData.value.mois[k]; return a ? M(a[i]) : 0 }
 
 const phasesActives = computed(() => PHASES.filter(ph => planData.value.an[ph.key] || realData.value.an[ph.key]))
 const filtrePhase = ref(null)
+const moisSel = ref(new Date().getMonth())
 const phasesAffichees = computed(() => filtrePhase.value ? phasesActives.value.filter(p => p.key === filtrePhase.value) : phasesActives.value)
 const prodTxt = (o) => { const p = o && o.produits; return p ? ((p.code_pf || '') + ' — ' + (p.designation || '')) : '' }
 const labelPhase = (k) => { const ph = PHASES.find(p => p.key === k); return ph ? ph.label : k }
@@ -659,4 +665,7 @@ const serieMois = computed(() => {
 .mini { flex: 1; text-align: center; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 8px; padding: 6px 3px; font-size: 9px; color: #64748b; }
 .mini b { display: block; font-size: 16px; font-weight: 800; }
 .mini.enc b { color: #14b8a6; } .mini.att b { color: #f59e0b; } .mini.pla b { color: #64748b; }
+.mois-sel { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 4px; }
+.mois-sel label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #94a3b8; }
+.mois-sel select { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; }
 </style>
