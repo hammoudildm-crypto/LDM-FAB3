@@ -165,7 +165,7 @@ const pilotActive = computed(() => PILOT.includes(route.path))
 const THEMES = [['clair', 'Clair'], ['indigo', 'Indigo'], ['emeraude', 'Émeraude'], ['violet', 'Violet'], ['ocean', 'Océan'], ['ardoise', 'Ardoise'], ['sombre', 'Sombre'], ['minuit', 'Minuit']]
 const theme = ref('clair')
 const themeOuvert = ref(false)
-const zoom = ref(90)
+const zoom = ref(80)
 function setZoom(z) {
   zoom.value = Math.max(20, Math.min(200, z))
   try { localStorage.setItem('ldmfab-zoom', String(zoom.value)) } catch (e) { /* ignore */ }
