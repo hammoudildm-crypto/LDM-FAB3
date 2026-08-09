@@ -678,4 +678,12 @@ const serieMois = computed(() => {
 .rp-main { display: flex; flex-direction: column; }
 .rp-main > *:last-child { flex: 1; }
 .rp-right > *:last-child { flex: 1; }
+/* Section Lots : remplir jusqu'en bas (aligné avec gauche/droite) */
+.lots-phase { display: flex; flex-direction: column; }
+.lots-phase .lp-cols { flex: 1; }
+.lots-phase .lp-col { display: flex; flex-direction: column; }
+.lots-phase .lp-list { flex: 1; max-height: none; }
+/* Grille des lots : rangée qui remplit la hauteur -> listes jusqu'en bas */
+.lots-phase .lp-cols { grid-auto-rows: 1fr; align-items: stretch; }
+.lots-phase .lp-list { overflow-y: auto; }
 </style>
