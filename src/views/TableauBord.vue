@@ -30,7 +30,7 @@
     <!-- Regroupement -->
     <div class="tb-grp">
       <span class="grp-lbl">Regrouper par :</span>
-      <button v-for="g in groupes" :key="g.k" type="button" :class="{ on: grp === g.k }" @click="grp = g.k">{{ g.lbl }}</button>
+      <button v-for="g in groupes" :key="g.k" type="button" :class="{ on: grp === g.k }" @click="grp = g.k">{{ (onglet === 'fab' && g.k === 'equip') ? 'Phase' : g.lbl }}</button>
     </div>
 
     <!-- Tableau -->
@@ -93,6 +93,20 @@ async function fetchAllPaged(make) {
   return out
 }
 
+const CANON_FAB = ['Pesée', 'Granulation', 'Mélange', 'Compression', 'Pelliculage']
+function phaseKey(nom) {
+  const t = String(nom || '').trim().toLowerCase()
+  if (!t) return null
+  if (/gran|s[ée]ch/.test(t)) return 'granulation'
+  if (/pes/.test(t)) return 'pesee'
+  if (/m[ée]lang/.test(t)) return 'melange'
+  if (/compress/.test(t)) return 'compression'
+  if (/rempliss|g[ée]lul/.test(t)) return 'remplissage'
+  if (/pellicul|enrob/.test(t)) return 'pelliculage'
+  if (/condition/.test(t)) return 'conditionnement'
+  return null
+}
+const PHASE_LBL = { pesee: 'Pesée', granulation: 'Granulation / Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage gélules', pelliculage: 'Pelliculage' }
 const onglet = ref('fab')       // fab | cond
 const grp = ref('lab')          // lab | forme | produit | lot
 const annee = ref(new Date().getFullYear())
@@ -102,20 +116,31 @@ const groupes = [
   { k: 'produit', lbl: 'Produit' }, { k: 'equip', lbl: 'Équipement' }
 ]
 const LIB = { lab: 'Laboratoire', forme: 'Forme galénique', produit: 'Produit', equip: 'Équipement' }
-const libGroupe = computed(() => LIB[grp.value])
+const libGroupe = computed(() => (onglet.value === 'fab' && grp.value === 'equip') ? 'Phase' : LIB[grp.value])
+const phasesByOf = computed(() => {
+  const m = {}
+  for (const sp of suiviRaw.value) {
+    if (sp.statut !== 'Terminé') continue
+    const k = phaseKey(sp.phase); if (!k || k === 'conditionnement') continue
+    if (!m[sp.ordre_id]) m[sp.ordre_id] = new Set()
+    m[sp.ordre_id].add(k)
+  }
+  return m
+})
 
-const fabRaw = ref([]); const condRaw = ref([]); const planRaw = ref([])
+const fabRaw = ref([]); const condRaw = ref([]); const planRaw = ref([]); const suiviRaw = ref([])
 onMounted(async () => {
   try {
-    const [rf, rc, rp] = await Promise.all([
+    const [rf, rc, rp, rs] = await Promise.all([
       fetchAllPaged(() => supabase.from('ordres_fabrication')
-        .select('numero_lot, boites_fabriquees, date_fin_fabrication, equipements(nom), produits(code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
+        .select('id, numero_lot, boites_fabriquees, date_fin_fabrication, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('conditionnement')
         .select('quantite_conditionnee, date_conditionnement, equipements(nom), ordres_fabrication(numero_lot, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
       fetchAllPaged(() => supabase.from('plan_production')
-        .select('annee, quantite_planifiee, equipements(nom), produits(code_pf, designation, donneurs_ordre(nom))'))
+        .select('annee, quantite_planifiee, equipements(nom), produits(gamme, code_pf, designation, donneurs_ordre(nom))')),
+      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut'))
     ])
-    fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp
+    fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs
   } catch (e) { console.error(e) } finally { chargement.value = false }
 })
 
@@ -123,7 +148,7 @@ const anYear = (d) => d ? new Date(d).getFullYear() : null
 
 const fabData = computed(() => fabRaw.value
   .filter(o => o.date_fin_fabrication && anYear(o.date_fin_fabrication) === annee.value)
-  .map(o => ({ lot: o.numero_lot, equip: o.equipements ? o.equipements.nom : null, boites: o.boites_fabriquees, produit: o.produits })))
+  .map(o => ({ id: o.id, lot: o.numero_lot, equip: o.equipements ? o.equipements.nom : null, boites: o.boites_fabriquees, produit: o.produits })))
 
 const condData = computed(() => condRaw.value
   .filter(c => c.date_conditionnement && anYear(c.date_conditionnement) === annee.value)
@@ -161,11 +186,22 @@ function cleProduit(p) {
 function cleGroupe(r) { return grp.value === 'equip' ? (r.equip || 'Non attribué') : (cleProduit(r.produit) || 'Non attribué') }
 const planParGroupe = computed(() => {
   const acc = {}
+  const parPhase = onglet.value === 'fab' && grp.value === 'equip'
   for (const r of planRaw.value) {
     if (Number(r.annee) !== annee.value) continue
-    const cle = grp.value === 'equip' ? (r.equipements ? r.equipements.nom : null) : cleProduit(r.produits)
-    if (cle == null) continue
-    acc[cle] = (acc[cle] || 0) + num(r.quantite_planifiee)
+    if (parPhase) {
+      const p = r.produits; if (!p) continue
+      const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
+      const seen = new Set()
+      for (const phn of gamme) { const k = phaseKey(phn); if (!k || k === 'conditionnement' || seen.has(k)) continue; seen.add(k)
+        const cle = PHASE_LBL[k] || k
+        acc[cle] = (acc[cle] || 0) + num(r.quantite_planifiee)
+      }
+    } else {
+      const cle = grp.value === 'equip' ? (r.equipements ? r.equipements.nom : null) : cleProduit(r.produits)
+      if (cle == null) continue
+      acc[cle] = (acc[cle] || 0) + num(r.quantite_planifiee)
+    }
   }
   return acc
 })
@@ -173,14 +209,17 @@ const planParGroupe = computed(() => {
 const donnees = computed(() => {
   const src = onglet.value === 'fab' ? fabData.value : condData.value
   const acc = {}
+  const parPhase = onglet.value === 'fab' && grp.value === 'equip'
+  const add = (cle, b, t, pc) => { if (!acc[cle]) acc[cle] = { cle, boites: 0, lots: 0, ca: 0 }; acc[cle].boites += b; acc[cle].lots += t > 0 ? b / t : 0; acc[cle].ca += b * pc }
   for (const r of src) {
     if (!r.produit || !(num(r.boites) > 0)) continue
-    const cle = cleGroupe(r)
-    if (!acc[cle]) acc[cle] = { cle, boites: 0, lots: 0, ca: 0 }
     const b = num(r.boites), t = num(r.produit.taille_lot), pc = num(r.produit.pcsu)
-    acc[cle].boites += b
-    acc[cle].lots += t > 0 ? b / t : 0
-    acc[cle].ca += b * pc
+    if (parPhase) {
+      const phs = phasesByOf.value[r.id]; if (!phs) continue
+      for (const k of phs) add(PHASE_LBL[k] || k, b, t, pc)
+    } else {
+      add(cleGroupe(r), b, t, pc)
+    }
   }
   const pg = planParGroupe.value
   return Object.values(acc).map(g => {
@@ -262,4 +301,22 @@ const tauxGlobal = computed(() => totPlan.value > 0 ? Math.round(totBoites.value
 .tb-table tbody td { padding: 6px 12px; font-size: 12px; }
 .tb-table tfoot .tot td { padding: 7px 12px; }
 .tb-empty { padding: 26px; font-size: 13px; }
+/* Ultra compact */
+.tb { padding: 8px 14px 14px; }
+.tb-title { font-size: 15px; }
+.tb-sub { display: none; }
+.tb-head { margin-bottom: 6px; }
+.tb-year select { padding: 5px 8px; font-size: 12px; }
+.tb-tabs { gap: 6px; margin-bottom: 8px; }
+.tb-tab { font-size: 12px; padding: 7px; border-radius: 9px; }
+.tb-kpis { gap: 8px; margin-bottom: 8px; }
+.tb-kpi { padding: 7px 11px; border-radius: 11px; gap: 2px; }
+.tb-kpi .k-val { font-size: 16px; }
+.tb-kpi .k-lbl { font-size: 9.5px; }
+.tb-grp { margin-bottom: 7px; }
+.tb-grp button { font-size: 10.5px; padding: 4px 10px; }
+.tb-table thead th { padding: 5px 10px; font-size: 10px; }
+.tb-table tbody td { padding: 4px 10px; font-size: 11px; }
+.tb-table tfoot .tot td { padding: 5px 10px; }
+.tb-empty { padding: 18px; font-size: 12px; }
 </style>
