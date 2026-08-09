@@ -134,6 +134,26 @@
             </div>
           </div>
         </section>
+        <div v-if="filtrePhase" class="rp-card ph-plan">
+          <h3 class="card-title">{{ labelPhase(filtrePhase) }}</h3>
+          <div class="pp-grid">
+            <div class="pp-row"><span class="pp-lbl">Plan</span><span class="pp-val">{{ fmt(planB(filtrePhase)) }} <i>b</i></span></div>
+            <div class="pp-row"><span class="pp-lbl">Réalisé</span><span class="pp-val">{{ fmt(realB(filtrePhase)) }} <i>b</i></span></div>
+            <div class="pp-row"><span class="pp-lbl">Taux</span><span class="pp-val"><span v-if="tauxB(filtrePhase) != null" class="tx" :class="tauxB(filtrePhase) >= objectifPct ? 'ok' : 'bas'">{{ tauxB(filtrePhase) }}%</span><span v-else class="muted">—</span></span></div>
+          </div>
+          <div class="pp-sep"></div>
+          <div class="pp-grid">
+            <div class="pp-row"><span class="pp-lbl">Plan lots</span><span class="pp-val">{{ fmt(planL(filtrePhase)) }}</span></div>
+            <div class="pp-row"><span class="pp-lbl">Réalisé lots</span><span class="pp-val">{{ fmt(realL(filtrePhase)) }}</span></div>
+            <div class="pp-row"><span class="pp-lbl">Taux lots</span><span class="pp-val">{{ tauxL(filtrePhase) != null ? tauxL(filtrePhase) + '%' : '—' }}</span></div>
+          </div>
+          <div class="pp-sep"></div>
+          <div class="pp-mini">
+            <div class="mini enc"><b>{{ lotsPhaseSel.encours.length }}</b>En cours</div>
+            <div class="mini att"><b>{{ lotsPhaseSel.attente.length }}</b>Attente</div>
+            <div class="mini pla"><b>{{ lotsPhaseSel.planifie.length }}</b>Planifiés</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -628,4 +648,15 @@ const serieMois = computed(() => {
 .lp-lot { padding: 4px 7px; font-size: 10.5px; }
 .v-b { display: block; }
 .v-l { display: block; font-size: 9px; color: #94a3b8; font-weight: 400; margin-top: 1px; }
+.ph-plan { margin-top: 12px; }
+.pp-grid { display: flex; flex-direction: column; gap: 5px; }
+.pp-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 11.5px; }
+.pp-lbl { color: #64748b; }
+.pp-val { font-weight: 700; color: #0f172a; }
+.pp-val i { font-style: normal; color: #94a3b8; font-weight: 400; font-size: 9px; }
+.pp-sep { height: 1px; background: #eef2f7; margin: 8px 0; }
+.pp-mini { display: flex; gap: 5px; }
+.mini { flex: 1; text-align: center; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 8px; padding: 6px 3px; font-size: 9px; color: #64748b; }
+.mini b { display: block; font-size: 16px; font-weight: 800; }
+.mini.enc b { color: #14b8a6; } .mini.att b { color: #f59e0b; } .mini.pla b { color: #64748b; }
 </style>
