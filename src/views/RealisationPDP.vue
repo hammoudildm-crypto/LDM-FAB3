@@ -731,4 +731,8 @@ const serieMois = computed(() => {
 .rp-side { flex: 0 0 260px; }
 .rp-rest { left: 272px; }
 .leg-note { white-space: nowrap; }
+/* Tableau fixe ; défilement sur la section Lots */
+.rp-rest .rp-main { overflow: hidden; }
+.rp-main > .rp-card:not(.lots-phase) { flex: 0 0 auto; }
+.rp-main > .lots-phase { flex: 1; min-height: 0; }
 </style>
