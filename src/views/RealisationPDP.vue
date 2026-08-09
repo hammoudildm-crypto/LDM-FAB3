@@ -294,7 +294,7 @@ const lotsParPhase = computed(() => {
     const st = (pl[k] || {}).statut
     const g = get(k)
     if (st === 'En cours') g.encours.push(o)
-    else if (lance) g.attente.push(o)
+    else if (pos > 0 || lance) g.attente.push(o)
     else g.planifie.push(o)
   }
   return m
