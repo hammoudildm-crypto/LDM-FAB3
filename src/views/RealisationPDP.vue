@@ -238,7 +238,7 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme, taille_lot)')),
       fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, date_reception, produits(code_pf, designation, gamme, taille_lot, pcsu)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true)),
-      fetchAllPaged(() => supabase.from('conditionnement').select('ordres_fabrication(id)'))
+      fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, date_conditionnement, date_fin, statut'))
     ])
     planRaw.value = rp; ofsRaw.value = ro; suivi.value = rs; condRaw.value = rc
   } catch (e) { console.error(e) } finally { chargement.value = false }
@@ -357,12 +357,22 @@ const lotsParPhase = computed(() => {
   return m
 })
 const lotsPhaseSel = computed(() => (filtrePhase.value && lotsParPhase.value[filtrePhase.value]) || { encours: [], attente: [], planifie: [] })
-const condOfSet = computed(() => { const s = new Set(); for (const c of condRaw.value) { const of = c.ordres_fabrication; if (of && of.id) s.add(of.id) } return s })
+const condByOf = computed(() => {
+  const m = {}
+  for (const c of condRaw.value) {
+    const oid = c.ordre_id; if (!oid) continue
+    if (!m[oid]) m[oid] = { launched: false, completed: false }
+    if (c.date_conditionnement) m[oid].launched = true
+    if (c.date_fin || /termin|lib[eé]r/i.test(c.statut || '')) m[oid].completed = true
+  }
+  return m
+})
 const lotsVracs = computed(() => {
-  const out = []; const cond = condOfSet.value
+  const out = []; const cb = condByOf.value
   for (const o of ofsRaw.value) {
     if (/rejet|lib[eé]r|clotur/i.test(o.statut || '')) continue
-    if (cond.has(o.id)) continue
+    const info = cb[o.id]
+    if (info && info.completed) continue
     const pl = phasesLot.value[o.id] || {}
     const p = o.produits || {}
     const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
@@ -377,10 +387,12 @@ const lotsVracs = computed(() => {
 const vracsInfo = computed(() => {
   const attente = [], recus = []
   let bA = 0, bR = 0, vA = 0, vR = 0
+  const cb = condByOf.value
   for (const o of lotsVracs.value) {
+    const lance = !!(cb[o.id] && cb[o.id].launched)
     const b = num(o.quantite_theorique) || num(o.boites_fabriquees)
     const pc = o.produits ? num(o.produits.pcsu) : 0
-    if (o.date_reception) { recus.push(o); bR += b; vR += b * pc }
+    if (lance) { recus.push(o); bR += b; vR += b * pc }
     else { attente.push(o); bA += b; vA += b * pc }
   }
   return { attente, recus, boites: bA + bR, val: vA + vR, total: lotsVracs.value.length }
