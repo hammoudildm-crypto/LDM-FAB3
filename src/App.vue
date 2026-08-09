@@ -636,4 +636,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .app-topbar { border-bottom: 3px solid var(--cat, #5b9bd5); transition: border-color .25s ease; }
 .side-link.router-link-active { box-shadow: inset 3px 0 0 var(--cat, #5b9bd5); }
 .side-link.router-link-active .link-ic svg { stroke: var(--cat, #5b9bd5); }
+/* Barre de navigation latérale supprimée */
+.sidebar, .side-reveal { display: none !important; }
+.burger { display: none !important; }
+.app-main { margin-left: 0 !important; }
 </style>
