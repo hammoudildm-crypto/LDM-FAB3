@@ -105,10 +105,14 @@
 
     <section v-if="filtrePhase" class="rp-card lots-phase">
       <h3 class="card-title">Lots — {{ filtrePhase === 'vracs' ? 'Vracs (prêts pour conditionnement)' : labelPhase(filtrePhase) }}</h3>
-      <div v-if="filtrePhase === 'vracs'" class="lp-cols vracs-single">
+      <div v-if="filtrePhase === 'vracs'" class="lp-cols vracs-two">
         <div class="lp-col">
-          <div class="lp-head prt"><span class="lp-dot"></span>Vracs prêts <b>{{ lotsVracs.length }}</b></div>
-          <div class="lp-list"><div v-for="o in lotsVracs" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!lotsVracs.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-head att"><span class="lp-dot"></span>En attente de réception <b>{{ vracsInfo.attente.length }}</b></div>
+          <div class="lp-list"><div v-for="o in vracsInfo.attente" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!vracsInfo.attente.length" class="lp-vide">Aucun</div></div>
+        </div>
+        <div class="lp-col">
+          <div class="lp-head prt"><span class="lp-dot"></span>Réceptionnés <b>{{ vracsInfo.recus.length }}</b></div>
+          <div class="lp-list"><div v-for="o in vracsInfo.recus" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!vracsInfo.recus.length" class="lp-vide">Aucun</div></div>
         </div>
       </div>
       <div v-else class="lp-cols">
@@ -159,6 +163,19 @@
             <div class="mini enc"><b>{{ lotsPhaseSel.encours.length }}</b>En cours</div>
             <div class="mini att"><b>{{ lotsPhaseSel.attente.length }}</b>Attente</div>
             <div class="mini pla"><b>{{ lotsPhaseSel.planifie.length }}</b>Planifiés</div>
+          </div>
+        </div>
+        <div v-if="filtrePhase === 'vracs'" class="rp-card ph-plan">
+          <h3 class="card-title">Vracs</h3>
+          <div class="pp-grid">
+            <div class="pp-row"><span class="pp-lbl">Total</span><span class="pp-val">{{ vracsInfo.total }} lots</span></div>
+            <div class="pp-row"><span class="pp-lbl">Boîtes</span><span class="pp-val">{{ fmt(vracsInfo.boites) }}</span></div>
+            <div class="pp-row"><span class="pp-lbl">Valeur</span><span class="pp-val">{{ fmt(vracsInfo.val) }} DA</span></div>
+          </div>
+          <div class="pp-sep"></div>
+          <div class="pp-mini">
+            <div class="mini att"><b>{{ vracsInfo.attente.length }}</b>En attente</div>
+            <div class="mini prt"><b>{{ vracsInfo.recus.length }}</b>Réceptionnés</div>
           </div>
         </div>
       </div>
@@ -219,7 +236,7 @@ onMounted(async () => {
   try {
     const [rp, ro, rs, rc] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme, taille_lot)')),
-      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, date_reception, produits(code_pf, designation, gamme, taille_lot)')),
+      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, date_reception, produits(code_pf, designation, gamme, taille_lot, pcsu)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true)),
       fetchAllPaged(() => supabase.from('conditionnement').select('ordres_fabrication(id)'))
     ])
@@ -356,6 +373,17 @@ const lotsVracs = computed(() => {
     out.push(o)
   }
   return out
+})
+const vracsInfo = computed(() => {
+  const attente = [], recus = []
+  let bA = 0, bR = 0, vA = 0, vR = 0
+  for (const o of lotsVracs.value) {
+    const b = num(o.quantite_theorique) || num(o.boites_fabriquees)
+    const pc = o.produits ? num(o.produits.pcsu) : 0
+    if (o.date_reception) { recus.push(o); bR += b; vR += b * pc }
+    else { attente.push(o); bA += b; vA += b * pc }
+  }
+  return { attente, recus, boites: bA + bR, val: vA + vR, total: lotsVracs.value.length }
 })
 const totMois = (i) => phasesAffichees.value.reduce((s, ph) => s + moisReal(ph.key, i), 0)
 const totGlobal = computed(() => phasesAffichees.value.reduce((s, ph) => s + valReal(ph.key), 0))
@@ -776,4 +804,6 @@ const serieMois = computed(() => {
 .lots-phase .lp-list::-webkit-scrollbar-track { background: #eef2f7; border-radius: 5px; }
 .vracs-single { grid-template-columns: 1fr !important; }
 .lp-head.prt .lp-dot { background: #f59e0b; }
+.vracs-two { grid-template-columns: repeat(2, 1fr) !important; }
+.mini.prt b { color: #f59e0b; }
 </style>
