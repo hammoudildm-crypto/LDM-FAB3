@@ -192,7 +192,7 @@ onMounted(async () => {
     const [rp, ro, rs] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme, taille_lot)')),
       fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, date_reception, produits(code_pf, designation, gamme, taille_lot)')),
-      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut, date_lancement, date_fin_fabrication').eq('actif', true))
+      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
     ])
     planRaw.value = rp; ofsRaw.value = ro; suivi.value = rs
   } catch (e) { console.error(e) } finally { chargement.value = false }
@@ -210,7 +210,7 @@ const phasesLot = computed(() => {
   for (const sp of suivi.value) {
     const k = phaseKey(sp.phase); if (!k) continue
     if (!m[sp.ordre_id]) m[sp.ordre_id] = {}
-    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut, dl: sp.date_lancement, df: sp.date_fin_fabrication }
+    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut, dl: sp.date_debut, df: sp.date_phase }
     if (!m[sp.ordre_id][k] || sp.statut === 'Terminé') m[sp.ordre_id][k] = rec
   }
   return m
