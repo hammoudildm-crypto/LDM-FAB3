@@ -107,6 +107,8 @@ function phaseKey(nom) {
   return null
 }
 const PHASE_LBL = { pesee: 'Pesée', granulation: 'Granulation / Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage gélules', pelliculage: 'Pelliculage' }
+const FAB_PH = new Set(['pesee', 'granulation', 'melange', 'compression', 'remplissage', 'pelliculage'])
+const estFabType = (type) => FAB_PH.has(phaseKey(type))
 const onglet = ref('fab')       // fab | cond
 const grp = ref('lab')          // lab | forme | produit | lot
 const annee = ref(new Date().getFullYear())
@@ -135,9 +137,9 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('ordres_fabrication')
         .select('id, numero_lot, boites_fabriquees, date_fin_fabrication, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('conditionnement')
-        .select('quantite_conditionnee, date_conditionnement, equipements(nom), ordres_fabrication(numero_lot, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
+        .select('quantite_conditionnee, date_conditionnement, equipements(nom, type), ordres_fabrication(numero_lot, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
       fetchAllPaged(() => supabase.from('plan_production')
-        .select('annee, quantite_planifiee, equipements(nom), produits(gamme, code_pf, designation, donneurs_ordre(nom))')),
+        .select('annee, quantite_planifiee, equipements(nom, type), produits(gamme, code_pf, designation, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut'))
     ])
     fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs
@@ -155,7 +157,7 @@ const condData = computed(() => condRaw.value
   .map(c => {
     const of = c.ordres_fabrication; const p = of ? of.produits : null
     const upb = p ? num(p.unites_par_boite) : 0
-    return { lot: of ? of.numero_lot : null, equip: c.equipements ? c.equipements.nom : null, boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p }
+    return { lot: of ? of.numero_lot : null, equip: c.equipements ? c.equipements.nom : null, equipType: c.equipements ? c.equipements.type : null, boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p }
   }))
 
 const annees = computed(() => {
@@ -200,6 +202,7 @@ const planParGroupe = computed(() => {
     } else {
       const cle = grp.value === 'equip' ? (r.equipements ? r.equipements.nom : null) : cleProduit(r.produits)
       if (cle == null) continue
+      if (onglet.value === 'cond' && grp.value === 'equip' && r.equipements && estFabType(r.equipements.type)) continue
       acc[cle] = (acc[cle] || 0) + num(r.quantite_planifiee)
     }
   }
@@ -218,6 +221,7 @@ const donnees = computed(() => {
       const phs = phasesByOf.value[r.id]; if (!phs) continue
       for (const k of phs) add(PHASE_LBL[k] || k, b, t, pc)
     } else {
+      if (onglet.value === 'cond' && grp.value === 'equip' && estFabType(r.equipType)) continue
       add(cleGroupe(r), b, t, pc)
     }
   }
