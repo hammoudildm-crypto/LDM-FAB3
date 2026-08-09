@@ -535,4 +535,41 @@ const serieMois = computed(() => {
 .lp-cols { margin-top: 10px; gap: 10px; }
 .lp-col { padding: 9px; }
 .lp-list { max-height: 220px; }
+/* Ultra compact */
+.rp { padding: 8px 14px 14px; }
+.rp-title { font-size: 17px; }
+.rp-sub { display: none; }
+.rp-head { margin-bottom: 8px; }
+.pdp-hero { padding: 10px 14px; margin-bottom: 8px; gap: 12px; }
+.hp-val { font-size: 24px; }
+.hp-txt { font-size: 11px; }
+.hero-pct { margin-bottom: 6px; }
+.hero-bar-wrap { margin-bottom: 15px; }
+.hero-bar { height: 8px; }
+.hero-stat { padding: 5px 10px; font-size: 11px; }
+.hero-r { gap: 8px; }
+.syn-card { padding: 8px 11px; min-width: 98px; }
+.syn-nums b { font-size: 16px; }
+.syn-lbl { font-size: 10px; }
+.syn-pct { font-size: 13px; margin-top: 4px; }
+.rp-layout { gap: 12px; }
+.rp-card { padding: 4px; }
+.rp-table thead th { padding: 6px 10px; font-size: 10.5px; }
+.rp-table tbody td { padding: 4px 10px; font-size: 12px; }
+.rp-matrix .cell { padding: 4px 5px; font-size: 10.5px; }
+.rp-side { padding: 10px; flex: 0 0 158px; }
+.rp-side .side-sec { margin-bottom: 9px; }
+.side-lbl { font-size: 10px; margin-bottom: 5px; }
+.side-tg button { padding: 5px 9px; font-size: 12px; }
+.side-phases button { padding: 4px 8px; font-size: 11px; }
+.side-select { padding: 5px 8px; font-size: 13px; }
+.pdp-chart { padding: 10px 12px; }
+.rp-right { flex: 0 0 218px; }
+.rp-right .pc-bars { height: 88px; }
+.card-title { font-size: 14px; }
+.lots-phase { margin-top: 10px; }
+.lp-cols { margin-top: 8px; gap: 8px; }
+.lp-col { padding: 8px; }
+.lp-list { max-height: 170px; }
+.lp-lot { padding: 5px 8px; font-size: 11px; }
 </style>
