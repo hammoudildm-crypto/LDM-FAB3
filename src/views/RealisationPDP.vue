@@ -23,19 +23,6 @@
       </div>
     </div>
 
-    <section class="rp-card pdp-chart">
-      <div class="pc-head"><h3 class="card-title">{{ mesure === 'boites' ? 'Boîtes' : 'Lots' }} par mois — réalisé vs prévu — {{ annee }}</h3><div class="pc-leg"><span class="lg r">Réalisé</span><span class="lg p">Prévu</span></div></div>
-      <div class="pc-bars">
-        <div v-for="(m, i) in MOIS" :key="i" class="pc-col">
-          <div class="pc-pair">
-            <span class="pc-bar r" :style="{ height: (serieMois.real[i] / serieMois.max * 100) + '%' }" :title="m + ' — Réalisé ' + fmt(serieMois.real[i])"></span>
-            <span class="pc-bar p" :style="{ height: (serieMois.plan[i] / serieMois.max * 100) + '%' }" :title="m + ' — Prévu ' + fmt(serieMois.plan[i])"></span>
-          </div>
-          <span class="pc-lbl">{{ m }}</span>
-        </div>
-      </div>
-    </section>
-
     <div class="rp-layout">
       <aside class="rp-side">
         <div class="side-sec">
@@ -114,6 +101,21 @@
       </table>
       <p class="rp-hint">Vue mensuelle : <b>Réalisé</b>, <b>Plan</b> ou <b>Taux</b> par phase et par mois (bascule ci-dessus). Le mois du réalisé = celui où le lot a atteint la phase.</p>
     </div>
+      </div>
+      <div class="rp-right">
+        <section class="rp-card pdp-chart">
+          <div class="pc-head"><h3 class="card-title">{{ mesure === 'boites' ? 'Boîtes' : 'Lots' }} par mois — {{ annee }}</h3></div>
+          <div class="pc-leg"><span class="lg r">Réalisé</span><span class="lg p">Prévu</span></div>
+          <div class="pc-bars">
+            <div v-for="(m, i) in MOIS" :key="i" class="pc-col">
+              <div class="pc-pair">
+                <span class="pc-bar r" :style="{ height: (serieMois.real[i] / serieMois.max * 100) + '%' }" :title="m + ' — Réalisé ' + fmt(serieMois.real[i])"></span>
+                <span class="pc-bar p" :style="{ height: (serieMois.plan[i] / serieMois.max * 100) + '%' }" :title="m + ' — Prévu ' + fmt(serieMois.plan[i])"></span>
+              </div>
+              <span class="pc-lbl">{{ m }}</span>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -435,4 +437,14 @@ const serieMois = computed(() => {
 .leg-sw { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
 .leg-sw.ok { background: #dcfce7; } .leg-sw.bas { background: #fee2e2; } .leg-sw.mid { background: #fef9c3; }
 .leg-note { font-size: 11px; color: #94a3b8; margin-top: 2px; line-height: 1.4; }
+.rp-right { flex: 0 0 250px; }
+.rp-right .pdp-chart { position: sticky; top: 16px; margin-bottom: 0; padding: 14px 16px; }
+.rp-right .pc-head { margin-bottom: 8px; }
+.rp-right .pc-head .card-title { font-size: 14px; }
+.rp-right .pc-leg { margin-bottom: 12px; }
+.rp-right .pc-bars { height: 120px; gap: 3px; }
+.rp-right .pc-pair { gap: 1px; }
+.rp-right .pc-bar { max-width: 8px; }
+.rp-right .pc-lbl { font-size: 8px; }
+@media (max-width: 980px) { .rp-right { flex: none; width: 100%; } .rp-right .pdp-chart { position: static; } .rp-right .pc-bar { max-width: 16px; } .rp-right .pc-lbl { font-size: 10px; } }
 </style>
