@@ -108,25 +108,25 @@
       <div v-if="filtrePhase === 'vracs'" class="lp-cols vracs-two">
         <div class="lp-col">
           <div class="lp-head att"><span class="lp-dot"></span>En attente de conditionnement <b>{{ vracsInfo.attente.length }}</b></div>
-          <div class="lp-list"><div v-for="o in vracsInfo.attente" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!vracsInfo.attente.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in vracsInfo.attente" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!vracsInfo.attente.length" class="lp-vide">Aucun</div></div>
         </div>
         <div class="lp-col">
           <div class="lp-head prt"><span class="lp-dot"></span>En cours de conditionnement <b>{{ vracsInfo.encours.length }}</b></div>
-          <div class="lp-list"><div v-for="o in vracsInfo.encours" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!vracsInfo.encours.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in vracsInfo.encours" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!vracsInfo.encours.length" class="lp-vide">Aucun</div></div>
         </div>
       </div>
       <div v-else class="lp-cols">
         <div class="lp-col">
           <div class="lp-head enc"><span class="lp-dot"></span>En cours <b>{{ lotsPhaseSel.encours.length }}</b></div>
-          <div class="lp-list"><div v-for="o in lotsPhaseSel.encours" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.encours.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in lotsPhaseSel.encours" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.encours.length" class="lp-vide">Aucun</div></div>
         </div>
         <div class="lp-col">
           <div class="lp-head att"><span class="lp-dot"></span>En attente <b>{{ lotsPhaseSel.attente.length }}</b></div>
-          <div class="lp-list"><div v-for="o in lotsPhaseSel.attente" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.attente.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in lotsPhaseSel.attente" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.attente.length" class="lp-vide">Aucun</div></div>
         </div>
         <div class="lp-col">
           <div class="lp-head pla"><span class="lp-dot"></span>Planifiés <b>{{ lotsPhaseSel.planifie.length }}</b></div>
-          <div class="lp-list"><div v-for="o in lotsPhaseSel.planifie" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.planifie.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in lotsPhaseSel.planifie" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.planifie.length" class="lp-vide">Aucun</div></div>
         </div>
       </div>
     </section>
@@ -328,6 +328,15 @@ const moisSel = ref(new Date().getMonth())
 const phasesAffichees = computed(() => (filtrePhase.value && filtrePhase.value !== 'vracs') ? phasesActives.value.filter(p => p.key === filtrePhase.value) : phasesActives.value)
 const prodTxt = (o) => { const p = o && o.produits; return p ? ((p.code_pf || '') + ' — ' + (p.designation || '')) : '' }
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : ''
+const validEtat = (o) => {
+  if (!o.date_fin_validite) return ''
+  const d = new Date(o.date_fin_validite); d.setHours(0, 0, 0, 0)
+  const now = new Date(); now.setHours(0, 0, 0, 0)
+  const j = (d - now) / 86400000
+  if (j < 0) return 'val-perime'
+  if (j <= 5) return 'val-proche'
+  return ''
+}
 const labelPhase = (k) => { const ph = PHASES.find(p => p.key === k); return ph ? ph.label : k }
 const PHASE_ORDER = ['pesee', 'granulation', 'melange', 'compression', 'remplissage', 'pelliculage']
 const lotsParPhase = computed(() => {
@@ -826,4 +835,6 @@ const serieMois = computed(() => {
 .vracs-two { grid-template-columns: repeat(2, 1fr) !important; }
 .mini.prt b { color: #f59e0b; }
 .lp-val { color: #94a3b8; font-size: 0.88em; margin-left: 4px; }
+.lp-val.val-perime { color: #dc2626; font-weight: 700; }
+.lp-val.val-proche { color: #ea580c; font-weight: 700; }
 </style>
