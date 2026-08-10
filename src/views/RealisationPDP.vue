@@ -328,6 +328,7 @@ const moisSel = ref(new Date().getMonth())
 const phasesAffichees = computed(() => (filtrePhase.value && filtrePhase.value !== 'vracs') ? phasesActives.value.filter(p => p.key === filtrePhase.value) : phasesActives.value)
 const prodTxt = (o) => { const p = o && o.produits; return p ? ((p.code_pf || '') + ' — ' + (p.designation || '')) : '' }
 const labelPhase = (k) => { const ph = PHASES.find(p => p.key === k); return ph ? ph.label : k }
+const PHASE_ORDER = ['pesee', 'granulation', 'melange', 'compression', 'remplissage', 'pelliculage']
 const lotsParPhase = computed(() => {
   const m = {}
   const get = (k) => { if (!m[k]) m[k] = { encours: [], attente: [], planifie: [] }; return m[k] }
@@ -338,6 +339,7 @@ const lotsParPhase = computed(() => {
     const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
     const fabKeys = []; const seen = new Set()
     for (const phn of gamme) { const k = phaseKey(phn); if (k && k !== 'conditionnement' && !seen.has(k)) { seen.add(k); fabKeys.push(k) } }
+    fabKeys.sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b))
     // position = première phase non terminée (sans date de fin)
     let pos = -1
     for (let i = 0; i < fabKeys.length; i++) { const q = pl[fabKeys[i]] || {}; if (!q.df && q.statut !== 'Terminé') { pos = i; break } }
