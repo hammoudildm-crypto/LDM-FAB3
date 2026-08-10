@@ -630,4 +630,6 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .v3-mid table.mini th:nth-child(4), .v3-mid table.mini td:nth-child(4) { width: 13%; }
 .v3-mid table.mini th:nth-child(5), .v3-mid table.mini td:nth-child(5) { width: 10%; }
 .v3-mid .verif-form td { white-space: normal; overflow: visible; }
+/* Pas de défilement sur colonnes gauche/droite */
+.verif-3col > .v3-col { overflow: visible !important; }
 </style>
