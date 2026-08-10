@@ -30,6 +30,7 @@ watch(supSuivis, (v) => { try { localStorage.setItem(CLE_SUP, JSON.stringify(v))
 const filtreSupOuvert = ref(false)
 const nouveauSuperviseur = ref('')
 const supList = ref([])  // superviseurs gérés dans Référentiels (noms)
+const planRaw = ref([])  // plan de production (PDP)
 const histRecherche = ref('')
 const histDu = ref('')
 const histAu = ref('')
@@ -59,6 +60,8 @@ async function charger() {
   if (!rp.error) phases.value = rp.data
   const rs = await supabase.from('superviseurs').select('nom').order('nom')
   if (!rs.error) supList.value = rs.data.map(s => s.nom)
+  const rpp = await fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produits(taille_lot)'))
+  if (!rpp.error) planRaw.value = rpp.data
 }
 onMounted(charger)
 
@@ -146,6 +149,17 @@ const taux = computed(() => {
   const tot = nbVerifies.value + nbAttente.value
   return tot > 0 ? (nbVerifies.value / tot) * 100 : null
 })
+const planDDL = computed(() => {
+  const an = anneeSel.value
+  let n = 0
+  for (const r of planRaw.value) {
+    if (an && Number(r.annee) !== an) continue
+    const t = Number(r.produits ? r.produits.taille_lot : 0) || 0
+    if (t > 0) n += Number(r.quantite_planifiee || 0) / t
+  }
+  return Math.round(n)
+})
+const tauxPlanDDL = computed(() => planDDL.value > 0 ? Math.round((nbVerifies.value / planDDL.value) * 100) : null)
 
 const parSuperviseur = computed(() => {
   const m = {}
@@ -295,7 +309,21 @@ async function devalider(l) {
       </section>
       </div>
 
-      <section class="card v3-right">
+      <div class="v3-col v3-right">
+      <section class="card plan-ddl">
+        <h3 class="card-title">Plan de vérification DDL<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
+        <p class="hint">Basé sur le PDP (nombre de lots planifiés)</p>
+        <div class="pddl-grid">
+          <div class="pddl-row"><span class="pddl-lbl">DDL à vérifier (an)</span><span class="pddl-val">{{ fmt(planDDL) }}</span></div>
+          <div class="pddl-row"><span class="pddl-lbl">Vérifiés</span><span class="pddl-val ok">{{ fmt(nbVerifies) }}</span></div>
+          <div class="pddl-row"><span class="pddl-lbl">En attente</span><span class="pddl-val warn">{{ fmt(nbAttente) }}</span></div>
+        </div>
+        <div v-if="tauxPlanDDL != null" class="pddl-progress">
+          <div class="pddl-bar-head"><span>Avancement / plan</span><span>{{ tauxPlanDDL }}%</span></div>
+          <div class="bar-track"><div class="bar-fill" :class="tauxPlanDDL >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxPlanDDL) + '%' }"></div></div>
+        </div>
+      </section>
+      <section class="card">
         <div class="sup-head">
           <h3 class="card-title">Taux de vérification par vérificateur</h3>
           <div class="sup-filtre">
@@ -317,6 +345,7 @@ async function devalider(l) {
           <div class="bar-track"><div class="bar-fill" :class="s.taux >= 100 ? 'ok' : 'part'" :style="{ width: s.taux + '%' }"></div></div>
         </div>
       </section>
+      </div>
 
       <section class="card v3-mid">
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
@@ -561,4 +590,11 @@ table.mini td { padding: 3px 5px; }
 .btn-filtre { font-size: 11px; padding: 5px 9px; }
 .sup-opt { font-size: 11px; padding: 4px 7px; }
 .resv-sel { font-size: 11px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; max-width: 150px; }
+.plan-ddl .pddl-grid { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.pddl-row { display: flex; justify-content: space-between; align-items: center; }
+.pddl-lbl { font-size: 11px; color: #64748b; }
+.pddl-val { font-size: 14px; font-weight: 800; color: #0f172a; }
+.pddl-val.ok { color: #0f766e; }
+.pddl-val.warn { color: #d97706; }
+.pddl-bar-head { display: flex; justify-content: space-between; font-size: 10px; color: #64748b; margin-bottom: 3px; font-weight: 600; }
 </style>
