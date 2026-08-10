@@ -643,4 +643,10 @@ table.mini td { padding: 2px 4px; }
 .resv-sel { font-size: 10px; padding: 2px 5px; }
 .chart-hint-vd { font-size: 9px; margin: 4px 0 0; }
 .card-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Colonnes bornées en hauteur + défilement interne pour tout voir */
+.v3-mid { max-height: calc(100vh - 130px); overflow-y: auto; }
+.v3-mid .card-title { position: sticky; top: 0; background: #fff; z-index: 2; padding-bottom: 4px; }
+.verif-3col > .v3-col { max-height: calc(100vh - 110px); overflow-y: auto; }
+.verif-3col > .v3-col::-webkit-scrollbar, .v3-mid::-webkit-scrollbar { width: 7px; }
+.verif-3col > .v3-col::-webkit-scrollbar-thumb, .v3-mid::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 </style>
