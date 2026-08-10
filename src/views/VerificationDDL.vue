@@ -649,4 +649,20 @@ table.mini td { padding: 2px 4px; }
 .verif-3col > .v3-col { max-height: calc(100vh - 110px); overflow-y: auto; }
 .verif-3col > .v3-col::-webkit-scrollbar, .v3-mid::-webkit-scrollbar { width: 7px; }
 .verif-3col > .v3-col::-webkit-scrollbar-thumb, .v3-mid::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+/* Réduction forte pour visualiser toutes les cartes */
+.card { padding: 5px 7px; }
+.card-title { font-size: 10px; margin: 0 0 4px; }
+.hint { font-size: 8px; margin: -2px 0 4px; }
+table.mini td { padding: 1px 4px; font-size: 9px; }
+table.mini th { font-size: 8px; padding: 2px 4px; }
+.prog-row { margin-bottom: 4px; }
+.prog-nom, .prog-pct { font-size: 9px; }
+.pddl-val { font-size: 11px; }
+.pddl-lbl { font-size: 9px; }
+.pddl-bar-head { font-size: 8px; }
+.verif-3col { gap: 8px; }
+.verif-3col > .v3-col { gap: 8px; }
+.chart-hint-vd { font-size: 8px; }
+.v3-col :deep(.ch), .v3-col :deep(.line-ch) { height: 90px !important; min-height: 0 !important; }
+.v3-col :deep(.lch-svg) { max-height: 90px; }
 </style>
