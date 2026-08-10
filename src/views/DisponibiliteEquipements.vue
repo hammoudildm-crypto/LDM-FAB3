@@ -973,4 +973,24 @@ onMounted(async () => {
 .grid td { padding: 1px 5px; font-size: 9.5px; }
 .atelier-titre { font-size: 10.5px; margin: 0 0 3px; }
 .searchbar input[type=text] { padding: 4px 8px; font-size: 10.5px; }
+/* Réduction supplémentaire de résolution */
+.de-head h1 { font-size: 12px; }
+.sub { display: none; }
+.flow { display: none; }
+.note { display: none; }
+.de-head { margin-bottom: 4px; }
+.kpi { padding: 5px 8px; }
+.kpi-val { font-size: 13px; }
+.kpi-lbl { font-size: 9px; }
+.board-h { font-size: 11px; margin: 6px 0 4px; padding-bottom: 4px; }
+.cond-plan-h { font-size: 11px; margin: 6px 0 4px; }
+.card { padding: 5px 8px; }
+.phase-card { padding: 4px 6px !important; gap: 3px; }
+.eq-stats { padding: 3px 0 4px; gap: 7px; font-size: 9.5px; }
+.eq-stats strong { font-size: 10.5px; }
+.grid th { font-size: 9px; padding: 2px 5px; }
+.grid td { padding: 1px 5px; font-size: 9.5px; }
+.atelier-titre { font-size: 10.5px; margin: 0 0 3px; }
+.at-plan { font-size: 9px; }
+.searchbar input[type=text] { padding: 4px 8px; font-size: 10.5px; }
 </style>
