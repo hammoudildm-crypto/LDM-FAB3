@@ -257,6 +257,7 @@ const queuePhase = computed(() => {
     const gammeB = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB
     const gamme = []; let _pk = null
     for (const _ph of gammeB) { const _k = phaseKey(_ph); if (_k && _k === _pk) continue; gamme.push(_ph); _pk = _k }
+    gamme.sort((a, b) => ((PHASES.find(x => x.key === phaseKey(a)) || {}).ordre || 99) - ((PHASES.find(x => x.key === phaseKey(b)) || {}).ordre || 99))
     const p = o.produits || {}
     // Fabrication finie = dernière phase de la gamme du produit terminée (critère fiable, pas la date).
     const kDern = gamme.length ? phaseKey(gamme[gamme.length - 1]) : null
@@ -957,4 +958,23 @@ onMounted(async () => {
 .grid th { font-size: 9.5px; padding: 3px 5px; }
 .grid td { padding: 2px 5px; font-size: 10px; }
 .lot-sub { font-size: 9px; }
+/* Réduction maximale */
+.flow { display: none; }
+.note { display: none; }
+.de-head h1 { font-size: 12px; }
+.de-head { margin-bottom: 4px; }
+.kpi { padding: 5px 8px; }
+.kpi-val { font-size: 13px; }
+.board-h { font-size: 11px; margin: 6px 0 4px; padding-bottom: 4px; }
+.cond-plan-h { font-size: 11px; margin: 6px 0 4px; }
+.de-tabs { margin: 0 0 6px; padding: 2px; }
+.de-tabs button { font-size: 10.5px; padding: 4px 9px; }
+.card { padding: 5px 8px; }
+.phase-card { padding: 4px 6px !important; gap: 3px; }
+.eq-stats { padding: 3px 0 4px; gap: 7px; font-size: 9.5px; }
+.eq-stats strong { font-size: 10.5px; }
+.grid th { font-size: 9px; padding: 2px 5px; }
+.grid td { padding: 1px 5px; font-size: 9.5px; }
+.atelier-titre { font-size: 10.5px; margin: 0 0 3px; }
+.searchbar input[type=text] { padding: 4px 8px; font-size: 10.5px; }
 </style>
