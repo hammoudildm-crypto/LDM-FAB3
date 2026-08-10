@@ -171,6 +171,7 @@
             <div class="pp-row"><span class="pp-lbl">Total</span><span class="pp-val">{{ vracsInfo.total }} lots</span></div>
             <div class="pp-row"><span class="pp-lbl">Boîtes</span><span class="pp-val">{{ fmt(vracsInfo.boites) }}</span></div>
             <div class="pp-row"><span class="pp-lbl">Valeur</span><span class="pp-val">{{ fmt(vracsInfo.val) }} DA</span></div>
+            <div class="pp-row" v-if="vracsInfo.moyStock != null"><span class="pp-lbl">Stockage moyen</span><span class="pp-val">{{ vracsInfo.moyStock }} j</span></div>
           </div>
           <div class="pp-sep"></div>
           <div class="pp-mini">
@@ -375,8 +376,8 @@ const condByOf = computed(() => {
   const m = {}
   for (const c of condRaw.value) {
     const oid = c.ordre_id; if (!oid) continue
-    if (!m[oid]) m[oid] = { launched: false, completed: false }
-    if (c.date_conditionnement) m[oid].launched = true
+    if (!m[oid]) m[oid] = { launched: false, completed: false, launchDate: null }
+    if (c.date_conditionnement) { m[oid].launched = true; if (!m[oid].launchDate || c.date_conditionnement < m[oid].launchDate) m[oid].launchDate = c.date_conditionnement }
     if (c.date_fin || /termin|lib[eé]r/i.test(c.statut || '')) m[oid].completed = true
   }
   return m
@@ -401,17 +402,29 @@ const lotsVracs = computed(() => {
 const vracsInfo = computed(() => {
   const attente = [], encours = []
   let bA = 0, bE = 0, vA = 0, vE = 0
+  let sommeJours = 0, nbDates = 0
   const cb = condByOf.value
+  const now = new Date(); now.setHours(0, 0, 0, 0)
   for (const o of lotsVracs.value) {
-    const lance = !!(cb[o.id] && cb[o.id].launched)
+    const info = cb[o.id] || {}
+    const lance = !!info.launched
     const b = num(o.quantite_theorique) || num(o.boites_fabriquees)
     const pc = o.produits ? num(o.produits.pcsu) : 0
     if (lance) { encours.push(o); bE += b; vE += b * pc }
     else { attente.push(o); bA += b; vA += b * pc }
+    const pl = phasesLot.value[o.id] || {}
+    let finFab = null
+    for (const k in pl) { if (k === 'conditionnement') continue; const dfk = pl[k].df; if (dfk && (!finFab || dfk > finFab)) finFab = dfk }
+    if (finFab) {
+      const d0 = new Date(finFab); d0.setHours(0, 0, 0, 0)
+      const d1 = (lance && info.launchDate) ? new Date(info.launchDate) : new Date(now); d1.setHours(0, 0, 0, 0)
+      sommeJours += Math.max(0, Math.round((d1 - d0) / 86400000)); nbDates++
+    }
   }
   const cmpLot = (a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })
   attente.sort(cmpLot); encours.sort(cmpLot)
-  return { attente, encours, boites: bA + bE, val: vA + vE, total: lotsVracs.value.length }
+  const moyStock = nbDates ? Math.round(sommeJours / nbDates) : null
+  return { attente, encours, boites: bA + bE, val: vA + vE, total: lotsVracs.value.length, moyStock }
 })
 const totMois = (i) => phasesAffichees.value.reduce((s, ph) => s + moisReal(ph.key, i), 0)
 const totGlobal = computed(() => phasesAffichees.value.reduce((s, ph) => s + valReal(ph.key), 0))
