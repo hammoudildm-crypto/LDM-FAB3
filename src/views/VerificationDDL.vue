@@ -622,4 +622,25 @@ table.mini td { padding: 3px 5px; }
 .pddl-val.ok { color: #0f766e; }
 .pddl-val.warn { color: #d97706; }
 .pddl-bar-head { display: flex; justify-content: space-between; font-size: 10px; color: #64748b; margin-bottom: 3px; font-weight: 600; }
+/* Réduction pour tout visualiser */
+.card { padding: 7px 9px; }
+.card-title { font-size: 11px; margin: 0 0 6px; }
+.hint { font-size: 9px; margin: -3px 0 6px; }
+.pddl-val { font-size: 12px; }
+.pddl-lbl { font-size: 10px; }
+.pddl-bar-head { font-size: 9px; }
+.pddl-grid { gap: 3px !important; margin-bottom: 6px !important; }
+.prog-nom, .prog-pct { font-size: 10px; }
+.prog-row { margin-bottom: 6px; }
+table.mini { font-size: 10px; }
+table.mini th { font-size: 8.5px; padding: 3px 4px; }
+table.mini td { padding: 2px 4px; }
+.verif-3col { gap: 10px; }
+.verif-3col > .v3-col { gap: 10px; }
+.bar-track { height: 6px; }
+.btn.sm { padding: 4px 9px; font-size: 10px; }
+.verif-form input, .verif-form select { font-size: 11px; padding: 4px 7px; }
+.resv-sel { font-size: 10px; padding: 2px 5px; }
+.chart-hint-vd { font-size: 9px; margin: 4px 0 0; }
+.card-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>
