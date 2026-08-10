@@ -30,6 +30,7 @@ watch(supSuivis, (v) => { try { localStorage.setItem(CLE_SUP, JSON.stringify(v))
 const filtreSupOuvert = ref(false)
 const nouveauSuperviseur = ref('')
 const supList = ref([])  // superviseurs gérés dans Référentiels (noms)
+const planRaw = ref([])  // plan de production (PDP)
 const histRecherche = ref('')
 const histDu = ref('')
 const histAu = ref('')
@@ -59,6 +60,8 @@ async function charger() {
   if (!rp.error) phases.value = rp.data
   const rs = await supabase.from('superviseurs').select('nom').order('nom')
   if (!rs.error) supList.value = rs.data.map(s => s.nom)
+  const rpp = await fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(taille_lot)'))
+  if (!rpp.error) planRaw.value = rpp.data
 }
 onMounted(charger)
 
@@ -147,6 +150,36 @@ const taux = computed(() => {
   const tot = nbVerifies.value + nbAttente.value
   return tot > 0 ? (nbVerifies.value / tot) * 100 : null
 })
+const planDDL = computed(() => {
+  const an = anneeSel.value || new Date().getFullYear()
+  let n = 0
+  for (const r of planRaw.value) {
+    if (Number(r.annee) !== an) continue
+    const t = Number(r.produits ? r.produits.taille_lot : 0) || 0
+    if (t > 0) n += Number(r.quantite_planifiee || 0) / t
+  }
+  return Math.round(n)
+})
+const tauxPlanDDL = computed(() => planDDL.value > 0 ? Math.round((nbVerifies.value / planDDL.value) * 100) : null)
+const moisCourant = new Date().getMonth() + 1
+const objectifMois = computed(() => {
+  const an = anneeSel.value || new Date().getFullYear()
+  let n = 0
+  for (const r of planRaw.value) {
+    if (Number(r.annee) !== an || Number(r.mois) !== moisCourant) continue
+    const t = Number(r.produits ? r.produits.taille_lot : 0) || 0
+    if (t > 0) n += Number(r.quantite_planifiee || 0) / t
+  }
+  return Math.round(n)
+})
+const verifMois = computed(() => {
+  const an = anneeSel.value || new Date().getFullYear()
+  return verifies.value.filter(l => {
+    const d = l.ddl_aq_date_verification ? new Date(l.ddl_aq_date_verification) : null
+    return d && d.getFullYear() === an && (d.getMonth() + 1) === moisCourant
+  }).length
+})
+const tauxMois = computed(() => objectifMois.value > 0 ? Math.round((verifMois.value / objectifMois.value) * 100) : null)
 
 const parSuperviseur = computed(() => {
   const m = {}
@@ -231,6 +264,11 @@ function ouvrir(l) {
   msg.value = ''
 }
 
+async function reserverVerif(l, nom) {
+  const r = await supabase.from('ordres_fabrication').update({ ddl_aq_verificateur: nom || null }).eq('id', l.id)
+  if (r.error) { msg.value = r.error.message; return }
+  await charger()
+}
 async function valider(l) {
   msg.value = ''
   const nom = (superviseurChoix.value === '__autre__' ? nouveauSuperviseur.value : superviseurChoix.value).trim()
@@ -270,29 +308,50 @@ async function devalider(l) {
 
     <p v-if="msg" class="alert">{{ msg }}</p>
 
-    <div class="kpi-grid k3">
-      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.clipboard"></svg></span><div class="kpi-val">{{ fmt(nbVerifies) }}</div></div><div class="kpi-lbl">DDL vérifiés</div></div>
-      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><div class="kpi-val" :class="{ warn: nbAttente > 0 }">{{ fmt(nbAttente) }}</div></div><div class="kpi-lbl">DDL en attente de vérification</div></div>
-      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><div class="kpi-val accent">{{ fmtPct(taux) }}</div></div><div class="kpi-lbl">Taux de vérification</div></div>
-    </div>
-
-    <section class="card">
-      <h3 class="card-title">Dossiers en attente de vérification par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
-      <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :clickable="true" @pick="ouvrirMois" :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" />
-      <p class="chart-hint-vd">Clique sur une barre pour voir les dossiers en attente ce mois-là.</p>
-      <p v-if="!attenteParMois.some(v => v)" class="empty">Aucun DDL en attente<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
+    <section class="card plan-ddl plan-ddl-top">
+      <h3 class="card-title">Plan de vérification AQ<span v-if="anneeSel"> — {{ anneeSel }}</span> <span class="pddl-src">· basé sur le PDP</span></h3>
+      <div class="pddl-top-row">
+        <div class="pddl-top-item"><span class="pddl-lbl">DDL à vérifier (an)</span><span class="pddl-val">{{ fmt(planDDL) }}</span></div>
+        <div class="pddl-top-item"><span class="pddl-lbl">Vérifiés</span><span class="pddl-val ok">{{ fmt(nbVerifies) }}</span></div>
+        <div class="pddl-top-item"><span class="pddl-lbl">En attente</span><span class="pddl-val warn">{{ fmt(nbAttente) }}</span></div>
+        <div class="pddl-top-bar" v-if="tauxPlanDDL != null">
+          <div class="pddl-bar-head"><span>Avancement / plan</span><span>{{ tauxPlanDDL }}%</span></div>
+          <div class="bar-track"><div class="bar-fill" :class="tauxPlanDDL >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxPlanDDL) + '%' }"></div></div>
+        </div>
+      </div>
     </section>
 
-    <section class="card">
-      <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
-      <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
-      <p v-if="!verifParMois.some(v => v)" class="empty">Aucun DDL vérifié<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
-    </section>
+    <div class="verif-3col">
+      <div class="v3-col">
+        <section class="card">
+          <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
+          <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
+          <p v-if="!verifParMois.some(v => v)" class="empty">Aucun DDL vérifié<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
+        </section>
+        <section class="card">
+          <h3 class="card-title">Dossiers en attente de vérification par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
+          <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :clickable="true" @pick="ouvrirMois" :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" />
+          <p class="chart-hint-vd">Clique sur une barre pour voir les dossiers en attente ce mois-là.</p>
+          <p v-if="!attenteParMois.some(v => v)" class="empty">Aucun DDL en attente<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
+        </section>
+      </div>
 
-    <div class="cols">
-      <section class="card">
-        <div class="sup-head">
-          <h3 class="card-title">Taux de vérification par vérificateur</h3>
+      <div class="v3-col v3-right">
+        <section class="card plan-ddl">
+          <h3 class="card-title">Objectif du mois — {{ MOIS[moisCourant - 1] }}</h3>
+          <p class="hint">DDL à vérifier ce mois (PDP)</p>
+          <div class="pddl-grid">
+            <div class="pddl-row"><span class="pddl-lbl">Objectif</span><span class="pddl-val">{{ fmt(objectifMois) }}</span></div>
+            <div class="pddl-row"><span class="pddl-lbl">Vérifiés ce mois</span><span class="pddl-val ok">{{ fmt(verifMois) }}</span></div>
+          </div>
+          <div v-if="tauxMois != null" class="pddl-progress">
+            <div class="pddl-bar-head"><span>Taux de vérification</span><span>{{ tauxMois }}%</span></div>
+            <div class="bar-track"><div class="bar-fill" :class="tauxMois >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxMois) + '%' }"></div></div>
+          </div>
+        </section>
+        <section class="card">
+          <div class="sup-head">
+            <h3 class="card-title">Taux de vérification par vérificateur</h3>
           <div class="sup-filtre">
             <button class="btn-filtre" type="button" @click="filtreSupOuvert = !filtreSupOuvert">Vérificateurs<span v-if="supSuivis.length"> ({{ supSuivis.length }})</span> ▾</button>
             <div v-if="filtreSupOuvert" class="sup-backdrop" @click="filtreSupOuvert = false"></div>
@@ -311,19 +370,26 @@ async function devalider(l) {
           </div>
           <div class="bar-track"><div class="bar-fill" :class="s.taux >= 100 ? 'ok' : 'part'" :style="{ width: s.taux + '%' }"></div></div>
         </div>
-      </section>
+        </section>
+      </div>
 
-      <section class="card">
+      <section class="card v3-mid">
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <table v-else class="mini">
-          <thead><tr><th>Lot</th><th>Produit</th><th>Vérificateur</th><th class="right">Fin fab.</th><th></th></tr></thead>
+          <thead><tr><th>Lot</th><th>Produit</th><th>Réserver vérificateur</th><th class="right">Fin fab.</th><th></th></tr></thead>
           <tbody>
             <template v-for="l in attente" :key="l.id">
               <tr>
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td class="desig">{{ prodNom(l) }}</td>
-                <td>{{ l.ddl_aq_verificateur || '—' }}</td>
+                <td>
+                  <select v-if="peutEditer" class="resv-sel" :value="l.ddl_aq_verificateur || ''" @change="reserverVerif(l, $event.target.value)">
+                    <option value="">— Réserver —</option>
+                    <option v-for="sup in superviseurs" :key="sup" :value="sup">{{ sup }}</option>
+                  </select>
+                  <span v-else>{{ l.ddl_aq_verificateur || '—' }}</span>
+                </td>
                 <td class="right nowrap">{{ fmtDate(dateDDL(l)) }}</td>
                 <td class="right"><button class="link" @click="ouvrir(l)">Vérifier</button></td>
               </tr>
@@ -520,4 +586,48 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .mini-vd .nowrap { white-space: nowrap; }
 .verif-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #b45309; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .verif-chk input { width: 15px; height: 15px; cursor: pointer; }
+/* === Refonte design (identique page DDL) === */
+.verif-3col { display: grid; grid-template-columns: 0.72fr 1.45fr 0.83fr; gap: 8px; align-items: stretch; }
+.verif-3col > .v3-col { display: flex; flex-direction: column; gap: 8px; order: 1; height: calc(100vh - 330px); max-height: calc(100vh - 330px); min-height: 0; overflow-y: auto; }
+.verif-3col > .v3-mid { display: flex; flex-direction: column; order: 2; margin: 0; height: calc(100vh - 330px); max-height: calc(100vh - 330px); min-height: 0; overflow-y: auto; }
+.verif-3col > .v3-right { order: 3; margin: 0; }
+.verif-3col > .v3-col > .card:last-child { flex: 1 1 auto; }
+.v3-mid .card-title { position: sticky; top: 0; background: #fff; z-index: 2; padding-bottom: 4px; }
+@media (max-width: 1100px) { .verif-3col { grid-template-columns: 1fr; } .verif-3col > * { order: 0 !important; height: auto !important; max-height: none !important; } }
+.plan-ddl .pddl-grid { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+.pddl-row { display: flex; justify-content: space-between; align-items: center; }
+.pddl-lbl { font-size: 10px; color: #64748b; }
+.pddl-val { font-size: 12px; font-weight: 800; color: #0f172a; }
+.pddl-val.ok { color: #0f766e; }
+.pddl-val.warn { color: #d97706; }
+.pddl-bar-head { display: flex; justify-content: space-between; font-size: 8px; color: #64748b; margin-bottom: 3px; font-weight: 600; }
+.pddl-src { font-size: 9px; color: #94a3b8; font-weight: 500; }
+.plan-ddl-top { margin-bottom: 10px; }
+.plan-ddl-top .pddl-top-row { display: flex; align-items: flex-end; gap: 22px; flex-wrap: wrap; }
+.plan-ddl-top .pddl-top-item { display: flex; flex-direction: column; gap: 2px; }
+.plan-ddl-top .pddl-top-item .pddl-val { font-size: 16px; }
+.plan-ddl-top .pddl-top-bar { flex: 1; min-width: 220px; }
+.resv-sel { font-size: 10px; padding: 2px 5px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; width: 100%; max-width: 100%; }
+.card { padding: 7px 9px; }
+.card-title { font-size: 11px; margin: 0 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hint { font-size: 8px; margin: -2px 0 4px; }
+table.mini td { padding: 1px 4px; font-size: 9px; }
+table.mini th { font-size: 8px; padding: 2px 4px; }
+.prog-row { margin-bottom: 4px; }
+.prog-nom, .prog-pct { font-size: 9px; }
+.bar-track { height: 6px; }
+.btn.sm { padding: 4px 9px; font-size: 10px; }
+.chart-hint-vd { font-size: 8px; }
+.v3-col .card-title { font-size: 8px !important; margin-bottom: 3px !important; }
+.v3-col :deep(.ch) { height: 95px !important; padding-top: 12px !important; }
+.v3-col :deep(.line-ch) { height: 95px !important; overflow: hidden; }
+.v3-col :deep(.lch-svg) { height: 95px !important; width: 100% !important; }
+.v3-mid table.mini { table-layout: fixed; width: 100%; }
+.v3-mid table.mini th, .v3-mid table.mini td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v3-mid table.mini th:nth-child(1), .v3-mid table.mini td:nth-child(1) { width: 12%; }
+.v3-mid table.mini th:nth-child(2), .v3-mid table.mini td:nth-child(2) { width: 32%; }
+.v3-mid table.mini th:nth-child(3), .v3-mid table.mini td:nth-child(3) { width: 33%; }
+.v3-mid table.mini th:nth-child(4), .v3-mid table.mini td:nth-child(4) { width: 13%; }
+.v3-mid table.mini th:nth-child(5), .v3-mid table.mini td:nth-child(5) { width: 10%; }
+.v3-mid .verif-form td { white-space: normal; overflow: visible; }
 </style>
