@@ -275,6 +275,7 @@ async function devalider(l) {
       <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><div class="kpi-val accent">{{ fmtPct(taux) }}</div></div><div class="kpi-lbl">Taux de vérification</div></div>
     </div>
 
+    <div class="charts-row">
     <section class="card">
       <h3 class="card-title">Dossiers en attente de vérification par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
       <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :clickable="true" @pick="ouvrirMois" :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" />
@@ -287,6 +288,7 @@ async function devalider(l) {
       <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
       <p v-if="!verifParMois.some(v => v)" class="empty">Aucun DDL vérifié<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
     </section>
+    </div>
 
     <div class="cols">
       <section class="card">
@@ -519,4 +521,7 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .mini-vd .nowrap { white-space: nowrap; }
 .verif-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #b45309; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .verif-chk input { width: 15px; height: 15px; cursor: pointer; }
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.charts-row > .card { margin: 0; }
+@media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
 </style>
