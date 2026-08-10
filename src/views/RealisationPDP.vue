@@ -104,15 +104,15 @@
     </div>
 
     <section v-if="filtrePhase" class="rp-card lots-phase">
-      <h3 class="card-title">Lots — {{ filtrePhase === 'vracs' ? 'Vracs (prêts pour conditionnement)' : labelPhase(filtrePhase) }}</h3>
+      <h3 class="card-title">Lots — {{ filtrePhase === 'vracs' ? 'Vracs' : labelPhase(filtrePhase) }}</h3>
       <div v-if="filtrePhase === 'vracs'" class="lp-cols vracs-two">
         <div class="lp-col">
-          <div class="lp-head att"><span class="lp-dot"></span>En attente de réception <b>{{ vracsInfo.attente.length }}</b></div>
+          <div class="lp-head att"><span class="lp-dot"></span>En attente de conditionnement <b>{{ vracsInfo.attente.length }}</b></div>
           <div class="lp-list"><div v-for="o in vracsInfo.attente" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!vracsInfo.attente.length" class="lp-vide">Aucun</div></div>
         </div>
         <div class="lp-col">
-          <div class="lp-head prt"><span class="lp-dot"></span>Réceptionnés <b>{{ vracsInfo.recus.length }}</b></div>
-          <div class="lp-list"><div v-for="o in vracsInfo.recus" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!vracsInfo.recus.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-head prt"><span class="lp-dot"></span>En cours de conditionnement <b>{{ vracsInfo.encours.length }}</b></div>
+          <div class="lp-list"><div v-for="o in vracsInfo.encours" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!vracsInfo.encours.length" class="lp-vide">Aucun</div></div>
         </div>
       </div>
       <div v-else class="lp-cols">
@@ -175,7 +175,7 @@
           <div class="pp-sep"></div>
           <div class="pp-mini">
             <div class="mini att"><b>{{ vracsInfo.attente.length }}</b>En attente</div>
-            <div class="mini prt"><b>{{ vracsInfo.recus.length }}</b>Réceptionnés</div>
+            <div class="mini prt"><b>{{ vracsInfo.encours.length }}</b>En cours</div>
           </div>
         </div>
       </div>
@@ -385,17 +385,17 @@ const lotsVracs = computed(() => {
   return out
 })
 const vracsInfo = computed(() => {
-  const attente = [], recus = []
-  let bA = 0, bR = 0, vA = 0, vR = 0
+  const attente = [], encours = []
+  let bA = 0, bE = 0, vA = 0, vE = 0
   const cb = condByOf.value
   for (const o of lotsVracs.value) {
     const lance = !!(cb[o.id] && cb[o.id].launched)
     const b = num(o.quantite_theorique) || num(o.boites_fabriquees)
     const pc = o.produits ? num(o.produits.pcsu) : 0
-    if (lance) { recus.push(o); bR += b; vR += b * pc }
+    if (lance) { encours.push(o); bE += b; vE += b * pc }
     else { attente.push(o); bA += b; vA += b * pc }
   }
-  return { attente, recus, boites: bA + bR, val: vA + vR, total: lotsVracs.value.length }
+  return { attente, encours, boites: bA + bE, val: vA + vE, total: lotsVracs.value.length }
 })
 const totMois = (i) => phasesAffichees.value.reduce((s, ph) => s + moisReal(ph.key, i), 0)
 const totGlobal = computed(() => phasesAffichees.value.reduce((s, ph) => s + valReal(ph.key), 0))
