@@ -26,6 +26,8 @@ const LIMITE = 300
 const rechProduit = ref('')
 const erreur = ref('')
 const message = ref('')
+const afficherDesactives = ref(false)
+const lotsDesactives = ref([])
 const signatures = ref([])
 const formCard = ref(null)
 
@@ -294,6 +296,20 @@ async function desactiver(l) {
   if (res.error) { erreur.value = res.error.message; return }
   await chargerTout()
 }
+async function chargerDesactives() {
+  const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
+    .select('*, produits(code_pf, designation), equipements(code, nom)')
+    .eq('actif', false).order('numero_lot'))
+  if (!rl.error) lotsDesactives.value = rl.data
+}
+async function reactiver(l) {
+  if (!confirm('Réactiver le lot « ' + l.numero_lot + ' » ?')) return
+  erreur.value = ''
+  const res = await supabase.from('ordres_fabrication').update({ actif: true }).eq('id', l.id)
+  if (res.error) { erreur.value = res.error.message; return }
+  lotsDesactives.value = lotsDesactives.value.filter(x => x.id !== l.id)
+  await chargerTout()
+}
 
 function classeStatut(s) {
   return {
@@ -511,6 +527,7 @@ onMounted(async () => {
             </select>
           </div>
           <button class="btn-exp" @click="exporterCSV" :disabled="!lotsFiltres.length">Exporter CSV</button>
+          <label class="chk-desact"><input type="checkbox" v-model="afficherDesactives" @change="afficherDesactives && chargerDesactives()" /> Afficher les lots désactivés</label>
         </div>
 
         <p v-if="msgGroupe" class="b-ok" style="margin:0 0 10px">{{ msgGroupe }}</p>
@@ -562,6 +579,25 @@ onMounted(async () => {
               <tr v-else-if="lotsFiltres.length > LIMITE"><td colspan="7" class="cap-note">… {{ lotsFiltres.length - LIMITE }} autres lots masqués — affine les filtres (l'export CSV reste complet).</td></tr>
             </tbody>
           </table>
+        </div>
+
+        <div v-if="afficherDesactives" class="desact-block">
+          <h3 class="desact-h">Lots désactivés <span class="desact-n">{{ lotsDesactives.length }}</span></h3>
+          <div class="table-scroll">
+            <table class="grid">
+              <thead><tr><th>N° lot</th><th>Produit</th><th class="right">Qté théo.</th><th>Statut</th><th class="right">Action</th></tr></thead>
+              <tbody>
+                <tr v-for="l in lotsDesactives" :key="l.id">
+                  <td class="mono">{{ l.numero_lot }}</td>
+                  <td><span class="mono">{{ l.produits ? l.produits.code_pf : '—' }}</span><span class="desig"> {{ l.produits ? l.produits.designation : '' }}</span></td>
+                  <td class="right">{{ fmt(l.quantite_theorique) }}</td>
+                  <td><span class="badge" :class="classeStatut(l.statut)">{{ l.statut }}</span></td>
+                  <td class="right"><button v-if="peutEditer" class="link ok" @click="reactiver(l)">Réactiver</button></td>
+                </tr>
+                <tr v-if="!lotsDesactives.length"><td colspan="5" class="empty">Aucun lot désactivé.</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
     </template>
@@ -724,4 +760,9 @@ button.link.release { color: #166534; }
 .chk input { width: 16px; height: 16px; cursor: pointer; }
 .tri-d { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; font-weight: 500; }
 .tri-d input { padding: 4px 8px; font-size: 13px; }
+.chk-desact { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; cursor: pointer; margin-left: 8px; }
+.desact-block { margin-top: 18px; padding-top: 14px; border-top: 2px dashed #e2e8f0; }
+.desact-h { font-size: 15px; font-weight: 800; color: #0f172a; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+.desact-n { background: #f1f5f9; color: #64748b; font-size: 12px; padding: 2px 8px; border-radius: 10px; }
+.link.ok { color: #15803d; font-weight: 700; }
 </style>
