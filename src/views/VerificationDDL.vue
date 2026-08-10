@@ -275,23 +275,22 @@ async function devalider(l) {
       <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><div class="kpi-val accent">{{ fmtPct(taux) }}</div></div><div class="kpi-lbl">Taux de vérification</div></div>
     </div>
 
-    <div class="charts-row">
-    <section class="card">
-      <h3 class="card-title">Dossiers en attente de vérification par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
-      <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :clickable="true" @pick="ouvrirMois" :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" />
-      <p class="chart-hint-vd">Clique sur une barre pour voir les dossiers en attente ce mois-là.</p>
-      <p v-if="!attenteParMois.some(v => v)" class="empty">Aucun DDL en attente<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
-    </section>
-
-    <section class="card">
-      <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
-      <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
-      <p v-if="!verifParMois.some(v => v)" class="empty">Aucun DDL vérifié<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
-    </section>
-    </div>
-
-    <div class="cols">
+    <div class="verif-3col">
+      <div class="v3-col">
       <section class="card">
+        <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
+        <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
+        <p v-if="!verifParMois.some(v => v)" class="empty">Aucun DDL vérifié<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
+      </section>
+      <section class="card">
+        <h3 class="card-title">Dossiers en attente de vérification par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
+        <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :clickable="true" @pick="ouvrirMois" :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" />
+        <p class="chart-hint-vd">Clique sur une barre pour voir les dossiers en attente ce mois-là.</p>
+        <p v-if="!attenteParMois.some(v => v)" class="empty">Aucun DDL en attente<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
+      </section>
+      </div>
+
+      <section class="card v3-right">
         <div class="sup-head">
           <h3 class="card-title">Taux de vérification par vérificateur</h3>
           <div class="sup-filtre">
@@ -314,7 +313,7 @@ async function devalider(l) {
         </div>
       </section>
 
-      <section class="card">
+      <section class="card v3-mid">
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <table v-else class="mini">
@@ -524,4 +523,9 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
 .charts-row > .card { margin: 0; }
 @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
+.verif-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; align-items: start; }
+.verif-3col > .v3-col { display: flex; flex-direction: column; gap: 14px; order: 1; }
+.verif-3col > .v3-mid { order: 2; margin: 0; }
+.verif-3col > .v3-right { order: 3; margin: 0; }
+@media (max-width: 1100px) { .verif-3col { grid-template-columns: 1fr; } .verif-3col > * { order: 0 !important; } }
 </style>
