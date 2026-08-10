@@ -307,6 +307,19 @@ async function devalider(l) {
 
     <p v-if="msg" class="alert">{{ msg }}</p>
 
+    <section class="card plan-ddl plan-ddl-top">
+      <h3 class="card-title">Plan de vérification DDL<span v-if="anneeSel"> — {{ anneeSel }}</span> <span class="pddl-src">· basé sur le PDP</span></h3>
+      <div class="pddl-top-row">
+        <div class="pddl-top-item"><span class="pddl-lbl">DDL à vérifier (an)</span><span class="pddl-val">{{ fmt(planDDL) }}</span></div>
+        <div class="pddl-top-item"><span class="pddl-lbl">Vérifiés</span><span class="pddl-val ok">{{ fmt(nbVerifies) }}</span></div>
+        <div class="pddl-top-item"><span class="pddl-lbl">En attente</span><span class="pddl-val warn">{{ fmt(nbAttente) }}</span></div>
+        <div class="pddl-top-bar" v-if="tauxPlanDDL != null">
+          <div class="pddl-bar-head"><span>Avancement / plan</span><span>{{ tauxPlanDDL }}%</span></div>
+          <div class="bar-track"><div class="bar-fill" :class="tauxPlanDDL >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxPlanDDL) + '%' }"></div></div>
+        </div>
+      </div>
+    </section>
+
     <div class="verif-3col">
       <div class="v3-col">
       <section class="card">
@@ -323,19 +336,6 @@ async function devalider(l) {
       </div>
 
       <div class="v3-col v3-right">
-      <section class="card plan-ddl">
-        <h3 class="card-title">Plan de vérification DDL<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
-        <p class="hint">Basé sur le PDP (nombre de lots planifiés)</p>
-        <div class="pddl-grid">
-          <div class="pddl-row"><span class="pddl-lbl">DDL à vérifier (an)</span><span class="pddl-val">{{ fmt(planDDL) }}</span></div>
-          <div class="pddl-row"><span class="pddl-lbl">Vérifiés</span><span class="pddl-val ok">{{ fmt(nbVerifies) }}</span></div>
-          <div class="pddl-row"><span class="pddl-lbl">En attente</span><span class="pddl-val warn">{{ fmt(nbAttente) }}</span></div>
-        </div>
-        <div v-if="tauxPlanDDL != null" class="pddl-progress">
-          <div class="pddl-bar-head"><span>Avancement / plan</span><span>{{ tauxPlanDDL }}%</span></div>
-          <div class="bar-track"><div class="bar-fill" :class="tauxPlanDDL >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxPlanDDL) + '%' }"></div></div>
-        </div>
-      </section>
       <section class="card plan-ddl">
         <h3 class="card-title">Objectif du mois — {{ MOIS[moisCourant - 1] }}</h3>
         <p class="hint">DDL à vérifier ce mois (PDP)</p>
@@ -682,4 +682,12 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .v3-mid table.mini th:nth-child(5), .v3-mid table.mini td:nth-child(5) { width: 10%; }
 .v3-mid .resv-sel { width: 100%; max-width: 100%; }
 .v3-mid .verif-form td { white-space: normal; overflow: visible; }
+/* Colonne droite plus étroite */
+.verif-3col { grid-template-columns: 0.72fr 1.45fr 0.83fr !important; }
+.plan-ddl-top { margin-bottom: 10px; }
+.plan-ddl-top .pddl-top-row { display: flex; align-items: flex-end; gap: 22px; flex-wrap: wrap; }
+.plan-ddl-top .pddl-top-item { display: flex; flex-direction: column; gap: 2px; }
+.plan-ddl-top .pddl-top-item .pddl-val { font-size: 16px; }
+.plan-ddl-top .pddl-top-bar { flex: 1; min-width: 220px; }
+.pddl-src { font-size: 9px; color: #94a3b8; font-weight: 500; }
 </style>
