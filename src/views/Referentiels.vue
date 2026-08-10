@@ -96,6 +96,17 @@ function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
 // --- Équipement ---
 const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '' })
 const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, cadences: false })
+const sectionActive = ref(null)
+const SECTIONS = [
+  { k: 'donneurs', lbl: "Donneurs d'ordre", ic: '🏢', n: () => donneurs.value.length },
+  { k: 'ateliers', lbl: 'Ateliers', ic: '🏭', n: () => ateliers.value.length },
+  { k: 'equipements', lbl: 'Équipements', ic: '⚙️', n: () => equipements.value.length },
+  { k: 'produits', lbl: 'Produits', ic: '💊', n: () => produits.value.length },
+  { k: 'superviseurs', lbl: 'Vérificateurs', ic: '👤', n: () => supList.value.length },
+  { k: 'verifCond', lbl: 'Vérif. conditionnement', ic: '📦', n: () => condList.value.length },
+  { k: 'cadences', lbl: 'Cadences', ic: '⏱️', n: () => cadList.value.length }
+]
+function ouvrirSection(k) { sectionActive.value = k; ouvert[k] = true }
 function resetE() { Object.assign(formE, { id: null, code: '', nom: '', atelier_id: '', type: '' }) }
 
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
@@ -385,8 +396,17 @@ onMounted(async () => {
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
 
+    <div v-if="!sectionActive" class="ref-hub">
+      <button v-for="sec in SECTIONS" :key="sec.k" class="ref-hub-card" @click="ouvrirSection(sec.k)">
+        <span class="rh-ic">{{ sec.ic }}</span>
+        <span class="rh-lbl">{{ sec.lbl }}</span>
+        <span class="rh-n">{{ sec.n() }}</span>
+      </button>
+    </div>
+    <button v-if="sectionActive" class="ref-back" @click="sectionActive = null">← Retour aux référentiels</button>
+
     <!-- DONNEURS D'ORDRE -->
-    <section class="card">
+    <section v-if="sectionActive === 'donneurs'" class="card">
       <div class="card-head clickable" @click="ouvert.donneurs = !ouvert.donneurs">
         <h2>Donneurs d'ordre</h2>
         <span class="count">{{ donneurs.length }}</span>
@@ -424,7 +444,7 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section class="card">
+    <section v-if="sectionActive === 'ateliers'" class="card">
       <div class="card-head clickable" @click="ouvert.ateliers = !ouvert.ateliers">
         <h2>Ateliers</h2>
         <span class="count">{{ ateliers.length }}</span>
@@ -460,7 +480,7 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section class="card">
+    <section v-if="sectionActive === 'equipements'" class="card">
       <div class="card-head clickable" @click="ouvert.equipements = !ouvert.equipements">
         <h2>Équipements</h2>
         <span class="count">{{ equipements.length }}</span>
@@ -505,7 +525,7 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section class="card">
+    <section v-if="sectionActive === 'produits'" class="card">
       <div class="card-head clickable" @click="ouvert.produits = !ouvert.produits">
         <h2>Produits</h2>
         <span class="count">{{ produits.length }}</span>
@@ -593,7 +613,7 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section class="card">
+    <section v-if="sectionActive === 'superviseurs'" class="card">
       <div class="card-head clickable" @click="ouvert.superviseurs = !ouvert.superviseurs">
         <h2>Vérificateurs</h2>
         <span class="count">{{ supList.length }}</span>
@@ -622,7 +642,7 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section class="card">
+    <section v-if="sectionActive === 'verifCond'" class="card">
       <div class="card-head clickable" @click="ouvert.verifCond = !ouvert.verifCond">
         <h2>Vérificateurs conditionnement</h2>
         <span class="count">{{ condList.length }}</span>
@@ -651,7 +671,7 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section class="card">
+    <section v-if="sectionActive === 'cadences'" class="card">
       <div class="card-head clickable" @click="ouvert.cadences = !ouvert.cadences">
         <h2>Cadences (équipement × produit)</h2>
         <span class="count">{{ cadList.length }}</span>
@@ -812,4 +832,12 @@ button.link.danger { color: #b91c1c; }
 .cad-edit-in2 { width: 78px; font-size: 13px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; margin-left: 4px; }
 .cad-edit-sel { font-size: 13px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
 .muted-sm { color: #94a3b8; }
+.ref-hub { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-top: 6px; }
+.ref-hub-card { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 18px; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; cursor: pointer; transition: all .15s; text-align: left; }
+.ref-hub-card:hover { border-color: #5B9BD5; box-shadow: 0 4px 14px rgba(43,74,133,.1); transform: translateY(-2px); }
+.rh-ic { font-size: 26px; }
+.rh-lbl { font-size: 14px; font-weight: 700; color: #1b2733; }
+.rh-n { font-size: 12px; font-weight: 700; color: #5B9BD5; background: #eff6ff; padding: 2px 10px; border-radius: 10px; }
+.ref-back { background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; margin-bottom: 14px; }
+.ref-back:hover { background: #e2e8f0; }
 </style>
