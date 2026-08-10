@@ -348,7 +348,7 @@ const lotsParPhase = computed(() => {
     const ph = pl[k] || {}
     const g = get(k)
     if (ph.dl || ph.statut === 'En cours') g.encours.push(o)        // phase démarrée : date de lancement, pas de date de fin
-    else if (o.date_reception) g.attente.push(o)                    // OF réceptionné, phase pas démarrée
+    else if (pos > 0 || o.date_reception) g.attente.push(o)          // en production (phase précédente finie) OU OF réceptionné
     else g.planifie.push(o)                                          // OF non réceptionné (planifié) sur sa phase courante
     // Planifié = tous les OF qui passeront par une phase en aval non terminée (fin de phase non mentionnée)
     for (let i = pos + 1; i < fabKeys.length; i++) {
