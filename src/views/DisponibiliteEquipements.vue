@@ -523,7 +523,7 @@ onMounted(async () => {
 <template>
   <div class="de-page">
     <PageHeader title="Disponibilité des produits par atelier" tone="cyan"
-      subtitle="File d'attente en temps réel par atelier (pour prioriser et éviter les ruptures) et vue des produits fabriqués par équipement.">
+      subtitle="File d'attente en temps réel par atelier (pour prioriser et éviter les ruptures).">
       <label class="annee-sel">Année de fabrication
         <select v-model.number="anneeSel">
           <option :value="0">Toutes années</option>
@@ -543,11 +543,7 @@ onMounted(async () => {
         </template>
       </div>
 
-      <!-- Onglets -->
-      <div class="de-tabs">
-        <button :class="{ on: ongletDispo === 'file' }" @click="ongletDispo = 'file'">File d'attente par atelier</button>
-        <button :class="{ on: ongletDispo === 'retro' }" @click="ongletDispo = 'retro'">Fabriqués par équipement</button>
-      </div>
+      <!-- Onglet « Fabriqués par équipement » supprimé : vue File d'attente uniquement -->
 
       <!-- ===================== FILE D'ATTENTE ===================== -->
       <div v-show="ongletDispo === 'file'">
