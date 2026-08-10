@@ -642,4 +642,7 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .hist-exp { padding: 6px 12px; font-size: 12px; }
 .card.span2 table.mini td { font-size: 11px; padding: 4px 8px; }
 .card.span2 table.mini th { font-size: 10px; padding: 5px 8px; }
+/* Colonnes gauche/droite : hauteur naturelle (évite le chevauchement avec l'historique) */
+.verif-3col { align-items: start !important; }
+.verif-3col > .v3-col { height: auto !important; max-height: none !important; overflow: visible !important; }
 </style>
