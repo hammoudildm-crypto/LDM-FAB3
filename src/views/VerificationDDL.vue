@@ -230,6 +230,11 @@ function ouvrir(l) {
   msg.value = ''
 }
 
+async function reserverVerif(l, nom) {
+  const r = await supabase.from('ordres_fabrication').update({ ddl_verificateur: nom || null }).eq('id', l.id)
+  if (r.error) { msg.value = r.error.message; return }
+  await charger()
+}
 async function valider(l) {
   msg.value = ''
   const nom = (superviseurChoix.value === '__autre__' ? nouveauSuperviseur.value : superviseurChoix.value).trim()
@@ -317,13 +322,19 @@ async function devalider(l) {
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <table v-else class="mini">
-          <thead><tr><th>Lot</th><th>Produit</th><th>Vérificateur</th><th class="right">Fin fab.</th><th></th></tr></thead>
+          <thead><tr><th>Lot</th><th>Produit</th><th>Réserver vérificateur</th><th class="right">Fin fab.</th><th></th></tr></thead>
           <tbody>
             <template v-for="l in attente" :key="l.id">
               <tr>
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td class="desig">{{ prodNom(l) }}</td>
-                <td>{{ l.ddl_verificateur || '—' }}</td>
+                <td>
+                  <select v-if="peutEditer" class="resv-sel" :value="l.ddl_verificateur || ''" @change="reserverVerif(l, $event.target.value)">
+                    <option value="">— Réserver —</option>
+                    <option v-for="sup in superviseurs" :key="sup" :value="sup">{{ sup }}</option>
+                  </select>
+                  <span v-else>{{ l.ddl_verificateur || '—' }}</span>
+                </td>
                 <td class="right nowrap">{{ fmtDate(dateDDL(l)) }}</td>
                 <td class="right"><button v-if="peutEditer" class="link" @click="ouvrir(l)">Vérifier</button></td>
               </tr>
@@ -528,4 +539,26 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .verif-3col > .v3-mid { order: 2; margin: 0; }
 .verif-3col > .v3-right { order: 3; margin: 0; }
 @media (max-width: 1100px) { .verif-3col { grid-template-columns: 1fr; } .verif-3col > * { order: 0 !important; } }
+/* Compact */
+.vd-head h1 { font-size: 15px; }
+.sub { display: none; }
+.vd-head { margin-bottom: 8px; }
+.kpi { padding: 8px 11px; }
+.kpi-val { font-size: 15px; }
+.kpi-lbl { font-size: 9.5px; margin-top: 2px; }
+.card { padding: 9px 11px; }
+.card-title { font-size: 12px; margin: 0 0 8px; }
+.prog-nom, .prog-pct { font-size: 11px; }
+.prog-row { margin-bottom: 8px; }
+.hint { font-size: 10px; margin: -4px 0 8px; }
+table.mini { font-size: 11px; }
+table.mini th { font-size: 9.5px; padding: 4px 5px; }
+table.mini td { padding: 3px 5px; }
+.btn { padding: 6px 14px; font-size: 12px; }
+.btn.sm { padding: 5px 11px; font-size: 11px; }
+.verif-form input, .verif-form select { font-size: 12px; padding: 5px 8px; }
+.verif-form select { min-width: 180px; }
+.btn-filtre { font-size: 11px; padding: 5px 9px; }
+.sup-opt { font-size: 11px; padding: 4px 7px; }
+.resv-sel { font-size: 11px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; max-width: 150px; }
 </style>
