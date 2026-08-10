@@ -60,7 +60,7 @@ async function charger() {
   if (!rp.error) phases.value = rp.data
   const rs = await supabase.from('superviseurs').select('nom').order('nom')
   if (!rs.error) supList.value = rs.data.map(s => s.nom)
-  const rpp = await fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produits(taille_lot)'))
+  const rpp = await fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(taille_lot)'))
   if (!rpp.error) planRaw.value = rpp.data
 }
 onMounted(charger)
@@ -160,6 +160,25 @@ const planDDL = computed(() => {
   return Math.round(n)
 })
 const tauxPlanDDL = computed(() => planDDL.value > 0 ? Math.round((nbVerifies.value / planDDL.value) * 100) : null)
+const moisCourant = new Date().getMonth() + 1
+const objectifMois = computed(() => {
+  const an = anneeSel.value || new Date().getFullYear()
+  let n = 0
+  for (const r of planRaw.value) {
+    if (Number(r.annee) !== an || Number(r.mois) !== moisCourant) continue
+    const t = Number(r.produits ? r.produits.taille_lot : 0) || 0
+    if (t > 0) n += Number(r.quantite_planifiee || 0) / t
+  }
+  return Math.round(n)
+})
+const verifMois = computed(() => {
+  const an = anneeSel.value || new Date().getFullYear()
+  return verifies.value.filter(l => {
+    const d = l.ddl_date_verification ? new Date(l.ddl_date_verification) : null
+    return d && d.getFullYear() === an && (d.getMonth() + 1) === moisCourant
+  }).length
+})
+const tauxMois = computed(() => objectifMois.value > 0 ? Math.round((verifMois.value / objectifMois.value) * 100) : null)
 
 const parSuperviseur = computed(() => {
   const m = {}
@@ -315,6 +334,18 @@ async function devalider(l) {
         <div v-if="tauxPlanDDL != null" class="pddl-progress">
           <div class="pddl-bar-head"><span>Avancement / plan</span><span>{{ tauxPlanDDL }}%</span></div>
           <div class="bar-track"><div class="bar-fill" :class="tauxPlanDDL >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxPlanDDL) + '%' }"></div></div>
+        </div>
+      </section>
+      <section class="card plan-ddl">
+        <h3 class="card-title">Objectif du mois — {{ MOIS[moisCourant - 1] }}</h3>
+        <p class="hint">DDL à vérifier ce mois (PDP)</p>
+        <div class="pddl-grid">
+          <div class="pddl-row"><span class="pddl-lbl">Objectif</span><span class="pddl-val">{{ fmt(objectifMois) }}</span></div>
+          <div class="pddl-row"><span class="pddl-lbl">Vérifiés ce mois</span><span class="pddl-val ok">{{ fmt(verifMois) }}</span></div>
+        </div>
+        <div v-if="tauxMois != null" class="pddl-progress">
+          <div class="pddl-bar-head"><span>Taux de vérification</span><span>{{ tauxMois }}%</span></div>
+          <div class="bar-track"><div class="bar-fill" :class="tauxMois >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxMois) + '%' }"></div></div>
         </div>
       </section>
       <section class="card">
