@@ -173,7 +173,7 @@
             <div class="pp-row"><span class="pp-lbl">Valeur</span><span class="pp-val">{{ fmt(vracsInfo.val) }} DA</span></div>
             <div class="pp-row" v-if="vracsInfo.moyStock != null"><span class="pp-lbl">Stockage moyen</span><span class="pp-val">{{ vracsInfo.moyStock }} j</span></div>
             <div class="pp-row" v-if="vracsInfo.minStock != null"><span class="pp-lbl">Stockage min</span><span class="pp-val">{{ vracsInfo.minStock }} j</span></div>
-            <div class="pp-row" v-if="vracsInfo.maxStock != null"><span class="pp-lbl">Stockage max</span><span class="pp-val">{{ vracsInfo.maxStock }} j</span></div>
+            <div class="pp-row" v-if="vracsInfo.maxStock != null"><span class="pp-lbl">Stockage max</span><span class="pp-val">{{ vracsInfo.maxStock }} j<span v-if="vracsInfo.maxLot" class="pp-lot"> · lot {{ vracsInfo.maxLot }}</span></span></div>
           </div>
           <div class="pp-sep"></div>
           <div class="pp-mini">
@@ -404,7 +404,7 @@ const lotsVracs = computed(() => {
 const vracsInfo = computed(() => {
   const attente = [], encours = []
   let bA = 0, bE = 0, vA = 0, vE = 0
-  let sommeJours = 0, nbDates = 0, minStock = null, maxStock = null
+  let sommeJours = 0, nbDates = 0, minStock = null, maxStock = null, maxLot = null
   const cb = condByOf.value
   const now = new Date(); now.setHours(0, 0, 0, 0)
   for (const o of lotsVracs.value) {
@@ -423,13 +423,13 @@ const vracsInfo = computed(() => {
       const j = Math.max(0, Math.round((d1 - d0) / 86400000))
       sommeJours += j; nbDates++
       if (minStock === null || j < minStock) minStock = j
-      if (maxStock === null || j > maxStock) maxStock = j
+      if (maxStock === null || j > maxStock) { maxStock = j; maxLot = o.numero_lot }
     }
   }
   const cmpLot = (a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })
   attente.sort(cmpLot); encours.sort(cmpLot)
   const moyStock = nbDates ? Math.round(sommeJours / nbDates) : null
-  return { attente, encours, boites: bA + bE, val: vA + vE, total: lotsVracs.value.length, moyStock, minStock, maxStock, nbStock: nbDates }
+  return { attente, encours, boites: bA + bE, val: vA + vE, total: lotsVracs.value.length, moyStock, minStock, maxStock, maxLot, nbStock: nbDates }
 })
 const totMois = (i) => phasesAffichees.value.reduce((s, ph) => s + moisReal(ph.key, i), 0)
 const totGlobal = computed(() => phasesAffichees.value.reduce((s, ph) => s + valReal(ph.key), 0))
@@ -855,4 +855,5 @@ const serieMois = computed(() => {
 .lp-val { color: #94a3b8; font-size: 0.88em; margin-left: 4px; }
 .lp-val.val-perime { color: #dc2626; font-weight: 700; }
 .lp-val.val-proche { color: #ea580c; font-weight: 700; }
+.pp-lot { color: #94a3b8; font-weight: 600; font-size: 0.85em; }
 </style>
