@@ -632,4 +632,14 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .v3-mid .verif-form td { white-space: normal; overflow: visible; }
 /* Pas de défilement sur colonnes gauche/droite */
 .verif-3col > .v3-col { overflow: visible !important; }
+/* Section « DDL vérifiés » (historique) compacte */
+.card.span2 { padding: 9px 11px; margin-top: 12px !important; }
+.hist-head { margin-bottom: 8px; gap: 8px; }
+.hist-head .card-title { font-size: 13px !important; }
+.hist-search { font-size: 12px; padding: 5px 9px; }
+.dlab { font-size: 11px; }
+.dlab input, .card.span2 input[type=date] { font-size: 11px; padding: 4px 6px; }
+.hist-exp { padding: 6px 12px; font-size: 12px; }
+.card.span2 table.mini td { font-size: 11px; padding: 4px 8px; }
+.card.span2 table.mini th { font-size: 10px; padding: 5px 8px; }
 </style>
