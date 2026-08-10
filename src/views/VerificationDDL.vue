@@ -663,6 +663,13 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .verif-3col { gap: 8px; }
 .verif-3col > .v3-col { gap: 8px; }
 .chart-hint-vd { font-size: 8px; }
-.v3-col :deep(.ch), .v3-col :deep(.line-ch) { height: 90px !important; min-height: 0 !important; }
-.v3-col :deep(.lch-svg) { max-height: 90px; }
+/* Graphes compacts (aires + barres) */
+.v3-col :deep(.ch) { height: 95px !important; padding-top: 12px !important; }
+.v3-col :deep(.line-ch) { height: 95px !important; overflow: hidden; }
+.v3-col :deep(.lch-svg) { height: 95px !important; width: 100% !important; }
+.v3-col :deep(.ch-switch) { margin-bottom: 3px !important; }
+.v3-col :deep(.ch-switch button) { font-size: 9px !important; padding: 2px 7px !important; }
+/* Colonne gauche plus étroite + titres minimisés */
+.verif-3col { grid-template-columns: 0.72fr 1.3fr 1fr !important; }
+.v3-col .card-title { font-size: 8px !important; margin-bottom: 3px !important; }
 </style>
