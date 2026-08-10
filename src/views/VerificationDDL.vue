@@ -690,4 +690,7 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .plan-ddl-top .pddl-top-item .pddl-val { font-size: 16px; }
 .plan-ddl-top .pddl-top-bar { flex: 1; min-width: 220px; }
 .pddl-src { font-size: 9px; color: #94a3b8; font-weight: 500; }
+/* 3 colonnes alignées en bas (même hauteur) */
+.verif-3col { align-items: stretch !important; }
+.verif-3col > .v3-col, .verif-3col > .v3-mid { height: calc(100vh - 240px) !important; max-height: calc(100vh - 240px) !important; overflow-y: auto; }
 </style>
