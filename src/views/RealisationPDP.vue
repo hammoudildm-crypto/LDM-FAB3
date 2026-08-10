@@ -108,25 +108,25 @@
       <div v-if="filtrePhase === 'vracs'" class="lp-cols vracs-two">
         <div class="lp-col">
           <div class="lp-head att"><span class="lp-dot"></span>En attente de conditionnement <b>{{ vracsInfo.attente.length }}</b></div>
-          <div class="lp-list"><div v-for="o in vracsInfo.attente" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!vracsInfo.attente.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in vracsInfo.attente" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!vracsInfo.attente.length" class="lp-vide">Aucun</div></div>
         </div>
         <div class="lp-col">
           <div class="lp-head prt"><span class="lp-dot"></span>En cours de conditionnement <b>{{ vracsInfo.encours.length }}</b></div>
-          <div class="lp-list"><div v-for="o in vracsInfo.encours" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!vracsInfo.encours.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in vracsInfo.encours" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!vracsInfo.encours.length" class="lp-vide">Aucun</div></div>
         </div>
       </div>
       <div v-else class="lp-cols">
         <div class="lp-col">
           <div class="lp-head enc"><span class="lp-dot"></span>En cours <b>{{ lotsPhaseSel.encours.length }}</b></div>
-          <div class="lp-list"><div v-for="o in lotsPhaseSel.encours" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!lotsPhaseSel.encours.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in lotsPhaseSel.encours" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.encours.length" class="lp-vide">Aucun</div></div>
         </div>
         <div class="lp-col">
           <div class="lp-head att"><span class="lp-dot"></span>En attente <b>{{ lotsPhaseSel.attente.length }}</b></div>
-          <div class="lp-list"><div v-for="o in lotsPhaseSel.attente" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!lotsPhaseSel.attente.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in lotsPhaseSel.attente" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.attente.length" class="lp-vide">Aucun</div></div>
         </div>
         <div class="lp-col">
           <div class="lp-head pla"><span class="lp-dot"></span>Planifiés <b>{{ lotsPhaseSel.planifie.length }}</b></div>
-          <div class="lp-list"><div v-for="o in lotsPhaseSel.planifie" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}</div><div v-if="!lotsPhaseSel.planifie.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in lotsPhaseSel.planifie" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.planifie.length" class="lp-vide">Aucun</div></div>
         </div>
       </div>
     </section>
@@ -236,7 +236,7 @@ onMounted(async () => {
   try {
     const [rp, ro, rs, rc] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme, taille_lot)')),
-      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, date_reception, produits(code_pf, designation, gamme, taille_lot, pcsu)')),
+      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, date_reception, date_fin_validite, produits(code_pf, designation, gamme, taille_lot, pcsu)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true)),
       fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, date_conditionnement, date_fin, statut'))
     ])
@@ -327,6 +327,7 @@ const filtrePhase = ref('vracs')
 const moisSel = ref(new Date().getMonth())
 const phasesAffichees = computed(() => (filtrePhase.value && filtrePhase.value !== 'vracs') ? phasesActives.value.filter(p => p.key === filtrePhase.value) : phasesActives.value)
 const prodTxt = (o) => { const p = o && o.produits; return p ? ((p.code_pf || '') + ' — ' + (p.designation || '')) : '' }
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : ''
 const labelPhase = (k) => { const ph = PHASES.find(p => p.key === k); return ph ? ph.label : k }
 const PHASE_ORDER = ['pesee', 'granulation', 'melange', 'compression', 'remplissage', 'pelliculage']
 const lotsParPhase = computed(() => {
@@ -356,6 +357,8 @@ const lotsParPhase = computed(() => {
       if (!q.df && q.statut !== 'Terminé') get(fabKeys[i]).planifie.push(o)
     }
   }
+  const cmpLot = (a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })
+  for (const kk in m) { m[kk].encours.sort(cmpLot); m[kk].attente.sort(cmpLot); m[kk].planifie.sort(cmpLot) }
   return m
 })
 const lotsPhaseSel = computed(() => (filtrePhase.value && lotsParPhase.value[filtrePhase.value]) || { encours: [], attente: [], planifie: [] })
@@ -397,6 +400,8 @@ const vracsInfo = computed(() => {
     if (lance) { encours.push(o); bE += b; vE += b * pc }
     else { attente.push(o); bA += b; vA += b * pc }
   }
+  const cmpLot = (a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })
+  attente.sort(cmpLot); encours.sort(cmpLot)
   return { attente, encours, boites: bA + bE, val: vA + vE, total: lotsVracs.value.length }
 })
 const totMois = (i) => phasesAffichees.value.reduce((s, ph) => s + moisReal(ph.key, i), 0)
@@ -820,4 +825,5 @@ const serieMois = computed(() => {
 .lp-head.prt .lp-dot { background: #f59e0b; }
 .vracs-two { grid-template-columns: repeat(2, 1fr) !important; }
 .mini.prt b { color: #f59e0b; }
+.lp-val { color: #94a3b8; font-size: 0.88em; margin-left: 4px; }
 </style>
