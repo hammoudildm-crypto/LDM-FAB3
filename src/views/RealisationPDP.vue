@@ -323,7 +323,7 @@ const tauxLM = (k) => { const pl = planLM(k); return pl > 0 ? Math.round(realLM(
 const moisReal = (k, i) => { const a = realData.value.mois[k]; return a ? M(a[i]) : 0 }
 
 const phasesActives = computed(() => PHASES.filter(ph => planData.value.an[ph.key] || realData.value.an[ph.key]))
-const filtrePhase = ref(null)
+const filtrePhase = ref('vracs')
 const moisSel = ref(new Date().getMonth())
 const phasesAffichees = computed(() => (filtrePhase.value && filtrePhase.value !== 'vracs') ? phasesActives.value.filter(p => p.key === filtrePhase.value) : phasesActives.value)
 const prodTxt = (o) => { const p = o && o.produits; return p ? ((p.code_pf || '') + ' — ' + (p.designation || '')) : '' }
