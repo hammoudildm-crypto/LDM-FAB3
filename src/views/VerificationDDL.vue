@@ -672,4 +672,14 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 /* Colonne gauche plus étroite + titres minimisés */
 .verif-3col { grid-template-columns: 0.72fr 1.3fr 1fr !important; }
 .v3-col .card-title { font-size: 8px !important; margin-bottom: 3px !important; }
+/* Colonne centrale : tableau pleine largeur, sans défilement horizontal */
+.v3-mid table.mini { table-layout: fixed; width: 100%; }
+.v3-mid table.mini th, .v3-mid table.mini td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v3-mid table.mini th:nth-child(1), .v3-mid table.mini td:nth-child(1) { width: 12%; }
+.v3-mid table.mini th:nth-child(2), .v3-mid table.mini td:nth-child(2) { width: 32%; }
+.v3-mid table.mini th:nth-child(3), .v3-mid table.mini td:nth-child(3) { width: 33%; }
+.v3-mid table.mini th:nth-child(4), .v3-mid table.mini td:nth-child(4) { width: 13%; }
+.v3-mid table.mini th:nth-child(5), .v3-mid table.mini td:nth-child(5) { width: 10%; }
+.v3-mid .resv-sel { width: 100%; max-width: 100%; }
+.v3-mid .verif-form td { white-space: normal; overflow: visible; }
 </style>
