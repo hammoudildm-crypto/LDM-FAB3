@@ -172,6 +172,8 @@
             <div class="pp-row"><span class="pp-lbl">Boîtes</span><span class="pp-val">{{ fmt(vracsInfo.boites) }}</span></div>
             <div class="pp-row"><span class="pp-lbl">Valeur</span><span class="pp-val">{{ fmt(vracsInfo.val) }} DA</span></div>
             <div class="pp-row" v-if="vracsInfo.moyStock != null"><span class="pp-lbl">Stockage moyen</span><span class="pp-val">{{ vracsInfo.moyStock }} j</span></div>
+            <div class="pp-row" v-if="vracsInfo.minStock != null"><span class="pp-lbl">Stockage min</span><span class="pp-val">{{ vracsInfo.minStock }} j</span></div>
+            <div class="pp-row" v-if="vracsInfo.maxStock != null"><span class="pp-lbl">Stockage max</span><span class="pp-val">{{ vracsInfo.maxStock }} j</span></div>
           </div>
           <div class="pp-sep"></div>
           <div class="pp-mini">
@@ -402,7 +404,7 @@ const lotsVracs = computed(() => {
 const vracsInfo = computed(() => {
   const attente = [], encours = []
   let bA = 0, bE = 0, vA = 0, vE = 0
-  let sommeJours = 0, nbDates = 0
+  let sommeJours = 0, nbDates = 0, minStock = null, maxStock = null
   const cb = condByOf.value
   const now = new Date(); now.setHours(0, 0, 0, 0)
   for (const o of lotsVracs.value) {
@@ -417,14 +419,17 @@ const vracsInfo = computed(() => {
     for (const k in pl) { if (k === 'conditionnement') continue; const dfk = pl[k].df; if (dfk && (!finFab || dfk > finFab)) finFab = dfk }
     if (finFab) {
       const d0 = new Date(finFab); d0.setHours(0, 0, 0, 0)
-      const d1 = (lance && info.launchDate) ? new Date(info.launchDate) : new Date(now); d1.setHours(0, 0, 0, 0)
-      sommeJours += Math.max(0, Math.round((d1 - d0) / 86400000)); nbDates++
+      const d1 = info.launchDate ? new Date(info.launchDate) : new Date(now); d1.setHours(0, 0, 0, 0)
+      const j = Math.max(0, Math.round((d1 - d0) / 86400000))
+      sommeJours += j; nbDates++
+      if (minStock === null || j < minStock) minStock = j
+      if (maxStock === null || j > maxStock) maxStock = j
     }
   }
   const cmpLot = (a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })
   attente.sort(cmpLot); encours.sort(cmpLot)
   const moyStock = nbDates ? Math.round(sommeJours / nbDates) : null
-  return { attente, encours, boites: bA + bE, val: vA + vE, total: lotsVracs.value.length, moyStock }
+  return { attente, encours, boites: bA + bE, val: vA + vE, total: lotsVracs.value.length, moyStock, minStock, maxStock, nbStock: nbDates }
 })
 const totMois = (i) => phasesAffichees.value.reduce((s, ph) => s + moisReal(ph.key, i), 0)
 const totGlobal = computed(() => phasesAffichees.value.reduce((s, ph) => s + valReal(ph.key), 0))
