@@ -288,12 +288,6 @@ async function devalider(l) {
 
     <p v-if="msg" class="alert">{{ msg }}</p>
 
-    <div class="kpi-grid k3">
-      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.clipboard"></svg></span><div class="kpi-val">{{ fmt(nbVerifies) }}</div></div><div class="kpi-lbl">DDL vérifiés</div></div>
-      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><div class="kpi-val" :class="{ warn: nbAttente > 0 }">{{ fmt(nbAttente) }}</div></div><div class="kpi-lbl">DDL en attente de vérification</div></div>
-      <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.emerald"><svg viewBox="0 0 24 24" v-html="ICONS.percent"></svg></span><div class="kpi-val accent">{{ fmtPct(taux) }}</div></div><div class="kpi-lbl">Taux de vérification</div></div>
-    </div>
-
     <div class="verif-3col">
       <div class="v3-col">
       <section class="card">
