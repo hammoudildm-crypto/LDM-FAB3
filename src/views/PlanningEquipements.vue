@@ -65,7 +65,7 @@
             <div class="g-eqcode">{{ row.eq.code }} <span v-if="(panierEquip[row.eq.id] || []).length" class="g-pan">🧺 {{ (panierEquip[row.eq.id] || []).length }}</span></div>
             <div class="g-eqnom">{{ row.eq.nom }}</div>
             <div class="g-eqfin">fin : {{ fmtJH(row.fin) }}</div>
-            <label class="g-eqwe" @click.stop><input type="checkbox" v-model="weekendEquip[row.eq.id]" /> week-ends</label>
+            <label class="g-eqwe" @click.stop><input type="checkbox" v-model="weekendEquip[row.eq.id]" @change="sauverPanier(row.eq.id)" /> week-ends</label>
           </div>
           <div class="g-track" :style="{ width: totalW + 'px' }">
             <!-- bandes jours -->
@@ -201,7 +201,7 @@ onMounted(async () => {
       let lotsArr = [], reg = null, req = null
       const pr = row.produits
       if (Array.isArray(pr)) lotsArr = pr
-      else if (pr && typeof pr === 'object') { lotsArr = Array.isArray(pr.lots) ? pr.lots : []; reg = pr.regime; req = pr.requis }
+      else if (pr && typeof pr === 'object') { lotsArr = Array.isArray(pr.lots) ? pr.lots : []; reg = pr.regime; req = pr.requis; if (typeof pr.weekend === 'boolean') weekendEquip[row.equipement_id] = pr.weekend }
       const flat = []
       for (const x of lotsArr) {
         if (x && typeof x === 'object' && x.uid) flat.push({ pid: x.pid, uid: x.uid })
@@ -355,7 +355,7 @@ function dropSur(eqId, uid) {
 const panierErreur = ref('')
 async function sauverPanier(id) {
   try {
-    const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: { lots: panierEquip[id] || [], regime: regimeEquip[id] || '3x8', requis: requisEquip[id] || [] }, updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
+    const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: { lots: panierEquip[id] || [], regime: regimeEquip[id] || '3x8', requis: requisEquip[id] || [], weekend: !!weekendEquip[id] }, updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
     panierErreur.value = r.error ? ('Panier non sauvegardé : ' + r.error.message + ' — crée la table planning_panier (voir SQL).') : ''
   } catch (e) { panierErreur.value = 'Panier non sauvegardé : ' + String(e) }
 }
