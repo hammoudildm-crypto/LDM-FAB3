@@ -55,11 +55,15 @@
           <div class="g-track" :style="{ width: totalW + 'px' }">
             <!-- bandes jours -->
             <div v-for="d in jours" :key="'b'+d.i" class="g-dband" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
-            <!-- barres -->
-            <div v-for="(t, i) in row.tasks" :key="i" class="g-bar" :class="'g-' + t.type"
-                 :style="barStyle(t)" :title="titre(t)">
-              <span class="g-lbl">{{ t.type === 'lot' ? t.prod.code_pf : (t.type.startsWith('gen') ? 'NG' : 'NP') }}</span>
-            </div>
+            <!-- bandes week-end -->
+            <div v-for="d in joursWeekend" :key="'w'+d.i" class="g-weekend" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
+            <!-- barres (par segment) -->
+            <template v-for="(t, i) in row.tasks">
+              <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar" :class="'g-' + t.type"
+                   :style="barStyleSeg(seg, t)" :title="titre(t)">
+                <span v-if="j === 0" class="g-lbl">{{ t.type === 'lot' ? t.prod.code_pf : (t.type.startsWith('gen') ? 'NG' : 'NP') }}</span>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -259,15 +263,16 @@ const jours = computed(() => {
   for (let i = 0; i < n; i++) {
     const d = new Date(start.getTime() + i * 86400000)
     const left = ((d - t0.value) / 3600000) * pxH.value
-    out.push({ i, left, w: 24 * pxH.value, label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }) })
+    out.push({ i, left, w: 24 * pxH.value, weekend: (d.getDay() === 5 || d.getDay() === 6) && !weekendInclus.value, label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }) })
   }
   return out
 })
+const joursWeekend = computed(() => jours.value.filter(d => d.weekend))
 
-// Position des barres
-function barStyle(t) {
-  const left = ((t.start - t0.value) / 3600000) * pxH.value
-  const w = Math.max(2, ((t.end - t.start) / 3600000) * pxH.value)
+// Position des barres (par segment)
+function barStyleSeg(seg, t) {
+  const left = ((seg.start - t0.value) / 3600000) * pxH.value
+  const w = Math.max(2, ((seg.end - seg.start) / 3600000) * pxH.value)
   const s = { left: left + 'px', width: w + 'px' }
   if (t.type === 'lot') { const c = couleurProd(t.prod.code_pf); s.background = c.bg; s.borderColor = c.bd }
   return s
@@ -314,6 +319,7 @@ const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filte
 .p-grp label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 700; color: #475569; }
 .p-grp input, .p-grp select { font-size: 13px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; color: #1b2733; }
 .p-grp input[type=range] { padding: 0; }
+.p-grp .chk { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; }
 
 .legende { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; font-size: 11px; color: #475569; }
 .lg { display: inline-flex; align-items: center; gap: 5px; }
@@ -338,8 +344,9 @@ const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filte
 .g-eqnom { font-size: 9.5px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-eqfin { font-size: 8.5px; color: #94a3b8; }
 .g-track { position: relative; height: 34px; }
-.g-dband { position: absolute; top: 0; bottom: 0; border-left: 1px solid #f1f5f9; box-sizing: border-box; }
-.g-bar { position: absolute; top: 4px; height: 26px; border-radius: 4px; border: 1px solid; box-sizing: border-box; overflow: hidden; display: flex; align-items: center; cursor: default; }
+.g-dband { position: absolute; top: 0; bottom: 0; border-left: 1px solid #f1f5f9; box-sizing: border-box; z-index: 0; }
+.g-weekend { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #e9edf3 6px, #e9edf3 12px); z-index: 0; }
+.g-bar { position: absolute; top: 4px; height: 26px; border-radius: 4px; border: 1px solid; box-sizing: border-box; overflow: hidden; display: flex; align-items: center; cursor: default; z-index: 1; }
 .g-bar.g-lot, .g-bar.g-gen, .g-bar.g-genH, .g-bar.g-part { }
 .g-lbl { font-size: 8.5px; font-weight: 700; padding: 0 3px; white-space: nowrap; color: #1e293b; }
 .g-gen, .g-genH { background: #7f1d1d; border-color: #7f1d1d; }
