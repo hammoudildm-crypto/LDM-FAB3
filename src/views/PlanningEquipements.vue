@@ -85,7 +85,10 @@
       <div class="pan-box" @click.stop>
         <div class="pan-head">
           <div><b>Panier — {{ panierOuvert.code }}</b> <span class="pan-nom">{{ panierOuvert.nom }}</span></div>
-          <button class="pan-close" @click="panierOuvert = null">✕</button>
+          <div class="pan-head-btns">
+            <button class="pan-vider" @click="viderPanier" :disabled="!(panierEquip[panierOuvert.id] || []).length">Vider</button>
+            <button class="pan-close" @click="panierOuvert = null">✕</button>
+          </div>
         </div>
         <p class="pan-hint">Ajoute des produits et ordonne les campagnes (haut → bas). Panier vide = calcul auto par cadences.</p>
         <div class="pan-list">
@@ -281,6 +284,7 @@ function nbLotsDefaut(pid) {
   return tl > 0 ? Math.max(1, Math.round(qty / tl)) : 1
 }
 function ouvrirPanier(eq) { panierOuvert.value = eq; rechProd.value = '' }
+function viderPanier() { if (!panierOuvert.value) return; if (!confirm('Vider le panier de cet équipement ?')) return; const id = panierOuvert.value.id; panierEquip[id] = []; sauverPanier(id) }
 function ajouterPanier(pid) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; if (!panierEquip[id].some(i => i.pid === pid)) panierEquip[id].push({ pid, nb: nbLotsDefaut(pid) }); sauverPanier(id) }
 function retirerPanier(idx) { const id = panierOuvert.value.id; const a = panierEquip[id]; if (a) { a.splice(idx, 1); sauverPanier(id) } }
 function monterPanier(idx) { const id = panierOuvert.value.id; const a = panierEquip[id]; if (a && idx > 0) { const t = a[idx - 1]; a[idx - 1] = a[idx]; a[idx] = t; sauverPanier(id) } }
@@ -453,6 +457,9 @@ const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filte
 .pan-head b { font-size: 15px; color: #0f172a; }
 .pan-nom { font-size: 12px; color: #64748b; }
 .pan-close { background: none; border: none; font-size: 16px; cursor: pointer; color: #64748b; }
+.pan-head-btns { display: flex; align-items: center; gap: 8px; }
+.pan-vider { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; border-radius: 7px; font-size: 12px; padding: 4px 12px; cursor: pointer; font-weight: 600; }
+.pan-vider:disabled { opacity: .4; cursor: default; }
 .pan-hint { font-size: 11px; color: #94a3b8; margin: 0 0 10px; }
 .pan-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
 .pan-item { display: flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 8px; }
