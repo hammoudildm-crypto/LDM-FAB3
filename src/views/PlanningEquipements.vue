@@ -19,6 +19,20 @@
         </div>
       </div>
       <div class="p-grp"><label>Zoom<input type="range" min="0.5" max="24" step="0.5" v-model.number="pxH" /></label></div>
+      <div class="p-grp"><label>Filtre<input type="text" v-model="filtreTexte" placeholder="code / nom…" /></label></div>
+      <div class="p-grp"><label>Phase
+        <select v-model="filtrePhase">
+          <option value="">Toutes</option>
+          <option value="1">Pesée</option>
+          <option value="2">Granulation</option>
+          <option value="3">Séchage</option>
+          <option value="4">Mélange</option>
+          <option value="5">Compression</option>
+          <option value="6">Remplissage</option>
+          <option value="7">Pelliculage</option>
+        </select>
+      </label></div>
+      <div class="p-grp"><label class="chk-inline"><input type="checkbox" v-model="filtreAvecPlan" /> Avec planning</label></div>
     </section>
 
     <!-- Légende -->
@@ -177,6 +191,9 @@ const vdlp = ref(2)        // nettoyage partiel (h)
 const holdingJ = ref(7)    // validité campagne (jours)
 const annee = ref(today.getFullYear())
 const pxH = ref(4)         // pixels par heure (zoom)
+const filtreTexte = ref('')
+const filtrePhase = ref('')
+const filtreAvecPlan = ref(false)
 const weekendEquip = reactive({}) // par équipement : true = tous les week-ends inclus
 const regimeEquip = reactive({})  // par équipement : '2x8' ou '3x8'
 const requisEquip = reactive({})  // par équipement : dates week-end travaillées
@@ -406,7 +423,13 @@ const produitsAjoutables = computed(() => {
 const planning = computed(() => {
   const t0 = new Date(dateDepart.value + 'T06:00:00')
   const rows = []
-  const equipsFab = equipements.value.filter(e => estFab(e.type)).sort((a, b) => (phaseOrdre(a.type) - phaseOrdre(b.type)) || String(a.code).localeCompare(String(b.code)))
+  const q = filtreTexte.value.trim().toLowerCase()
+  const equipsFab = equipements.value.filter(e => estFab(e.type)).filter(e => {
+    if (filtrePhase.value && phaseOrdre(e.type) !== Number(filtrePhase.value)) return false
+    if (filtreAvecPlan.value && !(panierEquip[e.id] && panierEquip[e.id].length)) return false
+    if (q && !((e.code + ' ' + (e.nom || '')).toLowerCase().includes(q))) return false
+    return true
+  }).sort((a, b) => (phaseOrdre(a.type) - phaseOrdre(b.type)) || String(a.code).localeCompare(String(b.code)))
   for (const eq of equipsFab) {
     const pan = panierEquip[eq.id]
     let lots = []
@@ -514,6 +537,8 @@ const synthEquip = computed(() => planning.value.map(r => ({
 .vue-btn { background: #eef2f7; border: 1px solid #cbd5e1; border-radius: 7px; font-size: 12px; padding: 5px 11px; cursor: pointer; color: #475569; font-weight: 600; }
 .vue-btn.on { background: #0f766e; border-color: #0f766e; color: #fff; }
 .p-grp .chk { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; }
+.p-grp .chk-inline { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; }
+.p-grp input[type=text], .p-grp select { font-size: 12px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 7px; }
 
 .legende { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; font-size: 11px; color: #475569; }
 .lg { display: inline-flex; align-items: center; gap: 5px; }
