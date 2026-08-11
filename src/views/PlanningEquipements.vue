@@ -59,12 +59,12 @@
             <!-- barres (par segment) -->
             <template v-for="(t, i) in row.tasks">
               <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar"
-                   :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragInfo && t.type === 'lot' && dragInfo.eqId === row.eq.id && dragInfo.pid === t.prod.id }]"
-                   :style="barStyleSeg(seg, t)" :title="t.type === 'lot' ? (titre(t) + '  •  glisser pour réordonner') : titre(t)"
+                   :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragInfo && t.type === 'lot' && dragInfo.eqId === row.eq.id && dragInfo.uid === t.uid }]"
+                   :style="barStyleSeg(seg, t)" :title="t.type === 'lot' ? (titre(t) + '  •  glisser ce lot pour réordonner') : titre(t)"
                    :draggable="t.type === 'lot' ? 'true' : 'false'"
-                   @dragstart="t.type === 'lot' ? dragStart(row.eq.id, t.prod.id) : null"
+                   @dragstart="t.type === 'lot' ? dragStart(row.eq.id, t.uid) : null"
                    @dragover.prevent
-                   @drop="t.type === 'lot' ? dropSur(row.eq.id, t.prod.id) : null">
+                   @drop="t.type === 'lot' ? dropSur(row.eq.id, t.uid) : null">
                 <span v-if="j === 0" class="g-lbl">{{ t.type === 'lot' ? t.prod.code_pf : (t.type.startsWith('gen') ? 'NG' : 'NP') }}</span>
               </div>
             </template>
@@ -97,21 +97,21 @@
         </div>
         <p class="pan-hint">Ajoute des produits et ordonne les campagnes (haut → bas). Panier vide = calcul auto par cadences.</p>
         <div class="pan-list">
-          <div v-for="(item, idx) in (panierEquip[panierOuvert.id] || [])" :key="item.pid" class="pan-item">
-            <span class="pan-idx">{{ idx + 1 }}</span>
-            <span class="pan-pnom">{{ produitNom(item.pid) }}</span>
-            <input type="number" min="1" step="1" class="pan-nb" v-model.number="item.nb" @change="sauverPanier(panierOuvert.id)" title="Nombre de lots" />
-            <span class="pan-nblbl">lots</span>
-            <button class="pan-btn" @click="monterPanier(idx)" :disabled="idx === 0">▲</button>
-            <button class="pan-btn" @click="descendrePanier(idx)" :disabled="idx === (panierEquip[panierOuvert.id] || []).length - 1">▼</button>
-            <button class="pan-btn del" @click="retirerPanier(idx)">✕</button>
+          <div v-for="(grp, gi) in campagnesPanier" :key="gi" class="pan-item">
+            <span class="pan-idx">{{ gi + 1 }}</span>
+            <span class="pan-pnom">{{ produitNom(grp.pid) }} <b>× {{ grp.count }} lot(s)</b></span>
+            <button class="pan-btn del" @click="retirerGroupe(grp)">✕</button>
           </div>
-          <div v-if="!(panierEquip[panierOuvert.id] || []).length" class="pan-vide">Panier vide.</div>
+          <div v-if="!campagnesPanier.length" class="pan-vide">Panier vide.</div>
         </div>
+        <p class="pan-hint2">Réordonne les lots <b>un par un en les glissant sur le Gantt</b>. Nettoyage recalculé : même produit → partiel ; produit différent ou validité dépassée → général.</p>
         <div class="pan-add">
-          <input v-model="rechProd" placeholder="Rechercher un produit à ajouter…" class="pan-search" />
+          <div class="pan-add-row">
+            <input v-model="rechProd" placeholder="Rechercher un produit…" class="pan-search" />
+            <label class="pan-nbadd">Lots <input type="number" min="1" step="1" v-model.number="nbAjout" class="pan-nb" /></label>
+          </div>
           <div class="pan-prods">
-            <button v-for="p in produitsAjoutables" :key="p.id" class="pan-chip" @click="ajouterPanier(p.id)" :title="p.designation">{{ p.code_pf }}</button>
+            <button v-for="p in produitsAjoutables" :key="p.id" class="pan-chip" @click="ajouterPanier(p.id)" :title="p.designation + ' — ajoute ' + nbAjout + ' lot(s)'">{{ p.code_pf }}</button>
             <span v-if="!produitsAjoutables.length" class="pan-none">Aucun produit.</span>
           </div>
         </div>
@@ -171,7 +171,13 @@ onMounted(async () => {
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
     if (rpan && !rpan.error && rpan.data) for (const row of rpan.data) {
       const arr = Array.isArray(row.produits) ? row.produits : []
-      panierEquip[row.equipement_id] = arr.map(x => (x && typeof x === 'object') ? { pid: x.pid, nb: Number(x.nb) || 1 } : { pid: x, nb: 1 })
+      const flat = []
+      for (const x of arr) {
+        if (x && typeof x === 'object' && x.uid) flat.push({ pid: x.pid, uid: x.uid })
+        else if (x && typeof x === 'object') { const n = Math.max(1, Number(x.nb) || 1); for (let k = 0; k < n; k++) flat.push({ pid: x.pid, uid: uidGen() }) }
+        else flat.push({ pid: x, uid: uidGen() })
+      }
+      panierEquip[row.equipement_id] = flat
     }
   } catch (e) { erreur.value = String(e) } finally { chargement.value = false }
 })
@@ -254,7 +260,7 @@ function placer(start, dureeH, weInc) {
   if (!segments.length) segments.push({ start: new Date(start), end: new Date(start) })
   return { segments, end: cursor }
 }
-function planifierTaches(campagnes, tDep, weInc, pVdlt, pVdlp, pHoldingH) {
+function planifierTaches(lots, tDep, weInc, pVdlt, pVdlp, pHoldingH) {
   const tasks = []
   let cursor = sauterWeekend(new Date(tDep), weInc)
   const push = (type, dureeH, extra) => {
@@ -262,14 +268,19 @@ function planifierTaches(campagnes, tDep, weInc, pVdlt, pVdlp, pHoldingH) {
     tasks.push({ type, ...(extra || {}), segments: pl.segments, start: pl.segments[0].start, end: pl.end })
     cursor = pl.end
   }
-  for (const camp of campagnes) {
-    push('gen', pVdlt)
-    let campStart = new Date(cursor)
-    for (let i = 0; i < camp.nbLots; i++) {
-      if ((cursor - campStart) / 3600000 > pHoldingH) { push('genH', pVdlt); campStart = new Date(cursor) }
-      push('lot', camp.dLot, { prod: camp.prod, n: i + 1 })
-      if (i < camp.nbLots - 1) push('part', pVdlp)
-    }
+  let lastPid = null, lastGen = null
+  const cpt = {}
+  for (const lot of lots) {
+    const holdingDep = lastGen && (cursor - lastGen) / 3600000 > pHoldingH
+    let cln
+    if (lastPid === null || lot.pid !== lastPid) cln = 'gen'   // 1er lot ou produit différent -> nettoyage général
+    else if (holdingDep) cln = 'genH'                          // validité campagne dépassée -> nettoyage général
+    else cln = 'part'                                          // même produit -> nettoyage partiel
+    if (cln === 'gen' || cln === 'genH') { push(cln, pVdlt); lastGen = new Date(cursor) }
+    else push('part', pVdlp)
+    cpt[lot.pid] = (cpt[lot.pid] || 0) + 1
+    push('lot', lot.dLot, { prod: lot.prod, n: cpt[lot.pid], uid: lot.uid })
+    lastPid = lot.pid
   }
   return { tasks, fin: cursor }
 }
@@ -281,14 +292,14 @@ const panierOuvert = ref(null)
 const rechProd = ref('')
 // Glisser-déposer des campagnes sur le Gantt
 const dragInfo = ref(null)
-function dragStart(eqId, pid) { dragInfo.value = { eqId, pid } }
-function dropSur(eqId, pid) {
+function dragStart(eqId, uid) { dragInfo.value = { eqId, uid } }
+function dropSur(eqId, uid) {
   const d = dragInfo.value; dragInfo.value = null
-  if (!d || d.eqId !== eqId || d.pid === pid) return
+  if (!d || d.eqId !== eqId || d.uid === uid) return
   const arr = panierEquip[eqId]; if (!arr) return
-  const from = arr.findIndex(i => i.pid === d.pid); if (from < 0) return
+  const from = arr.findIndex(i => i.uid === d.uid); if (from < 0) return
   const [moved] = arr.splice(from, 1)
-  const to = arr.findIndex(i => i.pid === pid)
+  const to = arr.findIndex(i => i.uid === uid)
   if (to < 0) arr.push(moved); else arr.splice(to, 0, moved)
   sauverPanier(eqId)
 }
@@ -299,19 +310,29 @@ async function sauverPanier(id) {
     panierErreur.value = r.error ? ('Panier non sauvegardé : ' + r.error.message + ' — crée la table planning_panier (voir SQL).') : ''
   } catch (e) { panierErreur.value = 'Panier non sauvegardé : ' + String(e) }
 }
-function nbLotsDefaut() { return 1 }
-function ouvrirPanier(eq) { panierOuvert.value = eq; rechProd.value = '' }
+let uidCounter = 0
+function uidGen() { return 'l' + Date.now().toString(36) + (uidCounter++) }
+const nbAjout = ref(1)
+function ouvrirPanier(eq) { panierOuvert.value = eq; rechProd.value = ''; nbAjout.value = 1 }
 function viderPanier() { if (!panierOuvert.value) return; if (!confirm('Vider le panier de cet équipement ?')) return; const id = panierOuvert.value.id; panierEquip[id] = []; sauverPanier(id) }
-function ajouterPanier(pid) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; if (!panierEquip[id].some(i => i.pid === pid)) panierEquip[id].push({ pid, nb: nbLotsDefaut(pid) }); sauverPanier(id) }
-function retirerPanier(idx) { const id = panierOuvert.value.id; const a = panierEquip[id]; if (a) { a.splice(idx, 1); sauverPanier(id) } }
-function monterPanier(idx) { const id = panierOuvert.value.id; const a = panierEquip[id]; if (a && idx > 0) { const t = a[idx - 1]; a[idx - 1] = a[idx]; a[idx] = t; sauverPanier(id) } }
-function descendrePanier(idx) { const id = panierOuvert.value.id; const a = panierEquip[id]; if (a && idx < a.length - 1) { const t = a[idx + 1]; a[idx + 1] = a[idx]; a[idx] = t; sauverPanier(id) } }
+function ajouterPanier(pid) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; const n = Math.max(1, Number(nbAjout.value) || 1); for (let k = 0; k < n; k++) panierEquip[id].push({ pid, uid: uidGen() }); sauverPanier(id) }
+function retirerGroupe(grp) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; const set = new Set(grp.uids); panierEquip[id] = (panierEquip[id] || []).filter(i => !set.has(i.uid)); sauverPanier(id) }
 function produitNom(pid) { const p = produitsById.value[pid]; return p ? (p.code_pf + ' — ' + p.designation) : String(pid) }
+const campagnesPanier = computed(() => {
+  if (!panierOuvert.value) return []
+  const arr = panierEquip[panierOuvert.value.id] || []
+  const groups = []
+  for (const item of arr) {
+    const last = groups[groups.length - 1]
+    if (last && last.pid === item.pid) { last.count++; last.uids.push(item.uid) }
+    else groups.push({ pid: item.pid, count: 1, uids: [item.uid] })
+  }
+  return groups
+})
 const produitsAjoutables = computed(() => {
   if (!panierOuvert.value) return []
-  const dans = new Set((panierEquip[panierOuvert.value.id] || []).map(i => i.pid))
   const q = rechProd.value.trim().toLowerCase()
-  return produits.value.filter(p => !dans.has(p.id) && (!q || (p.code_pf + ' ' + (p.designation || '')).toLowerCase().includes(q))).slice(0, 40)
+  return produits.value.filter(p => (!q || (p.code_pf + ' ' + (p.designation || '')).toLowerCase().includes(q))).slice(0, 40)
 })
 
 const planning = computed(() => {
@@ -320,20 +341,18 @@ const planning = computed(() => {
   const equipsFab = equipements.value.filter(e => estFab(e.type)).sort((a, b) => (phaseOrdre(a.type) - phaseOrdre(b.type)) || String(a.code).localeCompare(String(b.code)))
   for (const eq of equipsFab) {
     const pan = panierEquip[eq.id]
-    let campagnes = []
+    let lots = []
     if (pan && pan.length) {
       for (const item of pan) {
         const prod = produitsById.value[item.pid]; if (!prod) continue
-        const nbLots = Math.max(1, Number(item.nb) || 0)
-        if (nbLots <= 0) continue
         const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === item.pid)
-        campagnes.push({ prod, nbLots, dLot: cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8 })
+        lots.push({ pid: item.pid, uid: item.uid, prod, dLot: cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8 })
       }
     }
     const eqVdlt = (eq.vdlt != null && eq.vdlt !== '') ? Number(eq.vdlt) : vdlt.value
     const eqVdlp = (eq.vdlp != null && eq.vdlp !== '') ? Number(eq.vdlp) : vdlp.value
     const eqHoldingH = (eq.dht != null && eq.dht !== '') ? Number(eq.dht) * 24 : holdingH.value
-    const r = planifierTaches(campagnes, t0, !!weekendEquip[eq.id], eqVdlt, eqVdlp, eqHoldingH)
+    const r = planifierTaches(lots, t0, !!weekendEquip[eq.id], eqVdlt, eqVdlp, eqHoldingH)
     rows.push({ eq, tasks: r.tasks, fin: r.fin })
   }
   return rows
@@ -483,6 +502,11 @@ const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filte
 .pan-chip { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 12px; font-size: 11px; padding: 3px 10px; cursor: pointer; font-weight: 600; }
 .pan-chip:hover { background: #dbeafe; }
 .pan-none { font-size: 11px; color: #94a3b8; }
+.pan-add-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.pan-add-row .pan-search { margin-bottom: 0; flex: 1; }
+.pan-nbadd { font-size: 11px; color: #475569; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.pan-nbadd .pan-nb { width: 52px; }
+.pan-hint2 { font-size: 10px; color: #94a3b8; margin: 0 0 10px; }
 .g-drag { cursor: grab; }
 .g-drag:active { cursor: grabbing; }
 .g-dragging { opacity: .5; outline: 2px dashed #5B9BD5; outline-offset: -1px; }
