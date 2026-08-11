@@ -43,11 +43,11 @@
         </div>
         <!-- lignes -->
         <div v-for="row in planning" :key="row.eq.id" class="g-row">
-          <div class="g-eqcol" :title="row.eq.nom">
-            <div class="g-eqcode">{{ row.eq.code }}</div>
+          <div class="g-eqcol" :title="'Cliquer pour gérer le panier — ' + row.eq.nom" @click="ouvrirPanier(row.eq)">
+            <div class="g-eqcode">{{ row.eq.code }} <span v-if="(panierEquip[row.eq.id] || []).length" class="g-pan">🧺 {{ (panierEquip[row.eq.id] || []).length }}</span></div>
             <div class="g-eqnom">{{ row.eq.nom }}</div>
             <div class="g-eqfin">fin : {{ fmtJH(row.fin) }}</div>
-            <label class="g-eqwe"><input type="checkbox" v-model="weekendEquip[row.eq.id]" /> week-ends</label>
+            <label class="g-eqwe" @click.stop><input type="checkbox" v-model="weekendEquip[row.eq.id]" /> week-ends</label>
           </div>
           <div class="g-track" :style="{ width: totalW + 'px' }">
             <!-- bandes jours -->
@@ -79,6 +79,34 @@
         <div class="rc"><span class="rc-v">{{ fmtJH(finGlobale) }}</span><span class="rc-l">Fin la plus tardive</span></div>
       </div>
     </section>
+
+    <!-- Panier par équipement -->
+    <div v-if="panierOuvert" class="pan-overlay" @click="panierOuvert = null">
+      <div class="pan-box" @click.stop>
+        <div class="pan-head">
+          <div><b>Panier — {{ panierOuvert.code }}</b> <span class="pan-nom">{{ panierOuvert.nom }}</span></div>
+          <button class="pan-close" @click="panierOuvert = null">✕</button>
+        </div>
+        <p class="pan-hint">Ajoute des produits et ordonne les campagnes (haut → bas). Panier vide = calcul auto par cadences.</p>
+        <div class="pan-list">
+          <div v-for="(pid, idx) in (panierEquip[panierOuvert.id] || [])" :key="pid" class="pan-item">
+            <span class="pan-idx">{{ idx + 1 }}</span>
+            <span class="pan-pnom">{{ produitNom(pid) }}</span>
+            <button class="pan-btn" @click="monterPanier(idx)" :disabled="idx === 0">▲</button>
+            <button class="pan-btn" @click="descendrePanier(idx)" :disabled="idx === (panierEquip[panierOuvert.id] || []).length - 1">▼</button>
+            <button class="pan-btn del" @click="retirerPanier(idx)">✕</button>
+          </div>
+          <div v-if="!(panierEquip[panierOuvert.id] || []).length" class="pan-vide">Panier vide.</div>
+        </div>
+        <div class="pan-add">
+          <input v-model="rechProd" placeholder="Rechercher un produit à ajouter…" class="pan-search" />
+          <div class="pan-prods">
+            <button v-for="p in produitsAjoutables" :key="p.id" class="pan-chip" @click="ajouterPanier(p.id)" :title="p.designation">{{ p.code_pf }}</button>
+            <span v-if="!produitsAjoutables.length" class="pan-none">Aucun produit.</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -232,24 +260,52 @@ function planifierTaches(campagnes, tDep, weInc, pVdlt, pVdlp, pHoldingH) {
 }
 
 // Moteur d'ordonnancement
+// --- Panier par équipement (produits à planifier + ordre) ---
+const panierEquip = reactive({})
+const panierOuvert = ref(null)
+const rechProd = ref('')
+function ouvrirPanier(eq) { panierOuvert.value = eq; rechProd.value = '' }
+function ajouterPanier(pid) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; if (!panierEquip[id].includes(pid)) panierEquip[id].push(pid) }
+function retirerPanier(idx) { const a = panierEquip[panierOuvert.value.id]; if (a) a.splice(idx, 1) }
+function monterPanier(idx) { const a = panierEquip[panierOuvert.value.id]; if (a && idx > 0) { const t = a[idx - 1]; a[idx - 1] = a[idx]; a[idx] = t } }
+function descendrePanier(idx) { const a = panierEquip[panierOuvert.value.id]; if (a && idx < a.length - 1) { const t = a[idx + 1]; a[idx + 1] = a[idx]; a[idx] = t } }
+function produitNom(pid) { const p = produitsById.value[pid]; return p ? (p.code_pf + ' — ' + p.designation) : String(pid) }
+const produitsAjoutables = computed(() => {
+  if (!panierOuvert.value) return []
+  const dans = new Set(panierEquip[panierOuvert.value.id] || [])
+  const q = rechProd.value.trim().toLowerCase()
+  return produits.value.filter(p => !dans.has(p.id) && (!q || (p.code_pf + ' ' + (p.designation || '')).toLowerCase().includes(q))).slice(0, 40)
+})
+
 const planning = computed(() => {
   const t0 = new Date(dateDepart.value + 'T06:00:00')
   const rows = []
   const equipsFab = equipements.value.filter(e => estFab(e.type)).sort((a, b) => (phaseOrdre(a.type) - phaseOrdre(b.type)) || String(a.code).localeCompare(String(b.code)))
   for (const eq of equipsFab) {
-    const cads = cadences.value.filter(c => c.equipement_id === eq.id)
-    const campagnes = []
-    for (const c of cads) {
-      const prod = produitsById.value[c.produit_id]
-      if (!prod) continue
-      const qty = pdpQty.value[c.produit_id] || 0
-      const tl = Number(prod.taille_lot) || 0
-      const nbLots = tl > 0 ? Math.round(qty / tl) : 0
-      if (nbLots <= 0) continue
-      campagnes.push({ prod, nbLots, dLot: Math.max(0.25, dureeLotH(prod, c)) })
+    const pan = panierEquip[eq.id]
+    let campagnes = []
+    if (pan && pan.length) {
+      for (const pid of pan) {
+        const prod = produitsById.value[pid]; if (!prod) continue
+        const qty = pdpQty.value[pid] || 0
+        const tl = Number(prod.taille_lot) || 0
+        const nbLots = tl > 0 ? Math.round(qty / tl) : 0
+        if (nbLots <= 0) continue
+        const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === pid)
+        campagnes.push({ prod, nbLots, dLot: cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8 })
+      }
+    } else {
+      const cads = cadences.value.filter(c => c.equipement_id === eq.id)
+      for (const c of cads) {
+        const prod = produitsById.value[c.produit_id]; if (!prod) continue
+        const qty = pdpQty.value[c.produit_id] || 0
+        const tl = Number(prod.taille_lot) || 0
+        const nbLots = tl > 0 ? Math.round(qty / tl) : 0
+        if (nbLots <= 0) continue
+        campagnes.push({ prod, nbLots, dLot: Math.max(0.25, dureeLotH(prod, c)) })
+      }
+      campagnes.sort((a, b) => String(a.prod.code_pf).localeCompare(String(b.prod.code_pf)))
     }
-    if (!campagnes.length) continue
-    campagnes.sort((a, b) => String(a.prod.code_pf).localeCompare(String(b.prod.code_pf)))
     const eqVdlt = (eq.vdlt != null && eq.vdlt !== '') ? Number(eq.vdlt) : vdlt.value
     const eqVdlp = (eq.vdlp != null && eq.vdlp !== '') ? Number(eq.vdlp) : vdlp.value
     const eqHoldingH = (eq.dht != null && eq.dht !== '') ? Number(eq.dht) * 24 : holdingH.value
@@ -375,4 +431,27 @@ const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filte
 .rc { display: flex; flex-direction: column; }
 .rc-v { font-size: 18px; font-weight: 800; color: #0f172a; }
 .rc-l { font-size: 10px; color: #64748b; }
+.g-eqcol { cursor: pointer; }
+.g-pan { font-size: 8px; color: #0f766e; font-weight: 700; }
+.pan-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.4); display: flex; align-items: center; justify-content: center; z-index: 50; }
+.pan-box { background: #fff; border-radius: 14px; width: 520px; max-width: 92vw; max-height: 82vh; overflow-y: auto; padding: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.pan-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.pan-head b { font-size: 15px; color: #0f172a; }
+.pan-nom { font-size: 12px; color: #64748b; }
+.pan-close { background: none; border: none; font-size: 16px; cursor: pointer; color: #64748b; }
+.pan-hint { font-size: 11px; color: #94a3b8; margin: 0 0 10px; }
+.pan-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.pan-item { display: flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 8px; }
+.pan-idx { font-size: 11px; font-weight: 800; color: #5B9BD5; width: 18px; }
+.pan-pnom { flex: 1; font-size: 12px; color: #1b2733; }
+.pan-btn { background: #eef2f7; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; padding: 2px 7px; cursor: pointer; }
+.pan-btn:disabled { opacity: .35; cursor: default; }
+.pan-btn.del { color: #dc2626; }
+.pan-vide { font-size: 12px; color: #94a3b8; padding: 8px; text-align: center; }
+.pan-add { border-top: 1px solid #e2e8f0; padding-top: 10px; }
+.pan-search { width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; margin-bottom: 8px; box-sizing: border-box; }
+.pan-prods { display: flex; flex-wrap: wrap; gap: 5px; }
+.pan-chip { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 12px; font-size: 11px; padding: 3px 10px; cursor: pointer; font-weight: 600; }
+.pan-chip:hover { background: #dbeafe; }
+.pan-none { font-size: 11px; color: #94a3b8; }
 </style>
