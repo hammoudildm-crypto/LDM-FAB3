@@ -89,9 +89,11 @@
         </div>
         <p class="pan-hint">Ajoute des produits et ordonne les campagnes (haut → bas). Panier vide = calcul auto par cadences.</p>
         <div class="pan-list">
-          <div v-for="(pid, idx) in (panierEquip[panierOuvert.id] || [])" :key="pid" class="pan-item">
+          <div v-for="(item, idx) in (panierEquip[panierOuvert.id] || [])" :key="item.pid" class="pan-item">
             <span class="pan-idx">{{ idx + 1 }}</span>
-            <span class="pan-pnom">{{ produitNom(pid) }}</span>
+            <span class="pan-pnom">{{ produitNom(item.pid) }}</span>
+            <input type="number" min="1" step="1" class="pan-nb" v-model.number="item.nb" @change="sauverPanier(panierOuvert.id)" title="Nombre de lots" />
+            <span class="pan-nblbl">lots</span>
             <button class="pan-btn" @click="monterPanier(idx)" :disabled="idx === 0">▲</button>
             <button class="pan-btn" @click="descendrePanier(idx)" :disabled="idx === (panierEquip[panierOuvert.id] || []).length - 1">▼</button>
             <button class="pan-btn del" @click="retirerPanier(idx)">✕</button>
@@ -159,7 +161,10 @@ onMounted(async () => {
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
-    if (rpan && !rpan.error && rpan.data) for (const row of rpan.data) panierEquip[row.equipement_id] = Array.isArray(row.produits) ? row.produits : []
+    if (rpan && !rpan.error && rpan.data) for (const row of rpan.data) {
+      const arr = Array.isArray(row.produits) ? row.produits : []
+      panierEquip[row.equipement_id] = arr.map(x => (x && typeof x === 'object') ? { pid: x.pid, nb: Number(x.nb) || 1 } : { pid: x, nb: 1 })
+    }
   } catch (e) { erreur.value = String(e) } finally { chargement.value = false }
 })
 
@@ -269,15 +274,21 @@ const rechProd = ref('')
 async function sauverPanier(id) {
   try { await supabase.from('planning_panier').upsert({ equipement_id: id, produits: panierEquip[id] || [], updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' }) } catch (e) { /* table absente : ignoré */ }
 }
+function nbLotsDefaut(pid) {
+  const prod = produitsById.value[pid]; if (!prod) return 1
+  const qty = pdpQty.value[pid] || 0
+  const tl = Number(prod.taille_lot) || 0
+  return tl > 0 ? Math.max(1, Math.round(qty / tl)) : 1
+}
 function ouvrirPanier(eq) { panierOuvert.value = eq; rechProd.value = '' }
-function ajouterPanier(pid) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; if (!panierEquip[id].includes(pid)) panierEquip[id].push(pid); sauverPanier(id) }
+function ajouterPanier(pid) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; if (!panierEquip[id].some(i => i.pid === pid)) panierEquip[id].push({ pid, nb: nbLotsDefaut(pid) }); sauverPanier(id) }
 function retirerPanier(idx) { const id = panierOuvert.value.id; const a = panierEquip[id]; if (a) { a.splice(idx, 1); sauverPanier(id) } }
 function monterPanier(idx) { const id = panierOuvert.value.id; const a = panierEquip[id]; if (a && idx > 0) { const t = a[idx - 1]; a[idx - 1] = a[idx]; a[idx] = t; sauverPanier(id) } }
 function descendrePanier(idx) { const id = panierOuvert.value.id; const a = panierEquip[id]; if (a && idx < a.length - 1) { const t = a[idx + 1]; a[idx + 1] = a[idx]; a[idx] = t; sauverPanier(id) } }
 function produitNom(pid) { const p = produitsById.value[pid]; return p ? (p.code_pf + ' — ' + p.designation) : String(pid) }
 const produitsAjoutables = computed(() => {
   if (!panierOuvert.value) return []
-  const dans = new Set(panierEquip[panierOuvert.value.id] || [])
+  const dans = new Set((panierEquip[panierOuvert.value.id] || []).map(i => i.pid))
   const q = rechProd.value.trim().toLowerCase()
   return produits.value.filter(p => !dans.has(p.id) && (!q || (p.code_pf + ' ' + (p.designation || '')).toLowerCase().includes(q))).slice(0, 40)
 })
@@ -290,13 +301,11 @@ const planning = computed(() => {
     const pan = panierEquip[eq.id]
     let campagnes = []
     if (pan && pan.length) {
-      for (const pid of pan) {
-        const prod = produitsById.value[pid]; if (!prod) continue
-        const qty = pdpQty.value[pid] || 0
-        const tl = Number(prod.taille_lot) || 0
-        const nbLots = tl > 0 ? Math.round(qty / tl) : 0
+      for (const item of pan) {
+        const prod = produitsById.value[item.pid]; if (!prod) continue
+        const nbLots = Math.max(1, Number(item.nb) || 0)
         if (nbLots <= 0) continue
-        const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === pid)
+        const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === item.pid)
         campagnes.push({ prod, nbLots, dLot: cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8 })
       }
     } else {
@@ -449,6 +458,8 @@ const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filte
 .pan-item { display: flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 8px; }
 .pan-idx { font-size: 11px; font-weight: 800; color: #5B9BD5; width: 18px; }
 .pan-pnom { flex: 1; font-size: 12px; color: #1b2733; }
+.pan-nb { width: 52px; padding: 3px 5px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; text-align: right; }
+.pan-nblbl { font-size: 10px; color: #94a3b8; }
 .pan-btn { background: #eef2f7; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; padding: 2px 7px; cursor: pointer; }
 .pan-btn:disabled { opacity: .35; cursor: default; }
 .pan-btn.del { color: #dc2626; }
