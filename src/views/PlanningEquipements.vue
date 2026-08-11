@@ -6,6 +6,7 @@
     </div>
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
+    <p v-if="panierErreur" class="alert">{{ panierErreur }}</p>
 
     <!-- Paramètres -->
     <section class="card params">
@@ -291,8 +292,12 @@ function dropSur(eqId, pid) {
   if (to < 0) arr.push(moved); else arr.splice(to, 0, moved)
   sauverPanier(eqId)
 }
+const panierErreur = ref('')
 async function sauverPanier(id) {
-  try { await supabase.from('planning_panier').upsert({ equipement_id: id, produits: panierEquip[id] || [], updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' }) } catch (e) { /* table absente : ignoré */ }
+  try {
+    const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: panierEquip[id] || [], updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
+    panierErreur.value = r.error ? ('Panier non sauvegardé : ' + r.error.message + ' — crée la table planning_panier (voir SQL).') : ''
+  } catch (e) { panierErreur.value = 'Panier non sauvegardé : ' + String(e) }
 }
 function nbLotsDefaut() { return 1 }
 function ouvrirPanier(eq) { panierOuvert.value = eq; rechProd.value = '' }
