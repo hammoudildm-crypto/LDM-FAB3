@@ -10,10 +10,6 @@
     <!-- Paramètres -->
     <section class="card params">
       <div class="p-grp"><label>Départ<input type="date" v-model="dateDepart" /></label></div>
-      <div class="p-grp"><label>VDLT défaut (h)<input type="number" min="0" step="0.5" v-model.number="vdlt" /></label></div>
-      <div class="p-grp"><label>VDLP défaut (h)<input type="number" min="0" step="0.5" v-model.number="vdlp" /></label></div>
-      <div class="p-grp"><label>Holding défaut (j)<input type="number" min="0" step="1" v-model.number="holdingJ" /></label></div>
-      <div class="p-grp" style="align-self:center;font-size:11px;color:#94a3b8;max-width:220px">VDLT/VDLP/Holding viennent des paramètres par équipement (page Cadences). Les défauts ne servent qu'en absence de valeur.</div>
       <div class="p-grp"><label>Année PDP<select v-model.number="annee"><option v-for="a in annees" :key="a" :value="a">{{ a }}</option></select></label></div>
       <div class="p-grp"><label>Zoom<input type="range" min="1.5" max="10" step="0.5" v-model.number="pxH" /></label></div>
     </section>
@@ -256,7 +252,7 @@ const planning = computed(() => {
     campagnes.sort((a, b) => String(a.prod.code_pf).localeCompare(String(b.prod.code_pf)))
     const eqVdlt = (eq.vdlt != null && eq.vdlt !== '') ? Number(eq.vdlt) : vdlt.value
     const eqVdlp = (eq.vdlp != null && eq.vdlp !== '') ? Number(eq.vdlp) : vdlp.value
-    const eqHoldingH = (eq.dht != null && eq.dht !== '') ? Number(eq.dht) : holdingH.value
+    const eqHoldingH = (eq.dht != null && eq.dht !== '') ? Number(eq.dht) * 24 : holdingH.value
     const r = planifierTaches(campagnes, t0, !!weekendEquip[eq.id], eqVdlt, eqVdlp, eqHoldingH)
     rows.push({ eq, tasks: r.tasks, fin: r.fin })
   }
