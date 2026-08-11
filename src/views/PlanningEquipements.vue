@@ -57,8 +57,13 @@
             </template>
             <!-- barres (par segment) -->
             <template v-for="(t, i) in row.tasks">
-              <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar" :class="'g-' + t.type"
-                   :style="barStyleSeg(seg, t)" :title="titre(t)">
+              <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar"
+                   :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragInfo && t.type === 'lot' && dragInfo.eqId === row.eq.id && dragInfo.pid === t.prod.id }]"
+                   :style="barStyleSeg(seg, t)" :title="t.type === 'lot' ? (titre(t) + '  •  glisser pour réordonner') : titre(t)"
+                   :draggable="t.type === 'lot' ? 'true' : 'false'"
+                   @dragstart="t.type === 'lot' ? dragStart(row.eq.id, t.prod.id) : null"
+                   @dragover.prevent
+                   @drop="t.type === 'lot' ? dropSur(row.eq.id, t.prod.id) : null">
                 <span v-if="j === 0" class="g-lbl">{{ t.type === 'lot' ? t.prod.code_pf : (t.type.startsWith('gen') ? 'NG' : 'NP') }}</span>
               </div>
             </template>
@@ -273,6 +278,19 @@ function planifierTaches(campagnes, tDep, weInc, pVdlt, pVdlp, pHoldingH) {
 const panierEquip = reactive({})
 const panierOuvert = ref(null)
 const rechProd = ref('')
+// Glisser-déposer des campagnes sur le Gantt
+const dragInfo = ref(null)
+function dragStart(eqId, pid) { dragInfo.value = { eqId, pid } }
+function dropSur(eqId, pid) {
+  const d = dragInfo.value; dragInfo.value = null
+  if (!d || d.eqId !== eqId || d.pid === pid) return
+  const arr = panierEquip[eqId]; if (!arr) return
+  const from = arr.findIndex(i => i.pid === d.pid); if (from < 0) return
+  const [moved] = arr.splice(from, 1)
+  const to = arr.findIndex(i => i.pid === pid)
+  if (to < 0) arr.push(moved); else arr.splice(to, 0, moved)
+  sauverPanier(eqId)
+}
 async function sauverPanier(id) {
   try { await supabase.from('planning_panier').upsert({ equipement_id: id, produits: panierEquip[id] || [], updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' }) } catch (e) { /* table absente : ignoré */ }
 }
@@ -460,4 +478,7 @@ const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filte
 .pan-chip { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 12px; font-size: 11px; padding: 3px 10px; cursor: pointer; font-weight: 600; }
 .pan-chip:hover { background: #dbeafe; }
 .pan-none { font-size: 11px; color: #94a3b8; }
+.g-drag { cursor: grab; }
+.g-drag:active { cursor: grabbing; }
+.g-dragging { opacity: .5; outline: 2px dashed #5B9BD5; outline-offset: -1px; }
 </style>
