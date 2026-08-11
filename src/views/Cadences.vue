@@ -159,7 +159,7 @@ const COLS_PARAM = [
   { k: 'vdlp', l: 'VDLP', u: 'h' },
   { k: 'vdlt', l: 'VDLT', u: 'h' },
   { k: 'reglage', l: 'Réglage', u: 'h' },
-  { k: 'dht', l: 'Holding', u: 'h' }
+  { k: 'dht', l: 'Holding', u: 'j' }
 ]
 const PHASE_LBL = { pesee: 'Pesée', granulation: 'Granulation et Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
 function paramCell(grp, k) { const e = grp.equips[0]; return e && e[k] != null ? e[k] : '' }
