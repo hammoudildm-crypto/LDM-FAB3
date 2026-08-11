@@ -2,7 +2,7 @@
   <div class="pe-page">
     <div class="pe-head">
       <h1>Planning des équipements — Fabrication</h1>
-      <p class="sub">Ordonnancement 24 h/24 sur 3 shifts (06–14 · 14–22 · 22–06), selon les cadences et les campagnes de nettoyage.</p>
+      <p class="sub">Ordonnancement 24 h/24 sur 3 shifts (06–14 · 14–22 · 22–06). Clique sur un équipement pour alimenter son panier de produits (nombre de lots saisi manuellement). Durées et nettoyages selon les cadences et paramètres par équipement.</p>
     </div>
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
@@ -10,7 +10,6 @@
     <!-- Paramètres -->
     <section class="card params">
       <div class="p-grp"><label>Départ<input type="date" v-model="dateDepart" /></label></div>
-      <div class="p-grp"><label>Année PDP<select v-model.number="annee"><option v-for="a in annees" :key="a" :value="a">{{ a }}</option></select></label></div>
       <div class="p-grp"><label>Zoom<input type="range" min="1.5" max="10" step="0.5" v-model.number="pxH" /></label></div>
     </section>
 
@@ -22,7 +21,7 @@
     </div>
 
     <div v-if="chargement" class="empty">Chargement…</div>
-    <div v-else-if="!planning.length" class="empty">Aucun équipement de fabrication avec des cadences et un PDP pour {{ annee }}.</div>
+    <div v-else-if="!planning.length" class="empty">Aucun équipement de fabrication trouvé.</div>
 
     <!-- Gantt -->
     <section v-else class="card gantt-card">
@@ -277,12 +276,7 @@ const rechProd = ref('')
 async function sauverPanier(id) {
   try { await supabase.from('planning_panier').upsert({ equipement_id: id, produits: panierEquip[id] || [], updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' }) } catch (e) { /* table absente : ignoré */ }
 }
-function nbLotsDefaut(pid) {
-  const prod = produitsById.value[pid]; if (!prod) return 1
-  const qty = pdpQty.value[pid] || 0
-  const tl = Number(prod.taille_lot) || 0
-  return tl > 0 ? Math.max(1, Math.round(qty / tl)) : 1
-}
+function nbLotsDefaut() { return 1 }
 function ouvrirPanier(eq) { panierOuvert.value = eq; rechProd.value = '' }
 function viderPanier() { if (!panierOuvert.value) return; if (!confirm('Vider le panier de cet équipement ?')) return; const id = panierOuvert.value.id; panierEquip[id] = []; sauverPanier(id) }
 function ajouterPanier(pid) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; if (!panierEquip[id].some(i => i.pid === pid)) panierEquip[id].push({ pid, nb: nbLotsDefaut(pid) }); sauverPanier(id) }
@@ -312,17 +306,6 @@ const planning = computed(() => {
         const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === item.pid)
         campagnes.push({ prod, nbLots, dLot: cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8 })
       }
-    } else {
-      const cads = cadences.value.filter(c => c.equipement_id === eq.id)
-      for (const c of cads) {
-        const prod = produitsById.value[c.produit_id]; if (!prod) continue
-        const qty = pdpQty.value[c.produit_id] || 0
-        const tl = Number(prod.taille_lot) || 0
-        const nbLots = tl > 0 ? Math.round(qty / tl) : 0
-        if (nbLots <= 0) continue
-        campagnes.push({ prod, nbLots, dLot: Math.max(0.25, dureeLotH(prod, c)) })
-      }
-      campagnes.sort((a, b) => String(a.prod.code_pf).localeCompare(String(b.prod.code_pf)))
     }
     const eqVdlt = (eq.vdlt != null && eq.vdlt !== '') ? Number(eq.vdlt) : vdlt.value
     const eqVdlp = (eq.vdlp != null && eq.vdlp !== '') ? Number(eq.vdlp) : vdlp.value
