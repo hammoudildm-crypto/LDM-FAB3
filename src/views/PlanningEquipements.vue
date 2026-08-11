@@ -150,14 +150,16 @@ async function fetchAllPaged(qb) {
 
 onMounted(async () => {
   try {
-    const [rp, rc, re, rpr] = await Promise.all([
+    const [rp, rc, re, rpr, rpan] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produit_id')),
       fetchAllPaged(() => supabase.from('cadences_produit').select('cadence_nominale, unite_cadence, mode, equipement_id, produit_id')),
       fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif, vdlt, vdlp, dht, reglage, postes').eq('actif', true)),
-      fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, gamme').eq('actif', true))
+      fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, gamme').eq('actif', true)),
+      fetchAllPaged(() => supabase.from('planning_panier').select('equipement_id, produits'))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
+    if (rpan && !rpan.error && rpan.data) for (const row of rpan.data) panierEquip[row.equipement_id] = Array.isArray(row.produits) ? row.produits : []
   } catch (e) { erreur.value = String(e) } finally { chargement.value = false }
 })
 
@@ -264,11 +266,14 @@ function planifierTaches(campagnes, tDep, weInc, pVdlt, pVdlp, pHoldingH) {
 const panierEquip = reactive({})
 const panierOuvert = ref(null)
 const rechProd = ref('')
+async function sauverPanier(id) {
+  try { await supabase.from('planning_panier').upsert({ equipement_id: id, produits: panierEquip[id] || [], updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' }) } catch (e) { /* table absente : ignoré */ }
+}
 function ouvrirPanier(eq) { panierOuvert.value = eq; rechProd.value = '' }
-function ajouterPanier(pid) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; if (!panierEquip[id].includes(pid)) panierEquip[id].push(pid) }
-function retirerPanier(idx) { const a = panierEquip[panierOuvert.value.id]; if (a) a.splice(idx, 1) }
-function monterPanier(idx) { const a = panierEquip[panierOuvert.value.id]; if (a && idx > 0) { const t = a[idx - 1]; a[idx - 1] = a[idx]; a[idx] = t } }
-function descendrePanier(idx) { const a = panierEquip[panierOuvert.value.id]; if (a && idx < a.length - 1) { const t = a[idx + 1]; a[idx + 1] = a[idx]; a[idx] = t } }
+function ajouterPanier(pid) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; if (!panierEquip[id].includes(pid)) panierEquip[id].push(pid); sauverPanier(id) }
+function retirerPanier(idx) { const id = panierOuvert.value.id; const a = panierEquip[id]; if (a) { a.splice(idx, 1); sauverPanier(id) } }
+function monterPanier(idx) { const id = panierOuvert.value.id; const a = panierEquip[id]; if (a && idx > 0) { const t = a[idx - 1]; a[idx - 1] = a[idx]; a[idx] = t; sauverPanier(id) } }
+function descendrePanier(idx) { const id = panierOuvert.value.id; const a = panierEquip[id]; if (a && idx < a.length - 1) { const t = a[idx + 1]; a[idx + 1] = a[idx]; a[idx] = t; sauverPanier(id) } }
 function produitNom(pid) { const p = produitsById.value[pid]; return p ? (p.code_pf + ' — ' + p.designation) : String(pid) }
 const produitsAjoutables = computed(() => {
   if (!panierOuvert.value) return []
