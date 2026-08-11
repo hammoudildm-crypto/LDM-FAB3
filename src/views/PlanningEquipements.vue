@@ -21,6 +21,17 @@
       <span class="lg"><i class="sw sw-part"></i>Nettoyage partiel (NP)</span>
     </div>
 
+    <section v-if="!chargement && planning.length" class="card recap">
+      <h3>Synthèse</h3>
+      <div class="recap-grid">
+        <div class="rc"><span class="rc-v">{{ planning.length }}</span><span class="rc-l">Équipements planifiés</span></div>
+        <div class="rc"><span class="rc-v">{{ totalLots }}</span><span class="rc-l">Lots ordonnancés</span></div>
+        <div class="rc"><span class="rc-v">{{ totalNG }}</span><span class="rc-l">Nettoyages généraux</span></div>
+        <div class="rc"><span class="rc-v">{{ totalNP }}</span><span class="rc-l">Nettoyages partiels</span></div>
+        <div class="rc"><span class="rc-v">{{ fmtJH(finGlobale) }}</span><span class="rc-l">Fin la plus tardive</span></div>
+      </div>
+    </section>
+
     <div v-if="chargement" class="empty">Chargement…</div>
     <div v-else-if="!planning.length" class="empty">Aucun équipement de fabrication trouvé.</div>
 
@@ -74,16 +85,6 @@
     </section>
 
     <!-- Récap -->
-    <section v-if="!chargement && planning.length" class="card recap">
-      <h3>Synthèse</h3>
-      <div class="recap-grid">
-        <div class="rc"><span class="rc-v">{{ planning.length }}</span><span class="rc-l">Équipements planifiés</span></div>
-        <div class="rc"><span class="rc-v">{{ totalLots }}</span><span class="rc-l">Lots ordonnancés</span></div>
-        <div class="rc"><span class="rc-v">{{ totalNG }}</span><span class="rc-l">Nettoyages généraux</span></div>
-        <div class="rc"><span class="rc-v">{{ totalNP }}</span><span class="rc-l">Nettoyages partiels</span></div>
-        <div class="rc"><span class="rc-v">{{ fmtJH(finGlobale) }}</span><span class="rc-l">Fin la plus tardive</span></div>
-      </div>
-    </section>
 
     <!-- Panier par équipement -->
     <div v-if="panierOuvert" class="pan-overlay" @click="panierOuvert = null">
