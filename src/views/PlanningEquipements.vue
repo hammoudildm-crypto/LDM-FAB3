@@ -155,6 +155,18 @@ const pdpQty = computed(() => {
 // Types fabrication
 const FAB = /pes|gran|s[ée]ch|m[ée]lang|compress|rempliss|g[eé]lul|pellicul|enrob/i
 const estFab = (type) => FAB.test(String(type || ''))
+// Ordre des phases (pour trier les équipements)
+function phaseOrdre(type) {
+  const t = String(type || '').toLowerCase()
+  if (/pes/.test(t)) return 1
+  if (/gran/.test(t)) return 2
+  if (/s[ée]ch/.test(t)) return 3
+  if (/m[ée]lang/.test(t)) return 4
+  if (/compress/.test(t)) return 5
+  if (/rempliss|g[eé]lul/.test(t)) return 6
+  if (/pellicul|enrob/.test(t)) return 7
+  return 99
+}
 
 // Poids d'un lot en Kg (taille_lot boîtes × unités/boîte × poids unitaire mg)
 function poidsLotKg(prod) {
@@ -224,7 +236,7 @@ function planifierTaches(campagnes, tDep) {
 const planning = computed(() => {
   const t0 = new Date(dateDepart.value + 'T06:00:00')
   const rows = []
-  const equipsFab = equipements.value.filter(e => estFab(e.type)).sort((a, b) => String(a.code).localeCompare(String(b.code)))
+  const equipsFab = equipements.value.filter(e => estFab(e.type)).sort((a, b) => (phaseOrdre(a.type) - phaseOrdre(b.type)) || String(a.code).localeCompare(String(b.code)))
   for (const eq of equipsFab) {
     const cads = cadences.value.filter(c => c.equipement_id === eq.id)
     const campagnes = []
