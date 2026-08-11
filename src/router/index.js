@@ -7,6 +7,7 @@ import PdpEquipement from '../views/PdpEquipement.vue'
 import Hub from '../views/Hub.vue'
 import Accueil from '../views/Accueil.vue'
 import Ordonnancement from '../views/Ordonnancement.vue'
+import PlanningEquipements from '../views/PlanningEquipements.vue'
 import Login from '../views/Login.vue'
 import Referentiels from '../views/Referentiels.vue'
 import PlanDirecteur from '../views/PlanDirecteur.vue'
@@ -40,6 +41,7 @@ const routes = [
   { path: '/tableau-de-bord', name: 'tableau-de-bord', component: TableauBord },
   { path: '/temps-reel', name: 'temps-reel', component: SuiviTempsReel },
   { path: '/realisation-pdp', name: 'realisation-pdp', component: RealisationPDP },
+  { path: '/planning-equipements', name: 'planning-equipements', component: PlanningEquipements },
   { path: '/pdp-equipement', name: 'pdp-equipement', component: PdpEquipement },
   { path: '/tableau-de-bord-classique', name: 'tb-classique', component: Home },
   { path: '/accueil', redirect: '/' },
