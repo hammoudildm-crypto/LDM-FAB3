@@ -103,7 +103,25 @@
             <button class="pan-close" @click="panierOuvert = null">✕</button>
           </div>
         </div>
-        <p class="pan-hint">Ajoute des produits et ordonne les campagnes (haut → bas). Panier vide = calcul auto par cadences.</p>
+        <div class="pan-cfg">
+          <label class="pan-reg">Régime :
+            <select :value="regimeEquip[panierOuvert.id] || '3x8'" @change="setRegime($event.target.value)">
+              <option value="3x8">3×8 — 24 h/24</option>
+              <option value="2x8">2×8 — 06 h–22 h</option>
+            </select>
+          </label>
+        </div>
+        <div class="pan-requis" v-if="!weekendEquip[panierOuvert.id]">
+          <div class="pan-req-head">Réquisitions week-end (dates travaillées) :</div>
+          <div class="pan-req-list">
+            <span v-for="dt in (requisEquip[panierOuvert.id] || [])" :key="dt" class="pan-req-chip">{{ dt }} <button @click="retirerRequis(dt)">✕</button></span>
+            <span v-if="!(requisEquip[panierOuvert.id] || []).length" class="pan-none">Aucune.</span>
+          </div>
+          <div class="pan-req-add">
+            <input type="date" v-model="requisDate" class="pan-reqdate" />
+            <button class="vue-btn" @click="ajouterRequis">Ajouter</button>
+          </div>
+        </div>
         <div class="pan-list">
           <div v-for="(grp, gi) in campagnesPanier" :key="gi" class="pan-item">
             <span class="pan-idx">{{ gi + 1 }}</span>
@@ -144,7 +162,9 @@ const vdlp = ref(2)        // nettoyage partiel (h)
 const holdingJ = ref(7)    // validité campagne (jours)
 const annee = ref(today.getFullYear())
 const pxH = ref(4)         // pixels par heure (zoom)
-const weekendEquip = reactive({}) // par équipement : true = week-ends inclus
+const weekendEquip = reactive({}) // par équipement : true = tous les week-ends inclus
+const regimeEquip = reactive({})  // par équipement : '2x8' ou '3x8'
+const requisEquip = reactive({})  // par équipement : dates week-end travaillées
 
 const holdingH = computed(() => Number(holdingJ.value) * 24)
 
@@ -173,7 +193,7 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('cadences_produit').select('cadence_nominale, unite_cadence, mode, equipement_id, produit_id')),
       fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif, vdlt, vdlp, dht, reglage, postes').eq('actif', true)),
       fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, gamme').eq('actif', true)),
-      fetchAllPaged(() => supabase.from('planning_panier').select('equipement_id, produits'))
+      fetchAllPaged(() => supabase.from('planning_panier').select('equipement_id, produits, regime, requis'))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
@@ -186,6 +206,8 @@ onMounted(async () => {
         else flat.push({ pid: x, uid: uidGen() })
       }
       panierEquip[row.equipement_id] = flat
+      if (row.regime) regimeEquip[row.equipement_id] = row.regime
+      if (Array.isArray(row.requis)) requisEquip[row.equipement_id] = row.requis
     }
   } catch (e) { erreur.value = String(e) } finally { chargement.value = false }
 })
@@ -242,37 +264,53 @@ function dureeLotH(prod, cad) {
 const addH = (d, h) => new Date(d.getTime() + h * 3600000)
 
 // --- Gestion des week-ends (vendredi=5, samedi=6) ---
-function sauterWeekend(d, weInc) {
-  if (weInc) return new Date(d)
-  const c = new Date(d)
-  while (c.getDay() === 5 || c.getDay() === 6) { c.setDate(c.getDate() + 1); c.setHours(0, 0, 0, 0) }
+const isoL = (d) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const j = String(d.getDate()).padStart(2, '0'); return y + '-' + m + '-' + j }
+// Jour ouvré ? (week-end ven/sam sauf si weAll ou date réquisitionnée)
+function jourOuvre(d, weAll, requis) {
+  const j = d.getDay()
+  if (j === 5 || j === 6) return weAll || (requis && requis.has(isoL(d)))
+  return true
+}
+// Prochain instant ouvré (respecte régime 2x8 = 06-22, et jours ouvrés)
+function prochainOuvre(d, regime, weAll, requis) {
+  const c = new Date(d); let g = 0
+  while (g++ < 3000) {
+    if (!jourOuvre(c, weAll, requis)) { c.setDate(c.getDate() + 1); c.setHours(regime === '2x8' ? 6 : 0, 0, 0, 0); continue }
+    if (regime === '2x8') {
+      const h = c.getHours() + c.getMinutes() / 60
+      if (h < 6) { c.setHours(6, 0, 0, 0); continue }
+      if (h >= 22) { c.setDate(c.getDate() + 1); c.setHours(6, 0, 0, 0); continue }
+    }
+    return c
+  }
   return c
 }
-function prochainWeekend(d, weInc) {
-  if (weInc) return new Date(d.getTime() + 1e13)
-  const c = new Date(d); c.setHours(0, 0, 0, 0)
+// Fin de la plage ouvrée courante
+function finOuvre(d, regime, weAll, requis) {
+  if (regime === '2x8') { const f = new Date(d); f.setHours(22, 0, 0, 0); return f }
+  const nc = new Date(d); nc.setHours(0, 0, 0, 0); nc.setDate(nc.getDate() + 1)
   let g = 0
-  while (c.getDay() !== 5 && g++ < 14) c.setDate(c.getDate() + 1)
-  return c
+  while (g++ < 21 && jourOuvre(nc, weAll, requis)) nc.setDate(nc.getDate() + 1)
+  return nc
 }
-// Place une tâche de durée dureeH en sautant les week-ends -> segments + fin
-function placer(start, dureeH, weInc) {
-  let cursor = sauterWeekend(new Date(start), weInc)
+// Place une tâche de durée dureeH selon régime + jours ouvrés -> segments + fin
+function placer(start, dureeH, regime, weAll, requis) {
+  let cursor = prochainOuvre(new Date(start), regime, weAll, requis)
   let reste = dureeH; const segments = []; let g = 0
-  while (reste > 0.001 && g++ < 400) {
-    const we = prochainWeekend(cursor, weInc)
-    const dispo = (we - cursor) / 3600000
+  while (reste > 0.001 && g++ < 3000) {
+    const fin = finOuvre(cursor, regime, weAll, requis)
+    const dispo = (fin - cursor) / 3600000
     if (dispo >= reste) { segments.push({ start: new Date(cursor), end: addH(cursor, reste) }); cursor = addH(cursor, reste); reste = 0 }
-    else { if (dispo > 0.001) segments.push({ start: new Date(cursor), end: new Date(we) }); reste -= Math.max(0, dispo); cursor = sauterWeekend(new Date(we), weInc) }
+    else { if (dispo > 0.001) segments.push({ start: new Date(cursor), end: new Date(fin) }); reste -= Math.max(0, dispo); cursor = prochainOuvre(new Date(fin), regime, weAll, requis) }
   }
   if (!segments.length) segments.push({ start: new Date(start), end: new Date(start) })
   return { segments, end: cursor }
 }
-function planifierTaches(lots, tDep, weInc, pVdlt, pVdlp, pHoldingH) {
+function planifierTaches(lots, tDep, regime, weAll, requis, pVdlt, pVdlp, pHoldingH) {
   const tasks = []
-  let cursor = sauterWeekend(new Date(tDep), weInc)
+  let cursor = prochainOuvre(new Date(tDep), regime, weAll, requis)
   const push = (type, dureeH, extra) => {
-    const pl = placer(cursor, dureeH, weInc)
+    const pl = placer(cursor, dureeH, regime, weAll, requis)
     tasks.push({ type, ...(extra || {}), segments: pl.segments, start: pl.segments[0].start, end: pl.end })
     cursor = pl.end
   }
@@ -314,7 +352,7 @@ function dropSur(eqId, uid) {
 const panierErreur = ref('')
 async function sauverPanier(id) {
   try {
-    const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: panierEquip[id] || [], updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
+    const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: panierEquip[id] || [], regime: regimeEquip[id] || '3x8', requis: requisEquip[id] || [], updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
     panierErreur.value = r.error ? ('Panier non sauvegardé : ' + r.error.message + ' — crée la table planning_panier (voir SQL).') : ''
   } catch (e) { panierErreur.value = 'Panier non sauvegardé : ' + String(e) }
 }
@@ -325,6 +363,10 @@ function ouvrirPanier(eq) { panierOuvert.value = eq; rechProd.value = ''; nbAjou
 function viderPanier() { if (!panierOuvert.value) return; if (!confirm('Vider le panier de cet équipement ?')) return; const id = panierOuvert.value.id; panierEquip[id] = []; sauverPanier(id) }
 function ajouterPanier(pid) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; const n = Math.max(1, Number(nbAjout.value) || 1); for (let k = 0; k < n; k++) panierEquip[id].push({ pid, uid: uidGen() }); sauverPanier(id) }
 function retirerGroupe(grp) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; const set = new Set(grp.uids); panierEquip[id] = (panierEquip[id] || []).filter(i => !set.has(i.uid)); sauverPanier(id) }
+const requisDate = ref('')
+function setRegime(v) { if (!panierOuvert.value) return; regimeEquip[panierOuvert.value.id] = v; sauverPanier(panierOuvert.value.id) }
+function ajouterRequis() { if (!panierOuvert.value || !requisDate.value) return; const id = panierOuvert.value.id; if (!requisEquip[id]) requisEquip[id] = []; if (!requisEquip[id].includes(requisDate.value)) requisEquip[id].push(requisDate.value); requisEquip[id].sort(); requisDate.value = ''; sauverPanier(id) }
+function retirerRequis(dt) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; requisEquip[id] = (requisEquip[id] || []).filter(d => d !== dt); sauverPanier(id) }
 function produitNom(pid) { const p = produitsById.value[pid]; return p ? (p.code_pf + ' — ' + p.designation) : String(pid) }
 const campagnesPanier = computed(() => {
   if (!panierOuvert.value) return []
@@ -360,7 +402,9 @@ const planning = computed(() => {
     const eqVdlt = (eq.vdlt != null && eq.vdlt !== '') ? Number(eq.vdlt) : vdlt.value
     const eqVdlp = (eq.vdlp != null && eq.vdlp !== '') ? Number(eq.vdlp) : vdlp.value
     const eqHoldingH = (eq.dht != null && eq.dht !== '') ? Number(eq.dht) * 24 : holdingH.value
-    const r = planifierTaches(lots, t0, !!weekendEquip[eq.id], eqVdlt, eqVdlp, eqHoldingH)
+    const regime = regimeEquip[eq.id] || '3x8'
+    const requis = new Set(requisEquip[eq.id] || [])
+    const r = planifierTaches(lots, t0, regime, !!weekendEquip[eq.id], requis, eqVdlt, eqVdlp, eqHoldingH)
     rows.push({ eq, tasks: r.tasks, fin: r.fin })
   }
   return rows
@@ -518,6 +562,16 @@ const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filte
 .pan-nbadd { font-size: 11px; color: #475569; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .pan-nbadd .pan-nb { width: 52px; }
 .pan-hint2 { font-size: 10px; color: #94a3b8; margin: 0 0 10px; }
+.pan-cfg { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9; }
+.pan-reg { font-size: 12px; color: #475569; display: flex; align-items: center; gap: 5px; }
+.pan-reg select { font-size: 12px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
+.pan-requis { margin-bottom: 10px; }
+.pan-req-head { font-size: 11px; color: #64748b; margin-bottom: 5px; font-weight: 600; }
+.pan-req-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.pan-req-chip { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; border-radius: 10px; font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px; }
+.pan-req-chip button { background: none; border: none; color: #b45309; cursor: pointer; font-size: 11px; padding: 0; }
+.pan-req-add { display: flex; gap: 6px; align-items: center; }
+.pan-reqdate { font-size: 12px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
 .g-drag { cursor: grab; }
 .g-drag:active { cursor: grabbing; }
 .g-dragging { opacity: .5; outline: 2px dashed #5B9BD5; outline-offset: -1px; }
