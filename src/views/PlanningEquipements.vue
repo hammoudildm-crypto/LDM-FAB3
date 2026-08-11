@@ -15,6 +15,7 @@
       <div class="p-grp"><label>Holding — validité campagne (jours)<input type="number" min="0" step="1" v-model.number="holdingJ" /></label></div>
       <div class="p-grp"><label>Année PDP<select v-model.number="annee"><option v-for="a in annees" :key="a" :value="a">{{ a }}</option></select></label></div>
       <div class="p-grp"><label>Zoom<input type="range" min="1.5" max="10" step="0.5" v-model.number="pxH" /></label></div>
+      <div class="p-grp"><label class="chk"><input type="checkbox" v-model="weekendInclus" /> Intégrer les week-ends (ven./sam.)</label></div>
     </section>
 
     <!-- Légende -->
@@ -94,6 +95,7 @@ const vdlp = ref(2)        // nettoyage partiel (h)
 const holdingJ = ref(7)    // validité campagne (jours)
 const annee = ref(today.getFullYear())
 const pxH = ref(4)         // pixels par heure (zoom)
+const weekendInclus = ref(false) // false = sauter vendredi/samedi
 
 const holdingH = computed(() => Number(holdingJ.value) * 24)
 
@@ -121,7 +123,7 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produit_id')),
       fetchAllPaged(() => supabase.from('cadences_produit').select('cadence_nominale, unite_cadence, mode, equipement_id, produit_id')),
       fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif').eq('actif', true)),
-      fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, gamme').eq('actif', true))
+      fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, gamme').eq('actif', true))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
@@ -150,23 +152,69 @@ const pdpQty = computed(() => {
 const FAB = /pes|gran|s[ée]ch|m[ée]lang|compress|rempliss|g[eé]lul|pellicul|enrob/i
 const estFab = (type) => FAB.test(String(type || ''))
 
-// Durée d'un lot (h) selon la cadence
-function dureeLotH(prod, cad) {
-  const c = Number(cad.cadence_nominale) || 0
-  const u = (cad.unite_cadence || '').toLowerCase()
+// Poids d'un lot en Kg (taille_lot boîtes × unités/boîte × poids unitaire mg)
+function poidsLotKg(prod) {
   const boites = Number(prod.taille_lot) || 0
-  const unites = boites * (Number(prod.unites_par_boite) || 1)
-  if (c > 0) {
-    if (/bo[iî]te/.test(u)) return boites / c
-    if (/unit|comprim|g[eé]lul|tube|sachet|\bcp\b/.test(u)) return unites / c
-    if (/heure|\bh\b|temps|cycle/.test(u)) return c
-    // par défaut : cadence en unités/h
-    return unites > 0 ? unites / c : c
-  }
-  return 8 // repli : 8 h / lot
+  const upb = Number(prod.unites_par_boite) || 0
+  const pmg = Number(prod.poids_unitaire_mg) || 0
+  return (boites * upb * pmg) / 1e6 // mg -> Kg
+}
+// Durée d'un lot (h) : cadence en Kg/h
+function dureeLotH(prod, cad) {
+  const c = Number(cad.cadence_nominale) || 0 // Kg/h
+  if (c <= 0) return 8 // repli : 8 h / lot
+  const kg = poidsLotKg(prod)
+  return kg > 0 ? kg / c : 8
 }
 
 const addH = (d, h) => new Date(d.getTime() + h * 3600000)
+
+// --- Gestion des week-ends (vendredi=5, samedi=6) ---
+function sauterWeekend(d) {
+  if (weekendInclus.value) return new Date(d)
+  const c = new Date(d)
+  while (c.getDay() === 5 || c.getDay() === 6) { c.setDate(c.getDate() + 1); c.setHours(0, 0, 0, 0) }
+  return c
+}
+function prochainWeekend(d) {
+  if (weekendInclus.value) return new Date(d.getTime() + 1e13)
+  const c = new Date(d); c.setHours(0, 0, 0, 0)
+  let g = 0
+  while (c.getDay() !== 5 && g++ < 14) c.setDate(c.getDate() + 1)
+  return c
+}
+// Place une tâche de durée dureeH en sautant les week-ends -> segments + fin
+function placer(start, dureeH) {
+  let cursor = sauterWeekend(new Date(start))
+  let reste = dureeH; const segments = []; let g = 0
+  while (reste > 0.001 && g++ < 400) {
+    const we = prochainWeekend(cursor)
+    const dispo = (we - cursor) / 3600000
+    if (dispo >= reste) { segments.push({ start: new Date(cursor), end: addH(cursor, reste) }); cursor = addH(cursor, reste); reste = 0 }
+    else { if (dispo > 0.001) segments.push({ start: new Date(cursor), end: new Date(we) }); reste -= Math.max(0, dispo); cursor = sauterWeekend(new Date(we)) }
+  }
+  if (!segments.length) segments.push({ start: new Date(start), end: new Date(start) })
+  return { segments, end: cursor }
+}
+function planifierTaches(campagnes, tDep) {
+  const tasks = []
+  let cursor = sauterWeekend(new Date(tDep))
+  const push = (type, dureeH, extra) => {
+    const pl = placer(cursor, dureeH)
+    tasks.push({ type, ...(extra || {}), segments: pl.segments, start: pl.segments[0].start, end: pl.end })
+    cursor = pl.end
+  }
+  for (const camp of campagnes) {
+    push('gen', vdlt.value)
+    let campStart = new Date(cursor)
+    for (let i = 0; i < camp.nbLots; i++) {
+      if ((cursor - campStart) / 3600000 > holdingH.value) { push('genH', vdlt.value); campStart = new Date(cursor) }
+      push('lot', camp.dLot, { prod: camp.prod, n: i + 1 })
+      if (i < camp.nbLots - 1) push('part', vdlp.value)
+    }
+  }
+  return { tasks, fin: cursor }
+}
 
 // Moteur d'ordonnancement
 const planning = computed(() => {
@@ -187,31 +235,8 @@ const planning = computed(() => {
     }
     if (!campagnes.length) continue
     campagnes.sort((a, b) => String(a.prod.code_pf).localeCompare(String(b.prod.code_pf)))
-    const tasks = []
-    let cursor = new Date(t0)
-    for (const camp of campagnes) {
-      // Nettoyage général au début de campagne
-      tasks.push({ type: 'gen', start: new Date(cursor), end: addH(cursor, vdlt.value) })
-      cursor = addH(cursor, vdlt.value)
-      let campStart = new Date(cursor)
-      for (let i = 0; i < camp.nbLots; i++) {
-        // Holding dépassé -> nettoyage général et redémarrage campagne
-        if ((cursor - campStart) / 3600000 > holdingH.value) {
-          tasks.push({ type: 'genH', start: new Date(cursor), end: addH(cursor, vdlt.value) })
-          cursor = addH(cursor, vdlt.value)
-          campStart = new Date(cursor)
-        }
-        const fin = addH(cursor, camp.dLot)
-        tasks.push({ type: 'lot', prod: camp.prod, n: i + 1, start: new Date(cursor), end: fin })
-        cursor = fin
-        // Nettoyage partiel entre lots du même produit (sauf après le dernier)
-        if (i < camp.nbLots - 1) {
-          tasks.push({ type: 'part', start: new Date(cursor), end: addH(cursor, vdlp.value) })
-          cursor = addH(cursor, vdlp.value)
-        }
-      }
-    }
-    rows.push({ eq, tasks, fin: cursor })
+    const r = planifierTaches(campagnes, t0)
+    rows.push({ eq, tasks: r.tasks, fin: r.fin })
   }
   return rows
 })
