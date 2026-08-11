@@ -649,4 +649,31 @@ const synthEquip = computed(() => planning.value.map(r => ({
 .g-drag { cursor: grab; }
 .g-drag:active { cursor: grabbing; }
 .g-dragging { opacity: .5; outline: 2px dashed #5B9BD5; outline-offset: -1px; }
+/* Compact global pour optimiser l'affichage */
+.pe-head h1 { font-size: 15px; }
+.pe-head .sub { font-size: 9.5px; margin-bottom: 8px; }
+.card { padding: 8px 10px; margin-bottom: 8px; }
+.params { gap: 10px; }
+.p-grp label { font-size: 10px; }
+.p-grp input, .p-grp select { font-size: 11px; padding: 4px 6px; }
+.vue-btn { font-size: 11px; padding: 4px 9px; }
+.legende { font-size: 9.5px; gap: 12px; margin-bottom: 6px; }
+.recap h3 { font-size: 12px; margin-bottom: 6px; }
+.recap-grid { gap: 16px; }
+.rc-v { font-size: 15px; }
+.rc-l { font-size: 9px; }
+.synth-tbl { font-size: 10px; }
+.synth-tbl th { font-size: 9px; padding: 3px 6px; }
+.synth-tbl td { padding: 2px 6px; }
+.synth-nom { font-size: 9px; }
+.g-eqcol { flex: 0 0 168px; width: 168px; padding: 4px 8px; }
+.g-eqhead { font-size: 10px; }
+.g-eqcode { font-size: 10px; }
+.g-eqnom { font-size: 8.5px; }
+.g-eqfin { font-size: 8px; }
+.g-eqwe { font-size: 7.5px; }
+.g-dlbl { font-size: 9px; }
+.g-sh { font-size: 7.5px; }
+.g-lbl { font-size: 8px; }
+.g-reg, .g-pan { font-size: 7.5px; }
 </style>
