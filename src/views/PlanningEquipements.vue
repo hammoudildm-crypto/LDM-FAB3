@@ -37,6 +37,21 @@
         <div class="rc"><span class="rc-v">{{ totalNP }}</span><span class="rc-l">Nettoyages partiels</span></div>
         <div class="rc"><span class="rc-v">{{ fmtJH(finGlobale) }}</span><span class="rc-l">Fin la plus tardive</span></div>
       </div>
+      <div class="synth-eq" v-if="synthEquip.length">
+        <table class="synth-tbl">
+          <thead><tr><th>Équipement</th><th class="right">Lots</th><th class="right">NG</th><th class="right">NP</th><th>Régime</th><th class="right">Fin</th></tr></thead>
+          <tbody>
+            <tr v-for="e in synthEquip" :key="e.id">
+              <td>{{ e.code }} <span class="synth-nom">{{ e.nom }}</span></td>
+              <td class="right">{{ e.lots }}</td>
+              <td class="right">{{ e.ng }}</td>
+              <td class="right">{{ e.np }}</td>
+              <td>{{ e.regime === '2x8' ? '2×8' : '3×8' }}</td>
+              <td class="right nowrap">{{ fmtJH(e.fin) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <div v-if="chargement" class="empty">Chargement…</div>
@@ -473,6 +488,14 @@ function titre(t) {
 const totalLots = computed(() => planning.value.reduce((s, r) => s + r.tasks.filter(t => t.type === 'lot').length, 0))
 const totalNG = computed(() => planning.value.reduce((s, r) => s + r.tasks.filter(t => t.type === 'gen' || t.type === 'genH').length, 0))
 const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filter(t => t.type === 'part').length, 0))
+const synthEquip = computed(() => planning.value.map(r => ({
+  id: r.eq.id, code: r.eq.code, nom: r.eq.nom,
+  regime: regimeEquip[r.eq.id] || '3x8',
+  lots: r.tasks.filter(t => t.type === 'lot').length,
+  ng: r.tasks.filter(t => t.type === 'gen' || t.type === 'genH').length,
+  np: r.tasks.filter(t => t.type === 'part').length,
+  fin: r.fin
+})).filter(x => x.lots > 0))
 </script>
 
 <style scoped>
@@ -529,6 +552,12 @@ const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filte
 
 .recap h3 { margin: 0 0 8px; font-size: 13px; font-weight: 800; color: #0f172a; }
 .recap-grid { display: flex; flex-wrap: wrap; gap: 22px; }
+.synth-eq { margin-top: 14px; overflow-x: auto; border-top: 1px solid #f1f5f9; padding-top: 10px; }
+.synth-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+.synth-tbl th { text-align: left; font-size: 10px; color: #64748b; padding: 4px 8px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+.synth-tbl th.right, .synth-tbl td.right { text-align: right; }
+.synth-tbl td { padding: 3px 8px; border-bottom: 1px solid #f1f5f9; color: #1b2733; white-space: nowrap; }
+.synth-nom { color: #94a3b8; font-size: 10px; }
 .rc { display: flex; flex-direction: column; }
 .rc-v { font-size: 18px; font-weight: 800; color: #0f172a; }
 .rc-l { font-size: 10px; color: #64748b; }
