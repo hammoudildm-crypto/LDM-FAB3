@@ -15,7 +15,6 @@
       <div class="p-grp"><label>Holding — validité campagne (jours)<input type="number" min="0" step="1" v-model.number="holdingJ" /></label></div>
       <div class="p-grp"><label>Année PDP<select v-model.number="annee"><option v-for="a in annees" :key="a" :value="a">{{ a }}</option></select></label></div>
       <div class="p-grp"><label>Zoom<input type="range" min="1.5" max="10" step="0.5" v-model.number="pxH" /></label></div>
-      <div class="p-grp"><label class="chk"><input type="checkbox" v-model="weekendInclus" /> Intégrer les week-ends (ven./sam.)</label></div>
     </section>
 
     <!-- Légende -->
@@ -51,12 +50,15 @@
             <div class="g-eqcode">{{ row.eq.code }}</div>
             <div class="g-eqnom">{{ row.eq.nom }}</div>
             <div class="g-eqfin">fin : {{ fmtJH(row.fin) }}</div>
+            <label class="g-eqwe"><input type="checkbox" v-model="weekendEquip[row.eq.id]" /> week-ends</label>
           </div>
           <div class="g-track" :style="{ width: totalW + 'px' }">
             <!-- bandes jours -->
             <div v-for="d in jours" :key="'b'+d.i" class="g-dband" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
-            <!-- bandes week-end -->
-            <div v-for="d in joursWeekend" :key="'w'+d.i" class="g-weekend" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
+            <!-- bandes week-end (si l'équipement ne travaille pas le week-end) -->
+            <template v-if="!weekendEquip[row.eq.id]">
+              <div v-for="d in joursWeekend" :key="'w'+d.i" class="g-weekend" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
+            </template>
             <!-- barres (par segment) -->
             <template v-for="(t, i) in row.tasks">
               <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar" :class="'g-' + t.type"
@@ -99,7 +101,7 @@ const vdlp = ref(2)        // nettoyage partiel (h)
 const holdingJ = ref(7)    // validité campagne (jours)
 const annee = ref(today.getFullYear())
 const pxH = ref(4)         // pixels par heure (zoom)
-const weekendInclus = ref(false) // false = sauter vendredi/samedi
+const weekendEquip = reactive({}) // par équipement : true = week-ends inclus
 
 const holdingH = computed(() => Number(holdingJ.value) * 24)
 
@@ -153,18 +155,18 @@ const pdpQty = computed(() => {
 })
 
 // Types fabrication
-const FAB = /pes|gran|s[ée]ch|m[ée]lang|compress|rempliss|g[eé]lul|pellicul|enrob/i
+const FAB = /pes[ée]|balance|bascule|granul|s[ée]ch|m[ée]lang|compress|presse|compri|g[ée]lule|remplis|encapsul|capsul|pellicul|enrob|coat|drag[ée]/i
 const estFab = (type) => FAB.test(String(type || ''))
 // Ordre des phases (pour trier les équipements)
 function phaseOrdre(type) {
   const t = String(type || '').toLowerCase()
-  if (/pes/.test(t)) return 1
-  if (/gran/.test(t)) return 2
+  if (/pes[ée]|balance|bascule/.test(t)) return 1
+  if (/granul/.test(t)) return 2
   if (/s[ée]ch/.test(t)) return 3
   if (/m[ée]lang/.test(t)) return 4
-  if (/compress/.test(t)) return 5
-  if (/rempliss|g[eé]lul/.test(t)) return 6
-  if (/pellicul|enrob/.test(t)) return 7
+  if (/compress|presse|compri/.test(t)) return 5
+  if (/g[ée]lule|remplis|encapsul|capsul/.test(t)) return 6
+  if (/pellicul|enrob|coat|drag[ée]/.test(t)) return 7
   return 99
 }
 
@@ -186,37 +188,37 @@ function dureeLotH(prod, cad) {
 const addH = (d, h) => new Date(d.getTime() + h * 3600000)
 
 // --- Gestion des week-ends (vendredi=5, samedi=6) ---
-function sauterWeekend(d) {
-  if (weekendInclus.value) return new Date(d)
+function sauterWeekend(d, weInc) {
+  if (weInc) return new Date(d)
   const c = new Date(d)
   while (c.getDay() === 5 || c.getDay() === 6) { c.setDate(c.getDate() + 1); c.setHours(0, 0, 0, 0) }
   return c
 }
-function prochainWeekend(d) {
-  if (weekendInclus.value) return new Date(d.getTime() + 1e13)
+function prochainWeekend(d, weInc) {
+  if (weInc) return new Date(d.getTime() + 1e13)
   const c = new Date(d); c.setHours(0, 0, 0, 0)
   let g = 0
   while (c.getDay() !== 5 && g++ < 14) c.setDate(c.getDate() + 1)
   return c
 }
 // Place une tâche de durée dureeH en sautant les week-ends -> segments + fin
-function placer(start, dureeH) {
-  let cursor = sauterWeekend(new Date(start))
+function placer(start, dureeH, weInc) {
+  let cursor = sauterWeekend(new Date(start), weInc)
   let reste = dureeH; const segments = []; let g = 0
   while (reste > 0.001 && g++ < 400) {
-    const we = prochainWeekend(cursor)
+    const we = prochainWeekend(cursor, weInc)
     const dispo = (we - cursor) / 3600000
     if (dispo >= reste) { segments.push({ start: new Date(cursor), end: addH(cursor, reste) }); cursor = addH(cursor, reste); reste = 0 }
-    else { if (dispo > 0.001) segments.push({ start: new Date(cursor), end: new Date(we) }); reste -= Math.max(0, dispo); cursor = sauterWeekend(new Date(we)) }
+    else { if (dispo > 0.001) segments.push({ start: new Date(cursor), end: new Date(we) }); reste -= Math.max(0, dispo); cursor = sauterWeekend(new Date(we), weInc) }
   }
   if (!segments.length) segments.push({ start: new Date(start), end: new Date(start) })
   return { segments, end: cursor }
 }
-function planifierTaches(campagnes, tDep) {
+function planifierTaches(campagnes, tDep, weInc) {
   const tasks = []
-  let cursor = sauterWeekend(new Date(tDep))
+  let cursor = sauterWeekend(new Date(tDep), weInc)
   const push = (type, dureeH, extra) => {
-    const pl = placer(cursor, dureeH)
+    const pl = placer(cursor, dureeH, weInc)
     tasks.push({ type, ...(extra || {}), segments: pl.segments, start: pl.segments[0].start, end: pl.end })
     cursor = pl.end
   }
@@ -251,7 +253,7 @@ const planning = computed(() => {
     }
     if (!campagnes.length) continue
     campagnes.sort((a, b) => String(a.prod.code_pf).localeCompare(String(b.prod.code_pf)))
-    const r = planifierTaches(campagnes, t0)
+    const r = planifierTaches(campagnes, t0, !!weekendEquip[eq.id])
     rows.push({ eq, tasks: r.tasks, fin: r.fin })
   }
   return rows
@@ -275,7 +277,7 @@ const jours = computed(() => {
   for (let i = 0; i < n; i++) {
     const d = new Date(start.getTime() + i * 86400000)
     const left = ((d - t0.value) / 3600000) * pxH.value
-    out.push({ i, left, w: 24 * pxH.value, weekend: (d.getDay() === 5 || d.getDay() === 6) && !weekendInclus.value, label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }) })
+    out.push({ i, left, w: 24 * pxH.value, weekend: d.getDay() === 5 || d.getDay() === 6, label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }) })
   }
   return out
 })
@@ -355,7 +357,8 @@ const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filte
 .g-eqcode { font-size: 11px; font-weight: 800; color: #0f172a; }
 .g-eqnom { font-size: 9.5px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-eqfin { font-size: 8.5px; color: #94a3b8; }
-.g-track { position: relative; height: 34px; }
+.g-eqwe { display: flex; align-items: center; gap: 3px; font-size: 8px; color: #64748b; margin-top: 1px; cursor: pointer; }
+.g-track { position: relative; height: 44px; }
 .g-dband { position: absolute; top: 0; bottom: 0; border-left: 1px solid #f1f5f9; box-sizing: border-box; z-index: 0; }
 .g-weekend { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #e9edf3 6px, #e9edf3 12px); z-index: 0; }
 .g-bar { position: absolute; top: 4px; height: 26px; border-radius: 4px; border: 1px solid; box-sizing: border-box; overflow: hidden; display: flex; align-items: center; cursor: default; z-index: 1; }
