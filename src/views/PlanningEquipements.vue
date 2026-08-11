@@ -683,7 +683,8 @@ const synthEquip = computed(() => planning.value.map(r => ({
 .params-side { flex: 0 0 190px; width: 190px; flex-direction: column; align-items: stretch; gap: 8px; align-self: stretch; }
 .params-side .p-grp { width: 100%; }
 .params-side .p-grp label { display: flex; flex-direction: column; gap: 4px; }
-.params-side .vue-btns { flex-wrap: wrap; }
+.params-side .vue-btns { flex-wrap: nowrap; gap: 3px; }
+.params-side .vue-btns .vue-btn { padding: 4px 4px; font-size: 9.5px; flex: 1 1 0; min-width: 0; white-space: nowrap; }
 .params-side .dep-row { width: 100%; }
 .params-side input, .params-side select { width: 100%; box-sizing: border-box; }
 .pe-gantt-wrap { flex: 1; min-width: 0; }
