@@ -62,7 +62,7 @@
         <!-- lignes -->
         <div v-for="row in planning" :key="row.eq.id" class="g-row">
           <div class="g-eqcol" :title="'Cliquer pour gérer le panier — ' + row.eq.nom" @click="ouvrirPanier(row.eq)">
-            <div class="g-eqcode">{{ row.eq.code }} <span v-if="(panierEquip[row.eq.id] || []).length" class="g-pan">🧺 {{ (panierEquip[row.eq.id] || []).length }}</span></div>
+            <div class="g-eqcode">{{ row.eq.code }} <span class="g-reg" :class="{ r2: (regimeEquip[row.eq.id] || '3x8') === '2x8' }">{{ (regimeEquip[row.eq.id] || '3x8') === '2x8' ? '2×8' : '3×8' }}</span> <span v-if="(panierEquip[row.eq.id] || []).length" class="g-pan">🧺 {{ (panierEquip[row.eq.id] || []).length }}</span></div>
             <div class="g-eqnom">{{ row.eq.nom }}</div>
             <div class="g-eqfin">fin : {{ fmtJH(row.fin) }}</div>
             <label class="g-eqwe" @click.stop><input type="checkbox" v-model="weekendEquip[row.eq.id]" @change="sauverPanier(row.eq.id)" /> week-ends</label>
@@ -534,6 +534,8 @@ const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filte
 .rc-l { font-size: 10px; color: #64748b; }
 .g-eqcol { cursor: pointer; }
 .g-pan { font-size: 8px; color: #0f766e; font-weight: 700; }
+.g-reg { font-size: 8px; font-weight: 700; color: #64748b; background: #eef2f7; border-radius: 5px; padding: 0 4px; }
+.g-reg.r2 { color: #b45309; background: #fef3c7; }
 .pan-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.4); display: flex; align-items: center; justify-content: center; z-index: 50; }
 .pan-box { background: #fff; border-radius: 14px; width: 520px; max-width: 92vw; max-height: 82vh; overflow-y: auto; padding: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
 .pan-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
