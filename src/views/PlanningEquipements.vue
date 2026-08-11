@@ -10,7 +10,7 @@
 
     <!-- Paramètres -->
     <section class="card params">
-      <div class="p-grp"><label>Départ<input type="date" v-model="dateDepart" /></label></div>
+      <div class="p-grp"><label>Départ</label><div class="dep-row"><input type="date" v-model="dateDepart" /><button type="button" class="vue-btn" @click="dateDepart = iso(new Date())">Auj.</button></div></div>
       <div class="p-grp"><label>Affichage</label>
         <div class="vue-btns">
           <button type="button" class="vue-btn" :class="{ on: pxH >= 15 }" @click="pxH = 20">Jour</button>
@@ -78,8 +78,8 @@
         <div class="g-header">
           <div class="g-eqcol g-eqhead">Équipement</div>
           <div class="g-track g-timeline" :style="{ width: totalW + 'px' }">
-            <div v-for="d in jours" :key="d.i" class="g-dcol" :style="{ left: d.left + 'px', width: d.w + 'px' }">
-              <div class="g-dlbl">{{ d.label }}</div>
+            <div v-for="d in jours" :key="d.i" class="g-dcol" :class="{ 'g-dcol-today': d.aujourdhui }" :style="{ left: d.left + 'px', width: d.w + 'px' }">
+              <div class="g-dlbl">{{ d.label }}<span v-if="d.aujourdhui" class="g-today-lbl"> ● Auj.</span></div>
               <div class="g-shifts">
                 <span class="g-sh" :style="{ width: (8 * pxH) + 'px' }">06</span>
                 <span class="g-sh" :style="{ width: (8 * pxH) + 'px' }">14</span>
@@ -103,6 +103,7 @@
             <template v-if="!weekendEquip[row.eq.id]">
               <div v-for="d in joursWeekend" :key="'w'+d.i" class="g-weekend" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
             </template>
+            <div v-if="jourAuj.length" class="g-today" :style="{ left: jourAuj[0].left + 'px', width: jourAuj[0].w + 'px' }"></div>
             <!-- barres (par segment) -->
             <template v-for="(t, i) in row.tasks">
               <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar"
@@ -184,7 +185,7 @@ const erreur = ref('')
 
 // Paramètres (valeurs fixes réglables)
 const today = new Date()
-const iso = (d) => d.toISOString().slice(0, 10)
+const iso = (d) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const j = String(d.getDate()).padStart(2, '0'); return y + '-' + m + '-' + j }
 const dateDepart = ref(iso(today))
 const vdlt = ref(8)        // nettoyage général (h)
 const vdlp = ref(2)        // nettoyage partiel (h)
@@ -469,11 +470,12 @@ const jours = computed(() => {
   for (let i = 0; i < n; i++) {
     const d = new Date(start.getTime() + i * 86400000)
     const left = ((d - t0.value) / 3600000) * pxH.value
-    out.push({ i, left, w: 24 * pxH.value, weekend: d.getDay() === 5 || d.getDay() === 6, label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }) })
+    out.push({ i, left, w: 24 * pxH.value, weekend: d.getDay() === 5 || d.getDay() === 6, aujourdhui: isoL(d) === isoL(new Date()), label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }) })
   }
   return out
 })
 const joursWeekend = computed(() => jours.value.filter(d => d.weekend))
+const jourAuj = computed(() => jours.value.filter(d => d.aujourdhui))
 
 // Position des barres (par segment)
 function barStyleSeg(seg, t) {
@@ -536,6 +538,7 @@ const synthEquip = computed(() => planning.value.map(r => ({
 .vue-btns { display: flex; gap: 4px; }
 .vue-btn { background: #eef2f7; border: 1px solid #cbd5e1; border-radius: 7px; font-size: 12px; padding: 5px 11px; cursor: pointer; color: #475569; font-weight: 600; }
 .vue-btn.on { background: #0f766e; border-color: #0f766e; color: #fff; }
+.dep-row { display: flex; gap: 6px; align-items: center; }
 .p-grp .chk { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; }
 .p-grp .chk-inline { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; }
 .p-grp input[type=text], .p-grp select { font-size: 12px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 7px; }
@@ -566,6 +569,10 @@ const synthEquip = computed(() => planning.value.map(r => ({
 .g-track { position: relative; height: 44px; }
 .g-dband { position: absolute; top: 0; bottom: 0; border-left: 1px solid #f1f5f9; box-sizing: border-box; z-index: 0; }
 .g-weekend { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #e9edf3 6px, #e9edf3 12px); z-index: 0; }
+.g-today { position: absolute; top: 0; bottom: 0; background: rgba(20, 184, 166, 0.12); border-left: 2px solid #14b8a6; border-right: 2px solid #14b8a6; z-index: 0; box-sizing: border-box; }
+.g-dcol-today { background: rgba(20, 184, 166, 0.10); }
+.g-dcol-today .g-dlbl { color: #0f766e; font-weight: 800; }
+.g-today-lbl { color: #14b8a6; font-weight: 800; }
 .g-bar { position: absolute; top: 4px; height: 26px; border-radius: 4px; border: 1px solid; box-sizing: border-box; overflow: hidden; display: flex; align-items: center; cursor: default; z-index: 1; }
 .g-bar.g-lot, .g-bar.g-gen, .g-bar.g-genH, .g-bar.g-part { }
 .g-lbl { font-size: 8.5px; font-weight: 700; padding: 0 3px; white-space: nowrap; color: #1e293b; }
