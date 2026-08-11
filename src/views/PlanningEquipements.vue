@@ -193,21 +193,24 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('cadences_produit').select('cadence_nominale, unite_cadence, mode, equipement_id, produit_id')),
       fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif, vdlt, vdlp, dht, reglage, postes').eq('actif', true)),
       fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, gamme').eq('actif', true)),
-      fetchAllPaged(() => supabase.from('planning_panier').select('equipement_id, produits, regime, requis'))
+      fetchAllPaged(() => supabase.from('planning_panier').select('equipement_id, produits'))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
     if (rpan && !rpan.error && rpan.data) for (const row of rpan.data) {
-      const arr = Array.isArray(row.produits) ? row.produits : []
+      let lotsArr = [], reg = null, req = null
+      const pr = row.produits
+      if (Array.isArray(pr)) lotsArr = pr
+      else if (pr && typeof pr === 'object') { lotsArr = Array.isArray(pr.lots) ? pr.lots : []; reg = pr.regime; req = pr.requis }
       const flat = []
-      for (const x of arr) {
+      for (const x of lotsArr) {
         if (x && typeof x === 'object' && x.uid) flat.push({ pid: x.pid, uid: x.uid })
         else if (x && typeof x === 'object') { const n = Math.max(1, Number(x.nb) || 1); for (let k = 0; k < n; k++) flat.push({ pid: x.pid, uid: uidGen() }) }
         else flat.push({ pid: x, uid: uidGen() })
       }
       panierEquip[row.equipement_id] = flat
-      if (row.regime) regimeEquip[row.equipement_id] = row.regime
-      if (Array.isArray(row.requis)) requisEquip[row.equipement_id] = row.requis
+      if (reg) regimeEquip[row.equipement_id] = reg
+      if (Array.isArray(req)) requisEquip[row.equipement_id] = req
     }
   } catch (e) { erreur.value = String(e) } finally { chargement.value = false }
 })
@@ -352,7 +355,7 @@ function dropSur(eqId, uid) {
 const panierErreur = ref('')
 async function sauverPanier(id) {
   try {
-    const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: panierEquip[id] || [], regime: regimeEquip[id] || '3x8', requis: requisEquip[id] || [], updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
+    const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: { lots: panierEquip[id] || [], regime: regimeEquip[id] || '3x8', requis: requisEquip[id] || [] }, updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
     panierErreur.value = r.error ? ('Panier non sauvegardé : ' + r.error.message + ' — crée la table planning_panier (voir SQL).') : ''
   } catch (e) { panierErreur.value = 'Panier non sauvegardé : ' + String(e) }
 }
