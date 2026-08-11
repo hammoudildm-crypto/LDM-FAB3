@@ -2,38 +2,11 @@
   <div class="pe-page">
     <div class="pe-head">
       <h1>Planning des équipements — Fabrication</h1>
-      <p class="sub">Ordonnancement 24 h/24 sur 3 shifts (06–14 · 14–22 · 22–06). Clique sur un équipement pour alimenter son panier de produits (nombre de lots saisi manuellement). Durées et nettoyages selon les cadences et paramètres par équipement.</p>
     </div>
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="panierErreur" class="alert">{{ panierErreur }}</p>
 
-    <!-- Paramètres -->
-    <section class="card params">
-      <div class="p-grp"><label>Départ</label><div class="dep-row"><input type="date" v-model="dateDepart" /><button type="button" class="vue-btn" @click="dateDepart = iso(new Date())">Auj.</button></div></div>
-      <div class="p-grp"><label>Affichage</label>
-        <div class="vue-btns">
-          <button type="button" class="vue-btn" :class="{ on: pxH >= 15 }" @click="pxH = 20">Jour</button>
-          <button type="button" class="vue-btn" :class="{ on: pxH >= 2.5 && pxH < 15 }" @click="pxH = 3.5">Semaine</button>
-          <button type="button" class="vue-btn" :class="{ on: pxH < 2.5 }" @click="pxH = 0.8">Mois</button>
-        </div>
-      </div>
-      <div class="p-grp"><label>Zoom<input type="range" min="0.5" max="24" step="0.5" v-model.number="pxH" /></label></div>
-      <div class="p-grp"><label>Filtre<input type="text" v-model="filtreTexte" placeholder="code / nom…" /></label></div>
-      <div class="p-grp"><label>Phase
-        <select v-model="filtrePhase">
-          <option value="">Toutes</option>
-          <option value="1">Pesée</option>
-          <option value="2">Granulation</option>
-          <option value="3">Séchage</option>
-          <option value="4">Mélange</option>
-          <option value="5">Compression</option>
-          <option value="6">Remplissage</option>
-          <option value="7">Pelliculage</option>
-        </select>
-      </label></div>
-      <div class="p-grp"><label class="chk-inline"><input type="checkbox" v-model="filtreAvecPlan" /> Avec planning</label></div>
-    </section>
 
     <!-- Légende -->
     <div class="legende">
@@ -68,6 +41,33 @@
       </div>
     </section>
 
+    <div class="pe-body">
+    <section class="card params params-side">
+      <div class="p-grp"><label>Départ</label><div class="dep-row"><input type="date" v-model="dateDepart" /><button type="button" class="vue-btn" @click="dateDepart = iso(new Date())">Auj.</button></div></div>
+      <div class="p-grp"><label>Affichage</label>
+        <div class="vue-btns">
+          <button type="button" class="vue-btn" :class="{ on: pxH >= 15 }" @click="pxH = 20">Jour</button>
+          <button type="button" class="vue-btn" :class="{ on: pxH >= 2.5 && pxH < 15 }" @click="pxH = 3.5">Semaine</button>
+          <button type="button" class="vue-btn" :class="{ on: pxH < 2.5 }" @click="pxH = 0.8">Mois</button>
+        </div>
+      </div>
+      <div class="p-grp"><label>Zoom<input type="range" min="0.5" max="24" step="0.5" v-model.number="pxH" /></label></div>
+      <div class="p-grp"><label>Filtre<input type="text" v-model="filtreTexte" placeholder="code / nom…" /></label></div>
+      <div class="p-grp"><label>Phase
+        <select v-model="filtrePhase">
+          <option value="">Toutes</option>
+          <option value="1">Pesée</option>
+          <option value="2">Granulation</option>
+          <option value="3">Séchage</option>
+          <option value="4">Mélange</option>
+          <option value="5">Compression</option>
+          <option value="6">Remplissage</option>
+          <option value="7">Pelliculage</option>
+        </select>
+      </label></div>
+      <div class="p-grp"><label class="chk-inline"><input type="checkbox" v-model="filtreAvecPlan" /> Avec planning</label></div>
+    </section>
+      <div class="pe-gantt-wrap">
     <div v-if="chargement" class="empty">Chargement…</div>
     <div v-else-if="!planning.length" class="empty">Aucun équipement de fabrication trouvé.</div>
 
@@ -121,6 +121,8 @@
         </div>
       </div>
     </section>
+      </div>
+    </div>
 
     <!-- Récap -->
 
@@ -676,4 +678,14 @@ const synthEquip = computed(() => planning.value.map(r => ({
 .g-sh { font-size: 7.5px; }
 .g-lbl { font-size: 8px; }
 .g-reg, .g-pan { font-size: 7.5px; }
+/* Paramètres en colonne à gauche du Gantt */
+.pe-body { display: flex; gap: 10px; align-items: flex-start; }
+.params-side { flex: 0 0 190px; width: 190px; flex-direction: column; align-items: stretch; gap: 8px; align-self: stretch; }
+.params-side .p-grp { width: 100%; }
+.params-side .p-grp label { display: flex; flex-direction: column; gap: 4px; }
+.params-side .vue-btns { flex-wrap: wrap; }
+.params-side .dep-row { width: 100%; }
+.params-side input, .params-side select { width: 100%; box-sizing: border-box; }
+.pe-gantt-wrap { flex: 1; min-width: 0; }
+@media (max-width: 900px) { .pe-body { flex-direction: column; } .params-side { flex: none; width: 100%; flex-direction: row; flex-wrap: wrap; } }
 </style>
