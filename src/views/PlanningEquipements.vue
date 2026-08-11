@@ -10,9 +10,10 @@
     <!-- Paramètres -->
     <section class="card params">
       <div class="p-grp"><label>Départ<input type="date" v-model="dateDepart" /></label></div>
-      <div class="p-grp"><label>VDLT — nettoyage général (h)<input type="number" min="0" step="0.5" v-model.number="vdlt" /></label></div>
-      <div class="p-grp"><label>VDLP — nettoyage partiel (h)<input type="number" min="0" step="0.5" v-model.number="vdlp" /></label></div>
-      <div class="p-grp"><label>Holding — validité campagne (jours)<input type="number" min="0" step="1" v-model.number="holdingJ" /></label></div>
+      <div class="p-grp"><label>VDLT défaut (h)<input type="number" min="0" step="0.5" v-model.number="vdlt" /></label></div>
+      <div class="p-grp"><label>VDLP défaut (h)<input type="number" min="0" step="0.5" v-model.number="vdlp" /></label></div>
+      <div class="p-grp"><label>Holding défaut (j)<input type="number" min="0" step="1" v-model.number="holdingJ" /></label></div>
+      <div class="p-grp" style="align-self:center;font-size:11px;color:#94a3b8;max-width:220px">VDLT/VDLP/Holding viennent des paramètres par équipement (page Cadences). Les défauts ne servent qu'en absence de valeur.</div>
       <div class="p-grp"><label>Année PDP<select v-model.number="annee"><option v-for="a in annees" :key="a" :value="a">{{ a }}</option></select></label></div>
       <div class="p-grp"><label>Zoom<input type="range" min="1.5" max="10" step="0.5" v-model.number="pxH" /></label></div>
     </section>
@@ -128,7 +129,7 @@ onMounted(async () => {
     const [rp, rc, re, rpr] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produit_id')),
       fetchAllPaged(() => supabase.from('cadences_produit').select('cadence_nominale, unite_cadence, mode, equipement_id, produit_id')),
-      fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif').eq('actif', true)),
+      fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif, vdlt, vdlp, dht, reglage, postes').eq('actif', true)),
       fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, gamme').eq('actif', true))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
@@ -214,7 +215,7 @@ function placer(start, dureeH, weInc) {
   if (!segments.length) segments.push({ start: new Date(start), end: new Date(start) })
   return { segments, end: cursor }
 }
-function planifierTaches(campagnes, tDep, weInc) {
+function planifierTaches(campagnes, tDep, weInc, pVdlt, pVdlp, pHoldingH) {
   const tasks = []
   let cursor = sauterWeekend(new Date(tDep), weInc)
   const push = (type, dureeH, extra) => {
@@ -223,12 +224,12 @@ function planifierTaches(campagnes, tDep, weInc) {
     cursor = pl.end
   }
   for (const camp of campagnes) {
-    push('gen', vdlt.value)
+    push('gen', pVdlt)
     let campStart = new Date(cursor)
     for (let i = 0; i < camp.nbLots; i++) {
-      if ((cursor - campStart) / 3600000 > holdingH.value) { push('genH', vdlt.value); campStart = new Date(cursor) }
+      if ((cursor - campStart) / 3600000 > pHoldingH) { push('genH', pVdlt); campStart = new Date(cursor) }
       push('lot', camp.dLot, { prod: camp.prod, n: i + 1 })
-      if (i < camp.nbLots - 1) push('part', vdlp.value)
+      if (i < camp.nbLots - 1) push('part', pVdlp)
     }
   }
   return { tasks, fin: cursor }
@@ -253,7 +254,10 @@ const planning = computed(() => {
     }
     if (!campagnes.length) continue
     campagnes.sort((a, b) => String(a.prod.code_pf).localeCompare(String(b.prod.code_pf)))
-    const r = planifierTaches(campagnes, t0, !!weekendEquip[eq.id])
+    const eqVdlt = (eq.vdlt != null && eq.vdlt !== '') ? Number(eq.vdlt) : vdlt.value
+    const eqVdlp = (eq.vdlp != null && eq.vdlp !== '') ? Number(eq.vdlp) : vdlp.value
+    const eqHoldingH = (eq.dht != null && eq.dht !== '') ? Number(eq.dht) : holdingH.value
+    const r = planifierTaches(campagnes, t0, !!weekendEquip[eq.id], eqVdlt, eqVdlp, eqHoldingH)
     rows.push({ eq, tasks: r.tasks, fin: r.fin })
   }
   return rows
