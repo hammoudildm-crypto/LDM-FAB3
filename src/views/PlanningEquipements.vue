@@ -78,14 +78,15 @@
         <div class="g-header">
           <div class="g-eqcol g-eqhead">Équipement</div>
           <div class="g-track g-timeline" :style="{ width: totalW + 'px' }">
-            <div v-for="d in jours" :key="d.i" class="g-dcol" :class="{ 'g-dcol-today': d.aujourdhui }" :style="{ left: d.left + 'px', width: d.w + 'px' }">
-              <div class="g-dlbl">{{ d.label }}<span v-if="d.aujourdhui" class="g-today-lbl"> ● Auj.</span></div>
+            <div v-for="d in jours" :key="d.i" class="g-dcol" :style="{ left: d.left + 'px', width: d.w + 'px' }">
+              <div class="g-dlbl">{{ d.label }}</div>
               <div class="g-shifts">
                 <span class="g-sh" :style="{ width: (8 * pxH) + 'px' }">06</span>
                 <span class="g-sh" :style="{ width: (8 * pxH) + 'px' }">14</span>
                 <span class="g-sh" :style="{ width: (8 * pxH) + 'px' }">22</span>
               </div>
             </div>
+            <div v-if="posMaintenant != null" class="g-now-head" :style="{ left: posMaintenant + 'px' }"><span>{{ heureMaintenant }}</span></div>
           </div>
         </div>
         <!-- lignes -->
@@ -103,7 +104,7 @@
             <template v-if="!weekendEquip[row.eq.id]">
               <div v-for="d in joursWeekend" :key="'w'+d.i" class="g-weekend" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
             </template>
-            <div v-if="jourAuj.length" class="g-today" :style="{ left: jourAuj[0].left + 'px', width: jourAuj[0].w + 'px' }"></div>
+            <div v-if="posMaintenant != null" class="g-now" :style="{ left: posMaintenant + 'px' }"></div>
             <!-- barres (par segment) -->
             <template v-for="(t, i) in row.tasks">
               <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar"
@@ -177,7 +178,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { supabase } from '../supabase'
 
 const chargement = ref(true)
@@ -475,7 +476,15 @@ const jours = computed(() => {
   return out
 })
 const joursWeekend = computed(() => jours.value.filter(d => d.weekend))
-const jourAuj = computed(() => jours.value.filter(d => d.aujourdhui))
+const maintenant = ref(new Date())
+let timerNow = null
+onMounted(() => { timerNow = setInterval(() => { maintenant.value = new Date() }, 60000) })
+onUnmounted(() => { if (timerNow) clearInterval(timerNow) })
+const heureMaintenant = computed(() => maintenant.value.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))
+const posMaintenant = computed(() => {
+  const px = ((maintenant.value - t0.value) / 3600000) * pxH.value
+  return (px >= 0 && px <= totalW.value) ? px : null
+})
 
 // Position des barres (par segment)
 function barStyleSeg(seg, t) {
@@ -569,10 +578,9 @@ const synthEquip = computed(() => planning.value.map(r => ({
 .g-track { position: relative; height: 44px; }
 .g-dband { position: absolute; top: 0; bottom: 0; border-left: 1px solid #f1f5f9; box-sizing: border-box; z-index: 0; }
 .g-weekend { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #e9edf3 6px, #e9edf3 12px); z-index: 0; }
-.g-today { position: absolute; top: 0; bottom: 0; background: rgba(20, 184, 166, 0.12); border-left: 2px solid #14b8a6; border-right: 2px solid #14b8a6; z-index: 0; box-sizing: border-box; }
-.g-dcol-today { background: rgba(20, 184, 166, 0.10); }
-.g-dcol-today .g-dlbl { color: #0f766e; font-weight: 800; }
-.g-today-lbl { color: #14b8a6; font-weight: 800; }
+.g-now { position: absolute; top: 0; bottom: 0; width: 2px; background: #ef4444; z-index: 3; }
+.g-now-head { position: absolute; top: 0; bottom: 0; width: 2px; background: #ef4444; z-index: 4; }
+.g-now-head span { position: absolute; top: 0; left: 2px; background: #ef4444; color: #fff; font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: 0 3px 3px 0; white-space: nowrap; }
 .g-bar { position: absolute; top: 4px; height: 26px; border-radius: 4px; border: 1px solid; box-sizing: border-box; overflow: hidden; display: flex; align-items: center; cursor: default; z-index: 1; }
 .g-bar.g-lot, .g-bar.g-gen, .g-bar.g-genH, .g-bar.g-part { }
 .g-lbl { font-size: 8.5px; font-weight: 700; padding: 0 3px; white-space: nowrap; color: #1e293b; }
