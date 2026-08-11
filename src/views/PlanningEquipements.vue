@@ -11,7 +11,14 @@
     <!-- Paramètres -->
     <section class="card params">
       <div class="p-grp"><label>Départ<input type="date" v-model="dateDepart" /></label></div>
-      <div class="p-grp"><label>Zoom<input type="range" min="1.5" max="10" step="0.5" v-model.number="pxH" /></label></div>
+      <div class="p-grp"><label>Affichage</label>
+        <div class="vue-btns">
+          <button type="button" class="vue-btn" :class="{ on: pxH >= 15 }" @click="pxH = 20">Jour</button>
+          <button type="button" class="vue-btn" :class="{ on: pxH >= 2.5 && pxH < 15 }" @click="pxH = 3.5">Semaine</button>
+          <button type="button" class="vue-btn" :class="{ on: pxH < 2.5 }" @click="pxH = 0.8">Mois</button>
+        </div>
+      </div>
+      <div class="p-grp"><label>Zoom<input type="range" min="0.5" max="24" step="0.5" v-model.number="pxH" /></label></div>
     </section>
 
     <!-- Légende -->
@@ -433,6 +440,9 @@ const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filte
 .p-grp label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 700; color: #475569; }
 .p-grp input, .p-grp select { font-size: 13px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; color: #1b2733; }
 .p-grp input[type=range] { padding: 0; }
+.vue-btns { display: flex; gap: 4px; }
+.vue-btn { background: #eef2f7; border: 1px solid #cbd5e1; border-radius: 7px; font-size: 12px; padding: 5px 11px; cursor: pointer; color: #475569; font-weight: 600; }
+.vue-btn.on { background: #0f766e; border-color: #0f766e; color: #fff; }
 .p-grp .chk { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; }
 
 .legende { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; font-size: 11px; color: #475569; }
