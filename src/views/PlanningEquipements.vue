@@ -186,7 +186,7 @@ const erreur = ref('')
 // Paramètres (valeurs fixes réglables)
 const today = new Date()
 const iso = (d) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const j = String(d.getDate()).padStart(2, '0'); return y + '-' + m + '-' + j }
-const dateDepart = ref(iso(today))
+const dateDepart = ref('2026-08-11')  // départ fixe
 const vdlt = ref(8)        // nettoyage général (h)
 const vdlp = ref(2)        // nettoyage partiel (h)
 const holdingJ = ref(7)    // validité campagne (jours)
