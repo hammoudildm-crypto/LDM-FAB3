@@ -588,10 +588,10 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
 .charts-row > .card { margin: 0; }
 @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
-.verif-3col { display: grid; grid-template-columns: 0.8fr 1.5fr 0.9fr; gap: 14px; align-items: start; }
-.verif-3col > .v3-col { display: flex; flex-direction: column; gap: 14px; order: 1; align-self: start; margin-top: 0; }
-.verif-3col > .v3-mid { order: 2; margin: 0; align-self: start; margin-top: 0; }
-.verif-3col > .v3-right { order: 3; margin: 0; align-self: start; margin-top: 0; }
+.verif-3col { display: grid; grid-template-columns: 0.8fr 1.5fr 0.9fr; gap: 14px; align-items: stretch; }
+.verif-3col > .v3-col { display: flex; flex-direction: column; gap: 14px; order: 1; align-self: stretch; margin-top: 0; }
+.verif-3col > .v3-mid { order: 2; margin: 0; align-self: stretch; margin-top: 0; }
+.verif-3col > .v3-right { order: 3; margin: 0; align-self: stretch; margin-top: 0; }
 .verif-3col > * > .card:first-child, .verif-3col > .v3-mid.card { margin-top: 0; }
 @media (max-width: 1100px) { .verif-3col { grid-template-columns: 1fr; } .verif-3col > * { order: 0 !important; } }
 /* Compact */
@@ -645,9 +645,9 @@ table.mini td { padding: 2px 4px; }
 .chart-hint-vd { font-size: 9px; margin: 4px 0 0; }
 .card-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Colonnes bornées en hauteur + défilement interne pour tout voir */
-.v3-mid { max-height: calc(100vh - 130px); overflow-y: auto; }
+.v3-mid { max-height: calc(100vh - 120px); overflow-y: auto; }
 .v3-mid .card-title { position: sticky; top: 0; background: #fff; z-index: 2; padding-bottom: 4px; }
-.verif-3col > .v3-col { max-height: calc(100vh - 110px); overflow-y: auto; }
+.verif-3col > .v3-col { max-height: calc(100vh - 120px); overflow-y: auto; }
 .verif-3col > .v3-col::-webkit-scrollbar, .v3-mid::-webkit-scrollbar { width: 7px; }
 .verif-3col > .v3-col::-webkit-scrollbar-thumb, .v3-mid::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 /* Réduction forte pour visualiser toutes les cartes */
@@ -694,4 +694,7 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 /* 3 colonnes alignées en bas (même hauteur) */
 .verif-3col { align-items: stretch !important; }
 .verif-3col > .v3-col, .verif-3col > .v3-mid { height: calc(100vh - 240px) !important; max-height: calc(100vh - 240px) !important; overflow-y: auto; }
+
+/* Colonnes de même hauteur : bas aligné */
+.verif-3col > .v3-col > .card:last-child { flex: 1 1 auto; }
 </style>
