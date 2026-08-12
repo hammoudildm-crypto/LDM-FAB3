@@ -672,7 +672,7 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .v3-col :deep(.ch-switch button) { font-size: 9px !important; padding: 2px 7px !important; }
 /* Colonne gauche plus étroite + titres minimisés */
 .verif-3col { grid-template-columns: 0.72fr 1.3fr 1fr !important; }
-.v3-col .card-title { font-size: 8px !important; margin-bottom: 3px !important; }
+.v3-col .card-title, .v3-mid .card-title { font-size: 10px !important; margin-bottom: 4px !important; line-height: 1.2 !important; }
 /* Colonne centrale : tableau pleine largeur, sans défilement horizontal */
 .v3-mid table.mini { table-layout: fixed; width: 100%; }
 .v3-mid table.mini th, .v3-mid table.mini td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
