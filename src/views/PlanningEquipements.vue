@@ -115,7 +115,7 @@
                    @dragstart="t.type === 'lot' ? dragStart(row.eq.id, t.uid) : null"
                    @dragover.prevent
                    @drop="t.type === 'lot' ? dropSur(row.eq.id, t.uid) : null">
-                <span v-if="j === 0" class="g-lbl">{{ t.type === 'lot' ? t.prod.code_pf : (t.type.startsWith('gen') ? 'NG' : 'NP') }}</span>
+                <span v-if="j === 0" class="g-lbl">{{ t.type === 'lot' ? (t.prod.code_pf + (t.turbNo ? ' T' + t.turbNo : '')) : (t.type.startsWith('gen') ? 'NG' : 'NP') }}</span>
               </div>
             </template>
           </div>
@@ -335,6 +335,18 @@ function poidsLotKg(prod) {
   const pmg = Number(prod.poids_unitaire_mg) || 0
   return (boites * upb * pmg) / 1e6 // mg -> Kg
 }
+// Nombre de turbines par produit (pelliculage) — éditable ici
+const TURBINES = [
+  { rx: /panadol.*\b1\s*g/i, n: 21 },
+  { rx: /panadol.*extra/i, n: 8 },
+  { rx: /panadol.*(rhume|grippe)/i, n: 2 },
+  { rx: /lipanthyl.*160/i, n: 6 }
+]
+function nbTurbines(prod) {
+  const t = (prod.designation || '') + ' ' + (prod.code_pf || '')
+  for (const x of TURBINES) if (x.rx.test(t)) return x.n
+  return 1
+}
 // Durée d'un lot (h) : cadence en Kg/h
 function dureeLotH(prod, cad) {
   const c = Number(cad.cadence_nominale) || 0 // Kg/h
@@ -544,31 +556,41 @@ const planning = computed(() => {
       for (const item of pan) {
         const prod = produitsById.value[item.pid]; if (!prod) continue
         const key = item.ordreId
-        const ready = lotReady[key] || new Date(t0v)  // fin de la phase précédente (ou t0 si 1re phase)
-        let cursor = eqCursor[eq.id]
-        const lastPid = eqLastPid[eq.id], lastGen = eqLastGen[eq.id]
-        const holdingDep = lastGen && (cursor - lastGen) / 3600000 > P.holdingH
-        const cln = (lastPid == null || item.pid !== lastPid) ? 'gen' : (holdingDep ? 'genH' : 'part')
-        const C = (cln === 'gen' || cln === 'genH') ? P.vdlt : P.vdlp
-        // Fin du nettoyage s'il démarrait au curseur (dispo équipement)
-        const clFinSiMaintenant = placer(cursor, C, P.regime, P.weAll, P.requis).end
-        // Le lot démarre au plus tôt à max(fin nettoyage-au-curseur, prêt phase précédente)
-        let debut = clFinSiMaintenant > ready ? clFinSiMaintenant : ready
-        debut = prochainOuvre(new Date(debut), P.regime, P.weAll, P.requis)
+        const readyPhase = lotReady[key] || new Date(t0v)  // fin de la phase précédente
         const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === item.pid)
-        const dLot = cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8
+        const dLotFull = cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8
+        // Pelliculage : chaque turbine = un lot séparé
+        let nbTurb = (ph === 7) ? nbTurbines(prod) : 1
+        let dRun = dLotFull
+        if (nbTurb > 1) {
+          const cN = cad ? (Number(cad.cadence_nominale) || 0) : 0
+          const kg = poidsLotKg(prod)
+          dRun = (cN > 0 && kg > 0) ? Math.max(0.25, (kg / nbTurb) / cN) : Math.max(0.25, dLotFull / nbTurb)
+        }
         const noWeekend = (ph === 2 || ph === 4 || ph === 7)  // granulation, mélange, pelliculage
-        const plLot = placerLot(debut, dLot, P.regime, P.weAll, P.requis, noWeekend)
-        const lotStart = plLot.segments[0].start
-        // Nettoyage calé pour FINIR pile au démarrage du lot (juste avant)
-        const clStart = reculerOuvre(lotStart, C, P.regime, P.weAll, P.requis)
-        const plClean = placer(clStart, C, P.regime, P.weAll, P.requis)
-        eqTasks[eq.id].push({ type: cln, segments: plClean.segments, start: plClean.segments[0].start, end: plClean.end })
-        if (cln === 'gen' || cln === 'genH') eqLastGen[eq.id] = new Date(plClean.end)
-        eqTasks[eq.id].push({ type: 'lot', prod, lot: item.lot, uid: item.ordreId, segments: plLot.segments, start: lotStart, end: plLot.end })
-        cursor = plLot.end
-        eqCursor[eq.id] = cursor; eqLastPid[eq.id] = item.pid
-        lotReady[key] = new Date(cursor)  // prêt pour la phase suivante
+        let finLot = null
+        for (let k = 1; k <= nbTurb; k++) {
+          let cursor = eqCursor[eq.id]
+          const lastPid = eqLastPid[eq.id], lastGen = eqLastGen[eq.id]
+          const holdingDep = lastGen && (cursor - lastGen) / 3600000 > P.holdingH
+          const cln = (lastPid == null || item.pid !== lastPid) ? 'gen' : (holdingDep ? 'genH' : 'part')
+          const C = (cln === 'gen' || cln === 'genH') ? P.vdlt : P.vdlp
+          const clFinSiMaintenant = placer(cursor, C, P.regime, P.weAll, P.requis).end
+          // 1re turbine : attend la fin de la phase précédente ; les suivantes enchaînent sur l'équipement
+          const ready = (k === 1) ? readyPhase : new Date(t0v)
+          let debut = clFinSiMaintenant > ready ? clFinSiMaintenant : ready
+          debut = prochainOuvre(new Date(debut), P.regime, P.weAll, P.requis)
+          const plLot = placerLot(debut, dRun, P.regime, P.weAll, P.requis, noWeekend)
+          const lotStart = plLot.segments[0].start
+          const clStart = reculerOuvre(lotStart, C, P.regime, P.weAll, P.requis)
+          const plClean = placer(clStart, C, P.regime, P.weAll, P.requis)
+          eqTasks[eq.id].push({ type: cln, segments: plClean.segments, start: plClean.segments[0].start, end: plClean.end })
+          if (cln === 'gen' || cln === 'genH') eqLastGen[eq.id] = new Date(plClean.end)
+          eqTasks[eq.id].push({ type: 'lot', prod, lot: item.lot, uid: item.ordreId, turbines: nbTurb, turbNo: (nbTurb > 1 ? k : null), segments: plLot.segments, start: lotStart, end: plLot.end })
+          eqCursor[eq.id] = plLot.end; eqLastPid[eq.id] = item.pid
+          finLot = plLot.end
+        }
+        lotReady[key] = new Date(finLot)  // prêt pour la phase suivante (après la dernière turbine)
       }
     }
   }
@@ -644,7 +666,7 @@ function couleurProd(code) {
 const fmtJH = (d) => d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''
 function titre(t) {
   const p = fmtJH(t.start) + ' → ' + fmtJH(t.end)
-  if (t.type === 'lot') return t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + '  •  ' + p
+  if (t.type === 'lot') return t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + (t.turbNo ? '  •  turbine ' + t.turbNo + '/' + t.turbines : '') + '  •  ' + p
   if (t.type === 'gen') return 'Nettoyage général (début campagne)  •  ' + p
   if (t.type === 'genH') return 'Nettoyage général (holding dépassé)  •  ' + p
   return 'Nettoyage partiel  •  ' + p
