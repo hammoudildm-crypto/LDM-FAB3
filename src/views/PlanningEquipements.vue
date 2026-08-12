@@ -399,6 +399,33 @@ function placerLot(start, dureeH, regime, weAll, requis, noSplit) {
   }
   return placer(sdeb, dureeH, regime, weAll, requis)
 }
+// Instant ouvré ?
+function estOuvre(d, regime, weAll, requis) {
+  const j = d.getDay()
+  if ((j === 5 || j === 6) && !weAll && !(requis && requis.has(isoL(d)))) return false
+  if (regime === '2x8') { const h = d.getHours() + d.getMinutes() / 60; if (h < 6 || h >= 22) return false }
+  return true
+}
+// Début de la plage ouvrée qui se termine à 'd'
+function debutPlageAvant(d, regime, weAll, requis) {
+  let c = new Date(d.getTime() - 1); let g = 0
+  while (!estOuvre(c, regime, weAll, requis) && g++ < 20000) c = new Date(c.getTime() - 60000)
+  let deb = new Date(c); g = 0
+  while (g++ < 20000) { const t = new Date(deb.getTime() - 60000); if (!estOuvre(t, regime, weAll, requis)) break; deb = t }
+  return deb
+}
+// Recule de dureeH heures ouvrées à partir de 'end' -> instant de début
+function reculerOuvre(end, dureeH, regime, weAll, requis) {
+  let curEnd = new Date(end); let reste = dureeH; let g = 0
+  while (reste > 0.001 && g++ < 300) {
+    const deb = debutPlageAvant(curEnd, regime, weAll, requis)
+    const dispo = (curEnd - deb) / 3600000
+    if (dispo >= reste) return new Date(curEnd.getTime() - reste * 3600000)
+    reste -= dispo
+    curEnd = new Date(deb.getTime() - 1)
+  }
+  return curEnd
+}
 function planifierTaches(lots, tDep, regime, weAll, requis, pVdlt, pVdlp, pHoldingH) {
   const tasks = []
   let cursor = prochainOuvre(new Date(tDep), regime, weAll, requis)
@@ -500,23 +527,23 @@ const planning = computed(() => {
         const lastPid = eqLastPid[eq.id], lastGen = eqLastGen[eq.id]
         const holdingDep = lastGen && (cursor - lastGen) / 3600000 > P.holdingH
         const cln = (lastPid == null || item.pid !== lastPid) ? 'gen' : (holdingDep ? 'genH' : 'part')
-        if (cln === 'gen' || cln === 'genH') {
-          const pl = placer(cursor, P.vdlt, P.regime, P.weAll, P.requis)
-          eqTasks[eq.id].push({ type: cln, segments: pl.segments, start: pl.segments[0].start, end: pl.end })
-          cursor = pl.end; eqLastGen[eq.id] = new Date(cursor)
-        } else {
-          const pl = placer(cursor, P.vdlp, P.regime, P.weAll, P.requis)
-          eqTasks[eq.id].push({ type: 'part', segments: pl.segments, start: pl.segments[0].start, end: pl.end })
-          cursor = pl.end
-        }
-        // Le lot ne démarre qu'après la fin de sa phase précédente ET la disponibilité de l'équipement
-        let debut = cursor > ready ? cursor : ready
+        const C = (cln === 'gen' || cln === 'genH') ? P.vdlt : P.vdlp
+        // Fin du nettoyage s'il démarrait au curseur (dispo équipement)
+        const clFinSiMaintenant = placer(cursor, C, P.regime, P.weAll, P.requis).end
+        // Le lot démarre au plus tôt à max(fin nettoyage-au-curseur, prêt phase précédente)
+        let debut = clFinSiMaintenant > ready ? clFinSiMaintenant : ready
         debut = prochainOuvre(new Date(debut), P.regime, P.weAll, P.requis)
         const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === item.pid)
         const dLot = cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8
         const noWeekend = (ph === 2 || ph === 4 || ph === 7)  // granulation, mélange, pelliculage
         const plLot = placerLot(debut, dLot, P.regime, P.weAll, P.requis, noWeekend)
-        eqTasks[eq.id].push({ type: 'lot', prod, lot: item.lot, uid: item.ordreId, segments: plLot.segments, start: plLot.segments[0].start, end: plLot.end })
+        const lotStart = plLot.segments[0].start
+        // Nettoyage calé pour FINIR pile au démarrage du lot (juste avant)
+        const clStart = reculerOuvre(lotStart, C, P.regime, P.weAll, P.requis)
+        const plClean = placer(clStart, C, P.regime, P.weAll, P.requis)
+        eqTasks[eq.id].push({ type: cln, segments: plClean.segments, start: plClean.segments[0].start, end: plClean.end })
+        if (cln === 'gen' || cln === 'genH') eqLastGen[eq.id] = new Date(plClean.end)
+        eqTasks[eq.id].push({ type: 'lot', prod, lot: item.lot, uid: item.ordreId, segments: plLot.segments, start: lotStart, end: plLot.end })
         cursor = plLot.end
         eqCursor[eq.id] = cursor; eqLastPid[eq.id] = item.pid
         lotReady[key] = new Date(cursor)  // prêt pour la phase suivante
