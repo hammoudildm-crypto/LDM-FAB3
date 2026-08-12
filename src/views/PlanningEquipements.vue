@@ -425,33 +425,70 @@ const produitsAjoutables = computed(() => {
 })
 
 const planning = computed(() => {
-  const t0 = new Date(dateDepart.value + 'T06:00:00')
-  const rows = []
+  const t0v = new Date(dateDepart.value + 'T06:00:00')
   const q = filtreTexte.value.trim().toLowerCase()
-  const equipsFab = equipements.value.filter(e => estFab(e.type)).filter(e => {
+  const equipsFab = equipements.value.filter(e => estFab(e.type))
+  const paramsEq = (eq) => ({
+    regime: regimeEquip[eq.id] || '3x8',
+    weAll: !!weekendEquip[eq.id],
+    requis: new Set(requisEquip[eq.id] || []),
+    vdlt: (eq.vdlt != null && eq.vdlt !== '') ? Number(eq.vdlt) : vdlt.value,
+    vdlp: (eq.vdlp != null && eq.vdlp !== '') ? Number(eq.vdlp) : vdlp.value,
+    holdingH: (eq.dht != null && eq.dht !== '') ? Number(eq.dht) * 24 : holdingH.value
+  })
+  const eqTasks = {}, eqCursor = {}, eqLastPid = {}, eqLastGen = {}
+  const lotReady = {}  // pid#idx -> fin de la phase précédente du même lot
+  // Ordonnancement de flux : phase par phase (1=pesée -> 7=pelliculage)
+  for (let ph = 1; ph <= 7; ph++) {
+    const eqsPh = equipsFab.filter(e => phaseOrdre(e.type) === ph).sort((a, b) => String(a.code).localeCompare(String(b.code)))
+    for (const eq of eqsPh) {
+      const pan = panierEquip[eq.id]
+      if (!pan || !pan.length) continue
+      const P = paramsEq(eq)
+      if (eqCursor[eq.id] === undefined) eqCursor[eq.id] = prochainOuvre(new Date(t0v), P.regime, P.weAll, P.requis)
+      if (!eqTasks[eq.id]) eqTasks[eq.id] = []
+      const cptP = {}
+      for (const item of pan) {
+        const prod = produitsById.value[item.pid]; if (!prod) continue
+        cptP[item.pid] = (cptP[item.pid] || 0) + 1
+        const idx = cptP[item.pid]
+        const key = item.pid + '#' + idx
+        const ready = lotReady[key] || new Date(t0v)  // fin de la phase précédente (ou t0 si 1re phase)
+        let cursor = eqCursor[eq.id]
+        const lastPid = eqLastPid[eq.id], lastGen = eqLastGen[eq.id]
+        const holdingDep = lastGen && (cursor - lastGen) / 3600000 > P.holdingH
+        const cln = (lastPid == null || item.pid !== lastPid) ? 'gen' : (holdingDep ? 'genH' : 'part')
+        if (cln === 'gen' || cln === 'genH') {
+          const pl = placer(cursor, P.vdlt, P.regime, P.weAll, P.requis)
+          eqTasks[eq.id].push({ type: cln, segments: pl.segments, start: pl.segments[0].start, end: pl.end })
+          cursor = pl.end; eqLastGen[eq.id] = new Date(cursor)
+        } else {
+          const pl = placer(cursor, P.vdlp, P.regime, P.weAll, P.requis)
+          eqTasks[eq.id].push({ type: 'part', segments: pl.segments, start: pl.segments[0].start, end: pl.end })
+          cursor = pl.end
+        }
+        // Le lot ne démarre qu'après la fin de sa phase précédente ET la disponibilité de l'équipement
+        let debut = cursor > ready ? cursor : ready
+        debut = prochainOuvre(new Date(debut), P.regime, P.weAll, P.requis)
+        const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === item.pid)
+        const dLot = cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8
+        const plLot = placer(debut, dLot, P.regime, P.weAll, P.requis)
+        eqTasks[eq.id].push({ type: 'lot', prod, n: idx, uid: item.uid, segments: plLot.segments, start: plLot.segments[0].start, end: plLot.end })
+        cursor = plLot.end
+        eqCursor[eq.id] = cursor; eqLastPid[eq.id] = item.pid
+        lotReady[key] = new Date(cursor)  // prêt pour la phase suivante
+      }
+    }
+  }
+  // Lignes affichées (filtres)
+  const rows = []
+  const eqsSorted = equipsFab.filter(e => {
     if (filtrePhase.value && phaseOrdre(e.type) !== Number(filtrePhase.value)) return false
     if (filtreAvecPlan.value && !(panierEquip[e.id] && panierEquip[e.id].length)) return false
     if (q && !((e.code + ' ' + (e.nom || '')).toLowerCase().includes(q))) return false
     return true
   }).sort((a, b) => (phaseOrdre(a.type) - phaseOrdre(b.type)) || String(a.code).localeCompare(String(b.code)))
-  for (const eq of equipsFab) {
-    const pan = panierEquip[eq.id]
-    let lots = []
-    if (pan && pan.length) {
-      for (const item of pan) {
-        const prod = produitsById.value[item.pid]; if (!prod) continue
-        const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === item.pid)
-        lots.push({ pid: item.pid, uid: item.uid, prod, dLot: cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8 })
-      }
-    }
-    const eqVdlt = (eq.vdlt != null && eq.vdlt !== '') ? Number(eq.vdlt) : vdlt.value
-    const eqVdlp = (eq.vdlp != null && eq.vdlp !== '') ? Number(eq.vdlp) : vdlp.value
-    const eqHoldingH = (eq.dht != null && eq.dht !== '') ? Number(eq.dht) * 24 : holdingH.value
-    const regime = regimeEquip[eq.id] || '3x8'
-    const requis = new Set(requisEquip[eq.id] || [])
-    const r = planifierTaches(lots, t0, regime, !!weekendEquip[eq.id], requis, eqVdlt, eqVdlp, eqHoldingH)
-    rows.push({ eq, tasks: r.tasks, fin: r.fin })
-  }
+  for (const eq of eqsSorted) rows.push({ eq, tasks: eqTasks[eq.id] || [], fin: eqCursor[eq.id] || new Date(t0v) })
   return rows
 })
 
