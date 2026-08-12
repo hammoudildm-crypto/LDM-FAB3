@@ -209,6 +209,8 @@ const planRaw = ref([])
 const cadences = ref([])
 const equipements = ref([])
 const produits = ref([])
+const ofs = ref([])
+const suivi = ref([])
 
 async function fetchAllPaged(qb) {
   const size = 1000; let from = 0; const out = []
@@ -224,15 +226,19 @@ async function fetchAllPaged(qb) {
 
 onMounted(async () => {
   try {
-    const [rp, rc, re, rpr, rpan] = await Promise.all([
+    const [rp, rc, re, rpr, rpan, rof, rsu] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produit_id')),
       fetchAllPaged(() => supabase.from('cadences_produit').select('cadence_nominale, unite_cadence, mode, equipement_id, produit_id')),
       fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif, vdlt, vdlp, dht, reglage, postes').eq('actif', true)),
       fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, gamme').eq('actif', true)),
-      fetchAllPaged(() => supabase.from('planning_panier').select('equipement_id, produits'))
+      fetchAllPaged(() => supabase.from('planning_panier').select('equipement_id, produits')),
+      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, date_lancement, date_fin_fabrication, produits(id, code_pf, designation, gamme, taille_lot, unites_par_boite, poids_unitaire_mg)')),
+      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
+    if (rof && !rof.error) ofs.value = rof.data
+    if (rsu && !rsu.error) suivi.value = rsu.data
     if (rpan && !rpan.error && rpan.data) for (const row of rpan.data) {
       let lotsArr = [], reg = null, req = null
       const pr = row.produits
@@ -260,6 +266,37 @@ const annees = computed(() => {
 
 // Index produits + PDP quantité par produit pour l'année
 const produitsById = computed(() => { const m = {}; for (const p of produits.value) m[p.id] = p; return m })
+// Statut de chaque phase (1..7) par OF, depuis suivi_phases
+const phasesLot = computed(() => {
+  const m = {}
+  for (const sp of suivi.value) {
+    const po = phaseOrdre(sp.phase)
+    if (po < 1 || po > 7) continue
+    const id = sp.ordre_id
+    if (!m[id]) m[id] = {}
+    if (!m[id][po] || sp.statut === 'Terminé') m[id][po] = sp.statut
+  }
+  return m
+})
+const GAMME_DEF = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage', 'Pelliculage']
+// Lots réels en attente par phase (à leur 1re phase de gamme non terminée, non démarrée)
+const lotsAttentePhase = computed(() => {
+  const q = {}
+  for (const o of ofs.value) {
+    if (o.statut === 'Libéré' || o.statut === 'Rejeté' || o.date_fin_fabrication) continue
+    const prod = o.produits || {}
+    const gammeB = (Array.isArray(prod.gamme) && prod.gamme.length) ? prod.gamme : GAMME_DEF
+    const phases = [...new Set(gammeB.map(phaseOrdre).filter(x => x >= 1 && x <= 7))].sort((a, b) => a - b)
+    if (!phases.length) continue
+    const pl = phasesLot.value[o.id] || {}
+    let cur = null
+    for (const po of phases) { if (pl[po] !== 'Terminé') { cur = po; break } }
+    if (cur == null || pl[cur] === 'En cours') continue
+    if (!q[cur]) q[cur] = []
+    q[cur].push({ id: o.id, lot: o.numero_lot || '—', pid: prod.id, code: prod.code_pf || '—', desig: prod.designation || '' })
+  }
+  return q
+})
 const pdpQty = computed(() => {
   const m = {}
   for (const r of planRaw.value) {
@@ -397,31 +434,22 @@ async function sauverPanier(id) {
 }
 let uidCounter = 0
 function uidGen() { return 'l' + Date.now().toString(36) + (uidCounter++) }
-const nbAjout = ref(1)
-function ouvrirPanier(eq) { panierOuvert.value = eq; rechProd.value = ''; nbAjout.value = 1 }
+function ouvrirPanier(eq) { panierOuvert.value = eq; rechProd.value = '' }
 function viderPanier() { if (!panierOuvert.value) return; if (!confirm('Vider le panier de cet équipement ?')) return; const id = panierOuvert.value.id; panierEquip[id] = []; sauverPanier(id) }
-function ajouterPanier(pid) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; const n = Math.max(1, Number(nbAjout.value) || 1); for (let k = 0; k < n; k++) panierEquip[id].push({ pid, uid: uidGen() }); sauverPanier(id) }
-function retirerGroupe(grp) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; const set = new Set(grp.uids); panierEquip[id] = (panierEquip[id] || []).filter(i => !set.has(i.uid)); sauverPanier(id) }
+function ajouterLot(l) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; if (!panierEquip[id].some(i => i.ordreId === l.id)) panierEquip[id].push({ ordreId: l.id, lot: l.lot, pid: l.pid }); sauverPanier(id) }
+function retirerLot(idx) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; const a = panierEquip[id]; if (a) { a.splice(idx, 1); sauverPanier(id) } }
 const requisDate = ref('')
 function setRegime(v) { if (!panierOuvert.value) return; regimeEquip[panierOuvert.value.id] = v; sauverPanier(panierOuvert.value.id) }
 function ajouterRequis() { if (!panierOuvert.value || !requisDate.value) return; const id = panierOuvert.value.id; if (!requisEquip[id]) requisEquip[id] = []; if (!requisEquip[id].includes(requisDate.value)) requisEquip[id].push(requisDate.value); requisEquip[id].sort(); requisDate.value = ''; sauverPanier(id) }
 function retirerRequis(dt) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; requisEquip[id] = (requisEquip[id] || []).filter(d => d !== dt); sauverPanier(id) }
 function produitNom(pid) { const p = produitsById.value[pid]; return p ? (p.code_pf + ' — ' + p.designation) : String(pid) }
-const campagnesPanier = computed(() => {
+const phaseOuvert = computed(() => panierOuvert.value ? phaseOrdre(panierOuvert.value.type) : null)
+const lotsAjoutables = computed(() => {
   if (!panierOuvert.value) return []
-  const arr = panierEquip[panierOuvert.value.id] || []
-  const groups = []
-  for (const item of arr) {
-    const last = groups[groups.length - 1]
-    if (last && last.pid === item.pid) { last.count++; last.uids.push(item.uid) }
-    else groups.push({ pid: item.pid, count: 1, uids: [item.uid] })
-  }
-  return groups
-})
-const produitsAjoutables = computed(() => {
-  if (!panierOuvert.value) return []
+  const ph = phaseOuvert.value
+  const dans = new Set((panierEquip[panierOuvert.value.id] || []).map(i => i.ordreId))
   const q = rechProd.value.trim().toLowerCase()
-  return produits.value.filter(p => (!q || (p.code_pf + ' ' + (p.designation || '')).toLowerCase().includes(q))).slice(0, 40)
+  return (lotsAttentePhase.value[ph] || []).filter(l => !dans.has(l.id) && (!q || (l.lot + ' ' + l.code + ' ' + (l.desig || '')).toLowerCase().includes(q)))
 })
 
 const planning = computed(() => {
