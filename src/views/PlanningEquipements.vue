@@ -385,6 +385,20 @@ function placer(start, dureeH, regime, weAll, requis) {
   if (!segments.length) segments.push({ start: new Date(start), end: new Date(start) })
   return { segments, end: cursor }
 }
+// Placement d'un lot en UN SEUL TENANT si noSplit (aucune coupure nuit en 2x8 ni week-end).
+// Si le lot ne tient pas dans la fenêtre courante, on décale au début de la fenêtre suivante.
+function placerLot(start, dureeH, regime, weAll, requis, noSplit) {
+  let sdeb = prochainOuvre(new Date(start), regime, weAll, requis)
+  if (noSplit) {
+    let g = 0
+    while (g++ < 120) {
+      const pl = placer(sdeb, dureeH, regime, weAll, requis)
+      if (pl.segments.length <= 1) return pl        // contigu -> OK
+      sdeb = new Date(pl.segments[1].start)          // décalage à la fenêtre suivante
+    }
+  }
+  return placer(sdeb, dureeH, regime, weAll, requis)
+}
 function planifierTaches(lots, tDep, regime, weAll, requis, pVdlt, pVdlp, pHoldingH) {
   const tasks = []
   let cursor = prochainOuvre(new Date(tDep), regime, weAll, requis)
@@ -500,7 +514,8 @@ const planning = computed(() => {
         debut = prochainOuvre(new Date(debut), P.regime, P.weAll, P.requis)
         const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === item.pid)
         const dLot = cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8
-        const plLot = placer(debut, dLot, P.regime, P.weAll, P.requis)
+        const noWeekend = (ph === 2 || ph === 4 || ph === 7)  // granulation, mélange, pelliculage
+        const plLot = placerLot(debut, dLot, P.regime, P.weAll, P.requis, noWeekend)
         eqTasks[eq.id].push({ type: 'lot', prod, lot: item.lot, uid: item.ordreId, segments: plLot.segments, start: plLot.segments[0].start, end: plLot.end })
         cursor = plLot.end
         eqCursor[eq.id] = cursor; eqLastPid[eq.id] = item.pid
