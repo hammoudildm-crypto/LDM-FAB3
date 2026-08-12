@@ -644,7 +644,7 @@ function couleurProd(code) {
 const fmtJH = (d) => d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''
 function titre(t) {
   const p = fmtJH(t.start) + ' → ' + fmtJH(t.end)
-  if (t.type === 'lot') return t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + t.n + '  •  ' + p
+  if (t.type === 'lot') return t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + '  •  ' + p
   if (t.type === 'gen') return 'Nettoyage général (début campagne)  •  ' + p
   if (t.type === 'genH') return 'Nettoyage général (holding dépassé)  •  ' + p
   return 'Nettoyage partiel  •  ' + p
