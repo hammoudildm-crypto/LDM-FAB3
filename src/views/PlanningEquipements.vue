@@ -167,7 +167,7 @@
         <div class="pan-add">
           <input v-model="rechProd" placeholder="Rechercher un lot (n°, produit)…" class="pan-search" />
           <div class="pan-prods">
-            <button v-for="l in lotsAjoutables" :key="l.id" class="pan-chip" @click="ajouterLot(l)" :title="l.code + ' — ' + l.desig">{{ l.lot }}</button>
+            <button v-for="l in lotsAjoutables" :key="l.id" class="pan-chip" :class="{ 'pan-chip-plan': l.plan }" @click="ajouterLot(l)" :title="(l.plan ? 'Planifié — ' : 'En attente — ') + l.code + ' — ' + l.desig">{{ l.lot }}</button>
             <span v-if="!lotsAjoutables.length" class="pan-none">Aucun lot en attente pour cette phase.</span>
           </div>
         </div>
@@ -284,11 +284,19 @@ const lotsAttentePhase = computed(() => {
     const phases = [...new Set(gammeB.map(phaseOrdre).filter(x => x >= 1 && x <= 7))].sort((a, b) => a - b)
     if (!phases.length) continue
     const pl = phasesLot.value[o.id] || {}
-    let cur = null
-    for (const po of phases) { if (pl[po] !== 'Terminé') { cur = po; break } }
-    if (cur == null || pl[cur] === 'En cours') continue
-    if (!q[cur]) q[cur] = []
-    q[cur].push({ id: o.id, lot: o.numero_lot || '—', pid: prod.id, code: prod.code_pf || '—', desig: prod.designation || '' })
+    const base = { id: o.id, lot: o.numero_lot || '—', pid: prod.id, code: prod.code_pf || '—', desig: prod.designation || '' }
+    if (Object.keys(pl).length === 0) {
+      // OF sans phase enregistrée (planifié / non démarré) -> proposé sur TOUTES les phases de sa gamme
+      const planifie = !o.date_lancement
+      for (const po of phases) { if (!q[po]) q[po] = []; q[po].push({ ...base, plan: planifie }) }
+    } else {
+      // OF en cours -> à sa phase courante (1re non terminée, non démarrée)
+      let cur = null
+      for (const po of phases) { if (pl[po] !== 'Terminé') { cur = po; break } }
+      if (cur == null || pl[cur] === 'En cours') continue
+      if (!q[cur]) q[cur] = []
+      q[cur].push(base)
+    }
   }
   return q
 })
@@ -444,7 +452,7 @@ const lotsAjoutables = computed(() => {
   const ph = phaseOuvert.value
   const dans = new Set((panierEquip[panierOuvert.value.id] || []).map(i => i.ordreId))
   const q = rechProd.value.trim().toLowerCase()
-  return (lotsAttentePhase.value[ph] || []).filter(l => !dans.has(l.id) && (!q || (l.lot + ' ' + l.code + ' ' + (l.desig || '')).toLowerCase().includes(q)))
+  return (lotsAttentePhase.value[ph] || []).filter(l => !dans.has(l.id) && (!q || (l.lot + ' ' + l.code + ' ' + (l.desig || '')).toLowerCase().includes(q))).slice(0, 150)
 })
 
 const planning = computed(() => {
@@ -689,6 +697,8 @@ const synthEquip = computed(() => planning.value.map(r => ({
 .pan-prods { display: flex; flex-wrap: wrap; gap: 5px; }
 .pan-chip { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 12px; font-size: 11px; padding: 3px 10px; cursor: pointer; font-weight: 600; }
 .pan-chip:hover { background: #dbeafe; }
+.pan-chip-plan { background: #fef3c7; border-color: #fde68a; color: #92400e; }
+.pan-chip-plan:hover { background: #fde68a; }
 .pan-none { font-size: 11px; color: #94a3b8; }
 .pan-add-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .pan-add-row .pan-search { margin-bottom: 0; flex: 1; }
