@@ -78,8 +78,8 @@
         <div class="g-header">
           <div class="g-eqcol g-eqhead">Équipement</div>
           <div class="g-track g-timeline" :style="{ width: totalW + 'px' }">
-            <div v-for="d in jours" :key="d.i" class="g-dcol" :style="{ left: d.left + 'px', width: d.w + 'px' }">
-              <div class="g-dlbl">{{ d.label }}</div>
+            <div v-for="d in jours" :key="d.i" class="g-dcol" :class="{ 'g-dcol-dep': d.depart }" :style="{ left: d.left + 'px', width: d.w + 'px' }">
+              <div class="g-dlbl">{{ d.label }}<span v-if="d.depart" class="g-dep-lbl"> ▸ Départ</span></div>
               <div class="g-shifts">
                 <span class="g-sh" :style="{ width: (8 * pxH) + 'px' }">06</span>
                 <span class="g-sh" :style="{ width: (8 * pxH) + 'px' }">14</span>
@@ -104,6 +104,7 @@
             <template v-if="!weekendEquip[row.eq.id]">
               <div v-for="d in joursWeekend" :key="'w'+d.i" class="g-weekend" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
             </template>
+            <div v-for="d in jourDepart" :key="'dep'+d.i" class="g-depart" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
             <div v-if="posMaintenant != null" class="g-now" :style="{ left: posMaintenant + 'px' }"></div>
             <!-- barres (par segment) -->
             <template v-for="(t, i) in row.tasks">
@@ -580,11 +581,12 @@ const jours = computed(() => {
   for (let i = 0; i < n; i++) {
     const d = new Date(start.getTime() + i * 86400000)
     const left = ((d - t0.value) / 3600000) * pxH.value
-    out.push({ i, left, w: 24 * pxH.value, weekend: d.getDay() === 5 || d.getDay() === 6, aujourdhui: isoL(d) === isoL(new Date()), label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }) })
+    out.push({ i, left, w: 24 * pxH.value, weekend: d.getDay() === 5 || d.getDay() === 6, aujourdhui: isoL(d) === isoL(new Date()), depart: isoL(d) === dateDepart.value, label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }) })
   }
   return out
 })
 const joursWeekend = computed(() => jours.value.filter(d => d.weekend))
+const jourDepart = computed(() => jours.value.filter(d => d.depart))
 const maintenant = ref(new Date())
 let timerNow = null
 onMounted(() => { timerNow = setInterval(() => { maintenant.value = new Date() }, 60000) })
@@ -687,6 +689,9 @@ const synthEquip = computed(() => planning.value.map(r => ({
 .g-track { position: relative; height: 44px; }
 .g-dband { position: absolute; top: 0; bottom: 0; border-left: 1px solid #f1f5f9; box-sizing: border-box; z-index: 0; }
 .g-weekend { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #e9edf3 6px, #e9edf3 12px); z-index: 0; }
+.g-depart { position: absolute; top: 0; bottom: 0; background: rgba(91, 155, 213, 0.10); border-left: 2px solid #5B9BD5; z-index: 0; box-sizing: border-box; }
+.g-dcol-dep { background: rgba(91, 155, 213, 0.08); }
+.g-dep-lbl { color: #2A4A85; font-weight: 800; }
 .g-now { position: absolute; top: 0; bottom: 0; width: 2px; background: #ef4444; z-index: 3; }
 .g-now-head { position: absolute; top: 0; bottom: 0; width: 2px; background: #ef4444; z-index: 4; }
 .g-now-head span { position: absolute; top: 0; left: 2px; background: #ef4444; color: #fff; font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: 0 3px 3px 0; white-space: nowrap; }
