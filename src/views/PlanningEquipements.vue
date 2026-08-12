@@ -156,22 +156,19 @@
           </div>
         </div>
         <div class="pan-list">
-          <div v-for="(grp, gi) in campagnesPanier" :key="gi" class="pan-item">
-            <span class="pan-idx">{{ gi + 1 }}</span>
-            <span class="pan-pnom">{{ produitNom(grp.pid) }} <b>× {{ grp.count }} lot(s)</b></span>
-            <button class="pan-btn del" @click="retirerGroupe(grp)">✕</button>
+          <div v-for="(item, idx) in (panierEquip[panierOuvert.id] || [])" :key="item.ordreId" class="pan-item">
+            <span class="pan-idx">{{ idx + 1 }}</span>
+            <span class="pan-pnom"><b>{{ item.lot }}</b> — {{ produitNom(item.pid) }}</span>
+            <button class="pan-btn del" @click="retirerLot(idx)">✕</button>
           </div>
-          <div v-if="!campagnesPanier.length" class="pan-vide">Panier vide.</div>
+          <div v-if="!(panierEquip[panierOuvert.id] || []).length" class="pan-vide">Aucun lot affecté à cet équipement.</div>
         </div>
-        <p class="pan-hint2">Réordonne les lots <b>un par un en les glissant sur le Gantt</b>. Nettoyage recalculé : même produit → partiel ; produit différent ou validité dépassée → général.</p>
+        <p class="pan-hint2">Lots en attente de cette phase. Réordonne-les en les <b>glissant sur le Gantt</b>.</p>
         <div class="pan-add">
-          <div class="pan-add-row">
-            <input v-model="rechProd" placeholder="Rechercher un produit…" class="pan-search" />
-            <label class="pan-nbadd">Lots <input type="number" min="1" step="1" v-model.number="nbAjout" class="pan-nb" /></label>
-          </div>
+          <input v-model="rechProd" placeholder="Rechercher un lot (n°, produit)…" class="pan-search" />
           <div class="pan-prods">
-            <button v-for="p in produitsAjoutables" :key="p.id" class="pan-chip" @click="ajouterPanier(p.id)" :title="p.designation + ' — ajoute ' + nbAjout + ' lot(s)'">{{ p.code_pf }}</button>
-            <span v-if="!produitsAjoutables.length" class="pan-none">Aucun produit.</span>
+            <button v-for="l in lotsAjoutables" :key="l.id" class="pan-chip" @click="ajouterLot(l)" :title="l.code + ' — ' + l.desig">{{ l.lot }}</button>
+            <span v-if="!lotsAjoutables.length" class="pan-none">Aucun lot en attente pour cette phase.</span>
           </div>
         </div>
       </div>
@@ -246,9 +243,7 @@ onMounted(async () => {
       else if (pr && typeof pr === 'object') { lotsArr = Array.isArray(pr.lots) ? pr.lots : []; reg = pr.regime; req = pr.requis; if (typeof pr.weekend === 'boolean') weekendEquip[row.equipement_id] = pr.weekend }
       const flat = []
       for (const x of lotsArr) {
-        if (x && typeof x === 'object' && x.uid) flat.push({ pid: x.pid, uid: x.uid })
-        else if (x && typeof x === 'object') { const n = Math.max(1, Number(x.nb) || 1); for (let k = 0; k < n; k++) flat.push({ pid: x.pid, uid: uidGen() }) }
-        else flat.push({ pid: x, uid: uidGen() })
+        if (x && typeof x === 'object' && x.ordreId) flat.push({ ordreId: x.ordreId, lot: x.lot, pid: x.pid })
       }
       panierEquip[row.equipement_id] = flat
       if (reg) regimeEquip[row.equipement_id] = reg
@@ -419,9 +414,9 @@ function dropSur(eqId, uid) {
   const d = dragInfo.value; dragInfo.value = null
   if (!d || d.eqId !== eqId || d.uid === uid) return
   const arr = panierEquip[eqId]; if (!arr) return
-  const from = arr.findIndex(i => i.uid === d.uid); if (from < 0) return
+  const from = arr.findIndex(i => i.ordreId === d.uid); if (from < 0) return
   const [moved] = arr.splice(from, 1)
-  const to = arr.findIndex(i => i.uid === uid)
+  const to = arr.findIndex(i => i.ordreId === uid)
   if (to < 0) arr.push(moved); else arr.splice(to, 0, moved)
   sauverPanier(eqId)
 }
@@ -475,12 +470,9 @@ const planning = computed(() => {
       const P = paramsEq(eq)
       if (eqCursor[eq.id] === undefined) eqCursor[eq.id] = prochainOuvre(new Date(t0v), P.regime, P.weAll, P.requis)
       if (!eqTasks[eq.id]) eqTasks[eq.id] = []
-      const cptP = {}
       for (const item of pan) {
         const prod = produitsById.value[item.pid]; if (!prod) continue
-        cptP[item.pid] = (cptP[item.pid] || 0) + 1
-        const idx = cptP[item.pid]
-        const key = item.pid + '#' + idx
+        const key = item.ordreId
         const ready = lotReady[key] || new Date(t0v)  // fin de la phase précédente (ou t0 si 1re phase)
         let cursor = eqCursor[eq.id]
         const lastPid = eqLastPid[eq.id], lastGen = eqLastGen[eq.id]
@@ -501,7 +493,7 @@ const planning = computed(() => {
         const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === item.pid)
         const dLot = cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8
         const plLot = placer(debut, dLot, P.regime, P.weAll, P.requis)
-        eqTasks[eq.id].push({ type: 'lot', prod, n: idx, uid: item.uid, segments: plLot.segments, start: plLot.segments[0].start, end: plLot.end })
+        eqTasks[eq.id].push({ type: 'lot', prod, lot: item.lot, uid: item.ordreId, segments: plLot.segments, start: plLot.segments[0].start, end: plLot.end })
         cursor = plLot.end
         eqCursor[eq.id] = cursor; eqLastPid[eq.id] = item.pid
         lotReady[key] = new Date(cursor)  // prêt pour la phase suivante
