@@ -178,7 +178,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { supabase } from '../supabase'
 
 const chargement = ref(true)
@@ -187,7 +187,8 @@ const erreur = ref('')
 // Paramètres (valeurs fixes réglables)
 const today = new Date()
 const iso = (d) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const j = String(d.getDate()).padStart(2, '0'); return y + '-' + m + '-' + j }
-const dateDepart = ref('2026-08-11')  // départ fixe
+const dateDepart = ref((() => { try { return localStorage.getItem('pe_depart') || '2026-08-11' } catch (e) { return '2026-08-11' } })())
+watch(dateDepart, (v) => { try { if (v) localStorage.setItem('pe_depart', v) } catch (e) {} })
 const vdlt = ref(8)        // nettoyage général (h)
 const vdlp = ref(2)        // nettoyage partiel (h)
 const holdingJ = ref(7)    // validité campagne (jours)
