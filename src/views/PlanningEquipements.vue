@@ -146,13 +146,14 @@
           </label>
         </div>
         <div class="pan-requis" v-if="!weekendEquip[panierOuvert.id]">
-          <div class="pan-req-head">Réquisitions week-end (dates travaillées) :</div>
+          <div class="pan-req-head">Réquisitions week-end (date + régime) :</div>
           <div class="pan-req-list">
-            <span v-for="dt in (requisEquip[panierOuvert.id] || [])" :key="dt" class="pan-req-chip">{{ dt }} <button @click="retirerRequis(dt)">✕</button></span>
+            <span v-for="req in (requisEquip[panierOuvert.id] || [])" :key="req.d || req" class="pan-req-chip">{{ req.d || req }} <b>{{ (req.r || '3x8') === '2x8' ? '2×8' : '3×8' }}</b> <button @click="retirerRequis(req.d || req)">✕</button></span>
             <span v-if="!(requisEquip[panierOuvert.id] || []).length" class="pan-none">Aucune.</span>
           </div>
           <div class="pan-req-add">
             <input type="date" v-model="requisDate" class="pan-reqdate" />
+            <select v-model="requisRegime" class="pan-reqreg"><option value="3x8">3×8</option><option value="2x8">2×8</option></select>
             <button class="vue-btn" @click="ajouterRequis">Ajouter</button>
           </div>
         </div>
@@ -346,33 +347,51 @@ const addH = (d, h) => new Date(d.getTime() + h * 3600000)
 
 // --- Gestion des week-ends (vendredi=5, samedi=6) ---
 const isoL = (d) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const j = String(d.getDate()).padStart(2, '0'); return y + '-' + m + '-' + j }
-// Jour ouvré ? (week-end ven/sam sauf si weAll ou date réquisitionnée)
-function jourOuvre(d, weAll, requis) {
+// requis = Map(dateISO -> régime). Régime effectif du jour d (ou null si chômé).
+function regJour(d, regimeEq, weAll, requis) {
   const j = d.getDay()
-  if (j === 5 || j === 6) return weAll || (requis && requis.has(isoL(d)))
-  return true
+  if (j === 5 || j === 6) {
+    if (weAll) return regimeEq
+    return (requis && requis.get(isoL(d))) || null
+  }
+  return regimeEq
 }
-// Prochain instant ouvré (respecte régime 2x8 = 06-22, et jours ouvrés)
-function prochainOuvre(d, regime, weAll, requis) {
+function buildRequisMap(arr, regimeEq) {
+  const m = new Map()
+  for (const x of (arr || [])) {
+    if (x && typeof x === 'object' && x.d) m.set(x.d, x.r || regimeEq)
+    else if (typeof x === 'string') m.set(x, regimeEq)
+  }
+  return m
+}
+// Prochain instant ouvré (régime variable par jour)
+function prochainOuvre(d, regimeEq, weAll, requis) {
   const c = new Date(d); let g = 0
   while (g++ < 3000) {
-    if (!jourOuvre(c, weAll, requis)) { c.setDate(c.getDate() + 1); c.setHours(regime === '2x8' ? 6 : 0, 0, 0, 0); continue }
-    if (regime === '2x8') {
+    const reg = regJour(c, regimeEq, weAll, requis)
+    if (!reg) { c.setDate(c.getDate() + 1); c.setHours(0, 0, 0, 0); continue }
+    if (reg === '2x8') {
       const h = c.getHours() + c.getMinutes() / 60
       if (h < 6) { c.setHours(6, 0, 0, 0); continue }
-      if (h >= 22) { c.setDate(c.getDate() + 1); c.setHours(6, 0, 0, 0); continue }
+      if (h >= 22) { c.setDate(c.getDate() + 1); c.setHours(0, 0, 0, 0); continue }
     }
     return c
   }
   return c
 }
-// Fin de la plage ouvrée courante
-function finOuvre(d, regime, weAll, requis) {
-  if (regime === '2x8') { const f = new Date(d); f.setHours(22, 0, 0, 0); return f }
-  const nc = new Date(d); nc.setHours(0, 0, 0, 0); nc.setDate(nc.getDate() + 1)
-  let g = 0
-  while (g++ < 21 && jourOuvre(nc, weAll, requis)) nc.setDate(nc.getDate() + 1)
-  return nc
+// Fin de la plage ouvrée courante (régime variable par jour)
+function finOuvre(d, regimeEq, weAll, requis) {
+  let c = new Date(d); let g = 0
+  while (g++ < 40) {
+    const reg = regJour(c, regimeEq, weAll, requis)
+    if (!reg) return c
+    if (reg === '2x8') { const f = new Date(c); f.setHours(22, 0, 0, 0); return f }
+    const lend = new Date(c); lend.setDate(lend.getDate() + 1); lend.setHours(0, 0, 0, 0)
+    const regL = regJour(lend, regimeEq, weAll, requis)
+    if (regL === '3x8') { c = lend; continue }
+    return lend
+  }
+  return c
 }
 // Place une tâche de durée dureeH selon régime + jours ouvrés -> segments + fin
 function placer(start, dureeH, regime, weAll, requis) {
@@ -401,11 +420,11 @@ function placerLot(start, dureeH, regime, weAll, requis, noSplit) {
   }
   return placer(sdeb, dureeH, regime, weAll, requis)
 }
-// Instant ouvré ?
-function estOuvre(d, regime, weAll, requis) {
-  const j = d.getDay()
-  if ((j === 5 || j === 6) && !weAll && !(requis && requis.has(isoL(d)))) return false
-  if (regime === '2x8') { const h = d.getHours() + d.getMinutes() / 60; if (h < 6 || h >= 22) return false }
+// Instant ouvré ? (régime variable par jour)
+function estOuvre(d, regimeEq, weAll, requis) {
+  const reg = regJour(d, regimeEq, weAll, requis)
+  if (!reg) return false
+  if (reg === '2x8') { const h = d.getHours() + d.getMinutes() / 60; if (h < 6 || h >= 22) return false }
   return true
 }
 // Début de la plage ouvrée qui se termine à 'd'
@@ -485,9 +504,10 @@ function viderPanier() { if (!panierOuvert.value) return; if (!confirm('Vider le
 function ajouterLot(l) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; if (!panierEquip[id].some(i => i.ordreId === l.id)) panierEquip[id].push({ ordreId: l.id, lot: l.lot, pid: l.pid }); sauverPanier(id) }
 function retirerLot(idx) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; const a = panierEquip[id]; if (a) { a.splice(idx, 1); sauverPanier(id) } }
 const requisDate = ref('')
+const requisRegime = ref('3x8')
 function setRegime(v) { if (!panierOuvert.value) return; regimeEquip[panierOuvert.value.id] = v; sauverPanier(panierOuvert.value.id) }
-function ajouterRequis() { if (!panierOuvert.value || !requisDate.value) return; const id = panierOuvert.value.id; if (!requisEquip[id]) requisEquip[id] = []; if (!requisEquip[id].includes(requisDate.value)) requisEquip[id].push(requisDate.value); requisEquip[id].sort(); requisDate.value = ''; sauverPanier(id) }
-function retirerRequis(dt) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; requisEquip[id] = (requisEquip[id] || []).filter(d => d !== dt); sauverPanier(id) }
+function ajouterRequis() { if (!panierOuvert.value || !requisDate.value) return; const id = panierOuvert.value.id; if (!requisEquip[id]) requisEquip[id] = []; const d = requisDate.value; if (!requisEquip[id].some(x => (typeof x === 'object' ? x.d : x) === d)) requisEquip[id].push({ d, r: requisRegime.value }); requisEquip[id].sort((a, b) => ((a && a.d) || a).localeCompare((b && b.d) || b)); requisDate.value = ''; sauverPanier(id) }
+function retirerRequis(dt) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; requisEquip[id] = (requisEquip[id] || []).filter(x => (typeof x === 'object' ? x.d : x) !== dt); sauverPanier(id) }
 function produitNom(pid) { const p = produitsById.value[pid]; return p ? (p.code_pf + ' — ' + p.designation) : String(pid) }
 const phaseOuvert = computed(() => panierOuvert.value ? phaseOrdre(panierOuvert.value.type) : null)
 const lotsAjoutables = computed(() => {
@@ -505,7 +525,7 @@ const planning = computed(() => {
   const paramsEq = (eq) => ({
     regime: regimeEquip[eq.id] || '3x8',
     weAll: !!weekendEquip[eq.id],
-    requis: new Set(requisEquip[eq.id] || []),
+    requis: buildRequisMap(requisEquip[eq.id], regimeEquip[eq.id] || '3x8'),
     vdlt: (eq.vdlt != null && eq.vdlt !== '') ? Number(eq.vdlt) : vdlt.value,
     vdlp: (eq.vdlp != null && eq.vdlp !== '') ? Number(eq.vdlp) : vdlp.value,
     holdingH: (eq.dht != null && eq.dht !== '') ? Number(eq.dht) * 24 : holdingH.value
@@ -765,6 +785,7 @@ const synthEquip = computed(() => planning.value.map(r => ({
 .pan-req-chip button { background: none; border: none; color: #b45309; cursor: pointer; font-size: 11px; padding: 0; }
 .pan-req-add { display: flex; gap: 6px; align-items: center; }
 .pan-reqdate { font-size: 12px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
+.pan-reqreg { font-size: 12px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
 .g-drag { cursor: grab; }
 .g-drag:active { cursor: grabbing; }
 .g-dragging { opacity: .5; outline: 2px dashed #5B9BD5; outline-offset: -1px; }
