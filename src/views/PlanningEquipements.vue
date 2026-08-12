@@ -167,7 +167,7 @@
         <div class="pan-add">
           <input v-model="rechProd" placeholder="Rechercher un lot (n°, produit)…" class="pan-search" />
           <div class="pan-prods">
-            <button v-for="l in lotsAjoutables" :key="l.id" class="pan-chip" :class="{ 'pan-chip-plan': l.plan }" @click="ajouterLot(l)" :title="(l.plan ? 'Planifié — ' : 'En attente — ') + l.code + ' — ' + l.desig">{{ l.lot }}</button>
+            <button v-for="l in lotsAjoutables" :key="l.id" class="pan-chip" :class="{ 'pan-chip-plan': l.plan, 'pan-chip-cours': l.cours }" @click="ajouterLot(l)" :title="(l.plan ? 'Planifié — ' : (l.cours ? 'En cours — ' : 'En attente — ')) + l.code + ' — ' + l.desig">{{ l.lot }}</button>
             <span v-if="!lotsAjoutables.length" class="pan-none">Aucun lot en attente pour cette phase.</span>
           </div>
         </div>
@@ -290,12 +290,12 @@ const lotsAttentePhase = computed(() => {
       const planifie = !o.date_lancement
       for (const po of phases) { if (!q[po]) q[po] = []; q[po].push({ ...base, plan: planifie }) }
     } else {
-      // OF en cours -> à sa phase courante (1re non terminée, non démarrée)
+      // OF en fabrication -> à sa phase courante (1re non terminée), en attente OU en cours
       let cur = null
       for (const po of phases) { if (pl[po] !== 'Terminé') { cur = po; break } }
-      if (cur == null || pl[cur] === 'En cours') continue
+      if (cur == null) continue
       if (!q[cur]) q[cur] = []
-      q[cur].push(base)
+      q[cur].push({ ...base, cours: pl[cur] === 'En cours' })
     }
   }
   return q
@@ -699,6 +699,8 @@ const synthEquip = computed(() => planning.value.map(r => ({
 .pan-chip:hover { background: #dbeafe; }
 .pan-chip-plan { background: #fef3c7; border-color: #fde68a; color: #92400e; }
 .pan-chip-plan:hover { background: #fde68a; }
+.pan-chip-cours { background: #dcfce7; border-color: #86efac; color: #166534; }
+.pan-chip-cours:hover { background: #bbf7d0; }
 .pan-none { font-size: 11px; color: #94a3b8; }
 .pan-add-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .pan-add-row .pan-search { margin-bottom: 0; flex: 1; }
