@@ -588,9 +588,12 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
 .charts-row > .card { margin: 0; }
 @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
-.verif-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; align-items: start; }
-.verif-3col > .v3-col { display: flex; flex-direction: column; gap: 14px; order: 1; }
-.verif-3col > .v3-mid { order: 2; margin: 0; }
+.verif-3col { display: grid; grid-template-columns: 0.8fr 1.5fr 0.9fr; gap: 14px; align-items: start; }
+.verif-3col > .v3-col { display: flex; flex-direction: column; gap: 14px; align-self: start; }
+.verif-3col > .v3-col:first-child { order: 1; }
+.verif-3col > .v3-mid { order: 2; margin: 0; align-self: start; }
+.verif-3col > .v3-right { order: 3; align-self: start; }
+@media (max-width: 1100px) { .verif-3col { grid-template-columns: 1fr; } }
 .verif-3col > .v3-right { order: 3; margin: 0; }
 @media (max-width: 1100px) { .verif-3col { grid-template-columns: 1fr; } .verif-3col > * { order: 0 !important; } }
 /* Compact */
