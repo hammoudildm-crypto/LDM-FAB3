@@ -27,6 +27,14 @@
       <div class="tb-kpi"><span class="k-lbl">Chiffre d'affaires</span><span class="k-val">{{ fmtCA(totCA) }}</span></div>
     </div>
 
+    <div class="tb-mois-lbl">Mois en cours — {{ nomMois }} {{ annee }}</div>
+    <div class="tb-kpis">
+      <div class="tb-kpi tb-kpi-m"><span class="k-lbl">Plan (boîtes)</span><span class="k-val">{{ totPlanMois ? fmt(totPlanMois) : '—' }}</span></div>
+      <div class="tb-kpi tb-kpi-m"><span class="k-lbl">{{ onglet === 'fab' ? 'Fabriqué' : 'Conditionné' }}</span><span class="k-val">{{ fmt(totBoitesMois) }}</span></div>
+      <div class="tb-kpi tb-kpi-m"><span class="k-lbl">Taux</span><span class="k-val" :class="tauxGlobalMois != null && tauxGlobalMois < 100 ? 'v-bas' : ''">{{ tauxGlobalMois != null ? tauxGlobalMois + '%' : '—' }}</span></div>
+      <div class="tb-kpi tb-kpi-m"><span class="k-lbl">Chiffre d'affaires</span><span class="k-val">{{ fmtCA(totCAMois) }}</span></div>
+    </div>
+
     <!-- Regroupement -->
     <div class="tb-grp">
       <span class="grp-lbl">Regrouper par :</span>
@@ -139,7 +147,7 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('conditionnement')
         .select('quantite_conditionnee, date_conditionnement, equipements(nom, type), ordres_fabrication(numero_lot, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
       fetchAllPaged(() => supabase.from('plan_production')
-        .select('annee, quantite_planifiee, equipements(nom, type), produits(gamme, code_pf, designation, donneurs_ordre(nom))')),
+        .select('annee, mois, quantite_planifiee, equipements(nom, type), produits(gamme, code_pf, designation, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut'))
     ])
     fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs
@@ -238,6 +246,17 @@ const totCA = computed(() => donnees.value.reduce((s, g) => s + g.ca, 0))
 const maxBoites = computed(() => Math.max(1, ...donnees.value.map(g => g.boites)))
 const totPlan = computed(() => donnees.value.reduce((s, g) => s + g.plan, 0))
 const tauxGlobal = computed(() => totPlan.value > 0 ? Math.round(totBoites.value / totPlan.value * 100) : null)
+// --- Mois en cours ---
+const moisCourant = new Date().getMonth() + 1
+const anMonth = (d) => d ? new Date(d).getMonth() + 1 : null
+const nomMois = computed(() => new Date(annee.value, moisCourant - 1, 1).toLocaleDateString('fr-FR', { month: 'long' }))
+const fabDataMois = computed(() => fabRaw.value.filter(o => o.date_fin_fabrication && anYear(o.date_fin_fabrication) === annee.value && anMonth(o.date_fin_fabrication) === moisCourant).map(o => ({ boites: o.boites_fabriquees, produit: o.produits })))
+const condDataMois = computed(() => condRaw.value.filter(c => c.date_conditionnement && anYear(c.date_conditionnement) === annee.value && anMonth(c.date_conditionnement) === moisCourant).map(c => { const of = c.ordres_fabrication; const pp = of ? of.produits : null; const upb = pp ? num(pp.unites_par_boite) : 0; return { boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: pp } }))
+const srcMois = computed(() => onglet.value === 'fab' ? fabDataMois.value : condDataMois.value)
+const totBoitesMois = computed(() => srcMois.value.reduce((s, r) => s + num(r.boites), 0))
+const totCAMois = computed(() => srcMois.value.reduce((s, r) => s + num(r.boites) * (r.produit ? num(r.produit.pcsu) : 0), 0))
+const totPlanMois = computed(() => { let tot = 0; for (const r of planRaw.value) { if (Number(r.annee) === annee.value && Number(r.mois) === moisCourant) tot += num(r.quantite_planifiee) } return tot })
+const tauxGlobalMois = computed(() => totPlanMois.value > 0 ? Math.round(totBoitesMois.value / totPlanMois.value * 100) : null)
 </script>
 
 <style scoped>
@@ -258,6 +277,8 @@ const tauxGlobal = computed(() => totPlan.value > 0 ? Math.round(totBoites.value
 .tb-kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 15px 18px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 4px 14px rgba(30,41,59,.05); }
 .k-lbl { font-size: 12px; font-weight: 700; color: #64748b; }
 .k-val { font-size: 22px; font-weight: 800; color: #0f172a; }
+.tb-mois-lbl { font-size: 12px; font-weight: 800; color: #0f766e; margin: 4px 0 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.tb-kpi-m { border-left: 3px solid #14b8a6; }
 
 .tb-grp { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 .grp-lbl { font-size: 12px; font-weight: 700; color: #64748b; margin-right: 4px; }
