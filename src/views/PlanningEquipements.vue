@@ -201,6 +201,7 @@ const filtreAvecPlan = ref(false)
 const weekendEquip = reactive({}) // par équipement : true = tous les week-ends inclus
 const regimeEquip = reactive({})  // par équipement : '2x8' ou '3x8'
 const requisEquip = reactive({})  // par équipement : dates week-end travaillées
+const maintEquip = reactive({})   // par équipement : arrêts [{type,debut,dureeH}]
 
 const holdingH = computed(() => Number(holdingJ.value) * 24)
 
@@ -360,6 +361,19 @@ const addH = (d, h) => new Date(d.getTime() + h * 3600000)
 // --- Gestion des week-ends (vendredi=5, samedi=6) ---
 const isoL = (d) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const j = String(d.getDate()).padStart(2, '0'); return y + '-' + m + '-' + j }
 // requis = Map(dateISO -> régime). Régime effectif du jour d (ou null si chômé).
+let maintCourant = []
+function maintA(d) { const t = d.getTime(); for (const m of maintCourant) if (t >= m.debut && t < m.fin) return m; return null }
+function buildMaintList(arr) {
+  const out = []
+  for (const m of (arr || [])) {
+    if (!m || !m.debut) continue
+    const deb = new Date(m.debut).getTime()
+    if (isNaN(deb)) continue
+    const dur = Math.max(0.25, Number(m.dureeH) || 0)
+    out.push({ debut: deb, fin: deb + dur * 3600000, type: m.type || 'prev' })
+  }
+  return out
+}
 function regJour(d, regimeEq, weAll, requis) {
   const j = d.getDay()
   if (j === 5 || j === 6) {
@@ -379,7 +393,8 @@ function buildRequisMap(arr, regimeEq) {
 // Prochain instant ouvré (régime variable par jour)
 function prochainOuvre(d, regimeEq, weAll, requis) {
   const c = new Date(d); let g = 0
-  while (g++ < 3000) {
+  while (g++ < 5000) {
+    const m = maintA(c); if (m) { c.setTime(m.fin); continue }
     const reg = regJour(c, regimeEq, weAll, requis)
     if (!reg) { c.setDate(c.getDate() + 1); c.setHours(0, 0, 0, 0); continue }
     if (reg === '2x8') {
@@ -393,17 +408,20 @@ function prochainOuvre(d, regimeEq, weAll, requis) {
 }
 // Fin de la plage ouvrée courante (régime variable par jour)
 function finOuvre(d, regimeEq, weAll, requis) {
-  let c = new Date(d); let g = 0
+  let c = new Date(d); let g = 0; let fin = null
   while (g++ < 40) {
     const reg = regJour(c, regimeEq, weAll, requis)
-    if (!reg) return c
-    if (reg === '2x8') { const f = new Date(c); f.setHours(22, 0, 0, 0); return f }
+    if (!reg) { fin = c; break }
+    if (reg === '2x8') { const f = new Date(c); f.setHours(22, 0, 0, 0); fin = f; break }
     const lend = new Date(c); lend.setDate(lend.getDate() + 1); lend.setHours(0, 0, 0, 0)
     const regL = regJour(lend, regimeEq, weAll, requis)
     if (regL === '3x8') { c = lend; continue }
-    return lend
+    fin = lend; break
   }
-  return c
+  if (!fin) fin = c
+  const t = d.getTime()
+  for (const m of maintCourant) { if (m.debut > t && m.debut < fin.getTime()) fin = new Date(m.debut) }
+  return fin
 }
 // Place une tâche de durée dureeH selon régime + jours ouvrés -> segments + fin
 function placer(start, dureeH, regime, weAll, requis) {
@@ -434,6 +452,7 @@ function placerLot(start, dureeH, regime, weAll, requis, noSplit) {
 }
 // Instant ouvré ? (régime variable par jour)
 function estOuvre(d, regimeEq, weAll, requis) {
+  if (maintA(d)) return false
   const reg = regJour(d, regimeEq, weAll, requis)
   if (!reg) return false
   if (reg === '2x8') { const h = d.getHours() + d.getMinutes() / 60; if (h < 6 || h >= 22) return false }
@@ -551,6 +570,7 @@ const planning = computed(() => {
       const pan = panierEquip[eq.id]
       if (!pan || !pan.length) continue
       const P = paramsEq(eq)
+      maintCourant = buildMaintList(maintEquip[eq.id])
       if (eqCursor[eq.id] === undefined) eqCursor[eq.id] = prochainOuvre(new Date(t0v), P.regime, P.weAll, P.requis)
       if (!eqTasks[eq.id]) eqTasks[eq.id] = []
       for (const item of pan) {
