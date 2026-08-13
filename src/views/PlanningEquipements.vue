@@ -610,9 +610,7 @@ const lotsAjoutables = computed(() => {
 })
 
 const planning = computed(() => {
-  const dep06 = new Date(dateDepart.value + 'T06:00:00')
-  const nowT = new Date()
-  const t0v = nowT > dep06 ? nowT : dep06  // démarrage = maintenant (si départ ≤ aujourd'hui)
+  const t0v = new Date(dateDepart.value + 'T06:00:00')
   const q = filtreTexte.value.trim().toLowerCase()
   const equipsFab = equipements.value.filter(e => estFab(e.type))
   const paramsEq = (eq) => ({
