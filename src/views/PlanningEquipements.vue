@@ -102,6 +102,7 @@
           <div class="g-eqcol" :title="'Cliquer pour gérer le panier — ' + row.eq.nom" @click="ouvrirPanier(row.eq)">
             <div class="g-eqcode">{{ row.eq.code }} <span class="g-reg" :class="{ r2: (regimeEquip[row.eq.id] || '3x8') === '2x8' }">{{ (regimeEquip[row.eq.id] || '3x8') === '2x8' ? '2×8' : '3×8' }}</span> <span v-if="(panierEquip[row.eq.id] || []).length" class="g-pan">🧺 {{ (panierEquip[row.eq.id] || []).length }}</span></div>
             <div class="g-eqnom">{{ row.eq.nom }}</div>
+            <div v-if="enCoursEquip[row.eq.id]" class="g-eqcours" :title="'En cours : ' + enCoursEquip[row.eq.id].code + ' — ' + enCoursEquip[row.eq.id].desig + ' · lot ' + enCoursEquip[row.eq.id].lot + ' · ' + enCoursEquip[row.eq.id].phase">▶ {{ enCoursEquip[row.eq.id].code }} · lot {{ enCoursEquip[row.eq.id].lot }} · {{ enCoursEquip[row.eq.id].phase }}</div>
             <div class="g-eqfin">fin : {{ fmtJH(row.fin) }}</div>
             <label class="g-eqwe" @click.stop><input type="checkbox" v-model="weekendEquip[row.eq.id]" @change="sauverPanier(row.eq.id)" /> week-ends</label>
           </div>
@@ -258,7 +259,7 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, gamme').eq('actif', true)),
       fetchAllPaged(() => supabase.from('planning_panier').select('equipement_id, produits')),
       fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, date_lancement, date_fin_fabrication, produits(id, code_pf, designation, gamme, taille_lot, unites_par_boite, poids_unitaire_mg)')),
-      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
+      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut, equipement_id').eq('actif', true))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
@@ -289,6 +290,18 @@ const annees = computed(() => {
 
 // Index produits + PDP quantité par produit pour l'année
 const produitsById = computed(() => { const m = {}; for (const p of produits.value) m[p.id] = p; return m })
+const ofsById = computed(() => { const m = {}; for (const o of ofs.value) m[o.id] = o; return m })
+// Lot en cours par équipement (suivi_phases 'En cours' + equipement_id)
+const enCoursEquip = computed(() => {
+  const m = {}
+  for (const sp of suivi.value) {
+    if (sp.statut !== 'En cours' || sp.equipement_id == null) continue
+    const o = ofsById.value[sp.ordre_id]; if (!o) continue
+    const prod = o.produits || {}
+    m[sp.equipement_id] = { lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', phase: sp.phase || '' }
+  }
+  return m
+})
 // Statut de chaque phase (1..7) par OF, depuis suivi_phases
 const phasesLot = computed(() => {
   const m = {}
@@ -818,6 +831,7 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .g-eqcode { font-size: 11px; font-weight: 800; color: #0f172a; }
 .g-eqnom { font-size: 9.5px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-eqfin { font-size: 8.5px; color: #94a3b8; }
+.g-eqcours { font-size: 8px; color: #166534; font-weight: 700; background: #dcfce7; border-radius: 4px; padding: 1px 4px; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-eqwe { display: flex; align-items: center; gap: 3px; font-size: 8px; color: #64748b; margin-top: 1px; cursor: pointer; }
 .g-track { position: relative; height: 44px; }
 .g-dband { position: absolute; top: 0; bottom: 0; border-left: 1px solid #f1f5f9; box-sizing: border-box; z-index: 0; }
