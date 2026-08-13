@@ -250,6 +250,7 @@ async function fetchAllPaged(qb) {
 
 onMounted(async () => {
   try {
+    chargerLocal()
     const [rp, rc, re, rpr, rpan, rof, rsu] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produit_id')),
       fetchAllPaged(() => supabase.from('cadences_produit').select('cadence_nominale, unite_cadence, mode, equipement_id, produit_id')),
@@ -550,7 +551,32 @@ async function sauverPanier(id) {
     const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: { lots: panierEquip[id] || [], regime: regimeEquip[id] || '3x8', requis: requisEquip[id] || [], weekend: !!weekendEquip[id], maint: maintEquip[id] || [] }, updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
     panierErreur.value = r.error ? ('Panier non sauvegardé : ' + r.error.message + ' — crée la table planning_panier (voir SQL).') : ''
   } catch (e) { panierErreur.value = 'Panier non sauvegardé : ' + String(e) }
+  sauverLocal()
 }
+function sauverLocal() {
+  try {
+    localStorage.setItem('pe_state', JSON.stringify({
+      panier: panierEquip, regime: regimeEquip, requis: requisEquip, weekend: weekendEquip, maint: maintEquip,
+      ft: filtreTexte.value, fp: filtrePhase.value, fap: filtreAvecPlan.value, px: pxH.value
+    }))
+  } catch (e) {}
+}
+function chargerLocal() {
+  try {
+    const raw = localStorage.getItem('pe_state'); if (!raw) return
+    const st = JSON.parse(raw)
+    if (st.panier) Object.assign(panierEquip, st.panier)
+    if (st.regime) Object.assign(regimeEquip, st.regime)
+    if (st.requis) Object.assign(requisEquip, st.requis)
+    if (st.weekend) Object.assign(weekendEquip, st.weekend)
+    if (st.maint) Object.assign(maintEquip, st.maint)
+    if (st.ft != null) filtreTexte.value = st.ft
+    if (st.fp != null) filtrePhase.value = st.fp
+    if (typeof st.fap === 'boolean') filtreAvecPlan.value = st.fap
+    if (st.px) pxH.value = st.px
+  } catch (e) {}
+}
+watch([filtreTexte, filtrePhase, filtreAvecPlan, pxH], sauverLocal)
 let uidCounter = 0
 function uidGen() { return 'l' + Date.now().toString(36) + (uidCounter++) }
 function ouvrirPanier(eq) { panierOuvert.value = eq; rechProd.value = '' }
@@ -584,7 +610,9 @@ const lotsAjoutables = computed(() => {
 })
 
 const planning = computed(() => {
-  const t0v = new Date(dateDepart.value + 'T06:00:00')
+  const dep06 = new Date(dateDepart.value + 'T06:00:00')
+  const nowT = new Date()
+  const t0v = nowT > dep06 ? nowT : dep06  // démarrage = maintenant (si départ ≤ aujourd'hui)
   const q = filtreTexte.value.trim().toLowerCase()
   const equipsFab = equipements.value.filter(e => estFab(e.type))
   const paramsEq = (eq) => ({
