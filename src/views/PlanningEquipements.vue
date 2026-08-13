@@ -25,11 +25,12 @@
         <div class="rc"><span class="rc-v">{{ totalMP }}</span><span class="rc-l">Arrêt MP (h)</span></div>
         <div class="rc"><span class="rc-v">{{ totalMC }}</span><span class="rc-l">Arrêt MC (h)</span></div>
         <div class="rc"><span class="rc-v">{{ totalAT }}</span><span class="rc-l">Arrêt AT (h)</span></div>
+        <div class="rc"><span class="rc-v">{{ totalAU }}</span><span class="rc-l">Arrêt autre (h)</span></div>
         <div class="rc"><span class="rc-v">{{ fmtJH(finGlobale) }}</span><span class="rc-l">Fin la plus tardive</span></div>
       </div>
       <div class="synth-eq" v-if="synthEquip.length">
         <table class="synth-tbl">
-          <thead><tr><th>Équipement</th><th class="right">Lots</th><th class="right">NG</th><th class="right">NP</th><th class="right">MP</th><th class="right">MC</th><th class="right">AT</th><th>Régime</th><th class="right">Fin</th></tr></thead>
+          <thead><tr><th>Équipement</th><th class="right">Lots</th><th class="right">NG</th><th class="right">NP</th><th class="right">MP</th><th class="right">MC</th><th class="right">AT</th><th class="right">Autre</th><th>Régime</th><th class="right">Fin</th></tr></thead>
           <tbody>
             <tr v-for="e in synthEquip" :key="e.id">
               <td>{{ e.code }} <span class="synth-nom">{{ e.nom }}</span></td>
@@ -39,6 +40,7 @@
               <td class="right">{{ e.mp || '—' }}</td>
               <td class="right">{{ e.mc || '—' }}</td>
               <td class="right">{{ e.at || '—' }}</td>
+              <td class="right">{{ e.au || '—' }}</td>
               <td>{{ e.regime === '2x8' ? '2×8' : '3×8' }}</td>
               <td class="right nowrap">{{ fmtJH(e.fin) }}</td>
             </tr>
@@ -111,7 +113,7 @@
               <div v-for="d in joursWeekend" :key="'w'+d.i" class="g-weekend" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
             </template>
             <div v-for="d in jourDepart" :key="'dep'+d.i" class="g-depart" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
-            <div v-for="(m, mi) in (maintEquip[row.eq.id] || [])" :key="'mnt'+mi" class="g-maint" :class="{ 'g-maint-curr': m.type === 'curr', 'g-maint-tech': m.type === 'tech' }" :style="maintStyle(m)" :title="maintLibelle(m.type) + ' — ' + m.dureeH + ' h'"><span class="g-maint-lbl">{{ maintAbrev(m.type) }}</span></div>
+            <div v-for="(m, mi) in (maintEquip[row.eq.id] || [])" :key="'mnt'+mi" class="g-maint" :class="{ 'g-maint-curr': m.type === 'curr', 'g-maint-tech': m.type === 'tech', 'g-maint-autre': m.type === 'autre' }" :style="maintStyle(m)" :title="maintLibelle(m) + ' — ' + m.dureeH + ' h'"><span class="g-maint-lbl">{{ maintAbrev(m) }}</span></div>
             <div v-if="posMaintenant != null" class="g-now" :style="{ left: posMaintenant + 'px' }"></div>
             <!-- barres (par segment) -->
             <template v-for="(t, i) in row.tasks">
@@ -167,11 +169,12 @@
         <div class="pan-requis">
           <div class="pan-req-head">Arrêts maintenance (équipement indisponible) :</div>
           <div class="pan-req-list">
-            <span v-for="(m, mi) in (maintEquip[panierOuvert.id] || [])" :key="mi" class="pan-req-chip" :class="{ 'pan-maint-curr': m.type === 'curr', 'pan-maint-tech': m.type === 'tech' }">{{ maintNom(m.type) }} · {{ fmtMaint(m.debut) }} · {{ m.dureeH }}h <button @click="retirerMaint(mi)">✕</button></span>
+            <span v-for="(m, mi) in (maintEquip[panierOuvert.id] || [])" :key="mi" class="pan-req-chip" :class="{ 'pan-maint-curr': m.type === 'curr', 'pan-maint-tech': m.type === 'tech', 'pan-maint-autre': m.type === 'autre' }">{{ maintNom(m) }} · {{ fmtMaint(m.debut) }} · {{ m.dureeH }}h <button @click="retirerMaint(mi)">✕</button></span>
             <span v-if="!(maintEquip[panierOuvert.id] || []).length" class="pan-none">Aucun.</span>
           </div>
           <div class="pan-req-add">
-            <select v-model="maintType" class="pan-reqreg"><option value="prev">Préventif</option><option value="curr">Curatif</option><option value="tech">Technique</option></select>
+            <select v-model="maintType" class="pan-reqreg"><option value="prev">Préventif</option><option value="curr">Curatif</option><option value="tech">Technique</option><option value="autre">Autre…</option></select>
+            <input v-if="maintType === 'autre'" v-model="maintLabel" placeholder="Nom de l'arrêt" class="pan-reqdate" />
             <input type="datetime-local" v-model="maintDebut" class="pan-reqdate" />
             <input type="number" min="0.25" step="0.25" v-model.number="maintDuree" class="pan-nb" title="Durée (h)" />
             <button class="vue-btn" @click="ajouterMaint">Ajouter</button>
@@ -562,12 +565,13 @@ function retirerRequis(dt) { if (!panierOuvert.value) return; const id = panierO
 const maintType = ref('prev')
 const maintDebut = ref('')
 const maintDuree = ref(8)
-function ajouterMaint() { if (!panierOuvert.value || !maintDebut.value) return; const id = panierOuvert.value.id; if (!maintEquip[id]) maintEquip[id] = []; maintEquip[id].push({ type: maintType.value, debut: maintDebut.value, dureeH: Math.max(0.25, Number(maintDuree.value) || 8) }); maintEquip[id].sort((a, b) => String(a.debut).localeCompare(String(b.debut))); maintDebut.value = ''; sauverPanier(id) }
+const maintLabel = ref('')
+function ajouterMaint() { if (!panierOuvert.value || !maintDebut.value) return; const id = panierOuvert.value.id; if (!maintEquip[id]) maintEquip[id] = []; const it = { type: maintType.value, debut: maintDebut.value, dureeH: Math.max(0.25, Number(maintDuree.value) || 8) }; if (maintType.value === 'autre') it.label = (maintLabel.value || 'Autre').trim(); maintEquip[id].push(it); maintEquip[id].sort((a, b) => String(a.debut).localeCompare(String(b.debut))); maintDebut.value = ''; maintLabel.value = ''; sauverPanier(id) }
 function retirerMaint(idx) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; const a = maintEquip[id]; if (a) { a.splice(idx, 1); sauverPanier(id) } }
 function fmtMaint(dt) { const d = new Date(dt); return isNaN(d) ? dt : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) }
-function maintAbrev(t) { return t === 'curr' ? 'MC' : t === 'tech' ? 'AT' : 'MP' }
-function maintNom(t) { return t === 'curr' ? 'Curatif' : t === 'tech' ? 'Technique' : 'Préventif' }
-function maintLibelle(t) { return t === 'curr' ? 'Maintenance curative' : t === 'tech' ? 'Arrêt technique / essai / étalonnage' : 'Maintenance préventive' }
+function maintAbrev(m) { const t = m.type; return t === 'curr' ? 'MC' : t === 'tech' ? 'AT' : t === 'autre' ? (m.label || 'Autre') : 'MP' }
+function maintNom(m) { const t = m.type; return t === 'curr' ? 'Curatif' : t === 'tech' ? 'Technique' : t === 'autre' ? (m.label || 'Autre') : 'Préventif' }
+function maintLibelle(m) { const t = m.type; return t === 'curr' ? 'Maintenance curative' : t === 'tech' ? 'Arrêt technique / essai / étalonnage' : t === 'autre' ? (m.label || 'Autre arrêt') : 'Maintenance préventive' }
 function maintStyle(m) { const deb = new Date(m.debut).getTime(); const left = ((deb - t0.value.getTime()) / 3600000) * pxH.value; const w = Math.max(2, (Number(m.dureeH) || 0) * pxH.value); return { left: left + 'px', width: w + 'px' } }
 function produitNom(pid) { const p = produitsById.value[pid]; return p ? (p.code_pf + ' — ' + p.designation) : String(pid) }
 const phaseOuvert = computed(() => panierOuvert.value ? phaseOrdre(panierOuvert.value.type) : null)
@@ -729,20 +733,21 @@ const totalNP = computed(() => planning.value.reduce((s, r) => s + r.tasks.filte
 const hMaint = (list, type) => (list || []).filter(m => (m.type || 'prev') === type).reduce((a, m) => a + (Number(m.dureeH) || 0), 0)
 const synthEquip = computed(() => planning.value.map(r => {
   const mList = maintEquip[r.eq.id] || []
-  const mp = hMaint(mList, 'prev'), mc = hMaint(mList, 'curr'), at = hMaint(mList, 'tech')
+  const mp = hMaint(mList, 'prev'), mc = hMaint(mList, 'curr'), at = hMaint(mList, 'tech'), au = hMaint(mList, 'autre')
   return {
     id: r.eq.id, code: r.eq.code, nom: r.eq.nom,
     regime: regimeEquip[r.eq.id] || '3x8',
     lots: r.tasks.filter(t => t.type === 'lot').length,
     ng: r.tasks.filter(t => t.type === 'gen' || t.type === 'genH').length,
     np: r.tasks.filter(t => t.type === 'part').length,
-    mp, mc, at, maintH: mp + mc + at,
+    mp, mc, at, au, maintH: mp + mc + at + au,
     fin: r.fin
   }
 }).filter(x => x.lots > 0 || x.maintH > 0))
 const totalMP = computed(() => synthEquip.value.reduce((s, e) => s + e.mp, 0))
 const totalMC = computed(() => synthEquip.value.reduce((s, e) => s + e.mc, 0))
 const totalAT = computed(() => synthEquip.value.reduce((s, e) => s + e.at, 0))
+const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 </script>
 
 <style scoped>
@@ -801,6 +806,9 @@ const totalAT = computed(() => synthEquip.value.reduce((s, e) => s + e.at, 0))
 .g-maint-tech { background: repeating-linear-gradient(45deg, #d8b4fe, #d8b4fe 5px, #e9d5ff 5px, #e9d5ff 10px); border-color: #a855f7; }
 .g-maint-tech .g-maint-lbl { color: #6b21a8; }
 .pan-maint-tech { background: #f3e8ff; border-color: #e9d5ff; color: #6b21a8; }
+.g-maint-autre { background: repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 5px, #e2e8f0 5px, #e2e8f0 10px); border-color: #64748b; }
+.g-maint-autre .g-maint-lbl { color: #334155; }
+.pan-maint-autre { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
 .pan-maint-curr { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
 .g-now { position: absolute; top: 0; bottom: 0; width: 2px; background: #ef4444; z-index: 3; }
 .g-now-head { position: absolute; top: 0; bottom: 0; width: 2px; background: #ef4444; z-index: 4; }
