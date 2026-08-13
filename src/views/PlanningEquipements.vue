@@ -105,6 +105,7 @@
               <div v-for="d in joursWeekend" :key="'w'+d.i" class="g-weekend" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
             </template>
             <div v-for="d in jourDepart" :key="'dep'+d.i" class="g-depart" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
+            <div v-for="(m, mi) in (maintEquip[row.eq.id] || [])" :key="'mnt'+mi" class="g-maint" :class="{ 'g-maint-curr': m.type === 'curr' }" :style="maintStyle(m)" :title="(m.type === 'curr' ? 'Maintenance curative' : 'Maintenance préventive') + ' — ' + m.dureeH + ' h'"></div>
             <div v-if="posMaintenant != null" class="g-now" :style="{ left: posMaintenant + 'px' }"></div>
             <!-- barres (par segment) -->
             <template v-for="(t, i) in row.tasks">
@@ -155,6 +156,19 @@
             <input type="date" v-model="requisDate" class="pan-reqdate" />
             <select v-model="requisRegime" class="pan-reqreg"><option value="3x8">3×8</option><option value="2x8">2×8</option></select>
             <button class="vue-btn" @click="ajouterRequis">Ajouter</button>
+          </div>
+        </div>
+        <div class="pan-requis">
+          <div class="pan-req-head">Arrêts maintenance (équipement indisponible) :</div>
+          <div class="pan-req-list">
+            <span v-for="(m, mi) in (maintEquip[panierOuvert.id] || [])" :key="mi" class="pan-req-chip" :class="{ 'pan-maint-curr': m.type === 'curr' }">{{ m.type === 'curr' ? 'Curatif' : 'Préventif' }} · {{ fmtMaint(m.debut) }} · {{ m.dureeH }}h <button @click="retirerMaint(mi)">✕</button></span>
+            <span v-if="!(maintEquip[panierOuvert.id] || []).length" class="pan-none">Aucun.</span>
+          </div>
+          <div class="pan-req-add">
+            <select v-model="maintType" class="pan-reqreg"><option value="prev">Préventif</option><option value="curr">Curatif</option></select>
+            <input type="datetime-local" v-model="maintDebut" class="pan-reqdate" />
+            <input type="number" min="0.25" step="0.25" v-model.number="maintDuree" class="pan-nb" title="Durée (h)" />
+            <button class="vue-btn" @click="ajouterMaint">Ajouter</button>
           </div>
         </div>
         <div class="pan-list">
@@ -244,7 +258,7 @@ onMounted(async () => {
       let lotsArr = [], reg = null, req = null
       const pr = row.produits
       if (Array.isArray(pr)) lotsArr = pr
-      else if (pr && typeof pr === 'object') { lotsArr = Array.isArray(pr.lots) ? pr.lots : []; reg = pr.regime; req = pr.requis; if (typeof pr.weekend === 'boolean') weekendEquip[row.equipement_id] = pr.weekend }
+      else if (pr && typeof pr === 'object') { lotsArr = Array.isArray(pr.lots) ? pr.lots : []; reg = pr.regime; req = pr.requis; if (typeof pr.weekend === 'boolean') weekendEquip[row.equipement_id] = pr.weekend; if (Array.isArray(pr.maint)) maintEquip[row.equipement_id] = pr.maint }
       const flat = []
       for (const x of lotsArr) {
         if (x && typeof x === 'object' && x.ordreId) flat.push({ ordreId: x.ordreId, lot: x.lot, pid: x.pid })
@@ -524,7 +538,7 @@ function dropSur(eqId, uid) {
 const panierErreur = ref('')
 async function sauverPanier(id) {
   try {
-    const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: { lots: panierEquip[id] || [], regime: regimeEquip[id] || '3x8', requis: requisEquip[id] || [], weekend: !!weekendEquip[id] }, updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
+    const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: { lots: panierEquip[id] || [], regime: regimeEquip[id] || '3x8', requis: requisEquip[id] || [], weekend: !!weekendEquip[id], maint: maintEquip[id] || [] }, updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
     panierErreur.value = r.error ? ('Panier non sauvegardé : ' + r.error.message + ' — crée la table planning_panier (voir SQL).') : ''
   } catch (e) { panierErreur.value = 'Panier non sauvegardé : ' + String(e) }
 }
@@ -539,6 +553,13 @@ const requisRegime = ref('3x8')
 function setRegime(v) { if (!panierOuvert.value) return; regimeEquip[panierOuvert.value.id] = v; sauverPanier(panierOuvert.value.id) }
 function ajouterRequis() { if (!panierOuvert.value || !requisDate.value) return; const id = panierOuvert.value.id; if (!requisEquip[id]) requisEquip[id] = []; const d = requisDate.value; if (!requisEquip[id].some(x => (typeof x === 'object' ? x.d : x) === d)) requisEquip[id].push({ d, r: requisRegime.value }); requisEquip[id].sort((a, b) => ((a && a.d) || a).localeCompare((b && b.d) || b)); requisDate.value = ''; sauverPanier(id) }
 function retirerRequis(dt) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; requisEquip[id] = (requisEquip[id] || []).filter(x => (typeof x === 'object' ? x.d : x) !== dt); sauverPanier(id) }
+const maintType = ref('prev')
+const maintDebut = ref('')
+const maintDuree = ref(8)
+function ajouterMaint() { if (!panierOuvert.value || !maintDebut.value) return; const id = panierOuvert.value.id; if (!maintEquip[id]) maintEquip[id] = []; maintEquip[id].push({ type: maintType.value, debut: maintDebut.value, dureeH: Math.max(0.25, Number(maintDuree.value) || 8) }); maintEquip[id].sort((a, b) => String(a.debut).localeCompare(String(b.debut))); maintDebut.value = ''; sauverPanier(id) }
+function retirerMaint(idx) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; const a = maintEquip[id]; if (a) { a.splice(idx, 1); sauverPanier(id) } }
+function fmtMaint(dt) { const d = new Date(dt); return isNaN(d) ? dt : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) }
+function maintStyle(m) { const deb = new Date(m.debut).getTime(); const left = ((deb - t0.value.getTime()) / 3600000) * pxH.value; const w = Math.max(2, (Number(m.dureeH) || 0) * pxH.value); return { left: left + 'px', width: w + 'px' } }
 function produitNom(pid) { const p = produitsById.value[pid]; return p ? (p.code_pf + ' — ' + p.designation) : String(pid) }
 const phaseOuvert = computed(() => panierOuvert.value ? phaseOrdre(panierOuvert.value.type) : null)
 const lotsAjoutables = computed(() => {
@@ -755,6 +776,9 @@ const synthEquip = computed(() => planning.value.map(r => ({
 .g-depart { position: absolute; top: 0; bottom: 0; background: rgba(91, 155, 213, 0.10); border-left: 2px solid #5B9BD5; z-index: 0; box-sizing: border-box; }
 .g-dcol-dep { background: rgba(91, 155, 213, 0.08); }
 .g-dep-lbl { color: #2A4A85; font-weight: 800; }
+.g-maint { position: absolute; top: 2px; bottom: 2px; background: repeating-linear-gradient(45deg, #93c5fd, #93c5fd 5px, #bfdbfe 5px, #bfdbfe 10px); border: 1px solid #3b82f6; border-radius: 3px; z-index: 2; box-sizing: border-box; }
+.g-maint-curr { background: repeating-linear-gradient(45deg, #fca5a5, #fca5a5 5px, #fecaca 5px, #fecaca 10px); border-color: #ef4444; }
+.pan-maint-curr { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
 .g-now { position: absolute; top: 0; bottom: 0; width: 2px; background: #ef4444; z-index: 3; }
 .g-now-head { position: absolute; top: 0; bottom: 0; width: 2px; background: #ef4444; z-index: 4; }
 .g-now-head span { position: absolute; top: 0; left: 2px; background: #ef4444; color: #fff; font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: 0 3px 3px 0; white-space: nowrap; }
