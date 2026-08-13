@@ -610,7 +610,7 @@ const lotsAjoutables = computed(() => {
 })
 
 const planning = computed(() => {
-  const t0v = new Date(dateDepart.value + 'T06:00:00')
+  const t0v = new Date(dateDepart.value + 'T22:00:00')
   const q = filtreTexte.value.trim().toLowerCase()
   const equipsFab = equipements.value.filter(e => estFab(e.type))
   const paramsEq = (eq) => ({
@@ -687,7 +687,7 @@ const planning = computed(() => {
 })
 
 // Bornes temps
-const t0 = computed(() => new Date(dateDepart.value + 'T06:00:00'))
+const t0 = computed(() => new Date(dateDepart.value + 'T22:00:00'))
 const finGlobale = computed(() => {
   let m = t0.value
   for (const r of planning.value) if (r.fin > m) m = r.fin
