@@ -219,7 +219,7 @@ const phasesLot = computed(() => {
 // Lots en cours de triage (ordres_fabrication.en_triage === 'Triage')
 const lotsTriage = computed(() => {
   const pl = phasesLot.value
-  return ofs.value.filter(o => !!o.en_triage).map(o => {
+  return ofs.value.filter(o => !!o.en_triage && !o.triage_fin).map(o => {
     const prod = o.produits || {}
     const eq = o.equipements || {}
     let phaseAct = ''
@@ -572,13 +572,13 @@ onMounted(async () => {
         <section class="triage-box">
           <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
           <table v-if="lotsTriage.length" class="triage-tbl">
-            <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier / étape</th><th>Triage (début → fin)</th></tr></thead>
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier / étape</th><th>En triage depuis</th></tr></thead>
             <tbody>
               <tr v-for="l in lotsTriage" :key="l.id">
                 <td class="t-lot">{{ l.lot }}</td>
                 <td>{{ l.code }} — {{ l.desig }}</td>
                 <td>{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
-                <td>{{ l.debut || '—' }}<span v-if="l.fin"> → {{ l.fin }}</span></td>
+                <td>{{ l.debut || '—' }}</td>
               </tr>
             </tbody>
           </table>
