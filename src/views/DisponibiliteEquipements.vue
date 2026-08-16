@@ -75,7 +75,7 @@ async function charger() {
   equipements.value = re.data || []
 
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite), equipements(code, nom)')
+    .select('id, numero_lot, statut, en_triage, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite), equipements(code, nom)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
@@ -214,6 +214,19 @@ const phasesLot = computed(() => {
     }
   }
   return m
+})
+
+// Lots en cours de triage (ordres_fabrication.en_triage === 'Triage')
+const lotsTriage = computed(() => {
+  const pl = phasesLot.value
+  return ofs.value.filter(o => o.en_triage === 'Triage').map(o => {
+    const prod = o.produits || {}
+    const eq = o.equipements || {}
+    let phaseAct = ''
+    const ph = pl[o.id] || {}
+    for (const P of PHASES) { const rec = ph[P.key]; if (rec && rec.statut !== 'Terminé') { phaseAct = P.label; break } }
+    return { id: o.id, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct }
+  })
 })
 
 // File par phase : lots à l'étape courante (en attente = étape précédente finie ; en cours = démarrée)
@@ -556,6 +569,19 @@ onMounted(async () => {
         <div class="searchbar">
           <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
         </div>
+        <section v-if="lotsTriage.length" class="triage-box">
+          <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
+          <table class="triage-tbl">
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier / étape</th></tr></thead>
+            <tbody>
+              <tr v-for="l in lotsTriage" :key="l.id">
+                <td class="t-lot">{{ l.lot }}</td>
+                <td>{{ l.code }} — {{ l.desig }}</td>
+                <td>{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
         <h3 class="board-h">Fabrication — files par atelier</h3>
         <p class="note">
           Chaque lot apparaît dans l'atelier de son <strong>étape courante</strong> : « en cours » s'il y est démarré, « en attente » si l'étape précédente est terminée.
@@ -993,4 +1019,11 @@ onMounted(async () => {
 .atelier-titre { font-size: 10.5px; margin: 0 0 3px; }
 .at-plan { font-size: 9px; }
 .searchbar input[type=text] { padding: 4px 8px; font-size: 10.5px; }
+/* Lots en cours de triage */
+.triage-box { background: #fef3c7; border: 1px solid #fde68a; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
+.triage-h { margin: 0 0 10px; font-size: 15px; font-weight: 800; color: #92400e; }
+.triage-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.triage-tbl th { text-align: left; font-size: 11px; color: #a16207; padding: 4px 8px; border-bottom: 1px solid #fde68a; }
+.triage-tbl td { padding: 5px 8px; border-bottom: 1px solid #fde68a55; color: #451a03; }
+.triage-tbl .t-lot { font-weight: 700; }
 </style>
