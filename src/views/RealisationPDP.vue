@@ -103,6 +103,28 @@
       </table>
     </div>
 
+    <section class="rp-card deliv-card">
+      <h3 class="card-title">Délivrable fabrication — {{ MOIS[moisSel] }} {{ annee }}</h3>
+      <div class="deliv-sum">
+        <div class="deliv-kpi"><span class="dk-v">{{ lotsDelivres.length }}</span><span class="dk-l">Lots délivrés</span></div>
+        <div class="deliv-kpi"><span class="dk-v">{{ fmt(realMoisDelivr.boites) }}</span><span class="dk-l">Boîtes délivrées</span></div>
+        <div class="deliv-kpi"><span class="dk-v">{{ fmt(planMoisDelivr.boites) }}</span><span class="dk-l">Plan (boîtes)</span></div>
+        <div class="deliv-kpi"><span class="dk-v" :class="tauxDelivr != null && tauxDelivr < 100 ? 'bas' : ''">{{ tauxDelivr != null ? tauxDelivr + '%' : '—' }}</span><span class="dk-l">Taux</span></div>
+      </div>
+      <table v-if="lotsDelivres.length" class="deliv-tbl">
+        <thead><tr><th>N° lot</th><th>Produit</th><th class="num">Boîtes</th><th>Fin fabrication</th></tr></thead>
+        <tbody>
+          <tr v-for="o in lotsDelivres" :key="o.id">
+            <td class="d-lot">{{ o.numero_lot }}</td>
+            <td>{{ prodTxt(o) }}</td>
+            <td class="num">{{ fmt(o.boites_fabriquees) }}</td>
+            <td>{{ fmtDate(o.date_fin_fabrication) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="rp-empty" style="padding:12px">Aucun lot terminé en {{ MOIS[moisSel] }} {{ annee }}.</p>
+    </section>
+
     <section v-if="filtrePhase" class="rp-card lots-phase">
       <h3 class="card-title">Lots — {{ filtrePhase === 'vracs' ? 'Vracs' : labelPhase(filtrePhase) }}</h3>
       <div v-if="filtrePhase === 'vracs'" class="lp-cols vracs-two">
@@ -328,6 +350,15 @@ const moisReal = (k, i) => { const a = realData.value.mois[k]; return a ? M(a[i]
 const phasesActives = computed(() => PHASES.filter(ph => planData.value.an[ph.key] || realData.value.an[ph.key]))
 const filtrePhase = ref('vracs')
 const moisSel = ref(new Date().getMonth())
+// Délivrable fabrication du mois : lots terminés (date_fin_fabrication) sur le mois sélectionné
+const lotsDelivres = computed(() => ofsRaw.value.filter(o => {
+  if (!o.date_fin_fabrication) return false
+  const d = new Date(o.date_fin_fabrication)
+  return d.getFullYear() === annee.value && d.getMonth() === moisSel.value
+}).sort((a, b) => new Date(a.date_fin_fabrication) - new Date(b.date_fin_fabrication)))
+const realMoisDelivr = computed(() => { let boites = 0; for (const o of lotsDelivres.value) boites += num(o.boites_fabriquees); return { boites, lots: lotsDelivres.value.length } })
+const planMoisDelivr = computed(() => { let boites = 0, lots = 0; for (const r of planRaw.value) { if (Number(r.annee) !== annee.value || (Number(r.mois) || 1) - 1 !== moisSel.value) continue; const p = r.produits || {}; const b = num(r.quantite_planifiee), t = num(p.taille_lot); boites += b; lots += t > 0 ? b / t : 0 } return { boites, lots: Math.round(lots) } })
+const tauxDelivr = computed(() => planMoisDelivr.value.boites > 0 ? Math.round(realMoisDelivr.value.boites / planMoisDelivr.value.boites * 100) : null)
 const phasesAffichees = computed(() => (filtrePhase.value && filtrePhase.value !== 'vracs') ? phasesActives.value.filter(p => p.key === filtrePhase.value) : phasesActives.value)
 const prodTxt = (o) => { const p = o && o.produits; return p ? ((p.code_pf || '') + ' — ' + (p.designation || '')) : '' }
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : ''
@@ -856,4 +887,16 @@ const serieMois = computed(() => {
 .lp-val.val-perime { color: #dc2626; font-weight: 700; }
 .lp-val.val-proche { color: #ea580c; font-weight: 700; }
 .pp-lot { color: #94a3b8; font-weight: 600; font-size: 0.85em; }
+/* Délivrable fabrication du mois */
+.deliv-card { margin-top: 16px; }
+.deliv-sum { display: flex; gap: 20px; flex-wrap: wrap; margin: 10px 0 14px; }
+.deliv-kpi { display: flex; flex-direction: column; gap: 2px; }
+.dk-v { font-size: 22px; font-weight: 800; color: #0f172a; }
+.dk-v.bas { color: #dc2626; }
+.dk-l { font-size: 11px; color: #64748b; font-weight: 600; }
+.deliv-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.deliv-tbl th { text-align: left; font-size: 11px; color: #64748b; padding: 5px 8px; border-bottom: 1px solid #e2e8f0; }
+.deliv-tbl th.num, .deliv-tbl td.num { text-align: right; }
+.deliv-tbl td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
+.deliv-tbl .d-lot { font-weight: 700; }
 </style>
