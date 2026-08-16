@@ -569,9 +569,9 @@ onMounted(async () => {
         <div class="searchbar">
           <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
         </div>
-        <section v-if="lotsTriage.length" class="triage-box">
+        <section class="triage-box">
           <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
-          <table class="triage-tbl">
+          <table v-if="lotsTriage.length" class="triage-tbl">
             <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier / étape</th></tr></thead>
             <tbody>
               <tr v-for="l in lotsTriage" :key="l.id">
@@ -581,6 +581,7 @@ onMounted(async () => {
               </tr>
             </tbody>
           </table>
+          <p v-else class="triage-vide">Aucun lot avec <code>en_triage = 'Triage'</code> pour l'instant. Vérifie le nom exact de la colonne et la valeur en base.</p>
         </section>
         <h3 class="board-h">Fabrication — files par atelier</h3>
         <p class="note">
@@ -1026,4 +1027,6 @@ onMounted(async () => {
 .triage-tbl th { text-align: left; font-size: 11px; color: #a16207; padding: 4px 8px; border-bottom: 1px solid #fde68a; }
 .triage-tbl td { padding: 5px 8px; border-bottom: 1px solid #fde68a55; color: #451a03; }
 .triage-tbl .t-lot { font-weight: 700; }
+.triage-vide { font-size: 12px; color: #92400e; margin: 0; }
+.triage-vide code { background: #fde68a; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
 </style>
