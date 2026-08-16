@@ -75,7 +75,7 @@ async function charger() {
   equipements.value = re.data || []
 
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, en_triage, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite), equipements(code, nom)')
+    .select('id, numero_lot, statut, en_triage, triage_debut, triage_fin, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite), equipements(code, nom)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
@@ -219,13 +219,13 @@ const phasesLot = computed(() => {
 // Lots en cours de triage (ordres_fabrication.en_triage === 'Triage')
 const lotsTriage = computed(() => {
   const pl = phasesLot.value
-  return ofs.value.filter(o => o.en_triage === 'Triage').map(o => {
+  return ofs.value.filter(o => !!o.en_triage).map(o => {
     const prod = o.produits || {}
     const eq = o.equipements || {}
     let phaseAct = ''
     const ph = pl[o.id] || {}
     for (const P of PHASES) { const rec = ph[P.key]; if (rec && rec.statut !== 'Terminé') { phaseAct = P.label; break } }
-    return { id: o.id, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct }
+    return { id: o.id, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin || '' }
   })
 })
 
@@ -572,16 +572,17 @@ onMounted(async () => {
         <section class="triage-box">
           <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
           <table v-if="lotsTriage.length" class="triage-tbl">
-            <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier / étape</th></tr></thead>
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier / étape</th><th>Triage (début → fin)</th></tr></thead>
             <tbody>
               <tr v-for="l in lotsTriage" :key="l.id">
                 <td class="t-lot">{{ l.lot }}</td>
                 <td>{{ l.code }} — {{ l.desig }}</td>
                 <td>{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
+                <td>{{ l.debut || '—' }}<span v-if="l.fin"> → {{ l.fin }}</span></td>
               </tr>
             </tbody>
           </table>
-          <p v-else class="triage-vide">Aucun lot avec <code>en_triage = 'Triage'</code> pour l'instant. Vérifie le nom exact de la colonne et la valeur en base.</p>
+          <p v-else class="triage-vide">Aucun lot coché « En triage fabrication » pour l'instant (case à cocher sur la page Ordres de fabrication).</p>
         </section>
         <h3 class="board-h">Fabrication — files par atelier</h3>
         <p class="note">
