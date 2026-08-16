@@ -77,6 +77,13 @@
             <td class="num"><span v-if="tauxB(ph.key) != null" class="tx v-b" :class="tauxB(ph.key) >= 100 ? 'ok' : 'bas'">{{ tauxB(ph.key) }}%</span><span v-else class="v-b muted">—</span><span class="v-l">{{ tauxL(ph.key) != null ? tauxL(ph.key) + '% lots' : '— lots' }}</span></td>
             <td class="w-cbar"><span class="cbar"><span class="cbar-in" :class="(tauxB(ph.key) || 0) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(tauxB(ph.key) || 0, 100) + '%' }"></span></span></td>
           </tr>
+          <tr v-if="!filtrePhase" class="deliv-row">
+            <td class="ph-nom"><span class="ph-dot" style="background:#0f766e"></span>Délivrable fabrication</td>
+            <td class="num"><span class="v-b">{{ fmt(planDelivrAn.boites) }}</span><span class="v-l">{{ fmt(planDelivrAn.lots) }} lots</span></td>
+            <td class="num"><span class="v-b">{{ fmt(delivrAn.boites) }}</span><span class="v-l">{{ fmt(delivrAn.lots) }} lots</span></td>
+            <td class="num"><span v-if="tauxD(delivrAn.boites, planDelivrAn.boites) != null" class="tx v-b" :class="tauxD(delivrAn.boites, planDelivrAn.boites) >= 100 ? 'ok' : 'bas'">{{ tauxD(delivrAn.boites, planDelivrAn.boites) }}%</span><span v-else class="v-b muted">—</span><span class="v-l">{{ tauxD(delivrAn.lots, planDelivrAn.lots) != null ? tauxD(delivrAn.lots, planDelivrAn.lots) + '% lots' : '— lots' }}</span></td>
+            <td class="w-cbar"><span class="cbar"><span class="cbar-in" :class="(tauxD(delivrAn.boites, planDelivrAn.boites) || 0) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(tauxD(delivrAn.boites, planDelivrAn.boites) || 0, 100) + '%' }"></span></span></td>
+          </tr>
           <tr v-if="!phasesAffichees.length"><td colspan="5" class="rp-empty">Aucune donnée pour {{ annee }}.</td></tr>
         </tbody>
       </table>
@@ -97,6 +104,13 @@
             <td class="num"><span class="v-b">{{ fmt(realBM(ph.key)) }}</span><span class="v-l">{{ fmt(realLM(ph.key)) }} lots</span></td>
             <td class="num"><span v-if="tauxBM(ph.key) != null" class="tx v-b" :class="tauxBM(ph.key) >= 100 ? 'ok' : 'bas'">{{ tauxBM(ph.key) }}%</span><span v-else class="v-b muted">—</span><span class="v-l">{{ tauxLM(ph.key) != null ? tauxLM(ph.key) + '% lots' : '— lots' }}</span></td>
             <td class="w-cbar"><span class="cbar"><span class="cbar-in" :class="(tauxBM(ph.key) || 0) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(tauxBM(ph.key) || 0, 100) + '%' }"></span></span></td>
+          </tr>
+          <tr v-if="!filtrePhase" class="deliv-row">
+            <td class="ph-nom"><span class="ph-dot" style="background:#0f766e"></span>Délivrable fabrication</td>
+            <td class="num"><span class="v-b">{{ fmt(planDelivrMois.boites) }}</span><span class="v-l">{{ fmt(planDelivrMois.lots) }} lots</span></td>
+            <td class="num"><span class="v-b">{{ fmt(delivrMois.boites) }}</span><span class="v-l">{{ fmt(delivrMois.lots) }} lots</span></td>
+            <td class="num"><span v-if="tauxD(delivrMois.boites, planDelivrMois.boites) != null" class="tx v-b" :class="tauxD(delivrMois.boites, planDelivrMois.boites) >= 100 ? 'ok' : 'bas'">{{ tauxD(delivrMois.boites, planDelivrMois.boites) }}%</span><span v-else class="v-b muted">—</span><span class="v-l">{{ tauxD(delivrMois.lots, planDelivrMois.lots) != null ? tauxD(delivrMois.lots, planDelivrMois.lots) + '% lots' : '— lots' }}</span></td>
+            <td class="w-cbar"><span class="cbar"><span class="cbar-in" :class="(tauxD(delivrMois.boites, planDelivrMois.boites) || 0) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(tauxD(delivrMois.boites, planDelivrMois.boites) || 0, 100) + '%' }"></span></span></td>
           </tr>
           <tr v-if="!phasesAffichees.length"><td colspan="5" class="rp-empty">Aucune donnée pour {{ MOIS[moisSel] }} {{ annee }}.</td></tr>
         </tbody>
@@ -328,6 +342,12 @@ const moisReal = (k, i) => { const a = realData.value.mois[k]; return a ? M(a[i]
 const phasesActives = computed(() => PHASES.filter(ph => planData.value.an[ph.key] || realData.value.an[ph.key]))
 const filtrePhase = ref('vracs')
 const moisSel = ref(new Date().getMonth())
+// Délivrable fabrication = lots dont la fabrication est terminée (date_fin_fabrication)
+const delivrAn = computed(() => { let boites = 0, lots = 0; for (const o of ofsRaw.value) { if (o.date_fin_fabrication && new Date(o.date_fin_fabrication).getFullYear() === annee.value) { boites += num(o.boites_fabriquees); lots += 1 } } return { boites, lots } })
+const planDelivrAn = computed(() => { let boites = 0, lots = 0; for (const r of planRaw.value) { if (Number(r.annee) !== annee.value) continue; const p = r.produits || {}; const b = num(r.quantite_planifiee), t = num(p.taille_lot); boites += b; lots += t > 0 ? b / t : 0 } return { boites, lots: Math.round(lots) } })
+const delivrMois = computed(() => { let boites = 0, lots = 0; for (const o of ofsRaw.value) { if (o.date_fin_fabrication) { const d = new Date(o.date_fin_fabrication); if (d.getFullYear() === annee.value && d.getMonth() === moisSel.value) { boites += num(o.boites_fabriquees); lots += 1 } } } return { boites, lots } })
+const planDelivrMois = computed(() => { let boites = 0, lots = 0; for (const r of planRaw.value) { if (Number(r.annee) !== annee.value || (Number(r.mois) || 1) - 1 !== moisSel.value) continue; const p = r.produits || {}; const b = num(r.quantite_planifiee), t = num(p.taille_lot); boites += b; lots += t > 0 ? b / t : 0 } return { boites, lots: Math.round(lots) } })
+const tauxD = (real, plan) => plan > 0 ? Math.round(real / plan * 100) : null
 const phasesAffichees = computed(() => (filtrePhase.value && filtrePhase.value !== 'vracs') ? phasesActives.value.filter(p => p.key === filtrePhase.value) : phasesActives.value)
 const prodTxt = (o) => { const p = o && o.produits; return p ? ((p.code_pf || '') + ' — ' + (p.designation || '')) : '' }
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : ''
@@ -856,4 +876,7 @@ const serieMois = computed(() => {
 .lp-val.val-perime { color: #dc2626; font-weight: 700; }
 .lp-val.val-proche { color: #ea580c; font-weight: 700; }
 .pp-lot { color: #94a3b8; font-weight: 600; font-size: 0.85em; }
+/* Ligne délivrable fabrication */
+.deliv-row td { border-top: 2px solid #0f766e; font-weight: 700; background: #f0fdfa; }
+.deliv-row .ph-nom { color: #0f766e; }
 </style>
