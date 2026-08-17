@@ -255,7 +255,7 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme, taille_lot)')),
       fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, en_triage, triage_fin, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, date_reception, date_fin_validite, produits(code_pf, designation, gamme, taille_lot, pcsu)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true)),
-      fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, date_conditionnement, date_fin, statut'))
+      fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, date_conditionnement, date_fin, statut').eq('actif', true))
     ])
     planRaw.value = rp; ofsRaw.value = ro; suivi.value = rs; condRaw.value = rc
   } catch (e) { console.error(e) } finally { chargement.value = false }
@@ -399,8 +399,8 @@ const condByOf = computed(() => {
   const m = {}
   for (const c of condRaw.value) {
     const oid = c.ordre_id; if (!oid) continue
-    if (!m[oid]) m[oid] = { launched: false, completed: false, launchDate: null }
-    if (c.date_conditionnement) { m[oid].launched = true; if (!m[oid].launchDate || c.date_conditionnement < m[oid].launchDate) m[oid].launchDate = c.date_conditionnement }
+    if (!m[oid]) m[oid] = { launched: true, completed: false, launchDate: null }
+    if (c.date_conditionnement && (!m[oid].launchDate || c.date_conditionnement < m[oid].launchDate)) m[oid].launchDate = c.date_conditionnement
     if (c.date_fin || /termin|lib[eé]r/i.test(c.statut || '')) m[oid].completed = true
   }
   return m
