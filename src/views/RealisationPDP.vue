@@ -253,9 +253,9 @@ onMounted(async () => {
   try {
     const [rp, ro, rs, rc] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme, taille_lot)')),
-      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, en_triage, triage_fin, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, date_reception, date_fin_validite, produits(code_pf, designation, gamme, taille_lot, pcsu)')),
+      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, en_triage, triage_fin, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, date_reception, date_fin_validite, produits(code_pf, designation, gamme, taille_lot, pcsu, unites_par_boite)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true)),
-      fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, date_conditionnement, date_fin, statut').eq('actif', true))
+      fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, date_conditionnement, statut, quantite_conditionnee').eq('actif', true))
     ])
     planRaw.value = rp; ofsRaw.value = ro; suivi.value = rs; condRaw.value = rc
   } catch (e) { console.error(e) } finally { chargement.value = false }
@@ -399,18 +399,28 @@ const condByOf = computed(() => {
   const m = {}
   for (const c of condRaw.value) {
     const oid = c.ordre_id; if (!oid) continue
-    if (!m[oid]) m[oid] = { launched: true, completed: false, launchDate: null }
+    if (!m[oid]) m[oid] = { launched: true, launchDate: null }
     if (c.date_conditionnement && (!m[oid].launchDate || c.date_conditionnement < m[oid].launchDate)) m[oid].launchDate = c.date_conditionnement
-    if (c.date_fin || /termin|lib[eé]r/i.test(c.statut || '')) m[oid].completed = true
   }
   return m
+})
+// Conditionnement DÉFINITIF (comme page Disponibilité) : Terminé/Libéré OU >= 85 % conditionné
+const condTermine = computed(() => { const s = new Set(); for (const c of condRaw.value) if (c.statut === 'Terminé' || c.statut === 'Libéré') s.add(c.ordre_id); return s })
+const condBoxParLot = computed(() => {
+  const upb = {}; for (const o of ofsRaw.value) upb[o.id] = o.produits ? Number(o.produits.unites_par_boite || 0) : 0
+  const m = {}; for (const c of condRaw.value) { const u = upb[c.ordre_id] || 0; if (u <= 0) continue; m[c.ordre_id] = (m[c.ordre_id] || 0) + Math.floor(Number(c.quantite_conditionnee || 0) / u) }
+  return m
+})
+const condComplet = computed(() => {
+  const s = new Set(condTermine.value); const cb = condBoxParLot.value
+  for (const o of ofsRaw.value) { if (s.has(o.id)) continue; const avail = Number(o.boites_fabriquees || 0) || Number(o.quantite_theorique || 0); if (avail > 0 && (cb[o.id] || 0) >= avail * 0.85) s.add(o.id) }
+  return s
 })
 const lotsVracs = computed(() => {
   const out = []; const cb = condByOf.value
   for (const o of ofsRaw.value) {
     if (/rejet|lib[eé]r|clotur/i.test(o.statut || '')) continue
-    const info = cb[o.id]
-    if (info && info.completed) continue
+    if (condComplet.value.has(o.id)) continue
     const pl = phasesLot.value[o.id] || {}
     const p = o.produits || {}
     const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
