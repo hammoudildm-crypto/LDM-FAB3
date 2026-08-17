@@ -77,7 +77,7 @@
             <td class="num"><span v-if="tauxB(ph.key) != null" class="tx v-b" :class="tauxB(ph.key) >= 100 ? 'ok' : 'bas'">{{ tauxB(ph.key) }}%</span><span v-else class="v-b muted">—</span><span class="v-l">{{ tauxL(ph.key) != null ? tauxL(ph.key) + '% lots' : '— lots' }}</span></td>
             <td class="w-cbar"><span class="cbar"><span class="cbar-in" :class="(tauxB(ph.key) || 0) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(tauxB(ph.key) || 0, 100) + '%' }"></span></span></td>
           </tr>
-          <tr v-if="!filtrePhase" class="deliv-row">
+          <tr v-if="!filtrePhase || filtrePhase === 'vracs'" class="deliv-row">
             <td class="ph-nom"><span class="ph-dot" style="background:#0f766e"></span>Délivrable fabrication</td>
             <td class="num"><span class="v-b">{{ fmt(planDelivrAn.boites) }}</span><span class="v-l">{{ fmt(planDelivrAn.lots) }} lots</span></td>
             <td class="num"><span class="v-b">{{ fmt(delivrAn.boites) }}</span><span class="v-l">{{ fmt(delivrAn.lots) }} lots</span></td>
@@ -105,7 +105,7 @@
             <td class="num"><span v-if="tauxBM(ph.key) != null" class="tx v-b" :class="tauxBM(ph.key) >= 100 ? 'ok' : 'bas'">{{ tauxBM(ph.key) }}%</span><span v-else class="v-b muted">—</span><span class="v-l">{{ tauxLM(ph.key) != null ? tauxLM(ph.key) + '% lots' : '— lots' }}</span></td>
             <td class="w-cbar"><span class="cbar"><span class="cbar-in" :class="(tauxBM(ph.key) || 0) >= objectifPct ? 'ok' : 'bas'" :style="{ width: Math.min(tauxBM(ph.key) || 0, 100) + '%' }"></span></span></td>
           </tr>
-          <tr v-if="!filtrePhase" class="deliv-row">
+          <tr v-if="!filtrePhase || filtrePhase === 'vracs'" class="deliv-row">
             <td class="ph-nom"><span class="ph-dot" style="background:#0f766e"></span>Délivrable fabrication</td>
             <td class="num"><span class="v-b">{{ fmt(planDelivrMois.boites) }}</span><span class="v-l">{{ fmt(planDelivrMois.lots) }} lots</span></td>
             <td class="num"><span class="v-b">{{ fmt(delivrMois.boites) }}</span><span class="v-l">{{ fmt(delivrMois.lots) }} lots</span></td>
