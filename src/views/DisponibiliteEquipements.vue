@@ -570,23 +570,7 @@ onMounted(async () => {
         </div>
         <div class="searchbar">
           <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
-        </div>
-        <section class="triage-box">
-          <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
-          <table v-if="lotsTriage.length" class="triage-tbl">
-            <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier / étape</th><th>En triage depuis</th></tr></thead>
-            <tbody>
-              <tr v-for="l in lotsTriage" :key="l.id">
-                <td class="t-lot">{{ l.lot }}</td>
-                <td>{{ l.code }} — {{ l.desig }}</td>
-                <td>{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
-                <td>{{ l.debut || '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <p v-else class="triage-vide">Aucun lot coché « En triage fabrication » pour l'instant (case à cocher sur la page Ordres de fabrication).</p>
-        </section>
-        <h3 class="board-h">Fabrication — files par atelier</h3>
+        </div>        <h3 class="board-h">Fabrication — files par atelier</h3>
         <p class="note">
           Chaque lot apparaît dans l'atelier de son <strong>étape courante</strong> : « en cours » s'il y est démarré, « en attente » si l'étape précédente est terminée.
           Une file <strong>vide</strong> = atelier à sec (risque de rupture). Les lots les plus anciens sont en haut.
@@ -743,6 +727,21 @@ onMounted(async () => {
             </div>
           </section>
         </div>
+        <section class="triage-box">
+          <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
+          <table v-if="lotsTriage.length" class="triage-tbl">
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier / étape</th><th>En triage depuis</th></tr></thead>
+            <tbody>
+              <tr v-for="l in lotsTriage" :key="l.id">
+                <td class="t-lot">{{ l.lot }}</td>
+                <td>{{ l.code }} — {{ l.desig }}</td>
+                <td>{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
+                <td>{{ l.debut || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else class="triage-vide">Aucun lot coché « En triage fabrication » pour l'instant (case à cocher sur la page Ordres de fabrication).</p>
+        </section>
       </div>
 
       <!-- ===================== RÉTROSPECTIVE ===================== -->
