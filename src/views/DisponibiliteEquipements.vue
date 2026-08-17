@@ -229,6 +229,7 @@ const lotsTriage = computed(() => {
   })
 })
 
+const triageIds = computed(() => new Set(lotsTriage.value.map(l => l.id)))
 // File par phase : lots à l'étape courante (en attente = étape précédente finie ; en cours = démarrée)
 const anneeCourante = new Date().getFullYear()
 const planParPhase = computed(() => {
@@ -275,7 +276,7 @@ const queuePhase = computed(() => {
     // Fabrication finie = dernière phase de la gamme du produit terminée (critère fiable, pas la date).
     const kDern = gamme.length ? phaseKey(gamme[gamme.length - 1]) : null
     const fabTerminee = !!o.date_fin_fabrication || !!(kDern && pl[kDern] && pl[kDern].statut === 'Terminé')
-    const base = { id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
+    const base = { id: o.id, triage: triageIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !fabTerminee) ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
     // Règle : le lot est à sa PREMIÈRE phase de gamme NON terminée.
@@ -665,7 +666,7 @@ onMounted(async () => {
                 <div class="q-title cours">En cours — {{ ph.cours.length }} lot(s) · {{ fmtC(ph.volCours) }} bts</div>
                 <div v-if="ph.cours.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
+                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                       <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                       <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -679,7 +680,7 @@ onMounted(async () => {
                 <div class="q-title attente">En attente — {{ ph.attente.length }} lot(s) · {{ fmtC(ph.volAttente) }} bts</div>
                 <div v-if="ph.attente.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
+                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                       <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                       <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -1028,6 +1029,9 @@ onMounted(async () => {
 .triage-tbl th { text-align: left; font-size: 11px; color: #a16207; padding: 4px 8px; border-bottom: 1px solid #fde68a; }
 .triage-tbl td { padding: 5px 8px; border-bottom: 1px solid #fde68a55; color: #451a03; }
 .triage-tbl .t-lot { font-weight: 700; }
+.lot-row.en-triage { background: #fef3c7; }
+.lot-row.en-triage > td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
+.lot-row.en-triage .pf::after { content: ' 🔍 triage'; color: #b45309; font-size: .78em; font-weight: 700; }
 .triage-vide { font-size: 12px; color: #92400e; margin: 0; }
 .triage-vide code { background: #fde68a; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
 </style>
