@@ -717,7 +717,7 @@ onMounted(async () => {
                   <div class="q-title cours">En cours — {{ g.cours.length }} lot(s) · {{ fmtC(g.volCours) }} bts</div>
                   <div v-if="g.cours.length" class="prod-scroll">
                     <table class="grid"><tbody>
-                      <tr v-for="l in g.cours" :key="l.id" class="lot-row" :class="{ 'en-triage-cond': l.triageCond }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
+                      <tr v-for="l in g.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
                         <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                         <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                         <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -730,7 +730,7 @@ onMounted(async () => {
                   <div class="q-title attente">En attente — {{ g.attente.length }} lot(s) · {{ fmtC(g.volAttente) }} bts</div>
                   <div v-if="g.attente.length" class="prod-scroll">
                     <table class="grid"><tbody>
-                      <tr v-for="l in g.attente" :key="l.id" class="lot-row" :class="{ 'en-triage-cond': l.triageCond }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
+                      <tr v-for="l in g.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
                         <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                         <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                         <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
