@@ -122,25 +122,25 @@
       <div v-if="filtrePhase === 'vracs'" class="lp-cols vracs-two">
         <div class="lp-col">
           <div class="lp-head att"><span class="lp-dot"></span>En attente de conditionnement <b>{{ vracsInfo.attente.length }}</b></div>
-          <div class="lp-list"><div v-for="o in vracsInfo.attente" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!vracsInfo.attente.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in vracsInfo.attente" :key="o.id" class="lp-lot" :class="{ 'lp-triage': triageIds.has(o.id) }"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!vracsInfo.attente.length" class="lp-vide">Aucun</div></div>
         </div>
         <div class="lp-col">
           <div class="lp-head prt"><span class="lp-dot"></span>En cours de conditionnement <b>{{ vracsInfo.encours.length }}</b></div>
-          <div class="lp-list"><div v-for="o in vracsInfo.encours" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!vracsInfo.encours.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in vracsInfo.encours" :key="o.id" class="lp-lot" :class="{ 'lp-triage': triageIds.has(o.id) }"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!vracsInfo.encours.length" class="lp-vide">Aucun</div></div>
         </div>
       </div>
       <div v-else class="lp-cols">
         <div class="lp-col">
           <div class="lp-head enc"><span class="lp-dot"></span>En cours <b>{{ lotsPhaseSel.encours.length }}</b></div>
-          <div class="lp-list"><div v-for="o in lotsPhaseSel.encours" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.encours.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in lotsPhaseSel.encours" :key="o.id" class="lp-lot" :class="{ 'lp-triage': triageIds.has(o.id) }"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.encours.length" class="lp-vide">Aucun</div></div>
         </div>
         <div class="lp-col">
           <div class="lp-head att"><span class="lp-dot"></span>En attente <b>{{ lotsPhaseSel.attente.length }}</b></div>
-          <div class="lp-list"><div v-for="o in lotsPhaseSel.attente" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.attente.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in lotsPhaseSel.attente" :key="o.id" class="lp-lot" :class="{ 'lp-triage': triageIds.has(o.id) }"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.attente.length" class="lp-vide">Aucun</div></div>
         </div>
         <div class="lp-col">
           <div class="lp-head pla"><span class="lp-dot"></span>Planifiés <b>{{ lotsPhaseSel.planifie.length }}</b></div>
-          <div class="lp-list"><div v-for="o in lotsPhaseSel.planifie" :key="o.id" class="lp-lot"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.planifie.length" class="lp-vide">Aucun</div></div>
+          <div class="lp-list"><div v-for="o in lotsPhaseSel.planifie" :key="o.id" class="lp-lot" :class="{ 'lp-triage': triageIds.has(o.id) }"><span class="lp-num">{{ o.numero_lot }}</span> {{ prodTxt(o) }}<span class="lp-val" :class="validEtat(o)" v-if="o.date_fin_validite"> · valid. {{ fmtDate(o.date_fin_validite) }}</span></div><div v-if="!lotsPhaseSel.planifie.length" class="lp-vide">Aucun</div></div>
         </div>
       </div>
     </section>
@@ -253,7 +253,7 @@ onMounted(async () => {
   try {
     const [rp, ro, rs, rc] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme, taille_lot)')),
-      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, date_reception, date_fin_validite, produits(code_pf, designation, gamme, taille_lot, pcsu)')),
+      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, en_triage, triage_fin, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, date_reception, date_fin_validite, produits(code_pf, designation, gamme, taille_lot, pcsu)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true)),
       fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, date_conditionnement, date_fin, statut'))
     ])
@@ -393,6 +393,7 @@ const lotsParPhase = computed(() => {
   for (const kk in m) { m[kk].encours.sort(cmpLot); m[kk].attente.sort(cmpLot); m[kk].planifie.sort(cmpLot) }
   return m
 })
+const triageIds = computed(() => new Set(ofsRaw.value.filter(o => !!o.en_triage && !o.triage_fin).map(o => o.id)))
 const lotsPhaseSel = computed(() => (filtrePhase.value && lotsParPhase.value[filtrePhase.value]) || { encours: [], attente: [], planifie: [] })
 const condByOf = computed(() => {
   const m = {}
@@ -557,9 +558,9 @@ const serieMois = computed(() => {
 .rp-scroll { overflow-x: auto; }
 .rp-empty { padding: 40px; text-align: center; color: #94a3b8; font-size: 14px; }
 .rp-table { width: 100%; border-collapse: collapse; }
-.rp-table thead th { text-align: left; font-size: 11.5px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: #64748b; padding: 12px 14px; border-bottom: 2px solid #f1f5f9; white-space: nowrap; }
+.rp-table thead th { text-align: left; font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: #64748b; padding: 6px 10px; border-bottom: 2px solid #f1f5f9; white-space: nowrap; }
 .rp-table thead th.num { text-align: right; }
-.rp-table tbody td { padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid #f5f7fa; }
+.rp-table tbody td { padding: 4px 10px; font-size: 11.5px; border-bottom: 1px solid #f5f7fa; line-height: 1.25; }
 .rp-table tbody tr:hover td { background: #f8fafc; }
 .ph-nom { font-weight: 600; color: #1e293b; white-space: nowrap; }
 .ph-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
@@ -579,7 +580,7 @@ const serieMois = computed(() => {
 .cmp-ok { background: #dcfce7; color: #15803d; font-weight: 700; }
 .cmp-mid { background: #fef9c3; color: #a16207; font-weight: 700; }
 .cmp-low { background: #fee2e2; color: #b91c1c; font-weight: 700; }
-.rp-matrix .cell i, .rp-table i { font-style: normal; color: #94a3b8; font-weight: 400; font-size: .88em; }
+.rp-matrix .cell i, .rp-table i { font-style: normal; color: #94a3b8; font-weight: 400; font-size: .82em; }
 .pdp-hero { display: flex; gap: 18px; background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px 24px; margin-bottom: 18px; box-shadow: 0 8px 22px rgba(30,41,59,.06); flex-wrap: wrap; }
 .hero-l { flex: 1; min-width: 320px; }
 .hero-pct { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
@@ -879,4 +880,7 @@ const serieMois = computed(() => {
 /* Ligne délivrable fabrication */
 .deliv-row td { border-top: 2px solid #0f766e; font-weight: 700; background: #f0fdfa; }
 .deliv-row .ph-nom { color: #0f766e; }
+/* Lots en cours de triage (fabrication) */
+.lp-lot.lp-triage { background: #fef3c7; border-radius: 5px; box-shadow: inset 3px 0 0 #f59e0b; padding-left: 6px; }
+.lp-lot.lp-triage .lp-num::after { content: ' 🔍 triage'; color: #b45309; font-size: .82em; font-weight: 700; }
 </style>
