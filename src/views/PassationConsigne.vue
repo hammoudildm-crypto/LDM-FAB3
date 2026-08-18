@@ -46,6 +46,11 @@ const equipsFab = computed(() => equipements.value.filter(e => {
   return PHASES_FAB.some(ph => t.includes(ph))
 }).sort((a, b) => (ordreSite(a) - ordreSite(b)) || (ordreEquip(a) - ordreEquip(b)) || String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true })))
 
+const equipsFabAvecSite = computed(() => {
+  let prev = null
+  return equipsFab.value.map(e => { const s = siteEquip(e); const b = s !== prev; prev = s; return { e, site: s, banner: b } })
+})
+
 const form = reactive({
   date_shift: new Date().toISOString().slice(0, 10),
   shift: 'matin',
@@ -149,13 +154,16 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
             <table class="pc-equip-tbl">
               <thead><tr><th>Équipement</th><th>Site</th><th>État</th><th>Lot en cours</th><th>Remarque</th></tr></thead>
               <tbody>
-                <tr v-for="e in equipsFab" :key="e.id">
-                  <td class="pc-eq-nom">{{ e.code }} — {{ e.nom }}</td>
-                  <td><span class="pc-site" :class="'site-' + siteEquip(e)">{{ siteLabel(siteEquip(e)) }}</span></td>
-                  <td><select v-model="etatEquip[e.id].etat" class="pc-eq-etat" :class="'etat-' + etatClass(etatEquip[e.id].etat)"><option value="">—</option><option v-for="s in ETATS" :key="s" :value="s">{{ s }}</option></select></td>
-                  <td><input v-model="etatEquip[e.id].lot" placeholder="N° lot" /></td>
-                  <td><input v-model="etatEquip[e.id].remarque" placeholder="Remarque…" /></td>
-                </tr>
+                <template v-for="row in equipsFabAvecSite" :key="row.e.id">
+                  <tr v-if="row.banner" class="pc-site-banner" :class="'sb-' + row.site"><td colspan="5">Site {{ siteLabel(row.site) }}</td></tr>
+                  <tr>
+                    <td class="pc-eq-nom">{{ row.e.code }} — {{ row.e.nom }}</td>
+                    <td><span class="pc-site" :class="'site-' + row.site">{{ siteLabel(row.site) }}</span></td>
+                    <td><select v-model="etatEquip[row.e.id].etat" class="pc-eq-etat" :class="'etat-' + etatClass(etatEquip[row.e.id].etat)"><option value="">—</option><option v-for="s in ETATS" :key="s" :value="s">{{ s }}</option></select></td>
+                    <td><input v-model="etatEquip[row.e.id].lot" placeholder="N° lot" /></td>
+                    <td><input v-model="etatEquip[row.e.id].remarque" placeholder="Remarque…" /></td>
+                  </tr>
+                </template>
                 <tr v-if="!equipsFab.length"><td colspan="5" class="pc-muted">Aucun équipement de fabrication trouvé.</td></tr>
               </tbody>
             </table>
@@ -275,6 +283,10 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
 .pc-site.site-hormonal { background: #fce7f3; color: #be185d; }
 .pc-site.site-semi { background: #fef9c3; color: #a16207; }
 .pc-site.site-seche { background: #dbeafe; color: #1d4ed8; }
+.pc-site-banner td { font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; padding: 6px 8px; }
+.pc-site-banner.sb-hormonal td { background: #fce7f3; color: #be185d; border-top: 2px solid #f9a8d4; }
+.pc-site-banner.sb-semi td { background: #fef9c3; color: #a16207; border-top: 2px solid #fde047; }
+.pc-site-banner.sb-seche td { background: #dbeafe; color: #1d4ed8; border-top: 2px solid #93c5fd; }
 .mono { font-family: ui-monospace, monospace; }
 .pc-eq-full { color: #94a3b8; font-weight: 400; }
 .pc-blocks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
