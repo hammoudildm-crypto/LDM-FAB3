@@ -449,6 +449,7 @@ function ouvrirLot(l, phaseKey) {
   if (phaseKey === 'conditionnement') router.push({ path: '/conditionnement', query: { lot: l.id } })
   else router.push({ path: '/suivi', query: { lot: l.id } })
 }
+function ouvrirTriageFin(id) { router.push({ path: '/ordres', query: { edit: id } }) }
 
 // Pour chaque phase : { code_pf -> { code, desig, lots, boites } }
 const produitsParPhase = computed(() => {
@@ -732,7 +733,7 @@ onMounted(async () => {
           <table v-if="lotsTriage.length" class="triage-tbl">
             <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier / étape</th><th>En triage depuis</th></tr></thead>
             <tbody>
-              <tr v-for="l in lotsTriage" :key="l.id">
+              <tr v-for="l in lotsTriage" :key="l.id" class="triage-row" @click="ouvrirTriageFin(l.id)" title="Cliquer pour renseigner la date de fin de triage">
                 <td class="t-lot">{{ l.lot }}</td>
                 <td>{{ l.code }} — {{ l.desig }}</td>
                 <td>{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
@@ -1029,6 +1030,9 @@ onMounted(async () => {
 .triage-tbl th { text-align: left; font-size: 11px; color: #a16207; padding: 4px 8px; border-bottom: 1px solid #fde68a; }
 .triage-tbl td { padding: 5px 8px; border-bottom: 1px solid #fde68a55; color: #451a03; }
 .triage-tbl .t-lot { font-weight: 700; }
+.triage-row { cursor: pointer; transition: background .12s; }
+.triage-row:hover { background: #fde68a; }
+.triage-row:hover .t-lot { text-decoration: underline; }
 .lot-row.en-triage { background: #fef3c7; }
 .lot-row.en-triage > td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
 .lot-row.en-triage .pf::after { content: ' 🔍 triage'; color: #b45309; font-size: .78em; font-weight: 700; }
