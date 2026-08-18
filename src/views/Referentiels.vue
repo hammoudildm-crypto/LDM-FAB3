@@ -164,6 +164,13 @@ async function supprimerSup(sv) {
   if (r.error) { erreur.value = r.error.message; return }
   await chargerTout()
 }
+async function reinitialiserPin(sv) {
+  if (!confirm('Réinitialiser le code PIN de « ' + sv.nom + ' » ? Il devra en redéfinir un depuis « Mon compte ».')) return
+  const r = await supabase.rpc('reinitialiser_pin_superviseur', { p_nom: sv.nom })
+  if (r.error) { erreur.value = r.error.message + ' — as-tu créé la fonction SQL reinitialiser_pin_superviseur ?'; return }
+  erreur.value = ''
+  alert('Code PIN de « ' + sv.nom + ' » réinitialisé. Le superviseur peut en créer un nouveau depuis Mon compte.')
+}
 
 // --- Actions Vérificateurs conditionnement ---
 async function ajouterCond() {
@@ -635,6 +642,7 @@ onMounted(async () => {
             <span class="sv-nom">{{ sv.nom }}</span>
             <template v-if="peutEditer">
               <button class="link" @click="ouvrirEditSup(sv)">Renommer</button>
+              <button class="link warn" @click="reinitialiserPin(sv)">Réinit. PIN</button>
               <button class="link danger" @click="supprimerSup(sv)">Supprimer</button>
             </template>
           </template>
@@ -840,4 +848,5 @@ button.link.danger { color: #b91c1c; }
 .rh-n { font-size: 12px; font-weight: 700; color: #5B9BD5; background: #eff6ff; padding: 2px 10px; border-radius: 10px; }
 .ref-back { background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; margin-bottom: 14px; }
 .ref-back:hover { background: #e2e8f0; }
+.link.warn { color: #b45309; }
 </style>
