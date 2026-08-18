@@ -37,7 +37,8 @@ const consignes = ref([])
 const chargement = ref(true)
 const erreur = ref('')
 const enregistrement = ref(false)
-const entrantSel = reactive({})
+const entrant1 = reactive({})
+const entrant2 = reactive({})
 const etatEquip = reactive({})
 
 const equipsFab = computed(() => equipements.value.filter(e => {
@@ -55,7 +56,8 @@ const nbParSite = computed(() => { const m = { hormonal: 0, seche: 0, semi: 0 };
 const form = reactive({
   date_shift: new Date().toISOString().slice(0, 10),
   shift: 'matin',
-  superviseur_sortant: ''
+  superviseur_sortant: '',
+  superviseur_sortant_2: ''
 })
 
 function initEtat() {
@@ -96,6 +98,7 @@ async function enregistrer() {
     date_shift: form.date_shift,
     shift: form.shift,
     superviseur_sortant: form.superviseur_sortant,
+    superviseur_sortant_2: form.superviseur_sortant_2 || null,
     equipements_etat: equipEtat
   })
   enregistrement.value = false
@@ -105,12 +108,13 @@ async function enregistrer() {
 }
 
 async function prendreConnaissance(c) {
-  const nom = entrantSel[c.id]
-  if (!nom) { erreur.value = 'Choisis le superviseur entrant avant de valider.'; return }
+  const n1 = entrant1[c.id]
+  if (!n1) { erreur.value = 'Choisis au moins le superviseur entrant 1 avant de valider.'; return }
   erreur.value = ''
   const r = await supabase.from('passation_consignes').update({
     pris_connaissance: true,
-    superviseur_entrant: nom,
+    superviseur_entrant: n1,
+    superviseur_entrant_2: entrant2[c.id] || null,
     pris_connaissance_le: new Date().toISOString()
   }).eq('id', c.id)
   if (r.error) { erreur.value = 'Validation échouée : ' + r.error.message; return }
@@ -140,8 +144,11 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
             <label class="pc-field"><span>Shift</span>
               <select v-model="form.shift"><option v-for="s in SHIFTS" :key="s.key" :value="s.key">{{ s.label }}</option></select>
             </label>
-            <label class="pc-field"><span>Superviseur sortant</span>
+            <label class="pc-field"><span>Superviseur sortant 1</span>
               <select v-model="form.superviseur_sortant"><option value="">— Choisir —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
+            </label>
+            <label class="pc-field"><span>Superviseur sortant 2</span>
+              <select v-model="form.superviseur_sortant_2"><option value="">— (optionnel) —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
             </label>
             <div class="pc-filters">
               <div class="pc-filter-col">
@@ -196,7 +203,7 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
           <header class="pc-head">
             <span class="pc-shift">{{ shiftLabel(c.shift) }}</span>
             <span class="pc-datechip">{{ fmtDate(c.date_shift) }}</span>
-            <span class="pc-sortant">Sortant : <b>{{ c.superviseur_sortant }}</b></span>
+            <span class="pc-sortant">Sortant : <b>{{ c.superviseur_sortant }}{{ c.superviseur_sortant_2 ? ' & ' + c.superviseur_sortant_2 : '' }}</b></span>
             <span v-if="!c.pris_connaissance" class="pc-badge">Non lu</span>
           </header>
 
@@ -218,9 +225,10 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
           <p v-else class="pc-muted">Aucun détail équipement.</p>
 
           <footer class="pc-foot">
-            <div v-if="c.pris_connaissance" class="pc-ack ok">✓ Pris connaissance par <b>{{ c.superviseur_entrant }}</b> le {{ fmtDateTime(c.pris_connaissance_le) }}</div>
+            <div v-if="c.pris_connaissance" class="pc-ack ok">✓ Pris connaissance par <b>{{ c.superviseur_entrant }}{{ c.superviseur_entrant_2 ? ' & ' + c.superviseur_entrant_2 : '' }}</b> le {{ fmtDateTime(c.pris_connaissance_le) }}</div>
             <div v-else-if="peutEditer" class="pc-ack-form">
-              <select v-model="entrantSel[c.id]"><option value="">— Superviseur entrant —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
+              <select v-model="entrant1[c.id]"><option value="">— Entrant 1 —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
+              <select v-model="entrant2[c.id]"><option value="">— Entrant 2 (opt.) —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
               <button class="pc-btn sm" @click="prendreConnaissance(c)">Pris connaissance</button>
             </div>
             <div v-else class="pc-ack pending">En attente de lecture</div>
