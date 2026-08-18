@@ -22,12 +22,9 @@ function etatClass(e) {
   return 'none'
 }
 
-// Phases de fabrication (Pesée -> Pelliculage), conditionnement exclu
 const PHASES_FAB = ['pesée', 'pesee', 'granulation', 'séchage', 'sechage', 'calibrage', 'mélange', 'melange', 'compression', 'remplissage', 'gélul', 'gelul', 'pelliculage']
-// Ordre des ateliers selon la gamme de fabrication
 const ORDRE_GAMME = [['pesée', 'pesee'], ['granulation'], ['séchage', 'sechage'], ['calibrage', 'mélange', 'melange'], ['compression'], ['remplissage', 'gélul', 'gelul'], ['pelliculage']]
 function ordreEquip(e) { const t = (e.type || '').toLowerCase(); for (let i = 0; i < ORDRE_GAMME.length; i++) if (ORDRE_GAMME[i].some(k => t.includes(k))) return i; return 999 }
-// Site de production selon le code équipement
 function siteEquip(e) { const c = (e.code || '').toUpperCase(); if (c.startsWith('PRH')) return 'hormonal'; if (c === 'PR054') return 'semi'; return 'seche' }
 function siteLabel(s) { return s === 'hormonal' ? 'Hormonal' : s === 'semi' ? 'Semi-solide' : 'Forme sèche' }
 function ordreSite(e) { const s = siteEquip(e); return s === 'hormonal' ? 0 : s === 'seche' ? 1 : 2 }
@@ -54,13 +51,11 @@ const nbParSite = computed(() => { const m = { hormonal: 0, seche: 0, semi: 0 };
 const form = reactive({
   date_shift: new Date().toISOString().slice(0, 10),
   shift: 'matin',
-  superviseur_sortant: '',
-  taches_realisees: '',
-  taches_a_realiser: ''
+  superviseur_sortant: ''
 })
 
 function initEtat() {
-  for (const e of equipsFab.value) if (!etatEquip[e.id]) etatEquip[e.id] = { etat: '', lot: '', remarque: '' }
+  for (const e of equipsFab.value) if (!etatEquip[e.id]) etatEquip[e.id] = { etat: '', lot: '', realisees: '', aRealiser: '' }
 }
 
 async function charger() {
@@ -88,23 +83,20 @@ async function enregistrer() {
     return
   }
   const equipEtat = equipsFab.value
-    .map(e => { const v = etatEquip[e.id] || {}; return { id: e.id, code: e.code, nom: e.nom, site: siteEquip(e), etat: v.etat || '', lot: (v.lot || '').trim(), remarque: (v.remarque || '').trim() } })
-    .filter(x => x.etat || x.lot || x.remarque)
+    .map(e => { const v = etatEquip[e.id] || {}; return { id: e.id, code: e.code, nom: e.nom, site: siteEquip(e), etat: v.etat || '', lot: (v.lot || '').trim(), realisees: (v.realisees || '').trim(), aRealiser: (v.aRealiser || '').trim() } })
+    .filter(x => x.etat || x.lot || x.realisees || x.aRealiser)
+  if (!equipEtat.length) { erreur.value = 'Renseigne au moins un équipement (état, lot ou tâche).'; return }
   enregistrement.value = true
   erreur.value = ''
   const r = await supabase.from('passation_consignes').insert({
     date_shift: form.date_shift,
     shift: form.shift,
     superviseur_sortant: form.superviseur_sortant,
-    taches_realisees: form.taches_realisees || null,
-    taches_a_realiser: form.taches_a_realiser || null,
     equipements_etat: equipEtat
   })
   enregistrement.value = false
   if (r.error) { erreur.value = 'Enregistrement échoué : ' + r.error.message; return }
-  form.taches_realisees = ''
-  form.taches_a_realiser = ''
-  for (const e of equipsFab.value) etatEquip[e.id] = { etat: '', lot: '', remarque: '' }
+  for (const e of equipsFab.value) etatEquip[e.id] = { etat: '', lot: '', realisees: '', aRealiser: '' }
   await charger()
 }
 
@@ -130,7 +122,7 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
 <template>
   <div class="pc-page">
     <PageHeader title="Passation de consigne — Production" tone="violet">
-      <p class="pc-sub">Transmission entre superviseurs des 3 shifts — état des équipements, tâches réalisées &amp; à réaliser</p>
+      <p class="pc-sub">Transmission entre superviseurs des 3 shifts — état des équipements &amp; tâches par équipement</p>
     </PageHeader>
 
     <p v-if="erreur" class="pc-err">{{ erreur }}</p>
@@ -149,7 +141,7 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
         </div>
 
         <div class="pc-equip">
-          <span class="pc-lbl eq">🏭 État des équipements (fabrication)</span>
+          <span class="pc-lbl eq">🏭 État &amp; tâches des équipements (fabrication)</span>
           <div class="pc-equip-layout">
             <div class="pc-site-nav">
               <button v-for="st in SITES" :key="st.key" type="button" class="pc-site-btn" :class="['sn-' + st.key, { active: siteSel === st.key }]" @click="siteSel = st.key">
@@ -158,23 +150,22 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
             </div>
             <div class="pc-equip-wrap">
               <table class="pc-equip-tbl">
-                <thead><tr><th>Équipement</th><th>État</th><th>Lot en cours</th><th>Remarque</th></tr></thead>
+                <thead><tr><th>Équipement</th><th>État</th><th>Lot</th><th class="ok">✅ Tâches réalisées</th><th class="todo">📋 Tâches à réaliser</th></tr></thead>
                 <tbody>
                   <tr v-for="e in equipsAffiches" :key="e.id">
                     <td class="pc-eq-nom">{{ e.code }} — {{ e.nom }}</td>
                     <td><select v-model="etatEquip[e.id].etat" class="pc-eq-etat" :class="'etat-' + etatClass(etatEquip[e.id].etat)"><option value="">—</option><option v-for="s in ETATS" :key="s" :value="s">{{ s }}</option></select></td>
-                    <td><input v-model="etatEquip[e.id].lot" placeholder="N° lot" /></td>
-                    <td><input v-model="etatEquip[e.id].remarque" placeholder="Remarque…" /></td>
+                    <td><input v-model="etatEquip[e.id].lot" class="pc-in-lot" placeholder="N° lot" /></td>
+                    <td><textarea v-model="etatEquip[e.id].realisees" rows="2" placeholder="Fait…"></textarea></td>
+                    <td><textarea v-model="etatEquip[e.id].aRealiser" rows="2" placeholder="À faire…"></textarea></td>
                   </tr>
-                  <tr v-if="!equipsAffiches.length"><td colspan="4" class="pc-muted">Aucun équipement pour ce site.</td></tr>
+                  <tr v-if="!equipsAffiches.length"><td colspan="5" class="pc-muted">Aucun équipement pour ce site.</td></tr>
                 </tbody>
               </table>
             </div>
           </div>
         </div>
 
-        <label class="pc-field full"><span class="pc-lbl ok">✅ Tâches réalisées</span><textarea v-model="form.taches_realisees" rows="4" placeholder="Ce qui a été fait pendant le shift…"></textarea></label>
-        <label class="pc-field full"><span class="pc-lbl todo">📋 Tâches à réaliser (shift suivant)</span><textarea v-model="form.taches_a_realiser" rows="4" placeholder="Ce qui reste à faire / points de vigilance…"></textarea></label>
         <div class="pc-actions">
           <button class="pc-btn" :disabled="enregistrement" @click="enregistrer">{{ enregistrement ? 'Enregistrement…' : 'Enregistrer la consigne' }}</button>
         </div>
@@ -195,25 +186,22 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
           </header>
 
           <div v-if="c.equipements_etat && c.equipements_etat.length" class="pc-equip-hist">
-            <span class="pc-lbl eq">🏭 Équipements</span>
             <table class="pc-equip-tbl histo">
-              <thead><tr><th>Équipement</th><th>Site</th><th>État</th><th>Lot</th><th>Remarque</th></tr></thead>
+              <thead><tr><th>Équipement</th><th>Site</th><th>État</th><th>Lot</th><th class="ok">✅ Réalisé</th><th class="todo">📋 À réaliser</th></tr></thead>
               <tbody>
                 <tr v-for="(eq, i) in c.equipements_etat" :key="i">
                   <td class="pc-eq-nom">{{ eq.code }}<span class="pc-eq-full"> — {{ eq.nom }}</span></td>
                   <td><span class="pc-site" :class="'site-' + (eq.site || 'seche')">{{ siteLabel(eq.site || 'seche') }}</span></td>
                   <td><span class="pc-etat" :class="'etat-' + etatClass(eq.etat)">{{ eq.etat || '—' }}</span></td>
                   <td class="mono">{{ eq.lot || '—' }}</td>
-                  <td>{{ eq.remarque || '—' }}</td>
+                  <td class="pc-td-txt">{{ eq.realisees || '—' }}</td>
+                  <td class="pc-td-txt">{{ eq.aRealiser || '—' }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
+          <p v-else class="pc-muted">Aucun détail équipement.</p>
 
-          <div class="pc-blocks">
-            <div class="pc-block"><span class="pc-lbl ok">✅ Tâches réalisées</span><p>{{ c.taches_realisees || '—' }}</p></div>
-            <div class="pc-block"><span class="pc-lbl todo">📋 Tâches à réaliser</span><p>{{ c.taches_a_realiser || '—' }}</p></div>
-          </div>
           <footer class="pc-foot">
             <div v-if="c.pris_connaissance" class="pc-ack ok">✓ Pris connaissance par <b>{{ c.superviseur_entrant }}</b> le {{ fmtDateTime(c.pris_connaissance_le) }}</div>
             <div v-else-if="peutEditer" class="pc-ack-form">
@@ -238,21 +226,30 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
 .pc-form { display: flex; flex-direction: column; gap: 14px; }
 .pc-row { display: flex; gap: 14px; flex-wrap: wrap; }
 .pc-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: #475569; }
-.pc-field.full { width: 100%; }
-.pc-field input, .pc-field select, .pc-field textarea { font: inherit; font-weight: 500; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; color: #0f172a; background: #fff; }
-.pc-field textarea { resize: vertical; line-height: 1.4; }
-.pc-field select, .pc-field input { min-width: 190px; }
+.pc-field input, .pc-field select { font: inherit; font-weight: 500; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; color: #0f172a; background: #fff; min-width: 190px; }
 .pc-lbl { font-weight: 800; }
-.pc-lbl.ok { color: #047857; }
-.pc-lbl.todo { color: #b45309; }
 .pc-lbl.eq { color: #4c1d95; }
 .pc-equip { display: flex; flex-direction: column; gap: 6px; }
-.pc-equip-wrap { border: 1px solid #eef2f7; border-radius: 10px; overflow: auto; max-height: 320px; }
+.pc-equip-layout { display: flex; gap: 12px; align-items: flex-start; }
+.pc-site-nav { display: flex; flex-direction: column; gap: 6px; flex: 0 0 150px; }
+.pc-site-btn { text-align: left; border: 1px solid #e2e8f0; background: #fff; border-radius: 9px; padding: 10px 11px; font: inherit; font-weight: 700; font-size: 12.5px; color: #475569; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; transition: all .12s; }
+.pc-site-btn:hover { border-color: #cbd5e1; background: #f8fafc; }
+.pc-site-btn .sn-n { font-size: 11px; background: #f1f5f9; border-radius: 20px; padding: 1px 8px; color: #64748b; font-weight: 700; }
+.pc-site-btn.active { color: #fff; }
+.pc-site-btn.active .sn-n { background: rgba(255,255,255,.25); color: #fff; }
+.pc-site-btn.sn-hormonal.active { background: #be185d; border-color: #be185d; }
+.pc-site-btn.sn-seche.active { background: #1d4ed8; border-color: #1d4ed8; }
+.pc-site-btn.sn-semi.active { background: #a16207; border-color: #a16207; }
+.pc-equip-wrap { border: 1px solid #eef2f7; border-radius: 10px; overflow: auto; max-height: 420px; flex: 1; min-width: 0; }
 .pc-equip-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .pc-equip-tbl th { position: sticky; top: 0; background: #f8fafc; text-align: left; font-size: 11px; color: #64748b; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; z-index: 1; }
-.pc-equip-tbl td { padding: 4px 8px; border-bottom: 1px solid #f1f5f9; }
-.pc-equip-tbl input, .pc-equip-tbl select { font: inherit; padding: 5px 7px; border: 1px solid #cbd5e1; border-radius: 6px; width: 100%; box-sizing: border-box; }
-.pc-eq-nom { font-weight: 700; color: #334155; white-space: nowrap; }
+.pc-equip-tbl th.ok { color: #047857; }
+.pc-equip-tbl th.todo { color: #b45309; }
+.pc-equip-tbl td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+.pc-equip-tbl input, .pc-equip-tbl select, .pc-equip-tbl textarea { font: inherit; padding: 5px 7px; border: 1px solid #cbd5e1; border-radius: 6px; width: 100%; box-sizing: border-box; }
+.pc-equip-tbl textarea { resize: vertical; line-height: 1.35; min-width: 150px; }
+.pc-in-lot { min-width: 80px; }
+.pc-eq-nom { font-weight: 700; color: #334155; white-space: nowrap; min-width: 150px; }
 .pc-eq-etat.etat-marche { color: #047857; }
 .pc-eq-etat.etat-arret { color: #b91c1c; }
 .pc-eq-etat.etat-nett { color: #0369a1; }
@@ -272,9 +269,9 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
 .pc-datechip { font-weight: 700; color: #334155; font-size: 12.5px; }
 .pc-sortant { font-size: 12.5px; color: #475569; }
 .pc-badge { margin-left: auto; font-size: 10.5px; font-weight: 800; color: #92400e; background: #fde68a; border-radius: 20px; padding: 2px 9px; text-transform: uppercase; letter-spacing: .3px; }
-.pc-equip-hist { margin: 4px 0 10px; }
+.pc-equip-hist { margin: 4px 0 10px; overflow-x: auto; }
 .pc-equip-tbl.histo { border: 1px solid #eef2f7; border-radius: 8px; }
-.pc-equip-tbl.histo td { padding: 4px 8px; }
+.pc-td-txt { white-space: pre-wrap; color: #1e293b; max-width: 260px; }
 .pc-etat { font-weight: 700; font-size: 11.5px; border-radius: 5px; padding: 1px 7px; }
 .pc-etat.etat-marche { background: #d1fae5; color: #047857; }
 .pc-etat.etat-arret { background: #fee2e2; color: #b91c1c; }
@@ -286,32 +283,12 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
 .pc-site.site-hormonal { background: #fce7f3; color: #be185d; }
 .pc-site.site-semi { background: #fef9c3; color: #a16207; }
 .pc-site.site-seche { background: #dbeafe; color: #1d4ed8; }
-.pc-site-banner td { font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; padding: 6px 8px; }
-.pc-site-banner.sb-hormonal td { background: #fce7f3; color: #be185d; border-top: 2px solid #f9a8d4; }
-.pc-site-banner.sb-semi td { background: #fef9c3; color: #a16207; border-top: 2px solid #fde047; }
-/* Sélecteur de site à gauche */
-.pc-equip-layout { display: flex; gap: 12px; align-items: flex-start; }
-.pc-site-nav { display: flex; flex-direction: column; gap: 6px; flex: 0 0 150px; }
-.pc-site-btn { text-align: left; border: 1px solid #e2e8f0; background: #fff; border-radius: 9px; padding: 10px 11px; font: inherit; font-weight: 700; font-size: 12.5px; color: #475569; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; transition: all .12s; }
-.pc-site-btn:hover { border-color: #cbd5e1; background: #f8fafc; }
-.pc-site-btn .sn-n { font-size: 11px; background: #f1f5f9; border-radius: 20px; padding: 1px 8px; color: #64748b; font-weight: 700; }
-.pc-site-btn.active { color: #fff; }
-.pc-site-btn.active .sn-n { background: rgba(255,255,255,.25); color: #fff; }
-.pc-site-btn.sn-hormonal.active { background: #be185d; border-color: #be185d; }
-.pc-site-btn.sn-seche.active { background: #1d4ed8; border-color: #1d4ed8; }
-.pc-site-btn.sn-semi.active { background: #a16207; border-color: #a16207; }
-.pc-equip-layout .pc-equip-wrap { flex: 1; min-width: 0; }
-@media (max-width: 640px) { .pc-equip-layout { flex-direction: column; } .pc-site-nav { flex-direction: row; flex-wrap: wrap; } .pc-site-nav .pc-site-btn { flex: 1; } }
 .mono { font-family: ui-monospace, monospace; }
 .pc-eq-full { color: #94a3b8; font-weight: 400; }
-.pc-blocks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.pc-block { background: #fff; border: 1px solid #eef2f7; border-radius: 8px; padding: 8px 10px; }
-.pc-block .pc-lbl { font-size: 11.5px; }
-.pc-block p { margin: 4px 0 0; font-size: 13px; color: #1e293b; white-space: pre-wrap; line-height: 1.4; }
 .pc-foot { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e5e7eb; }
 .pc-ack.ok { color: #047857; font-size: 12.5px; font-weight: 600; }
 .pc-ack.pending { color: #b45309; font-size: 12.5px; font-weight: 600; }
 .pc-ack-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .pc-ack-form select { font: inherit; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
-@media (max-width: 640px) { .pc-blocks { grid-template-columns: 1fr; } .pc-eq-full { display: none; } }
+@media (max-width: 640px) { .pc-equip-layout { flex-direction: column; } .pc-site-nav { flex-direction: row; flex-wrap: wrap; } .pc-site-nav .pc-site-btn { flex: 1; } .pc-eq-full { display: none; } }
 </style>
