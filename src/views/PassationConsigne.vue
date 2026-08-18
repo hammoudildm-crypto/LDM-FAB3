@@ -150,10 +150,10 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
               </button>
             </div>
             <div class="pc-nav-sep">Phase (gamme)</div>
-            <select v-model="phaseSel" class="pc-phase-sel">
-              <option value="">Toutes les phases</option>
-              <option v-for="ph in phasesDisponibles" :key="ph" :value="ph">{{ ph }}</option>
-            </select>
+            <div class="pc-phase-nav">
+              <button type="button" class="pc-phase-btn" :class="{ active: !phaseSel }" @click="phaseSel = ''">Toutes</button>
+              <button v-for="ph in phasesDisponibles" :key="ph" type="button" class="pc-phase-btn" :class="{ active: phaseSel === ph }" @click="phaseSel = ph">{{ ph }}</button>
+            </div>
           </div>
           <div class="pc-equip-right">
             <span class="pc-lbl eq">🏭 État &amp; tâches — {{ siteLabel(siteSel) }}<span v-if="phaseSel"> · {{ phaseSel }}</span></span>
@@ -245,7 +245,10 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
 .pc-left .pc-field input, .pc-left .pc-field select { min-width: 0; width: 100%; box-sizing: border-box; }
 .pc-nav-sep { font-size: 11px; font-weight: 800; color: #4c1d95; text-transform: uppercase; letter-spacing: .4px; margin-top: 6px; padding-top: 8px; border-top: 1px solid #eef2f7; }
 .pc-equip-right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.pc-phase-sel { font: inherit; font-weight: 600; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; box-sizing: border-box; color: #0f172a; background: #fff; }
+.pc-phase-nav { display: flex; flex-direction: column; gap: 5px; }
+.pc-phase-btn { text-align: left; border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 7px 10px; font: inherit; font-weight: 600; font-size: 12px; color: #475569; cursor: pointer; transition: all .12s; }
+.pc-phase-btn:hover { border-color: #cbd5e1; background: #f8fafc; }
+.pc-phase-btn.active { background: #4c1d95; border-color: #4c1d95; color: #fff; }
 .pc-site-nav { display: flex; flex-direction: column; gap: 6px; }
 .pc-site-btn { text-align: left; border: 1px solid #e2e8f0; background: #fff; border-radius: 9px; padding: 10px 11px; font: inherit; font-weight: 700; font-size: 12.5px; color: #475569; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; transition: all .12s; }
 .pc-site-btn:hover { border-color: #cbd5e1; background: #f8fafc; }
