@@ -39,6 +39,9 @@ const erreur = ref('')
 const enregistrement = ref(false)
 const entrant1 = reactive({})
 const entrant2 = reactive({})
+const pin1Ack = reactive({})
+const pin2Ack = reactive({})
+async function verifierPin(nom, pin) { if (!nom || !pin) return false; const r = await supabase.from('superviseurs').select('id').eq('nom', nom).eq('pin', String(pin)).maybeSingle(); return !r.error && !!r.data }
 const etatEquip = reactive({})
 
 const equipsFab = computed(() => equipements.value.filter(e => {
@@ -57,7 +60,9 @@ const form = reactive({
   date_shift: new Date().toISOString().slice(0, 10),
   shift: 'matin',
   superviseur_sortant: '',
-  superviseur_sortant_2: ''
+  superviseur_sortant_2: '',
+  pin_sortant: '',
+  pin_sortant_2: ''
 })
 
 function initEtat() {
@@ -88,6 +93,8 @@ async function enregistrer() {
     erreur.value = 'Renseigne la date, le shift et le superviseur sortant.'
     return
   }
+  if (!(await verifierPin(form.superviseur_sortant, form.pin_sortant))) { erreur.value = 'Code PIN incorrect pour le superviseur sortant 1.'; return }
+  if (form.superviseur_sortant_2 && !(await verifierPin(form.superviseur_sortant_2, form.pin_sortant_2))) { erreur.value = 'Code PIN incorrect pour le superviseur sortant 2.'; return }
   const equipEtat = equipsAffiches.value
     .map(e => { const v = etatEquip[e.id] || {}; return { id: e.id, code: e.code, nom: e.nom, site: siteEquip(e), etat: v.etat || '', lot: (v.lot || '').trim(), realisees: (v.realisees || '').trim(), aRealiser: (v.aRealiser || '').trim() } })
     .filter(x => x.etat || x.lot || x.realisees || x.aRealiser)
@@ -101,17 +108,21 @@ async function enregistrer() {
     superviseur_sortant_2: form.superviseur_sortant_2 || null,
     site: siteSel.value,
     phase: phaseSel.value || 'Toutes',
+    sortant_signe_le: new Date().toISOString(),
     equipements_etat: equipEtat
   })
   enregistrement.value = false
   if (r.error) { erreur.value = 'Enregistrement échoué : ' + r.error.message; return }
   for (const e of equipsAffiches.value) etatEquip[e.id] = { etat: '', lot: '', realisees: '', aRealiser: '' }
+  form.pin_sortant = ''; form.pin_sortant_2 = ''
   await charger()
 }
 
 async function prendreConnaissance(c) {
   const n1 = entrant1[c.id]
   if (!n1) { erreur.value = 'Choisis au moins le superviseur entrant 1 avant de valider.'; return }
+  if (!(await verifierPin(n1, pin1Ack[c.id]))) { erreur.value = 'Code PIN incorrect pour l'entrant 1.'; return }
+  if (entrant2[c.id] && !(await verifierPin(entrant2[c.id], pin2Ack[c.id]))) { erreur.value = 'Code PIN incorrect pour l'entrant 2.'; return }
   erreur.value = ''
   const r = await supabase.from('passation_consignes').update({
     pris_connaissance: true,
@@ -149,8 +160,14 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
             <label class="pc-field"><span>Superviseur sortant 1</span>
               <select v-model="form.superviseur_sortant"><option value="">— Choisir —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
             </label>
+            <label class="pc-field"><span>🔒 Code PIN sortant 1</span>
+              <input type="password" v-model="form.pin_sortant" placeholder="Code confidentiel" autocomplete="off" />
+            </label>
             <label class="pc-field"><span>Superviseur sortant 2</span>
               <select v-model="form.superviseur_sortant_2"><option value="">— (optionnel) —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
+            </label>
+            <label class="pc-field" v-if="form.superviseur_sortant_2"><span>🔒 Code PIN sortant 2</span>
+              <input type="password" v-model="form.pin_sortant_2" placeholder="Code confidentiel" autocomplete="off" />
             </label>
             <div class="pc-filters">
               <div class="pc-filter-col">
@@ -231,8 +248,10 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
             <div v-if="c.pris_connaissance" class="pc-ack ok">✓ Pris connaissance par <b>{{ c.superviseur_entrant }}{{ c.superviseur_entrant_2 ? ' & ' + c.superviseur_entrant_2 : '' }}</b> le {{ fmtDateTime(c.pris_connaissance_le) }}</div>
             <div v-else-if="peutEditer" class="pc-ack-form">
               <select v-model="entrant1[c.id]"><option value="">— Entrant 1 —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
+              <input type="password" v-model="pin1Ack[c.id]" class="pc-pin" placeholder="PIN 1" autocomplete="off" />
               <select v-model="entrant2[c.id]"><option value="">— Entrant 2 (opt.) —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
-              <button class="pc-btn sm" @click="prendreConnaissance(c)">Pris connaissance</button>
+              <input type="password" v-model="pin2Ack[c.id]" class="pc-pin" placeholder="PIN 2" autocomplete="off" />
+              <button class="pc-btn sm" @click="prendreConnaissance(c)">Signer (pris connaissance)</button>
             </div>
             <div v-else class="pc-ack pending">En attente de lecture</div>
           </footer>
@@ -329,5 +348,6 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
 .pc-ack.pending { color: #b45309; font-size: 12.5px; font-weight: 600; }
 .pc-ack-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .pc-ack-form select { font: inherit; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
+.pc-pin { font: inherit; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; width: 90px; }
 @media (max-width: 640px) { .pc-equip-layout { flex-direction: column; } .pc-site-nav { flex-direction: row; flex-wrap: wrap; } .pc-site-nav .pc-site-btn { flex: 1; } .pc-eq-full { display: none; } }
 </style>
