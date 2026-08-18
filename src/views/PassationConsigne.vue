@@ -28,6 +28,8 @@ function ordreEquip(e) { const t = (e.type || '').toLowerCase(); for (let i = 0;
 function siteEquip(e) { const c = (e.code || '').toUpperCase(); if (c.startsWith('PRH')) return 'hormonal'; if (c === 'PR054') return 'semi'; return 'seche' }
 function siteLabel(s) { return s === 'hormonal' ? 'Hormonal' : s === 'semi' ? 'Semi-solide' : 'Forme sèche' }
 function ordreSite(e) { const s = siteEquip(e); return s === 'hormonal' ? 0 : s === 'seche' ? 1 : 2 }
+const PHASES_NOMS = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage gélules', 'Pelliculage']
+function phaseEquip(e) { const i = ordreEquip(e); return i < PHASES_NOMS.length ? PHASES_NOMS[i] : 'Autre' }
 
 const superviseurs = ref([])
 const equipements = ref([])
@@ -45,7 +47,9 @@ const equipsFab = computed(() => equipements.value.filter(e => {
 
 const SITES = [{ key: 'hormonal', label: 'Hormonal' }, { key: 'seche', label: 'Forme sèche' }, { key: 'semi', label: 'Semi-solide' }]
 const siteSel = ref('seche')
-const equipsAffiches = computed(() => equipsFab.value.filter(e => siteEquip(e) === siteSel.value))
+const phaseSel = ref('')
+const phasesDisponibles = computed(() => { const set = new Set(); for (const e of equipsFab.value) if (siteEquip(e) === siteSel.value) set.add(phaseEquip(e)); return [...PHASES_NOMS, 'Autre'].filter(p => set.has(p)) })
+const equipsAffiches = computed(() => equipsFab.value.filter(e => siteEquip(e) === siteSel.value && (!phaseSel.value || phaseEquip(e) === phaseSel.value)))
 const nbParSite = computed(() => { const m = { hormonal: 0, seche: 0, semi: 0 }; for (const e of equipsFab.value) m[siteEquip(e)] = (m[siteEquip(e)] || 0) + 1; return m })
 
 const form = reactive({
@@ -141,13 +145,18 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
             </label>
             <div class="pc-nav-sep">🏭 Site de production</div>
             <div class="pc-site-nav">
-              <button v-for="st in SITES" :key="st.key" type="button" class="pc-site-btn" :class="['sn-' + st.key, { active: siteSel === st.key }]" @click="siteSel = st.key">
+              <button v-for="st in SITES" :key="st.key" type="button" class="pc-site-btn" :class="['sn-' + st.key, { active: siteSel === st.key }]" @click="siteSel = st.key; phaseSel = ''">
                 <span class="sn-lbl">{{ st.label }}</span><span class="sn-n">{{ nbParSite[st.key] }}</span>
               </button>
             </div>
+            <div class="pc-nav-sep">Phase (gamme)</div>
+            <select v-model="phaseSel" class="pc-phase-sel">
+              <option value="">Toutes les phases</option>
+              <option v-for="ph in phasesDisponibles" :key="ph" :value="ph">{{ ph }}</option>
+            </select>
           </div>
           <div class="pc-equip-right">
-            <span class="pc-lbl eq">🏭 État &amp; tâches — {{ siteLabel(siteSel) }}</span>
+            <span class="pc-lbl eq">🏭 État &amp; tâches — {{ siteLabel(siteSel) }}<span v-if="phaseSel"> · {{ phaseSel }}</span></span>
             <div class="pc-equip-wrap">
               <table class="pc-equip-tbl">
                 <thead><tr><th>Équipement</th><th>État</th><th>Lot</th><th class="ok">✅ Tâches réalisées</th><th class="todo">📋 Tâches à réaliser</th></tr></thead>
@@ -236,6 +245,7 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
 .pc-left .pc-field input, .pc-left .pc-field select { min-width: 0; width: 100%; box-sizing: border-box; }
 .pc-nav-sep { font-size: 11px; font-weight: 800; color: #4c1d95; text-transform: uppercase; letter-spacing: .4px; margin-top: 6px; padding-top: 8px; border-top: 1px solid #eef2f7; }
 .pc-equip-right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.pc-phase-sel { font: inherit; font-weight: 600; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; box-sizing: border-box; color: #0f172a; background: #fff; }
 .pc-site-nav { display: flex; flex-direction: column; gap: 6px; }
 .pc-site-btn { text-align: left; border: 1px solid #e2e8f0; background: #fff; border-radius: 9px; padding: 10px 11px; font: inherit; font-weight: 700; font-size: 12.5px; color: #475569; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; transition: all .12s; }
 .pc-site-btn:hover { border-color: #cbd5e1; background: #f8fafc; }
