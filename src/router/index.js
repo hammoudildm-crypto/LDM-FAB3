@@ -35,6 +35,7 @@ import SuiviTRS from '../views/SuiviTRS.vue'
 import SuiviCapacite from '../views/SuiviCapacite.vue'
 import IndicateursQSE from '../views/IndicateursQSE.vue'
 import Cadences from '../views/Cadences.vue'
+import PassationConsigne from '../views/PassationConsigne.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Hub },
@@ -70,6 +71,7 @@ const routes = [
   { path: '/capacite', name: 'capacite', component: SuiviCapacite },
   { path: '/qse', name: 'qse', component: IndicateursQSE },
   { path: '/cadences', name: 'cadences', component: Cadences },
+  { path: '/passation', name: 'passation', component: PassationConsigne },
   { path: '/compte', name: 'compte', component: MonCompte },
   { path: '/login', name: 'login', component: Login },
 ]
