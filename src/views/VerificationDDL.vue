@@ -51,7 +51,7 @@ async function fetchAllPaged(make) {
 async function charger() {
   msg.value = ''
   const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, ddl_verifie, ddl_verificateur, ddl_date_verification, ddl_reserve, produits(designation, code_pf, gamme)')
+    .select('id, numero_lot, statut, en_triage, triage_fin, date_lancement, date_fin_fabrication, ddl_verifie, ddl_verificateur, ddl_date_verification, ddl_reserve, produits(designation, code_pf, gamme)')
     .eq('actif', true)
     .order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (r.error) { msg.value = r.error.message; return }
@@ -117,6 +117,7 @@ const produits = computed(() => lots.value.filter(l => {
 }))
 const verifies = computed(() => produits.value.filter(l => l.ddl_verifie))
 const attente = computed(() => produits.value.filter(l => !l.ddl_verifie).sort((a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })))
+const triageIds = computed(() => new Set(lots.value.filter(l => !!l.en_triage && !l.triage_fin).map(l => l.id)))
 const attenteParMois = computed(() => {
   const a = Array(12).fill(0)
   for (const l of attente.value) {
@@ -379,7 +380,7 @@ async function devalider(l) {
           <thead><tr><th>Lot</th><th>Produit</th><th>Réserver vérificateur</th><th class="right">Fin fab.</th><th></th></tr></thead>
           <tbody>
             <template v-for="l in attente" :key="l.id">
-              <tr>
+              <tr :class="{ 'ddl-triage': triageIds.has(l.id) }">
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td class="desig">{{ prodNom(l) }}</td>
                 <td>
@@ -697,4 +698,7 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 
 /* Colonnes de même hauteur : bas aligné */
 .verif-3col > .v3-col > .card:last-child { flex: 1 1 auto; }
+/* Lots en cours de triage (fabrication) */
+tr.ddl-triage td { background: #fef3c7; }
+tr.ddl-triage .mono::after { content: ' 🔍 triage'; color: #b45309; font-size: .78em; font-weight: 700; white-space: nowrap; }
 </style>
