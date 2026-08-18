@@ -121,8 +121,8 @@ async function enregistrer() {
 async function prendreConnaissance(c) {
   const n1 = entrant1[c.id]
   if (!n1) { erreur.value = 'Choisis au moins le superviseur entrant 1 avant de valider.'; return }
-  if (!(await verifierPin(n1, pin1Ack[c.id]))) { erreur.value = 'Code PIN incorrect pour l'entrant 1.'; return }
-  if (entrant2[c.id] && !(await verifierPin(entrant2[c.id], pin2Ack[c.id]))) { erreur.value = 'Code PIN incorrect pour l'entrant 2.'; return }
+  if (!(await verifierPin(n1, pin1Ack[c.id]))) { erreur.value = 'Code PIN incorrect pour le superviseur entrant 1.'; return }
+  if (entrant2[c.id] && !(await verifierPin(entrant2[c.id], pin2Ack[c.id]))) { erreur.value = 'Code PIN incorrect pour le superviseur entrant 2.'; return }
   erreur.value = ''
   const r = await supabase.from('passation_consignes').update({
     pris_connaissance: true,
