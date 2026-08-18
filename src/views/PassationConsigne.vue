@@ -143,16 +143,22 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
             <label class="pc-field"><span>Superviseur sortant</span>
               <select v-model="form.superviseur_sortant"><option value="">— Choisir —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
             </label>
-            <div class="pc-nav-sep">🏭 Site de production</div>
-            <div class="pc-site-nav">
-              <button v-for="st in SITES" :key="st.key" type="button" class="pc-site-btn" :class="['sn-' + st.key, { active: siteSel === st.key }]" @click="siteSel = st.key; phaseSel = ''">
-                <span class="sn-lbl">{{ st.label }}</span><span class="sn-n">{{ nbParSite[st.key] }}</span>
-              </button>
-            </div>
-            <div class="pc-nav-sep">Phase (gamme)</div>
-            <div class="pc-phase-nav">
-              <button type="button" class="pc-phase-btn" :class="{ active: !phaseSel }" @click="phaseSel = ''">Toutes</button>
-              <button v-for="ph in phasesDisponibles" :key="ph" type="button" class="pc-phase-btn" :class="{ active: phaseSel === ph }" @click="phaseSel = ph">{{ ph }}</button>
+            <div class="pc-filters">
+              <div class="pc-filter-col">
+                <div class="pc-nav-sep">🏭 Site</div>
+                <div class="pc-site-nav">
+                  <button v-for="st in SITES" :key="st.key" type="button" class="pc-site-btn" :class="['sn-' + st.key, { active: siteSel === st.key }]" @click="siteSel = st.key; phaseSel = ''">
+                    <span class="sn-lbl">{{ st.label }}</span><span class="sn-n">{{ nbParSite[st.key] }}</span>
+                  </button>
+                </div>
+              </div>
+              <div class="pc-filter-col">
+                <div class="pc-nav-sep">Phase</div>
+                <div class="pc-phase-nav">
+                  <button type="button" class="pc-phase-btn" :class="{ active: !phaseSel }" @click="phaseSel = ''">Toutes</button>
+                  <button v-for="ph in phasesDisponibles" :key="ph" type="button" class="pc-phase-btn" :class="{ active: phaseSel === ph }" @click="phaseSel = ph">{{ ph }}</button>
+                </div>
+              </div>
             </div>
           </div>
           <div class="pc-equip-right">
@@ -240,10 +246,13 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
 .pc-lbl.eq { color: #4c1d95; }
 .pc-equip { display: flex; flex-direction: column; gap: 6px; }
 .pc-equip-layout { display: flex; gap: 12px; align-items: flex-start; }
-.pc-left { flex: 0 0 215px; display: flex; flex-direction: column; gap: 10px; }
+.pc-left { flex: 0 0 340px; display: flex; flex-direction: column; gap: 10px; }
 .pc-left .pc-field { width: 100%; }
 .pc-left .pc-field input, .pc-left .pc-field select { min-width: 0; width: 100%; box-sizing: border-box; }
 .pc-nav-sep { font-size: 11px; font-weight: 800; color: #4c1d95; text-transform: uppercase; letter-spacing: .4px; margin-top: 6px; padding-top: 8px; border-top: 1px solid #eef2f7; }
+.pc-filters { display: flex; gap: 12px; align-items: flex-start; }
+.pc-filter-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.pc-filters .pc-nav-sep { margin-top: 0; padding-top: 0; border-top: none; }
 .pc-equip-right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .pc-phase-nav { display: flex; flex-direction: column; gap: 5px; }
 .pc-phase-btn { text-align: left; border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 7px 10px; font: inherit; font-weight: 600; font-size: 12px; color: #475569; cursor: pointer; transition: all .12s; }
