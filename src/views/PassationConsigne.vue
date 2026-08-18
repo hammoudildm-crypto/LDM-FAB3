@@ -88,10 +88,10 @@ async function enregistrer() {
     erreur.value = 'Renseigne la date, le shift et le superviseur sortant.'
     return
   }
-  const equipEtat = equipsFab.value
+  const equipEtat = equipsAffiches.value
     .map(e => { const v = etatEquip[e.id] || {}; return { id: e.id, code: e.code, nom: e.nom, site: siteEquip(e), etat: v.etat || '', lot: (v.lot || '').trim(), realisees: (v.realisees || '').trim(), aRealiser: (v.aRealiser || '').trim() } })
     .filter(x => x.etat || x.lot || x.realisees || x.aRealiser)
-  if (!equipEtat.length) { erreur.value = 'Renseigne au moins un équipement (état, lot ou tâche).'; return }
+  if (!equipEtat.length) { erreur.value = 'Renseigne au moins un équipement de cette phase.'; return }
   enregistrement.value = true
   erreur.value = ''
   const r = await supabase.from('passation_consignes').insert({
@@ -99,11 +99,13 @@ async function enregistrer() {
     shift: form.shift,
     superviseur_sortant: form.superviseur_sortant,
     superviseur_sortant_2: form.superviseur_sortant_2 || null,
+    site: siteSel.value,
+    phase: phaseSel.value || 'Toutes',
     equipements_etat: equipEtat
   })
   enregistrement.value = false
   if (r.error) { erreur.value = 'Enregistrement échoué : ' + r.error.message; return }
-  for (const e of equipsFab.value) etatEquip[e.id] = { etat: '', lot: '', realisees: '', aRealiser: '' }
+  for (const e of equipsAffiches.value) etatEquip[e.id] = { etat: '', lot: '', realisees: '', aRealiser: '' }
   await charger()
 }
 
@@ -189,7 +191,7 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
         </div>
 
         <div class="pc-actions">
-          <button class="pc-btn" :disabled="enregistrement" @click="enregistrer">{{ enregistrement ? 'Enregistrement…' : 'Enregistrer la consigne' }}</button>
+          <button class="pc-btn" :disabled="enregistrement" @click="enregistrer">{{ enregistrement ? 'Enregistrement…' : ('Enregistrer — ' + siteLabel(siteSel) + (phaseSel ? ' · ' + phaseSel : ' · toutes phases')) }}</button>
         </div>
       </div>
     </section>
@@ -203,6 +205,7 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
           <header class="pc-head">
             <span class="pc-shift">{{ shiftLabel(c.shift) }}</span>
             <span class="pc-datechip">{{ fmtDate(c.date_shift) }}</span>
+            <span v-if="c.site || c.phase" class="pc-sitephase">{{ siteLabel(c.site || 'seche') }}<template v-if="c.phase && c.phase !== 'Toutes'"> · {{ c.phase }}</template></span>
             <span class="pc-sortant">Sortant : <b>{{ c.superviseur_sortant }}{{ c.superviseur_sortant_2 ? ' & ' + c.superviseur_sortant_2 : '' }}</b></span>
             <span v-if="!c.pris_connaissance" class="pc-badge">Non lu</span>
           </header>
@@ -302,6 +305,7 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
 .pc-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
 .pc-shift { font-weight: 800; color: #4c1d95; background: #ede9fe; border-radius: 6px; padding: 2px 10px; font-size: 12.5px; }
 .pc-datechip { font-weight: 700; color: #334155; font-size: 12.5px; }
+.pc-sitephase { font-weight: 700; color: #1d4ed8; background: #eff6ff; border: 1px solid #dbeafe; border-radius: 6px; padding: 2px 9px; font-size: 11.5px; }
 .pc-sortant { font-size: 12.5px; color: #475569; }
 .pc-badge { margin-left: auto; font-size: 10.5px; font-weight: 800; color: #92400e; background: #fde68a; border-radius: 20px; padding: 2px 9px; text-transform: uppercase; letter-spacing: .3px; }
 .pc-equip-hist { margin: 4px 0 10px; overflow-x: auto; }
