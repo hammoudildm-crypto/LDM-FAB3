@@ -24,6 +24,9 @@ function etatClass(e) {
 
 // Phases de fabrication (Pesée -> Pelliculage), conditionnement exclu
 const PHASES_FAB = ['pesée', 'pesee', 'granulation', 'séchage', 'sechage', 'calibrage', 'mélange', 'melange', 'compression', 'remplissage', 'gélul', 'gelul', 'pelliculage']
+// Ordre des ateliers selon la gamme de fabrication
+const ORDRE_GAMME = [['pesée', 'pesee'], ['granulation'], ['séchage', 'sechage'], ['calibrage', 'mélange', 'melange'], ['compression'], ['remplissage', 'gélul', 'gelul'], ['pelliculage']]
+function ordreEquip(e) { const t = (e.type || '').toLowerCase(); for (let i = 0; i < ORDRE_GAMME.length; i++) if (ORDRE_GAMME[i].some(k => t.includes(k))) return i; return 999 }
 
 const superviseurs = ref([])
 const equipements = ref([])
@@ -37,7 +40,7 @@ const etatEquip = reactive({})
 const equipsFab = computed(() => equipements.value.filter(e => {
   const t = (e.type || '').toLowerCase()
   return PHASES_FAB.some(ph => t.includes(ph))
-}))
+}).sort((a, b) => (ordreEquip(a) - ordreEquip(b)) || String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true })))
 
 const form = reactive({
   date_shift: new Date().toISOString().slice(0, 10),
