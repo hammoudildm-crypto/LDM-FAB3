@@ -130,24 +130,24 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
     <section v-if="peutEditer" class="pc-card">
       <h2 class="pc-title">Nouvelle passation</h2>
       <div class="pc-form">
-        <div class="pc-row">
-          <label class="pc-field"><span>Date</span><input type="date" v-model="form.date_shift" /></label>
-          <label class="pc-field"><span>Shift</span>
-            <select v-model="form.shift"><option v-for="s in SHIFTS" :key="s.key" :value="s.key">{{ s.label }}</option></select>
-          </label>
-          <label class="pc-field"><span>Superviseur sortant</span>
-            <select v-model="form.superviseur_sortant"><option value="">— Choisir —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
-          </label>
-        </div>
-
-        <div class="pc-equip">
-          <span class="pc-lbl eq">🏭 État &amp; tâches des équipements (fabrication)</span>
-          <div class="pc-equip-layout">
+        <div class="pc-equip-layout">
+          <div class="pc-left">
+            <label class="pc-field"><span>Date</span><input type="date" v-model="form.date_shift" /></label>
+            <label class="pc-field"><span>Shift</span>
+              <select v-model="form.shift"><option v-for="s in SHIFTS" :key="s.key" :value="s.key">{{ s.label }}</option></select>
+            </label>
+            <label class="pc-field"><span>Superviseur sortant</span>
+              <select v-model="form.superviseur_sortant"><option value="">— Choisir —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
+            </label>
+            <div class="pc-nav-sep">🏭 Site de production</div>
             <div class="pc-site-nav">
               <button v-for="st in SITES" :key="st.key" type="button" class="pc-site-btn" :class="['sn-' + st.key, { active: siteSel === st.key }]" @click="siteSel = st.key">
                 <span class="sn-lbl">{{ st.label }}</span><span class="sn-n">{{ nbParSite[st.key] }}</span>
               </button>
             </div>
+          </div>
+          <div class="pc-equip-right">
+            <span class="pc-lbl eq">🏭 État &amp; tâches — {{ siteLabel(siteSel) }}</span>
             <div class="pc-equip-wrap">
               <table class="pc-equip-tbl">
                 <thead><tr><th>Équipement</th><th>État</th><th>Lot</th><th class="ok">✅ Tâches réalisées</th><th class="todo">📋 Tâches à réaliser</th></tr></thead>
@@ -231,7 +231,12 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
 .pc-lbl.eq { color: #4c1d95; }
 .pc-equip { display: flex; flex-direction: column; gap: 6px; }
 .pc-equip-layout { display: flex; gap: 12px; align-items: flex-start; }
-.pc-site-nav { display: flex; flex-direction: column; gap: 6px; flex: 0 0 150px; }
+.pc-left { flex: 0 0 215px; display: flex; flex-direction: column; gap: 10px; }
+.pc-left .pc-field { width: 100%; }
+.pc-left .pc-field input, .pc-left .pc-field select { min-width: 0; width: 100%; box-sizing: border-box; }
+.pc-nav-sep { font-size: 11px; font-weight: 800; color: #4c1d95; text-transform: uppercase; letter-spacing: .4px; margin-top: 6px; padding-top: 8px; border-top: 1px solid #eef2f7; }
+.pc-equip-right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.pc-site-nav { display: flex; flex-direction: column; gap: 6px; }
 .pc-site-btn { text-align: left; border: 1px solid #e2e8f0; background: #fff; border-radius: 9px; padding: 10px 11px; font: inherit; font-weight: 700; font-size: 12.5px; color: #475569; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; transition: all .12s; }
 .pc-site-btn:hover { border-color: #cbd5e1; background: #f8fafc; }
 .pc-site-btn .sn-n { font-size: 11px; background: #f1f5f9; border-radius: 20px; padding: 1px 8px; color: #64748b; font-weight: 700; }
