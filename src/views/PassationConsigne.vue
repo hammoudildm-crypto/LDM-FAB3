@@ -30,6 +30,7 @@ function ordreEquip(e) { const t = (e.type || '').toLowerCase(); for (let i = 0;
 // Site de production selon le code équipement
 function siteEquip(e) { const c = (e.code || '').toUpperCase(); if (c.startsWith('PRH')) return 'hormonal'; if (c === 'PR054') return 'semi'; return 'seche' }
 function siteLabel(s) { return s === 'hormonal' ? 'Hormonal' : s === 'semi' ? 'Semi-solide' : 'Forme sèche' }
+function ordreSite(e) { const s = siteEquip(e); return s === 'hormonal' ? 0 : s === 'seche' ? 1 : 2 }
 
 const superviseurs = ref([])
 const equipements = ref([])
@@ -43,7 +44,7 @@ const etatEquip = reactive({})
 const equipsFab = computed(() => equipements.value.filter(e => {
   const t = (e.type || '').toLowerCase()
   return PHASES_FAB.some(ph => t.includes(ph))
-}).sort((a, b) => (ordreEquip(a) - ordreEquip(b)) || String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true })))
+}).sort((a, b) => (ordreSite(a) - ordreSite(b)) || (ordreEquip(a) - ordreEquip(b)) || String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true })))
 
 const form = reactive({
   date_shift: new Date().toISOString().slice(0, 10),
