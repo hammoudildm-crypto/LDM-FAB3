@@ -27,6 +27,9 @@ const PHASES_FAB = ['pesée', 'pesee', 'granulation', 'séchage', 'sechage', 'ca
 // Ordre des ateliers selon la gamme de fabrication
 const ORDRE_GAMME = [['pesée', 'pesee'], ['granulation'], ['séchage', 'sechage'], ['calibrage', 'mélange', 'melange'], ['compression'], ['remplissage', 'gélul', 'gelul'], ['pelliculage']]
 function ordreEquip(e) { const t = (e.type || '').toLowerCase(); for (let i = 0; i < ORDRE_GAMME.length; i++) if (ORDRE_GAMME[i].some(k => t.includes(k))) return i; return 999 }
+// Site de production selon le code équipement
+function siteEquip(e) { const c = (e.code || '').toUpperCase(); if (c.startsWith('PRH')) return 'hormonal'; if (c === 'PR054') return 'semi'; return 'seche' }
+function siteLabel(s) { return s === 'hormonal' ? 'Hormonal' : s === 'semi' ? 'Semi-solide' : 'Forme sèche' }
 
 const superviseurs = ref([])
 const equipements = ref([])
@@ -79,7 +82,7 @@ async function enregistrer() {
     return
   }
   const equipEtat = equipsFab.value
-    .map(e => { const v = etatEquip[e.id] || {}; return { id: e.id, code: e.code, nom: e.nom, etat: v.etat || '', lot: (v.lot || '').trim(), remarque: (v.remarque || '').trim() } })
+    .map(e => { const v = etatEquip[e.id] || {}; return { id: e.id, code: e.code, nom: e.nom, site: siteEquip(e), etat: v.etat || '', lot: (v.lot || '').trim(), remarque: (v.remarque || '').trim() } })
     .filter(x => x.etat || x.lot || x.remarque)
   enregistrement.value = true
   erreur.value = ''
@@ -143,15 +146,16 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
           <span class="pc-lbl eq">🏭 État des équipements (fabrication)</span>
           <div class="pc-equip-wrap">
             <table class="pc-equip-tbl">
-              <thead><tr><th>Équipement</th><th>État</th><th>Lot en cours</th><th>Remarque</th></tr></thead>
+              <thead><tr><th>Équipement</th><th>Site</th><th>État</th><th>Lot en cours</th><th>Remarque</th></tr></thead>
               <tbody>
                 <tr v-for="e in equipsFab" :key="e.id">
                   <td class="pc-eq-nom">{{ e.code }} — {{ e.nom }}</td>
+                  <td><span class="pc-site" :class="'site-' + siteEquip(e)">{{ siteLabel(siteEquip(e)) }}</span></td>
                   <td><select v-model="etatEquip[e.id].etat" class="pc-eq-etat" :class="'etat-' + etatClass(etatEquip[e.id].etat)"><option value="">—</option><option v-for="s in ETATS" :key="s" :value="s">{{ s }}</option></select></td>
                   <td><input v-model="etatEquip[e.id].lot" placeholder="N° lot" /></td>
                   <td><input v-model="etatEquip[e.id].remarque" placeholder="Remarque…" /></td>
                 </tr>
-                <tr v-if="!equipsFab.length"><td colspan="4" class="pc-muted">Aucun équipement de fabrication trouvé.</td></tr>
+                <tr v-if="!equipsFab.length"><td colspan="5" class="pc-muted">Aucun équipement de fabrication trouvé.</td></tr>
               </tbody>
             </table>
           </div>
@@ -181,10 +185,11 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
           <div v-if="c.equipements_etat && c.equipements_etat.length" class="pc-equip-hist">
             <span class="pc-lbl eq">🏭 Équipements</span>
             <table class="pc-equip-tbl histo">
-              <thead><tr><th>Équipement</th><th>État</th><th>Lot</th><th>Remarque</th></tr></thead>
+              <thead><tr><th>Équipement</th><th>Site</th><th>État</th><th>Lot</th><th>Remarque</th></tr></thead>
               <tbody>
                 <tr v-for="(eq, i) in c.equipements_etat" :key="i">
                   <td class="pc-eq-nom">{{ eq.code }}<span class="pc-eq-full"> — {{ eq.nom }}</span></td>
+                  <td><span class="pc-site" :class="'site-' + (eq.site || 'seche')">{{ siteLabel(eq.site || 'seche') }}</span></td>
                   <td><span class="pc-etat" :class="'etat-' + etatClass(eq.etat)">{{ eq.etat || '—' }}</span></td>
                   <td class="mono">{{ eq.lot || '—' }}</td>
                   <td>{{ eq.remarque || '—' }}</td>
@@ -265,6 +270,10 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
 .pc-etat.etat-maint { background: #ede9fe; color: #7c3aed; }
 .pc-etat.etat-dispo { background: #f1f5f9; color: #64748b; }
 .pc-etat.etat-none { background: #f8fafc; color: #94a3b8; }
+.pc-site { font-weight: 700; font-size: 11px; border-radius: 5px; padding: 1px 7px; white-space: nowrap; }
+.pc-site.site-hormonal { background: #fce7f3; color: #be185d; }
+.pc-site.site-semi { background: #fef9c3; color: #a16207; }
+.pc-site.site-seche { background: #dbeafe; color: #1d4ed8; }
 .mono { font-family: ui-monospace, monospace; }
 .pc-eq-full { color: #94a3b8; font-weight: 400; }
 .pc-blocks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
