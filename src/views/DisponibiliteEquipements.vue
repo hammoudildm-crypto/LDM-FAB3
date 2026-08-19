@@ -75,7 +75,7 @@ async function charger() {
   equipements.value = re.data || []
 
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, en_triage, triage_debut, triage_fin, qte_a_trier, qte_triee, en_triage_cond, triage_cond_debut, triage_cond_fin, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite), equipements(code, nom)')
+    .select('id, numero_lot, statut, en_triage, triage_debut, triage_fin, qte_a_trier, qte_triee, en_triage_cond, triage_cond_debut, triage_cond_fin, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite, taille_lot, poids_unitaire_mg), equipements(code, nom)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
@@ -225,7 +225,10 @@ const lotsTriage = computed(() => {
     let phaseAct = ''
     const ph = pl[o.id] || {}
     for (const P of PHASES) { const rec = ph[P.key]; if (rec && rec.statut !== 'Terminé') { phaseAct = P.label; break } }
-    const aTrierDef = o.qte_a_trier != null ? o.qte_a_trier : (o.boites_fabriquees || o.quantite_theorique || 0)
+    const upbT = Number(prod.unites_par_boite) || 0, pmgT = Number(prod.poids_unitaire_mg) || 0
+    const boitesT = Number(o.boites_fabriquees) || Number(prod.taille_lot) || 0
+    const kgLot = Math.round((boitesT * upbT * pmgT) / 1e6 * 100) / 100
+    const aTrierDef = o.qte_a_trier != null ? o.qte_a_trier : kgLot
     return { id: o.id, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin || '', qteATrier: aTrierDef, qteTriee: o.qte_triee != null ? o.qte_triee : 0 }
   })
 })
@@ -741,14 +744,14 @@ onMounted(async () => {
         <section class="triage-box">
           <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
           <table v-if="lotsTriage.length" class="triage-tbl">
-            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th class="tnum">À trier</th><th class="tnum">Triée</th><th>Avancement</th><th></th></tr></thead>
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th class="tnum">À trier (Kg)</th><th class="tnum">Triée (Kg)</th><th>Avancement</th><th></th></tr></thead>
             <tbody>
               <tr v-for="l in lotsTriage" :key="l.id" class="triage-row">
                 <td class="t-lot" @click="ouvrirTriageFin(l.id)" title="Ouvrir l'OF (date de fin de triage)">{{ l.lot }}</td>
                 <td @click="ouvrirTriageFin(l.id)">{{ l.code }} — {{ l.desig }}</td>
                 <td>{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
-                <td class="tnum"><input type="number" min="0" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop /></td>
-                <td class="tnum"><input type="number" min="0" v-model.number="qteEdit[l.id].triee" class="tq" @click.stop /></td>
+                <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop /></td>
+                <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].triee" class="tq" @click.stop /></td>
                 <td class="t-prog">
                   <div class="tp-bar"><div class="tp-fill" :class="{ full: pctTriage(l.id) >= 100 }" :style="{ width: pctTriage(l.id) + '%' }"></div></div>
                   <span class="tp-pct">{{ pctTriage(l.id) }}%</span>
