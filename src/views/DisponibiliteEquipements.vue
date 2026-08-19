@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
@@ -75,7 +75,7 @@ async function charger() {
   equipements.value = re.data || []
 
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, en_triage, triage_debut, triage_fin, en_triage_cond, triage_cond_debut, triage_cond_fin, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite), equipements(code, nom)')
+    .select('id, numero_lot, statut, en_triage, triage_debut, triage_fin, qte_a_trier, qte_triee, en_triage_cond, triage_cond_debut, triage_cond_fin, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite), equipements(code, nom)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
@@ -225,7 +225,8 @@ const lotsTriage = computed(() => {
     let phaseAct = ''
     const ph = pl[o.id] || {}
     for (const P of PHASES) { const rec = ph[P.key]; if (rec && rec.statut !== 'Terminé') { phaseAct = P.label; break } }
-    return { id: o.id, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin || '' }
+    const aTrierDef = o.qte_a_trier != null ? o.qte_a_trier : (o.boites_fabriquees || o.quantite_theorique || 0)
+    return { id: o.id, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin || '', qteATrier: aTrierDef, qteTriee: o.qte_triee != null ? o.qte_triee : 0 }
   })
 })
 
@@ -450,6 +451,15 @@ function ouvrirLot(l, phaseKey) {
   else router.push({ path: '/suivi', query: { lot: l.id } })
 }
 function ouvrirTriageFin(id) { router.push({ path: '/ordres', query: { edit: id } }) }
+const qteEdit = reactive({})
+watch(lotsTriage, (lots) => { for (const l of lots) if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: l.qteATrier || 0, triee: l.qteTriee || 0 } }, { immediate: true })
+function pctTriage(id) { const q = qteEdit[id] || {}; const t = Number(q.aTrier) || 0; return t > 0 ? Math.min(100, Math.round((Number(q.triee) || 0) / t * 100)) : 0 }
+async function sauverTriage(l) {
+  const q = qteEdit[l.id] || {}
+  const r = await supabase.from('ordres_fabrication').update({ qte_a_trier: Number(q.aTrier) || 0, qte_triee: Number(q.triee) || 0 }).eq('id', l.id)
+  if (r.error) { alert('Enregistrement échoué : ' + r.error.message + ' — as-tu ajouté les colonnes qte_a_trier / qte_triee ?'); return }
+  await charger()
+}
 
 // Pour chaque phase : { code_pf -> { code, desig, lots, boites } }
 const produitsParPhase = computed(() => {
@@ -731,13 +741,19 @@ onMounted(async () => {
         <section class="triage-box">
           <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
           <table v-if="lotsTriage.length" class="triage-tbl">
-            <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier / étape</th><th>En triage depuis</th></tr></thead>
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th class="tnum">À trier</th><th class="tnum">Triée</th><th>Avancement</th><th></th></tr></thead>
             <tbody>
-              <tr v-for="l in lotsTriage" :key="l.id" class="triage-row" @click="ouvrirTriageFin(l.id)" title="Cliquer pour renseigner la date de fin de triage">
-                <td class="t-lot">{{ l.lot }}</td>
-                <td>{{ l.code }} — {{ l.desig }}</td>
+              <tr v-for="l in lotsTriage" :key="l.id" class="triage-row">
+                <td class="t-lot" @click="ouvrirTriageFin(l.id)" title="Ouvrir l'OF (date de fin de triage)">{{ l.lot }}</td>
+                <td @click="ouvrirTriageFin(l.id)">{{ l.code }} — {{ l.desig }}</td>
                 <td>{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
-                <td>{{ l.debut || '—' }}</td>
+                <td class="tnum"><input type="number" min="0" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop /></td>
+                <td class="tnum"><input type="number" min="0" v-model.number="qteEdit[l.id].triee" class="tq" @click.stop /></td>
+                <td class="t-prog">
+                  <div class="tp-bar"><div class="tp-fill" :class="{ full: pctTriage(l.id) >= 100 }" :style="{ width: pctTriage(l.id) + '%' }"></div></div>
+                  <span class="tp-pct">{{ pctTriage(l.id) }}%</span>
+                </td>
+                <td><button class="tq-save" @click.stop="sauverTriage(l)" title="Enregistrer">💾</button></td>
               </tr>
             </tbody>
           </table>
@@ -1029,7 +1045,16 @@ onMounted(async () => {
 .triage-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .triage-tbl th { text-align: left; font-size: 11px; color: #a16207; padding: 4px 8px; border-bottom: 1px solid #fde68a; }
 .triage-tbl td { padding: 5px 8px; border-bottom: 1px solid #fde68a55; color: #451a03; }
-.triage-tbl .t-lot { font-weight: 700; }
+.triage-tbl .t-lot { font-weight: 700; cursor: pointer; }
+.triage-tbl .tnum { text-align: right; white-space: nowrap; }
+.triage-tbl .tq { width: 72px; text-align: right; font: inherit; padding: 3px 6px; border: 1px solid #fcd34d; border-radius: 6px; background: #fffef7; }
+.t-prog { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.tp-bar { flex: 1; height: 9px; background: #fde68a; border-radius: 6px; overflow: hidden; }
+.tp-fill { height: 100%; background: #f59e0b; border-radius: 6px; transition: width .2s; }
+.tp-fill.full { background: #16a34a; }
+.tp-pct { font-size: 11.5px; font-weight: 800; color: #92400e; min-width: 34px; text-align: right; }
+.tq-save { background: #f59e0b; color: #fff; border: none; border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 13px; }
+.tq-save:hover { background: #d97706; }
 .triage-row { cursor: pointer; transition: background .12s; }
 .triage-row:hover { background: #fde68a; }
 .triage-row:hover .t-lot { text-decoration: underline; }
