@@ -36,10 +36,6 @@
       <h2 class="card-title">Occupation annuelle — {{ siteSel === 'tous' ? 'Tous sites' : (SITES.find(s => s.key === siteSel) || {}).label }}<span v-if="phaseSel"> · {{ PHASE_NOM[phaseSel] || phaseSel }}</span> · {{ lignesTableau.length }} équip. · {{ joursAnnee }} j ouvrés</h2>
       <div class="occ-layout">
         <aside class="occ-side">
-          <div class="side-sec">
-            <div class="side-lbl">À suivre ({{ nbSel }})</div>
-            <div class="side-tg side-row2"><button :class="{ on: false }" @click="selTout">Tout</button><button @click="selRien">Aucun</button></div>
-          </div>
           <div class="side-sec side-sp-row">
             <div class="side-sp-col">
               <div class="side-lbl">Site</div>
@@ -53,17 +49,6 @@
                 <button :class="{ on: !phaseSel }" @click="phaseSel = ''"><span class="ph-dot" style="background:#94a3b8"></span>Toutes</button>
                 <button v-for="ph in phasesDuSite" :key="ph" :class="{ on: phaseSel === ph }" @click="phaseSel = ph"><span class="ph-dot" :style="{ background: couleurPhase(ph) }"></span>{{ PHASE_NOM[ph] || ph }}</button>
               </div>
-            </div>
-          </div>
-          <div class="side-sec">
-            <div class="side-lbl">Équipements ({{ lignesSidebar.length }})</div>
-            <div class="side-phases side-eq">
-              <button v-for="r in lignesSidebar" :key="r.id" :class="{ on: selEquips[r.id] !== false }" @click="toggleSel(r.id)">
-                <span class="ph-dot" :style="{ background: couleurPhase(r.phase) }"></span>
-                <span class="eq-nom">{{ r.nom }}</span>
-                <span class="eq-taux" :class="clsTxt(r.taux)">{{ (r.taux * 100).toFixed(0) }}%</span>
-              </button>
-              <p v-if="!lignesSidebar.length" class="occ-vide">Aucun équipement pour ce filtre.</p>
             </div>
           </div>
         </aside>
@@ -173,6 +158,7 @@ function phaseDeType(type) {
   if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)) return 'conditionnement'
   return null
 }
+function phaseDe(e) { return phaseDe(e) || phaseDeType(e.nom) || phaseDeType(e.code) }
 function phaseKeyFromName(name) {
   const t = String(name || '').toLowerCase().trim()
   if (NOM_KEY[t]) return NOM_KEY[t]
@@ -233,7 +219,7 @@ function baseNom(nom) {
 // Regroupe par unité physique : même nom de base (toutes opérations confondues) -> une seule ligne.
 // Une unité multi-opérations (COMASA = granulation + séchage) cumule le temps de ses opérations.
 const groupesEquip = computed(() => {
-  const eqs = equipements.value.filter(e => phaseDeType(e.type))
+  const eqs = equipements.value.filter(e => phaseDe(e))
   const g = {}
   for (const e of eqs) {
     const nom = (e.nom || e.code || '—').trim()
@@ -263,7 +249,7 @@ const lignes = computed(() => {
     // équipements de l'unité regroupés par opération (phase)
     const parPhase = {}
     for (const e of grp.equips) {
-      const ph = phaseDeType(e.type)
+      const ph = phaseDe(e)
       if (!parPhase[ph]) parPhase[ph] = { equips: [], machines: 0 }
       parPhase[ph].equips.push(e)
       parPhase[ph].machines += Math.max(1, num(e.nb_machines, 1))
@@ -335,7 +321,7 @@ const produitsSansPoids = computed(() => {
     if (!planAgg.value[pid].some(v => v > 0)) continue
     const p = prodById.value[pid]; if (!p) continue
     let besoin = false
-    for (const e of equipements.value) { const ph = phaseDeType(e.type); if (ph && ph !== 'conditionnement' && cadMap.value[e.id + '|' + pid] > 0) { besoin = true; break } }
+    for (const e of equipements.value) { const ph = phaseDe(e); if (ph && ph !== 'conditionnement' && cadMap.value[e.id + '|' + pid] > 0) { besoin = true; break } }
     if (besoin && !(num(p.poids_lot_kg, 0) > 0)) s.add((p.code_pf || '') + ' · ' + (p.designation || ''))
   }
   return [...s].sort()
@@ -355,7 +341,7 @@ const siteSel = ref('tous')
 const phaseSel = ref('')
 const phasesDuSite = computed(() => { const set = new Set(); for (const r of lignes.value) if ((siteSel.value === 'tous' || r.site === siteSel.value) && r.phase) set.add(r.phase); return [...set].sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99)) })
 const lignesSidebar = computed(() => lignes.value.filter(r => (siteSel.value === 'tous' || r.site === siteSel.value) && (!phaseSel.value || r.phase === phaseSel.value)))
-const lignesTableau = computed(() => lignesSidebar.value.filter(r => selEquips[r.id] !== false))
+const lignesTableau = computed(() => lignesSidebar.value)
 const sidebarGroupe = computed(() => { const m = {}; for (const r of lignesSidebar.value) { const ph = r.phase || 'autre'; (m[ph] = m[ph] || []).push(r) } return Object.keys(m).sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99)).map(ph => ({ phase: ph, label: PHASE_NOM[ph] || ph, items: m[ph] })) })
 const nbSel = computed(() => lignes.value.filter(r => selEquips[r.id] !== false).length)
 function cls(t) { if (!t) return ''; if (t > 1) return 'x'; if (t > 0.9) return 'r'; if (t >= 0.7) return 'a'; return 'g' }
