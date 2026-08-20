@@ -33,6 +33,7 @@ import AvancementLots from '../views/AvancementLots.vue'
 import ProductionAtelier from '../views/ProductionAtelier.vue'
 import SuiviTRS from '../views/SuiviTRS.vue'
 import SuiviCapacite from '../views/SuiviCapacite.vue'
+import EquipementDetail from '../views/EquipementDetail.vue'
 import IndicateursQSE from '../views/IndicateursQSE.vue'
 import Cadences from '../views/Cadences.vue'
 import PassationConsigne from '../views/PassationConsigne.vue'
@@ -69,6 +70,7 @@ const routes = [
   { path: '/production-atelier', name: 'production-atelier', component: ProductionAtelier },
   { path: '/suivi-trs', name: 'suivi-trs', component: SuiviTRS },
   { path: '/capacite', name: 'capacite', component: SuiviCapacite },
+  { path: '/equipement', name: 'equipement', component: EquipementDetail },
   { path: '/qse', name: 'qse', component: IndicateursQSE },
   { path: '/cadences', name: 'cadences', component: Cadences },
   { path: '/passation', name: 'passation', component: PassationConsigne },
