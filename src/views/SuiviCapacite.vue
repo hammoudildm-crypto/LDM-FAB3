@@ -34,7 +34,18 @@
 
     <section v-if="!chargement" class="card">
       <h2 class="card-title">Occupation annuelle par équipement · {{ joursAnnee }} jours ouvrés</h2>
-      <div class="tbl-wrap">
+      <div class="occ-layout">
+        <aside class="occ-side">
+          <div class="occ-side-head"><span>À suivre ({{ nbSel }})</span><span class="occ-side-btns"><button type="button" @click="selTout">Tout</button><button type="button" @click="selRien">Aucun</button></span></div>
+          <div class="occ-side-list">
+            <label v-for="r in lignes" :key="r.id" class="occ-chk" :class="{ off: selEquips[r.id] === false }">
+              <input type="checkbox" :checked="selEquips[r.id] !== false" @change="toggleSel(r.id)" />
+              <span class="occ-chk-nom">{{ r.nom }}</span>
+              <span class="occ-chk-taux" :class="clsTxt(r.taux)">{{ (r.taux * 100).toFixed(0) }}%</span>
+            </label>
+          </div>
+        </aside>
+        <div class="occ-content tbl-wrap">
         <table class="grid">
           <thead>
             <tr>
@@ -43,7 +54,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="r in lignes" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
+            <tr v-for="r in lignesAffichees" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
               <td><strong>{{ r.nom }}</strong></td>
               <td><span class="phase-tag">{{ r.phaseLabel || PHASE_NOM[r.phase] || r.phase }}</span></td>
               <td class="ta-c unite">{{ r.estCond ? 'boîtes/h' : 'kg/h' }}</td>
@@ -60,15 +71,16 @@
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
       <p class="note">Fabrication : charge = kg ÷ cadence (kg/h), kg = boîtes × poids du lot ÷ taille de lot. Conditionnement : charge = boîtes ÷ cadence (boîtes/h). Un produit ne charge une phase que si elle figure dans sa gamme (le conditionnement s'ajoute toujours). <strong>Charge globale</strong> = charge totale de la phase (tous produits) ; <strong>Charge / machine</strong> = charge globale ÷ nombre de machines identiques — c'est elle qui donne le taux. <template v-if="inclureNett">+ nettoyage (VDLP/lot) + nettoyage général & réglage (VDLT + REGLAGE / campagne).</template></p>
     </section>
 
-    <section v-if="!chargement && lignes.some(r => r.chargeJ > 0)" class="card">
+    <section v-if="!chargement && lignesAffichees.some(r => r.chargeJ > 0)" class="card">
       <h2 class="card-title">Évolution mensuelle de l'occupation par équipement</h2>
       <div class="mc-legend"><span class="mc-100">— 100 %</span></div>
       <div class="mc-list">
-        <div v-for="r in lignes" :key="r.id" v-show="r.chargeJ > 0" class="mc-row">
+        <div v-for="r in lignesAffichees" :key="r.id" v-show="r.chargeJ > 0" class="mc-row">
           <div class="mc-nom"><strong>{{ r.nom }}</strong><span class="mc-ph">{{ r.phaseLabel || PHASE_NOM[r.phase] || r.phase }}</span></div>
           <div class="mc-chart">
             <div class="mc-ref"></div>
@@ -105,7 +117,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { supabase } from '../supabase'
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
@@ -304,6 +316,16 @@ const produitsSansPoids = computed(() => {
   return [...s].sort()
 })
 
+const selEquips = reactive({})
+const CLE_SEL = 'sc_sel_equips'
+function sauverSel() { try { localStorage.setItem(CLE_SEL, JSON.stringify(selEquips)) } catch (e) {} }
+function initSel() { let sv = {}; try { sv = JSON.parse(localStorage.getItem(CLE_SEL) || '{}') } catch (e) {} for (const r of lignes.value) if (!(r.id in selEquips)) selEquips[r.id] = (r.id in sv) ? sv[r.id] : true }
+watch(lignes, initSel, { immediate: true })
+function toggleSel(id) { selEquips[id] = selEquips[id] === false ? true : false; sauverSel() }
+function selTout() { for (const r of lignes.value) selEquips[r.id] = true; sauverSel() }
+function selRien() { for (const r of lignes.value) selEquips[r.id] = false; sauverSel() }
+const lignesAffichees = computed(() => lignes.value.filter(r => selEquips[r.id] !== false))
+const nbSel = computed(() => lignes.value.filter(r => selEquips[r.id] !== false).length)
 function cls(t) { if (!t) return ''; if (t > 1) return 'x'; if (t > 0.9) return 'r'; if (t >= 0.7) return 'a'; return 'g' }
 function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 </script>
@@ -366,6 +388,21 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: 11.5px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; border-radius: 6px; padding: 3px 8px; }
 .chip.more { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
+/* Panneau de sélection des équipements */
+.occ-layout { display: flex; gap: 14px; align-items: flex-start; }
+.occ-side { flex: 0 0 210px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; background: #fafafa; }
+.occ-side-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; font-size: 12px; font-weight: 800; color: #334155; }
+.occ-side-btns { display: flex; gap: 4px; }
+.occ-side-btns button { font: inherit; font-size: 10.5px; font-weight: 700; border: 1px solid #cbd5e1; background: #fff; border-radius: 5px; padding: 2px 7px; cursor: pointer; color: #475569; }
+.occ-side-btns button:hover { background: #e2e8f0; }
+.occ-side-list { max-height: 60vh; overflow-y: auto; }
+.occ-chk { display: flex; align-items: center; gap: 7px; padding: 6px 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 12.5px; }
+.occ-chk:hover { background: #eef2f7; }
+.occ-chk.off { opacity: .5; }
+.occ-chk-nom { flex: 1; min-width: 0; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.occ-chk-taux { font-size: 10.5px; font-weight: 800; }
+.occ-content { flex: 1; min-width: 0; }
+@media (max-width: 800px) { .occ-layout { flex-direction: column; } .occ-side { flex-basis: auto; width: 100%; } .occ-side-list { max-height: 200px; } }
 /* Mini-graphique mensuel par équipement */
 .mc-legend { font-size: 11px; color: #64748b; margin-bottom: 6px; }
 .mc-100 { border-top: 2px dashed #cbd5e1; padding-top: 2px; }
