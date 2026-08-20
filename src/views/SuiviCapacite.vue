@@ -158,7 +158,7 @@ function phaseDeType(type) {
   if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)) return 'conditionnement'
   return null
 }
-function phaseDe(e) { return phaseDe(e) || phaseDeType(e.nom) || phaseDeType(e.code) }
+function phaseDe(e) { return phaseDeType(e.type) || phaseDeType(e.nom) || phaseDeType(e.code) }
 function phaseKeyFromName(name) {
   const t = String(name || '').toLowerCase().trim()
   if (NOM_KEY[t]) return NOM_KEY[t]
