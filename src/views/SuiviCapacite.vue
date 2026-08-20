@@ -40,17 +40,19 @@
             <div class="side-lbl">À suivre ({{ nbSel }})</div>
             <div class="side-tg side-row2"><button :class="{ on: false }" @click="selTout">Tout</button><button @click="selRien">Aucun</button></div>
           </div>
-          <div class="side-sec">
-            <div class="side-lbl">Site</div>
-            <div class="side-tg">
-              <button v-for="st in SITES" :key="st.key" :class="{ on: siteSel === st.key }" @click="siteSel = st.key; phaseSel = ''">{{ st.label }}</button>
+          <div class="side-sec side-sp-row">
+            <div class="side-sp-col">
+              <div class="side-lbl">Site</div>
+              <div class="side-tg">
+                <button v-for="st in SITES" :key="st.key" :class="{ on: siteSel === st.key }" @click="siteSel = st.key; phaseSel = ''">{{ st.label }}</button>
+              </div>
             </div>
-          </div>
-          <div class="side-sec">
-            <div class="side-lbl">Phase</div>
-            <div class="side-phases">
-              <button :class="{ on: !phaseSel }" @click="phaseSel = ''"><span class="ph-dot" style="background:#94a3b8"></span>Toutes</button>
-              <button v-for="ph in phasesDuSite" :key="ph" :class="{ on: phaseSel === ph }" @click="phaseSel = ph"><span class="ph-dot" :style="{ background: couleurPhase(ph) }"></span>{{ PHASE_NOM[ph] || ph }}</button>
+            <div class="side-sp-col">
+              <div class="side-lbl">Phase</div>
+              <div class="side-phases">
+                <button :class="{ on: !phaseSel }" @click="phaseSel = ''"><span class="ph-dot" style="background:#94a3b8"></span>Toutes</button>
+                <button v-for="ph in phasesDuSite" :key="ph" :class="{ on: phaseSel === ph }" @click="phaseSel = ph"><span class="ph-dot" :style="{ background: couleurPhase(ph) }"></span>{{ PHASE_NOM[ph] || ph }}</button>
+              </div>
             </div>
           </div>
           <div class="side-sec">
@@ -68,19 +70,17 @@
         <div class="occ-content tbl-wrap">
         <table class="grid">
           <colgroup>
-            <col style="width:16%"><col style="width:9%"><col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:9%"><col style="width:9%"><col style="width:5%"><col style="width:8%"><col style="width:13%"><col style="width:14%">
+            <col style="width:20%"><col style="width:8%"><col style="width:8%"><col style="width:12%"><col style="width:12%"><col style="width:7%"><col style="width:10%"><col style="width:15%"><col style="width:16%">
           </colgroup>
           <thead>
             <tr>
-              <th>Équipement</th><th>Phase</th><th class="ta-c">Unité</th><th class="ta-c">Machines</th><th class="ta-c">h/j effectif</th>
+              <th>Équipement</th><th class="ta-c">Machines</th><th class="ta-c">h/j effectif</th>
               <th class="ta-r">Charge globale (j)</th><th class="ta-r">Charge / machine (j)</th><th class="ta-c">Réq. WE</th><th class="ta-r">Capacité (j)</th><th class="taux-h">Taux d'occupation</th><th class="mc-h">Évolution mensuelle</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="r in lignesTableau" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
               <td><strong>{{ r.nom }}</strong></td>
-              <td><span class="phase-tag">{{ r.phaseLabel || PHASE_NOM[r.phase] || r.phase }}</span></td>
-              <td class="ta-c unite">{{ r.estCond ? 'boîtes/h' : 'kg/h' }}</td>
               <td class="ta-c">{{ r.machines }}</td>
               <td class="ta-c hj">{{ r.hj.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r glob">{{ r.chargeGlobaleJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
@@ -413,12 +413,16 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .chip.more { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
 /* Panneau de sélection des équipements */
 .occ-layout { display: flex; gap: 10px; align-items: flex-start; }
-.occ-side { flex: 0 0 172px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: flex-start; }
+.occ-side { flex: 0 0 250px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: flex-start; }
 .occ-side-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; font-size: 12px; font-weight: 800; color: #334155; }
 .occ-side-btns { display: flex; gap: 4px; }
 .occ-side-btns button { font: inherit; font-size: 10.5px; font-weight: 700; border: 1px solid #cbd5e1; background: #fff; border-radius: 5px; padding: 2px 7px; cursor: pointer; color: #475569; }
 .occ-side-btns button:hover { background: #e2e8f0; }
 .side-sec { padding: 7px 11px; border-bottom: 1px solid #eef2f6; }
+.side-sp-row { display: flex; gap: 10px; }
+.side-sp-col { flex: 1; min-width: 0; }
+.side-sp-col .side-tg button, .side-sp-col .side-phases button { font-size: 10.5px; padding: 4px 7px; }
+.side-sp-col .side-phases button { gap: 5px; }
 .side-sec:last-child { border-bottom: none; }
 .side-lbl { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; }
 .side-tg { display: flex; flex-direction: column; gap: 5px; }
