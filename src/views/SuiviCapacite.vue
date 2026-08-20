@@ -8,34 +8,30 @@
       </div>
     </div>
 
-    <section class="card">
-      <div class="ctrl">
-        <div class="cf"><label>Année</label>
-          <select v-model.number="annee"><option v-for="a in annees" :key="a" :value="a">{{ a }}</option></select>
-        </div>
-        <div class="cf"><label>Régime</label>
-          <select v-model="regime">
-            <option value="auto">Réel (par équipement)</option>
-            <option :value="1">1×8 (forcé)</option>
-            <option :value="2">2×8 (forcé)</option>
-            <option :value="3">3×8 (forcé)</option>
-          </select>
-        </div>
-        <div class="cf chk"><label>Nettoyage & réglage</label>
-          <label class="wk"><input type="checkbox" v-model="inclureNett" /> Inclure dans la charge</label>
-        </div>
-        <div class="cf grow legend">
-          <span class="lg lg-g">&lt; 70 %</span><span class="lg lg-a">70–90 %</span><span class="lg lg-r">&gt; 90 %</span><span class="lg lg-x">&gt; 100 %</span>
-        </div>
-      </div>
-      <p v-if="chargement" class="muted">Chargement…</p>
-      <p v-else-if="!planExiste" class="muted warn">Aucune quantité planifiée pour {{ annee }} dans le plan directeur.</p>
-    </section>
+    <p v-if="chargement" class="muted card">Chargement…</p>
+    <p v-else-if="!planExiste" class="muted warn card">Aucune quantité planifiée pour {{ annee }} dans le plan directeur.</p>
 
     <section v-if="!chargement" class="card">
       <h2 class="card-title">Occupation annuelle — {{ siteSel === 'tous' ? 'Tous sites' : (SITES.find(s => s.key === siteSel) || {}).label }}<span v-if="phaseSel"> · {{ PHASE_NOM[phaseSel] || phaseSel }}</span> · {{ lignesTableau.length }} équip. · {{ joursAnnee }} j ouvrés</h2>
       <div class="occ-layout">
         <aside class="occ-side">
+          <div class="side-sec">
+            <div class="side-lbl">Année</div>
+            <select class="side-select" v-model.number="annee"><option v-for="a in annees" :key="a" :value="a">{{ a }}</option></select>
+          </div>
+          <div class="side-sec">
+            <div class="side-lbl">Régime</div>
+            <select class="side-select" v-model="regime">
+              <option value="auto">Réel (par équipement)</option>
+              <option :value="1">1×8 (forcé)</option>
+              <option :value="2">2×8 (forcé)</option>
+              <option :value="3">3×8 (forcé)</option>
+            </select>
+          </div>
+          <div class="side-sec">
+            <div class="side-lbl">Nettoyage &amp; réglage</div>
+            <label class="side-chk"><input type="checkbox" v-model="inclureNett" /> Inclure dans la charge</label>
+          </div>
           <div class="side-sec side-sp-row">
             <div class="side-sp-col">
               <div class="side-lbl">Site</div>
@@ -51,26 +47,32 @@
               </div>
             </div>
           </div>
+          <div class="side-sec">
+            <div class="side-lbl">Légende</div>
+            <div class="side-leg">
+              <span class="lg lg-g">&lt; 70 %</span><span class="lg lg-a">70–90 %</span><span class="lg lg-r">&gt; 90 %</span><span class="lg lg-x">&gt; 100 %</span>
+            </div>
+          </div>
         </aside>
         <div class="occ-content tbl-wrap">
         <table class="grid">
           <colgroup>
-            <col style="width:20%"><col style="width:8%"><col style="width:8%"><col style="width:12%"><col style="width:12%"><col style="width:7%"><col style="width:10%"><col style="width:15%"><col style="width:16%">
+            <col style="width:6%"><col style="width:21%"><col style="width:8%"><col style="width:8%"><col style="width:12%"><col style="width:12%"><col style="width:10%"><col style="width:15%"><col style="width:16%">
           </colgroup>
           <thead>
             <tr>
-              <th>Équipement</th><th class="ta-c">Machines</th><th class="ta-c">h/j effectif</th>
-              <th class="ta-r">Charge globale (j)</th><th class="ta-r">Charge / machine (j)</th><th class="ta-c">Réq. WE</th><th class="ta-r">Capacité (j)</th><th class="taux-h">Taux d'occupation</th><th class="mc-h">Évolution mensuelle</th>
+              <th class="ta-c">Réq. WE</th><th>Équipement</th><th class="ta-c">Machines</th><th class="ta-c">h/j effectif</th>
+              <th class="ta-r">Charge globale (j)</th><th class="ta-r">Charge / machine (j)</th><th class="ta-r">Capacité (j)</th><th class="taux-h">Taux d'occupation</th><th class="mc-h">Évolution mensuelle</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="r in lignesTableau" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
+              <td class="ta-c"><input type="checkbox" :checked="weEq(r.id)" @change="setReq(r.id, $event.target.checked)" title="Travail le week-end pour cet équipement" /></td>
               <td><strong>{{ r.nom }}</strong></td>
               <td class="ta-c">{{ r.machines }}</td>
               <td class="ta-c hj">{{ r.hj.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r glob">{{ r.chargeGlobaleJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r">{{ r.chargeJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
-              <td class="ta-c"><input type="checkbox" :checked="weEq(r.id)" @change="setReq(r.id, $event.target.checked)" title="Travail le week-end pour cet équipement" /></td>
               <td class="ta-r">{{ r.capaciteJ.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) }}</td>
               <td class="taux-cell">
                 <div class="bar-wrap"><div class="bar" :class="cls(r.taux)" :style="{ width: Math.min(100, r.taux * 100) + '%' }"></div></div>
@@ -415,6 +417,10 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .occ-side-btns button:hover { background: #e2e8f0; }
 .side-sec { padding: 7px 11px; border-bottom: 1px solid #eef2f6; }
 .side-sp-row { display: flex; gap: 10px; }
+.side-select { width: 100%; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 600; color: #0f172a; background: #fff; box-sizing: border-box; }
+.side-chk { font-size: 12px; color: #334155; font-weight: 500; display: flex; align-items: center; gap: 7px; cursor: pointer; }
+.side-leg { display: flex; flex-wrap: wrap; gap: 5px; }
+.side-leg .lg { font-size: 10.5px; font-weight: 700; border-radius: 5px; padding: 2px 8px; }
 .side-sp-col { flex: 1; min-width: 0; }
 .side-sp-col .side-tg button, .side-sp-col .side-phases button { font-size: 10.5px; padding: 4px 7px; }
 .side-sp-col .side-phases button { gap: 5px; }
