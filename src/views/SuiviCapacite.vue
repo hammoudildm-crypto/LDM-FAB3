@@ -233,7 +233,7 @@ function baseNom(nom) {
 // Regroupe par unité physique : même nom de base (toutes opérations confondues) -> une seule ligne.
 // Une unité multi-opérations (COMASA = granulation + séchage) cumule le temps de ses opérations.
 const groupesEquip = computed(() => {
-  const eqs = equipements.value.filter(e => equipAvecCadence.value.has(e.id) && phaseDeType(e.type))
+  const eqs = equipements.value.filter(e => phaseDeType(e.type))
   const g = {}
   for (const e of eqs) {
     const nom = (e.nom || e.code || '—').trim()
