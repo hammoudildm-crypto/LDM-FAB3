@@ -114,7 +114,7 @@
 
     <section v-if="!chargement && produitsSansPoids.length" class="card avert">
       <h2 class="card-title">Produits de fabrication sans poids de lot</h2>
-      <p class="note">Ces produits ont une phase de fabrication planifiée (cadence en kg/h) mais aucun <strong>poids de lot (kg)</strong> — leur charge de fabrication n'est pas comptée. Exécute le SQL <em>poids_lot_kg</em> ou renseigne le poids.</p>
+      <p class="note">Ces produits ont une phase de fabrication planifiée mais aucun poids exploitable (ni <strong>poids de lot</strong>, ni <strong>poids unitaire</strong>) — leur charge n'est pas comptée. Clique un produit pour renseigner son <strong>poids unitaire (mg)</strong> dans Référentiels.</p>
       <div class="chips"><button v-for="(p, i) in produitsSansPoids.slice(0, 30)" :key="i" type="button" class="chip chip-btn" @click="ouvrirProduit(p)" title="Ouvrir dans Cadences">{{ p.code }} · {{ p.desig }}</button><span v-if="produitsSansPoids.length > 30" class="chip more">+{{ produitsSansPoids.length - 30 }}</span></div>
     </section>
   </div>
@@ -280,7 +280,8 @@ const lignes = computed(() => {
         const boites = tab[mi]; if (!boites) continue
         const gk = gammeKeys.value[pid]
         const p = prodById.value[pid] || {}
-        const tl = num(p.taille_lot, 0), plk = num(p.poids_lot_kg, 0)
+        const tl = num(p.taille_lot, 0)
+        const plk = num(p.poids_lot_kg, 0) || (tl * num(p.unites_par_boite, 0) * num(p.poids_unitaire_mg, 0) / 1e6)
         let utilise = false
         for (const ph of phases) {   // cumule le temps de chaque opération de l'unité
           const estCond = ph === 'conditionnement'
@@ -330,11 +331,12 @@ const produitsSansPoids = computed(() => {
     const p = prodById.value[pid]; if (!p) continue
     let besoin = false
     for (const e of equipements.value) { const ph = phaseDe(e); if (ph && ph !== 'conditionnement' && cadMap.value[e.id + '|' + pid] > 0) { besoin = true; break } }
-    if (besoin && !(num(p.poids_lot_kg, 0) > 0) && !vus.has(pid)) { vus.add(pid); out.push({ code: p.code_pf || '', desig: p.designation || '' }) }
+    const plkP = num(p.poids_lot_kg, 0) || (num(p.taille_lot, 0) * num(p.unites_par_boite, 0) * num(p.poids_unitaire_mg, 0) / 1e6)
+    if (besoin && !(plkP > 0) && !vus.has(pid)) { vus.add(pid); out.push({ code: p.code_pf || '', desig: p.designation || '' }) }
   }
   return out.sort((a, b) => (a.code + a.desig).localeCompare(b.code + b.desig))
 })
-function ouvrirProduit(p) { router.push({ path: '/cadences', query: { produit: p.code } }) }
+function ouvrirProduit(p) { router.push({ path: '/referentiels', query: { produit: p.code } }) }
 
 const selEquips = reactive({})
 const CLE_SEL = 'sc_sel_equips'
