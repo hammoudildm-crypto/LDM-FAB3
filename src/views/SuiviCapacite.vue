@@ -66,7 +66,7 @@
           </colgroup>
           <thead>
             <tr>
-              <th class="ta-c">Réq. WE</th><th>Équipement</th><th class="ta-c">Machines</th><th class="ta-c">h/j effectif</th>
+              <th class="ta-c">Réq. WE</th><th>Équipement</th><th class="ta-c">Machines</th><th class="ta-c">Régime</th>
               <th class="ta-r">Charge globale (j)</th><th class="ta-r">Charge / machine (j)</th><th class="ta-r">Capacité (j)</th><th class="taux-h">Taux d'occupation</th><th class="mc-h">Évolution mensuelle</th>
             </tr>
           </thead>
@@ -75,7 +75,7 @@
               <td class="ta-c"><input type="checkbox" :checked="weEq(r.id)" @change="setReq(r.id, $event.target.checked)" title="Travail le week-end pour cet équipement" /></td>
               <td><strong>{{ r.nom }}</strong></td>
               <td class="ta-c">{{ r.machines }}</td>
-              <td class="ta-c hj">{{ r.hj.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
+              <td class="ta-c"><select :value="regimeEquip[r.id] || ''" @change="setRegime(r.id, $event.target.value)" class="reg-sel" title="Régime de travail de cet équipement"><option value="">Auto</option><option value="1">1×8</option><option value="2">2×8</option><option value="3">3×8</option></select></td>
               <td class="ta-r glob">{{ r.chargeGlobaleJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r">{{ r.chargeJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r">{{ r.capaciteJ.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) }}</td>
@@ -212,6 +212,12 @@ const joursAnSansWE = computed(() => joursMoisSansWE.value.reduce((a, n) => a + 
 const joursAnAvecWE = computed(() => joursMoisAvecWE.value.reduce((a, n) => a + n, 0))
 const reqEquip = reactive({})
 function weEq(key) { return !!reqEquip[key] }
+const regimeEquip = reactive({})
+function regimeEq(key, repPostes) { const r = regimeEquip[key]; if (r) return Number(r); return regime.value === 'auto' ? num(repPostes, 3) : Number(regime.value) }
+const CLE_REG = 'sc_reg_equip'
+function sauverReg() { try { localStorage.setItem(CLE_REG, JSON.stringify(regimeEquip)) } catch (e) {} }
+function setRegime(key, val) { if (val) regimeEquip[key] = val; else delete regimeEquip[key]; sauverReg() }
+try { const _rg = JSON.parse(localStorage.getItem(CLE_REG) || '{}'); for (const k in _rg) regimeEquip[k] = _rg[k] } catch (e) {}
 const CLE_REQ = 'sc_req_we'
 function sauverReq() { try { localStorage.setItem(CLE_REQ, JSON.stringify(reqEquip)) } catch (e) {} }
 function setReq(key, val) { reqEquip[key] = val; sauverReq() }
@@ -265,7 +271,7 @@ const lignes = computed(() => {
     const phases = Object.keys(parPhase).sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99))
     const machines = Math.max(1, ...phases.map(ph => parPhase[ph].machines))   // nb d'unités physiques
     const rep = grp.equips[0]
-    const postes = regime.value === 'auto' ? num(rep.postes, 3) : Number(regime.value)
+    const postes = regimeEq(grp.key, rep.postes)
     const tep = num(rep.tep, 8)
     const vdlp = num(rep.vdlp, 0), vdlt = num(rep.vdlt, 0), reglage = num(rep.reglage, 0)
     const capaJour = postes * tep * machines
@@ -401,6 +407,7 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 
 .taux-h { width: 260px; }
 .taux-cell { display: flex; align-items: center; gap: 3px; }
+.reg-sel { font: inherit; font-size: 9.5px; padding: 1px 3px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; width: 100%; box-sizing: border-box; }
 .bar-wrap { flex: 1; height: 7px; background: #f1f5f9; border-radius: 5px; overflow: hidden; min-width: 22px; }
 .bar { height: 100%; border-radius: 7px; }
 .bar.g { background: #22c55e; } .bar.a { background: #f59e0b; } .bar.r { background: #ef4444; } .bar.x { background: #7f1d1d; }
