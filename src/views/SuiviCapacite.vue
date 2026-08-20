@@ -21,9 +21,6 @@
             <option :value="3">3×8 (forcé)</option>
           </select>
         </div>
-        <div class="cf chk"><label>Week-end</label>
-          <label class="wk"><input type="checkbox" v-model="avecWE" /> Travail le week-end</label>
-        </div>
         <div class="cf chk"><label>Nettoyage & réglage</label>
           <label class="wk"><input type="checkbox" v-model="inclureNett" /> Inclure dans la charge</label>
         </div>
@@ -68,19 +65,22 @@
     </section>
 
     <section v-if="!chargement && lignes.some(r => r.chargeJ > 0)" class="card">
-      <h2 class="card-title">Taux d'occupation mensuel</h2>
-      <div class="tbl-wrap">
-        <table class="grid matrice">
-          <thead><tr><th class="sticky-c">Équipement</th><th v-for="(m, i) in MOIS" :key="i" class="ta-c">{{ m }}</th></tr></thead>
-          <tbody>
-            <tr v-for="r in lignes" :key="r.id" v-show="r.chargeJ > 0">
-              <td class="sticky-c"><strong>{{ r.nom }}</strong></td>
-              <td v-for="(m, i) in MOIS" :key="i" class="cell-taux" :class="cls(r.tauxMois[i])"><span v-if="r.tauxMois[i] > 0">{{ (r.tauxMois[i] * 100).toFixed(0) }}</span></td>
-            </tr>
-          </tbody>
-        </table>
+      <h2 class="card-title">Évolution mensuelle de l'occupation par équipement</h2>
+      <div class="mc-legend"><span class="mc-100">— 100 %</span></div>
+      <div class="mc-list">
+        <div v-for="r in lignes" :key="r.id" v-show="r.chargeJ > 0" class="mc-row">
+          <div class="mc-nom"><strong>{{ r.nom }}</strong><span class="mc-ph">{{ r.phaseLabel || PHASE_NOM[r.phase] || r.phase }}</span></div>
+          <div class="mc-chart">
+            <div class="mc-ref"></div>
+            <div v-for="(t, i) in r.tauxMois" :key="i" class="mc-col" :title="MOIS[i] + ' : ' + (t * 100).toFixed(0) + ' %'">
+              <div class="mc-bar" :class="cls(t)" :style="{ height: Math.max(2, Math.min(120, t * 100)) + '%' }"></div>
+              <span class="mc-m">{{ MOIS[i].charAt(0) }}</span>
+            </div>
+          </div>
+          <div class="mc-max" :class="clsTxt(Math.max(...r.tauxMois))">max {{ (Math.max(...r.tauxMois) * 100).toFixed(0) }} %</div>
+        </div>
       </div>
-      <p class="note">Valeurs en % d'occupation. Cellule vide = pas de charge planifiée.</p>
+      <p class="note">Chaque barre = un mois. Hauteur ∝ taux d'occupation ; le trait pointillé marque les 100 %. Survole une barre pour la valeur exacte.</p>
     </section>
 
     <section v-if="!chargement" class="kpi-line">
@@ -192,7 +192,7 @@ const joursMoisAvecWE = computed(() => MOIS.map((_, i) => joursOuvresMoisWE(anne
 const joursAnSansWE = computed(() => joursMoisSansWE.value.reduce((a, n) => a + n, 0))
 const joursAnAvecWE = computed(() => joursMoisAvecWE.value.reduce((a, n) => a + n, 0))
 const reqEquip = reactive({})
-function weEq(key) { return key in reqEquip ? reqEquip[key] : avecWE.value }
+function weEq(key) { return !!reqEquip[key] }
 const CLE_REQ = 'sc_req_we'
 function sauverReq() { try { localStorage.setItem(CLE_REQ, JSON.stringify(reqEquip)) } catch (e) {} }
 function setReq(key, val) { reqEquip[key] = val; sauverReq() }
@@ -366,4 +366,24 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: 11.5px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; border-radius: 6px; padding: 3px 8px; }
 .chip.more { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
+/* Mini-graphique mensuel par équipement */
+.mc-legend { font-size: 11px; color: #64748b; margin-bottom: 6px; }
+.mc-100 { border-top: 2px dashed #cbd5e1; padding-top: 2px; }
+.mc-list { display: flex; flex-direction: column; gap: 4px; }
+.mc-row { display: flex; align-items: center; gap: 12px; padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+.mc-row:hover { background: #f8fafc; }
+.mc-nom { flex: 0 0 230px; min-width: 0; display: flex; flex-direction: column; }
+.mc-nom strong { font-size: 13px; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-ph { font-size: 10.5px; color: #94a3b8; }
+.mc-chart { flex: 1; display: flex; align-items: flex-end; gap: 3px; height: 58px; position: relative; border-bottom: 1px solid #e2e8f0; padding-top: 12px; }
+.mc-ref { position: absolute; left: 0; right: 0; top: calc(12px + (58px - 12px) * (1 - 100/120)); border-top: 1px dashed #cbd5e1; pointer-events: none; }
+.mc-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.mc-bar { width: 78%; min-height: 2px; border-radius: 3px 3px 0 0; transition: height .2s; }
+.mc-bar.g { background: #16a34a; }
+.mc-bar.a { background: #f59e0b; }
+.mc-bar.r { background: #ef4444; }
+.mc-bar.x { background: #991b1b; }
+.mc-m { font-size: 8.5px; color: #94a3b8; margin-top: 2px; }
+.mc-max { flex: 0 0 78px; text-align: right; font-size: 12px; font-weight: 800; }
+@media (max-width: 700px) { .mc-nom { flex-basis: 140px; } .mc-m { display: none; } }
 </style>
