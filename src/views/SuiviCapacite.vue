@@ -268,8 +268,12 @@ const lignes = computed(() => {
     const capaJour = postes * tep * machines
     const cadPhase = (ph, pid) => { let c = 0; for (const e of parPhase[ph].equips) { const v = cadMap.value[e.id + '|' + pid]; if (v > 0 && v > c) c = v } return c }
     const we = weEq(grp.key)
-    const jMois = we ? joursMoisAvecWE.value : joursMoisSansWE.value
-    const jAn = we ? joursAnAvecWE.value : joursAnSansWE.value
+    const regKey = regimeEquip[grp.key] || (regime.value === 'auto' ? '' : String(regime.value))
+    // Réquisition week-end (vendredi/samedi) : 2×8 (16 h), sauf 4×8 qui tourne en 24/7 plein
+    const postesWE = regKey === '4' ? postes : 2
+    const facteurWE = postes > 0 ? Math.min(1, postesWE / postes) : 1
+    const jMois = joursMoisSansWE.value.map((jw, mi) => we ? jw + (joursMoisAvecWE.value[mi] - jw) * facteurWE : jw)
+    const jAn = jMois.reduce((a, n) => a + n, 0)
     const tauxMois = []; let chargeJTot = 0
     for (let mi = 0; mi < 12; mi++) {
       let occH = 0
