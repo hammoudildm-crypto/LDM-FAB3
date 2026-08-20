@@ -63,7 +63,7 @@
           </thead>
           <tbody>
             <tr v-for="r in lignesTableau" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
-              <td class="ta-c"><input type="checkbox" :checked="weEq(r.id)" @change="setReq(r.id, $event.target.checked)" title="Travail le week-end pour cet équipement" /></td>
+              <td class="ta-c"><input type="checkbox" :checked="weEq(r.id)" :disabled="estRegime4(r.id)" @change="setReq(r.id, $event.target.checked)" :title="estRegime4(r.id) ? 'Week-end inclus automatiquement (4×8 = 24/7)' : 'Réquisition week-end (comptée en 2×8)'" /></td>
               <td class="eq-lien" @click="ouvrirEquipement(r)" title="Voir la fiche équipement (TRS, top produits, occupation restante)"><strong>{{ r.nom }}</strong></td>
               <td class="ta-c">{{ r.machines }}</td>
               <td class="ta-c"><select :value="regimeEquip[r.id] || ''" @change="setRegime(r.id, $event.target.value)" class="reg-sel" title="Régime de travail de cet équipement"><option value="">Auto</option><option value="1">1×8</option><option value="2">2×8</option><option value="3">3×8</option><option value="4">4×8</option></select></td>
@@ -203,6 +203,7 @@ const joursAnSansWE = computed(() => joursMoisSansWE.value.reduce((a, n) => a + 
 const joursAnAvecWE = computed(() => joursMoisAvecWE.value.reduce((a, n) => a + n, 0))
 const reqEquip = reactive({})
 function weEq(key) { const r = regimeEquip[key] || (regime.value === 'auto' ? '' : String(regime.value)); if (r === '4') return true; return !!reqEquip[key] }
+function estRegime4(key) { return (regimeEquip[key] || (regime.value === 'auto' ? '' : String(regime.value))) === '4' }
 const regimeEquip = reactive({})
 function regimeEq(key, repPostes) { const r = regimeEquip[key] || (regime.value === 'auto' ? '' : String(regime.value)); if (r === '4') return 3; if (r) return Number(r); return num(repPostes, 3) }
 const CLE_REG = 'sc_reg_equip'
