@@ -491,7 +491,7 @@ onMounted(charger)
 </template>
 
 <style scoped>
-".pa-page { color: #1b2733; }
+.pa-page { color: #1b2733; }
 .pa-layout { display: flex; gap: 14px; align-items: flex-start; }
 .pa-side { flex: 0 0 210px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: flex-start; position: sticky; top: 8px; overflow: hidden; }
 .pa-content { flex: 1; min-width: 0; }
