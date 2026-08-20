@@ -17,8 +17,10 @@
       <section class="card mat-card">
         <div class="mat-head">
           <input type="search" v-model="filtre" class="prod-search-big" placeholder="Filtrer les produits (code ou désignation)…" />
-          <input type="search" v-model="filtreEq" class="prod-search-big eq-filter" placeholder="Filtrer les équipements (colonnes)…" />
-          <span v-if="filtreEq" class="eq-filter-info">{{ groupesAffiches.length }} équipement(s)</span>
+          <select v-model="filtreEq" class="eq-select">
+            <option value="">Tous les équipements</option>
+            <option v-for="g in groupes" :key="g.key" :value="g.nom">{{ g.nom }}</option>
+          </select>
           <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupes.length }} équipement(s) — saisissez la cadence directement dans les cases</span>
           <span v-if="msgMat" class="mat-msg">{{ msgMat }}</span>
         </div>
@@ -177,7 +179,7 @@ async function sauverParam(grp, k, valeur) {
 }
 
 // Regroupement des équipements identiques : même phase (type) + même nom de base
-const groupesAffiches = computed(() => { const q = filtreEq.value.trim().toLowerCase(); return q ? groupes.value.filter(g => (g.nom || '').toLowerCase().includes(q)) : groupes.value })
+const groupesAffiches = computed(() => filtreEq.value ? groupes.value.filter(g => g.nom === filtreEq.value) : groupes.value)
 const groupes = computed(() => {
   const eqs = equipements.value.slice()
   const kp = (e) => phaseDeType(e.type) || ('t:' + (e.type || '?'))
@@ -393,8 +395,8 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 .mat-table tbody tr:hover .mat-prod { background: #f0fdfa; }
 .ph-granulation { border-top: 3px solid #0f766e; } .ph-melange { border-top: 3px solid #4338ca; } .ph-compression { border-top: 3px solid #c2410c; } .ph-pelliculage { border-top: 3px solid #7c3aed; } .ph-conditionnement { border-top: 3px solid #0891b2; } .ph-remplissage { border-top: 3px solid #ca8a04; } .ph-pesee { border-top: 3px solid #64748b; }
 .prod-search-big:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
-.eq-filter { max-width: 320px; }
-.eq-filter-info { font-size: 12px; font-weight: 700; color: #0f766e; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 20px; padding: 3px 10px; }
+.eq-select { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 9px; font: inherit; font-size: 14px; min-width: 260px; background: #fff; color: #0f172a; }
+.eq-select:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .ps-count { font-size: 13px; color: #64748b; font-weight: 600; }
 .no-res { text-align: center; color: #94a3b8; padding: 18px; font-size: 13.5px; }
 
