@@ -309,7 +309,7 @@ const lignes = computed(() => {
     let nomAffiche = grp.nom
     if (phases.includes('granulation') && phases.includes('sechage')) { phaseLabel = 'Granulation et Séchage'; nomAffiche = 'Granulation et Séchage ' + grp.nom }
     else if (phases.length === 1 && phases[0] === 'granulation' && grp.equips.some(e => /s[ée]ch/i.test((e.type || '') + ' ' + (e.nom || e.code || '')))) phaseLabel = 'Granulation et Séchage'
-    out.push({ id: grp.key, nom: nomAffiche, nomBase: grp.nom, phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, site: phases.includes('conditionnement') ? 'conditionnement' : siteDuGroupe(grp.equips), capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
+    out.push({ id: grp.key, nom: nomAffiche, nomBase: grp.nom, codes: grp.equips.map(e => e.code).filter(Boolean).join(','), phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, site: phases.includes('conditionnement') ? 'conditionnement' : siteDuGroupe(grp.equips), capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
   }
   return out.sort((a, b) => (ORDRE_GAMME[a.phase] || 99) - (ORDRE_GAMME[b.phase] || 99) || b.taux - a.taux)
 })
@@ -339,7 +339,7 @@ const produitsSansPoids = computed(() => {
   return out.sort((a, b) => (a.code + a.desig).localeCompare(b.code + b.desig))
 })
 function ouvrirProduit(p) { router.push({ path: '/referentiels', query: { produit: p.code } }) }
-function ouvrirEquipement(r) { router.push({ path: '/equipement', query: { nom: r.nomBase, annee: annee.value } }) }
+function ouvrirEquipement(r) { router.push({ path: '/equipement', query: { nom: r.nomBase, codes: r.codes, annee: annee.value } }) }
 
 const selEquips = reactive({})
 const CLE_SEL = 'sc_sel_equips'
