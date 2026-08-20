@@ -25,16 +25,6 @@
             <select class="side-select" v-model.number="annee"><option v-for="a in annees" :key="a" :value="a">{{ a }}</option></select>
           </div>
           <div class="side-sec">
-            <div class="side-lbl">Régime</div>
-            <select class="side-select" v-model="regime">
-              <option value="auto">Réel (par équipement)</option>
-              <option :value="1">1×8 (forcé)</option>
-              <option :value="2">2×8 (forcé)</option>
-              <option :value="3">3×8 (forcé)</option>
-              <option :value="4">4×8 · 24/7 (forcé)</option>
-            </select>
-          </div>
-          <div class="side-sec">
             <div class="side-lbl">Nettoyage &amp; réglage</div>
             <label class="side-chk"><input type="checkbox" v-model="inclureNett" /> Inclure dans la charge</label>
           </div>
