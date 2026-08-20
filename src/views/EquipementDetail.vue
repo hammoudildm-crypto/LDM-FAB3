@@ -16,6 +16,7 @@ const MOTIFS = [
   ['autre', 'arret_autre_min', 'Autre', '#cbd5e1']
 ]
 function num(v, d = 0) { const n = Number(v); return isFinite(n) ? n : d }
+async function fetchAllPaged(makeQuery) { const page = 1000; let from = 0, all = []; while (true) { const { data, error } = await makeQuery().range(from, from + page - 1); if (error || !data || !data.length) break; all = all.concat(data); if (data.length < page) break; from += page } return all }
 
 const nomGroupe = ref(route.query.nom ? String(route.query.nom) : '')
 const annee = ref(route.query.annee ? Number(route.query.annee) : new Date().getFullYear())
@@ -36,8 +37,11 @@ function baseNom(nom) {
 
 // Équipements du groupe (même nom de base)
 const equipsGroupe = computed(() => {
-  const cible = baseNom(nomGroupe.value).toLowerCase()
-  return equipements.value.filter(e => baseNom(e.nom || e.code).toLowerCase() === cible)
+  const cible = baseNom(nomGroupe.value).toLowerCase().trim()
+  if (!cible) return []
+  let list = equipements.value.filter(e => baseNom(e.nom || e.code).toLowerCase() === cible)
+  if (!list.length) list = equipements.value.filter(e => { const n = (e.nom || '').toLowerCase(); return n && (n.includes(cible) || cible.includes(n)) })
+  return list
 })
 const idsGroupe = computed(() => new Set(equipsGroupe.value.map(e => e.id)))
 const nbMachines = computed(() => equipsGroupe.value.length || 1)
@@ -50,19 +54,19 @@ function cadenceGroupe(pid) { let best = 0; for (const e of equipsGroupe.value) 
 async function charger() {
   chargement.value = true
   const [re, rp, rc, rt, rpl, rof] = await Promise.all([
-    supabase.from('equipements').select('*').eq('actif', true),
-    supabase.from('produits').select('id, code_pf, designation, unites_par_boite, taille_lot, poids_lot_kg, poids_unitaire_mg').eq('actif', true),
-    supabase.from('cadences_produit').select('*'),
-    supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf, designation)').gte('date', annee.value + '-01-01').lte('date', annee.value + '-12-31'),
-    supabase.from('plan_production').select('produit_id, annee, mois, quantite_planifiee').eq('annee', annee.value),
-    supabase.from('ordres_fabrication').select('produit_id, boites_fabriquees, date_fin_fabrication, statut')
+    fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, unites_par_boite, taille_lot, poids_lot_kg, poids_unitaire_mg').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('cadences_produit').select('*')),
+    fetchAllPaged(() => supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf, designation)').gte('date', annee.value + '-01-01').lte('date', annee.value + '-12-31')),
+    fetchAllPaged(() => supabase.from('plan_production').select('produit_id, annee, mois, quantite_planifiee').eq('annee', annee.value)),
+    fetchAllPaged(() => supabase.from('ordres_fabrication').select('produit_id, boites_fabriquees, date_fin_fabrication, statut'))
   ])
-  equipements.value = re.data || []
-  produits.value = rp.data || []
-  cadences.value = rc.data || []
-  postes.value = (rt.data || []).filter(s => idsGroupe.value.has(s.equipement_id) || true) // filtré plus bas
-  plan.value = rpl.data || []
-  ofs.value = rof.data || []
+  equipements.value = re || []
+  produits.value = rp || []
+  cadences.value = rc || []
+  postes.value = rt || []
+  plan.value = rpl || []
+  ofs.value = rof || []
   chargement.value = false
 }
 onMounted(charger)
@@ -124,7 +128,6 @@ const top10 = computed(() => {
     const planB = planParProduit.value[p.id] || 0
     const realB = realiseParProduit.value[p.id] || 0
     const posteB = produitProduitPoste.value[p.id] || 0
-    if (planB <= 0 && realB <= 0 && posteB <= 0) continue
     rows.push({ code: p.code_pf, desig: p.designation, cad, plan: planB, real: realB, poste: posteB, taux: planB > 0 ? Math.min(999, realB / planB * 100) : null })
   }
   rows.sort((a, b) => (b.plan || b.poste) - (a.plan || a.poste))
