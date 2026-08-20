@@ -281,6 +281,7 @@ onMounted(async () => {
       if (Array.isArray(req)) requisEquip[row.equipement_id] = req
     }
     nettoyerPanierTermines()
+    nettoyerHistoriqueEquip()
   } catch (e) { erreur.value = String(e) } finally { chargement.value = false }
 })
 
@@ -304,6 +305,22 @@ function nettoyerPanierTermines() {
     if (garde.length !== pan.length) { n += pan.length - garde.length; panierEquip[eqId] = garde; sauverPanier(Number(eqId)) }
   }
   retiresAuto.value = n
+}
+function nettoyerHistoriqueEquip() {
+  const auj = new Date(); auj.setHours(0, 0, 0, 0)
+  const maintenant = Date.now()
+  for (const eqId in requisEquip) {
+    const arr = requisEquip[eqId]
+    if (!Array.isArray(arr) || !arr.length) continue
+    const garde = arr.filter(x => { const d = typeof x === 'object' ? x.d : x; if (!d) return true; const dd = new Date(d + 'T00:00:00'); return isNaN(dd) || dd >= auj })
+    if (garde.length !== arr.length) { requisEquip[eqId] = garde; sauverPanier(Number(eqId)) }
+  }
+  for (const eqId in maintEquip) {
+    const arr = maintEquip[eqId]
+    if (!Array.isArray(arr) || !arr.length) continue
+    const garde = arr.filter(m => { if (!m || !m.debut) return true; const fin = new Date(m.debut).getTime() + (Number(m.dureeH) || 0) * 3600000; return isNaN(fin) || fin >= maintenant })
+    if (garde.length !== arr.length) { maintEquip[eqId] = garde; sauverPanier(Number(eqId)) }
+  }
 }
 // Lot en cours par équipement (suivi_phases 'En cours' + equipement_id)
 const enCoursEquip = computed(() => {
@@ -955,7 +972,7 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pan-reg select { font-size: 12px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
 .pan-requis { margin-bottom: 10px; }
 .pan-req-head { font-size: 11px; color: #64748b; margin-bottom: 5px; font-weight: 600; }
-.pan-req-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.pan-req-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px;  max-height: 120px; overflow-y: auto; }
 .pan-req-chip { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; border-radius: 10px; font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px; }
 .pan-req-chip button { background: none; border: none; color: #b45309; cursor: pointer; font-size: 11px; padding: 0; }
 .pan-req-add { display: flex; gap: 6px; align-items: center; }
