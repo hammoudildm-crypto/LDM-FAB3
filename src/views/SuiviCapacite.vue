@@ -372,15 +372,15 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 </script>
 
 <style scoped>
-.cap { max-width: 1240px; margin: 0 auto; padding: 6px 4px 24px; }
-.cap-head { margin-bottom: 20px; }
+.cap { max-width: 1600px; margin: 0 auto; padding: 4px 6px 12px; }
+.cap-head { margin-bottom: 10px; }
 .ch-eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #0f766e; }
-.ch-title { font-size: 20px; font-weight: 800; letter-spacing: -.02em; color: #1a2233; margin: 2px 0 1px; }
+.ch-title { font-size: 17px; font-weight: 800; letter-spacing: -.02em; color: #1a2233; margin: 1px 0 0; }
 .ch-sub { font-size: 13.5px; color: #64748b; }
 
-.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 8px 12px; margin-bottom: 8px; }
 .card.avert { border-color: #fcd34d; background: #fffbeb; }
-.card-title { font-size: 14px; font-weight: 800; color: #1a2233; margin: 0 0 10px; }
+.card-title { font-size: 13px; font-weight: 800; color: #1a2233; margin: 0 0 8px; }
 .muted { font-size: 13px; color: #94a3b8; margin: 6px 0 0; }
 .muted.warn { color: #b45309; }
 .note { font-size: 12px; color: #64748b; margin-top: 12px; font-style: italic; }
@@ -434,9 +434,9 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .chip.more { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
 /* Panneau de sélection des équipements */
 .occ-layout { display: flex; gap: 10px; align-items: flex-start; }
-.kpi-row { display: flex; gap: 12px; margin-bottom: 14px; }
-.kpi { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; text-align: center; }
-.kpi-v { font-size: 23px; font-weight: 800; color: #1e293b; line-height: 1.1; }
+.kpi-row { display: flex; gap: 10px; margin-bottom: 10px; }
+.kpi { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; padding: 6px 12px; text-align: center; }
+.kpi-v { font-size: 18px; font-weight: 800; color: #1e293b; line-height: 1.1; }
 .kpi-l { font-size: 11px; color: #64748b; font-weight: 600; margin-top: 3px; }
 .kpi.warn .kpi-v { color: #b91c1c; }
 .occ-side { flex: 0 0 250px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: flex-start; }
