@@ -17,6 +17,8 @@
       <section class="card mat-card">
         <div class="mat-head">
           <input type="search" v-model="filtre" class="prod-search-big" placeholder="Filtrer les produits (code ou désignation)…" />
+          <input type="search" v-model="filtreEq" class="prod-search-big eq-filter" placeholder="Filtrer les équipements (colonnes)…" />
+          <span v-if="filtreEq" class="eq-filter-info">{{ groupesAffiches.length }} équipement(s)</span>
           <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupes.length }} équipement(s) — saisissez la cadence directement dans les cases</span>
           <span v-if="msgMat" class="mat-msg">{{ msgMat }}</span>
         </div>
@@ -25,7 +27,7 @@
             <thead>
               <tr>
                 <th class="mat-corner">Produit</th>
-                <th v-for="g in groupes" :key="g.key" class="mat-col" :class="'ph-' + (g.phase || 'x')">
+                <th v-for="g in groupesAffiches" :key="g.key" class="mat-col" :class="'ph-' + (g.phase || 'x')">
                   {{ g.nom }}<div class="mat-unit">{{ uniteGroupe(g) }}</div>
                 </th>
               </tr>
@@ -33,7 +35,7 @@
             <tbody>
               <tr v-for="p in produitsMatrice" :key="p.id">
                 <td class="mat-prod"><span class="mat-code">{{ p.code_pf }}</span><span class="mat-des">{{ p.designation }}</span></td>
-                <td v-for="g in groupes" :key="g.key" class="mat-cell" :class="{ vide: !cadenceCell(p.id, g) }"><input type="number" step="any" min="0" class="mat-in" :value="cadenceCell(p.id, g) || ''" @change="sauverCellule(p.id, g, $event.target.value)" @keyup.enter="$event.target.blur()" placeholder="·" /></td>
+                <td v-for="g in groupesAffiches" :key="g.key" class="mat-cell" :class="{ vide: !cadenceCell(p.id, g) }"><input type="number" step="any" min="0" class="mat-in" :value="cadenceCell(p.id, g) || ''" @change="sauverCellule(p.id, g, $event.target.value)" @keyup.enter="$event.target.blur()" placeholder="·" /></td>
               </tr>
             </tbody>
           </table>
@@ -77,7 +79,7 @@ const routeCad = useRoute()
 
 const produits = ref([]), equipements = ref([]), ateliers = ref([]), cadences = ref([])
 const chargement = ref(true), sauvegarde = ref(false), sauvegardeP = ref(false)
-const selGroupe = ref(''), filtre = ref('')
+const selGroupe = ref(''), filtre = ref(''), filtreEq = ref('')
 const message = ref(''), messageErr = ref(false), messageP = ref(''), messagePErr = ref(false)
 
 const cadEdit = reactive({})
@@ -175,6 +177,7 @@ async function sauverParam(grp, k, valeur) {
 }
 
 // Regroupement des équipements identiques : même phase (type) + même nom de base
+const groupesAffiches = computed(() => { const q = filtreEq.value.trim().toLowerCase(); return q ? groupes.value.filter(g => (g.nom || '').toLowerCase().includes(q)) : groupes.value })
 const groupes = computed(() => {
   const eqs = equipements.value.slice()
   const kp = (e) => phaseDeType(e.type) || ('t:' + (e.type || '?'))
@@ -390,6 +393,8 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 .mat-table tbody tr:hover .mat-prod { background: #f0fdfa; }
 .ph-granulation { border-top: 3px solid #0f766e; } .ph-melange { border-top: 3px solid #4338ca; } .ph-compression { border-top: 3px solid #c2410c; } .ph-pelliculage { border-top: 3px solid #7c3aed; } .ph-conditionnement { border-top: 3px solid #0891b2; } .ph-remplissage { border-top: 3px solid #ca8a04; } .ph-pesee { border-top: 3px solid #64748b; }
 .prod-search-big:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.eq-filter { max-width: 320px; }
+.eq-filter-info { font-size: 12px; font-weight: 700; color: #0f766e; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 20px; padding: 3px 10px; }
 .ps-count { font-size: 13px; color: #64748b; font-weight: 600; }
 .no-res { text-align: center; color: #94a3b8; padding: 18px; font-size: 13.5px; }
 
