@@ -112,6 +112,31 @@ const arretsGroupe = computed(() => {
 
 // --- Plan / réalisé par produit ---
 const planParProduit = computed(() => { const m = {}; for (const r of plan.value) m[r.produit_id] = (m[r.produit_id] || 0) + num(r.quantite_planifiee); return m })
+const planParProduitMois = computed(() => { const m = {}; for (const r of plan.value) { const pid = r.produit_id, mo = num(r.mois) - 1; if (!m[pid]) m[pid] = Array(12).fill(0); if (mo >= 0 && mo < 12) m[pid][mo] += num(r.quantite_planifiee) } return m })
+const postesEquip = computed(() => { const e = equipsGroupe.value[0] || {}; return num(e.postes, 3) })
+function joursOuvresMoisN(mo) { const d = new Date(annee.value, mo, 1); let n = 0; while (d.getMonth() === mo) { const wd = d.getDay(); if (wd !== 0 && wd !== 6) n++; d.setDate(d.getDate() + 1) } return n }
+const occupationParMois = computed(() => {
+  const out = Array(12).fill(null)
+  const auj = new Date(); const moisActuel = auj.getMonth(); const anneeActuelle = auj.getFullYear()
+  const capaJour = postesEquip.value * 8 * nbMachines.value
+  for (let mo = 0; mo < 12; mo++) {
+    if (annee.value === anneeActuelle && mo < moisActuel) continue
+    if (annee.value < anneeActuelle) continue
+    let heures = 0
+    for (const p of produits.value) {
+      const cad = cadenceGroupe(p.id); if (cad <= 0) continue
+      const planB = (planParProduitMois.value[p.id] || [])[mo] || 0
+      if (planB <= 0) continue
+      const plk = num(p.poids_lot_kg) || (num(p.taille_lot) * num(p.unites_par_boite) * num(p.poids_unitaire_mg) / 1e6)
+      const tl = num(p.taille_lot)
+      if (tl > 0 && plk > 0) heures += (planB * plk / tl) / cad
+    }
+    const jm = joursOuvresMoisN(mo)
+    const capaMois = jm * capaJour
+    out[mo] = capaMois > 0 ? heures / capaMois : 0
+  }
+  return out
+})
 const realiseParProduit = computed(() => {
   const m = {}
   for (const o of ofs.value) { const d = o.date_fin_fabrication ? new Date(o.date_fin_fabrication) : null; if (d && d.getFullYear() === annee.value) m[o.produit_id] = (m[o.produit_id] || 0) + num(o.boites_fabriquees) }
@@ -120,7 +145,7 @@ const realiseParProduit = computed(() => {
 const produitProduitPoste = computed(() => { const m = {}; for (const s of postesGroupe.value) if (s.produit_id) m[s.produit_id] = (m[s.produit_id] || 0) + num(s.production_realisee); return m })
 
 // Top 10 produits sur la ligne : produits ayant une cadence sur le groupe, triés par plan
-const top10 = computed(() => {
+const top5 = computed(() => {
   const rows = []
   for (const p of produits.value) {
     const cad = cadenceGroupe(p.id)
@@ -131,7 +156,7 @@ const top10 = computed(() => {
     rows.push({ code: p.code_pf, desig: p.designation, cad, plan: planB, real: realB, poste: posteB, taux: planB > 0 ? Math.min(999, realB / planB * 100) : null })
   }
   rows.sort((a, b) => (b.plan || b.poste) - (a.plan || a.poste))
-  return rows.slice(0, 10)
+  return rows.slice(0, 5)
 })
 
 // --- Occupation restante (quantité restante ÷ jours restants) ---
@@ -224,14 +249,14 @@ function retour() { router.push({ path: '/capacite' }) }
           </template>
         </section>
 
-        <!-- Top 10 produits -->
+        <!-- Top 5 produits + évolution mois restants -->
         <section class="ed-card">
-          <h2 class="ed-ct">🏆 Top 10 produits sur la ligne</h2>
-          <p v-if="!top10.length" class="ed-muted">Aucun produit avec cadence/plan sur cet équipement.</p>
+          <h2 class="ed-ct">🏆 Top 5 produits sur la ligne</h2>
+          <p v-if="!top5.length" class="ed-muted">Aucun produit avec cadence/plan sur cet équipement.</p>
           <table v-else class="ed-tbl">
-            <thead><tr><th>#</th><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Réalisé</th><th class="r">Cadence</th><th class="r">Avancement</th></tr></thead>
+            <thead><tr><th>#</th><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Réalisé</th><th class="r">Cadence</th><th class="r">Avanc.</th></tr></thead>
             <tbody>
-              <tr v-for="(p, i) in top10" :key="p.code">
+              <tr v-for="(p, i) in top5" :key="p.code">
                 <td class="ed-rank">{{ i + 1 }}</td>
                 <td><b>{{ p.code }}</b><span class="ed-pdesig"> — {{ p.desig }}</span></td>
                 <td class="r">{{ p.plan.toLocaleString('fr-FR') }}</td>
@@ -241,6 +266,15 @@ function retour() { router.push({ path: '/capacite' }) }
               </tr>
             </tbody>
           </table>
+          <div class="ed-sub">📈 Occupation prévisionnelle — mois restants</div>
+          <div class="ed-mchart tall">
+            <div class="ed-refline"></div>
+            <div v-for="(t, i) in occupationParMois" :key="i" class="ed-mcol" :title="MOIS[i] + ' : ' + (t == null ? 'écoulé' : (t * 100).toFixed(0) + ' %')">
+              <div class="ed-mbar" :class="t == null ? 'gone' : 'b-' + clsTaux(t)" :style="{ height: t == null ? '2px' : Math.min(120, t * 100) + '%' }"></div>
+              <span class="ed-mm">{{ MOIS[i].charAt(0) }}</span>
+            </div>
+          </div>
+          <p class="ed-hint">Barres grises = mois écoulés. Trait = 100 %. Charge planifiée du mois ÷ capacité mensuelle de l'équipement.</p>
         </section>
       </div>
 
@@ -292,6 +326,11 @@ function retour() { router.push({ path: '/capacite' }) }
 .ed-mchart { display: flex; align-items: flex-end; gap: 3px; height: 52px; padding-top: 3px; border-bottom: 1px solid #e2e8f0; }
 .ed-mcol { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
 .ed-mbar { width: 70%; min-height: 2px; background: #6366f1; border-radius: 3px 3px 0 0; }
+.ed-mchart.tall { height: 70px; position: relative; padding-top: 12px; }
+.ed-refline { position: absolute; left: 0; right: 0; top: calc(12px + (70px - 12px) * (1 - 100/120)); border-top: 1px dashed #cbd5e1; }
+.ed-mbar.gone { background: #e2e8f0; }
+.ed-mbar.b-g { background: #16a34a; } .ed-mbar.b-a { background: #f59e0b; } .ed-mbar.b-r { background: #ef4444; } .ed-mbar.b-x { background: #991b1b; }
+.ed-hint { font-size: 9.5px; color: #94a3b8; margin: 5px 0 0; }
 .ed-mm { font-size: 9px; color: #94a3b8; margin-top: 2px; }
 
 .ed-arrets { display: flex; flex-direction: column; gap: 3px; }
