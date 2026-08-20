@@ -690,8 +690,9 @@ const planning = computed(() => {
           const clFinSiMaintenant = placer(cursor, C, P.regime, P.weAll, P.requis).end
           // 1re turbine : attend la fin de la phase précédente ; les suivantes enchaînent sur l'équipement
           const decalMs = (Number(item.decalage) || 0) * 3600000
-          const ready = (k === 1) ? new Date(readyPhase.getTime() + decalMs) : new Date(t0v)
+          const ready = (k === 1) ? readyPhase : new Date(t0v)
           let debut = clFinSiMaintenant > ready ? clFinSiMaintenant : ready
+          if (k === 1 && decalMs > 0) debut = new Date(debut.getTime() + decalMs)
           debut = prochainOuvre(new Date(debut), P.regime, P.weAll, P.requis)
           const plLot = placerLot(debut, dRun, P.regime, P.weAll, P.requis, noWeekend)
           const lotStart = plLot.segments[0].start
