@@ -21,6 +21,7 @@
             <option value="">Tous les équipements</option>
             <option v-for="g in groupes" :key="g.key" :value="g.nom">{{ g.nom }}</option>
           </select>
+          <span v-if="filtreEq" class="eq-count">{{ produitsMatrice.length }} produit(s) avec cadence</span>
           <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupes.length }} équipement(s) — saisissez la cadence directement dans les cases</span>
           <span v-if="msgMat" class="mat-msg">{{ msgMat }}</span>
         </div>
@@ -136,10 +137,14 @@ function cadenceCell(pid, grp) {
 function uniteGroupe(grp) { return grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h' }
 const fmtCad = (v) => Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 })
 function ouvrirGroupe(g) { selGroupe.value = g.key; chargerEditeur(); vueMode.value = 'editeur' }
+const groupeSel = computed(() => filtreEq.value ? (groupes.value.find(g => g.nom === filtreEq.value) || null) : null)
 const produitsMatrice = computed(() => {
   const q = filtre.value.trim().toLowerCase()
-  if (!q) return produitsTries.value
-  return produitsTries.value.filter(p => String(p.code_pf || '').toLowerCase().includes(q) || String(p.designation || '').toLowerCase().includes(q))
+  let list = produitsTries.value
+  if (q) list = list.filter(p => String(p.code_pf || '').toLowerCase().includes(q) || String(p.designation || '').toLowerCase().includes(q))
+  const gs = groupeSel.value
+  if (gs) list = list.filter(p => cadenceCell(p.id, gs) > 0)
+  return list
 })
 const msgMat = ref('')
 async function sauverCellule(pid, grp, valeur) {
@@ -397,6 +402,7 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 .prod-search-big:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .eq-select { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 9px; font: inherit; font-size: 14px; min-width: 260px; background: #fff; color: #0f172a; }
 .eq-select:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.eq-count { font-size: 12px; font-weight: 700; color: #0f766e; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 20px; padding: 4px 11px; white-space: nowrap; }
 .ps-count { font-size: 13px; color: #64748b; font-weight: 600; }
 .no-res { text-align: center; color: #94a3b8; padding: 18px; font-size: 13.5px; }
 
