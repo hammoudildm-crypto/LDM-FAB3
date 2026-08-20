@@ -61,7 +61,8 @@
           <p v-else-if="!phaseSel" class="occ-step">2️⃣ Choisis une <b>phase</b> ci-dessus.</p>
           <p v-else class="occ-step">3️⃣ Coche les <b>équipements</b> à suivre.</p>
         </aside>
-        <div class="occ-content tbl-wrap">
+        <div class="occ-content">
+        <div v-if="lignesAffichees.length" class="tbl-wrap">
         <table class="grid">
           <thead>
             <tr>
@@ -96,8 +97,14 @@
           </tbody>
         </table>
         </div>
+        <div v-else class="occ-empty">
+          <div class="occ-empty-ic">📊</div>
+          <p class="occ-empty-t">Synthèse par équipement</p>
+          <p class="occ-empty-s">Sélectionne un <b>site</b>, puis une <b>phase</b>, puis coche un ou plusieurs <b>équipements</b> à gauche pour afficher leur occupation annuelle et leur évolution mensuelle.</p>
+        </div>
+        </div>
       </div>
-      <p class="note">Fabrication : charge = kg ÷ cadence (kg/h), kg = boîtes × poids du lot ÷ taille de lot. Conditionnement : charge = boîtes ÷ cadence (boîtes/h). Un produit ne charge une phase que si elle figure dans sa gamme (le conditionnement s'ajoute toujours). <strong>Charge globale</strong> = charge totale de la phase (tous produits) ; <strong>Charge / machine</strong> = charge globale ÷ nombre de machines identiques — c'est elle qui donne le taux. <template v-if="inclureNett">+ nettoyage (VDLP/lot) + nettoyage général & réglage (VDLT + REGLAGE / campagne).</template></p>
+      <p v-if="lignesAffichees.length" class="note">Fabrication : charge = kg ÷ cadence (kg/h), kg = boîtes × poids du lot ÷ taille de lot. Conditionnement : charge = boîtes ÷ cadence (boîtes/h). Un produit ne charge une phase que si elle figure dans sa gamme (le conditionnement s'ajoute toujours). <strong>Charge globale</strong> = charge totale de la phase (tous produits) ; <strong>Charge / machine</strong> = charge globale ÷ nombre de machines identiques — c'est elle qui donne le taux. <template v-if="inclureNett">+ nettoyage (VDLP/lot) + nettoyage général & réglage (VDLT + REGLAGE / campagne).</template></p>
     </section>
 
 
@@ -421,6 +428,11 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .occ-ph-h { display: flex; align-items: center; justify-content: space-between; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #0f766e; background: #f0fdfa; padding: 3px 10px; position: sticky; top: 0; z-index: 1; border-bottom: 1px solid #ccfbf1; }
 .occ-ph-n { font-size: 9px; background: #ccfbf1; border-radius: 10px; padding: 0 6px; color: #0f766e; font-weight: 800; }
 .occ-vide { font-size: 11px; color: #94a3b8; padding: 10px; margin: 0; }
+.occ-step { font-size: 11.5px; color: #475569; background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 8px 10px; margin: 0; }
+.occ-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-height: 260px; color: #94a3b8; padding: 30px; }
+.occ-empty-ic { font-size: 42px; margin-bottom: 8px; opacity: .6; }
+.occ-empty-t { font-size: 16px; font-weight: 800; color: #64748b; margin: 0 0 6px; }
+.occ-empty-s { font-size: 13px; max-width: 380px; line-height: 1.5; margin: 0; }
 .occ-chk { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 11.5px; }
 .occ-chk:hover { background: #eef2f7; }
 .occ-chk.off { opacity: .5; }
