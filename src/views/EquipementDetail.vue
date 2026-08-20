@@ -282,7 +282,6 @@ function retour() { router.push({ path: '/capacite' }) }
       <!-- Occupation restante détaillée -->
       <section class="ed-card">
         <h2 class="ed-ct">📅 Occupation prévisionnelle — reste de l'année</h2>
-        <p class="ed-muted">Calcul : quantité <b>restant à fabriquer</b> (plan {{ annee }} − déjà réalisé) convertie en heures via la cadence, rapportée aux <b>jours ouvrés restants</b> jusqu'au 31/12.</p>
         <div class="ed-occ">
           <div class="ed-occ-b"><div class="ed-occ-v">{{ Math.round(occupationRestante.boitesRestantes).toLocaleString('fr-FR') }}</div><div class="ed-occ-l">Boîtes restantes à fabriquer</div></div>
           <div class="ed-occ-b"><div class="ed-occ-v">{{ occupationRestante.chargeJ.toFixed(1) }} j</div><div class="ed-occ-l">Charge restante (machine)</div></div>
