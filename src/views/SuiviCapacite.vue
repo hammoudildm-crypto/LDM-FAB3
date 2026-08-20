@@ -42,7 +42,7 @@
           <thead>
             <tr>
               <th>Équipement</th><th>Phase</th><th class="ta-c">Unité</th><th class="ta-c">Machines</th><th class="ta-c">h/j effectif</th>
-              <th class="ta-r">Charge globale (j)</th><th class="ta-r">Charge / machine (j)</th><th class="ta-r">Capacité (j)</th><th class="taux-h">Taux d'occupation</th>
+              <th class="ta-r">Charge globale (j)</th><th class="ta-r">Charge / machine (j)</th><th class="ta-c">Réq. WE</th><th class="ta-r">Capacité (j)</th><th class="taux-h">Taux d'occupation</th>
             </tr>
           </thead>
           <tbody>
@@ -54,6 +54,7 @@
               <td class="ta-c hj">{{ r.hj.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r glob">{{ r.chargeGlobaleJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r">{{ r.chargeJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
+              <td class="ta-c"><input type="checkbox" :checked="weEq(r.id)" @change="setReq(r.id, $event.target.checked)" title="Travail le week-end pour cet équipement" /></td>
               <td class="ta-r">{{ r.capaciteJ.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) }}</td>
               <td class="taux-cell">
                 <div class="bar-wrap"><div class="bar" :class="cls(r.taux)" :style="{ width: Math.min(100, r.taux * 100) + '%' }"></div></div>
@@ -104,7 +105,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
@@ -185,6 +186,17 @@ const planAgg = computed(() => {
 function joursOuvresMois(an, moisIdx) { const d = new Date(an, moisIdx, 1); let n = 0; while (d.getMonth() === moisIdx) { const wd = d.getDay(); if (avecWE.value || (wd !== 0 && wd !== 6)) n++; d.setDate(d.getDate() + 1) } return n }
 const joursParMois = computed(() => MOIS.map((_, i) => joursOuvresMois(annee.value, i)))
 const joursAnnee = computed(() => joursParMois.value.reduce((s, n) => s + n, 0))
+function joursOuvresMoisWE(an, moisIdx, we) { const d = new Date(an, moisIdx, 1); let n = 0; while (d.getMonth() === moisIdx) { const wd = d.getDay(); if (we || (wd !== 0 && wd !== 6)) n++; d.setDate(d.getDate() + 1) } return n }
+const joursMoisSansWE = computed(() => MOIS.map((_, i) => joursOuvresMoisWE(annee.value, i, false)))
+const joursMoisAvecWE = computed(() => MOIS.map((_, i) => joursOuvresMoisWE(annee.value, i, true)))
+const joursAnSansWE = computed(() => joursMoisSansWE.value.reduce((a, n) => a + n, 0))
+const joursAnAvecWE = computed(() => joursMoisAvecWE.value.reduce((a, n) => a + n, 0))
+const reqEquip = reactive({})
+function weEq(key) { return key in reqEquip ? reqEquip[key] : avecWE.value }
+const CLE_REQ = 'sc_req_we'
+function sauverReq() { try { localStorage.setItem(CLE_REQ, JSON.stringify(reqEquip)) } catch (e) {} }
+function setReq(key, val) { reqEquip[key] = val; sauverReq() }
+try { const _r = JSON.parse(localStorage.getItem(CLE_REQ) || '{}'); for (const k in _r) reqEquip[k] = _r[k] } catch (e) {}
 
 // Nom d'unité : retire le préfixe d'opération (ex "Granulation COMASA" / "Séchage COMASA" -> "COMASA")
 // puis un indice d'unité en fin (<= 20), sans toucher aux numéros de modèle (FE55, TR100, 520...).
@@ -227,6 +239,9 @@ const lignes = computed(() => {
     const vdlp = num(rep.vdlp, 0), vdlt = num(rep.vdlt, 0), reglage = num(rep.reglage, 0)
     const capaJour = postes * tep * machines
     const cadPhase = (ph, pid) => { let c = 0; for (const e of parPhase[ph].equips) { const v = cadMap.value[e.id + '|' + pid]; if (v > 0 && v > c) c = v } return c }
+    const we = weEq(grp.key)
+    const jMois = we ? joursMoisAvecWE.value : joursMoisSansWE.value
+    const jAn = we ? joursAnAvecWE.value : joursAnSansWE.value
     const tauxMois = []; let chargeJTot = 0
     for (let mi = 0; mi < 12; mi++) {
       let occH = 0
@@ -254,13 +269,13 @@ const lignes = computed(() => {
       }
       const chargeJ = capaJour > 0 ? occH / capaJour : 0
       chargeJTot += chargeJ
-      tauxMois.push(joursParMois.value[mi] > 0 ? chargeJ / joursParMois.value[mi] : 0)
+      tauxMois.push(jMois[mi] > 0 ? chargeJ / jMois[mi] : 0)
     }
     let phaseLabel = phases.map(ph => PHASE_NOM[ph] || ph).join(' / ')
     let nomAffiche = grp.nom
     if (phases.includes('granulation') && phases.includes('sechage')) { phaseLabel = 'Granulation et Séchage'; nomAffiche = 'Granulation et Séchage ' + grp.nom }
     else if (phases.length === 1 && phases[0] === 'granulation' && grp.equips.some(e => /s[ée]ch/i.test((e.type || '') + ' ' + (e.nom || e.code || '')))) phaseLabel = 'Granulation et Séchage'
-    out.push({ id: grp.key, nom: nomAffiche, phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, capaciteJ: joursAnnee.value, taux: joursAnnee.value > 0 ? chargeJTot / joursAnnee.value : 0, tauxMois })
+    out.push({ id: grp.key, nom: nomAffiche, phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
   }
   return out.sort((a, b) => (ORDRE_GAMME[a.phase] || 99) - (ORDRE_GAMME[b.phase] || 99) || b.taux - a.taux)
 })
