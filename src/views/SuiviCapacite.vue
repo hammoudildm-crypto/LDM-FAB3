@@ -67,6 +67,9 @@
         </aside>
         <div class="occ-content tbl-wrap">
         <table class="grid">
+          <colgroup>
+            <col style="width:16%"><col style="width:9%"><col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:9%"><col style="width:9%"><col style="width:5%"><col style="width:8%"><col style="width:13%"><col style="width:14%">
+          </colgroup>
           <thead>
             <tr>
               <th>Équipement</th><th>Phase</th><th class="ta-c">Unité</th><th class="ta-c">Machines</th><th class="ta-c">h/j effectif</th>
@@ -374,10 +377,10 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .lg { font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 20px; }
 .lg-g { background: #dcfce7; color: #15803d; } .lg-a { background: #fef3c7; color: #b45309; } .lg-r { background: #fee2e2; color: #b91c1c; } .lg-x { background: #7f1d1d; color: #fff; }
 
-.tbl-wrap { overflow-x: auto; }
-.grid { width: 100%; border-collapse: collapse; font-size: 11px; }
-.grid th, .grid td { padding: 3px 6px; border-bottom: 1px solid #eef2f6; text-align: left; white-space: nowrap; }
-.grid th { font-size: 10px; color: #64748b; font-weight: 700; }
+.tbl-wrap { overflow-x: hidden; width: 100%; }
+.grid { width: 100%; border-collapse: collapse; font-size: 9.5px; table-layout: fixed; }
+.grid th, .grid td { padding: 2px 4px; border-bottom: 1px solid #eef2f6; text-align: left; white-space: normal; word-break: break-word; overflow: hidden; }
+.grid th { font-size: 8.5px; color: #64748b; font-weight: 700; line-height: 1.1; }
 .ta-r { text-align: right; } .ta-c { text-align: center; }
 .grid tr.vide td { color: #cbd5e1; }
 .hj { color: #64748b; font-size: 12px; }
@@ -387,11 +390,11 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .phase-tag { font-size: 9.5px; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 5px; padding: 1px 5px; font-weight: 600; }
 
 .taux-h { width: 260px; }
-.taux-cell { display: flex; align-items: center; gap: 5px; }
-.bar-wrap { flex: 1; height: 8px; background: #f1f5f9; border-radius: 6px; overflow: hidden; min-width: 50px; }
+.taux-cell { display: flex; align-items: center; gap: 3px; }
+.bar-wrap { flex: 1; height: 7px; background: #f1f5f9; border-radius: 5px; overflow: hidden; min-width: 22px; }
 .bar { height: 100%; border-radius: 7px; }
 .bar.g { background: #22c55e; } .bar.a { background: #f59e0b; } .bar.r { background: #ef4444; } .bar.x { background: #7f1d1d; }
-.taux-val { font-weight: 700; font-size: 10.5px; min-width: 40px; text-align: right; }
+.taux-val { font-weight: 700; font-size: 9px; min-width: 30px; text-align: right; }
 .t-g { color: #15803d; } .t-a { color: #b45309; } .t-r { color: #b91c1c; } .t-x { color: #7f1d1d; }
 
 .matrice .sticky-c { position: sticky; left: 0; background: #fff; z-index: 1; }
@@ -410,7 +413,7 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .chip.more { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
 /* Panneau de sélection des équipements */
 .occ-layout { display: flex; gap: 10px; align-items: flex-start; }
-.occ-side { flex: 0 0 200px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: flex-start; }
+.occ-side { flex: 0 0 172px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: flex-start; }
 .occ-side-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; font-size: 12px; font-weight: 800; color: #334155; }
 .occ-side-btns { display: flex; gap: 4px; }
 .occ-side-btns button { font: inherit; font-size: 10.5px; font-weight: 700; border: 1px solid #cbd5e1; background: #fff; border-radius: 5px; padding: 2px 7px; cursor: pointer; color: #475569; }
@@ -465,8 +468,8 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .mc-bar.r { background: #ef4444; }
 .mc-bar.x { background: #991b1b; }
 .mc-m { font-size: 8.5px; color: #94a3b8; margin-top: 2px; }
-.mc-cell { min-width: 140px; padding: 2px 6px !important; }
-.mc-chart.mc-inline { height: 34px; padding-top: 7px; gap: 1.5px; border-bottom: none; }
+.mc-cell { width: 96px; padding: 1px 4px !important; }
+.mc-chart.mc-inline { height: 30px; padding-top: 6px; gap: 1px; border-bottom: none; }
 .mc-chart.mc-inline .mc-ref { top: calc(8px + (40px - 8px) * (1 - 100/120)); }
 .mc-h { text-align: left; }
 .mc-max { flex: 0 0 78px; text-align: right; font-size: 12px; font-weight: 800; }
