@@ -232,7 +232,8 @@ function retour() { router.push({ path: '/capacite' }) }
             <div class="ed-sub">Évolution mensuelle du TRS</div>
             <div class="ed-mchart">
               <div v-for="(t, i) in trsParMois" :key="i" class="ed-mcol" :title="MOIS[i] + ' : ' + t + ' %'">
-                <div class="ed-mbar" :style="{ height: Math.min(100, t) + '%' }"></div>
+                <span class="ed-mv">{{ t > 0 ? t : '' }}</span>
+                <div class="ed-bararea"><div class="ed-mbar" :style="{ height: Math.min(100, t) + '%' }"></div></div>
                 <span class="ed-mm">{{ MOIS[i].charAt(0) }}</span>
               </div>
             </div>
@@ -268,9 +269,9 @@ function retour() { router.push({ path: '/capacite' }) }
           </table>
           <div class="ed-sub">📈 Occupation prévisionnelle — mois restants</div>
           <div class="ed-mchart tall">
-            <div class="ed-refline"></div>
             <div v-for="(t, i) in occupationParMois" :key="i" class="ed-mcol" :title="MOIS[i] + ' : ' + (t == null ? 'écoulé' : (t * 100).toFixed(0) + ' %')">
-              <div class="ed-mbar" :class="t == null ? 'gone' : 'b-' + clsTaux(t)" :style="{ height: t == null ? '2px' : Math.min(120, t * 100) + '%' }"></div>
+              <span class="ed-mv" :class="t == null ? '' : 't-' + clsTaux(t)">{{ t == null ? '' : (t * 100).toFixed(0) }}</span>
+              <div class="ed-bararea"><div class="ed-refl2"></div><div class="ed-mbar" :class="t == null ? 'gone' : 'b-' + clsTaux(t)" :style="{ height: t == null ? '2px' : Math.min(120, t * 100) + '%' }"></div></div>
               <span class="ed-mm">{{ MOIS[i].charAt(0) }}</span>
             </div>
           </div>
@@ -323,10 +324,13 @@ function retour() { router.push({ path: '/capacite' }) }
 .ed-tbl { font-size: 9px; color: #64748b; font-weight: 600; margin-top: 1px; }
 .ed-op { align-self: center; font-size: 18px; font-weight: 800; color: #cbd5e1; }
 
-.ed-mchart { display: flex; align-items: flex-end; gap: 3px; height: 52px; padding-top: 3px; border-bottom: 1px solid #e2e8f0; }
-.ed-mcol { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.ed-mchart { display: flex; align-items: flex-end; gap: 3px; height: 66px; padding-top: 2px; border-bottom: 1px solid #e2e8f0; }
+.ed-mcol { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
+.ed-mv { font-size: 8px; font-weight: 800; color: #475569; line-height: 1; height: 10px; }
+.ed-bararea { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; position: relative; }
+.ed-refl2 { position: absolute; left: 0; right: 0; top: 16.7%; border-top: 1px dashed #cbd5e1; }
 .ed-mbar { width: 70%; min-height: 2px; background: #6366f1; border-radius: 3px 3px 0 0; }
-.ed-mchart.tall { height: 70px; position: relative; padding-top: 12px; }
+.ed-mchart.tall { height: 84px; position: relative; padding-top: 2px; }
 .ed-refline { position: absolute; left: 0; right: 0; top: calc(12px + (70px - 12px) * (1 - 100/120)); border-top: 1px dashed #cbd5e1; }
 .ed-mbar.gone { background: #e2e8f0; }
 .ed-mbar.b-g { background: #16a34a; } .ed-mbar.b-a { background: #f59e0b; } .ed-mbar.b-r { background: #ef4444; } .ed-mbar.b-x { background: #991b1b; }
