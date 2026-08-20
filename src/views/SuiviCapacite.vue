@@ -74,7 +74,7 @@
           <tbody>
             <tr v-for="r in lignesTableau" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
               <td class="ta-c"><input type="checkbox" :checked="weEq(r.id)" @change="setReq(r.id, $event.target.checked)" title="Travail le week-end pour cet équipement" /></td>
-              <td><strong>{{ r.nom }}</strong></td>
+              <td class="eq-lien" @click="ouvrirEquipement(r)" title="Voir la fiche équipement (TRS, top produits, occupation restante)"><strong>{{ r.nom }}</strong></td>
               <td class="ta-c">{{ r.machines }}</td>
               <td class="ta-c"><select :value="regimeEquip[r.id] || ''" @change="setRegime(r.id, $event.target.value)" class="reg-sel" title="Régime de travail de cet équipement"><option value="">Auto</option><option value="1">1×8</option><option value="2">2×8</option><option value="3">3×8</option><option value="4">4×8</option></select></td>
               <td class="ta-r glob">{{ r.chargeGlobaleJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
@@ -314,7 +314,7 @@ const lignes = computed(() => {
     let nomAffiche = grp.nom
     if (phases.includes('granulation') && phases.includes('sechage')) { phaseLabel = 'Granulation et Séchage'; nomAffiche = 'Granulation et Séchage ' + grp.nom }
     else if (phases.length === 1 && phases[0] === 'granulation' && grp.equips.some(e => /s[ée]ch/i.test((e.type || '') + ' ' + (e.nom || e.code || '')))) phaseLabel = 'Granulation et Séchage'
-    out.push({ id: grp.key, nom: nomAffiche, phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, site: phases.includes('conditionnement') ? 'conditionnement' : siteDuGroupe(grp.equips), capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
+    out.push({ id: grp.key, nom: nomAffiche, nomBase: grp.nom, phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, site: phases.includes('conditionnement') ? 'conditionnement' : siteDuGroupe(grp.equips), capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
   }
   return out.sort((a, b) => (ORDRE_GAMME[a.phase] || 99) - (ORDRE_GAMME[b.phase] || 99) || b.taux - a.taux)
 })
@@ -344,6 +344,7 @@ const produitsSansPoids = computed(() => {
   return out.sort((a, b) => (a.code + a.desig).localeCompare(b.code + b.desig))
 })
 function ouvrirProduit(p) { router.push({ path: '/referentiels', query: { produit: p.code } }) }
+function ouvrirEquipement(r) { router.push({ path: '/equipement', query: { nom: r.nomBase, annee: annee.value } }) }
 
 const selEquips = reactive({})
 const CLE_SEL = 'sc_sel_equips'
@@ -409,6 +410,8 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .taux-h { width: 260px; }
 .taux-cell { display: flex; align-items: center; gap: 3px; }
 .reg-sel { font: inherit; font-size: 9.5px; padding: 1px 3px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; width: 100%; box-sizing: border-box; }
+.eq-lien { cursor: pointer; }
+.eq-lien:hover strong { color: #6366f1; text-decoration: underline; }
 .bar-wrap { flex: 1; height: 7px; background: #f1f5f9; border-radius: 5px; overflow: hidden; min-width: 22px; }
 .bar { height: 100%; border-radius: 7px; }
 .bar.g { background: #22c55e; } .bar.a { background: #f59e0b; } .bar.r { background: #ef4444; } .bar.x { background: #7f1d1d; }
