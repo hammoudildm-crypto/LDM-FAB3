@@ -37,8 +37,17 @@
       <div class="occ-layout">
         <aside class="occ-side">
           <div class="occ-side-head"><span>À suivre ({{ nbSel }})</span><span class="occ-side-btns"><button type="button" @click="selTout">Tout</button><button type="button" @click="selRien">Aucun</button></span></div>
+          <div class="occ-grp-btns">
+            <div class="occ-btn-row">
+              <button v-for="st in SITES" :key="st.key" type="button" class="occ-gbtn site" :class="{ on: siteSel === st.key }" @click="siteSel = st.key; phaseSel = ''">{{ st.label }}</button>
+            </div>
+            <div class="occ-btn-row">
+              <button type="button" class="occ-gbtn ph" :class="{ on: !phaseSel }" @click="phaseSel = ''">Toutes phases</button>
+              <button v-for="ph in phasesDuSite" :key="ph" type="button" class="occ-gbtn ph" :class="{ on: phaseSel === ph }" @click="phaseSel = ph">{{ PHASE_NOM[ph] || ph }}</button>
+            </div>
+          </div>
           <div class="occ-side-list">
-            <label v-for="r in lignes" :key="r.id" class="occ-chk" :class="{ off: selEquips[r.id] === false }">
+            <label v-for="r in lignesSidebar" :key="r.id" class="occ-chk" :class="{ off: selEquips[r.id] === false }">
               <input type="checkbox" :checked="selEquips[r.id] !== false" @change="toggleSel(r.id)" />
               <span class="occ-chk-nom">{{ r.nom }}</span>
               <span class="occ-chk-taux" :class="clsTxt(r.taux)">{{ (r.taux * 100).toFixed(0) }}%</span>
@@ -222,6 +231,7 @@ const groupesEquip = computed(() => {
   return Object.values(g)
 })
 
+function siteDeCode(code) { const c = (code || '').toUpperCase(); if (c.startsWith('PRH')) return 'hormonal'; if (c === 'PR054') return 'semi'; return 'seche' }
 const lignes = computed(() => {
   const out = []
   for (const grp of groupesEquip.value) {
@@ -277,7 +287,7 @@ const lignes = computed(() => {
     let nomAffiche = grp.nom
     if (phases.includes('granulation') && phases.includes('sechage')) { phaseLabel = 'Granulation et Séchage'; nomAffiche = 'Granulation et Séchage ' + grp.nom }
     else if (phases.length === 1 && phases[0] === 'granulation' && grp.equips.some(e => /s[ée]ch/i.test((e.type || '') + ' ' + (e.nom || e.code || '')))) phaseLabel = 'Granulation et Séchage'
-    out.push({ id: grp.key, nom: nomAffiche, phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
+    out.push({ id: grp.key, nom: nomAffiche, phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, site: siteDeCode((grp.equips[0] || {}).code), capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
   }
   return out.sort((a, b) => (ORDRE_GAMME[a.phase] || 99) - (ORDRE_GAMME[b.phase] || 99) || b.taux - a.taux)
 })
@@ -315,6 +325,11 @@ function toggleSel(id) { selEquips[id] = selEquips[id] === false ? true : false;
 function selTout() { for (const r of lignes.value) selEquips[r.id] = true; sauverSel() }
 function selRien() { for (const r of lignes.value) selEquips[r.id] = false; sauverSel() }
 const lignesAffichees = computed(() => lignes.value.filter(r => selEquips[r.id] !== false))
+const SITES = [{ key: 'tous', label: 'Tous' }, { key: 'seche', label: 'Forme sèche' }, { key: 'hormonal', label: 'Hormonal' }, { key: 'semi', label: 'Semi' }]
+const siteSel = ref('tous')
+const phaseSel = ref('')
+const phasesDuSite = computed(() => { const set = new Set(); for (const r of lignes.value) if ((siteSel.value === 'tous' || r.site === siteSel.value) && r.phase) set.add(r.phase); return [...set].sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99)) })
+const lignesSidebar = computed(() => lignes.value.filter(r => (siteSel.value === 'tous' || r.site === siteSel.value) && (!phaseSel.value || r.phase === phaseSel.value)))
 const nbSel = computed(() => lignes.value.filter(r => selEquips[r.id] !== false).length)
 function cls(t) { if (!t) return ''; if (t > 1) return 'x'; if (t > 0.9) return 'r'; if (t >= 0.7) return 'a'; return 'g' }
 function clsTxt(t) { return 't-' + (cls(t) || 'g') }
@@ -386,6 +401,12 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .occ-side-btns button { font: inherit; font-size: 10.5px; font-weight: 700; border: 1px solid #cbd5e1; background: #fff; border-radius: 5px; padding: 2px 7px; cursor: pointer; color: #475569; }
 .occ-side-btns button:hover { background: #e2e8f0; }
 .occ-side-list { max-height: 60vh; overflow-y: auto; }
+.occ-grp-btns { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 5px; background: #fff; }
+.occ-btn-row { display: flex; flex-wrap: wrap; gap: 3px; }
+.occ-gbtn { font: inherit; font-size: 10px; font-weight: 700; border: 1px solid #cbd5e1; background: #fff; border-radius: 5px; padding: 2px 7px; cursor: pointer; color: #475569; }
+.occ-gbtn:hover { background: #eef2f7; }
+.occ-gbtn.site.on { background: #0f766e; border-color: #0f766e; color: #fff; }
+.occ-gbtn.ph.on { background: #334155; border-color: #334155; color: #fff; }
 .occ-chk { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 11.5px; }
 .occ-chk:hover { background: #eef2f7; }
 .occ-chk.off { opacity: .5; }
