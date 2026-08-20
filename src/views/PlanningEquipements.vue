@@ -119,12 +119,11 @@
             <!-- barres (par segment) -->
             <template v-for="(t, i) in row.tasks">
               <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar"
-                   :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragInfo && t.type === 'lot' && dragInfo.eqId === row.eq.id && dragInfo.uid === t.uid }]"
-                   :style="barStyleSeg(seg, t)" :title="t.type === 'lot' ? (titre(t) + '  •  glisser ce lot pour réordonner') : titre(t)"
-                   :draggable="t.type === 'lot' ? 'true' : 'false'"
-                   @dragstart="t.type === 'lot' ? dragStart(row.eq.id, t.uid) : null"
-                   @dragover.prevent
-                   @drop="t.type === 'lot' ? dropSur(row.eq.id, t.uid) : null">
+                   :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragTemps && t.type === 'lot' && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid }]"
+                   :style="[barStyleSeg(seg, t), (t.type === 'lot' && dragTemps && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid) ? { transform: 'translateX(' + (dragTemps.deltaH * pxH) + 'px)', opacity: 0.75, zIndex: 6 } : null]"
+                   :title="t.type === 'lot' ? (titre(t) + '  •  glisser horizontalement pour décaler ce lot  •  double-clic pour réinitialiser') : titre(t)"
+                   @mousedown="t.type === 'lot' ? debutDragTemps($event, row.eq.id, t.uid) : null"
+                   @dblclick="t.type === 'lot' ? resetDecal(row.eq.id, t.uid) : null">
                 <span v-if="j === 0" class="g-lbl">{{ t.type === 'lot' ? (t.prod.code_pf + (t.turbNo ? ' T' + t.turbNo : '')) : (t.type.startsWith('gen') ? 'NG' : 'NP') }}</span>
               </div>
             </template>
@@ -548,6 +547,26 @@ const rechProd = ref('')
 // Glisser-déposer des campagnes sur le Gantt
 const dragInfo = ref(null)
 function dragStart(eqId, uid) { dragInfo.value = { eqId, uid } }
+const dragTemps = ref(null)
+function itemDecal(eqId, uid) { const pan = panierEquip[eqId]; const it = pan && pan.find(x => x.ordreId === uid); return it ? (Number(it.decalage) || 0) : 0 }
+function debutDragTemps(e, eqId, uid) {
+  if (e.button !== 0) return
+  e.preventDefault()
+  dragTemps.value = { eqId, uid, startX: e.clientX, startDecal: itemDecal(eqId, uid), deltaH: 0 }
+  window.addEventListener('mousemove', moveDragTemps)
+  window.addEventListener('mouseup', finDragTemps)
+}
+function moveDragTemps(e) { if (dragTemps.value) dragTemps.value = { ...dragTemps.value, deltaH: (e.clientX - dragTemps.value.startX) / pxH.value } }
+function finDragTemps() {
+  window.removeEventListener('mousemove', moveDragTemps)
+  window.removeEventListener('mouseup', finDragTemps)
+  const d = dragTemps.value; dragTemps.value = null
+  if (!d) return
+  const nouveau = Math.max(0, Math.round((d.startDecal + d.deltaH) * 4) / 4)
+  const pan = panierEquip[d.eqId]
+  if (pan) { const it = pan.find(x => x.ordreId === d.uid); if (it) { it.decalage = nouveau; sauverPanier(d.eqId) } }
+}
+function resetDecal(eqId, uid) { const pan = panierEquip[eqId]; if (pan) { const it = pan.find(x => x.ordreId === uid); if (it && it.decalage) { it.decalage = 0; sauverPanier(eqId) } } }
 function dropSur(eqId, uid) {
   const d = dragInfo.value; dragInfo.value = null
   if (!d || d.eqId !== eqId || d.uid === uid) return
@@ -670,7 +689,8 @@ const planning = computed(() => {
           const C = (cln === 'gen' || cln === 'genH') ? P.vdlt : P.vdlp
           const clFinSiMaintenant = placer(cursor, C, P.regime, P.weAll, P.requis).end
           // 1re turbine : attend la fin de la phase précédente ; les suivantes enchaînent sur l'équipement
-          const ready = (k === 1) ? readyPhase : new Date(t0v)
+          const decalMs = (Number(item.decalage) || 0) * 3600000
+          const ready = (k === 1) ? new Date(readyPhase.getTime() + decalMs) : new Date(t0v)
           let debut = clFinSiMaintenant > ready ? clFinSiMaintenant : ready
           debut = prochainOuvre(new Date(debut), P.regime, P.weAll, P.requis)
           const plLot = placerLot(debut, dRun, P.regime, P.weAll, P.requis, noWeekend)
