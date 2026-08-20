@@ -33,7 +33,7 @@
     </section>
 
     <section v-if="!chargement" class="card">
-      <h2 class="card-title">Occupation annuelle par équipement · {{ joursAnnee }} jours ouvrés</h2>
+      <h2 class="card-title">Occupation annuelle — {{ siteSel === 'tous' ? 'Tous sites' : (SITES.find(s => s.key === siteSel) || {}).label }}<span v-if="phaseSel"> · {{ PHASE_NOM[phaseSel] || phaseSel }}</span> · {{ lignesTableau.length }} équip. · {{ joursAnnee }} j ouvrés</h2>
       <div class="occ-layout">
         <aside class="occ-side">
           <div class="side-sec">
@@ -74,7 +74,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="r in lignesAffichees" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
+            <tr v-for="r in lignesTableau" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
               <td><strong>{{ r.nom }}</strong></td>
               <td><span class="phase-tag">{{ r.phaseLabel || PHASE_NOM[r.phase] || r.phase }}</span></td>
               <td class="ta-c unite">{{ r.estCond ? 'boîtes/h' : 'kg/h' }}</td>
@@ -343,6 +343,7 @@ const siteSel = ref('tous')
 const phaseSel = ref('')
 const phasesDuSite = computed(() => { const set = new Set(); for (const r of lignes.value) if ((siteSel.value === 'tous' || r.site === siteSel.value) && r.phase) set.add(r.phase); return [...set].sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99)) })
 const lignesSidebar = computed(() => lignes.value.filter(r => (siteSel.value === 'tous' || r.site === siteSel.value) && (!phaseSel.value || r.phase === phaseSel.value)))
+const lignesTableau = computed(() => lignesSidebar.value.filter(r => selEquips[r.id] !== false))
 const sidebarGroupe = computed(() => { const m = {}; for (const r of lignesSidebar.value) { const ph = r.phase || 'autre'; (m[ph] = m[ph] || []).push(r) } return Object.keys(m).sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99)).map(ph => ({ phase: ph, label: PHASE_NOM[ph] || ph, items: m[ph] })) })
 const nbSel = computed(() => lignes.value.filter(r => selEquips[r.id] !== false).length)
 function cls(t) { if (!t) return ''; if (t > 1) return 'x'; if (t > 0.9) return 'r'; if (t >= 0.7) return 'a'; return 'g' }
