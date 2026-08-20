@@ -41,12 +41,12 @@
             <div class="occ-fgrp"><span class="occ-flbl">Site</span><div class="occ-btn-row">
               <button v-for="st in SITES" :key="st.key" type="button" class="occ-gbtn site" :class="{ on: siteSel === st.key }" @click="siteSel = st.key; phaseSel = ''">{{ st.label }}</button>
             </div></div>
-            <div class="occ-fgrp"><span class="occ-flbl">Phase</span><div class="occ-btn-row">
-              <button type="button" class="occ-gbtn ph" :class="{ on: !phaseSel }" @click="phaseSel = ''">Toutes</button>
+            <div class="occ-fgrp" v-if="siteSel"><span class="occ-flbl">Phase</span><div class="occ-btn-row">
+              <button type="button" class="occ-gbtn ph" :class="{ on: phaseSel === 'toutes' }" @click="phaseSel = 'toutes'">Toutes</button>
               <button v-for="ph in phasesDuSite" :key="ph" type="button" class="occ-gbtn ph" :class="{ on: phaseSel === ph }" @click="phaseSel = ph">{{ PHASE_NOM[ph] || ph }}</button>
             </div></div>
           </div>
-          <div class="occ-side-list">
+          <div class="occ-side-list" v-if="siteSel && phaseSel">
             <div v-for="g in sidebarGroupe" :key="g.phase" class="occ-pgrp">
               <div class="occ-ph-h">{{ g.label }}<span class="occ-ph-n">{{ g.items.length }}</span></div>
               <label v-for="r in g.items" :key="r.id" class="occ-chk" :class="{ off: selEquips[r.id] === false }">
@@ -57,6 +57,9 @@
             </div>
             <p v-if="!sidebarGroupe.length" class="occ-vide">Aucun équipement pour ce filtre.</p>
           </div>
+          <p v-if="!siteSel" class="occ-step">1️⃣ Choisis un <b>site</b> ci-dessus.</p>
+          <p v-else-if="!phaseSel" class="occ-step">2️⃣ Choisis une <b>phase</b> ci-dessus.</p>
+          <p v-else class="occ-step">3️⃣ Coche les <b>équipements</b> à suivre.</p>
         </aside>
         <div class="occ-content tbl-wrap">
         <table class="grid">
@@ -330,10 +333,10 @@ function selTout() { for (const r of lignes.value) selEquips[r.id] = true; sauve
 function selRien() { for (const r of lignes.value) selEquips[r.id] = false; sauverSel() }
 const lignesAffichees = computed(() => lignes.value.filter(r => selEquips[r.id] !== false))
 const SITES = [{ key: 'tous', label: 'Tous' }, { key: 'seche', label: 'Forme sèche' }, { key: 'hormonal', label: 'Hormonal' }, { key: 'semi', label: 'Semi' }]
-const siteSel = ref('tous')
+const siteSel = ref('')
 const phaseSel = ref('')
 const phasesDuSite = computed(() => { const set = new Set(); for (const r of lignes.value) if ((siteSel.value === 'tous' || r.site === siteSel.value) && r.phase) set.add(r.phase); return [...set].sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99)) })
-const lignesSidebar = computed(() => lignes.value.filter(r => (siteSel.value === 'tous' || r.site === siteSel.value) && (!phaseSel.value || r.phase === phaseSel.value)))
+const lignesSidebar = computed(() => { if (!siteSel.value) return []; return lignes.value.filter(r => (siteSel.value === 'tous' || r.site === siteSel.value) && (phaseSel.value === 'toutes' || r.phase === phaseSel.value)) })
 const sidebarGroupe = computed(() => { const m = {}; for (const r of lignesSidebar.value) { const ph = r.phase || 'autre'; (m[ph] = m[ph] || []).push(r) } return Object.keys(m).sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99)).map(ph => ({ phase: ph, label: PHASE_NOM[ph] || ph, items: m[ph] })) })
 const nbSel = computed(() => lignes.value.filter(r => selEquips[r.id] !== false).length)
 function cls(t) { if (!t) return ''; if (t > 1) return 'x'; if (t > 0.9) return 'r'; if (t >= 0.7) return 'a'; return 'g' }
