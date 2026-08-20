@@ -331,16 +331,27 @@ onMounted(charger)
   <div class="pa-page">
     <PageHeader title="Production par atelier" tone="teal"
       subtitle="Nombre de lots ayant terminé chaque étape, par atelier et par mois.">
-      <label class="annee">Année
-        <select v-model.number="anneeSel">
-          <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
-        </select>
-      </label>
     </PageHeader>
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="chargement" class="muted">Chargement…</p>
 
+    <div class="pa-layout">
+      <aside class="pa-side">
+        <div class="side-sec">
+          <div class="side-lbl">Atelier</div>
+          <div class="side-tg">
+            <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
+          </div>
+        </div>
+        <div class="side-sec">
+          <div class="side-lbl">Années</div>
+          <div class="side-tg side-annees">
+            <button v-for="a in ANNEES" :key="a" type="button" :class="{ on: anneeSel === a }" @click="anneeSel = a">{{ a }}</button>
+          </div>
+        </div>
+      </aside>
+      <div class="pa-content">
     <template v-if="!chargement">
       <div class="kpi-grid">
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.activity"></svg></span><div class="kpi-val accent">{{ fmt(grandTotal) }}</div></div><div class="kpi-lbl">Étapes terminées en {{ anneeSel }}</div></div>
@@ -387,12 +398,6 @@ onMounted(charger)
       <section class="card">
         <div class="card-head"><h2 class="card-title">Comparaison mensuelle par atelier</h2></div>
         <div class="filtres">
-          <div class="filtre-groupe">
-            <span class="filtre-lbl">Atelier</span>
-            <div class="btn-row">
-              <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
-            </div>
-          </div>
           <div class="filtre-groupe">
             <span class="filtre-lbl">Années</span>
             <div class="btn-row">
@@ -456,6 +461,9 @@ onMounted(charger)
       </p>
     </section>
 
+      </div>
+    </div>
+
     <div v-if="modalPA" class="modal-overlay" @click="modalPA = null">
       <div class="pa-modal" @click.stop>
         <div class="pa-md-head">
@@ -483,7 +491,20 @@ onMounted(charger)
 </template>
 
 <style scoped>
-.pa-page { color: #1b2733; }
+".pa-page { color: #1b2733; }
+.pa-layout { display: flex; gap: 14px; align-items: flex-start; }
+.pa-side { flex: 0 0 210px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: flex-start; position: sticky; top: 8px; overflow: hidden; }
+.pa-content { flex: 1; min-width: 0; }
+.side-sec { padding: 10px 12px; border-bottom: 1px solid #eef2f6; }
+.side-sec:last-child { border-bottom: none; }
+.side-lbl { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; margin-bottom: 7px; }
+.side-tg { display: flex; flex-direction: column; gap: 5px; }
+.side-tg button { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 600; color: #64748b; padding: 6px 10px; cursor: pointer; text-align: left; }
+.side-tg button:hover { background: #eef2f7; }
+.side-tg button.on { background: #0f766e; border-color: #0f766e; color: #fff; }
+.side-annees { flex-direction: row; flex-wrap: wrap; }
+.side-annees button { flex: 1; min-width: 44px; text-align: center; padding: 7px 4px; }
+@media (max-width: 820px) { .pa-layout { flex-direction: column; } .pa-side { flex-basis: auto; width: 100%; position: static; } .side-tg { flex-direction: row; flex-wrap: wrap; } .side-tg button { flex: 1; } }
 .annee { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
 .annee select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 600; color: #1b2733; }
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
