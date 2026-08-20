@@ -4,7 +4,6 @@
       <div>
         <div class="ch-eyebrow">Charge & capacité</div>
         <h1 class="ch-title">Suivi de capacité des équipements</h1>
-        <p class="ch-sub">Occupation par équipement, selon la gamme des produits du plan directeur et les cadences.</p>
       </div>
     </div>
 
@@ -12,6 +11,12 @@
     <p v-else-if="!planExiste" class="muted warn card">Aucune quantité planifiée pour {{ annee }} dans le plan directeur.</p>
 
     <section v-if="!chargement" class="card">
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-v">{{ (kpiOccMoy * 100).toFixed(0) }} %</div><div class="kpi-l">Occupation moyenne</div></div>
+        <div class="kpi"><div class="kpi-v">{{ kpiSup90 }}</div><div class="kpi-l">Équipements &gt; 90 %</div></div>
+        <div class="kpi warn"><div class="kpi-v">{{ kpiSurcharge }}</div><div class="kpi-l">En surcharge</div></div>
+        <div class="kpi"><div class="kpi-v">{{ joursAnnee }}</div><div class="kpi-l">Jours ouvrés {{ annee }}</div></div>
+      </div>
       <h2 class="card-title">Occupation annuelle — {{ siteSel === 'tous' ? 'Tous sites' : (SITES.find(s => s.key === siteSel) || {}).label }}<span v-if="phaseSel"> · {{ PHASE_NOM[phaseSel] || phaseSel }}</span> · {{ lignesTableau.length }} équip. · {{ joursAnnee }} j ouvrés</h2>
       <div class="occ-layout">
         <aside class="occ-side">
@@ -344,6 +349,10 @@ const phaseSel = ref('')
 const phasesDuSite = computed(() => { const set = new Set(); for (const r of lignes.value) if ((siteSel.value === 'tous' || r.site === siteSel.value) && r.phase) set.add(r.phase); return [...set].filter(ph => ph !== 'conditionnement').sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99)) })
 const lignesSidebar = computed(() => lignes.value.filter(r => (siteSel.value === 'tous' || r.site === siteSel.value) && (!phaseSel.value || r.phase === phaseSel.value)))
 const lignesTableau = computed(() => lignesSidebar.value)
+const kpiCharges = computed(() => lignesTableau.value.filter(r => r.chargeJ > 0))
+const kpiOccMoy = computed(() => { const l = kpiCharges.value; return l.length ? l.reduce((a, r) => a + r.taux, 0) / l.length : 0 })
+const kpiSup90 = computed(() => lignesTableau.value.filter(r => r.taux > 0.9).length)
+const kpiSurcharge = computed(() => lignesTableau.value.filter(r => r.taux > 1).length)
 const sidebarGroupe = computed(() => { const m = {}; for (const r of lignesSidebar.value) { const ph = r.phase || 'autre'; (m[ph] = m[ph] || []).push(r) } return Object.keys(m).sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99)).map(ph => ({ phase: ph, label: PHASE_NOM[ph] || ph, items: m[ph] })) })
 const nbSel = computed(() => lignes.value.filter(r => selEquips[r.id] !== false).length)
 function cls(t) { if (!t) return ''; if (t > 1) return 'x'; if (t > 0.9) return 'r'; if (t >= 0.7) return 'a'; return 'g' }
@@ -410,6 +419,11 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .chip.more { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
 /* Panneau de sélection des équipements */
 .occ-layout { display: flex; gap: 10px; align-items: flex-start; }
+.kpi-row { display: flex; gap: 12px; margin-bottom: 14px; }
+.kpi { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; text-align: center; }
+.kpi-v { font-size: 23px; font-weight: 800; color: #1e293b; line-height: 1.1; }
+.kpi-l { font-size: 11px; color: #64748b; font-weight: 600; margin-top: 3px; }
+.kpi.warn .kpi-v { color: #b91c1c; }
 .occ-side { flex: 0 0 250px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: flex-start; }
 .occ-side-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; font-size: 12px; font-weight: 800; color: #334155; }
 .occ-side-btns { display: flex; gap: 4px; }
