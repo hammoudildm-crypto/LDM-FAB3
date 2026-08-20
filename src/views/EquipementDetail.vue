@@ -19,6 +19,7 @@ function num(v, d = 0) { const n = Number(v); return isFinite(n) ? n : d }
 async function fetchAllPaged(makeQuery) { const page = 1000; let from = 0, all = []; while (true) { const { data, error } = await makeQuery().range(from, from + page - 1); if (error || !data || !data.length) break; all = all.concat(data); if (data.length < page) break; from += page } return all }
 
 const nomGroupe = ref(route.query.nom ? String(route.query.nom) : '')
+const codesGroupe = ref(route.query.codes ? String(route.query.codes).split(',').map(c => c.trim()).filter(Boolean) : [])
 const annee = ref(route.query.annee ? Number(route.query.annee) : new Date().getFullYear())
 const chargement = ref(true)
 
@@ -37,6 +38,7 @@ function baseNom(nom) {
 
 // Équipements du groupe (même nom de base)
 const equipsGroupe = computed(() => {
+  if (codesGroupe.value.length) { const set = new Set(codesGroupe.value); return equipements.value.filter(e => set.has(e.code)) }
   const cible = baseNom(nomGroupe.value).toLowerCase().trim()
   if (!cible) return []
   let list = equipements.value.filter(e => baseNom(e.nom || e.code).toLowerCase() === cible)
