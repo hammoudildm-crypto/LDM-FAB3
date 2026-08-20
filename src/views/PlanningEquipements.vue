@@ -184,11 +184,13 @@
           <div v-for="(item, idx) in (panierEquip[panierOuvert.id] || [])" :key="item.ordreId" class="pan-item">
             <span class="pan-idx">{{ idx + 1 }}</span>
             <span class="pan-pnom"><b>{{ item.lot }}</b> — {{ produitNom(item.pid) }}</span>
+            <input type="datetime-local" v-model="item.dateDebut" class="pan-date" title="Date de début souhaitée (laisser vide = automatique)" @change="sauverPanier(panierOuvert.id)" />
+            <button v-if="item.dateDebut" class="pan-btn" @click="item.dateDebut = ''; sauverPanier(panierOuvert.id)" title="Repasser en automatique">auto</button>
             <button class="pan-btn del" @click="retirerLot(idx)">✕</button>
           </div>
           <div v-if="!(panierEquip[panierOuvert.id] || []).length" class="pan-vide">Aucun lot affecté à cet équipement.</div>
         </div>
-        <p class="pan-hint2">Lots en attente de cette phase. Réordonne-les en les <b>glissant sur le Gantt</b>.</p>
+        <p class="pan-hint2">Lots en attente de cette phase. Réordonne/décale en les <b>glissant sur le Gantt</b>, ou fixe une <b>date de début</b> par lot ci-dessus.</p>
         <div class="pan-add">
           <input v-model="rechProd" placeholder="Rechercher un lot (n°, produit)…" class="pan-search" />
           <div class="pan-prods">
@@ -693,6 +695,7 @@ const planning = computed(() => {
           const ready = (k === 1) ? readyPhase : new Date(t0v)
           let debut = clFinSiMaintenant > ready ? clFinSiMaintenant : ready
           if (k === 1 && decalMs > 0) debut = new Date(debut.getTime() + decalMs)
+          if (k === 1 && item.dateDebut) { const dd = new Date(item.dateDebut); if (!isNaN(dd) && dd.getTime() > debut.getTime()) debut = dd }
           debut = prochainOuvre(new Date(debut), P.regime, P.weAll, P.requis)
           const plLot = placerLot(debut, dRun, P.regime, P.weAll, P.requis, noWeekend)
           const lotStart = plLot.segments[0].start
@@ -909,6 +912,7 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pan-vider:disabled { opacity: .4; cursor: default; }
 .pan-hint { font-size: 11px; color: #94a3b8; margin: 0 0 10px; }
 .pan-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.pan-date { font: inherit; font-size: 10.5px; padding: 2px 5px; border: 1px solid #cbd5e1; border-radius: 5px; max-width: 155px; }
 .pan-item { display: flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 8px; }
 .pan-idx { font-size: 11px; font-weight: 800; color: #5B9BD5; width: 18px; }
 .pan-pnom { flex: 1; font-size: 12px; color: #1b2733; }
