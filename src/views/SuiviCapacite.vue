@@ -31,6 +31,7 @@
               <option :value="1">1×8 (forcé)</option>
               <option :value="2">2×8 (forcé)</option>
               <option :value="3">3×8 (forcé)</option>
+              <option :value="4">4×8 · 24/7 (forcé)</option>
             </select>
           </div>
           <div class="side-sec">
@@ -75,7 +76,7 @@
               <td class="ta-c"><input type="checkbox" :checked="weEq(r.id)" @change="setReq(r.id, $event.target.checked)" title="Travail le week-end pour cet équipement" /></td>
               <td><strong>{{ r.nom }}</strong></td>
               <td class="ta-c">{{ r.machines }}</td>
-              <td class="ta-c"><select :value="regimeEquip[r.id] || ''" @change="setRegime(r.id, $event.target.value)" class="reg-sel" title="Régime de travail de cet équipement"><option value="">Auto</option><option value="1">1×8</option><option value="2">2×8</option><option value="3">3×8</option></select></td>
+              <td class="ta-c"><select :value="regimeEquip[r.id] || ''" @change="setRegime(r.id, $event.target.value)" class="reg-sel" title="Régime de travail de cet équipement"><option value="">Auto</option><option value="1">1×8</option><option value="2">2×8</option><option value="3">3×8</option><option value="4">4×8</option></select></td>
               <td class="ta-r glob">{{ r.chargeGlobaleJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r">{{ r.chargeJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r">{{ r.capaciteJ.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) }}</td>
@@ -211,9 +212,9 @@ const joursMoisAvecWE = computed(() => MOIS.map((_, i) => joursOuvresMoisWE(anne
 const joursAnSansWE = computed(() => joursMoisSansWE.value.reduce((a, n) => a + n, 0))
 const joursAnAvecWE = computed(() => joursMoisAvecWE.value.reduce((a, n) => a + n, 0))
 const reqEquip = reactive({})
-function weEq(key) { return !!reqEquip[key] }
+function weEq(key) { const r = regimeEquip[key] || (regime.value === 'auto' ? '' : String(regime.value)); if (r === '4') return true; return !!reqEquip[key] }
 const regimeEquip = reactive({})
-function regimeEq(key, repPostes) { const r = regimeEquip[key]; if (r) return Number(r); return regime.value === 'auto' ? num(repPostes, 3) : Number(regime.value) }
+function regimeEq(key, repPostes) { const r = regimeEquip[key] || (regime.value === 'auto' ? '' : String(regime.value)); if (r === '4') return 3; if (r) return Number(r); return num(repPostes, 3) }
 const CLE_REG = 'sc_reg_equip'
 function sauverReg() { try { localStorage.setItem(CLE_REG, JSON.stringify(regimeEquip)) } catch (e) {} }
 function setRegime(key, val) { if (val) regimeEquip[key] = val; else delete regimeEquip[key]; sauverReg() }
