@@ -915,7 +915,7 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .g-reg { font-size: 8px; font-weight: 700; color: #64748b; background: #eef2f7; border-radius: 5px; padding: 0 4px; }
 .g-reg.r2 { color: #b45309; background: #fef3c7; }
 .pan-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.4); display: flex; align-items: center; justify-content: center; z-index: 50; }
-.pan-box { background: #fff; border-radius: 14px; width: 520px; max-width: 92vw; max-height: 82vh; overflow-y: auto; padding: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.pan-box { background: #fff; border-radius: 14px; width: 860px; max-width: 96vw; max-height: 92vh; overflow-y: auto; padding: 18px 20px; box-shadow: 0 20px 60px rgba(0,0,0,.3); display: flex; flex-direction: column; }
 .pan-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .pan-head b { font-size: 15px; color: #0f172a; }
 .pan-nom { font-size: 12px; color: #64748b; }
@@ -924,7 +924,7 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pan-vider { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; border-radius: 7px; font-size: 12px; padding: 4px 12px; cursor: pointer; font-weight: 600; }
 .pan-vider:disabled { opacity: .4; cursor: default; }
 .pan-hint { font-size: 11px; color: #94a3b8; margin: 0 0 10px; }
-.pan-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.pan-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; max-height: 42vh; overflow-y: auto; border: 1px solid #f1f5f9; border-radius: 8px; padding: 6px; }
 .pan-date { font: inherit; font-size: 10.5px; padding: 2px 5px; border: 1px solid #cbd5e1; border-radius: 5px; max-width: 155px; }
 .pan-item { display: flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 8px; }
 .pan-idx { font-size: 11px; font-weight: 800; color: #5B9BD5; width: 18px; }
