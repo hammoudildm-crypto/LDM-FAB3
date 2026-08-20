@@ -115,7 +115,7 @@
     <section v-if="!chargement && produitsSansPoids.length" class="card avert">
       <h2 class="card-title">Produits de fabrication sans poids de lot</h2>
       <p class="note">Ces produits ont une phase de fabrication planifiée (cadence en kg/h) mais aucun <strong>poids de lot (kg)</strong> — leur charge de fabrication n'est pas comptée. Exécute le SQL <em>poids_lot_kg</em> ou renseigne le poids.</p>
-      <div class="chips"><span v-for="(p, i) in produitsSansPoids.slice(0, 30)" :key="i" class="chip">{{ p }}</span><span v-if="produitsSansPoids.length > 30" class="chip more">+{{ produitsSansPoids.length - 30 }}</span></div>
+      <div class="chips"><button v-for="(p, i) in produitsSansPoids.slice(0, 30)" :key="i" type="button" class="chip chip-btn" @click="ouvrirProduit(p)" title="Ouvrir dans Cadences">{{ p.code }} · {{ p.desig }}</button><span v-if="produitsSansPoids.length > 30" class="chip more">+{{ produitsSansPoids.length - 30 }}</span></div>
     </section>
   </div>
 </template>
@@ -123,6 +123,8 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { supabase } from '../supabase'
+import { useRouter } from 'vue-router'
+const router = useRouter()
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
 const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage: 'Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
@@ -322,16 +324,17 @@ const produitsSansCadence = computed(() => {
   return [...s].sort()
 })
 const produitsSansPoids = computed(() => {
-  const s = new Set()
+  const out = []; const vus = new Set()
   for (const pid of Object.keys(planAgg.value)) {
     if (!planAgg.value[pid].some(v => v > 0)) continue
     const p = prodById.value[pid]; if (!p) continue
     let besoin = false
     for (const e of equipements.value) { const ph = phaseDe(e); if (ph && ph !== 'conditionnement' && cadMap.value[e.id + '|' + pid] > 0) { besoin = true; break } }
-    if (besoin && !(num(p.poids_lot_kg, 0) > 0)) s.add((p.code_pf || '') + ' · ' + (p.designation || ''))
+    if (besoin && !(num(p.poids_lot_kg, 0) > 0) && !vus.has(pid)) { vus.add(pid); out.push({ code: p.code_pf || '', desig: p.designation || '' }) }
   }
-  return [...s].sort()
+  return out.sort((a, b) => (a.code + a.desig).localeCompare(b.code + b.desig))
 })
+function ouvrirProduit(p) { router.push({ path: '/cadences', query: { produit: p.code } }) }
 
 const selEquips = reactive({})
 const CLE_SEL = 'sc_sel_equips'
@@ -492,4 +495,6 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .mc-h { text-align: left; }
 .mc-max { flex: 0 0 78px; text-align: right; font-size: 12px; font-weight: 800; }
 @media (max-width: 700px) { .mc-nom { flex-basis: 140px; } .mc-m { display: none; } }
+.chip-btn { cursor: pointer; border: 1px solid #fca5a5; background: #fff; font: inherit; transition: all .12s; }
+.chip-btn:hover { background: #fee2e2; border-color: #ef4444; }
 </style>
