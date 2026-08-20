@@ -432,8 +432,8 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .side-sp-row { display: flex; gap: 10px; }
 .side-select { width: 100%; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 600; color: #0f172a; background: #fff; box-sizing: border-box; }
 .side-chk { font-size: 12px; color: #334155; font-weight: 500; display: flex; align-items: center; gap: 7px; cursor: pointer; }
-.side-leg { display: flex; flex-wrap: wrap; gap: 5px; }
-.side-leg .lg { font-size: 10.5px; font-weight: 700; border-radius: 5px; padding: 2px 8px; }
+.side-leg { display: flex; flex-wrap: nowrap; gap: 3px; }
+.side-leg .lg { font-size: 9px; font-weight: 700; border-radius: 4px; padding: 2px 5px; white-space: nowrap; flex: 1; text-align: center; }
 .side-sp-col { flex: 1; min-width: 0; }
 .side-sp-col .side-tg button, .side-sp-col .side-phases button { font-size: 10.5px; padding: 4px 7px; }
 .side-sp-col .side-phases button { gap: 5px; }
