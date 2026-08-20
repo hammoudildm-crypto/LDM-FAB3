@@ -184,7 +184,13 @@ async function sauverParam(grp, k, valeur) {
 }
 
 // Regroupement des équipements identiques : même phase (type) + même nom de base
-const groupesAffiches = computed(() => filtreEq.value ? groupes.value.filter(g => g.nom === filtreEq.value) : groupes.value)
+const produitUnique = computed(() => produitsMatrice.value.length === 1 ? produitsMatrice.value[0] : null)
+const groupesAffiches = computed(() => {
+  if (filtreEq.value) return groupes.value.filter(g => g.nom === filtreEq.value)
+  const pu = produitUnique.value
+  if (pu) return groupes.value.filter(g => cadenceCell(pu.id, g) > 0)
+  return groupes.value
+})
 const groupes = computed(() => {
   const eqs = equipements.value.slice()
   const kp = (e) => phaseDeType(e.type) || ('t:' + (e.type || '?'))
