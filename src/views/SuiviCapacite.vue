@@ -96,7 +96,6 @@
         </table>
         </div>
       </div>
-      <p class="note">Fabrication : charge = kg ÷ cadence (kg/h), kg = boîtes × poids du lot ÷ taille de lot. Conditionnement : charge = boîtes ÷ cadence (boîtes/h). Un produit ne charge une phase que si elle figure dans sa gamme (le conditionnement s'ajoute toujours). <strong>Charge globale</strong> = charge totale de la phase (tous produits) ; <strong>Charge / machine</strong> = charge globale ÷ nombre de machines identiques — c'est elle qui donne le taux. <template v-if="inclureNett">+ nettoyage (VDLP/lot) + nettoyage général & réglage (VDLT + REGLAGE / campagne).</template></p>
     </section>
 
 
