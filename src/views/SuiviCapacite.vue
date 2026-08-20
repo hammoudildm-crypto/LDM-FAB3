@@ -50,7 +50,7 @@
           <thead>
             <tr>
               <th>Équipement</th><th>Phase</th><th class="ta-c">Unité</th><th class="ta-c">Machines</th><th class="ta-c">h/j effectif</th>
-              <th class="ta-r">Charge globale (j)</th><th class="ta-r">Charge / machine (j)</th><th class="ta-c">Réq. WE</th><th class="ta-r">Capacité (j)</th><th class="taux-h">Taux d'occupation</th>
+              <th class="ta-r">Charge globale (j)</th><th class="ta-r">Charge / machine (j)</th><th class="ta-c">Réq. WE</th><th class="ta-r">Capacité (j)</th><th class="taux-h">Taux d'occupation</th><th class="mc-h">Évolution mensuelle</th>
             </tr>
           </thead>
           <tbody>
@@ -68,6 +68,14 @@
                 <div class="bar-wrap"><div class="bar" :class="cls(r.taux)" :style="{ width: Math.min(100, r.taux * 100) + '%' }"></div></div>
                 <span class="taux-val" :class="clsTxt(r.taux)">{{ (r.taux * 100).toFixed(1) }} %</span>
               </td>
+              <td class="mc-cell">
+                <div class="mc-chart mc-inline">
+                  <div class="mc-ref"></div>
+                  <div v-for="(t, i) in r.tauxMois" :key="i" class="mc-col" :title="MOIS[i] + ' : ' + (t * 100).toFixed(0) + ' %'">
+                    <div class="mc-bar" :class="cls(t)" :style="{ height: Math.max(2, Math.min(120, t * 100)) + '%' }"></div>
+                  </div>
+                </div>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -76,24 +84,6 @@
       <p class="note">Fabrication : charge = kg ÷ cadence (kg/h), kg = boîtes × poids du lot ÷ taille de lot. Conditionnement : charge = boîtes ÷ cadence (boîtes/h). Un produit ne charge une phase que si elle figure dans sa gamme (le conditionnement s'ajoute toujours). <strong>Charge globale</strong> = charge totale de la phase (tous produits) ; <strong>Charge / machine</strong> = charge globale ÷ nombre de machines identiques — c'est elle qui donne le taux. <template v-if="inclureNett">+ nettoyage (VDLP/lot) + nettoyage général & réglage (VDLT + REGLAGE / campagne).</template></p>
     </section>
 
-    <section v-if="!chargement && lignesAffichees.some(r => r.chargeJ > 0)" class="card">
-      <h2 class="card-title">Évolution mensuelle de l'occupation par équipement</h2>
-      <div class="mc-legend"><span class="mc-100">— 100 %</span></div>
-      <div class="mc-list">
-        <div v-for="r in lignesAffichees" :key="r.id" v-show="r.chargeJ > 0" class="mc-row">
-          <div class="mc-nom"><strong>{{ r.nom }}</strong><span class="mc-ph">{{ r.phaseLabel || PHASE_NOM[r.phase] || r.phase }}</span></div>
-          <div class="mc-chart">
-            <div class="mc-ref"></div>
-            <div v-for="(t, i) in r.tauxMois" :key="i" class="mc-col" :title="MOIS[i] + ' : ' + (t * 100).toFixed(0) + ' %'">
-              <div class="mc-bar" :class="cls(t)" :style="{ height: Math.max(2, Math.min(120, t * 100)) + '%' }"></div>
-              <span class="mc-m">{{ MOIS[i].charAt(0) }}</span>
-            </div>
-          </div>
-          <div class="mc-max" :class="clsTxt(Math.max(...r.tauxMois))">max {{ (Math.max(...r.tauxMois) * 100).toFixed(0) }} %</div>
-        </div>
-      </div>
-      <p class="note">Chaque barre = un mois. Hauteur ∝ taux d'occupation ; le trait pointillé marque les 100 %. Survole une barre pour la valeur exacte.</p>
-    </section>
 
     <section v-if="!chargement" class="kpi-line">
       <div class="kpi-mini"><div class="km-val">{{ (occGlobal * 100).toFixed(0) }} %</div><div class="km-lbl">Occupation moyenne</div></div>
@@ -421,6 +411,10 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .mc-bar.r { background: #ef4444; }
 .mc-bar.x { background: #991b1b; }
 .mc-m { font-size: 8.5px; color: #94a3b8; margin-top: 2px; }
+.mc-cell { min-width: 210px; padding: 4px 8px !important; }
+.mc-chart.mc-inline { height: 40px; padding-top: 8px; gap: 2px; border-bottom: none; }
+.mc-chart.mc-inline .mc-ref { top: calc(8px + (40px - 8px) * (1 - 100/120)); }
+.mc-h { text-align: left; }
 .mc-max { flex: 0 0 78px; text-align: right; font-size: 12px; font-weight: 800; }
 @media (max-width: 700px) { .mc-nom { flex-basis: 140px; } .mc-m { display: none; } }
 </style>
