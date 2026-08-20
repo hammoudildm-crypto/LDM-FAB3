@@ -147,7 +147,7 @@ async function fetchAllPaged(make) {
 }
 
 onMounted(async () => {
-  produits.value = await fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, unites_par_boite, taille_lot, poids_lot_kg, gamme').eq('actif', true))
+  produits.value = await fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, unites_par_boite, taille_lot, poids_lot_kg, poids_unitaire_mg, gamme').eq('actif', true))
   equipements.value = await fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true))
   cadences.value = await fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale'))
   plans.value = await fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produit_id'))
