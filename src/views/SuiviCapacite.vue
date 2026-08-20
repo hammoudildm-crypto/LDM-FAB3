@@ -410,21 +410,24 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .chip.more { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
 /* Panneau de sélection des équipements */
 .occ-layout { display: flex; gap: 10px; align-items: flex-start; }
-.occ-side { flex: 0 0 200px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #fff; }
+.occ-side { flex: 0 0 200px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: flex-start; }
 .occ-side-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; font-size: 12px; font-weight: 800; color: #334155; }
 .occ-side-btns { display: flex; gap: 4px; }
 .occ-side-btns button { font: inherit; font-size: 10.5px; font-weight: 700; border: 1px solid #cbd5e1; background: #fff; border-radius: 5px; padding: 2px 7px; cursor: pointer; color: #475569; }
 .occ-side-btns button:hover { background: #e2e8f0; }
-.side-sec { padding: 10px 12px; border-bottom: 1px solid #eef2f6; }
+.side-sec { padding: 7px 11px; border-bottom: 1px solid #eef2f6; }
 .side-sec:last-child { border-bottom: none; }
-.side-lbl { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; margin-bottom: 7px; }
+.side-lbl { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; }
 .side-tg { display: flex; flex-direction: column; gap: 5px; }
 .side-tg.side-row2 { flex-direction: row; }
 .side-tg button { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 600; color: #64748b; padding: 7px 11px; cursor: pointer; text-align: left; flex: 1; }
 .side-tg button:hover { background: #eef2f7; }
 .side-tg button.on { background: #6366f1; border-color: #6366f1; color: #fff; }
 .side-phases { display: flex; flex-direction: column; gap: 3px; }
-.side-phases.side-eq { max-height: 42vh; overflow-y: auto; }
+.side-phases.side-eq { gap: 2px; }
+.side-eq button { font-size: 10px; padding: 3px 7px; }
+.side-eq .eq-taux { font-size: 9px; }
+.side-eq .ph-dot { width: 7px; height: 7px; }
 .side-phases button { display: flex; align-items: center; gap: 7px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 600; color: #475569; padding: 6px 9px; cursor: pointer; text-align: left; width: 100%; }
 .side-phases button:hover { background: #eef2f7; }
 .side-phases button.on { background: #eef2ff; border-color: #6366f1; color: #4338ca; }
