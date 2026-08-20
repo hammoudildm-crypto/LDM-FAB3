@@ -298,7 +298,7 @@ const lignes = computed(() => {
     let nomAffiche = grp.nom
     if (phases.includes('granulation') && phases.includes('sechage')) { phaseLabel = 'Granulation et Séchage'; nomAffiche = 'Granulation et Séchage ' + grp.nom }
     else if (phases.length === 1 && phases[0] === 'granulation' && grp.equips.some(e => /s[ée]ch/i.test((e.type || '') + ' ' + (e.nom || e.code || '')))) phaseLabel = 'Granulation et Séchage'
-    out.push({ id: grp.key, nom: nomAffiche, phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, site: siteDuGroupe(grp.equips), capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
+    out.push({ id: grp.key, nom: nomAffiche, phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, site: phases.includes('conditionnement') ? 'conditionnement' : siteDuGroupe(grp.equips), capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
   }
   return out.sort((a, b) => (ORDRE_GAMME[a.phase] || 99) - (ORDRE_GAMME[b.phase] || 99) || b.taux - a.taux)
 })
@@ -336,10 +336,10 @@ function toggleSel(id) { selEquips[id] = selEquips[id] === false ? true : false;
 function selTout() { for (const r of lignes.value) selEquips[r.id] = true; sauverSel() }
 function selRien() { for (const r of lignes.value) selEquips[r.id] = false; sauverSel() }
 const lignesAffichees = computed(() => lignes.value.filter(r => selEquips[r.id] !== false))
-const SITES = [{ key: 'tous', label: 'Tous' }, { key: 'seche', label: 'Forme sèche' }, { key: 'hormonal', label: 'Hormonal' }, { key: 'semi', label: 'Semi' }]
+const SITES = [{ key: 'tous', label: 'Tous' }, { key: 'seche', label: 'Forme sèche' }, { key: 'hormonal', label: 'Hormonal' }, { key: 'semi', label: 'Semi' }, { key: 'conditionnement', label: 'Conditionnement' }]
 const siteSel = ref('tous')
 const phaseSel = ref('')
-const phasesDuSite = computed(() => { const set = new Set(); for (const r of lignes.value) if ((siteSel.value === 'tous' || r.site === siteSel.value) && r.phase) set.add(r.phase); return [...set].sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99)) })
+const phasesDuSite = computed(() => { const set = new Set(); for (const r of lignes.value) if ((siteSel.value === 'tous' || r.site === siteSel.value) && r.phase) set.add(r.phase); return [...set].filter(ph => ph !== 'conditionnement').sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99)) })
 const lignesSidebar = computed(() => lignes.value.filter(r => (siteSel.value === 'tous' || r.site === siteSel.value) && (!phaseSel.value || r.phase === phaseSel.value)))
 const lignesTableau = computed(() => lignesSidebar.value)
 const sidebarGroupe = computed(() => { const m = {}; for (const r of lignesSidebar.value) { const ph = r.phase || 'autre'; (m[ph] = m[ph] || []).push(r) } return Object.keys(m).sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99)).map(ph => ({ phase: ph, label: PHASE_NOM[ph] || ph, items: m[ph] })) })
