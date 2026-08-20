@@ -137,12 +137,12 @@ function cadenceCell(pid, grp) {
 function uniteGroupe(grp) { return grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h' }
 const fmtCad = (v) => Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 })
 function ouvrirGroupe(g) { selGroupe.value = g.key; chargerEditeur(); vueMode.value = 'editeur' }
-const groupeSel = computed(() => filtreEq.value ? (groupes.value.find(g => g.nom === filtreEq.value) || null) : null)
+const groupeFiltreEq = computed(() => filtreEq.value ? (groupes.value.find(g => g.nom === filtreEq.value) || null) : null)
 const produitsMatrice = computed(() => {
   const q = filtre.value.trim().toLowerCase()
   let list = produitsTries.value
   if (q) list = list.filter(p => String(p.code_pf || '').toLowerCase().includes(q) || String(p.designation || '').toLowerCase().includes(q))
-  const gs = groupeSel.value
+  const gs = groupeFiltreEq.value
   if (gs) list = list.filter(p => cadenceCell(p.id, gs) > 0)
   return list
 })
