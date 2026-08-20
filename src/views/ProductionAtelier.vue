@@ -383,6 +383,7 @@ onMounted(charger)
         </div>
       </section>
 
+      <div class="pa-row2">
       <section class="card">
         <div class="card-head">
           <h2 class="card-title">Lots fabriqués par atelier — {{ anneeSel }}</h2>
@@ -418,10 +419,6 @@ onMounted(charger)
           </table>
         </div>
       </section>
-
-      <p class="hint">Chaque cellule = nombre de <strong>lots distincts</strong> ayant <strong>terminé</strong> l'étape ce mois-là. Les <strong>années passées</strong> proviennent de l'<strong>historique importé</strong> (TDB PROD) ; l'<strong>année en cours</strong> est calculée en <strong>temps réel</strong> depuis Suivi des phases. Un même lot compte une fois par atelier.</p>
-    </template>
-
     <section v-if="projectionsTable.length" class="proj-card">
       <div class="proj-head">
         <h2 class="proj-title">Prévisionnel de fin d'année — {{ anneeCourante }}</h2>
@@ -460,7 +457,10 @@ onMounted(charger)
         <strong>Méthode :</strong> le réalisé des mois clôturés (janvier → {{ MOIS[moisCourant - 1] || '—' }}) est rapporté à l'année entière selon le <strong>profil saisonnier moyen</strong> des années passées. Le mois en cours ({{ MOIS[moisCourant] }}), partiel, n'entre pas dans le calcul. <span class="proj-star">*</span> atelier sans historique → projection linéaire (réalisé ÷ mois écoulés × 12).<br><strong>Plan :</strong> PDP converti en lots (boîtes planifiées ÷ taille de lot), réparti selon la gamme. <strong>% du plan</strong> = projection ÷ plan.
       </p>
     </section>
+      </div>
 
+      <p class="hint">Chaque cellule = nombre de <strong>lots distincts</strong> ayant <strong>terminé</strong> l'étape ce mois-là. Les <strong>années passées</strong> proviennent de l'<strong>historique importé</strong> (TDB PROD) ; l'<strong>année en cours</strong> est calculée en <strong>temps réel</strong> depuis Suivi des phases. Un même lot compte une fois par atelier.</p>
+    </template>
       </div>
     </div>
 
@@ -495,6 +495,9 @@ onMounted(charger)
 .pa-layout { display: flex; gap: 14px; align-items: flex-start; }
 .pa-side { flex: 0 0 210px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: flex-start; position: sticky; top: 8px; overflow: hidden; }
 .pa-content { flex: 1; min-width: 0; }
+.pa-row2 { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
+.pa-row2 > .card, .pa-row2 > .proj-card { flex: 1; min-width: 0; margin-bottom: 0; }
+@media (max-width: 1100px) { .pa-row2 { flex-direction: column; } .pa-row2 > .card, .pa-row2 > .proj-card { width: 100%; } }
 .side-sec { padding: 10px 12px; border-bottom: 1px solid #eef2f6; }
 .side-sec:last-child { border-bottom: none; }
 .side-lbl { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; margin-bottom: 7px; }
