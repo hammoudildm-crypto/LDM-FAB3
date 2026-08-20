@@ -6,6 +6,7 @@
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="panierErreur" class="alert">{{ panierErreur }}</p>
+    <p v-if="retiresAuto" class="pe-clean-notice">✓ {{ retiresAuto }} lot(s) terminé(s) retiré(s) automatiquement du planning. <button class="pe-clean-x" @click="retiresAuto = 0">×</button></p>
 
 
     <!-- Légende -->
@@ -273,12 +274,13 @@ onMounted(async () => {
       else if (pr && typeof pr === 'object') { lotsArr = Array.isArray(pr.lots) ? pr.lots : []; reg = pr.regime; req = pr.requis; if (typeof pr.weekend === 'boolean') weekendEquip[row.equipement_id] = pr.weekend; if (Array.isArray(pr.maint)) maintEquip[row.equipement_id] = pr.maint }
       const flat = []
       for (const x of lotsArr) {
-        if (x && typeof x === 'object' && x.ordreId) flat.push({ ordreId: x.ordreId, lot: x.lot, pid: x.pid })
+        if (x && typeof x === 'object' && x.ordreId) flat.push({ ordreId: x.ordreId, lot: x.lot, pid: x.pid, decalage: Number(x.decalage) || 0, dateDebut: x.dateDebut || '' })
       }
       panierEquip[row.equipement_id] = flat
       if (reg) regimeEquip[row.equipement_id] = reg
       if (Array.isArray(req)) requisEquip[row.equipement_id] = req
     }
+    nettoyerPanierTermines()
   } catch (e) { erreur.value = String(e) } finally { chargement.value = false }
 })
 
@@ -292,6 +294,17 @@ const annees = computed(() => {
 // Index produits + PDP quantité par produit pour l'année
 const produitsById = computed(() => { const m = {}; for (const p of produits.value) m[p.id] = p; return m })
 const ofsById = computed(() => { const m = {}; for (const o of ofs.value) m[o.id] = o; return m })
+const retiresAuto = ref(0)
+function nettoyerPanierTermines() {
+  const byId = ofsById.value; let n = 0
+  for (const eqId in panierEquip) {
+    const pan = panierEquip[eqId]
+    if (!Array.isArray(pan) || !pan.length) continue
+    const garde = pan.filter(item => { const o = byId[item.ordreId]; if (!o) return true; const fini = !!o.date_fin_fabrication || /lib[eé]r|rejet|clotur/i.test(o.statut || ''); return !fini })
+    if (garde.length !== pan.length) { n += pan.length - garde.length; panierEquip[eqId] = garde; sauverPanier(Number(eqId)) }
+  }
+  retiresAuto.value = n
+}
 // Lot en cours par équipement (suivi_phases 'En cours' + equipement_id)
 const enCoursEquip = computed(() => {
   const m = {}
@@ -989,4 +1002,6 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .params-side input, .params-side select { width: 100%; box-sizing: border-box; }
 .pe-gantt-wrap { flex: 1; min-width: 0; }
 @media (max-width: 900px) { .pe-body { flex-direction: column; } .params-side { flex: none; width: 100%; flex-direction: row; flex-wrap: wrap; } }
+.pe-clean-notice { background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; padding: 7px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600; margin: 6px 0; display: inline-flex; align-items: center; gap: 8px; }
+.pe-clean-x { background: none; border: none; color: #047857; font-size: 16px; cursor: pointer; line-height: 1; }
 </style>
