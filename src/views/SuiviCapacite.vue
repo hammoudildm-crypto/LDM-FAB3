@@ -36,26 +36,33 @@
       <h2 class="card-title">Occupation annuelle par équipement · {{ joursAnnee }} jours ouvrés</h2>
       <div class="occ-layout">
         <aside class="occ-side">
-          <div class="occ-side-head"><span>À suivre ({{ nbSel }})</span><span class="occ-side-btns"><button type="button" @click="selTout">Tout</button><button type="button" @click="selRien">Aucun</button></span></div>
-          <div class="occ-grp-btns">
-            <div class="occ-fgrp"><span class="occ-flbl">Site</span><div class="occ-btn-row">
-              <button v-for="st in SITES" :key="st.key" type="button" class="occ-gbtn site" :class="{ on: siteSel === st.key }" @click="siteSel = st.key; phaseSel = ''">{{ st.label }}</button>
-            </div></div>
-            <div class="occ-fgrp"><span class="occ-flbl">Phase</span><div class="occ-btn-row">
-              <button type="button" class="occ-gbtn ph" :class="{ on: !phaseSel }" @click="phaseSel = ''">Toutes</button>
-              <button v-for="ph in phasesDuSite" :key="ph" type="button" class="occ-gbtn ph" :class="{ on: phaseSel === ph }" @click="phaseSel = ph">{{ PHASE_NOM[ph] || ph }}</button>
-            </div></div>
+          <div class="side-sec">
+            <div class="side-lbl">À suivre ({{ nbSel }})</div>
+            <div class="side-tg side-row2"><button :class="{ on: false }" @click="selTout">Tout</button><button @click="selRien">Aucun</button></div>
           </div>
-          <div class="occ-side-list">
-            <div v-for="g in sidebarGroupe" :key="g.phase" class="occ-pgrp">
-              <div class="occ-ph-h">{{ g.label }}<span class="occ-ph-n">{{ g.items.length }}</span></div>
-              <label v-for="r in g.items" :key="r.id" class="occ-chk" :class="{ off: selEquips[r.id] === false }">
-                <input type="checkbox" :checked="selEquips[r.id] !== false" @change="toggleSel(r.id)" />
-                <span class="occ-chk-nom">{{ r.nom }}</span>
-                <span class="occ-chk-taux" :class="clsTxt(r.taux)">{{ (r.taux * 100).toFixed(0) }}%</span>
-              </label>
+          <div class="side-sec">
+            <div class="side-lbl">Site</div>
+            <div class="side-tg">
+              <button v-for="st in SITES" :key="st.key" :class="{ on: siteSel === st.key }" @click="siteSel = st.key; phaseSel = ''">{{ st.label }}</button>
             </div>
-            <p v-if="!sidebarGroupe.length" class="occ-vide">Aucun équipement pour ce filtre.</p>
+          </div>
+          <div class="side-sec">
+            <div class="side-lbl">Phase</div>
+            <div class="side-phases">
+              <button :class="{ on: !phaseSel }" @click="phaseSel = ''"><span class="ph-dot" style="background:#94a3b8"></span>Toutes</button>
+              <button v-for="ph in phasesDuSite" :key="ph" :class="{ on: phaseSel === ph }" @click="phaseSel = ph"><span class="ph-dot" :style="{ background: couleurPhase(ph) }"></span>{{ PHASE_NOM[ph] || ph }}</button>
+            </div>
+          </div>
+          <div class="side-sec">
+            <div class="side-lbl">Équipements ({{ lignesSidebar.length }})</div>
+            <div class="side-phases side-eq">
+              <button v-for="r in lignesSidebar" :key="r.id" :class="{ on: selEquips[r.id] !== false }" @click="toggleSel(r.id)">
+                <span class="ph-dot" :style="{ background: couleurPhase(r.phase) }"></span>
+                <span class="eq-nom">{{ r.nom }}</span>
+                <span class="eq-taux" :class="clsTxt(r.taux)">{{ (r.taux * 100).toFixed(0) }}%</span>
+              </button>
+              <p v-if="!lignesSidebar.length" class="occ-vide">Aucun équipement pour ce filtre.</p>
+            </div>
           </div>
         </aside>
         <div class="occ-content tbl-wrap">
@@ -236,6 +243,8 @@ const groupesEquip = computed(() => {
 })
 
 function siteDeCode(code) { const c = (code || '').toUpperCase(); if (c.startsWith('PRH')) return 'hormonal'; if (c === 'PR054') return 'semi'; return 'seche' }
+const COULEUR_PHASE = { pesee: '#64748b', granulation: '#10b981', sechage: '#06b6d4', melange: '#3b82f6', compression: '#8b5cf6', remplissage: '#a855f7', pelliculage: '#f59e0b', conditionnement: '#ec4899' }
+function couleurPhase(ph) { return COULEUR_PHASE[ph] || '#94a3b8' }
 const lignes = computed(() => {
   const out = []
   for (const grp of groupesEquip.value) {
@@ -400,24 +409,28 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .chip.more { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
 /* Panneau de sélection des équipements */
 .occ-layout { display: flex; gap: 10px; align-items: flex-start; }
-.occ-side { flex: 0 0 165px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; background: #fafafa; }
+.occ-side { flex: 0 0 200px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #fff; }
 .occ-side-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; font-size: 12px; font-weight: 800; color: #334155; }
 .occ-side-btns { display: flex; gap: 4px; }
 .occ-side-btns button { font: inherit; font-size: 10.5px; font-weight: 700; border: 1px solid #cbd5e1; background: #fff; border-radius: 5px; padding: 2px 7px; cursor: pointer; color: #475569; }
 .occ-side-btns button:hover { background: #e2e8f0; }
-.occ-side-list { max-height: 60vh; overflow-y: auto; }
-.occ-grp-btns { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 5px; background: #fff; }
-.occ-btn-row { display: flex; flex-wrap: wrap; gap: 3px; }
-.occ-gbtn { font: inherit; font-size: 10px; font-weight: 700; border: 1px solid #cbd5e1; background: #fff; border-radius: 5px; padding: 2px 7px; cursor: pointer; color: #475569; }
-.occ-gbtn:hover { background: #eef2f7; }
-.occ-gbtn.site.on { background: #0f766e; border-color: #0f766e; color: #fff; }
-.occ-gbtn.ph.on { background: #334155; border-color: #334155; color: #fff; }
-.occ-fgrp { display: flex; align-items: flex-start; gap: 6px; }
-.occ-flbl { flex: 0 0 30px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; padding-top: 4px; }
-.occ-fgrp .occ-btn-row { flex: 1; }
-.occ-ph-h { display: flex; align-items: center; justify-content: space-between; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #0f766e; background: #f0fdfa; padding: 3px 10px; position: sticky; top: 0; z-index: 1; border-bottom: 1px solid #ccfbf1; }
-.occ-ph-n { font-size: 9px; background: #ccfbf1; border-radius: 10px; padding: 0 6px; color: #0f766e; font-weight: 800; }
-.occ-vide { font-size: 11px; color: #94a3b8; padding: 10px; margin: 0; }
+.side-sec { padding: 10px 12px; border-bottom: 1px solid #eef2f6; }
+.side-sec:last-child { border-bottom: none; }
+.side-lbl { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; margin-bottom: 7px; }
+.side-tg { display: flex; flex-direction: column; gap: 5px; }
+.side-tg.side-row2 { flex-direction: row; }
+.side-tg button { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 600; color: #64748b; padding: 7px 11px; cursor: pointer; text-align: left; flex: 1; }
+.side-tg button:hover { background: #eef2f7; }
+.side-tg button.on { background: #6366f1; border-color: #6366f1; color: #fff; }
+.side-phases { display: flex; flex-direction: column; gap: 3px; }
+.side-phases.side-eq { max-height: 42vh; overflow-y: auto; }
+.side-phases button { display: flex; align-items: center; gap: 7px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 600; color: #475569; padding: 6px 9px; cursor: pointer; text-align: left; width: 100%; }
+.side-phases button:hover { background: #eef2f7; }
+.side-phases button.on { background: #eef2ff; border-color: #6366f1; color: #4338ca; }
+.ph-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.eq-nom { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eq-taux { font-size: 10.5px; font-weight: 800; }
+.occ-vide { font-size: 11px; color: #94a3b8; padding: 8px 2px; margin: 0; }
 .occ-step { font-size: 11.5px; color: #475569; background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 8px 10px; margin: 0; }
 .occ-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-height: 260px; color: #94a3b8; padding: 30px; }
 .occ-empty-ic { font-size: 42px; margin-bottom: 8px; opacity: .6; }
