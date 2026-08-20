@@ -324,12 +324,12 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .cap { max-width: 1240px; margin: 0 auto; padding: 6px 4px 24px; }
 .cap-head { margin-bottom: 20px; }
 .ch-eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #0f766e; }
-.ch-title { font-size: 24px; font-weight: 800; letter-spacing: -.02em; color: #1a2233; margin: 3px 0 2px; }
+.ch-title { font-size: 20px; font-weight: 800; letter-spacing: -.02em; color: #1a2233; margin: 2px 0 1px; }
 .ch-sub { font-size: 13.5px; color: #64748b; }
 
-.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px; margin-bottom: 18px; }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
 .card.avert { border-color: #fcd34d; background: #fffbeb; }
-.card-title { font-size: 15px; font-weight: 800; color: #1a2233; margin: 0 0 14px; }
+.card-title { font-size: 14px; font-weight: 800; color: #1a2233; margin: 0 0 10px; }
 .muted { font-size: 13px; color: #94a3b8; margin: 6px 0 0; }
 .muted.warn { color: #b45309; }
 .note { font-size: 12px; color: #64748b; margin-top: 12px; font-style: italic; }
@@ -345,23 +345,23 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .lg-g { background: #dcfce7; color: #15803d; } .lg-a { background: #fef3c7; color: #b45309; } .lg-r { background: #fee2e2; color: #b91c1c; } .lg-x { background: #7f1d1d; color: #fff; }
 
 .tbl-wrap { overflow-x: auto; }
-.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
-.grid th, .grid td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; text-align: left; white-space: nowrap; }
-.grid th { font-size: 12px; color: #64748b; font-weight: 700; }
+.grid { width: 100%; border-collapse: collapse; font-size: 11px; }
+.grid th, .grid td { padding: 3px 6px; border-bottom: 1px solid #eef2f6; text-align: left; white-space: nowrap; }
+.grid th { font-size: 10px; color: #64748b; font-weight: 700; }
 .ta-r { text-align: right; } .ta-c { text-align: center; }
 .grid tr.vide td { color: #cbd5e1; }
 .hj { color: #64748b; font-size: 12px; }
 .glob { color: #94a3b8; }
 .unite { color: #64748b; font-size: 12px; }
 .desig { color: #94a3b8; font-size: 12px; }
-.phase-tag { font-size: 11px; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 5px; padding: 1px 7px; font-weight: 600; }
+.phase-tag { font-size: 9.5px; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 5px; padding: 1px 5px; font-weight: 600; }
 
 .taux-h { width: 260px; }
-.taux-cell { display: flex; align-items: center; gap: 10px; }
-.bar-wrap { flex: 1; height: 12px; background: #f1f5f9; border-radius: 7px; overflow: hidden; min-width: 100px; }
+.taux-cell { display: flex; align-items: center; gap: 5px; }
+.bar-wrap { flex: 1; height: 8px; background: #f1f5f9; border-radius: 6px; overflow: hidden; min-width: 50px; }
 .bar { height: 100%; border-radius: 7px; }
 .bar.g { background: #22c55e; } .bar.a { background: #f59e0b; } .bar.r { background: #ef4444; } .bar.x { background: #7f1d1d; }
-.taux-val { font-weight: 700; font-size: 13px; min-width: 52px; text-align: right; }
+.taux-val { font-weight: 700; font-size: 10.5px; min-width: 40px; text-align: right; }
 .t-g { color: #15803d; } .t-a { color: #b45309; } .t-r { color: #b91c1c; } .t-x { color: #7f1d1d; }
 
 .matrice .sticky-c { position: sticky; left: 0; background: #fff; z-index: 1; }
@@ -379,14 +379,14 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .chip { font-size: 11.5px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; border-radius: 6px; padding: 3px 8px; }
 .chip.more { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
 /* Panneau de sélection des équipements */
-.occ-layout { display: flex; gap: 14px; align-items: flex-start; }
-.occ-side { flex: 0 0 210px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; background: #fafafa; }
+.occ-layout { display: flex; gap: 10px; align-items: flex-start; }
+.occ-side { flex: 0 0 165px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; background: #fafafa; }
 .occ-side-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; font-size: 12px; font-weight: 800; color: #334155; }
 .occ-side-btns { display: flex; gap: 4px; }
 .occ-side-btns button { font: inherit; font-size: 10.5px; font-weight: 700; border: 1px solid #cbd5e1; background: #fff; border-radius: 5px; padding: 2px 7px; cursor: pointer; color: #475569; }
 .occ-side-btns button:hover { background: #e2e8f0; }
 .occ-side-list { max-height: 60vh; overflow-y: auto; }
-.occ-chk { display: flex; align-items: center; gap: 7px; padding: 6px 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 12.5px; }
+.occ-chk { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 11.5px; }
 .occ-chk:hover { background: #eef2f7; }
 .occ-chk.off { opacity: .5; }
 .occ-chk-nom { flex: 1; min-width: 0; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -411,8 +411,8 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .mc-bar.r { background: #ef4444; }
 .mc-bar.x { background: #991b1b; }
 .mc-m { font-size: 8.5px; color: #94a3b8; margin-top: 2px; }
-.mc-cell { min-width: 210px; padding: 4px 8px !important; }
-.mc-chart.mc-inline { height: 40px; padding-top: 8px; gap: 2px; border-bottom: none; }
+.mc-cell { min-width: 140px; padding: 2px 6px !important; }
+.mc-chart.mc-inline { height: 34px; padding-top: 7px; gap: 1.5px; border-bottom: none; }
 .mc-chart.mc-inline .mc-ref { top: calc(8px + (40px - 8px) * (1 - 100/120)); }
 .mc-h { text-align: left; }
 .mc-max { flex: 0 0 78px; text-align: right; font-size: 12px; font-weight: 800; }
