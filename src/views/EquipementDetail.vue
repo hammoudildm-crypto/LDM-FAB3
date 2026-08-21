@@ -20,6 +20,9 @@ async function fetchAllPaged(makeQuery) { const page = 1000; let from = 0, all =
 
 const nomGroupe = ref(route.query.nom ? String(route.query.nom) : '')
 const codesGroupe = ref(route.query.codes ? String(route.query.codes).split(',').map(c => c.trim()).filter(Boolean) : [])
+const postesRegime = ref(route.query.postes ? Number(route.query.postes) : 0)
+const weRegime = ref(route.query.we === '1')
+const reg4Regime = ref(route.query.reg4 === '1')
 const annee = ref(route.query.annee ? Number(route.query.annee) : new Date().getFullYear())
 const chargement = ref(true)
 
@@ -115,7 +118,7 @@ const arretsGroupe = computed(() => {
 // --- Plan / réalisé par produit ---
 const planParProduit = computed(() => { const m = {}; for (const r of plan.value) m[r.produit_id] = (m[r.produit_id] || 0) + num(r.quantite_planifiee); return m })
 const planParProduitMois = computed(() => { const m = {}; for (const r of plan.value) { const pid = r.produit_id, mo = num(r.mois) - 1; if (!m[pid]) m[pid] = Array(12).fill(0); if (mo >= 0 && mo < 12) m[pid][mo] += num(r.quantite_planifiee) } return m })
-const postesEquip = computed(() => { const e = equipsGroupe.value[0] || {}; return num(e.postes, 3) })
+const postesEquip = computed(() => { if (postesRegime.value > 0) return postesRegime.value; const e = equipsGroupe.value[0] || {}; return num(e.postes, 3) })
 function joursOuvresMoisN(mo) { const d = new Date(annee.value, mo, 1); let n = 0; while (d.getMonth() === mo) { const wd = d.getDay(); if (wd !== 0 && wd !== 6) n++; d.setDate(d.getDate() + 1) } return n }
 const occupationParMois = computed(() => {
   const out = Array(12).fill(null)
@@ -166,8 +169,10 @@ function joursOuvresRestants() {
   const auj = new Date(); auj.setHours(0, 0, 0, 0)
   const fin = new Date(annee.value, 11, 31)
   if (auj.getFullYear() > annee.value) return 0
+  const po = postesEquip.value
+  const facteurWE = reg4Regime.value ? 1 : (weRegime.value ? Math.min(1, 2 / (po || 3)) : 0)
   let d = new Date(Math.max(auj.getTime(), new Date(annee.value, 0, 1).getTime())); let n = 0
-  while (d <= fin) { const wd = d.getDay(); if (wd !== 0 && wd !== 6) n++; d = new Date(d.getTime() + 86400000) }
+  while (d <= fin) { const wd = d.getDay(); if (wd === 0 || wd === 6) n += facteurWE; else n += 1; d = new Date(d.getTime() + 86400000) }
   return n
 }
 const occupationRestante = computed(() => {
@@ -183,7 +188,7 @@ const occupationRestante = computed(() => {
     const tl = num(p.taille_lot)
     if (tl > 0 && plk > 0) { const kg = reste * plk / tl; heures += kg / cad }
   }
-  const chargeJ = heures / 24 / nbMachines.value
+  const chargeJ = (postesEquip.value * 8 * nbMachines.value) > 0 ? heures / (postesEquip.value * 8 * nbMachines.value) : 0
   const jrsRest = joursOuvresRestants()
   const capaRest = jrsRest * nbMachines.value
   return { boitesRestantes, chargeJ, jrsRest, taux: capaRest > 0 ? chargeJ / jrsRest : 0 }
@@ -212,7 +217,7 @@ function retour() { router.push({ path: '/capacite' }) }
         <div class="ed-kpi"><div class="ed-kv" :class="'t-' + clsTaux(trs.global)">{{ trs.aPostes ? pct(trs.global) + ' %' : '—' }}</div><div class="ed-kl">TRS global</div></div>
         <div class="ed-kpi"><div class="ed-kv" :class="'t-' + clsTaux(occupationRestante.taux)">{{ pct(occupationRestante.taux) }} %</div><div class="ed-kl">Occupation du reste d'année</div></div>
         <div class="ed-kpi"><div class="ed-kv">{{ occupationRestante.chargeJ.toFixed(1) }} j</div><div class="ed-kl">Charge restante</div></div>
-        <div class="ed-kpi"><div class="ed-kv">{{ occupationRestante.jrsRest }} j</div><div class="ed-kl">Jours ouvrés restants</div></div>
+        <div class="ed-kpi"><div class="ed-kv">{{ Math.round(occupationRestante.jrsRest) }} j</div><div class="ed-kl">Jours ouvrés restants</div></div>
       </div>
 
       <div class="ed-grid">
@@ -287,7 +292,7 @@ function retour() { router.push({ path: '/capacite' }) }
         <div class="ed-occ">
           <div class="ed-occ-b"><div class="ed-occ-v">{{ Math.round(occupationRestante.boitesRestantes).toLocaleString('fr-FR') }}</div><div class="ed-occ-l">Boîtes restantes à fabriquer</div></div>
           <div class="ed-occ-b"><div class="ed-occ-v">{{ occupationRestante.chargeJ.toFixed(1) }} j</div><div class="ed-occ-l">Charge restante (machine)</div></div>
-          <div class="ed-occ-b"><div class="ed-occ-v">{{ occupationRestante.jrsRest }} j</div><div class="ed-occ-l">Jours ouvrés restants</div></div>
+          <div class="ed-occ-b"><div class="ed-occ-v">{{ Math.round(occupationRestante.jrsRest) }} j</div><div class="ed-occ-l">Jours ouvrés restants</div></div>
           <div class="ed-occ-b hi"><div class="ed-occ-v" :class="'t-' + clsTaux(occupationRestante.taux)">{{ pct(occupationRestante.taux) }} %</div><div class="ed-occ-l">Taux d'occupation prévisionnel</div></div>
         </div>
         <div class="ed-occ-bar"><div class="ed-occ-fill" :class="'t-' + clsTaux(occupationRestante.taux)" :style="{ width: Math.min(100, occupationRestante.taux * 100) + '%' }"></div></div>
