@@ -65,7 +65,7 @@
             <tr v-for="r in lignesTableau" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
               <td class="ta-c"><input type="checkbox" :checked="weEq(r.id)" :disabled="estRegime4(r.id)" @change="setReq(r.id, $event.target.checked)" :title="estRegime4(r.id) ? 'Week-end inclus automatiquement (4×8 = 24/7)' : 'Réquisition week-end (comptée en 2×8)'" /></td>
               <td class="eq-lien" @click="ouvrirEquipement(r)" title="Voir la fiche équipement (TRS, top produits, occupation restante)"><strong>{{ r.nom }}</strong></td>
-              <td class="ta-c"><input type="number" min="1" step="1" :value="r.machines" @change="setMachines(r.repId, r.autresMach, $event.target.value)" class="mach-inp" :class="{ saved: majMachines === r.repId }" :title="'Enregistré en base (nb_machines). Détail : ' + r.equipsInfo" /></td>
+              <td class="ta-c"><input type="number" min="1" step="1" :value="r.machines" @change="setMachines(r.equipIds, $event.target.value)" class="mach-inp" :class="{ saved: majMachines === r.repId }" :title="'Enregistré en base (nb_machines). Détail : ' + r.equipsInfo" /></td>
               <td class="ta-c"><select :value="regimeEquip[r.id] || ''" @change="setRegime(r.id, $event.target.value)" class="reg-sel" title="Régime de travail de cet équipement"><option value="">Auto</option><option value="1">1×8</option><option value="2">2×8</option><option value="3">3×8</option><option value="4">4×8</option></select></td>
               <td class="ta-r glob">{{ r.chargeGlobaleJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r">{{ r.chargeJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
@@ -205,14 +205,18 @@ const reqEquip = reactive({})
 function weEq(key) { const r = regimeEquip[key] || (regime.value === 'auto' ? '' : String(regime.value)); if (r === '4') return true; return !!reqEquip[key] }
 function estRegime4(key) { return (regimeEquip[key] || (regime.value === 'auto' ? '' : String(regime.value))) === '4' }
 const majMachines = ref(null)
-async function setMachines(repId, autres, val) {
+async function setMachines(equipIds, val) {
   const n = Math.max(1, Number(val) || 1)
-  const repVal = Math.max(1, n - autres)
-  const rep = equipements.value.find(e => e.id === repId)
-  if (rep) rep.nb_machines = repVal
-  majMachines.value = repId
-  try { const { error } = await supabase.from('equipements').update({ nb_machines: repVal }).eq('id', repId); if (error) console.error(error) } catch (e) { console.error(e) }
-  setTimeout(() => { if (majMachines.value === repId) majMachines.value = null }, 1500)
+  const ids = String(equipIds || '').split(',').filter(Boolean)
+  if (!ids.length) return
+  majMachines.value = ids[0]
+  for (let i = 0; i < ids.length; i++) {
+    const v = i === 0 ? n : 0   // 1re fiche = total, doublons = 0
+    const e = equipements.value.find(x => String(x.id) === ids[i])
+    if (e) e.nb_machines = v
+    try { const { error } = await supabase.from('equipements').update({ nb_machines: v }).eq('id', ids[i]); if (error) console.error(error) } catch (err) { console.error(err) }
+  }
+  setTimeout(() => { if (majMachines.value === ids[0]) majMachines.value = null }, 1500)
 }
 const regimeEquip = reactive({})
 function regimeEq(key, repPostes) { const r = regimeEquip[key] || (regime.value === 'auto' ? '' : String(regime.value)); if (r === '4') return 3; if (r) return Number(r); return num(repPostes, 3) }
@@ -268,7 +272,7 @@ const lignes = computed(() => {
       const ph = phaseDe(e)
       if (!parPhase[ph]) parPhase[ph] = { equips: [], machines: 0 }
       parPhase[ph].equips.push(e)
-      parPhase[ph].machines += Math.max(1, num(e.nb_machines, 1))
+      parPhase[ph].machines += num(e.nb_machines, 1)
     }
     const phases = Object.keys(parPhase).sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99))
     const machines = Math.max(1, ...phases.map(ph => parPhase[ph].machines))   // nb d'unités physiques
@@ -319,7 +323,7 @@ const lignes = computed(() => {
     let nomAffiche = grp.nom
     if (phases.includes('granulation') && phases.includes('sechage')) { phaseLabel = 'Granulation et Séchage'; nomAffiche = 'Granulation et Séchage ' + grp.nom }
     else if (phases.length === 1 && phases[0] === 'granulation' && grp.equips.some(e => /s[ée]ch/i.test((e.type || '') + ' ' + (e.nom || e.code || '')))) phaseLabel = 'Granulation et Séchage'
-    out.push({ id: grp.key, nom: nomAffiche, nomBase: grp.nom, codes: grp.equips.map(e => e.code).filter(Boolean).join(','), equipsInfo: grp.equips.map(e => (e.code || '?') + ' ' + (e.nom || '') + ' [nb_machines=' + Math.max(1, num(e.nb_machines, 1)) + ']').join('  |  '), phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, postes, reg4: regKey === '4', repId: (grp.equips[0] || {}).id, autresMach: grp.equips.slice(1).reduce((a, e) => a + Math.max(1, num(e.nb_machines, 1)), 0), site: phases.includes('conditionnement') ? 'conditionnement' : siteDuGroupe(grp.equips), capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
+    out.push({ id: grp.key, nom: nomAffiche, nomBase: grp.nom, codes: grp.equips.map(e => e.code).filter(Boolean).join(','), equipsInfo: grp.equips.map(e => (e.code || '?') + ' ' + (e.nom || '') + ' [nb_machines=' + Math.max(1, num(e.nb_machines, 1)) + ']').join('  |  '), phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, postes, reg4: regKey === '4', repId: (grp.equips[0] || {}).id, equipIds: grp.equips.map(e => e.id).join(','), site: phases.includes('conditionnement') ? 'conditionnement' : siteDuGroupe(grp.equips), capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
   }
   return out.sort((a, b) => (ORDRE_GAMME[a.phase] || 99) - (ORDRE_GAMME[b.phase] || 99) || b.taux - a.taux)
 })
