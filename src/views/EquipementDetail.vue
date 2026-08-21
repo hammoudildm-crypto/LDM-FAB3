@@ -168,7 +168,7 @@ const detailMois = computed(() => {
     if (planB <= 0) continue
     const tl = num(p.taille_lot)
     const h = heuresProduit(p.id, planB)
-    rows.push({ code: p.code_pf, desig: p.designation, plan: planB, lots: tl > 0 ? planB / tl : 0, tl, plk: poidsLot(p), cad, prod: h.prod, nett: h.nett, heures: h.total })
+    rows.push({ code: p.code_pf, desig: p.designation, plan: planB, lots: tl > 0 ? planB / tl : 0, tl, plk: poidsLot(p), cad, hParLot: cad > 0 ? poidsLot(p) / cad : 0, prod: h.prod, nett: h.nett, heures: h.total })
   }
   rows.sort((a, b) => b.heures - a.heures)
   const totalH = rows.reduce((a, r) => a + r.heures, 0)
@@ -340,7 +340,7 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
           </div>
           <p class="ed-mod-s"><b>{{ Math.round(detailMois.totalH) }} h</b> = {{ Math.round(detailMois.totalProd) }} h production + {{ Math.round(detailMois.totalNett) }} h nettoyage (VDLP/VDLT/réglage) · capacité {{ Math.round(detailMois.jm) }} j × {{ postesEquip * 8 }} h × {{ nbMachines }} machine(s) = {{ Math.round(detailMois.capaMois) }} h</p>
           <table v-if="detailMois.rows.length" class="ed-tbl">
-            <thead><tr><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Lots</th><th class="r">Taille lot (bts)</th><th class="r">Poids lot (kg)</th><th class="r">Cadence</th><th class="r">Prod (h)</th><th class="r">Nett (h)</th><th class="r">Total (h)</th><th class="r">Part</th></tr></thead>
+            <thead><tr><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Lots</th><th class="r">Taille lot (bts)</th><th class="r">Poids lot (kg)</th><th class="r">Cadence</th><th class="r">h / lot</th><th class="r">Prod (h)</th><th class="r">Nett (h)</th><th class="r">Total (h)</th><th class="r">Part</th></tr></thead>
             <tbody>
               <tr v-for="r in detailMois.rows" :key="r.code">
                 <td><b class="ed-plien" @click="ouvrirProduit(r.code)" title="Vérifier la fiche produit (Référentiels)">{{ r.code }}</b><span class="ed-pdesig"> — {{ r.desig }}</span></td>
@@ -349,6 +349,7 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
                 <td class="r">{{ r.tl.toLocaleString('fr-FR') }}</td>
                 <td class="r">{{ r.plk.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
                 <td class="r">{{ r.cad.toLocaleString('fr-FR') }}</td>
+                <td class="r">{{ r.hParLot.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
                 <td class="r">{{ Math.round(r.prod) }}</td>
                 <td class="r" :title="'VDLP × lots + VDLT + réglage'">{{ Math.round(r.nett) }}</td>
                 <td class="r"><b>{{ Math.round(r.heures) }}</b></td>
@@ -406,7 +407,7 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
 .ed-clic { cursor: pointer; }
 .ed-clic:hover .ed-mbar { filter: brightness(1.1); outline: 2px solid rgba(99,102,241,.35); outline-offset: 1px; }
 .ed-mov { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
-.ed-mod { background: #fff; border-radius: 14px; width: min(900px, 100%); max-height: 82vh; overflow: auto; box-shadow: 0 20px 50px rgba(0,0,0,.3); padding: 16px 18px; }
+.ed-mod { background: #fff; border-radius: 14px; width: min(980px, 100%); max-height: 82vh; overflow: auto; box-shadow: 0 20px 50px rgba(0,0,0,.3); padding: 16px 18px; }
 .ed-mod-h { display: flex; align-items: center; justify-content: space-between; font-size: 15px; color: #1a2233; margin-bottom: 4px; }
 .ed-mod-x { background: none; border: 0; font-size: 18px; color: #94a3b8; cursor: pointer; }
 .ed-mod-s { font-size: 11.5px; color: #64748b; margin: 0 0 10px; }
