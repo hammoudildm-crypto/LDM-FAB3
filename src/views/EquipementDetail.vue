@@ -119,7 +119,7 @@ const arretsGroupe = computed(() => {
 const planParProduit = computed(() => { const m = {}; for (const r of plan.value) m[r.produit_id] = (m[r.produit_id] || 0) + num(r.quantite_planifiee); return m })
 const planParProduitMois = computed(() => { const m = {}; for (const r of plan.value) { const pid = r.produit_id, mo = num(r.mois) - 1; if (!m[pid]) m[pid] = Array(12).fill(0); if (mo >= 0 && mo < 12) m[pid][mo] += num(r.quantite_planifiee) } return m })
 const postesEquip = computed(() => { if (postesRegime.value > 0) return postesRegime.value; const e = equipsGroupe.value[0] || {}; return num(e.postes, 3) })
-function joursOuvresMoisN(mo) { const d = new Date(annee.value, mo, 1); let n = 0; while (d.getMonth() === mo) { const wd = d.getDay(); if (wd !== 0 && wd !== 6) n++; d.setDate(d.getDate() + 1) } return n }
+function joursOuvresMoisN(mo) { const d = new Date(annee.value, mo, 1); let n = 0; const facteurWE = reg4Regime.value ? 1 : (weRegime.value ? Math.min(1, 2 / (postesEquip.value || 3)) : 0); while (d.getMonth() === mo) { const wd = d.getDay(); if (wd === 0 || wd === 6) n += facteurWE; else n += 1; d.setDate(d.getDate() + 1) } return n }
 const occupationParMois = computed(() => {
   const out = Array(12).fill(null)
   const auj = new Date(); const moisActuel = auj.getMonth(); const anneeActuelle = auj.getFullYear()
