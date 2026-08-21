@@ -336,7 +336,14 @@ onMounted(charger)
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="chargement" class="muted">Chargement…</p>
 
-    <div class="pa-layout">
+    <template v-if="!chargement">
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.activity"></svg></span><div class="kpi-val accent">{{ fmt(grandTotal) }}</div></div><div class="kpi-lbl">Étapes terminées en {{ anneeSel }}</div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.flask"></svg></span><div class="kpi-val">{{ atelierTop ? atelierTop.nom : '—' }}</div></div><div class="kpi-lbl">Atelier le plus actif<span v-if="atelierTop"> ({{ atelierTop.n }})</span></div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.calendar"></svg></span><div class="kpi-val">{{ moisTop ? moisTop.nom : '—' }}</div></div><div class="kpi-lbl">Mois le plus actif<span v-if="moisTop"> ({{ moisTop.n }})</span></div></div>
+      </div>
+
+      <div class="pa-layout">
       <aside class="pa-side">
         <div class="side-sec">
           <div class="side-lbl">Année</div>
@@ -357,14 +364,7 @@ onMounted(charger)
           </div>
         </div>
       </aside>
-      <div class="pa-content">
-    <template v-if="!chargement">
-      <div class="kpi-grid">
-        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.activity"></svg></span><div class="kpi-val accent">{{ fmt(grandTotal) }}</div></div><div class="kpi-lbl">Étapes terminées en {{ anneeSel }}</div></div>
-        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.flask"></svg></span><div class="kpi-val">{{ atelierTop ? atelierTop.nom : '—' }}</div></div><div class="kpi-lbl">Atelier le plus actif<span v-if="atelierTop"> ({{ atelierTop.n }})</span></div></div>
-        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.calendar"></svg></span><div class="kpi-val">{{ moisTop ? moisTop.nom : '—' }}</div></div><div class="kpi-lbl">Mois le plus actif<span v-if="moisTop"> ({{ moisTop.n }})</span></div></div>
-      </div>
-
+        <div class="pa-content">
       <section class="card">
         <div class="card-head"><h2 class="card-title">Comparaison mensuelle par atelier</h2></div>
         <div class="chart-titre">{{ atelierSel }} — lots terminés par mois</div>
@@ -373,6 +373,8 @@ onMounted(charger)
           <p v-else class="empty">Sélectionne au moins une année pour afficher le graphe.</p>
         </div>
       </section>
+        </div>
+      </div>
 
       <div class="pa-row2">
       <section class="card">
@@ -444,16 +446,11 @@ onMounted(charger)
           </tbody>
         </table>
       </div>
-      <p class="proj-note">
-        <strong>Méthode :</strong> le réalisé des mois clôturés (janvier → {{ MOIS[moisCourant - 1] || '—' }}) est rapporté à l'année entière selon le <strong>profil saisonnier moyen</strong> des années passées. Le mois en cours ({{ MOIS[moisCourant] }}), partiel, n'entre pas dans le calcul. <span class="proj-star">*</span> atelier sans historique → projection linéaire (réalisé ÷ mois écoulés × 12).<br><strong>Plan :</strong> PDP converti en lots (boîtes planifiées ÷ taille de lot), réparti selon la gamme. <strong>% du plan</strong> = projection ÷ plan.
-      </p>
     </section>
       </div>
 
-      <p class="hint">Chaque cellule = nombre de <strong>lots distincts</strong> ayant <strong>terminé</strong> l'étape ce mois-là. Les <strong>années passées</strong> proviennent de l'<strong>historique importé</strong> (TDB PROD) ; l'<strong>année en cours</strong> est calculée en <strong>temps réel</strong> depuis Suivi des phases. Un même lot compte une fois par atelier.</p>
+            <p class="hint">Chaque cellule = nombre de <strong>lots distincts</strong> ayant <strong>terminé</strong> l'étape ce mois-là. Les <strong>années passées</strong> proviennent de l'<strong>historique importé</strong> (TDB PROD) ; l'<strong>année en cours</strong> est calculée en <strong>temps réel</strong> depuis Suivi des phases. Un même lot compte une fois par atelier.</p>
     </template>
-      </div>
-    </div>
 
     <div v-if="modalPA" class="modal-overlay" @click="modalPA = null">
       <div class="pa-modal" @click.stop>
@@ -484,7 +481,7 @@ onMounted(charger)
 <style scoped>
 .pa-page { color: #1b2733; }
 .pa-layout { display: flex; gap: 14px; align-items: flex-start; }
-.pa-side { flex: 0 0 210px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: flex-start; position: sticky; top: 8px; overflow: hidden; }
+.pa-side { flex: 0 0 210px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: stretch; overflow: hidden; }
 .pa-content { flex: 1; min-width: 0; }
 .pa-row2 { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
 .pa-row2 > .card, .pa-row2 > .proj-card { flex: 1; min-width: 0; margin-bottom: 0; }
