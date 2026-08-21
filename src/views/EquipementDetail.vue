@@ -55,6 +55,19 @@ const prodById = computed(() => { const m = {}; for (const p of produits.value) 
 function cadenceDe(eqId, pid) { const c = cadences.value.find(c => c.equipement_id === eqId && c.produit_id === pid); return { value: c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0, mode: c ? (c.mode || 'debit') : 'debit' } }
 // meilleure cadence du groupe pour un produit
 function cadenceGroupe(pid) { let best = 0; for (const e of equipsGroupe.value) { const v = cadenceDe(e.id, pid).value; if (v > best) best = v } return best }
+const repEq = computed(() => equipsGroupe.value[0] || {})
+function poidsLot(p) { return num(p.poids_lot_kg) || (num(p.taille_lot) * num(p.unites_par_boite) * num(p.poids_unitaire_mg) / 1e6) }
+function heuresProduit(pid, boites) {
+  const p = prodById.value[pid]; if (!p || boites <= 0) return { prod: 0, nett: 0, total: 0 }
+  const cad = cadenceGroupe(pid); if (cad <= 0) return { prod: 0, nett: 0, total: 0 }
+  const plk = poidsLot(p), tl = num(p.taille_lot)
+  if (!(tl > 0 && plk > 0)) return { prod: 0, nett: 0, total: 0 }
+  const prod = (boites * plk / tl) / cad
+  const nbLots = Math.ceil(boites / tl)
+  const e = repEq.value
+  const nett = nbLots * num(e.vdlp) + num(e.vdlt) + num(e.reglage)
+  return { prod, nett, total: prod + nett }
+}
 
 async function charger() {
   chargement.value = true
@@ -133,9 +146,7 @@ const occupationParMois = computed(() => {
       const cad = cadenceGroupe(p.id); if (cad <= 0) continue
       const planB = (planParProduitMois.value[p.id] || [])[mo] || 0
       if (planB <= 0) continue
-      const plk = num(p.poids_lot_kg) || (num(p.taille_lot) * num(p.unites_par_boite) * num(p.poids_unitaire_mg) / 1e6)
-      const tl = num(p.taille_lot)
-      if (tl > 0 && plk > 0) heures += (planB * plk / tl) / cad
+      heures += heuresProduit(p.id, planB).total
     }
     const jm = joursOuvresMoisN(mo)
     const capaMois = jm * capaJour
@@ -155,10 +166,9 @@ const detailMois = computed(() => {
     const cad = cadenceGroupe(p.id); if (cad <= 0) continue
     const planB = (planParProduitMois.value[p.id] || [])[mo] || 0
     if (planB <= 0) continue
-    const plk = num(p.poids_lot_kg) || (num(p.taille_lot) * num(p.unites_par_boite) * num(p.poids_unitaire_mg) / 1e6)
     const tl = num(p.taille_lot)
-    const heures = (tl > 0 && plk > 0) ? (planB * plk / tl) / cad : 0
-    rows.push({ code: p.code_pf, desig: p.designation, plan: planB, lots: tl > 0 ? planB / tl : 0, heures })
+    const h = heuresProduit(p.id, planB)
+    rows.push({ code: p.code_pf, desig: p.designation, plan: planB, lots: tl > 0 ? planB / tl : 0, tl, cad, prod: h.prod, nett: h.nett, heures: h.total })
   }
   rows.sort((a, b) => b.heures - a.heures)
   const totalH = rows.reduce((a, r) => a + r.heures, 0)
@@ -206,9 +216,7 @@ const occupationRestante = computed(() => {
     const reste = Math.max(0, planB - realB)
     if (reste <= 0) continue
     boitesRestantes += reste
-    const plk = num(p.poids_lot_kg) || (num(p.taille_lot) * num(p.unites_par_boite) * num(p.poids_unitaire_mg) / 1e6)
-    const tl = num(p.taille_lot)
-    if (tl > 0 && plk > 0) { const kg = reste * plk / tl; heures += kg / cad }
+    heures += heuresProduit(p.id, reste).total
   }
   const chargeJ = (postesEquip.value * 8 * nbMachines.value) > 0 ? heures / (postesEquip.value * 8 * nbMachines.value) : 0
   const jrsRest = joursOuvresRestants()
@@ -327,15 +335,17 @@ function retour() { router.push({ path: '/capacite' }) }
             <div><b>{{ detailMois.label }} {{ annee }}</b> · occupation <span :class="'t-' + clsTaux(detailMois.taux)">{{ (detailMois.taux * 100).toFixed(0) }} %</span></div>
             <button class="ed-mod-x" @click="moisSel = null">✕</button>
           </div>
-          <p class="ed-mod-s">{{ Math.round(detailMois.totalH) }} h de charge · capacité {{ Math.round(detailMois.jm) }} j × {{ postesEquip * 8 }} h × {{ nbMachines }} = {{ Math.round(detailMois.capaMois) }} h</p>
+          <p class="ed-mod-s">{{ Math.round(detailMois.totalH) }} h de charge (production + VDLP/lot + VDLT + réglage) · capacité {{ Math.round(detailMois.jm) }} j × {{ postesEquip * 8 }} h × {{ nbMachines }} machine(s) = {{ Math.round(detailMois.capaMois) }} h</p>
           <table v-if="detailMois.rows.length" class="ed-tbl">
-            <thead><tr><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Lots</th><th class="r">Heures</th><th class="r">Part</th></tr></thead>
+            <thead><tr><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Lots</th><th class="r">Taille lot</th><th class="r">Cadence</th><th class="r">Heures</th><th class="r">Part</th></tr></thead>
             <tbody>
               <tr v-for="r in detailMois.rows" :key="r.code">
                 <td><b>{{ r.code }}</b><span class="ed-pdesig"> — {{ r.desig }}</span></td>
                 <td class="r">{{ r.plan.toLocaleString('fr-FR') }}</td>
                 <td class="r">{{ r.lots.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
-                <td class="r">{{ Math.round(r.heures) }}</td>
+                <td class="r">{{ r.tl.toLocaleString('fr-FR') }}</td>
+                <td class="r">{{ r.cad.toLocaleString('fr-FR') }}</td>
+                <td class="r" :title="'Production ' + Math.round(r.prod) + ' h + nettoyage ' + Math.round(r.nett) + ' h'">{{ Math.round(r.heures) }}</td>
                 <td class="r">{{ detailMois.totalH > 0 ? (r.heures / detailMois.totalH * 100).toFixed(0) : 0 }} %</td>
               </tr>
             </tbody>
@@ -390,7 +400,7 @@ function retour() { router.push({ path: '/capacite' }) }
 .ed-clic { cursor: pointer; }
 .ed-clic:hover .ed-mbar { filter: brightness(1.1); outline: 2px solid rgba(99,102,241,.35); outline-offset: 1px; }
 .ed-mov { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
-.ed-mod { background: #fff; border-radius: 14px; width: min(560px, 100%); max-height: 82vh; overflow: auto; box-shadow: 0 20px 50px rgba(0,0,0,.3); padding: 16px 18px; }
+.ed-mod { background: #fff; border-radius: 14px; width: min(720px, 100%); max-height: 82vh; overflow: auto; box-shadow: 0 20px 50px rgba(0,0,0,.3); padding: 16px 18px; }
 .ed-mod-h { display: flex; align-items: center; justify-content: space-between; font-size: 15px; color: #1a2233; margin-bottom: 4px; }
 .ed-mod-x { background: none; border: 0; font-size: 18px; color: #94a3b8; cursor: pointer; }
 .ed-mod-s { font-size: 11.5px; color: #64748b; margin: 0 0 10px; }
