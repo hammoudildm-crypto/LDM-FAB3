@@ -483,8 +483,8 @@ onMounted(charger)
 .pa-layout { display: flex; gap: 14px; align-items: flex-start; }
 .pa-side { flex: 0 0 210px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: stretch; overflow: hidden; }
 .pa-content { flex: 1; min-width: 0; }
-.pa-row2 { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
-.pa-row2 > .card, .pa-row2 > .proj-card { flex: 1; min-width: 0; margin-bottom: 0; }
+.pa-row2 { display: flex; gap: 14px; align-items: stretch; margin-bottom: 18px; }
+.pa-row2 > .card, .pa-row2 > .proj-card { flex: 1 1 0; min-width: 0; margin-bottom: 0; display: flex; flex-direction: column; }
 @media (max-width: 1100px) { .pa-row2 { flex-direction: column; } .pa-row2 > .card, .pa-row2 > .proj-card { width: 100%; } }
 .side-sec { padding: 10px 12px; border-bottom: 1px solid #eef2f6; }
 .side-sec:last-child { border-bottom: none; }
