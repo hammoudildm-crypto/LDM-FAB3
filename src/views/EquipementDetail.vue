@@ -143,6 +143,27 @@ const occupationParMois = computed(() => {
   }
   return out
 })
+const moisSel = ref(null)
+const detailMois = computed(() => {
+  if (moisSel.value == null) return null
+  const mo = moisSel.value
+  const capaJour = postesEquip.value * 8 * nbMachines.value
+  const jm = joursOuvresMoisN(mo)
+  const capaMois = jm * capaJour
+  const rows = []
+  for (const p of produits.value) {
+    const cad = cadenceGroupe(p.id); if (cad <= 0) continue
+    const planB = (planParProduitMois.value[p.id] || [])[mo] || 0
+    if (planB <= 0) continue
+    const plk = num(p.poids_lot_kg) || (num(p.taille_lot) * num(p.unites_par_boite) * num(p.poids_unitaire_mg) / 1e6)
+    const tl = num(p.taille_lot)
+    const heures = (tl > 0 && plk > 0) ? (planB * plk / tl) / cad : 0
+    rows.push({ code: p.code_pf, desig: p.designation, plan: planB, heures })
+  }
+  rows.sort((a, b) => b.heures - a.heures)
+  const totalH = rows.reduce((a, r) => a + r.heures, 0)
+  return { mo, label: MOIS[mo], rows, totalH, capaMois, jm, taux: capaMois > 0 ? totalH / capaMois : 0 }
+})
 const realiseParProduit = computed(() => {
   const m = {}
   for (const o of ofs.value) { const d = o.date_fin_fabrication ? new Date(o.date_fin_fabrication) : null; if (d && d.getFullYear() === annee.value) m[o.produit_id] = (m[o.produit_id] || 0) + num(o.boites_fabriquees) }
@@ -277,13 +298,13 @@ function retour() { router.push({ path: '/capacite' }) }
           </table>
           <div class="ed-sub">📈 Occupation prévisionnelle — mois restants</div>
           <div class="ed-mchart tall">
-            <div v-for="(t, i) in occupationParMois" :key="i" class="ed-mcol" :title="MOIS[i] + ' : ' + (t == null ? 'écoulé' : (t * 100).toFixed(0) + ' %')">
+            <div v-for="(t, i) in occupationParMois" :key="i" class="ed-mcol" :class="{ 'ed-clic': t != null }" @click="t != null && (moisSel = i)" :title="MOIS[i] + ' : ' + (t == null ? 'écoulé' : (t * 100).toFixed(0) + ' % — cliquer pour le détail')">
               <span class="ed-mv" :class="t == null ? '' : 't-' + clsTaux(t)">{{ t == null ? '' : (t * 100).toFixed(0) }}</span>
               <div class="ed-bararea"><div class="ed-refl2"></div><div class="ed-mbar" :class="t == null ? 'gone' : 'b-' + clsTaux(t)" :style="{ height: t == null ? '2px' : Math.min(120, t * 100) + '%' }"></div></div>
               <span class="ed-mm">{{ MOIS[i].charAt(0) }}</span>
             </div>
           </div>
-          <p class="ed-hint">Barres grises = mois écoulés. Trait = 100 %. Charge planifiée du mois ÷ capacité mensuelle de l'équipement.</p>
+          <p class="ed-hint">Barres grises = mois écoulés. Trait = 100 %. <b>Clique une barre</b> pour voir les produits qui chargent ce mois.</p>
         </section>
       </div>
 
@@ -299,6 +320,28 @@ function retour() { router.push({ path: '/capacite' }) }
         <div class="ed-occ-bar"><div class="ed-occ-fill" :class="'t-' + clsTaux(occupationRestante.taux)" :style="{ width: Math.min(100, occupationRestante.taux * 100) + '%' }"></div></div>
         <p v-if="occupationRestante.taux > 1" class="ed-alert">⚠️ Charge restante supérieure à la capacité restante — cet équipement ne pourra pas absorber le reste du plan d'ici la fin de l'année au régime actuel.</p>
       </section>
+
+      <div v-if="detailMois" class="ed-mov" @click="moisSel = null">
+        <div class="ed-mod" @click.stop>
+          <div class="ed-mod-h">
+            <div><b>{{ detailMois.label }} {{ annee }}</b> · occupation <span :class="'t-' + clsTaux(detailMois.taux)">{{ (detailMois.taux * 100).toFixed(0) }} %</span></div>
+            <button class="ed-mod-x" @click="moisSel = null">✕</button>
+          </div>
+          <p class="ed-mod-s">{{ Math.round(detailMois.totalH) }} h de charge · capacité {{ Math.round(detailMois.jm) }} j × {{ postesEquip * 8 }} h × {{ nbMachines }} = {{ Math.round(detailMois.capaMois) }} h</p>
+          <table v-if="detailMois.rows.length" class="ed-tbl">
+            <thead><tr><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Heures</th><th class="r">Part</th></tr></thead>
+            <tbody>
+              <tr v-for="r in detailMois.rows" :key="r.code">
+                <td><b>{{ r.code }}</b><span class="ed-pdesig"> — {{ r.desig }}</span></td>
+                <td class="r">{{ r.plan.toLocaleString('fr-FR') }}</td>
+                <td class="r">{{ Math.round(r.heures) }}</td>
+                <td class="r">{{ detailMois.totalH > 0 ? (r.heures / detailMois.totalH * 100).toFixed(0) : 0 }} %</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else class="ed-muted">Aucun produit planifié ce mois.</p>
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -343,6 +386,13 @@ function retour() { router.push({ path: '/capacite' }) }
 .ed-mbar.gone { background: #e2e8f0; }
 .ed-mbar.b-g { background: #16a34a; } .ed-mbar.b-a { background: #f59e0b; } .ed-mbar.b-r { background: #ef4444; } .ed-mbar.b-x { background: #991b1b; }
 .ed-hint { font-size: 9.5px; color: #94a3b8; margin: 5px 0 0; }
+.ed-clic { cursor: pointer; }
+.ed-clic:hover .ed-mbar { filter: brightness(1.1); outline: 2px solid rgba(99,102,241,.35); outline-offset: 1px; }
+.ed-mov { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.ed-mod { background: #fff; border-radius: 14px; width: min(560px, 100%); max-height: 82vh; overflow: auto; box-shadow: 0 20px 50px rgba(0,0,0,.3); padding: 16px 18px; }
+.ed-mod-h { display: flex; align-items: center; justify-content: space-between; font-size: 15px; color: #1a2233; margin-bottom: 4px; }
+.ed-mod-x { background: none; border: 0; font-size: 18px; color: #94a3b8; cursor: pointer; }
+.ed-mod-s { font-size: 11.5px; color: #64748b; margin: 0 0 10px; }
 .ed-mm { font-size: 9px; color: #94a3b8; margin-top: 2px; }
 
 .ed-arrets { display: flex; flex-direction: column; gap: 3px; }
