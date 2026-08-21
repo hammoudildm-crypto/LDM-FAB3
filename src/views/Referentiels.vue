@@ -94,7 +94,7 @@ const formA = reactive({ id: null, code: '', nom: '' })
 function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
 
 // --- Équipement ---
-const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '' })
+const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1 })
 const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, cadences: false })
 const sectionActive = ref(null)
 const SECTIONS = [
@@ -107,7 +107,7 @@ const SECTIONS = [
   { k: 'cadences', lbl: 'Cadences', ic: '⏱️', n: () => cadList.value.length }
 ]
 function ouvrirSection(k) { sectionActive.value = k; ouvert[k] = true }
-function resetE() { Object.assign(formE, { id: null, code: '', nom: '', atelier_id: '', type: '' }) }
+function resetE() { Object.assign(formE, { id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1 }) }
 
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
 function atelierDe(e) { return ateliers.value.find(a => a.id === e.atelier_id) || null }
@@ -371,7 +371,7 @@ const equipementsTries = computed(() => [...equipements.value].sort((a, b) =>
 async function enregistrerE() {
   erreur.value = ''
   if (!formE.code.trim() || !formE.nom.trim()) { erreur.value = 'Code et nom de l\'équipement obligatoires.'; return }
-  const payload = { code: formE.code.trim(), nom: formE.nom.trim(), atelier_id: formE.atelier_id || null, type: formE.type.trim() || null }
+  const payload = { code: formE.code.trim(), nom: formE.nom.trim(), atelier_id: formE.atelier_id || null, type: formE.type.trim() || null, nb_machines: Math.max(1, Number(formE.nb_machines) || 1) }
   const res = formE.id
     ? await supabase.from('equipements').update(payload).eq('id', formE.id)
     : await supabase.from('equipements').insert(payload)
@@ -379,7 +379,7 @@ async function enregistrerE() {
   resetE()
   await chargerTout()
 }
-function modifierE(e) { Object.assign(formE, { id: e.id, code: e.code, nom: e.nom, atelier_id: e.atelier_id || '', type: e.type || '' }) }
+function modifierE(e) { Object.assign(formE, { id: e.id, code: e.code, nom: e.nom, atelier_id: e.atelier_id || '', type: e.type || '', nb_machines: Number(e.nb_machines) || 1 }) }
 async function desactiverE(e) {
   if (!confirm('Désactiver l\'équipement « ' + e.nom + ' » ?')) return
   erreur.value = ''
@@ -504,6 +504,7 @@ onMounted(async () => {
           </select>
         </label>
         <label>Type<input v-model="formE.type" placeholder="Compression" /></label>
+        <label>Nombre de machines identiques<input type="number" min="1" v-model.number="formE.nb_machines" placeholder="1" /></label>
         <div class="form-actions">
           <button class="btn" @click="enregistrerE">{{ formE.id ? 'Mettre à jour' : 'Ajouter' }}</button>
           <button v-if="formE.id" class="btn ghost" @click="resetE">Annuler</button>
