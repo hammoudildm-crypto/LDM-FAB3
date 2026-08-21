@@ -283,7 +283,7 @@ const lignes = computed(() => {
         const gk = gammeKeys.value[pid]
         const p = prodById.value[pid] || {}
         const tl = num(p.taille_lot, 0)
-        const plk = num(p.poids_lot_kg, 0) || (tl * num(p.unites_par_boite, 0) * num(p.poids_unitaire_mg, 0) / 1e6)
+        const plk = (tl * num(p.unites_par_boite, 0) * num(p.poids_unitaire_mg, 0) / 1e6) || num(p.poids_lot_kg, 0)
         let utilise = false
         for (const ph of phases) {   // cumule le temps de chaque opération de l'unité
           const estCond = ph === 'conditionnement'
@@ -333,7 +333,7 @@ const produitsSansPoids = computed(() => {
     const p = prodById.value[pid]; if (!p) continue
     let besoin = false
     for (const e of equipements.value) { const ph = phaseDe(e); if (ph && ph !== 'conditionnement' && cadMap.value[e.id + '|' + pid] > 0) { besoin = true; break } }
-    const plkP = num(p.poids_lot_kg, 0) || (num(p.taille_lot, 0) * num(p.unites_par_boite, 0) * num(p.poids_unitaire_mg, 0) / 1e6)
+    const plkP = (num(p.taille_lot, 0) * num(p.unites_par_boite, 0) * num(p.poids_unitaire_mg, 0) / 1e6) || num(p.poids_lot_kg, 0)
     if (besoin && !(plkP > 0) && !vus.has(pid)) { vus.add(pid); out.push({ code: p.code_pf || '', desig: p.designation || '' }) }
   }
   return out.sort((a, b) => (a.code + a.desig).localeCompare(b.code + b.desig))
