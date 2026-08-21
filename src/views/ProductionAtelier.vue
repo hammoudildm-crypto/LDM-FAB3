@@ -494,10 +494,10 @@ onMounted(charger)
 .side-tg button:hover { background: #eef2f7; }
 .side-tg button.on { background: #0f766e; border-color: #0f766e; color: #fff; }
 .side-select { width: 100%; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; color: #1b2733; background: #fff; box-sizing: border-box; cursor: pointer; }
-.side-annees2 { display: flex; flex-wrap: wrap; gap: 5px; }
-.side-annees2 .an-btn { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 11.5px; font-weight: 600; padding: 5px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #475569; cursor: pointer; }
+.side-annees2 { display: flex; flex-wrap: nowrap; gap: 3px; }
+.side-annees2 .an-btn { display: inline-flex; align-items: center; justify-content: center; gap: 3px; font: inherit; font-size: 10px; font-weight: 600; padding: 5px 3px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #475569; cursor: pointer; flex: 1; min-width: 0; }
 .side-annees2 .an-btn.on { border-color: #0f766e; background: #f0fdfa; color: #0f766e; }
-.side-annees2 .an-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.side-annees2 .an-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .side-annees { flex-direction: row; flex-wrap: wrap; }
 .side-annees button { flex: 1; min-width: 44px; text-align: center; padding: 7px 4px; }
 @media (max-width: 820px) { .pa-layout { flex-direction: column; } .pa-side { flex-basis: auto; width: 100%; position: static; } .side-tg { flex-direction: row; flex-wrap: wrap; } .side-tg button { flex: 1; } }
