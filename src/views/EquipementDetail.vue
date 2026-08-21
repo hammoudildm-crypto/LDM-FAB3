@@ -119,6 +119,7 @@ const arretsGroupe = computed(() => {
 const planParProduit = computed(() => { const m = {}; for (const r of plan.value) m[r.produit_id] = (m[r.produit_id] || 0) + num(r.quantite_planifiee); return m })
 const planParProduitMois = computed(() => { const m = {}; for (const r of plan.value) { const pid = r.produit_id, mo = num(r.mois) - 1; if (!m[pid]) m[pid] = Array(12).fill(0); if (mo >= 0 && mo < 12) m[pid][mo] += num(r.quantite_planifiee) } return m })
 const postesEquip = computed(() => { if (postesRegime.value > 0) return postesRegime.value; const e = equipsGroupe.value[0] || {}; return num(e.postes, 3) })
+const regimeLabel = computed(() => { if (reg4Regime.value) return '4×8 · 24/7'; const po = postesEquip.value; const base = po >= 3 ? '3×8' : (po === 2 ? '2×8' : '1×8'); return weRegime.value ? base + ' + WE' : base })
 function joursOuvresMoisN(mo) { const d = new Date(annee.value, mo, 1); let n = 0; const facteurWE = reg4Regime.value ? 1 : (weRegime.value ? Math.min(1, 2 / (postesEquip.value || 3)) : 0); while (d.getMonth() === mo) { const wd = d.getDay(); if (wd === 0 || wd === 6) n += facteurWE; else n += 1; d.setDate(d.getDate() + 1) } return n }
 const occupationParMois = computed(() => {
   const out = Array(12).fill(null)
@@ -217,7 +218,7 @@ function retour() { router.push({ path: '/capacite' }) }
         <div class="ed-kpi"><div class="ed-kv" :class="'t-' + clsTaux(trs.global)">{{ trs.aPostes ? pct(trs.global) + ' %' : '—' }}</div><div class="ed-kl">TRS global</div></div>
         <div class="ed-kpi"><div class="ed-kv" :class="'t-' + clsTaux(occupationRestante.taux)">{{ pct(occupationRestante.taux) }} %</div><div class="ed-kl">Occupation du reste d'année</div></div>
         <div class="ed-kpi"><div class="ed-kv">{{ occupationRestante.chargeJ.toFixed(1) }} j</div><div class="ed-kl">Charge restante</div></div>
-        <div class="ed-kpi"><div class="ed-kv">{{ Math.round(occupationRestante.jrsRest) }} j</div><div class="ed-kl">Jours ouvrés restants</div></div>
+        <div class="ed-kpi"><div class="ed-kv">{{ Math.round(occupationRestante.jrsRest) }} j</div><div class="ed-kl">Jours ouvrés restants · <b class="ed-reg">{{ regimeLabel }}</b></div></div>
       </div>
 
       <div class="ed-grid">
@@ -316,6 +317,7 @@ function retour() { router.push({ path: '/capacite' }) }
 .ed-kpi { flex: 1; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; text-align: center; }
 .ed-kv { font-size: 20px; font-weight: 800; color: #1e293b; line-height: 1.1; }
 .ed-kl { font-size: 10.5px; color: #64748b; font-weight: 600; margin-top: 2px; }
+.ed-reg { color: #0f766e; font-weight: 800; }
 
 .ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
 .ed-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 14px; }
