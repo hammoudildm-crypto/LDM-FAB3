@@ -513,29 +513,29 @@ onMounted(charger)
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .muted { color: #94a3b8; }
 
-.kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 22px; }
-.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
+.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 9px 12px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .kpi-top { display: flex; align-items: center; gap: 10px; }
 .kpi-ic { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .kpi-ic svg { width: 19px; height: 19px; }
-.kpi-val { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.kpi-val { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
 .kpi-val.accent { color: #0f766e; }
-.kpi-lbl { font-size: 12px; color: #64748b; margin-top: 6px; }
+.kpi-lbl { font-size: 10.5px; color: #64748b; margin-top: 3px; }
 
-.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 10px 12px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.card-title { margin: 0; font-size: 17px; }
+.card-title { margin: 0; font-size: 13px; }
 .btn-exp { margin-left: auto; font-size: 13px; padding: 7px 12px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .btn-exp:hover { background: #ecfdf5; }
 .btn-exp:disabled { opacity: .45; cursor: not-allowed; }
 
 .table-scroll { overflow-x: auto; }
-table.grid { width: 100%; border-collapse: collapse; font-size: 14px; }
-table.grid th { text-align: center; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 6px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+table.grid { width: 100%; border-collapse: collapse; font-size: 11px; }
+table.grid th { text-align: center; font-size: 9px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; padding: 3px 3px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
 table.grid th.at-col { text-align: left; }
-table.grid td { padding: 8px 6px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
-.at-col { min-width: 150px; }
-.mois-col { width: 52px; }
+table.grid td { padding: 2px 3px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
+.at-col { min-width: 92px; }
+.mois-col { width: 30px; }
 .tot-col { width: 60px; }
 .at-name { font-weight: 600; color: #1b2733; }
 .num { text-align: center; font-variant-numeric: tabular-nums; border-radius: 6px; }
@@ -545,7 +545,7 @@ tr.cond .at-name { color: #0f766e; }
 tr.cond td { border-top: 1px solid #cbd5e1; }
 table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; background: #f8fafc; }
 .empty { color: #94a3b8; text-align: center; padding: 18px; font-style: italic; white-space: normal; }
-.hint { color: #64748b; font-size: 13px; margin-top: 4px; }
+.hint { color: #64748b; font-size: 10px; margin-top: 4px; }
 .filtres { display: flex; flex-direction: column; gap: 12px; margin-bottom: 10px; }
 .filtre-groupe { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 .filtre-lbl { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding-top: 8px; min-width: 58px; }
@@ -555,7 +555,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .btn-row button.on { background: #0f766e; border-color: #0f766e; color: #fff; }
 .an-dot { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
 .btn-row button.an-btn.on .an-dot { background: #fff; }
-.chart-titre { font-size: 14px; font-weight: 700; color: #0f766e; margin: 4px 0 2px; }
+.chart-titre { font-size: 12px; font-weight: 700; color: #0f766e; margin: 2px 0 1px; }
 .chart-wrap { margin-top: 4px; }
 
 @media (max-width: 700px) {
@@ -574,14 +574,14 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-code { font-family: ui-monospace, monospace; font-weight: 600; color: #0f766e; white-space: nowrap; }
 .pa-des { color: #475569; }
 .pa-note { font-size: 12.5px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; padding: 8px 10px; border-radius: 7px; margin: 10px 0 0; }
-.proj-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px 18px; margin-top: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.proj-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 10px 12px; margin-top: 0; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
 .proj-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-.proj-title { margin: 0; font-size: 17px; color: #161c2e; }
+.proj-title { margin: 0; font-size: 13px; color: #161c2e; }
 .proj-sub { font-size: 12.5px; color: #64748b; }
 .proj-scroll { overflow-x: auto; }
-.proj-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.proj-table th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
-.proj-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
+.proj-table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+.proj-table th { text-align: left; font-size: 8.5px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; padding: 3px 5px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+.proj-table td { padding: 2px 5px; border-bottom: 1px solid #f1f5f9; }
 .proj-table .ta-r { text-align: right; font-variant-numeric: tabular-nums; }
 .proj-at { font-weight: 600; color: #1a2233; }
 .proj-val { font-weight: 800; color: #0f766e; }
