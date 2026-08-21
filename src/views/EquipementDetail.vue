@@ -56,7 +56,7 @@ function cadenceDe(eqId, pid) { const c = cadences.value.find(c => c.equipement_
 // meilleure cadence du groupe pour un produit
 function cadenceGroupe(pid) { let best = 0; for (const e of equipsGroupe.value) { const v = cadenceDe(e.id, pid).value; if (v > best) best = v } return best }
 const repEq = computed(() => equipsGroupe.value[0] || {})
-function poidsLot(p) { return num(p.poids_lot_kg) || (num(p.taille_lot) * num(p.unites_par_boite) * num(p.poids_unitaire_mg) / 1e6) }
+function poidsLot(p) { const calc = num(p.taille_lot) * num(p.unites_par_boite) * num(p.poids_unitaire_mg) / 1e6; return calc > 0 ? calc : num(p.poids_lot_kg) }
 function heuresProduit(pid, boites) {
   const p = prodById.value[pid]; if (!p || boites <= 0) return { prod: 0, nett: 0, total: 0 }
   const cad = cadenceGroupe(pid); if (cad <= 0) return { prod: 0, nett: 0, total: 0 }
