@@ -229,6 +229,7 @@ const occupationRestante = computed(() => {
 function pct(v) { return (v * 100).toFixed(1) }
 function clsTaux(t) { if (t > 1) return 'x'; if (t > 0.9) return 'r'; if (t >= 0.7) return 'a'; return 'g' }
 function retour() { router.push({ path: '/capacite' }) }
+function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', query: { produit: code } }) }
 </script>
 
 <template>
@@ -298,7 +299,7 @@ function retour() { router.push({ path: '/capacite' }) }
             <tbody>
               <tr v-for="(p, i) in top5" :key="p.code">
                 <td class="ed-rank">{{ i + 1 }}</td>
-                <td><b>{{ p.code }}</b><span class="ed-pdesig"> — {{ p.desig }}</span></td>
+                <td><b class="ed-plien" @click="ouvrirProduit(p.code)" title="Vérifier la fiche produit (Référentiels)">{{ p.code }}</b><span class="ed-pdesig"> — {{ p.desig }}</span></td>
                 <td class="r">{{ p.plan.toLocaleString('fr-FR') }}</td>
                 <td class="r">{{ p.real.toLocaleString('fr-FR') }}</td>
                 <td class="r">{{ p.cad.toLocaleString('fr-FR') }}</td>
@@ -342,7 +343,7 @@ function retour() { router.push({ path: '/capacite' }) }
             <thead><tr><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Lots</th><th class="r">Poids lot (kg)</th><th class="r">Cadence</th><th class="r">Prod (h)</th><th class="r">Nett (h)</th><th class="r">Total (h)</th><th class="r">Part</th></tr></thead>
             <tbody>
               <tr v-for="r in detailMois.rows" :key="r.code">
-                <td><b>{{ r.code }}</b><span class="ed-pdesig"> — {{ r.desig }}</span></td>
+                <td><b class="ed-plien" @click="ouvrirProduit(r.code)" title="Vérifier la fiche produit (Référentiels)">{{ r.code }}</b><span class="ed-pdesig"> — {{ r.desig }}</span></td>
                 <td class="r">{{ r.plan.toLocaleString('fr-FR') }}</td>
                 <td class="r">{{ r.lots.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
                 <td class="r">{{ r.plk.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
@@ -424,6 +425,8 @@ function retour() { router.push({ path: '/capacite' }) }
 .ed-tbl td { padding: 2px 6px; border-bottom: 1px solid #f1f5f9; }
 .ed-rank { font-weight: 800; color: #6366f1; }
 .ed-pdesig { color: #94a3b8; }
+.ed-plien { color: #4338ca; cursor: pointer; }
+.ed-plien:hover { text-decoration: underline; }
 .ed-badge { font-weight: 800; font-size: 11px; border-radius: 5px; padding: 1px 7px; }
 
 .ed-occ { display: flex; gap: 10px; margin-bottom: 8px; }
