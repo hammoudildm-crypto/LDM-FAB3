@@ -49,7 +49,7 @@ const equipsGroupe = computed(() => {
   return list
 })
 const idsGroupe = computed(() => new Set(equipsGroupe.value.map(e => e.id)))
-const nbMachines = computed(() => equipsGroupe.value.length || 1)
+const nbMachines = computed(() => Math.max(1, equipsGroupe.value.reduce((a, e) => a + num(e.nb_machines, 1), 0)))
 
 const prodById = computed(() => { const m = {}; for (const p of produits.value) m[p.id] = p; return m })
 function cadenceDe(eqId, pid) { const c = cadences.value.find(c => c.equipement_id === eqId && c.produit_id === pid); return { value: c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0, mode: c ? (c.mode || 'debit') : 'debit' } }
