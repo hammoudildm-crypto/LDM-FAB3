@@ -12,10 +12,10 @@
 
     <section v-if="!chargement" class="card">
       <div class="kpi-row">
-        <div class="kpi"><div class="kpi-v">{{ (kpiOccMoy * 100).toFixed(0) }} %</div><div class="kpi-l">Occupation moyenne</div></div>
-        <div class="kpi"><div class="kpi-v">{{ kpiSup90 }}</div><div class="kpi-l">Équipements &gt; 90 %</div></div>
+        <div class="kpi k-ind"><div class="kpi-v">{{ (kpiOccMoy * 100).toFixed(0) }} %</div><div class="kpi-l">Occupation moyenne</div></div>
+        <div class="kpi k-amb"><div class="kpi-v">{{ kpiSup90 }}</div><div class="kpi-l">Équipements &gt; 90 %</div></div>
         <div class="kpi warn"><div class="kpi-v">{{ kpiSurcharge }}</div><div class="kpi-l">En surcharge</div></div>
-        <div class="kpi"><div class="kpi-v">{{ joursAnnee }}</div><div class="kpi-l">Jours ouvrés {{ annee }}</div></div>
+        <div class="kpi k-teal"><div class="kpi-v">{{ joursAnnee }}</div><div class="kpi-l">Jours ouvrés {{ annee }}</div></div>
       </div>
       <h2 class="card-title">Occupation annuelle — {{ siteSel === 'tous' ? 'Tous sites' : (SITES.find(s => s.key === siteSel) || {}).label }}<span v-if="phaseSel"> · {{ PHASE_NOM[phaseSel] || phaseSel }}</span> · {{ lignesTableau.length }} équip. · {{ joursAnnee }} j ouvrés</h2>
       <div class="occ-layout">
@@ -434,6 +434,13 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .kpi-v { font-size: 18px; font-weight: 800; color: #1e293b; line-height: 1.1; }
 .kpi-l { font-size: 11px; color: #64748b; font-weight: 600; margin-top: 3px; }
 .kpi.warn .kpi-v { color: #b91c1c; }
+.kpi.warn { background: #fef2f2; border-color: #fecaca; }
+.kpi.k-ind { background: #eef2ff; border-color: #c7d2fe; } .kpi.k-ind .kpi-v { color: #4338ca; }
+.kpi.k-amb { background: #fffbeb; border-color: #fde68a; } .kpi.k-amb .kpi-v { color: #b45309; }
+.kpi.k-teal { background: #f0fdfa; border-color: #99f6e4; } .kpi.k-teal .kpi-v { color: #0f766e; }
+.grid thead th { background: #f0fdfa; color: #0f766e; }
+.card-title { border-left: 3px solid #14b8a6; padding-left: 9px; }
+.ch-eyebrow { color: #0d9488; }
 .occ-side { flex: 0 0 250px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: flex-start; }
 .occ-side-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; font-size: 12px; font-weight: 800; color: #334155; }
 .occ-side-btns { display: flex; gap: 4px; }
