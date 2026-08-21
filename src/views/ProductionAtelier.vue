@@ -339,15 +339,15 @@ onMounted(charger)
     <div class="pa-layout">
       <aside class="pa-side">
         <div class="side-sec">
+          <div class="side-lbl">Année</div>
+          <select class="side-select" v-model.number="anneeSel">
+            <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
+          </select>
+        </div>
+        <div class="side-sec">
           <div class="side-lbl">Atelier</div>
           <div class="side-tg">
             <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
-          </div>
-        </div>
-        <div class="side-sec">
-          <div class="side-lbl">Années</div>
-          <div class="side-tg side-annees">
-            <button v-for="a in ANNEES" :key="a" type="button" :class="{ on: anneeSel === a }" @click="anneeSel = a">{{ a }}</button>
           </div>
         </div>
       </aside>
@@ -505,6 +505,7 @@ onMounted(charger)
 .side-tg button { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 600; color: #64748b; padding: 6px 10px; cursor: pointer; text-align: left; }
 .side-tg button:hover { background: #eef2f7; }
 .side-tg button.on { background: #0f766e; border-color: #0f766e; color: #fff; }
+.side-select { width: 100%; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; color: #1b2733; background: #fff; box-sizing: border-box; cursor: pointer; }
 .side-annees { flex-direction: row; flex-wrap: wrap; }
 .side-annees button { flex: 1; min-width: 44px; text-align: center; padding: 7px 4px; }
 @media (max-width: 820px) { .pa-layout { flex-direction: column; } .pa-side { flex-basis: auto; width: 100%; position: static; } .side-tg { flex-direction: row; flex-wrap: wrap; } .side-tg button { flex: 1; } }
