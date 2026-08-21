@@ -345,6 +345,12 @@ onMounted(charger)
           </select>
         </div>
         <div class="side-sec">
+          <div class="side-lbl">Années (comparaison)</div>
+          <div class="side-annees2">
+            <button v-for="(y, i) in ANNEES_COMP" :key="y" type="button" class="an-btn" :class="{ on: anneesActives.has(y) }" @click="toggleAnnee(y)"><span class="an-dot" :style="{ background: COULEURS_ANNEES[i] }"></span>{{ y }}</button>
+          </div>
+        </div>
+        <div class="side-sec">
           <div class="side-lbl">Atelier</div>
           <div class="side-tg">
             <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
@@ -361,14 +367,6 @@ onMounted(charger)
 
       <section class="card">
         <div class="card-head"><h2 class="card-title">Comparaison mensuelle par atelier</h2></div>
-        <div class="filtres">
-          <div class="filtre-groupe">
-            <span class="filtre-lbl">Années</span>
-            <div class="btn-row">
-              <button v-for="(y, i) in ANNEES_COMP" :key="y" type="button" class="an-btn" :class="{ on: anneesActives.has(y) }" @click="toggleAnnee(y)"><span class="an-dot" :style="{ background: COULEURS_ANNEES[i] }"></span>{{ y }}</button>
-            </div>
-          </div>
-        </div>
         <div class="chart-titre">{{ atelierSel }} — lots terminés par mois</div>
         <div class="chart-wrap">
           <MiniChart v-if="seriesChart.length" :series="seriesChart" :labels="MOIS" :show-switch="true" :show-values="true" clickable @pick="ouvrirBarrePA" />
@@ -499,6 +497,10 @@ onMounted(charger)
 .side-tg button:hover { background: #eef2f7; }
 .side-tg button.on { background: #0f766e; border-color: #0f766e; color: #fff; }
 .side-select { width: 100%; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; color: #1b2733; background: #fff; box-sizing: border-box; cursor: pointer; }
+.side-annees2 { display: flex; flex-wrap: wrap; gap: 5px; }
+.side-annees2 .an-btn { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 11.5px; font-weight: 600; padding: 5px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #475569; cursor: pointer; }
+.side-annees2 .an-btn.on { border-color: #0f766e; background: #f0fdfa; color: #0f766e; }
+.side-annees2 .an-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .side-annees { flex-direction: row; flex-wrap: wrap; }
 .side-annees button { flex: 1; min-width: 44px; text-align: center; padding: 7px 4px; }
 @media (max-width: 820px) { .pa-layout { flex-direction: column; } .pa-side { flex-basis: auto; width: 100%; position: static; } .side-tg { flex-direction: row; flex-wrap: wrap; } .side-tg button { flex: 1; } }
