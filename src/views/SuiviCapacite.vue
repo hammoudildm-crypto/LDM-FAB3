@@ -65,7 +65,7 @@
             <tr v-for="r in lignesTableau" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
               <td class="ta-c"><input type="checkbox" :checked="weEq(r.id)" :disabled="estRegime4(r.id)" @change="setReq(r.id, $event.target.checked)" :title="estRegime4(r.id) ? 'Week-end inclus automatiquement (4×8 = 24/7)' : 'Réquisition week-end (comptée en 2×8)'" /></td>
               <td class="eq-lien" @click="ouvrirEquipement(r)" title="Voir la fiche équipement (TRS, top produits, occupation restante)"><strong>{{ r.nom }}</strong></td>
-              <td class="ta-c" :title="r.machines + ' machine(s) = ' + r.equipsInfo">{{ r.machines }}</td>
+              <td class="ta-c"><input type="number" min="1" step="1" :value="r.machines" @change="setMachines(r.repId, r.autresMach, $event.target.value)" class="mach-inp" :class="{ saved: majMachines === r.repId }" :title="'Enregistré en base (nb_machines). Détail : ' + r.equipsInfo" /></td>
               <td class="ta-c"><select :value="regimeEquip[r.id] || ''" @change="setRegime(r.id, $event.target.value)" class="reg-sel" title="Régime de travail de cet équipement"><option value="">Auto</option><option value="1">1×8</option><option value="2">2×8</option><option value="3">3×8</option><option value="4">4×8</option></select></td>
               <td class="ta-r glob">{{ r.chargeGlobaleJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="ta-r">{{ r.chargeJ.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
@@ -204,6 +204,16 @@ const joursAnAvecWE = computed(() => joursMoisAvecWE.value.reduce((a, n) => a + 
 const reqEquip = reactive({})
 function weEq(key) { const r = regimeEquip[key] || (regime.value === 'auto' ? '' : String(regime.value)); if (r === '4') return true; return !!reqEquip[key] }
 function estRegime4(key) { return (regimeEquip[key] || (regime.value === 'auto' ? '' : String(regime.value))) === '4' }
+const majMachines = ref(null)
+async function setMachines(repId, autres, val) {
+  const n = Math.max(1, Number(val) || 1)
+  const repVal = Math.max(1, n - autres)
+  const rep = equipements.value.find(e => e.id === repId)
+  if (rep) rep.nb_machines = repVal
+  majMachines.value = repId
+  try { const { error } = await supabase.from('equipements').update({ nb_machines: repVal }).eq('id', repId); if (error) console.error(error) } catch (e) { console.error(e) }
+  setTimeout(() => { if (majMachines.value === repId) majMachines.value = null }, 1500)
+}
 const regimeEquip = reactive({})
 function regimeEq(key, repPostes) { const r = regimeEquip[key] || (regime.value === 'auto' ? '' : String(regime.value)); if (r === '4') return 3; if (r) return Number(r); return num(repPostes, 3) }
 const CLE_REG = 'sc_reg_equip'
@@ -309,7 +319,7 @@ const lignes = computed(() => {
     let nomAffiche = grp.nom
     if (phases.includes('granulation') && phases.includes('sechage')) { phaseLabel = 'Granulation et Séchage'; nomAffiche = 'Granulation et Séchage ' + grp.nom }
     else if (phases.length === 1 && phases[0] === 'granulation' && grp.equips.some(e => /s[ée]ch/i.test((e.type || '') + ' ' + (e.nom || e.code || '')))) phaseLabel = 'Granulation et Séchage'
-    out.push({ id: grp.key, nom: nomAffiche, nomBase: grp.nom, codes: grp.equips.map(e => e.code).filter(Boolean).join(','), equipsInfo: grp.equips.map(e => (e.code || '?') + ' ' + (e.nom || '') + ' [nb_machines=' + Math.max(1, num(e.nb_machines, 1)) + ']').join('  |  '), phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, postes, reg4: regKey === '4', site: phases.includes('conditionnement') ? 'conditionnement' : siteDuGroupe(grp.equips), capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
+    out.push({ id: grp.key, nom: nomAffiche, nomBase: grp.nom, codes: grp.equips.map(e => e.code).filter(Boolean).join(','), equipsInfo: grp.equips.map(e => (e.code || '?') + ' ' + (e.nom || '') + ' [nb_machines=' + Math.max(1, num(e.nb_machines, 1)) + ']').join('  |  '), phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, postes, reg4: regKey === '4', repId: (grp.equips[0] || {}).id, autresMach: grp.equips.slice(1).reduce((a, e) => a + Math.max(1, num(e.nb_machines, 1)), 0), site: phases.includes('conditionnement') ? 'conditionnement' : siteDuGroupe(grp.equips), capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
   }
   return out.sort((a, b) => (ORDRE_GAMME[a.phase] || 99) - (ORDRE_GAMME[b.phase] || 99) || b.taux - a.taux)
 })
@@ -405,6 +415,9 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .taux-h { width: 260px; }
 .taux-cell { display: flex; align-items: center; gap: 3px; }
 .reg-sel { font: inherit; font-size: 9.5px; padding: 1px 3px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; width: 100%; box-sizing: border-box; }
+.mach-inp { font: inherit; font-size: 10px; font-weight: 700; text-align: center; width: 38px; padding: 2px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; }
+.mach-inp:focus { border-color: #6366f1; outline: none; }
+.mach-inp.saved { border-color: #16a34a; background: #dcfce7; }
 .eq-lien { cursor: pointer; }
 .eq-lien:hover strong { color: #6366f1; text-decoration: underline; }
 .bar-wrap { flex: 1; height: 7px; background: #f1f5f9; border-radius: 5px; overflow: hidden; min-width: 22px; }
