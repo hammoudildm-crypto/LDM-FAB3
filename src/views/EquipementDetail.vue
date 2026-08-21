@@ -192,7 +192,7 @@ const top5 = computed(() => {
     const planB = planParProduit.value[p.id] || 0
     const realB = realiseParProduit.value[p.id] || 0
     const posteB = produitProduitPoste.value[p.id] || 0
-    rows.push({ code: p.code_pf, desig: p.designation, cad, plan: planB, real: realB, poste: posteB, taux: planB > 0 ? Math.min(999, realB / planB * 100) : null })
+    rows.push({ code: p.code_pf, desig: p.designation, cad, hParLot: cad > 0 ? poidsLot(p) / cad : 0, plan: planB, real: realB, poste: posteB, taux: planB > 0 ? Math.min(999, realB / planB * 100) : null })
   }
   rows.sort((a, b) => (b.plan || b.poste) - (a.plan || a.poste))
   return rows.slice(0, 5)
@@ -295,7 +295,7 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
           <h2 class="ed-ct">🏆 Top 5 produits sur la ligne</h2>
           <p v-if="!top5.length" class="ed-muted">Aucun produit avec cadence/plan sur cet équipement.</p>
           <table v-else class="ed-tbl">
-            <thead><tr><th>#</th><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Réalisé</th><th class="r">Cadence</th><th class="r">Avanc.</th></tr></thead>
+            <thead><tr><th>#</th><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Réalisé</th><th class="r">Cadence</th><th class="r">h / lot</th><th class="r">Avanc.</th></tr></thead>
             <tbody>
               <tr v-for="(p, i) in top5" :key="p.code">
                 <td class="ed-rank">{{ i + 1 }}</td>
@@ -303,6 +303,7 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
                 <td class="r">{{ p.plan.toLocaleString('fr-FR') }}</td>
                 <td class="r">{{ p.real.toLocaleString('fr-FR') }}</td>
                 <td class="r">{{ p.cad.toLocaleString('fr-FR') }}</td>
+                <td class="r">{{ p.hParLot.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
                 <td class="r"><span v-if="p.taux != null" class="ed-badge" :class="'t-' + clsTaux(p.taux / 100)">{{ p.taux.toFixed(0) }} %</span><span v-else>—</span></td>
               </tr>
             </tbody>
