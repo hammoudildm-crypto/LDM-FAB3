@@ -380,6 +380,12 @@ async function enregistrerE() {
   await chargerTout()
 }
 function modifierE(e) { Object.assign(formE, { id: e.id, code: e.code, nom: e.nom, atelier_id: e.atelier_id || '', type: e.type || '', nb_machines: Number(e.nb_machines) || 1 }) }
+async function supprimerE(e) {
+  if (!confirm('Supprimer definitivement l' + ap + 'equipement ' + (e.nom || e.code || '') + ' ? Action irreversible.')) return
+  const r = await supabase.from('equipements').delete().eq('id', e.id)
+  if (r.error) { erreur.value = 'Suppression impossible (equipement sans doute reference par des cadences ou des OF). Utilise plutot Desactiver. Detail : ' + r.error.message; return }
+  await chargerTout()
+}
 async function desactiverE(e) {
   if (!confirm('Désactiver l\'équipement « ' + e.nom + ' » ?')) return
   erreur.value = ''
@@ -523,6 +529,7 @@ onMounted(async () => {
                 <template v-if="peutEditer">
                   <button class="link" @click="modifierE(e)">Modifier</button>
                   <button class="link danger" @click="desactiverE(e)">Désactiver</button>
+                  <button class="link danger" @click="supprimerE(e)">Supprimer</button>
                 </template>
               </td>
             </tr>
