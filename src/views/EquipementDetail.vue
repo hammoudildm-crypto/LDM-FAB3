@@ -158,7 +158,7 @@ const detailMois = computed(() => {
     const plk = num(p.poids_lot_kg) || (num(p.taille_lot) * num(p.unites_par_boite) * num(p.poids_unitaire_mg) / 1e6)
     const tl = num(p.taille_lot)
     const heures = (tl > 0 && plk > 0) ? (planB * plk / tl) / cad : 0
-    rows.push({ code: p.code_pf, desig: p.designation, plan: planB, heures })
+    rows.push({ code: p.code_pf, desig: p.designation, plan: planB, lots: tl > 0 ? planB / tl : 0, heures })
   }
   rows.sort((a, b) => b.heures - a.heures)
   const totalH = rows.reduce((a, r) => a + r.heures, 0)
@@ -329,11 +329,12 @@ function retour() { router.push({ path: '/capacite' }) }
           </div>
           <p class="ed-mod-s">{{ Math.round(detailMois.totalH) }} h de charge · capacité {{ Math.round(detailMois.jm) }} j × {{ postesEquip * 8 }} h × {{ nbMachines }} = {{ Math.round(detailMois.capaMois) }} h</p>
           <table v-if="detailMois.rows.length" class="ed-tbl">
-            <thead><tr><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Heures</th><th class="r">Part</th></tr></thead>
+            <thead><tr><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Lots</th><th class="r">Heures</th><th class="r">Part</th></tr></thead>
             <tbody>
               <tr v-for="r in detailMois.rows" :key="r.code">
                 <td><b>{{ r.code }}</b><span class="ed-pdesig"> — {{ r.desig }}</span></td>
                 <td class="r">{{ r.plan.toLocaleString('fr-FR') }}</td>
+                <td class="r">{{ r.lots.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
                 <td class="r">{{ Math.round(r.heures) }}</td>
                 <td class="r">{{ detailMois.totalH > 0 ? (r.heures / detailMois.totalH * 100).toFixed(0) : 0 }} %</td>
               </tr>
