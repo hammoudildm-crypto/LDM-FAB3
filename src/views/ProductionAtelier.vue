@@ -359,7 +359,7 @@ onMounted(charger)
         </div>
         <div class="side-sec">
           <div class="side-lbl">Atelier</div>
-          <div class="side-tg">
+          <div class="side-tg side-2col">
             <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
           </div>
         </div>
@@ -493,6 +493,8 @@ onMounted(charger)
 .side-tg button { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 600; color: #64748b; padding: 6px 10px; cursor: pointer; text-align: left; }
 .side-tg button:hover { background: #eef2f7; }
 .side-tg button.on { background: #0f766e; border-color: #0f766e; color: #fff; }
+.side-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.side-2col button { font-size: 10.5px; padding: 6px 6px; text-align: center; white-space: normal; line-height: 1.15; }
 .side-select { width: 100%; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; color: #1b2733; background: #fff; box-sizing: border-box; cursor: pointer; }
 .side-annees2 { display: flex; flex-wrap: nowrap; gap: 3px; }
 .side-annees2 .an-btn { display: inline-flex; align-items: center; justify-content: center; gap: 3px; font: inherit; font-size: 10px; font-weight: 600; padding: 5px 3px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #475569; cursor: pointer; flex: 1; min-width: 0; }
