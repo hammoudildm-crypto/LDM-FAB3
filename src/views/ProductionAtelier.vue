@@ -212,7 +212,7 @@ function projectionAtelier(ph) {
   const vsN1 = totN1 > 0 ? Math.round((projTotal / totN1 - 1) * 100) : null
   const plan = planParAtelier.value[ph] || 0
   const pctPlan = plan > 0 ? Math.round((projTotal / plan) * 100) : null
-  const reste = Math.max(0, projTotal - realiseTotal)
+  const reste = plan > 0 ? Math.max(0, plan - realiseTotal) : Math.max(0, projTotal - realiseTotal)
   const moisEcoules = mc + 1
   const moisRestants = Math.max(1, 12 - mc - 1)
   return { ph, realise: realiseTotal, projTotal, reste, methode, vsN1, plan, pctPlan,
@@ -436,7 +436,7 @@ onMounted(charger)
               <th class="ta-r">Projection {{ anneeCourante }}</th>
               <th class="ta-r">Plan {{ anneeCourante }}</th>
               <th class="ta-r">% du plan</th>
-              <th class="ta-r">Reste à faire</th>
+              <th class="ta-r">Reste / plan</th>
               <th class="ta-r">Reste /mois</th>
               <th class="ta-r">Reste /jour</th>
               <th class="ta-r">vs {{ anneeCourante - 1 }}</th>
