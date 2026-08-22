@@ -77,7 +77,7 @@
               <td class="mc-cell">
                 <div class="mc-chart mc-inline">
                   <div class="mc-ref"></div>
-                  <div v-for="(t, i) in r.tauxMois" :key="i" class="mc-col" :title="MOIS[i] + ' : ' + (t * 100).toFixed(0) + ' %'">
+                  <div v-for="(t, i) in r.tauxMois" :key="i" class="mc-col mc-clic" @click="ouvrirMois(r, i)" :title="MOIS[i] + ' : ' + (t * 100).toFixed(0) + ' % — cliquer pour le détail'">
                     <div class="mc-bar" :class="cls(t)" :style="{ height: Math.max(2, Math.min(120, t * 100)) + '%' }"></div>
                   </div>
                 </div>
@@ -108,6 +108,43 @@
       <p class="note">Ces produits ont une phase de fabrication planifiée mais aucun poids exploitable (ni <strong>poids de lot</strong>, ni <strong>poids unitaire</strong>) — leur charge n'est pas comptée. Clique un produit pour renseigner son <strong>poids unitaire (mg)</strong> dans Référentiels.</p>
       <div class="chips"><button v-for="(p, i) in produitsSansPoids.slice(0, 30)" :key="i" type="button" class="chip chip-btn" @click="ouvrirProduit(p)" title="Ouvrir dans Cadences">{{ p.code }} · {{ p.desig }}</button><span v-if="produitsSansPoids.length > 30" class="chip more">+{{ produitsSansPoids.length - 30 }}</span></div>
     </section>
+
+    <div v-if="moisModal" class="sc-mov" @click="moisModal = null">
+      <div class="sc-mod" @click.stop>
+        <div class="sc-mod-h">
+          <div><b>{{ moisModal.nom }}</b> · {{ MOIS[moisModal.mois] }} {{ annee }} · occupation <span :class="clsTxt(moisModal.taux)">{{ (moisModal.taux * 100).toFixed(0) }} %</span></div>
+          <button class="sc-mod-x" @click="moisModal = null">✕</button>
+        </div>
+        <table v-if="moisModal.rows.length" class="sc-tbl">
+          <thead><tr><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Lots</th><th class="r">Poids lot (kg)</th><th class="r">Cadence</th><th class="r">Prod (h)</th><th class="r">Nett (h)</th><th class="r">Total (h)</th></tr></thead>
+          <tbody>
+            <tr v-for="pr in moisModal.rows" :key="pr.code">
+              <td><b>{{ pr.code }}</b><span class="sc-desig"> — {{ pr.desig }}</span></td>
+              <td class="r">{{ pr.plan.toLocaleString('fr-FR') }}</td>
+              <td class="r">{{ pr.lots.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
+              <td class="r">{{ pr.plk.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
+              <td class="r">{{ pr.cad.toLocaleString('fr-FR') }}</td>
+              <td class="r">{{ Math.round(pr.prod) }}</td>
+              <td class="r">{{ Math.round(pr.nett) }}</td>
+              <td class="r"><b>{{ Math.round(pr.total) }}</b></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr class="sc-tot">
+              <td><b>Total</b></td>
+              <td class="r"><b>{{ moisModal.totPlan.toLocaleString('fr-FR') }}</b></td>
+              <td class="r"><b>{{ moisModal.totLots.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</b></td>
+              <td class="r">—</td>
+              <td class="r">—</td>
+              <td class="r"><b>{{ Math.round(moisModal.totProd) }}</b></td>
+              <td class="r"><b>{{ Math.round(moisModal.totNett) }}</b></td>
+              <td class="r"><b>{{ Math.round(moisModal.totTotal) }}</b></td>
+            </tr>
+          </tfoot>
+        </table>
+        <p v-else class="sc-muted">Aucun produit planifié ce mois.</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -290,6 +327,7 @@ const lignes = computed(() => {
     const jMois = joursMoisSansWE.value.map((jw, mi) => we ? jw + (joursMoisAvecWE.value[mi] - jw) * facteurWE : jw)
     const jAn = jMois.reduce((a, n) => a + n, 0)
     const tauxMois = []; let chargeJTot = 0
+    const detailParMois = Array.from({ length: 12 }, () => [])
     for (let mi = 0; mi < 12; mi++) {
       let occH = 0
       for (const [pid, tab] of Object.entries(planAgg.value)) {
@@ -298,7 +336,7 @@ const lignes = computed(() => {
         const p = prodById.value[pid] || {}
         const tl = num(p.taille_lot, 0)
         const plk = (tl * num(p.unites_par_boite, 0) * num(p.poids_unitaire_mg, 0) / 1e6) || num(p.poids_lot_kg, 0)
-        let utilise = false
+        let utilise = false, prodH = 0, cadMain = 0
         for (const ph of phases) {   // cumule le temps de chaque opération de l'unité
           const estCond = ph === 'conditionnement'
           const inGamme = estCond || !gk || gk.size === 0 || gk.has(ph) || (ph === 'sechage' && gk.has('granulation'))
@@ -307,13 +345,17 @@ const lignes = computed(() => {
           let qty
           if (estCond) qty = boites
           else { if (!(tl > 0 && plk > 0)) continue; qty = boites * plk / tl }
-          occH += qty / cad
+          occH += qty / cad; prodH += qty / cad
+          if (!cadMain) cadMain = cad
           utilise = true
         }
+        let nettH = 0
         if (inclureNett.value && utilise) {
           const nbLots = tl > 0 ? Math.ceil(boites / tl) : 1
-          occH += nbLots * vdlp + vdlt + reglage
+          nettH = nbLots * vdlp + vdlt + reglage
+          occH += nettH
         }
+        if (utilise) detailParMois[mi].push({ code: p.code_pf, desig: p.designation, plan: boites, lots: tl > 0 ? boites / tl : 0, plk, cad: cadMain, prod: prodH, nett: nettH, total: prodH + nettH })
       }
       const chargeJ = capaJour > 0 ? occH / capaJour : 0
       chargeJTot += chargeJ
@@ -323,7 +365,7 @@ const lignes = computed(() => {
     let nomAffiche = grp.nom
     if (phases.includes('granulation') && phases.includes('sechage')) { phaseLabel = 'Granulation et Séchage'; nomAffiche = 'Granulation et Séchage ' + grp.nom }
     else if (phases.length === 1 && phases[0] === 'granulation' && grp.equips.some(e => /s[ée]ch/i.test((e.type || '') + ' ' + (e.nom || e.code || '')))) phaseLabel = 'Granulation et Séchage'
-    out.push({ id: grp.key, nom: nomAffiche, nomBase: grp.nom, codes: grp.equips.map(e => e.code).filter(Boolean).join(','), equipsInfo: grp.equips.map(e => (e.code || '?') + ' ' + (e.nom || '') + ' [nb_machines=' + Math.max(1, num(e.nb_machines, 1)) + ']').join('  |  '), phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, postes, reg4: regKey === '4', repId: (grp.equips[0] || {}).id, equipIds: grp.equips.map(e => e.id).join(','), site: phases.includes('conditionnement') ? 'conditionnement' : siteDuGroupe(grp.equips), capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois })
+    out.push({ id: grp.key, nom: nomAffiche, nomBase: grp.nom, codes: grp.equips.map(e => e.code).filter(Boolean).join(','), equipsInfo: grp.equips.map(e => (e.code || '?') + ' ' + (e.nom || '') + ' [nb_machines=' + Math.max(1, num(e.nb_machines, 1)) + ']').join('  |  '), phase: phases[0], phaseLabel, estCond: phases.includes('conditionnement'), machines, hj: postes * tep, chargeGlobaleJ: chargeJTot * machines, chargeJ: chargeJTot, we, postes, reg4: regKey === '4', repId: (grp.equips[0] || {}).id, equipIds: grp.equips.map(e => e.id).join(','), site: phases.includes('conditionnement') ? 'conditionnement' : siteDuGroupe(grp.equips), capaciteJ: jAn, taux: jAn > 0 ? chargeJTot / jAn : 0, tauxMois, detailParMois })
   }
   return out.sort((a, b) => (ORDRE_GAMME[a.phase] || 99) - (ORDRE_GAMME[b.phase] || 99) || b.taux - a.taux)
 })
@@ -354,6 +396,15 @@ const produitsSansPoids = computed(() => {
 })
 function ouvrirProduit(p) { router.push({ path: '/referentiels', query: { produit: p.code } }) }
 function ouvrirEquipement(r, mois) { const q = { nom: r.nomBase, codes: r.codes, annee: annee.value, postes: r.postes, we: r.we ? 1 : 0, reg4: r.reg4 ? 1 : 0 }; if (mois != null) q.mois = mois; router.push({ path: '/equipement', query: q }) }
+const moisModal = ref(null)
+function ouvrirMois(r, mois) {
+  const rows = ((r.detailParMois && r.detailParMois[mois]) || []).slice().sort((a, b) => b.total - a.total)
+  moisModal.value = { nom: r.nom, mois, taux: r.tauxMois[mois],
+    rows,
+    totPlan: rows.reduce((a, x) => a + x.plan, 0), totLots: rows.reduce((a, x) => a + x.lots, 0),
+    totProd: rows.reduce((a, x) => a + x.prod, 0), totNett: rows.reduce((a, x) => a + x.nett, 0),
+    totTotal: rows.reduce((a, x) => a + x.total, 0) }
+}
 
 const selEquips = reactive({})
 const CLE_SEL = 'sc_sel_equips'
@@ -438,6 +489,19 @@ tbody tr:hover td { background: #f6fdfb; }
 tbody tr.rt-x:hover td { background: #fef2f2; }
 .taux-val { padding: 1px 6px; border-radius: 9px; }
 .taux-val.t-g { background: #dcfce7; } .taux-val.t-a { background: #fef3c7; } .taux-val.t-r { background: #fee2e2; } .taux-val.t-x { background: #fecaca; }
+.mc-clic { cursor: pointer; }
+.mc-clic:hover { background: rgba(99,102,241,.10); border-radius: 3px; }
+.sc-mov { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.sc-mod { background: #fff; border-radius: 14px; width: min(900px, 100%); max-height: 82vh; overflow: auto; box-shadow: 0 20px 50px rgba(0,0,0,.3); padding: 16px 18px; }
+.sc-mod-h { display: flex; align-items: center; justify-content: space-between; font-size: 14px; color: #1a2233; margin-bottom: 10px; }
+.sc-mod-x { background: none; border: 0; font-size: 18px; color: #94a3b8; cursor: pointer; }
+.sc-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+.sc-tbl th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; padding: 4px 6px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+.sc-tbl th.r, .sc-tbl td.r { text-align: right; }
+.sc-tbl td { padding: 3px 6px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+.sc-desig { color: #94a3b8; }
+.sc-tot td { border-top: 2px solid #cbd5e1; background: #f8fafc; }
+.sc-muted { color: #94a3b8; font-size: 12px; }
 .card-title { color: #0f766e; }
 .side-lbl { color: #0d9488; }
 
