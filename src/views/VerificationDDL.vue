@@ -117,6 +117,26 @@ const produits = computed(() => lots.value.filter(l => {
 }))
 const verifies = computed(() => produits.value.filter(l => l.ddl_verifie))
 const attente = computed(() => produits.value.filter(l => !l.ddl_verifie).sort((a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })))
+const kpiQualite = computed(() => {
+  const subj = produits.value
+  const total = subj.length
+  // BRFT : ni triage, ni rejeté, ni déviation (réserve)
+  const brftOk = subj.filter(l => {
+    const enTriage = !!l.en_triage && !l.triage_fin
+    const rejete = /rejet|rebut/i.test(l.statut || '')
+    const deviation = !!l.ddl_reserve
+    return !enTriage && !rejete && !deviation
+  }).length
+  // BRRFT : DDL vérifiés sans réserve / DDL vérifiés
+  const verif = subj.filter(l => l.ddl_verifie)
+  const brrftOk = verif.filter(l => !l.ddl_reserve).length
+  return {
+    total, brftOk, nbVerif: verif.length, brrftOk,
+    brft: total > 0 ? Math.round(brftOk / total * 1000) / 10 : null,
+    brrft: verif.length > 0 ? Math.round(brrftOk / verif.length * 1000) / 10 : null
+  }
+})
+function clsKpi(v) { return v == null ? '' : (v >= 95 ? 'ok' : (v >= 85 ? 'warn' : 'bad')) }
 const triageIds = computed(() => new Set(lots.value.filter(l => !!l.en_triage && !l.triage_fin).map(l => l.id)))
 const attenteParMois = computed(() => {
   const a = Array(12).fill(0)
@@ -314,6 +334,8 @@ async function devalider(l) {
         <div class="pddl-top-item"><span class="pddl-lbl">DDL à vérifier (an)</span><span class="pddl-val">{{ fmt(planDDL) }}</span></div>
         <div class="pddl-top-item"><span class="pddl-lbl">Vérifiés</span><span class="pddl-val ok">{{ fmt(nbVerifies) }}</span></div>
         <div class="pddl-top-item"><span class="pddl-lbl">En attente</span><span class="pddl-val warn">{{ fmt(nbAttente) }}</span></div>
+        <div class="pddl-top-item" title="Batch Right First Time : lots sans triage, sans rejet et sans réserve/déviation ÷ total lots"><span class="pddl-lbl">BRFT</span><span class="pddl-val" :class="'k-' + clsKpi(kpiQualite.brft)">{{ kpiQualite.brft != null ? kpiQualite.brft + '%' : '—' }}</span><span class="pddl-mini">{{ kpiQualite.brftOk }}/{{ kpiQualite.total }}</span></div>
+        <div class="pddl-top-item" title="Batch Record Right First Time : dossiers de lot vérifiés SANS réserve ÷ dossiers vérifiés"><span class="pddl-lbl">BRRFT</span><span class="pddl-val" :class="'k-' + clsKpi(kpiQualite.brrft)">{{ kpiQualite.brrft != null ? kpiQualite.brrft + '%' : '—' }}</span><span class="pddl-mini">{{ kpiQualite.brrftOk }}/{{ kpiQualite.nbVerif }}</span></div>
         <div class="pddl-top-bar" v-if="tauxPlanDDL != null">
           <div class="pddl-bar-head"><span>Avancement / plan</span><span>{{ tauxPlanDDL }}%</span></div>
           <div class="bar-track"><div class="bar-fill" :class="tauxPlanDDL >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxPlanDDL) + '%' }"></div></div>
@@ -782,4 +804,10 @@ table.mini tbody tr:hover td { background: #faf9fe; }
 .v3-mid-scroll::-webkit-scrollbar { width: 7px; }
 .v3-mid-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 .v3-mid table.mini thead th { position: sticky !important; top: 0 !important; z-index: 2; background: #f6f7fb !important; }
+
+/* KPI qualité BRFT / BRRFT */
+.pddl-top-item .pddl-mini { font-size: 9px; color: #94a3b8; font-weight: 600; margin-top: 1px; }
+.pddl-val.k-ok { color: #16a34a !important; }
+.pddl-val.k-warn { color: #d97706 !important; }
+.pddl-val.k-bad { color: #dc2626 !important; }
 </style>
