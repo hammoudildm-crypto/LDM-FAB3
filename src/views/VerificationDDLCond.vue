@@ -35,7 +35,7 @@ async function charger() {
   msg.value = ''
   chargement.value = true
   const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, ddl_cond_verifie, ddl_cond_verificateur, ddl_cond_date_verification, ddl_cond_date_envoi, ddl_cond_reserve, produits(designation, code_pf)')
+    .select('id, numero_lot, statut, deviation_cond, en_triage_cond, ddl_cond_verifie, ddl_cond_verificateur, ddl_cond_date_verification, ddl_cond_date_envoi, ddl_cond_reserve, produits(designation, code_pf)')
     .eq('actif', true))
   if (r.error) { msg.value = r.error.message; chargement.value = false; return }
   lots.value = r.data || []
@@ -81,6 +81,20 @@ const verifies = computed(() => dossiers.value
   .sort((a, b) => String(b.ddl_cond_date_verification || '').localeCompare(String(a.ddl_cond_date_verification || ''))))
 
 const nbAttente = computed(() => attente.value.length)
+const kpiQualite = computed(() => {
+  const subj = dossiers.value
+  const total = subj.length
+  const brftOk = subj.filter(l => !l.en_triage_cond && !/rejet|rebut/i.test(l.statut || '') && !l.deviation_cond).length
+  const verif = subj.filter(l => l.ddl_cond_verifie)
+  const brrftOk = verif.filter(l => !l.ddl_cond_reserve).length
+  const nbDeviations = subj.filter(l => !!l.deviation_cond).length
+  const nbTriage = subj.filter(l => !!l.en_triage_cond).length
+  const nbRejet = subj.filter(l => /rejet|rebut/i.test(l.statut || '')).length
+  return { total, brftOk, nbVerif: verif.length, brrftOk, nbDeviations, nbTriage, nbRejet,
+    brft: total > 0 ? Math.round(brftOk / total * 1000) / 10 : null,
+    brrft: verif.length > 0 ? Math.round(brrftOk / verif.length * 1000) / 10 : null }
+})
+function clsKpi(v) { return v == null ? '' : (v >= 95 ? 'ok' : (v >= 85 ? 'warn' : 'bad')) }
 const nbVerifies = computed(() => verifies.value.length)
 const taux = computed(() => {
   const tot = dossiers.value.length
@@ -201,6 +215,9 @@ async function devalider(l) {
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(dossiers.length) }}</div></div><div class="kpi-lbl">Dossiers conditionnement {{ anneeSel || '' }}</div></div>
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><div class="kpi-val" :class="{ warn: nbAttente > 0 }">{{ fmt(nbAttente) }}</div></div><div class="kpi-lbl">En attente de vérification</div></div>
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><div class="kpi-val accent">{{ taux }} %</div></div><div class="kpi-lbl">{{ nbVerifies }} vérifiés</div></div>
+        <div class="kpi" title="Batch Right First Time : lots sans triage, sans rejet et sans déviation conditionnement ÷ total"><div class="kpi-val" :class="'k-' + clsKpi(kpiQualite.brft)">{{ kpiQualite.brft != null ? kpiQualite.brft + ' %' : '—' }}</div><div class="kpi-lbl">BRFT · {{ kpiQualite.brftOk }}/{{ kpiQualite.total }}</div></div>
+        <div class="kpi" title="Batch Record Right First Time : dossiers cond. vérifiés SANS réserve ÷ vérifiés"><div class="kpi-val" :class="'k-' + clsKpi(kpiQualite.brrft)">{{ kpiQualite.brrft != null ? kpiQualite.brrft + ' %' : '—' }}</div><div class="kpi-lbl">BRRFT · {{ kpiQualite.brrftOk }}/{{ kpiQualite.nbVerif }}</div></div>
+        <div class="kpi" title="Lots avec déviation conditionnement"><div class="kpi-val" :class="kpiQualite.nbDeviations > 0 ? 'k-bad' : 'accent'">{{ kpiQualite.nbDeviations }}</div><div class="kpi-lbl">Déviations · {{ kpiQualite.nbTriage }} triage · {{ kpiQualite.nbRejet }} rejet</div></div>
       </div>
 
       <section class="card" v-if="totalAttenteMois">
@@ -390,4 +407,6 @@ table.mini tbody tr:hover td { background: #fafafa; }
 .vd-modal, .cond-modal, .aq-modal { border-radius: 16px !important; }
 .hist-count { background: #eff6ff !important; color: #2563eb !important; }
 
+
+.kpi-val.k-ok { color: #16a34a; } .kpi-val.k-warn { color: #d97706; } .kpi-val.k-bad { color: #dc2626; }
 </style>
