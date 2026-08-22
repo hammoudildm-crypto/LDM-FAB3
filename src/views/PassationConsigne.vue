@@ -55,6 +55,18 @@ const phaseSel = ref('')
 const phasesDisponibles = computed(() => { const set = new Set(); for (const e of equipsFab.value) if (siteEquip(e) === siteSel.value) set.add(phaseEquip(e)); return [...PHASES_NOMS, 'Autre'].filter(p => set.has(p)) })
 const equipsAffiches = computed(() => equipsFab.value.filter(e => siteEquip(e) === siteSel.value && (!phaseSel.value || phaseEquip(e) === phaseSel.value)))
 const nbParSite = computed(() => { const m = { hormonal: 0, seche: 0, semi: 0 }; for (const e of equipsFab.value) m[siteEquip(e)] = (m[siteEquip(e)] || 0) + 1; return m })
+const resume = computed(() => {
+  let marche = 0, arret = 0, maint = 0, taches = 0
+  for (const e of equipsFab.value) {
+    const et = etatEquip[e.id] || {}
+    if (et.etat === 'En marche') marche++
+    else if (et.etat === 'Arrêté') arret++
+    else if (et.etat === 'Maintenance') maint++
+    if ((et.aRealiser || '').trim()) taches++
+  }
+  return { marche, arret, maint, taches }
+})
+function imprimer() { window.print() }
 
 const form = reactive({
   date_shift: new Date().toISOString().slice(0, 10),
@@ -155,8 +167,35 @@ const consignesGroupees = computed(() => {
 
     <p v-if="erreur" class="pc-err">{{ erreur }}</p>
 
+    <div class="pc-toolbar no-print">
+      <button type="button" class="pc-print" @click="imprimer">🖨️ Imprimer / PDF</button>
+    </div>
+
     <section v-if="peutEditer" class="pc-card">
       <h2 class="pc-title">Nouvelle passation</h2>
+
+      <div class="pc-relay">
+        <div class="relay-side out">
+          <div class="relay-tag">Poste sortant · {{ shiftLabel(form.shift) }}</div>
+          <div class="relay-name">{{ form.superviseur_sortant || '— superviseur —' }}<span v-if="form.superviseur_sortant_2"> &amp; {{ form.superviseur_sortant_2 }}</span></div>
+        </div>
+        <div class="relay-arrow" aria-hidden="true">
+          <span class="relay-chip">passe la main</span>
+          <svg viewBox="0 0 48 24" width="46" height="22"><path d="M2 12 H40 M32 5 L42 12 L32 19" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="relay-side in">
+          <div class="relay-tag">Poste entrant</div>
+          <div class="relay-name muted">Signe à la prise de poste</div>
+        </div>
+      </div>
+
+      <div class="pc-summary">
+        <div class="sum ok"><div class="sum-v">{{ resume.marche }}</div><div class="sum-l">En marche</div></div>
+        <div class="sum warn" :class="{ hot: resume.arret }"><div class="sum-v">{{ resume.arret }}</div><div class="sum-l">À l'arrêt</div></div>
+        <div class="sum maint"><div class="sum-v">{{ resume.maint }}</div><div class="sum-l">Maintenance</div></div>
+        <div class="sum todo" :class="{ hot: resume.taches }"><div class="sum-v">{{ resume.taches }}</div><div class="sum-l">Tâches à réaliser</div></div>
+      </div>
+
       <div class="pc-form">
         <div class="pc-equip-layout">
           <div class="pc-left">
@@ -394,5 +433,43 @@ const consignesGroupees = computed(() => {
   .pc-site-nav { flex-direction: row; flex-wrap: wrap; }
   .pc-site-nav .pc-site-btn { flex: 1; }
   .pc-eq-full { display: none; }
+}
+
+/* --- Bandeau relais --- */
+.pc-relay { display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; margin-bottom: 14px; border-radius: 14px; overflow: hidden; box-shadow: 0 1px 4px rgba(15,23,42,.06); }
+.relay-side { padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
+.relay-side.out { background: linear-gradient(135deg, #fff7ed, #ffedd5); }
+.relay-side.in { background: linear-gradient(135deg, #ecfeff, #cffafe); text-align: right; }
+.relay-tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.relay-side.out .relay-tag { color: #c2410c; }
+.relay-side.in .relay-tag { color: #0e7490; }
+.relay-name { font-size: 16px; font-weight: 800; color: #0f172a; }
+.relay-name.muted { font-size: 13px; font-weight: 600; color: #64748b; }
+.relay-arrow { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 0 16px; background: linear-gradient(135deg, #7c3aed, #6d28d9); color: #fff; }
+.relay-chip { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; opacity: .92; }
+
+/* --- Tuiles résumé --- */
+.pc-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+.sum { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 12px; text-align: center; }
+.sum-v { font-size: 24px; font-weight: 800; line-height: 1; color: #94a3b8; }
+.sum-l { font-size: 11px; font-weight: 700; color: #64748b; margin-top: 5px; }
+.sum.ok { border-color: #a7f3d0; background: #ecfdf5; } .sum.ok .sum-v { color: #047857; }
+.sum.warn { border-color: #e2e8f0; } .sum.warn.hot { border-color: #fecaca; background: #fef2f2; } .sum.warn.hot .sum-v { color: #dc2626; }
+.sum.maint { border-color: #ddd6fe; background: #f5f3ff; } .sum.maint .sum-v { color: #7c3aed; }
+.sum.todo { border-color: #e2e8f0; } .sum.todo.hot { border-color: #fde68a; background: #fffbeb; } .sum.todo.hot .sum-v { color: #b45309; }
+
+/* --- Barre d'outils --- */
+.pc-toolbar { display: flex; justify-content: flex-end; margin-top: 10px; }
+.pc-print { font: inherit; font-size: 13px; font-weight: 700; padding: 8px 15px; border-radius: 10px; border: 1.5px solid #ddd6fe; background: #f5f3ff; color: #6d28d9; cursor: pointer; }
+.pc-print:hover { background: #ede9fe; }
+
+/* --- Impression / PDF --- */
+@media print {
+  .no-print, .pc-toolbar, .pc-actions, .pc-ack-form, .pc-add, .pc-del { display: none !important; }
+  .pc-card, .pc-relay, .pc-item, .sum { box-shadow: none !important; break-inside: avoid; }
+  .pc-page { padding: 0; }
+  .pc-left { background: #fff !important; }
+  select, input, textarea { border: none !important; padding: 0 !important; }
+  .pc-equip-tbl th { background: #f3f4f6 !important; }
 }
 </style>
