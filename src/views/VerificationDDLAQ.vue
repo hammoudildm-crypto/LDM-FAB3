@@ -676,4 +676,13 @@ table.mini tbody tr:hover td { background: #fafafa; }
 .hist-count { background: #fff1f2 !important; color: #e11d48 !important; }
 .verif-3col { grid-template-columns: 0.72fr 1.95fr 0.72fr !important; gap: 12px !important; }
 
+
+/* Placement explicite des 3 colonnes (robuste, corrige la table centrale) */
+.verif-3col > .v3-col:first-child { grid-column: 1 !important; }
+.verif-3col > .v3-mid { grid-column: 2 !important; }
+.verif-3col > .v3-right { grid-column: 3 !important; }
+@media (max-width: 1100px) {
+  .verif-3col { grid-template-columns: 1fr !important; }
+  .verif-3col > * { grid-column: auto !important; order: 0 !important; height: auto !important; max-height: none !important; }
+}
 </style>
