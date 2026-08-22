@@ -622,7 +622,7 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .pddl-bar-head { display: flex; justify-content: space-between; font-size: 8px; color: #64748b; margin-bottom: 3px; font-weight: 600; }
 .pddl-src { font-size: 9px; color: #94a3b8; font-weight: 500; }
 .plan-ddl-top { margin-bottom: 10px; }
-.plan-ddl-top .pddl-top-row { display: flex; align-items: flex-end; gap: 22px; flex-wrap: wrap; }
+.plan-ddl-top .pddl-top-row { display: flex; align-items: flex-start; gap: 22px; flex-wrap: wrap; }
 .plan-ddl-top .pddl-top-item { display: flex; flex-direction: column; gap: 2px; }
 .plan-ddl-top .pddl-top-item .pddl-val { font-size: 16px; }
 .plan-ddl-top .pddl-top-bar { flex: 1; min-width: 220px; }
