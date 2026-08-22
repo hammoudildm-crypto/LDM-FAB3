@@ -199,36 +199,53 @@ const consignesGroupees = computed(() => {
       <div class="pc-form">
         <div class="pc-equip-layout">
           <div class="pc-left">
-            <label class="pc-field"><span>Date</span><input type="date" v-model="form.date_shift" /></label>
-            <label class="pc-field"><span>Shift</span>
-              <select v-model="form.shift"><option v-for="s in SHIFTS" :key="s.key" :value="s.key">{{ s.label }}</option></select>
-            </label>
-            <label class="pc-field"><span>Superviseur sortant 1</span>
-              <select v-model="form.superviseur_sortant"><option value="">— Choisir —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
-            </label>
-            <label class="pc-field"><span>🔒 Code PIN sortant 1</span>
-              <input type="password" v-model="form.pin_sortant" placeholder="Code confidentiel" autocomplete="off" />
-            </label>
-            <label class="pc-field"><span>Superviseur sortant 2</span>
-              <select v-model="form.superviseur_sortant_2"><option value="">— (optionnel) —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
-            </label>
-            <label class="pc-field" v-if="form.superviseur_sortant_2"><span>🔒 Code PIN sortant 2</span>
-              <input type="password" v-model="form.pin_sortant_2" placeholder="Code confidentiel" autocomplete="off" />
-            </label>
-            <div class="pc-filters">
-              <div class="pc-filter-col">
-                <div class="pc-nav-sep">🏭 Site</div>
-                <div class="pc-site-nav">
-                  <button v-for="st in SITES" :key="st.key" type="button" class="pc-site-btn" :class="['sn-' + st.key, { active: siteSel === st.key }]" @click="siteSel = st.key; phaseSel = ''">
-                    <span class="sn-lbl">{{ st.label }}</span><span class="sn-n">{{ nbParSite[st.key] }}</span>
-                  </button>
-                </div>
+            <div class="pc-grp">
+              <div class="pc-grp-h"><span class="pc-grp-ic">🕐</span>Poste</div>
+              <div class="pc-grp-row">
+                <label class="pc-field"><span>Date</span><input type="date" v-model="form.date_shift" /></label>
+                <label class="pc-field"><span>Shift</span>
+                  <select v-model="form.shift"><option v-for="s in SHIFTS" :key="s.key" :value="s.key">{{ s.label }}</option></select>
+                </label>
               </div>
-              <div class="pc-filter-col">
-                <div class="pc-nav-sep">Phase</div>
-                <div class="pc-phase-nav">
-                  <button type="button" class="pc-phase-btn" :class="{ active: !phaseSel }" @click="phaseSel = ''">Toutes</button>
-                  <button v-for="ph in phasesDisponibles" :key="ph" type="button" class="pc-phase-btn" :class="{ active: phaseSel === ph }" @click="phaseSel = ph">{{ ph }}</button>
+            </div>
+
+            <div class="pc-grp out">
+              <div class="pc-grp-h"><span class="pc-grp-ic">👤</span>Superviseur sortant</div>
+              <div class="pc-pair">
+                <label class="pc-field grow"><span>Responsable 1</span>
+                  <select v-model="form.superviseur_sortant"><option value="">— Choisir —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
+                </label>
+                <label class="pc-field pin"><span>🔒 PIN</span>
+                  <input type="password" v-model="form.pin_sortant" placeholder="••••" autocomplete="off" />
+                </label>
+              </div>
+              <div class="pc-pair">
+                <label class="pc-field grow"><span>Responsable 2 · optionnel</span>
+                  <select v-model="form.superviseur_sortant_2"><option value="">— Aucun —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
+                </label>
+                <label class="pc-field pin" v-if="form.superviseur_sortant_2"><span>🔒 PIN</span>
+                  <input type="password" v-model="form.pin_sortant_2" placeholder="••••" autocomplete="off" />
+                </label>
+              </div>
+            </div>
+
+            <div class="pc-grp">
+              <div class="pc-grp-h"><span class="pc-grp-ic">🏭</span>Sélection</div>
+              <div class="pc-filters">
+                <div class="pc-filter-col">
+                  <div class="pc-nav-sep">Site</div>
+                  <div class="pc-site-nav">
+                    <button v-for="st in SITES" :key="st.key" type="button" class="pc-site-btn" :class="['sn-' + st.key, { active: siteSel === st.key }]" @click="siteSel = st.key; phaseSel = ''">
+                      <span class="sn-lbl">{{ st.label }}</span><span class="sn-n">{{ nbParSite[st.key] }}</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="pc-filter-col">
+                  <div class="pc-nav-sep">Phase</div>
+                  <div class="pc-phase-nav">
+                    <button type="button" class="pc-phase-btn" :class="{ active: !phaseSel }" @click="phaseSel = ''">Toutes</button>
+                    <button v-for="ph in phasesDisponibles" :key="ph" type="button" class="pc-phase-btn" :class="{ active: phaseSel === ph }" @click="phaseSel = ph">{{ ph }}</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -472,4 +489,20 @@ const consignesGroupees = computed(() => {
   select, input, textarea { border: none !important; padding: 0 !important; }
   .pc-equip-tbl th { background: #f3f4f6 !important; }
 }
+
+/* --- Bandeau de gauche : groupes --- */
+.pc-left { background: transparent; border: 0; padding: 0; gap: 12px; }
+.pc-grp { background: #fff; border: 1px solid #eceaf4; border-radius: 13px; padding: 12px 13px; display: flex; flex-direction: column; gap: 9px; box-shadow: 0 1px 2px rgba(15,23,42,.03); }
+.pc-grp.out { background: linear-gradient(180deg, #fffaf5, #fff); border-color: #fbe3ce; }
+.pc-grp-h { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #6d28d9; }
+.pc-grp.out .pc-grp-h { color: #c2410c; }
+.pc-grp-ic { font-size: 13px; }
+.pc-grp-row { display: flex; gap: 9px; }
+.pc-grp-row .pc-field { flex: 1; }
+.pc-pair { display: flex; gap: 9px; align-items: flex-end; }
+.pc-pair .pc-field.grow { flex: 1; min-width: 0; }
+.pc-pair .pc-field.pin { flex: 0 0 76px; }
+.pc-pair .pc-field.pin input { width: 100%; box-sizing: border-box; text-align: center; letter-spacing: .15em; }
+.pc-grp .pc-nav-sep { margin-top: 0; padding-top: 0; border-top: none; color: #94a3b8; }
+.pc-grp .pc-filters { gap: 10px; }
 </style>
