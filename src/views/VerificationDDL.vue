@@ -715,7 +715,7 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 /* Colonne droite plus étroite */
 .verif-3col { grid-template-columns: 0.72fr 1.45fr 0.83fr !important; }
 .plan-ddl-top { margin-bottom: 10px; }
-.plan-ddl-top .pddl-top-row { display: flex; align-items: flex-end; gap: 22px; flex-wrap: wrap; }
+.plan-ddl-top .pddl-top-row { display: flex; align-items: flex-start; gap: 22px; flex-wrap: wrap; }
 .plan-ddl-top .pddl-top-item { display: flex; flex-direction: column; gap: 2px; }
 .plan-ddl-top .pddl-top-item .pddl-val { font-size: 16px; }
 .plan-ddl-top .pddl-top-bar { flex: 1; min-width: 220px; }
