@@ -360,4 +360,34 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .prog-val { flex: 0 0 auto; font-weight: 700; font-size: 14px; color: #0f766e; min-width: 30px; text-align: right; }
 .verif-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #b45309; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .verif-chk input { width: 15px; height: 15px; cursor: pointer; }
+
+/* ============================================================= *
+ * Refonte moderne — couche de surcharge (cohérence)
+ * ============================================================= */
+.vd-page :deep(h1), .cond-page :deep(h1), .aq-page :deep(h1) { font-size: 20px !important; }
+.card { border-color: #ecebf3 !important; border-radius: 13px !important; box-shadow: 0 1px 3px rgba(30,41,59,.05) !important; }
+.card-title { color: #1e40af !important; font-weight: 800 !important; letter-spacing: -.01em !important; border-left: 3px solid #2563eb; padding-left: 8px; }
+.kpi { border-color: #ecebf3 !important; border-radius: 12px !important; background: #fff !important; }
+.kpi-val.accent { color: #2563eb !important; }
+.pddl-val.ok { color: #2563eb !important; }
+.plan-ddl-top { background: linear-gradient(135deg, #eff6ff, #fff) !important; border-color: #bfdbfe !important; }
+.bar-track { background: #eef0f4 !important; height: 8px !important; border-radius: 999px; }
+.bar-fill.prod, .bar-fill.ok { background: linear-gradient(90deg, #2563eb, #1e40af) !important; }
+.bar-fill.part { background: linear-gradient(90deg, #fbbf24, #f59e0b) !important; }
+.prog-pct { color: #2563eb !important; }
+.prog-pct.warn { color: #b45309 !important; }
+table.mini th, .mini-vd th { color: #2563eb !important; }
+table.mini tbody tr:hover td { background: #fafafa; }
+.btn { background: linear-gradient(135deg, #2563eb, #1e40af) !important; border-radius: 9px !important; box-shadow: 0 2px 8px rgba(37,99,235,.22); }
+.btn:hover { background: linear-gradient(135deg, #2563eb, #1e40af) !important; filter: brightness(1.07); }
+.link { color: #2563eb !important; }
+.link.danger { color: #b91c1c !important; }
+.hist-exp { color: #2563eb !important; border-color: #bfdbfe !important; }
+.hist-exp:hover { background: #eff6ff !important; }
+.btn-filtre:hover { color: #2563eb !important; border-color: #bfdbfe !important; }
+.annee-sel select:focus, .verif-form input:focus, .verif-form select:focus, .hist-search:focus { outline: none !important; border-color: #2563eb !important; box-shadow: 0 0 0 3px rgba(37,99,235,.22) !important; }
+.sup-opt input, .verif-chk input { accent-color: #2563eb; }
+.vd-modal, .cond-modal, .aq-modal { border-radius: 16px !important; }
+.hist-count { background: #eff6ff !important; color: #2563eb !important; }
+
 </style>
