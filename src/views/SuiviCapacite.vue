@@ -62,7 +62,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="r in lignesTableau" :key="r.id" :class="{ vide: r.chargeJ === 0 }">
+            <tr v-for="r in lignesTableau" :key="r.id" :class="['rt-' + cls(r.taux), { vide: r.chargeJ === 0 }]">
               <td class="ta-c"><input type="checkbox" :checked="weEq(r.id)" :disabled="estRegime4(r.id)" @change="setReq(r.id, $event.target.checked)" :title="estRegime4(r.id) ? 'Week-end inclus automatiquement (4×8 = 24/7)' : 'Réquisition week-end (comptée en 2×8)'" /></td>
               <td class="eq-lien" @click="ouvrirEquipement(r)" title="Voir la fiche équipement (TRS, top produits, occupation restante)"><strong>{{ r.nom }}</strong></td>
               <td class="ta-c"><input type="number" min="1" step="1" :value="r.machines" @change="setMachines(r.equipIds, $event.target.value)" class="mach-inp" :class="{ saved: majMachines === r.repId }" :title="'Enregistré en base (nb_machines). Détail : ' + r.equipsInfo" /></td>
@@ -429,6 +429,17 @@ function clsTxt(t) { return 't-' + (cls(t) || 'g') }
 .bar.g { background: #22c55e; } .bar.a { background: #f59e0b; } .bar.r { background: #ef4444; } .bar.x { background: #7f1d1d; }
 .taux-val { font-weight: 700; font-size: 9px; min-width: 30px; text-align: right; }
 .t-g { color: #15803d; } .t-a { color: #b45309; } .t-r { color: #b91c1c; } .t-x { color: #7f1d1d; }
+tbody tr td:first-child { border-left: 3px solid transparent; }
+tbody tr.rt-g td:first-child { border-left-color: #22c55e; }
+tbody tr.rt-a td:first-child { border-left-color: #f59e0b; }
+tbody tr.rt-r td:first-child { border-left-color: #ef4444; }
+tbody tr.rt-x td:first-child { border-left-color: #7f1d1d; }
+tbody tr:hover td { background: #f6fdfb; }
+tbody tr.rt-x:hover td { background: #fef2f2; }
+.taux-val { padding: 1px 6px; border-radius: 9px; }
+.taux-val.t-g { background: #dcfce7; } .taux-val.t-a { background: #fef3c7; } .taux-val.t-r { background: #fee2e2; } .taux-val.t-x { background: #fecaca; }
+.card-title { color: #0f766e; }
+.side-lbl { color: #0d9488; }
 
 .matrice .sticky-c { position: sticky; left: 0; background: #fff; z-index: 1; }
 .matrice th { text-align: center; }
