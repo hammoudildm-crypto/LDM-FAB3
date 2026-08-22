@@ -351,17 +351,17 @@ const consignesGroupees = computed(() => {
 .pc-left .pc-field { width: 100%; }
 .pc-left .pc-field input, .pc-left .pc-field select { min-width: 0; width: 100%; box-sizing: border-box; }
 .pc-nav-sep { font-size: 10px; font-weight: 800; color: #6d28d9; text-transform: uppercase; letter-spacing: .08em; margin-top: 8px; padding-top: 10px; border-top: 1px solid #ece8f8; }
-.pc-filters { display: flex; gap: 12px; align-items: flex-start; }
+.pc-filters { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
 .pc-filter-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
 .pc-filters .pc-nav-sep { margin-top: 0; padding-top: 0; border-top: none; }
 .pc-equip-right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 
-.pc-phase-nav { display: flex; flex-direction: column; gap: 5px; }
+.pc-phase-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .pc-phase-btn { text-align: left; border: 1px solid #e6e2f4; background: #fff; border-radius: 9px; padding: 8px 11px; font: inherit; font-weight: 700; font-size: 12px; color: #64748b; cursor: pointer; transition: all .12s; }
 .pc-phase-btn:hover { border-color: #c4b5fd; background: #faf9fe; }
 .pc-phase-btn.active { background: #6d28d9; border-color: #6d28d9; color: #fff; box-shadow: 0 2px 6px rgba(109,40,217,.28); }
-.pc-site-nav { display: flex; flex-direction: column; gap: 7px; }
-.pc-site-btn { text-align: left; border: 1px solid #e6e2f4; background: #fff; border-radius: 11px; padding: 11px 12px; font: inherit; font-weight: 800; font-size: 12.5px; color: #475569; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; transition: all .12s; }
+.pc-site-nav { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 6px; }
+.pc-site-btn { flex: 1; min-width: 0; text-align: center; border: 1px solid #e6e2f4; background: #fff; border-radius: 10px; padding: 7px 6px; font: inherit; font-weight: 800; font-size: 10.5px; color: #475569; cursor: pointer; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; transition: all .12s; }
 .pc-site-btn:hover { border-color: #c4b5fd; background: #faf9fe; }
 .pc-site-btn .sn-n { font-size: 11px; background: #f1f5f9; border-radius: 20px; padding: 2px 9px; color: #64748b; font-weight: 800; }
 .pc-site-btn.active { color: #fff; border-color: transparent; box-shadow: 0 3px 10px rgba(15,23,42,.16); }
@@ -445,8 +445,6 @@ const consignesGroupees = computed(() => {
 @media (max-width: 720px) {
   .pc-equip-layout { flex-direction: column; }
   .pc-left { flex-basis: auto; width: 100%; box-sizing: border-box; }
-  .pc-site-nav { flex-direction: row; flex-wrap: wrap; }
-  .pc-site-nav .pc-site-btn { flex: 1; }
   .pc-eq-full { display: none; }
 }
 
