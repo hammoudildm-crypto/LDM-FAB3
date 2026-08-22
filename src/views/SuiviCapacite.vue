@@ -116,14 +116,16 @@
           <button class="sc-mod-x" @click="moisModal = null">✕</button>
         </div>
         <table v-if="moisModal.rows.length" class="sc-tbl">
-          <thead><tr><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Lots</th><th class="r">Poids lot (kg)</th><th class="r">Cadence</th><th class="r">Prod (h)</th><th class="r">Nett (h)</th><th class="r">Total (h)</th></tr></thead>
+          <thead><tr><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Lots</th><th class="r">Taille lot (bts)</th><th class="r">Poids lot (kg)</th><th class="r">Cadence</th><th class="r">h / lot</th><th class="r">Prod (h)</th><th class="r">Nett (h)</th><th class="r">Total (h)</th></tr></thead>
           <tbody>
             <tr v-for="pr in moisModal.rows" :key="pr.code">
               <td><b>{{ pr.code }}</b><span class="sc-desig"> — {{ pr.desig }}</span></td>
               <td class="r">{{ pr.plan.toLocaleString('fr-FR') }}</td>
               <td class="r">{{ pr.lots.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
+              <td class="r">{{ pr.tl.toLocaleString('fr-FR') }}</td>
               <td class="r">{{ pr.plk.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="r">{{ pr.cad.toLocaleString('fr-FR') }}</td>
+              <td class="r">{{ pr.hParLot.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
               <td class="r">{{ Math.round(pr.prod) }}</td>
               <td class="r">{{ Math.round(pr.nett) }}</td>
               <td class="r"><b>{{ Math.round(pr.total) }}</b></td>
@@ -134,6 +136,8 @@
               <td><b>Total</b></td>
               <td class="r"><b>{{ moisModal.totPlan.toLocaleString('fr-FR') }}</b></td>
               <td class="r"><b>{{ moisModal.totLots.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</b></td>
+              <td class="r">—</td>
+              <td class="r">—</td>
               <td class="r">—</td>
               <td class="r">—</td>
               <td class="r"><b>{{ Math.round(moisModal.totProd) }}</b></td>
@@ -355,7 +359,7 @@ const lignes = computed(() => {
           nettH = nbLots * vdlp + vdlt + reglage
           occH += nettH
         }
-        if (utilise) detailParMois[mi].push({ code: p.code_pf, desig: p.designation, plan: boites, lots: tl > 0 ? boites / tl : 0, plk, cad: cadMain, prod: prodH, nett: nettH, total: prodH + nettH })
+        if (utilise) detailParMois[mi].push({ code: p.code_pf, desig: p.designation, plan: boites, lots: tl > 0 ? boites / tl : 0, tl, plk, cad: cadMain, hParLot: cadMain > 0 ? plk / cadMain : 0, prod: prodH, nett: nettH, total: prodH + nettH })
       }
       const chargeJ = capaJour > 0 ? occH / capaJour : 0
       chargeJTot += chargeJ
@@ -492,7 +496,7 @@ tbody tr.rt-x:hover td { background: #fef2f2; }
 .mc-clic { cursor: pointer; }
 .mc-clic:hover { background: rgba(99,102,241,.10); border-radius: 3px; }
 .sc-mov { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
-.sc-mod { background: #fff; border-radius: 14px; width: min(900px, 100%); max-height: 82vh; overflow: auto; box-shadow: 0 20px 50px rgba(0,0,0,.3); padding: 16px 18px; }
+.sc-mod { background: #fff; border-radius: 14px; width: min(1000px, 100%); max-height: 82vh; overflow: auto; box-shadow: 0 20px 50px rgba(0,0,0,.3); padding: 16px 18px; }
 .sc-mod-h { display: flex; align-items: center; justify-content: space-between; font-size: 14px; color: #1a2233; margin-bottom: 10px; }
 .sc-mod-x { background: none; border: 0; font-size: 18px; color: #94a3b8; cursor: pointer; }
 .sc-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
