@@ -333,17 +333,17 @@ const consignesGroupees = computed(() => {
 <style scoped>
 /* Passation de consigne — design moderne (violet ProdTrack) */
 .pc-page { padding: 4px 4px 40px; }
-.pc-sub { margin: 6px 0 0; font-size: 13px; opacity: .9; }
+.pc-sub { margin: 4px 0 0; font-size: 12px; opacity: .9; }
 .pc-err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 9px 13px; border-radius: 10px; font-size: 13px; margin: 12px 0; }
 
-.pc-card { background: #fff; border: 1px solid #eef0f4; border-radius: 18px; padding: 18px 20px; margin-top: 16px; box-shadow: 0 1px 3px rgba(15,23,42,.05); }
-.pc-title { margin: 0 0 14px; font-size: 17px; font-weight: 800; letter-spacing: -.01em; color: #1e1b3a; display: flex; align-items: center; gap: 10px; padding-left: 11px; border-left: 3px solid #7c3aed; }
+.pc-card { background: #fff; border: 1px solid #eef0f4; border-radius: 15px; padding: 13px 15px; margin-top: 12px; box-shadow: 0 1px 3px rgba(15,23,42,.05); }
+.pc-title { margin: 0 0 11px; font-size: 14px; font-weight: 800; letter-spacing: -.01em; color: #1e1b3a; display: flex; align-items: center; gap: 9px; padding-left: 9px; border-left: 3px solid #7c3aed; }
 .pc-count { font-size: 11px; font-weight: 800; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; border-radius: 20px; padding: 3px 11px; }
 
 .pc-form { display: flex; flex-direction: column; gap: 16px; }
 .pc-row { display: flex; gap: 14px; flex-wrap: wrap; }
-.pc-field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #94a3b8; }
-.pc-field input, .pc-field select { font: inherit; font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 14px; padding: 9px 11px; border: 1px solid #e2e8f0; border-radius: 10px; color: #0f172a; background: #fff; min-width: 190px; transition: border-color .12s, box-shadow .12s; }
+.pc-field { display: flex; flex-direction: column; gap: 4px; font-size: 9.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #94a3b8; }
+.pc-field input, .pc-field select { font: inherit; font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 12.5px; padding: 7px 9px; border: 1px solid #e2e8f0; border-radius: 9px; color: #0f172a; background: #fff; min-width: 150px; transition: border-color .12s, box-shadow .12s; }
 .pc-field input:focus, .pc-field select:focus { outline: none; border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124,58,237,.12); }
 .pc-lbl { font-weight: 800; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
 .pc-lbl.eq { color: #6d28d9; }
@@ -373,7 +373,7 @@ const consignesGroupees = computed(() => {
 .pc-site-btn.sn-semi.active { background: linear-gradient(135deg, #d97706, #a16207); }
 
 .pc-equip-wrap { border: 1px solid #eef2f7; border-radius: 12px; overflow: auto; max-height: 440px; flex: 1; min-width: 0; }
-.pc-equip-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.pc-equip-tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
 .pc-equip-tbl th { position: sticky; top: 0; background: #f5f3fb; text-align: left; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #6d28d9; padding: 8px; border-bottom: 1px solid #e6e2f4; white-space: nowrap; z-index: 1; }
 .pc-equip-tbl th.ok { color: #047857; }
 .pc-equip-tbl th.todo { color: #b45309; }
@@ -383,7 +383,7 @@ const consignesGroupees = computed(() => {
 .pc-equip-tbl input:focus, .pc-equip-tbl select:focus, .pc-equip-tbl textarea:focus { outline: none; border-color: #a78bfa; }
 .pc-equip-tbl textarea { resize: vertical; line-height: 1.35; min-width: 150px; }
 .pc-in-lot { min-width: 80px; }
-.pc-eq-nom { font-weight: 800; color: #334155; white-space: nowrap; min-width: 150px; }
+.pc-eq-nom { font-weight: 800; color: #334155; white-space: nowrap; min-width: 130px; font-size: 11.5px; }
 .pc-eq-etat { font-weight: 700; }
 .pc-eq-etat.etat-marche { color: #047857; }
 .pc-eq-etat.etat-arret { color: #b91c1c; }
@@ -392,7 +392,7 @@ const consignesGroupees = computed(() => {
 .pc-eq-etat.etat-dispo { color: #64748b; }
 
 .pc-actions { display: flex; justify-content: flex-end; }
-.pc-btn { background: linear-gradient(135deg, #7c3aed, #6d28d9); color: #fff; border: none; border-radius: 11px; padding: 11px 20px; font-weight: 800; font-size: 13.5px; cursor: pointer; box-shadow: 0 3px 10px rgba(109,40,217,.28); transition: filter .12s, transform .05s; }
+.pc-btn { background: linear-gradient(135deg, #7c3aed, #6d28d9); color: #fff; border: none; border-radius: 10px; padding: 9px 16px; font-weight: 800; font-size: 12.5px; cursor: pointer; box-shadow: 0 3px 10px rgba(109,40,217,.28); transition: filter .12s, transform .05s; }
 .pc-btn:hover { filter: brightness(1.06); }
 .pc-btn:active { transform: translateY(1px); }
 .pc-btn:disabled { opacity: .55; cursor: default; box-shadow: none; }
@@ -401,7 +401,7 @@ const consignesGroupees = computed(() => {
 .pc-muted { color: #94a3b8; font-size: 13px; padding: 8px; }
 .pc-list { display: flex; flex-direction: column; gap: 12px; }
 .pc-groupes { display: flex; flex-direction: column; gap: 24px; }
-.pc-jour-t { margin: 0 0 14px; font-size: 15px; font-weight: 800; color: #0f172a; text-transform: capitalize; border-bottom: 2px solid #ede9fe; padding-bottom: 7px; }
+.pc-jour-t { margin: 0 0 11px; font-size: 13.5px; font-weight: 800; color: #0f172a; text-transform: capitalize; border-bottom: 2px solid #ede9fe; padding-bottom: 6px; }
 .pc-shift-grp { margin-bottom: 18px; margin-left: 2px; }
 .pc-shift-t { font-weight: 800; font-size: 12.5px; padding: 6px 13px; border-radius: 9px; margin-bottom: 10px; display: inline-flex; align-items: center; gap: 8px; }
 .pc-shift-n { font-size: 11px; background: rgba(0,0,0,.10); border-radius: 20px; padding: 2px 9px; }
@@ -409,7 +409,7 @@ const consignesGroupees = computed(() => {
 .pc-shift-t.sh-apres-midi { background: #ffedd5; color: #c2410c; }
 .pc-shift-t.sh-nuit { background: #e0e7ff; color: #4338ca; }
 
-.pc-item { border: 1px solid #eceaf4; border-radius: 14px; padding: 13px 15px; background: #fff; transition: box-shadow .12s; }
+.pc-item { border: 1px solid #eceaf4; border-radius: 12px; padding: 11px 13px; background: #fff; transition: box-shadow .12s; }
 .pc-item:hover { box-shadow: 0 2px 10px rgba(15,23,42,.06); }
 .pc-item.pc-nonlu { border-left: 4px solid #f59e0b; background: #fffdf7; }
 .pc-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
@@ -454,22 +454,22 @@ const consignesGroupees = computed(() => {
 
 /* --- Bandeau relais --- */
 .pc-relay { display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; margin-bottom: 14px; border-radius: 14px; overflow: hidden; box-shadow: 0 1px 4px rgba(15,23,42,.06); }
-.relay-side { padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
+.relay-side { padding: 9px 13px; display: flex; flex-direction: column; gap: 3px; justify-content: center; }
 .relay-side.out { background: linear-gradient(135deg, #fff7ed, #ffedd5); }
 .relay-side.in { background: linear-gradient(135deg, #ecfeff, #cffafe); text-align: right; }
 .relay-tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .relay-side.out .relay-tag { color: #c2410c; }
 .relay-side.in .relay-tag { color: #0e7490; }
-.relay-name { font-size: 16px; font-weight: 800; color: #0f172a; }
-.relay-name.muted { font-size: 13px; font-weight: 600; color: #64748b; }
+.relay-name { font-size: 14px; font-weight: 800; color: #0f172a; }
+.relay-name.muted { font-size: 12px; font-weight: 600; color: #64748b; }
 .relay-arrow { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 0 16px; background: linear-gradient(135deg, #7c3aed, #6d28d9); color: #fff; }
 .relay-chip { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; opacity: .92; }
 
 /* --- Tuiles résumé --- */
-.pc-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
-.sum { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 12px; text-align: center; }
-.sum-v { font-size: 24px; font-weight: 800; line-height: 1; color: #94a3b8; }
-.sum-l { font-size: 11px; font-weight: 700; color: #64748b; margin-top: 5px; }
+.pc-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+.sum { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 7px 10px; text-align: center; }
+.sum-v { font-size: 19px; font-weight: 800; line-height: 1; color: #94a3b8; }
+.sum-l { font-size: 10px; font-weight: 700; color: #64748b; margin-top: 4px; }
 .sum.ok { border-color: #a7f3d0; background: #ecfdf5; } .sum.ok .sum-v { color: #047857; }
 .sum.warn { border-color: #e2e8f0; } .sum.warn.hot { border-color: #fecaca; background: #fef2f2; } .sum.warn.hot .sum-v { color: #dc2626; }
 .sum.maint { border-color: #ddd6fe; background: #f5f3ff; } .sum.maint .sum-v { color: #7c3aed; }
@@ -477,7 +477,7 @@ const consignesGroupees = computed(() => {
 
 /* --- Barre d'outils --- */
 .pc-toolbar { display: flex; justify-content: flex-end; margin-top: 10px; }
-.pc-print { font: inherit; font-size: 13px; font-weight: 700; padding: 8px 15px; border-radius: 10px; border: 1.5px solid #ddd6fe; background: #f5f3ff; color: #6d28d9; cursor: pointer; }
+.pc-print { font: inherit; font-size: 12px; font-weight: 700; padding: 7px 13px; border-radius: 9px; border: 1.5px solid #ddd6fe; background: #f5f3ff; color: #6d28d9; cursor: pointer; }
 .pc-print:hover { background: #ede9fe; }
 
 /* --- Impression / PDF --- */
@@ -492,7 +492,7 @@ const consignesGroupees = computed(() => {
 
 /* --- Bandeau de gauche : groupes --- */
 .pc-left { background: transparent; border: 0; padding: 0; gap: 12px; }
-.pc-grp { background: #fff; border: 1px solid #eceaf4; border-radius: 13px; padding: 12px 13px; display: flex; flex-direction: column; gap: 9px; box-shadow: 0 1px 2px rgba(15,23,42,.03); }
+.pc-grp { background: #fff; border: 1px solid #eceaf4; border-radius: 12px; padding: 10px 11px; display: flex; flex-direction: column; gap: 7px; box-shadow: 0 1px 2px rgba(15,23,42,.03); }
 .pc-grp.out { background: linear-gradient(180deg, #fffaf5, #fff); border-color: #fbe3ce; }
 .pc-grp-h { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #6d28d9; }
 .pc-grp.out .pc-grp-h { color: #c2410c; }
