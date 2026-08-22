@@ -211,14 +211,24 @@ async function devalider(l) {
     <p v-if="chargement" class="muted">Chargement…</p>
 
     <template v-if="!chargement">
-      <div class="kpi-grid">
-        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(dossiers.length) }}</div></div><div class="kpi-lbl">Dossiers conditionnement {{ anneeSel || '' }}</div></div>
-        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><div class="kpi-val" :class="{ warn: nbAttente > 0 }">{{ fmt(nbAttente) }}</div></div><div class="kpi-lbl">En attente de vérification</div></div>
-        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><div class="kpi-val accent">{{ taux }} %</div></div><div class="kpi-lbl">{{ nbVerifies }} vérifiés</div></div>
-        <div class="kpi" title="Batch Right First Time : lots sans triage, sans rejet et sans déviation conditionnement ÷ total"><div class="kpi-val" :class="'k-' + clsKpi(kpiQualite.brft)">{{ kpiQualite.brft != null ? kpiQualite.brft + ' %' : '—' }}</div><div class="kpi-lbl">BRFT · {{ kpiQualite.brftOk }}/{{ kpiQualite.total }}</div></div>
-        <div class="kpi" title="Batch Record Right First Time : dossiers cond. vérifiés SANS réserve ÷ vérifiés"><div class="kpi-val" :class="'k-' + clsKpi(kpiQualite.brrft)">{{ kpiQualite.brrft != null ? kpiQualite.brrft + ' %' : '—' }}</div><div class="kpi-lbl">BRRFT · {{ kpiQualite.brrftOk }}/{{ kpiQualite.nbVerif }}</div></div>
-        <div class="kpi" title="Lots avec déviation conditionnement"><div class="kpi-val" :class="kpiQualite.nbDeviations > 0 ? 'k-bad' : 'accent'">{{ kpiQualite.nbDeviations }}</div><div class="kpi-lbl">Déviations · {{ kpiQualite.nbTriage }} triage · {{ kpiQualite.nbRejet }} rejet</div></div>
-      </div>
+      <section class="card plan-ddl plan-ddl-top">
+        <h3 class="card-title">Synthèse de la vérification<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
+        <div class="pddl-top-row">
+          <div class="pddl-top-item"><span class="pddl-lbl">Dossiers cond.</span><span class="pddl-val">{{ fmt(dossiers.length) }}</span></div>
+          <div class="pddl-top-item"><span class="pddl-lbl">Vérifiés</span><span class="pddl-val ok">{{ fmt(nbVerifies) }}</span></div>
+          <div class="pddl-top-item"><span class="pddl-lbl">En attente</span><span class="pddl-val warn">{{ fmt(nbAttente) }}</span></div>
+          <div class="pddl-top-item" title="Batch Right First Time : lots sans triage, sans rejet et sans déviation conditionnement ÷ total"><span class="pddl-lbl">BRFT</span><span class="pddl-val" :class="'k-' + clsKpi(kpiQualite.brft)">{{ kpiQualite.brft != null ? kpiQualite.brft + '%' : '—' }}</span><span class="pddl-mini">{{ kpiQualite.brftOk }}/{{ kpiQualite.total }}</span></div>
+          <div class="pddl-top-item" title="Batch Record Right First Time : dossiers cond. vérifiés SANS réserve ÷ vérifiés"><span class="pddl-lbl">BRRFT</span><span class="pddl-val" :class="'k-' + clsKpi(kpiQualite.brrft)">{{ kpiQualite.brrft != null ? kpiQualite.brrft + '%' : '—' }}</span><span class="pddl-mini">{{ kpiQualite.brrftOk }}/{{ kpiQualite.nbVerif }}</span></div>
+          <div class="pddl-top-item" title="Lots avec déviation conditionnement"><span class="pddl-lbl">Déviations</span><span class="pddl-val" :class="kpiQualite.nbDeviations > 0 ? 'k-bad' : 'k-ok'">{{ kpiQualite.nbDeviations }}</span><span class="pddl-mini">{{ kpiQualite.nbTriage }} triage · {{ kpiQualite.nbRejet }} rejet</span></div>
+          <div class="pddl-top-bar">
+            <div class="pddl-bar-head"><span>Avancement</span><span>{{ taux }}%</span></div>
+            <div class="bar-track"><div class="bar-fill" :class="taux >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, taux) + '%' }"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="verif-3col">
+        <div class="v3-col">
 
       <section class="card" v-if="totalAttenteMois">
         <h3 class="card-title">Dossiers en attente de vérification par mois — {{ anneeSel || 'toutes années' }}</h3>
@@ -231,7 +241,8 @@ async function devalider(l) {
         <MiniChart :series="[{ label: 'Vérifiés', color: '#2563eb', data: verifiesParMois }]" :labels="MOIS" :show-values="true" :clickable="true" @pick="ouvrirMoisVerif" />
         <p class="chart-hint">Clique sur une barre pour voir les dossiers vérifiés ce mois-là.</p>
       </section>
-
+        </div>
+        <div class="v3-col v3-right">
       <section class="card" v-if="parVerificateurCond.length">
         <h3 class="card-title">Taux de vérification par vérificateur</h3>
         <div v-for="v in parVerificateurCond" :key="v.nom" class="prog-row">
@@ -240,8 +251,8 @@ async function devalider(l) {
           <span class="prog-val">{{ v.verifies }}</span>
         </div>
       </section>
-
-      <section class="card">
+        </div>
+      <section class="card v3-mid">
         <h3 class="card-title">En attente de vérification ({{ nbAttente }})</h3>
         <div v-if="!attente.length" class="empty">Aucun dossier conditionnement en attente. 🎉</div>
         <div v-else class="table-scroll">
@@ -276,8 +287,9 @@ async function devalider(l) {
           </table>
         </div>
       </section>
+      </div>
 
-      <section class="card">
+      <section class="card span2" style="margin-top: 18px">
         <h3 class="card-title">Dossiers vérifiés ({{ nbVerifies }})</h3>
         <div v-if="!verifies.length" class="empty">Aucun dossier vérifié pour cette période.</div>
         <div v-else class="table-scroll">
@@ -409,4 +421,35 @@ table.mini tbody tr:hover td { background: #fafafa; }
 
 
 .kpi-val.k-ok { color: #16a34a; } .kpi-val.k-warn { color: #d97706; } .kpi-val.k-bad { color: #dc2626; }
+
+/* Structure type Fabrication : bandeau plan + 3 colonnes */
+.plan-ddl-top { padding: 12px 14px !important; margin-bottom: 12px; }
+.plan-ddl-top .card-title { margin-bottom: 10px; }
+.pddl-top-row { display: flex; align-items: flex-start; gap: 22px; flex-wrap: wrap; }
+.pddl-top-item { display: flex; flex-direction: column; gap: 2px; }
+.pddl-lbl { font-size: 11px; color: #64748b; font-weight: 600; }
+.pddl-val { font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1; }
+.pddl-val.ok { color: #2563eb; }
+.pddl-val.warn { color: #d97706; }
+.pddl-val.k-ok { color: #16a34a; } .pddl-val.k-warn { color: #d97706; } .pddl-val.k-bad { color: #dc2626; }
+.pddl-mini { font-size: 9px; color: #94a3b8; font-weight: 600; margin-top: 1px; }
+.pddl-top-bar { flex: 1; min-width: 200px; }
+.pddl-bar-head { display: flex; justify-content: space-between; font-size: 10px; color: #64748b; margin-bottom: 3px; font-weight: 600; }
+.bar-track { height: 8px; background: #eef0f4; border-radius: 999px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 999px; min-width: 2px; }
+.bar-fill.ok { background: linear-gradient(90deg, #2563eb, #1d4ed8); }
+.bar-fill.part { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+.verif-3col { display: grid; grid-template-columns: 0.72fr 1.95fr 0.72fr; gap: 12px; align-items: stretch; margin-bottom: 16px; }
+.verif-3col > .v3-col { display: flex; flex-direction: column; gap: 12px; }
+.verif-3col > .v3-col:first-child { grid-column: 1; }
+.verif-3col > .v3-mid { grid-column: 2; display: flex; flex-direction: column; overflow: hidden; }
+.verif-3col > .v3-right { grid-column: 3; }
+.v3-mid > .card-title { flex: 0 0 auto; }
+.v3-mid > .table-scroll, .v3-mid > .empty { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+.v3-mid table.mini thead th { position: sticky; top: 0; z-index: 2; background: #eff6ff; }
+@media (max-width: 1100px) {
+  .verif-3col { grid-template-columns: 1fr; }
+  .verif-3col > * { grid-column: auto !important; }
+  .v3-mid { overflow: visible; }
+}
 </style>
