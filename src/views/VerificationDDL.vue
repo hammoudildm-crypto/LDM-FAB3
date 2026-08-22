@@ -375,6 +375,7 @@ async function devalider(l) {
 
       <section class="card v3-mid">
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
+        <div class="v3-mid-scroll">
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <table v-else class="mini">
           <thead><tr><th>Lot</th><th>Produit</th><th>Réserver vérificateur</th><th class="right">Fin fab.</th><th></th></tr></thead>
@@ -411,6 +412,7 @@ async function devalider(l) {
             </template>
           </tbody>
         </table>
+        </div>
       </section>
     </div>
 
@@ -754,4 +756,30 @@ table.mini tbody tr:hover td { background: #faf9fe; }
 
 /* Mise en page : centrale élargie, latérales équilibrées */
 .verif-3col { grid-template-columns: 0.72fr 1.95fr 0.72fr !important; gap: 12px !important; }
+
+/* Placement explicite des 3 colonnes (robuste, corrige la table centrale) */
+.verif-3col > .v3-col:first-child { grid-column: 1 !important; }
+.verif-3col > .v3-mid { grid-column: 2 !important; }
+.verif-3col > .v3-right { grid-column: 3 !important; }
+@media (max-width: 1100px) {
+  .verif-3col { grid-template-columns: 1fr !important; }
+  .verif-3col > * { grid-column: auto !important; order: 0 !important; height: auto !important; max-height: none !important; }
+}
+
+/* Titre de la carte centrale : visible en entier (non rogné par le scroll) */
+.v3-mid { padding-top: 0 !important; }
+.v3-mid .card-title { position: sticky; top: 0; z-index: 3; background: #fff; margin: 0 0 6px !important; padding: 8px 6px 6px !important; font-size: 12px !important; line-height: 1.2 !important; border-bottom: 1px solid #eef0f4; }
+
+/* Empilement titre + en-tête tableau (pas de superposition) */
+.v3-mid .card-title { position: sticky !important; top: 0 !important; z-index: 6 !important; background: #fff !important; margin: 0 !important; padding: 8px 6px 6px !important; font-size: 12px !important; line-height: 1.2 !important; }
+.v3-mid table.mini { border-collapse: separate; border-spacing: 0; }
+.v3-mid table.mini thead th { position: sticky !important; top: 30px !important; z-index: 5 !important; background: #f6f7fb !important; }
+
+/* Titre fixe hors défilement + liste scrollable (robuste) */
+.v3-mid { display: flex !important; flex-direction: column !important; overflow: hidden !important; }
+.v3-mid .card-title { flex: 0 0 auto !important; position: static !important; margin: 0 0 6px !important; }
+.v3-mid-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+.v3-mid-scroll::-webkit-scrollbar { width: 7px; }
+.v3-mid-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.v3-mid table.mini thead th { position: sticky !important; top: 0 !important; z-index: 2; background: #f6f7fb !important; }
 </style>
