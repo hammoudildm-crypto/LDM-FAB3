@@ -51,7 +51,7 @@ async function fetchAllPaged(make) {
 async function charger() {
   msg.value = ''
   const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_lancement, date_fin_fabrication, ddl_verifie, ddl_aq_verifie, ddl_aq_verificateur, ddl_aq_date_verification, ddl_aq_reserve, produits(designation, code_pf, gamme)')
+    .select('id, numero_lot, statut, deviation, en_triage, triage_fin, date_lancement, date_fin_fabrication, ddl_verifie, ddl_aq_verifie, ddl_aq_verificateur, ddl_aq_date_verification, ddl_aq_reserve, produits(designation, code_pf, gamme)')
     .eq('actif', true)
     .order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (r.error) { msg.value = r.error.message; return }
@@ -118,6 +118,20 @@ const produits = computed(() => lots.value.filter(l => {
 }))
 const verifies = computed(() => produits.value.filter(l => l.ddl_aq_verifie))
 const attente = computed(() => produits.value.filter(l => l.ddl_verifie && !l.ddl_aq_verifie).sort((a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })))
+const kpiQualite = computed(() => {
+  const subj = produits.value
+  const total = subj.length
+  const brftOk = subj.filter(l => !(!!l.en_triage && !l.triage_fin) && !/rejet|rebut/i.test(l.statut || '') && !l.deviation).length
+  const verif = subj.filter(l => l.ddl_aq_verifie)
+  const brrftOk = verif.filter(l => !l.ddl_aq_reserve).length
+  const nbDeviations = subj.filter(l => !!l.deviation).length
+  const nbTriage = subj.filter(l => !!l.en_triage && !l.triage_fin).length
+  const nbRejet = subj.filter(l => /rejet|rebut/i.test(l.statut || '')).length
+  return { total, brftOk, nbVerif: verif.length, brrftOk, nbDeviations, nbTriage, nbRejet,
+    brft: total > 0 ? Math.round(brftOk / total * 1000) / 10 : null,
+    brrft: verif.length > 0 ? Math.round(brrftOk / verif.length * 1000) / 10 : null }
+})
+function clsKpi(v) { return v == null ? '' : (v >= 95 ? 'ok' : (v >= 85 ? 'warn' : 'bad')) }
 const attenteParMois = computed(() => {
   const a = Array(12).fill(0)
   for (const l of attente.value) {
@@ -314,6 +328,9 @@ async function devalider(l) {
         <div class="pddl-top-item"><span class="pddl-lbl">DDL à vérifier (an)</span><span class="pddl-val">{{ fmt(planDDL) }}</span></div>
         <div class="pddl-top-item"><span class="pddl-lbl">Vérifiés</span><span class="pddl-val ok">{{ fmt(nbVerifies) }}</span></div>
         <div class="pddl-top-item"><span class="pddl-lbl">En attente</span><span class="pddl-val warn">{{ fmt(nbAttente) }}</span></div>
+        <div class="pddl-top-item" title="Batch Right First Time : lots sans triage, sans rejet et sans déviation ÷ total lots"><span class="pddl-lbl">BRFT</span><span class="pddl-val" :class="'k-' + clsKpi(kpiQualite.brft)">{{ kpiQualite.brft != null ? kpiQualite.brft + '%' : '—' }}</span><span class="pddl-mini">{{ kpiQualite.brftOk }}/{{ kpiQualite.total }}</span></div>
+        <div class="pddl-top-item" title="Batch Record Right First Time (AQ) : dossiers vérifiés AQ SANS réserve ÷ vérifiés AQ"><span class="pddl-lbl">BRRFT</span><span class="pddl-val" :class="'k-' + clsKpi(kpiQualite.brrft)">{{ kpiQualite.brrft != null ? kpiQualite.brrft + '%' : '—' }}</span><span class="pddl-mini">{{ kpiQualite.brrftOk }}/{{ kpiQualite.nbVerif }}</span></div>
+        <div class="pddl-top-item" title="Lots avec déviation fabrication (déviations · triage · rejets)"><span class="pddl-lbl">Déviations</span><span class="pddl-val" :class="kpiQualite.nbDeviations > 0 ? 'k-bad' : 'k-ok'">{{ kpiQualite.nbDeviations }}</span><span class="pddl-mini">{{ kpiQualite.nbTriage }} triage · {{ kpiQualite.nbRejet }} rejet</span></div>
         <div class="pddl-top-bar" v-if="tauxPlanDDL != null">
           <div class="pddl-bar-head"><span>Avancement / plan</span><span>{{ tauxPlanDDL }}%</span></div>
           <div class="bar-track"><div class="bar-fill" :class="tauxPlanDDL >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxPlanDDL) + '%' }"></div></div>
@@ -704,4 +721,7 @@ table.mini tbody tr:hover td { background: #fafafa; }
 .v3-mid-scroll::-webkit-scrollbar { width: 7px; }
 .v3-mid-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 .v3-mid table.mini thead th { position: sticky !important; top: 0 !important; z-index: 2; background: #f6f7fb !important; }
+
+.pddl-top-item .pddl-mini { font-size: 9px; color: #94a3b8; font-weight: 600; margin-top: 1px; }
+.pddl-val.k-ok { color: #16a34a !important; } .pddl-val.k-warn { color: #d97706 !important; } .pddl-val.k-bad { color: #dc2626 !important; }
 </style>
