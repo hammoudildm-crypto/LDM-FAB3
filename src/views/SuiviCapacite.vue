@@ -416,7 +416,7 @@ function selTout() { for (const r of lignes.value) selEquips[r.id] = true; sauve
 function selRien() { for (const r of lignes.value) selEquips[r.id] = false; sauverSel() }
 const lignesAffichees = computed(() => lignes.value.filter(r => selEquips[r.id] !== false))
 const SITES = [{ key: 'tous', label: 'Tous' }, { key: 'seche', label: 'Forme sèche' }, { key: 'hormonal', label: 'Hormonal' }, { key: 'semi', label: 'Semi' }, { key: 'conditionnement', label: 'Conditionnement' }]
-const siteSel = ref('tous')
+const siteSel = ref('seche')
 const phaseSel = ref('')
 const phasesDuSite = computed(() => { const set = new Set(); for (const r of lignes.value) if ((siteSel.value === 'tous' || r.site === siteSel.value) && r.phase) set.add(r.phase); return [...set].filter(ph => ph !== 'conditionnement').sort((a, b) => (ORDRE_GAMME[a] || 99) - (ORDRE_GAMME[b] || 99)) })
 const lignesSidebar = computed(() => lignes.value.filter(r => (siteSel.value === 'tous' || r.site === siteSel.value) && (!phaseSel.value || r.phase === phaseSel.value)))
