@@ -645,4 +645,35 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 /* Colonnes gauche/droite : hauteur naturelle (évite le chevauchement avec l'historique) */
 .verif-3col { align-items: start !important; }
 .verif-3col > .v3-col { height: auto !important; max-height: none !important; overflow: visible !important; }
+
+/* ============================================================= *
+ * Refonte moderne — couche de surcharge (cohérence)
+ * ============================================================= */
+.vd-page :deep(h1), .cond-page :deep(h1), .aq-page :deep(h1) { font-size: 20px !important; }
+.card { border-color: #ecebf3 !important; border-radius: 13px !important; box-shadow: 0 1px 3px rgba(30,41,59,.05) !important; }
+.card-title { color: #9f1239 !important; font-weight: 800 !important; letter-spacing: -.01em !important; border-left: 3px solid #e11d48; padding-left: 8px; }
+.kpi { border-color: #ecebf3 !important; border-radius: 12px !important; background: #fff !important; }
+.kpi-val.accent { color: #e11d48 !important; }
+.pddl-val.ok { color: #e11d48 !important; }
+.plan-ddl-top { background: linear-gradient(135deg, #fff1f2, #fff) !important; border-color: #fecdd3 !important; }
+.bar-track { background: #eef0f4 !important; height: 8px !important; border-radius: 999px; }
+.bar-fill.prod, .bar-fill.ok { background: linear-gradient(90deg, #e11d48, #9f1239) !important; }
+.bar-fill.part { background: linear-gradient(90deg, #fbbf24, #f59e0b) !important; }
+.prog-pct { color: #e11d48 !important; }
+.prog-pct.warn { color: #b45309 !important; }
+table.mini th, .mini-vd th { color: #e11d48 !important; }
+table.mini tbody tr:hover td { background: #fafafa; }
+.btn { background: linear-gradient(135deg, #e11d48, #9f1239) !important; border-radius: 9px !important; box-shadow: 0 2px 8px rgba(225,29,72,.22); }
+.btn:hover { background: linear-gradient(135deg, #e11d48, #9f1239) !important; filter: brightness(1.07); }
+.link { color: #e11d48 !important; }
+.link.danger { color: #b91c1c !important; }
+.hist-exp { color: #e11d48 !important; border-color: #fecdd3 !important; }
+.hist-exp:hover { background: #fff1f2 !important; }
+.btn-filtre:hover { color: #e11d48 !important; border-color: #fecdd3 !important; }
+.annee-sel select:focus, .verif-form input:focus, .verif-form select:focus, .hist-search:focus { outline: none !important; border-color: #e11d48 !important; box-shadow: 0 0 0 3px rgba(225,29,72,.22) !important; }
+.sup-opt input, .verif-chk input { accent-color: #e11d48; }
+.vd-modal, .cond-modal, .aq-modal { border-radius: 16px !important; }
+.hist-count { background: #fff1f2 !important; color: #e11d48 !important; }
+.verif-3col { grid-template-columns: 0.72fr 1.95fr 0.72fr !important; gap: 12px !important; }
+
 </style>
