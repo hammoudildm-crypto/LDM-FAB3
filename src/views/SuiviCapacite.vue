@@ -77,7 +77,7 @@
               <td class="mc-cell">
                 <div class="mc-chart mc-inline">
                   <div class="mc-ref"></div>
-                  <div v-for="(t, i) in r.tauxMois" :key="i" class="mc-col mc-clic" @click="ouvrirEquipement(r, i)" :title="MOIS[i] + ' : ' + (t * 100).toFixed(0) + ' % — cliquer pour le détail'">
+                  <div v-for="(t, i) in r.tauxMois" :key="i" class="mc-col" :title="MOIS[i] + ' : ' + (t * 100).toFixed(0) + ' %'">
                     <div class="mc-bar" :class="cls(t)" :style="{ height: Math.max(2, Math.min(120, t * 100)) + '%' }"></div>
                   </div>
                 </div>
@@ -438,8 +438,6 @@ tbody tr:hover td { background: #f6fdfb; }
 tbody tr.rt-x:hover td { background: #fef2f2; }
 .taux-val { padding: 1px 6px; border-radius: 9px; }
 .taux-val.t-g { background: #dcfce7; } .taux-val.t-a { background: #fef3c7; } .taux-val.t-r { background: #fee2e2; } .taux-val.t-x { background: #fecaca; }
-.mc-clic { cursor: pointer; }
-.mc-clic:hover { background: rgba(99,102,241,.10); border-radius: 3px; }
 .card-title { color: #0f766e; }
 .side-lbl { color: #0d9488; }
 
