@@ -893,4 +893,33 @@ const serieMois = computed(() => {
 /* Lots en cours de triage (fabrication) */
 .lp-lot.lp-triage { background: #fef3c7; border-radius: 5px; box-shadow: inset 3px 0 0 #f59e0b; padding-left: 6px; }
 .lp-lot.lp-triage .lp-num::after { content: ' 🔍 triage'; color: #b45309; font-size: .82em; font-weight: 700; }
+
+/* ============================================================= *
+ * Refonte moderne — couche de surcharge (cohérence teal)
+ * ============================================================= */
+.rp-title { font-size: 22px !important; letter-spacing: -.02em; }
+.rp-card { border-color: #e6f0ee !important; border-radius: 14px !important; box-shadow: 0 1px 3px rgba(15,118,110,.05) !important; }
+.card-title { color: #0f766e !important; font-weight: 800 !important; letter-spacing: -.01em; border-left: 3px solid #14b8a6; padding-left: 8px; }
+.side-lbl { color: #0f766e !important; }
+
+/* Barres de comparaison */
+.cbar { background: #edf6f4 !important; border-radius: 999px; overflow: hidden; }
+.cbar-in.ok { background: linear-gradient(90deg, #14b8a6, #0f766e) !important; }
+.cbar-in.bas { background: linear-gradient(90deg, #fbbf24, #f59e0b) !important; }
+
+/* Graphe mensuel */
+.pc-bar.r { background: linear-gradient(#14b8a6, #0f766e) !important; }
+.pc-bar.p { background: #d7e3e0 !important; }
+
+/* Boutons segmentés */
+.tg { background: #eef4f3 !important; }
+.tg button.on { color: #0f766e !important; box-shadow: 0 2px 6px rgba(15,118,110,.18) !important; }
+
+/* Valeurs / focus */
+.pp-val.ok, .lp-num { color: #0f766e; }
+select:focus, input:focus { outline: none !important; border-color: #14b8a6 !important; box-shadow: 0 0 0 3px rgba(20,184,166,.12) !important; }
+
+/* Tableaux : survol de ligne */
+table tbody tr:hover td { background: #f6fbfa; }
+
 </style>
