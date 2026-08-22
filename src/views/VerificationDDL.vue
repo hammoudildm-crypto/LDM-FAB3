@@ -51,7 +51,7 @@ async function fetchAllPaged(make) {
 async function charger() {
   msg.value = ''
   const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, en_triage, triage_fin, date_lancement, date_fin_fabrication, ddl_verifie, ddl_verificateur, ddl_date_verification, ddl_reserve, produits(designation, code_pf, gamme)')
+    .select('id, numero_lot, statut, en_triage, triage_fin, deviation, date_lancement, date_fin_fabrication, ddl_verifie, ddl_verificateur, ddl_date_verification, ddl_reserve, produits(designation, code_pf, gamme)')
     .eq('actif', true)
     .order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (r.error) { msg.value = r.error.message; return }
@@ -124,7 +124,7 @@ const kpiQualite = computed(() => {
   const brftOk = subj.filter(l => {
     const enTriage = !!l.en_triage && !l.triage_fin
     const rejete = /rejet|rebut/i.test(l.statut || '')
-    const deviation = !!l.ddl_reserve
+    const deviation = !!l.deviation
     return !enTriage && !rejete && !deviation
   }).length
   // BRRFT : DDL vérifiés sans réserve / DDL vérifiés
@@ -334,7 +334,7 @@ async function devalider(l) {
         <div class="pddl-top-item"><span class="pddl-lbl">DDL à vérifier (an)</span><span class="pddl-val">{{ fmt(planDDL) }}</span></div>
         <div class="pddl-top-item"><span class="pddl-lbl">Vérifiés</span><span class="pddl-val ok">{{ fmt(nbVerifies) }}</span></div>
         <div class="pddl-top-item"><span class="pddl-lbl">En attente</span><span class="pddl-val warn">{{ fmt(nbAttente) }}</span></div>
-        <div class="pddl-top-item" title="Batch Right First Time : lots sans triage, sans rejet et sans réserve/déviation ÷ total lots"><span class="pddl-lbl">BRFT</span><span class="pddl-val" :class="'k-' + clsKpi(kpiQualite.brft)">{{ kpiQualite.brft != null ? kpiQualite.brft + '%' : '—' }}</span><span class="pddl-mini">{{ kpiQualite.brftOk }}/{{ kpiQualite.total }}</span></div>
+        <div class="pddl-top-item" title="Batch Right First Time : lots sans triage, sans rejet et sans déviation ÷ total lots"><span class="pddl-lbl">BRFT</span><span class="pddl-val" :class="'k-' + clsKpi(kpiQualite.brft)">{{ kpiQualite.brft != null ? kpiQualite.brft + '%' : '—' }}</span><span class="pddl-mini">{{ kpiQualite.brftOk }}/{{ kpiQualite.total }}</span></div>
         <div class="pddl-top-item" title="Batch Record Right First Time : dossiers de lot vérifiés SANS réserve ÷ dossiers vérifiés"><span class="pddl-lbl">BRRFT</span><span class="pddl-val" :class="'k-' + clsKpi(kpiQualite.brrft)">{{ kpiQualite.brrft != null ? kpiQualite.brrft + '%' : '—' }}</span><span class="pddl-mini">{{ kpiQualite.brrftOk }}/{{ kpiQualite.nbVerif }}</span></div>
         <div class="pddl-top-bar" v-if="tauxPlanDDL != null">
           <div class="pddl-bar-head"><span>Avancement / plan</span><span>{{ tauxPlanDDL }}%</span></div>
