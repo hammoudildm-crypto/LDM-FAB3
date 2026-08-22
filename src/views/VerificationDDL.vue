@@ -130,8 +130,11 @@ const kpiQualite = computed(() => {
   // BRRFT : DDL vérifiés sans réserve / DDL vérifiés
   const verif = subj.filter(l => l.ddl_verifie)
   const brrftOk = verif.filter(l => !l.ddl_reserve).length
+  const nbDeviations = subj.filter(l => !!l.deviation).length
+  const nbTriage = subj.filter(l => !!l.en_triage && !l.triage_fin).length
+  const nbRejet = subj.filter(l => /rejet|rebut/i.test(l.statut || '')).length
   return {
-    total, brftOk, nbVerif: verif.length, brrftOk,
+    total, brftOk, nbVerif: verif.length, brrftOk, nbDeviations, nbTriage, nbRejet,
     brft: total > 0 ? Math.round(brftOk / total * 1000) / 10 : null,
     brrft: verif.length > 0 ? Math.round(brrftOk / verif.length * 1000) / 10 : null
   }
@@ -336,6 +339,7 @@ async function devalider(l) {
         <div class="pddl-top-item"><span class="pddl-lbl">En attente</span><span class="pddl-val warn">{{ fmt(nbAttente) }}</span></div>
         <div class="pddl-top-item" title="Batch Right First Time : lots sans triage, sans rejet et sans déviation ÷ total lots"><span class="pddl-lbl">BRFT</span><span class="pddl-val" :class="'k-' + clsKpi(kpiQualite.brft)">{{ kpiQualite.brft != null ? kpiQualite.brft + '%' : '—' }}</span><span class="pddl-mini">{{ kpiQualite.brftOk }}/{{ kpiQualite.total }}</span></div>
         <div class="pddl-top-item" title="Batch Record Right First Time : dossiers de lot vérifiés SANS réserve ÷ dossiers vérifiés"><span class="pddl-lbl">BRRFT</span><span class="pddl-val" :class="'k-' + clsKpi(kpiQualite.brrft)">{{ kpiQualite.brrft != null ? kpiQualite.brrft + '%' : '—' }}</span><span class="pddl-mini">{{ kpiQualite.brrftOk }}/{{ kpiQualite.nbVerif }}</span></div>
+        <div class="pddl-top-item" title="Nombre de lots avec déviation fabrication (déviations · triage · rejets)"><span class="pddl-lbl">Déviations</span><span class="pddl-val" :class="kpiQualite.nbDeviations > 0 ? 'k-bad' : 'k-ok'">{{ kpiQualite.nbDeviations }}</span><span class="pddl-mini">{{ kpiQualite.nbTriage }} triage · {{ kpiQualite.nbRejet }} rejet</span></div>
         <div class="pddl-top-bar" v-if="tauxPlanDDL != null">
           <div class="pddl-bar-head"><span>Avancement / plan</span><span>{{ tauxPlanDDL }}%</span></div>
           <div class="bar-track"><div class="bar-fill" :class="tauxPlanDDL >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxPlanDDL) + '%' }"></div></div>
