@@ -41,7 +41,7 @@ const entrant1 = reactive({})
 const entrant2 = reactive({})
 const pin1Ack = reactive({})
 const pin2Ack = reactive({})
-async function verifierPin(nom, pin) { if (!nom || !pin) return false; const r = await supabase.from('superviseurs').select('id').eq('nom', nom).eq('pin', String(pin)).maybeSingle(); return !r.error && !!r.data }
+async function verifierPin(nom, pin) { if (!nom || !pin) return false; const r = await supabase.rpc('verifier_pin_superviseur', { p_nom: nom, p_pin: String(pin) }); return !r.error && r.data === true }
 const etatEquip = reactive({})
 
 const equipsFab = computed(() => equipements.value.filter(e => {
@@ -138,6 +138,13 @@ function fmtDate(d) { if (!d) return '—'; const x = new Date(d); return isNaN(
 function fmtDateTime(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? d : x.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }
 
 const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissance).length)
+function fmtDateLong(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) }
+const consignesGroupees = computed(() => {
+  const parJour = {}
+  for (const c of consignes.value) { const j = c.date_shift || '?'; if (!parJour[j]) parJour[j] = {}; const sh = c.shift || '?'; if (!parJour[j][sh]) parJour[j][sh] = []; parJour[j][sh].push(c) }
+  const jours = Object.keys(parJour).sort((a, b) => String(b).localeCompare(String(a)))
+  return jours.map(j => ({ jour: j, shifts: SHIFTS.filter(sh => parJour[j][sh.key]).map(sh => ({ key: sh.key, label: sh.label, items: parJour[j][sh.key] })) }))
+})
 </script>
 
 <template>
@@ -217,12 +224,15 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
       <h2 class="pc-title">Consignes <span v-if="nbEnAttente" class="pc-count">{{ nbEnAttente }} en attente de lecture</span></h2>
       <p v-if="chargement" class="pc-muted">Chargement…</p>
       <p v-else-if="!consignes.length" class="pc-muted">Aucune consigne enregistrée pour l'instant.</p>
-      <div v-else class="pc-list">
-        <article v-for="c in consignes" :key="c.id" class="pc-item" :class="{ 'pc-nonlu': !c.pris_connaissance }">
-          <header class="pc-head">
-            <span class="pc-shift">{{ shiftLabel(c.shift) }}</span>
-            <span class="pc-datechip">{{ fmtDate(c.date_shift) }}</span>
-            <span v-if="c.site || c.phase" class="pc-sitephase">{{ siteLabel(c.site || 'seche') }}<template v-if="c.phase && c.phase !== 'Toutes'"> · {{ c.phase }}</template></span>
+      <div v-else class="pc-groupes">
+        <div v-for="g in consignesGroupees" :key="g.jour" class="pc-jour">
+          <h3 class="pc-jour-t">📅 {{ fmtDateLong(g.jour) }}</h3>
+          <div v-for="sh in g.shifts" :key="sh.key" class="pc-shift-grp">
+            <div class="pc-shift-t" :class="'sh-' + sh.key">{{ sh.label }} <span class="pc-shift-n">{{ sh.items.length }} consigne(s)</span></div>
+            <div class="pc-list">
+              <article v-for="c in sh.items" :key="c.id" class="pc-item" :class="{ 'pc-nonlu': !c.pris_connaissance }">
+                <header class="pc-head">
+                  <span v-if="c.site || c.phase" class="pc-sitephase">{{ siteLabel(c.site || 'seche') }}<template v-if="c.phase && c.phase !== 'Toutes'"> · {{ c.phase }}</template></span>
             <span class="pc-sortant">Sortant : <b>{{ c.superviseur_sortant }}{{ c.superviseur_sortant_2 ? ' & ' + c.superviseur_sortant_2 : '' }}</b></span>
             <span v-if="!c.pris_connaissance" class="pc-badge">Non lu</span>
           </header>
@@ -255,7 +265,10 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
             </div>
             <div v-else class="pc-ack pending">En attente de lecture</div>
           </footer>
-        </article>
+              </article>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   </div>
@@ -319,6 +332,14 @@ const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissa
 .pc-btn.sm { padding: 6px 12px; font-size: 12.5px; }
 .pc-muted { color: #94a3b8; font-size: 13px; padding: 8px; }
 .pc-list { display: flex; flex-direction: column; gap: 12px; }
+.pc-groupes { display: flex; flex-direction: column; gap: 22px; }
+.pc-jour-t { margin: 0 0 12px; font-size: 15px; font-weight: 800; color: #0f172a; text-transform: capitalize; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; }
+.pc-shift-grp { margin-bottom: 16px; margin-left: 4px; }
+.pc-shift-t { font-weight: 800; font-size: 13px; padding: 5px 12px; border-radius: 8px; margin-bottom: 8px; display: inline-flex; align-items: center; gap: 8px; }
+.pc-shift-n { font-size: 11px; background: rgba(0,0,0,.10); border-radius: 20px; padding: 1px 8px; }
+.pc-shift-t.sh-matin { background: #fef9c3; color: #a16207; }
+.pc-shift-t.sh-apres-midi { background: #ffedd5; color: #c2410c; }
+.pc-shift-t.sh-nuit { background: #e0e7ff; color: #4338ca; }
 .pc-item { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 14px; background: #fafafa; }
 .pc-item.pc-nonlu { border-left: 4px solid #f59e0b; background: #fffbeb; }
 .pc-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
