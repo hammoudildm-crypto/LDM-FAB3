@@ -7,6 +7,9 @@ import { ICONS, TINTS } from '../icons.js'
 
 const anneeCourante = new Date().getFullYear()
 const moisCourant = new Date().getMonth()   // 0-11
+function joursOuvresEntre(d1, d2) { let n = 0; const d = new Date(d1); d.setHours(0, 0, 0, 0); while (d <= d2) { const wd = d.getDay(); if (wd !== 0 && wd !== 6) n++; d.setDate(d.getDate() + 1) } return n }
+const joursEcoules = Math.max(1, joursOuvresEntre(new Date(new Date().getFullYear(), 0, 1), new Date()))
+const joursRestants = Math.max(1, joursOuvresEntre(new Date(), new Date(new Date().getFullYear(), 11, 31)))
 const ANNEES = []
 for (let a = anneeCourante - 4; a <= anneeCourante + 1; a++) ANNEES.push(a)
 const anneeSel = ref(anneeCourante)
@@ -209,7 +212,12 @@ function projectionAtelier(ph) {
   const vsN1 = totN1 > 0 ? Math.round((projTotal / totN1 - 1) * 100) : null
   const plan = planParAtelier.value[ph] || 0
   const pctPlan = plan > 0 ? Math.round((projTotal / plan) * 100) : null
-  return { ph, realise: realiseTotal, projTotal, reste: Math.max(0, projTotal - realiseTotal), methode, vsN1, plan, pctPlan }
+  const reste = Math.max(0, projTotal - realiseTotal)
+  const moisEcoules = mc + 1
+  const moisRestants = Math.max(1, 12 - mc - 1)
+  return { ph, realise: realiseTotal, projTotal, reste, methode, vsN1, plan, pctPlan,
+    realMens: realiseTotal / moisEcoules, realJour: realiseTotal / joursEcoules,
+    resteMens: reste / moisRestants, resteJour: reste / joursRestants }
 }
 const projectionsTable = computed(() => {
   return PHASES
@@ -423,10 +431,14 @@ onMounted(charger)
             <tr>
               <th>Atelier</th>
               <th class="ta-r">Réalisé à ce jour</th>
+              <th class="ta-r">Réal. /mois</th>
+              <th class="ta-r">Réal. /jour</th>
               <th class="ta-r">Projection {{ anneeCourante }}</th>
               <th class="ta-r">Plan {{ anneeCourante }}</th>
               <th class="ta-r">% du plan</th>
               <th class="ta-r">Reste à faire</th>
+              <th class="ta-r">Reste /mois</th>
+              <th class="ta-r">Reste /jour</th>
               <th class="ta-r">vs {{ anneeCourante - 1 }}</th>
             </tr>
           </thead>
@@ -434,10 +446,14 @@ onMounted(charger)
             <tr v-for="r in projectionsTable" :key="r.ph" :class="{ 'proj-on': r.ph === atelierSel }">
               <td class="proj-at">{{ r.ph }}<span v-if="r.methode === 'lineaire'" class="proj-star" title="Sans historique saisonnier : projection linéaire">*</span></td>
               <td class="ta-r">{{ fmt(r.realise) }}</td>
+              <td class="ta-r">{{ fmt(Math.round(r.realMens)) }}</td>
+              <td class="ta-r">{{ fmt(Math.round(r.realJour)) }}</td>
               <td class="ta-r proj-val">{{ fmt(r.projTotal) }}</td>
               <td class="ta-r">{{ r.plan ? fmt(r.plan) : '—' }}</td>
               <td class="ta-r" :class="r.pctPlan == null ? '' : (r.pctPlan >= 100 ? 'proj-up' : (r.pctPlan >= 80 ? 'proj-warn' : 'proj-down'))">{{ r.pctPlan != null ? r.pctPlan + ' %' : '—' }}</td>
               <td class="ta-r proj-reste">{{ fmt(r.reste) }}</td>
+              <td class="ta-r">{{ fmt(Math.round(r.resteMens)) }}</td>
+              <td class="ta-r">{{ fmt(Math.round(r.resteJour)) }}</td>
               <td class="ta-r" :class="r.vsN1 == null ? '' : (r.vsN1 >= 0 ? 'proj-up' : 'proj-down')">
                 <template v-if="r.vsN1 != null">{{ r.vsN1 >= 0 ? '+' : '' }}{{ r.vsN1 }} %</template>
                 <template v-else>—</template>
@@ -480,10 +496,10 @@ onMounted(charger)
 
 <style scoped>
 .pa-page { color: #1b2733; }
-.pa-layout { display: flex; gap: 14px; align-items: flex-start; }
+.pa-layout { display: flex; gap: 10px; align-items: stretch; margin-bottom: 8px; }
 .pa-side { flex: 0 0 210px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: stretch; overflow: hidden; }
 .pa-content { flex: 1; min-width: 0; }
-.pa-row2 { display: flex; gap: 14px; align-items: stretch; margin-bottom: 18px; }
+.pa-row2 { display: flex; gap: 10px; align-items: stretch; margin-bottom: 8px; }
 .pa-row2 > .card, .pa-row2 > .proj-card { flex: 1 1 0; min-width: 0; margin-bottom: 0; display: flex; flex-direction: column; }
 @media (max-width: 1100px) { .pa-row2 { flex-direction: column; } .pa-row2 > .card, .pa-row2 > .proj-card { width: 100%; } }
 .side-sec { padding: 10px 12px; border-bottom: 1px solid #eef2f6; }
@@ -508,16 +524,16 @@ onMounted(charger)
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .muted { color: #94a3b8; }
 
-.kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
-.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 9px 12px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; padding: 6px 10px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .kpi-top { display: flex; align-items: center; gap: 10px; }
-.kpi-ic { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
-.kpi-ic svg { width: 19px; height: 19px; }
-.kpi-val { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.kpi-ic { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.kpi-ic svg { width: 15px; height: 15px; }
+.kpi-val { font-size: 14px; font-weight: 700; letter-spacing: -0.02em; }
 .kpi-val.accent { color: #0f766e; }
 .kpi-lbl { font-size: 10.5px; color: #64748b; margin-top: 3px; }
 
-.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 10px 12px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 7px 10px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .card-title { margin: 0; font-size: 13px; }
 .btn-exp { margin-left: auto; font-size: 13px; padding: 7px 12px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
@@ -551,7 +567,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .an-dot { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
 .btn-row button.an-btn.on .an-dot { background: #fff; }
 .chart-titre { font-size: 12px; font-weight: 700; color: #0f766e; margin: 2px 0 1px; }
-.chart-wrap { margin-top: 4px; }
+.chart-wrap { margin-top: 2px; height: 190px; }
 
 @media (max-width: 700px) {
   .kpi-grid { grid-template-columns: 1fr; }
@@ -569,7 +585,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-code { font-family: ui-monospace, monospace; font-weight: 600; color: #0f766e; white-space: nowrap; }
 .pa-des { color: #475569; }
 .pa-note { font-size: 12.5px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; padding: 8px 10px; border-radius: 7px; margin: 10px 0 0; }
-.proj-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 10px 12px; margin-top: 0; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.proj-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 7px 10px; margin-top: 0; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
 .proj-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .proj-title { margin: 0; font-size: 13px; color: #161c2e; }
 .proj-sub { font-size: 12.5px; color: #64748b; }
