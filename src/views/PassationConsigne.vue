@@ -338,7 +338,7 @@ const consignesGroupees = computed(() => {
 .pc-title { margin: 0 0 9px; font-size: 12.5px; font-weight: 800; letter-spacing: -.01em; color: #1e1b3a; display: flex; align-items: center; gap: 8px; padding-left: 8px; border-left: 3px solid #7c3aed; }
 .pc-count { font-size: 11px; font-weight: 800; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; border-radius: 20px; padding: 3px 11px; }
 
-.pc-form { display: flex; flex-direction: column; gap: 16px; }
+.pc-form { display: flex; flex-direction: column; gap: 10px; }
 .pc-row { display: flex; gap: 14px; flex-wrap: wrap; }
 .pc-field { display: flex; flex-direction: column; gap: 3px; font-size: 9px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #94a3b8; }
 .pc-field input, .pc-field select { font: inherit; font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 11.5px; padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 8px; color: #0f172a; background: #fff; min-width: 120px; transition: border-color .12s, box-shadow .12s; }
@@ -346,8 +346,8 @@ const consignesGroupees = computed(() => {
 .pc-lbl { font-weight: 800; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
 .pc-lbl.eq { color: #6d28d9; }
 
-.pc-equip-layout { display: flex; gap: 16px; align-items: flex-start; }
-.pc-left { flex: 0 0 340px; display: flex; flex-direction: column; gap: 11px; background: #faf9fe; border: 1px solid #f0edfa; border-radius: 14px; padding: 14px; }
+.pc-equip-layout { display: flex; gap: 12px; align-items: flex-start; }
+.pc-left { flex: 0 0 320px; display: flex; flex-direction: column; gap: 8px; }
 .pc-left .pc-field { width: 100%; }
 .pc-left .pc-field input, .pc-left .pc-field select { min-width: 0; width: 100%; box-sizing: border-box; }
 .pc-nav-sep { font-size: 10px; font-weight: 800; color: #6d28d9; text-transform: uppercase; letter-spacing: .08em; margin-top: 8px; padding-top: 10px; border-top: 1px solid #ece8f8; }
@@ -370,16 +370,16 @@ const consignesGroupees = computed(() => {
 .pc-site-btn.sn-seche.active { background: linear-gradient(135deg, #7c3aed, #4f46e5); }
 .pc-site-btn.sn-semi.active { background: linear-gradient(135deg, #d97706, #a16207); }
 
-.pc-equip-wrap { border: 1px solid #eef2f7; border-radius: 12px; overflow: auto; max-height: 440px; flex: 1; min-width: 0; }
+.pc-equip-wrap { border: 1px solid #eef2f7; border-radius: 12px; overflow: auto; max-height: 300px; flex: 1; min-width: 0; }
 .pc-equip-tbl { width: 100%; border-collapse: collapse; font-size: 10.5px; }
-.pc-equip-tbl th { position: sticky; top: 0; background: #f5f3fb; text-align: left; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #6d28d9; padding: 8px; border-bottom: 1px solid #e6e2f4; white-space: nowrap; z-index: 1; }
+.pc-equip-tbl th { position: sticky; top: 0; background: #f5f3fb; text-align: left; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #6d28d9; padding: 5px 6px; border-bottom: 1px solid #e6e2f4; white-space: nowrap; z-index: 1; }
 .pc-equip-tbl th.ok { color: #047857; }
 .pc-equip-tbl th.todo { color: #b45309; }
-.pc-equip-tbl td { padding: 6px 8px; border-bottom: 1px solid #f4f2fa; vertical-align: top; }
+.pc-equip-tbl td { padding: 3px 6px; border-bottom: 1px solid #f4f2fa; vertical-align: top; }
 .pc-equip-tbl tbody tr:hover td { background: #faf9fe; }
 .pc-equip-tbl input, .pc-equip-tbl select, .pc-equip-tbl textarea { font: inherit; padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 7px; width: 100%; box-sizing: border-box; }
 .pc-equip-tbl input:focus, .pc-equip-tbl select:focus, .pc-equip-tbl textarea:focus { outline: none; border-color: #a78bfa; }
-.pc-equip-tbl textarea { resize: vertical; line-height: 1.35; min-width: 150px; }
+.pc-equip-tbl textarea { resize: vertical; line-height: 1.25; min-width: 140px; }
 .pc-in-lot { min-width: 80px; }
 .pc-eq-nom { font-weight: 800; color: #334155; white-space: nowrap; min-width: 115px; font-size: 10.5px; }
 .pc-eq-etat { font-weight: 700; }
@@ -398,9 +398,9 @@ const consignesGroupees = computed(() => {
 
 .pc-muted { color: #94a3b8; font-size: 13px; padding: 8px; }
 .pc-list { display: flex; flex-direction: column; gap: 12px; }
-.pc-groupes { display: flex; flex-direction: column; gap: 24px; }
-.pc-jour-t { margin: 0 0 11px; font-size: 13.5px; font-weight: 800; color: #0f172a; text-transform: capitalize; border-bottom: 2px solid #ede9fe; padding-bottom: 6px; }
-.pc-shift-grp { margin-bottom: 18px; margin-left: 2px; }
+.pc-groupes { display: flex; flex-direction: column; gap: 16px; }
+.pc-jour-t { margin: 0 0 8px; font-size: 13px; font-weight: 800; color: #0f172a; text-transform: capitalize; border-bottom: 2px solid #ede9fe; padding-bottom: 5px; }
+.pc-shift-grp { margin-bottom: 12px; margin-left: 2px; }
 .pc-shift-t { font-weight: 800; font-size: 12.5px; padding: 6px 13px; border-radius: 9px; margin-bottom: 10px; display: inline-flex; align-items: center; gap: 8px; }
 .pc-shift-n { font-size: 11px; background: rgba(0,0,0,.10); border-radius: 20px; padding: 2px 9px; }
 .pc-shift-t.sh-matin { background: #fef9c3; color: #a16207; }
@@ -449,7 +449,7 @@ const consignesGroupees = computed(() => {
 }
 
 /* --- Bandeau relais --- */
-.pc-relay { display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; margin-bottom: 14px; border-radius: 14px; overflow: hidden; box-shadow: 0 1px 4px rgba(15,23,42,.06); }
+.pc-relay { display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; margin-bottom: 9px; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(15,23,42,.06); }
 .relay-side { padding: 7px 12px; display: flex; flex-direction: column; gap: 2px; justify-content: center; }
 .relay-side.out { background: linear-gradient(135deg, #fff7ed, #ffedd5); }
 .relay-side.in { background: linear-gradient(135deg, #ecfeff, #cffafe); text-align: right; }
@@ -462,7 +462,7 @@ const consignesGroupees = computed(() => {
 .relay-chip { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; opacity: .92; }
 
 /* --- Tuiles résumé --- */
-.pc-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+.pc-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 9px; }
 .sum { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 6px 9px; text-align: center; }
 .sum-v { font-size: 16px; font-weight: 800; line-height: 1; color: #94a3b8; }
 .sum-l { font-size: 9px; font-weight: 700; color: #64748b; margin-top: 3px; }
@@ -487,7 +487,7 @@ const consignesGroupees = computed(() => {
 }
 
 /* --- Bandeau de gauche : groupes --- */
-.pc-left { background: transparent; border: 0; padding: 0; gap: 12px; }
+.pc-left { background: transparent; border: 0; padding: 0; gap: 8px; }
 .pc-grp { background: #fff; border: 1px solid #eceaf4; border-radius: 11px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 1px 2px rgba(15,23,42,.03); }
 .pc-grp.out { background: linear-gradient(180deg, #fffaf5, #fff); border-color: #fbe3ce; }
 .pc-grp-h { display: flex; align-items: center; gap: 6px; font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #6d28d9; }
