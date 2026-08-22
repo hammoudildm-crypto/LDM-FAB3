@@ -751,4 +751,7 @@ table.mini tbody tr:hover td { background: #faf9fe; }
 /* Compteurs / puces */
 .hist-count { background: #ede9fe !important; color: #6d28d9 !important; }
 
+
+/* Mise en page : centrale élargie, latérales équilibrées */
+.verif-3col { grid-template-columns: 0.72fr 1.95fr 0.72fr !important; gap: 12px !important; }
 </style>
