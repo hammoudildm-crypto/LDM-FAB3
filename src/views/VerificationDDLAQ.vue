@@ -375,6 +375,7 @@ async function devalider(l) {
 
       <section class="card v3-mid">
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
+        <div class="v3-mid-scroll">
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <table v-else class="mini">
           <thead><tr><th>Lot</th><th>Produit</th><th>Réserver vérificateur</th><th class="right">Fin fab.</th><th></th></tr></thead>
@@ -411,6 +412,7 @@ async function devalider(l) {
             </template>
           </tbody>
         </table>
+        </div>
       </section>
     </div>
 
@@ -694,4 +696,12 @@ table.mini tbody tr:hover td { background: #fafafa; }
 .v3-mid .card-title { position: sticky !important; top: 0 !important; z-index: 6 !important; background: #fff !important; margin: 0 !important; padding: 8px 6px 6px !important; font-size: 12px !important; line-height: 1.2 !important; }
 .v3-mid table.mini { border-collapse: separate; border-spacing: 0; }
 .v3-mid table.mini thead th { position: sticky !important; top: 30px !important; z-index: 5 !important; background: #f6f7fb !important; }
+
+/* Titre fixe hors défilement + liste scrollable (robuste) */
+.v3-mid { display: flex !important; flex-direction: column !important; overflow: hidden !important; }
+.v3-mid .card-title { flex: 0 0 auto !important; position: static !important; margin: 0 0 6px !important; }
+.v3-mid-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+.v3-mid-scroll::-webkit-scrollbar { width: 7px; }
+.v3-mid-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.v3-mid table.mini thead th { position: sticky !important; top: 0 !important; z-index: 2; background: #f6f7fb !important; }
 </style>
