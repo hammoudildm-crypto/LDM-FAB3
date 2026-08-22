@@ -701,4 +701,54 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 /* Lots en cours de triage (fabrication) */
 tr.ddl-triage td { background: #fef3c7; }
 tr.ddl-triage .mono::after { content: ' 🔍 triage'; color: #b45309; font-size: .78em; font-weight: 700; white-space: nowrap; }
+
+/* ============================================================= *
+ * Refonte moderne — couche de surcharge (cohérence violet)
+ * ============================================================= */
+.vd-page :deep(h1) { font-size: 20px !important; }
+.card { border-color: #ece9f6 !important; border-radius: 13px !important; box-shadow: 0 1px 3px rgba(76,29,149,.05) !important; }
+.card-title { color: #4c1d95 !important; font-weight: 800 !important; letter-spacing: -.01em !important; border-left: 3px solid #7c3aed; padding-left: 8px; }
+.v3-mid .card-title { position: sticky; top: 0; background: #fff; }
+
+/* KPI / valeurs */
+.kpi { border-color: #ece9f6 !important; border-radius: 12px !important; background: #fff !important; }
+.kpi-val.accent { color: #6d28d9 !important; }
+.pddl-val.ok { color: #6d28d9 !important; }
+
+/* Bandeau Plan DDL (en tête) */
+.plan-ddl-top { background: linear-gradient(135deg, #faf5ff, #f3f0fd) !important; border-color: #e5d9fb !important; }
+.plan-ddl-top .pddl-top-item .pddl-val { color: #1e1b3a; }
+.pddl-src { color: #a78bfa !important; }
+
+/* Barres de progression */
+.bar-track { background: #efeafb !important; height: 8px !important; border-radius: 999px; }
+.bar-fill.prod, .bar-fill.ok { background: linear-gradient(90deg, #8b5cf6, #6d28d9) !important; }
+.bar-fill.part { background: linear-gradient(90deg, #fbbf24, #f59e0b) !important; }
+.prog-pct { color: #6d28d9 !important; }
+.prog-pct.warn { color: #b45309 !important; }
+
+/* Tableaux */
+table.mini th, .mini-vd th { color: #6d28d9 !important; }
+table.mini tbody tr:hover td { background: #faf9fe; }
+
+/* Boutons */
+.btn { background: linear-gradient(135deg, #7c3aed, #6d28d9) !important; border-radius: 9px !important; box-shadow: 0 2px 8px rgba(109,40,217,.25); }
+.btn:hover { background: linear-gradient(135deg, #7c3aed, #6d28d9) !important; filter: brightness(1.07); }
+.link { color: #6d28d9 !important; }
+.link.danger { color: #b91c1c !important; }
+.hist-exp { color: #6d28d9 !important; border-color: #ddd6fe !important; }
+.hist-exp:hover { background: #f5f3ff !important; }
+.btn-filtre:hover { color: #6d28d9 !important; border-color: #c4b5fd !important; }
+
+/* Champs / focus */
+.annee-sel select:focus, .verif-form input:focus, .verif-form select:focus, .hist-search:focus { outline: none !important; border-color: #7c3aed !important; box-shadow: 0 0 0 3px rgba(124,58,237,.12) !important; }
+.sup-opt input, .verif-chk input { accent-color: #6d28d9; }
+
+/* Modale */
+.vd-modal { border-radius: 16px !important; }
+.vd-modal-title { color: #4c1d95 !important; }
+
+/* Compteurs / puces */
+.hist-count { background: #ede9fe !important; color: #6d28d9 !important; }
+
 </style>
