@@ -174,7 +174,9 @@ const detailMois = computed(() => {
   const totalH = rows.reduce((a, r) => a + r.heures, 0)
   const totalProd = rows.reduce((a, r) => a + r.prod, 0)
   const totalNett = rows.reduce((a, r) => a + r.nett, 0)
-  return { mo, label: MOIS[mo], rows, totalH, totalProd, totalNett, capaMois, jm, taux: capaMois > 0 ? totalH / capaMois : 0 }
+  const totalPlan = rows.reduce((a, r) => a + r.plan, 0)
+  const totalLots = rows.reduce((a, r) => a + r.lots, 0)
+  return { mo, label: MOIS[mo], rows, totalH, totalProd, totalNett, totalPlan, totalLots, capaMois, jm, taux: capaMois > 0 ? totalH / capaMois : 0 }
 })
 const realiseParProduit = computed(() => {
   const m = {}
@@ -357,6 +359,21 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
                 <td class="r">{{ detailMois.totalH > 0 ? (r.heures / detailMois.totalH * 100).toFixed(0) : 0 }} %</td>
               </tr>
             </tbody>
+            <tfoot>
+              <tr class="ed-tot">
+                <td><b>Total</b></td>
+                <td class="r"><b>{{ detailMois.totalPlan.toLocaleString('fr-FR') }}</b></td>
+                <td class="r"><b>{{ detailMois.totalLots.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</b></td>
+                <td class="r">—</td>
+                <td class="r">—</td>
+                <td class="r">—</td>
+                <td class="r">—</td>
+                <td class="r"><b>{{ Math.round(detailMois.totalProd) }}</b></td>
+                <td class="r"><b>{{ Math.round(detailMois.totalNett) }}</b></td>
+                <td class="r"><b>{{ Math.round(detailMois.totalH) }}</b></td>
+                <td class="r"><b>100 %</b></td>
+              </tr>
+            </tfoot>
           </table>
           <p v-else class="ed-muted">Aucun produit planifié ce mois.</p>
         </div>
@@ -412,6 +429,7 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
 .ed-mod-h { display: flex; align-items: center; justify-content: space-between; font-size: 15px; color: #1a2233; margin-bottom: 4px; }
 .ed-mod-x { background: none; border: 0; font-size: 18px; color: #94a3b8; cursor: pointer; }
 .ed-mod-s { font-size: 11.5px; color: #64748b; margin: 0 0 10px; }
+.ed-tot td { border-top: 2px solid #cbd5e1; background: #f8fafc; padding-top: 5px; }
 .ed-mm { font-size: 9px; color: #94a3b8; margin-top: 2px; }
 
 .ed-arrets { display: flex; flex-direction: column; gap: 3px; }
