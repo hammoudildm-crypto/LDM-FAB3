@@ -689,4 +689,9 @@ table.mini tbody tr:hover td { background: #fafafa; }
 /* Titre de la carte centrale : visible en entier (non rogné par le scroll) */
 .v3-mid { padding-top: 0 !important; }
 .v3-mid .card-title { position: sticky; top: 0; z-index: 3; background: #fff; margin: 0 0 6px !important; padding: 8px 6px 6px !important; font-size: 12px !important; line-height: 1.2 !important; border-bottom: 1px solid #eef0f4; }
+
+/* Empilement titre + en-tête tableau (pas de superposition) */
+.v3-mid .card-title { position: sticky !important; top: 0 !important; z-index: 6 !important; background: #fff !important; margin: 0 !important; padding: 8px 6px 6px !important; font-size: 12px !important; line-height: 1.2 !important; }
+.v3-mid table.mini { border-collapse: separate; border-spacing: 0; }
+.v3-mid table.mini thead th { position: sticky !important; top: 30px !important; z-index: 5 !important; background: #f6f7fb !important; }
 </style>
