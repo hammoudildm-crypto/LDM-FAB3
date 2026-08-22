@@ -685,4 +685,8 @@ table.mini tbody tr:hover td { background: #fafafa; }
   .verif-3col { grid-template-columns: 1fr !important; }
   .verif-3col > * { grid-column: auto !important; order: 0 !important; height: auto !important; max-height: none !important; }
 }
+
+/* Titre de la carte centrale : visible en entier (non rogné par le scroll) */
+.v3-mid { padding-top: 0 !important; }
+.v3-mid .card-title { position: sticky; top: 0; z-index: 3; background: #fff; margin: 0 0 6px !important; padding: 8px 6px 6px !important; font-size: 12px !important; line-height: 1.2 !important; border-bottom: 1px solid #eef0f4; }
 </style>
