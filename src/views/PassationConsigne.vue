@@ -162,14 +162,11 @@ const consignesGroupees = computed(() => {
 <template>
   <div class="pc-page">
     <PageHeader title="Passation de consigne — Production" tone="violet">
-      <p class="pc-sub">Transmission entre superviseurs des 3 shifts — état des équipements &amp; tâches par équipement</p>
+      <button type="button" class="pc-print no-print" @click="imprimer">🖨️ Imprimer / PDF</button>
     </PageHeader>
 
     <p v-if="erreur" class="pc-err">{{ erreur }}</p>
 
-    <div class="pc-toolbar no-print">
-      <button type="button" class="pc-print" @click="imprimer">🖨️ Imprimer / PDF</button>
-    </div>
 
     <section v-if="peutEditer" class="pc-card">
       <h2 class="pc-title">Nouvelle passation</h2>
