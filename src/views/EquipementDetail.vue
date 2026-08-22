@@ -154,7 +154,7 @@ const occupationParMois = computed(() => {
   }
   return out
 })
-const moisSel = ref(null)
+const moisSel = ref(route.query.mois != null && route.query.mois !== '' ? Number(route.query.mois) : null)
 const detailMois = computed(() => {
   if (moisSel.value == null) return null
   const mo = moisSel.value
