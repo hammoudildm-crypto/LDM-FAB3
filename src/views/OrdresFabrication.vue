@@ -124,7 +124,7 @@ const lotsFiltres = computed(() => {
       if (!(String(l.numero_lot || '').toLowerCase().includes(q) || code.toLowerCase().includes(q) || desig.toLowerCase().includes(q))) return false
     }
     return true
-  })
+  }).sort((a, b) => (numLot(b.numero_lot) || 0) - (numLot(a.numero_lot) || 0))
 })
 const lotsAffiches = computed(() => lotsFiltres.value.slice(0, LIMITE))
 // Dernier numéro de lot enregistré (le plus élevé) + le suivant proposé
