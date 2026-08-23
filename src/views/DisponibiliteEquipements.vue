@@ -322,11 +322,28 @@ const phasesParAtelier = computed(() => {
   return m
 })
 
+// --- Filtres + priorité ---
+const filtrePerime = ref(false)
+const filtreUrgent = ref(false)
+const SEUIL_URGENT = 15
+function estUrgent(l) {
+  if (l && l.perime) return true
+  if (!l || !l.date) return false
+  return Math.floor((Date.now() - new Date(l.date)) / 86400000) >= SEUIL_URGENT
+}
+function lotMatch(l) {
+  const rq = recherche.value.trim().toLowerCase()
+  if (rq && !((l.lot || "").toLowerCase().includes(rq) || (l.code || "").toLowerCase().includes(rq) || (l.desig || "").toLowerCase().includes(rq))) return false
+  if (filtrePerime.value && !l.perime) return false
+  if (filtreUrgent.value && !estUrgent(l)) return false
+  return true
+}
+
 // Vue file FABRICATION : une colonne par PHASE (dédupliquée, hors pesée/conditionnement)
 const vueFile = computed(() => {
   const q = queuePhase.value
   const rq = recherche.value.trim().toLowerCase()
-  const mL = (l) => !rq || (l.lot || '').toLowerCase().includes(rq) || (l.code || '').toLowerCase().includes(rq) || (l.desig || '').toLowerCase().includes(rq)
+  const mL = lotMatch
   const presentes = new Set()
   for (const a of ateliers.value) {
     const keys = phasesParAtelier.value[a.id]
@@ -363,7 +380,7 @@ const vueFile = computed(() => {
 const vueCondLignes = computed(() => {
   const qc = queuePhase.value.conditionnement
   const rq = recherche.value.trim().toLowerCase()
-  const mL = (l) => !rq || (l.lot || '').toLowerCase().includes(rq) || (l.code || '').toLowerCase().includes(rq) || (l.desig || '').toLowerCase().includes(rq)
+  const mL = lotMatch
   const groups = {}
   // Toutes les lignes de conditionnement, MÊME SANS LOT (pour visualiser l'utilisation).
   // Exception : pendant une recherche, on ne garde que les lignes concernées.
@@ -388,21 +405,43 @@ const vueCondLignes = computed(() => {
 })
 
 const kpisFile = computed(() => {
-  let attFab = 0, coursFab = 0, secs = 0
-  for (const ph of vueFile.value) { attFab += ph.attente.length; coursFab += ph.cours.length; if (ph.attente.length === 0 && ph.cours.length === 0) secs++ }
+  let attFab = 0, coursFab = 0, secs = 0, maxCharge = 0, atelierMax = "—"
+  for (const ph of vueFile.value) {
+    attFab += ph.attente.length; coursFab += ph.cours.length
+    if (ph.attente.length === 0 && ph.cours.length === 0) secs++
+    const ch = ph.attente.length + ph.cours.length
+    if (ch > maxCharge) { maxCharge = ch; atelierMax = ph.phase.label }
+  }
   let attCond = 0, coursCond = 0
   for (const g of vueCondLignes.value) { attCond += g.attente.length; coursCond += g.cours.length; if (g.reserve && g.tot === 0) secs++ }
   const pesee = attentePeseeList.value.length
+  let perimes = 0, sommeJ = 0, nbJ = 0
+  const scan = (l, att) => { if (l.perime) perimes++; if (att && l.date) { sommeJ += Math.max(0, Math.floor((Date.now() - new Date(l.date)) / 86400000)); nbJ++ } }
+  for (const l of attentePeseeList.value) scan(l, true)
+  for (const ph of vueFile.value) { ph.attente.forEach(l => scan(l, true)); ph.cours.forEach(l => scan(l, false)) }
+  for (const g of vueCondLignes.value) { g.attente.forEach(l => scan(l, true)); g.cours.forEach(l => scan(l, false)) }
+  const delai = nbJ ? Math.round(sommeJ / nbJ) : 0
+  const totalProd = pesee + attFab + attCond + coursFab + coursCond
   return [
-    { v: fmt(pesee + attFab + attCond), l: 'Lots en attente (toutes étapes)', tint: TINTS.amber, ic: ICONS.hourglass },
-    { v: fmt(coursFab + coursCond), l: 'Lots en cours (toutes étapes)', tint: TINTS.blue, ic: ICONS.activity },
-    { v: fmt(secs), l: 'Ateliers à sec (risque)', tint: TINTS.rose, ic: ICONS.alert },
+    { v: fmt(totalProd), l: "Lots en production", tint: TINTS.cyan, ic: ICONS.layers },
+    { v: fmt(pesee + attFab + attCond), l: "Lots en attente", tint: TINTS.amber, ic: ICONS.hourglass },
+    { v: fmt(coursFab + coursCond), l: "Lots en cours", tint: TINTS.blue, ic: ICONS.activity },
+    { v: fmt(secs), l: "Ateliers à sec (risque)", tint: TINTS.rose, ic: ICONS.alert },
+    { v: atelierMax, l: "Atelier le plus chargé" + (maxCharge ? " (" + maxCharge + ")" : ""), tint: TINTS.indigo, ic: ICONS.factory, small: true },
+    { v: delai + " j", l: "Délai moyen d'attente", tint: TINTS.violet, ic: ICONS.gauge },
+    { v: fmt(perimes), l: "OF périmés", tint: perimes > 0 ? TINTS.rose : TINTS.slate, ic: ICONS.alert },
   ]
+})
+const chargeAteliers = computed(() => {
+  const arr = vueFile.value.map(ph => ({ label: ph.phase.label, attente: ph.attente.length, cours: ph.cours.length, total: ph.attente.length + ph.cours.length }))
+  if (attentePeseeList.value.length) arr.unshift({ label: "Pesée (attente)", attente: attentePeseeList.value.length, cours: 0, total: attentePeseeList.value.length })
+  const max = Math.max(1, ...arr.map(x => x.total))
+  return arr.map(x => ({ ...x, pct: Math.round(x.total / max * 100) })).sort((a, b) => b.total - a.total)
 })
 // Lots planifiés EN ATTENTE DE PESÉE : réception OF faite, pesée pas encore terminée
 const attentePeseeList = computed(() => {
   const rq = recherche.value.trim().toLowerCase()
-  const mL = (l) => !rq || (l.lot || '').toLowerCase().includes(rq) || (l.code || '').toLowerCase().includes(rq) || (l.desig || '').toLowerCase().includes(rq)
+  const mL = lotMatch
   const cc = condComplet.value
   const now = new Date()
   const res = []
@@ -427,7 +466,7 @@ const attentePeseeList = computed(() => {
 // OF planifiés, pas encore reçus (ni démarrés) -> en attente de réception
 const attenteReceptionList = computed(() => {
   const rq = recherche.value.trim().toLowerCase()
-  const mL = (l) => !rq || (l.lot || '').toLowerCase().includes(rq) || (l.code || '').toLowerCase().includes(rq) || (l.desig || '').toLowerCase().includes(rq)
+  const mL = lotMatch
   const cc = condComplet.value
   const res = []
   for (const o of ofs.value) {
@@ -582,8 +621,20 @@ onMounted(async () => {
             <div class="kpi-lbl">{{ k.l }}</div>
           </div>
         </div>
+        <section v-if="chargeAteliers.length" class="card charge-card">
+          <h3 class="card-title">Charge par atelier — lots en file</h3>
+          <div class="charge-list">
+            <div v-for="c in chargeAteliers" :key="c.label" class="charge-row">
+              <span class="charge-lbl">{{ c.label }}</span>
+              <div class="charge-bar-wrap"><div class="charge-bar" :style="{ width: c.pct + '%' }"></div></div>
+              <span class="charge-val">{{ c.total }}<span v-if="c.attente" class="charge-att"> · {{ c.attente }} att.</span></span>
+            </div>
+          </div>
+        </section>
         <div class="searchbar">
           <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
+          <label class="filtre-chk"><input type="checkbox" v-model="filtreUrgent" /> Urgents (&gt;{{ SEUIL_URGENT }} j)</label>
+          <label class="filtre-chk"><input type="checkbox" v-model="filtrePerime" /> OF périmés</label>
         </div>        <h3 class="board-h">Fabrication — files par atelier</h3>
         <p class="note">
           Chaque lot apparaît dans l'atelier de son <strong>étape courante</strong> : « en cours » s'il y est démarré, « en attente » si l'étape précédente est terminée.
@@ -665,7 +716,7 @@ onMounted(async () => {
                 <div class="q-title cours">En cours — {{ ph.cours.length }} lot(s) · {{ fmtC(ph.volCours) }} bts</div>
                 <div v-if="ph.cours.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
+                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'row-urgent': estUrgent(l) }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                       <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                       <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -679,7 +730,7 @@ onMounted(async () => {
                 <div class="q-title attente">En attente — {{ ph.attente.length }} lot(s) · {{ fmtC(ph.volAttente) }} bts</div>
                 <div v-if="ph.attente.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
+                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'row-urgent': estUrgent(l) }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                       <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                       <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -715,7 +766,7 @@ onMounted(async () => {
                   <div class="q-title cours">En cours — {{ g.cours.length }} lot(s) · {{ fmtC(g.volCours) }} bts</div>
                   <div v-if="g.cours.length" class="prod-scroll">
                     <table class="grid"><tbody>
-                      <tr v-for="l in g.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
+                      <tr v-for="l in g.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'row-urgent': estUrgent(l) }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
                         <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                         <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                         <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -728,7 +779,7 @@ onMounted(async () => {
                   <div class="q-title attente">En attente — {{ g.attente.length }} lot(s) · {{ fmtC(g.volAttente) }} bts</div>
                   <div v-if="g.attente.length" class="prod-scroll">
                     <table class="grid"><tbody>
-                      <tr v-for="l in g.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
+                      <tr v-for="l in g.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'row-urgent': estUrgent(l) }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
                         <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                         <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                         <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -1100,4 +1151,21 @@ onMounted(async () => {
 /* Champs / focus */
 select:focus, input:focus { outline: none !important; border-color: #06b6d4 !important; box-shadow: 0 0 0 3px rgba(6,182,212,.12) !important; }
 
+
+/* Développements : KPI auto-fit + filtres + graphe de charge + urgence */
+.kpi-grid.k3 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important; }
+.searchbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.filtre-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #475569; cursor: pointer; white-space: nowrap; padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; }
+.filtre-chk input { accent-color: #0891b2; width: 15px; height: 15px; }
+.charge-card { margin: 10px 0 0; }
+.charge-list { display: flex; flex-direction: column; gap: 5px; }
+.charge-row { display: grid; grid-template-columns: 160px 1fr auto; align-items: center; gap: 10px; }
+.charge-lbl { font-size: 12px; font-weight: 600; color: #334155; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.charge-bar-wrap { background: #ecfeff; border-radius: 999px; height: 13px; overflow: hidden; }
+.charge-bar { height: 100%; background: linear-gradient(90deg, #22d3ee, #0891b2); border-radius: 999px; min-width: 2px; transition: width .3s ease; }
+.charge-val { font-size: 12px; font-weight: 800; color: #0891b2; white-space: nowrap; min-width: 30px; text-align: right; }
+.charge-att { font-weight: 600; color: #94a3b8; font-size: 10px; }
+.lot-row.row-urgent { background: #fff7ed; }
+.lot-row.row-urgent:hover td, .lot-row.row-urgent:hover { background: #ffedd5; }
+@media (max-width: 700px) { .charge-row { grid-template-columns: 100px 1fr auto; } .charge-lbl { font-size: 10px; } }
 </style>
