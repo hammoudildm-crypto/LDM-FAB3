@@ -197,7 +197,7 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 function aller(p) { router.push(p) }
 
-const selected = ref(0)
+const selected = ref(null)  // tous les menus fermés à l'ouverture
 function toggle(i) { selected.value = selected.value === i ? null : i }
 
 const heure = ref('')
@@ -242,6 +242,7 @@ const CLE = 'prodtrack_hub_style'
 const saved = (() => { try { return localStorage.getItem(CLE) } catch (e) { return null } })()
 const valid = styles.map(s => s.k)
 const style = ref(saved && valid.includes(saved) ? saved : 'convoyeur')
+if (style.value === 'lateral') selected.value = 0
 function setStyle(k) { style.value = k; if (k === 'lateral' && (selected.value == null)) selected.value = 0; try { localStorage.setItem(CLE, k) } catch (e) {} }
 </script>
 
