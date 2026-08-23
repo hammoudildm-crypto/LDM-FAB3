@@ -715,7 +715,7 @@ onMounted(async () => {
                 <div class="q-title cours">En cours — {{ ph.cours.length }} lot(s) · {{ fmtC(ph.volCours) }} bts</div>
                 <div v-if="ph.cours.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'row-urgent': estUrgent(l) }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
+                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                       <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                       <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -729,7 +729,7 @@ onMounted(async () => {
                 <div class="q-title attente">En attente — {{ ph.attente.length }} lot(s) · {{ fmtC(ph.volAttente) }} bts</div>
                 <div v-if="ph.attente.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'row-urgent': estUrgent(l) }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
+                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                       <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                       <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -765,7 +765,7 @@ onMounted(async () => {
                   <div class="q-title cours">En cours — {{ g.cours.length }} lot(s) · {{ fmtC(g.volCours) }} bts</div>
                   <div v-if="g.cours.length" class="prod-scroll">
                     <table class="grid"><tbody>
-                      <tr v-for="l in g.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'row-urgent': estUrgent(l) }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
+                      <tr v-for="l in g.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
                         <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                         <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                         <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -778,7 +778,7 @@ onMounted(async () => {
                   <div class="q-title attente">En attente — {{ g.attente.length }} lot(s) · {{ fmtC(g.volAttente) }} bts</div>
                   <div v-if="g.attente.length" class="prod-scroll">
                     <table class="grid"><tbody>
-                      <tr v-for="l in g.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'row-urgent': estUrgent(l) }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
+                      <tr v-for="l in g.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
                         <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                         <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                         <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -1164,8 +1164,6 @@ select:focus, input:focus { outline: none !important; border-color: #06b6d4 !imp
 .charge-bar { height: 100%; background: linear-gradient(90deg, #22d3ee, #0891b2); border-radius: 999px; min-width: 2px; transition: width .3s ease; }
 .charge-val { font-size: 12px; font-weight: 800; color: #0891b2; white-space: nowrap; min-width: 30px; text-align: right; }
 .charge-att { font-weight: 600; color: #94a3b8; font-size: 10px; }
-.lot-row.row-urgent { background: #fff7ed; }
-.lot-row.row-urgent:hover td, .lot-row.row-urgent:hover { background: #ffedd5; }
 @media (max-width: 700px) { .charge-row { grid-template-columns: 100px 1fr auto; } .charge-lbl { font-size: 10px; } }
 
 /* Tuile KPI à valeur texte (ex. atelier le plus chargé) : police réduite */
