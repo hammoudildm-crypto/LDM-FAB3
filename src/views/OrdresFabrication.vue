@@ -103,6 +103,12 @@ const anneesLot = computed(() => {
   return [...set].sort((a, b) => b - a)
 })
 const numLot = (v) => { const n = parseInt(String(v == null ? '' : v).replace(/\D/g, ''), 10); return isNaN(n) ? null : n }
+// Règle numéro de lot : 2 premiers chiffres = année, le reste = séquence
+const lotKey = (v) => {
+  const d = String(v == null ? '' : v).replace(/\D/g, '')
+  if (!d) return { an: -1, seq: -1 }
+  return { an: parseInt(d.slice(0, 2), 10), seq: parseInt(d.slice(2) || '0', 10) }
+}
 const lotsFiltres = computed(() => {
   const q = rechercheLot.value.trim().toLowerCase()
   return lots.value.filter(l => {
@@ -124,7 +130,7 @@ const lotsFiltres = computed(() => {
       if (!(String(l.numero_lot || '').toLowerCase().includes(q) || code.toLowerCase().includes(q) || desig.toLowerCase().includes(q))) return false
     }
     return true
-  }).sort((a, b) => (numLot(b.numero_lot) || 0) - (numLot(a.numero_lot) || 0))
+  }).sort((a, b) => { const ka = lotKey(a.numero_lot), kb = lotKey(b.numero_lot); return (kb.an - ka.an) || (kb.seq - ka.seq) })
 })
 const lotsAffiches = computed(() => lotsFiltres.value.slice(0, LIMITE))
 // Dernier numéro de lot enregistré (le plus élevé) + le suivant proposé
