@@ -263,13 +263,17 @@ function infoPhase(k) {
   const plan = planParPhase.value[k] || 0, realise = realiseParPhase.value[k] || 0
   return { plan, realise, taux: plan > 0 ? Math.round(realise / plan * 100) : null }
 }
+// Produit « direct conditionnement » (ex. seringues importées type Rebif) : pas d'étape de fabrication
+function estDirectCond(p) { return !!(p && String(p.forme || '').toLowerCase() === 'seringue') }
 const queuePhase = computed(() => {
   const q = {}
   for (const ph of PHASES) q[ph.key] = { attente: [], cours: [] }
   const condFini = condComplet.value
   const condAny = ordresConditionnes.value
   for (const o of ofs.value) {
-    if ((!o.date_lancement && !o.date_fin_fabrication) || condFini.has(o.id)) continue
+    const directCond = estDirectCond(o.produits)
+    if (condFini.has(o.id)) continue
+    if (!directCond && !o.date_lancement && !o.date_fin_fabrication) continue
     if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
     const pl = phasesLot.value[o.id] || {}
     const stat = (nom) => (pl[phaseKey(nom)] || {}).statut
@@ -284,6 +288,10 @@ const queuePhase = computed(() => {
     const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !fabTerminee) ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
+    if (directCond) {
+      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_lancement || o.date_reception || o.date_fin_fabrication })
+      continue
+    }
     // Règle : le lot est à sa PREMIÈRE phase de gamme NON terminée.
     //   Conditionnement uniquement si TOUTES les phases de la gamme sont terminées.
     if (Object.keys(pl).length === 0) {
@@ -474,6 +482,7 @@ const attenteReceptionList = computed(() => {
     if (cc.has(o.id)) continue
     if (o.statut === 'Libéré' || o.statut === 'Rejeté' || o.statut === 'Terminé') continue
     const p = o.produits || {}
+    if (estDirectCond(p)) continue
     res.push({ id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), validite: o.date_fin_validite || null })
   }
   return res.filter(mL).sort((a, b) => String(a.lot || '').localeCompare(String(b.lot || ''), undefined, { numeric: true }))
