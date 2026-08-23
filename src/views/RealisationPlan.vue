@@ -81,8 +81,9 @@ const fabReelParMois = computed(() => {
   }
   // Produits « direct conditionnement » (seringue, ex. Rebif) : conditionné = fabriqué
   for (const c of condRows.value) {
-    const p = (c.ordres_fabrication && c.ordres_fabrication.produits) || {}
-    if (!estDirectCond(p) || !c.date_conditionnement) continue
+    const o = c.ordres_fabrication
+    const p = (o && o.produits) || {}
+    if (!o || o.date_fin_fabrication || !c.date_conditionnement) continue
     const d = new Date(c.date_conditionnement)
     if (d.getFullYear() !== anneeSel.value) continue
     a[d.getMonth()] += condBoites(c)
@@ -140,8 +141,9 @@ const detailBarre = computed(() => {
     const e = rec(o.produits); if (e) e.fab += num(o.boites_fabriquees)
   }
   for (const c of condRows.value) {
-    const p = (c.ordres_fabrication && c.ordres_fabrication.produits) || {}
-    if (!estDirectCond(p) || !c.date_conditionnement) continue
+    const o = c.ordres_fabrication
+    const p = (o && o.produits) || {}
+    if (!o || o.date_fin_fabrication || !c.date_conditionnement) continue
     const d = new Date(c.date_conditionnement)
     if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
     const e = rec(p); if (e) e.fab += condBoites(c)
@@ -300,11 +302,13 @@ const parProduit = computed(() => {
   }
   for (const c of condRows.value) {
     if (!c.date_conditionnement || new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
-    const p = c.ordres_fabrication && c.ordres_fabrication.produits ? c.ordres_fabrication.produits : null
+    const o = c.ordres_fabrication
+    const p = o && o.produits ? o.produits : null
     if (!p) continue
     const e = ent(p.code_pf, p.designation)
     const b = condBoites(c)
     e.cond += b; e.ca += b * num(p.pcsu)
+    if (!o.date_fin_fabrication) e.fab += b   // direct conditionnement (ex. Rebif) : conditionné = fabriqué
   }
   return Object.values(m).sort((a, b) => (b.plan - a.plan) || (b.fab - a.fab))
 })
