@@ -486,23 +486,21 @@ onMounted(async () => {
             </select>
           </label>
           <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
-          <div class="wide chk-row">
+          <div class="wide chk-row chk-row-1l">
             <label class="chk"><input type="checkbox" v-model="form.deviation" /> Déviation fabrication</label>
             <label class="chk"><input type="checkbox" v-model="form.deviation_cond" /> Déviation conditionnement</label>
-          </div>
-          <div class="wide chk-row">
             <label class="chk"><input type="checkbox" v-model="form.en_triage" @change="majTriage('fab')" /> En triage fabrication</label>
-            <template v-if="form.en_triage">
-              <label class="tri-d">Début <input type="date" v-model="form.triage_debut" /></label>
-              <label class="tri-d">Fin <input type="date" v-model="form.triage_fin" /></label>
-            </template>
-          </div>
-          <div class="wide chk-row">
             <label class="chk"><input type="checkbox" v-model="form.en_triage_cond" @change="majTriage('cond')" /> En triage conditionnement</label>
-            <template v-if="form.en_triage_cond">
-              <label class="tri-d">Début <input type="date" v-model="form.triage_cond_debut" /></label>
-              <label class="tri-d">Fin <input type="date" v-model="form.triage_cond_fin" /></label>
-            </template>
+          </div>
+          <div class="wide chk-row" v-if="form.en_triage">
+            <span class="tri-lbl">Triage fabrication :</span>
+            <label class="tri-d">Début <input type="date" v-model="form.triage_debut" /></label>
+            <label class="tri-d">Fin <input type="date" v-model="form.triage_fin" /></label>
+          </div>
+          <div class="wide chk-row" v-if="form.en_triage_cond">
+            <span class="tri-lbl">Triage conditionnement :</span>
+            <label class="tri-d">Début <input type="date" v-model="form.triage_cond_debut" /></label>
+            <label class="tri-d">Fin <input type="date" v-model="form.triage_cond_fin" /></label>
           </div>
           <div class="form-actions">
             <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Créer le lot' }}</button>
@@ -771,4 +769,8 @@ button.link.release { color: #166534; }
 .desact-h { font-size: 15px; font-weight: 800; color: #0f172a; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
 .desact-n { background: #f1f5f9; color: #64748b; font-size: 12px; padding: 2px 8px; border-radius: 10px; }
 .link.ok { color: #15803d; font-weight: 700; }
+
+/* 4 cases (déviation/triage) sur une seule ligne */
+.chk-row-1l { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+.tri-lbl { font-size: 12px; font-weight: 700; color: #64748b; }
 </style>
