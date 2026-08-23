@@ -590,8 +590,7 @@ onMounted(async () => {
 
 <template>
   <div class="de-page">
-    <PageHeader title="Disponibilité des produits par atelier" tone="cyan"
-      subtitle="File d'attente en temps réel par atelier (pour prioriser et éviter les ruptures).">
+    <PageHeader title="Disponibilité des produits par atelier" tone="cyan">
       <label class="annee-sel">Année de fabrication
         <select v-model.number="anneeSel">
           <option :value="0">Toutes années</option>
@@ -617,7 +616,7 @@ onMounted(async () => {
       <div v-show="ongletDispo === 'file'">
         <div class="kpi-grid k3">
           <div class="kpi" v-for="(k, i) in kpisFile" :key="i">
-            <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val">{{ k.v }}</div></div>
+            <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
             <div class="kpi-lbl">{{ k.l }}</div>
           </div>
         </div>
@@ -821,7 +820,7 @@ onMounted(async () => {
         <div class="kpi" v-for="(k, i) in kpis" :key="i">
           <div class="kpi-top">
             <span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span>
-            <div class="kpi-val">{{ k.v }}</div>
+            <div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div>
           </div>
           <div class="kpi-lbl">{{ k.l }}</div>
         </div>
@@ -1168,4 +1167,7 @@ select:focus, input:focus { outline: none !important; border-color: #06b6d4 !imp
 .lot-row.row-urgent { background: #fff7ed; }
 .lot-row.row-urgent:hover td, .lot-row.row-urgent:hover { background: #ffedd5; }
 @media (max-width: 700px) { .charge-row { grid-template-columns: 100px 1fr auto; } .charge-lbl { font-size: 10px; } }
+
+/* Tuile KPI à valeur texte (ex. atelier le plus chargé) : police réduite */
+.kpi-val.kpi-val-sm { font-size: 12px !important; line-height: 1.2; word-break: break-word; }
 </style>
