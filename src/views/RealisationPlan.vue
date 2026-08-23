@@ -43,7 +43,7 @@ async function charger() {
   realRows.value = rr.data
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
-    .select('quantite_conditionnee, date_conditionnement, equipements(nom), ordres_fabrication(date_fin_fabrication, produits(code_pf, designation, pcsu, unites_par_boite, taille_lot))')
+    .select('quantite_conditionnee, date_conditionnement, equipements(nom), ordres_fabrication(date_fin_fabrication, produits(code_pf, designation, pcsu, unites_par_boite, taille_lot, forme))')
     .eq('actif', true))
   if (rc.error) { msg.value = rc.error.message; return }
   condRows.value = rc.data
@@ -70,6 +70,7 @@ const planParMois = computed(() => {
   for (const r of planRows.value) if (Number(r.annee) === anneeSel.value && r.mois >= 1 && r.mois <= 12) a[r.mois - 1] += num(r.quantite_planifiee)
   return a
 })
+const estDirectCond = (p) => !!(p && String(p.forme || '').toLowerCase() === 'seringue')
 const fabReelParMois = computed(() => {
   const a = Array(12).fill(0)
   for (const o of ofs.value) {
@@ -77,6 +78,14 @@ const fabReelParMois = computed(() => {
     const d = new Date(o.date_fin_fabrication)
     if (d.getFullYear() !== anneeSel.value) continue
     a[d.getMonth()] += num(o.boites_fabriquees)
+  }
+  // Produits « direct conditionnement » (seringue, ex. Rebif) : conditionné = fabriqué
+  for (const c of condRows.value) {
+    const p = (c.ordres_fabrication && c.ordres_fabrication.produits) || {}
+    if (!estDirectCond(p) || !c.date_conditionnement) continue
+    const d = new Date(c.date_conditionnement)
+    if (d.getFullYear() !== anneeSel.value) continue
+    a[d.getMonth()] += condBoites(c)
   }
   return a
 })
@@ -129,6 +138,13 @@ const detailBarre = computed(() => {
     const d = new Date(o.date_fin_fabrication)
     if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
     const e = rec(o.produits); if (e) e.fab += num(o.boites_fabriquees)
+  }
+  for (const c of condRows.value) {
+    const p = (c.ordres_fabrication && c.ordres_fabrication.produits) || {}
+    if (!estDirectCond(p) || !c.date_conditionnement) continue
+    const d = new Date(c.date_conditionnement)
+    if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
+    const e = rec(p); if (e) e.fab += condBoites(c)
   }
   for (const c of condRows.value) {
     if (!c.date_conditionnement) continue
