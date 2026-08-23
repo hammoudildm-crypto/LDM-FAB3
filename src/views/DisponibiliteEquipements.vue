@@ -1069,4 +1069,35 @@ onMounted(async () => {
 .lot-row.en-triage-cond .pf::after { content: ' 🔍 triage cond.'; color: #b45309; font-size: .78em; font-weight: 700; }
 .triage-vide { font-size: 12px; color: #92400e; margin: 0; }
 .triage-vide code { background: #fde68a; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+
+/* ============================================================= *
+ * Refonte moderne — couche de surcharge (cohérence cyan)
+ * ============================================================= */
+.de-page :deep(h1) { font-size: 20px !important; }
+.card, .kpi { border-color: #e0edf1 !important; border-radius: 13px !important; box-shadow: 0 1px 3px rgba(8,145,178,.05) !important; }
+.kpi-val { color: #0891b2 !important; }
+.atelier-titre { color: #0e7490 !important; font-weight: 800 !important; letter-spacing: -.01em; border-left: 3px solid #06b6d4; padding-left: 8px; }
+.q-title, .card-title { color: #0e7490 !important; font-weight: 800 !important; letter-spacing: -.01em; }
+.q-title { border-left: 3px solid #22d3ee; padding-left: 7px; }
+
+/* Bloc atelier / équipement */
+.atelier { border-color: #e0edf1 !important; border-radius: 13px !important; }
+.eq-head { border-bottom-color: #e6f4f7 !important; }
+.eq-ic { color: #0891b2 !important; background: #ecfeff !important; }
+.phase-card { border-color: #e6f4f7 !important; border-radius: 11px !important; }
+
+/* Tableaux */
+.grid th { color: #0891b2 !important; background: #ecfeff !important; }
+.lot-row:hover td, .lot-row:hover { background: #f2fdff; }
+
+/* Onglets */
+.de-tabs button.on { color: #0891b2 !important; background: #ecfeff !important; box-shadow: inset 0 -2px 0 #06b6d4; }
+
+/* Badges / puces */
+.phase-badge { background: #ecfeff !important; color: #0e7490 !important; border-color: #a5f0fc !important; }
+.attente { color: #0891b2; }
+
+/* Champs / focus */
+select:focus, input:focus { outline: none !important; border-color: #06b6d4 !important; box-shadow: 0 0 0 3px rgba(6,182,212,.12) !important; }
+
 </style>
