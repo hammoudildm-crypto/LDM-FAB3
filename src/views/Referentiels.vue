@@ -39,7 +39,7 @@ const produitsFiltresCad = computed(() => {
 })
 const erreur = ref('')
 
-const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet']
+const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet', 'blister']
 const GAMME_PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
 // Fusionne les anciennes étapes « Granulation » + « Séchage » en une seule « Granulation et Séchage »
 function normGammeR(g) {
