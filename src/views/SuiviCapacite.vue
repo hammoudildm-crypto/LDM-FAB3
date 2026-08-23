@@ -608,4 +608,13 @@ tbody tr.rt-x:hover td { background: #fef2f2; }
 @media (max-width: 700px) { .mc-nom { flex-basis: 140px; } .mc-m { display: none; } }
 .chip-btn { cursor: pointer; border: 1px solid #fca5a5; background: #fff; font: inherit; transition: all .12s; }
 .chip-btn:hover { background: #fee2e2; border-color: #ef4444; }
+
+/* Plafonner le tableau -> voir la KPI + cartes d'alerte du bas */
+.tbl-wrap { max-height: 55vh !important; overflow: auto !important; }
+.grid thead th { position: sticky; top: 0; z-index: 3; background: #f4f6f9; }
+.kpi-line { margin-top: 6px; }
+.kpi-mini { padding: 6px 10px !important; }
+.km-val { font-size: 14px !important; }
+.km-lbl { font-size: 9px !important; }
+.card.avert { padding: 6px 10px !important; margin-bottom: 5px !important; }
 </style>
