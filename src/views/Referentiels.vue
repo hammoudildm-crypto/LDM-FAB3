@@ -563,7 +563,7 @@ onMounted(async () => {
           </select>
         </label>
         <label>Unités / boîte<input v-model="formP.unites_par_boite" type="number" placeholder="30" /></label>
-        <label>Poids unitaire (mg)<input v-model="formP.poids_unitaire_mg" type="number" step="any" placeholder="350" /></label>
+        <label>Poids unitaire ({{ formP.forme === 'seringue' ? 'mg / unité' : 'mg' }})<input v-model="formP.poids_unitaire_mg" type="number" step="any" placeholder="350" /></label>
         <label>Taille de lot<input v-model="formP.taille_lot" type="number" placeholder="500000" /></label>
         <label>Durée de vie (mois)<input v-model="formP.duree_vie_mois" type="number" placeholder="36" /></label>
         <label>AQL<input v-model="formP.aql" placeholder="0.65" /></label>
