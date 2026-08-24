@@ -35,8 +35,9 @@
               <tr v-for="l in lignesFiltrees" :key="l.id" class="ho-row" :class="{ sel: sel === l.id }" @click="sel = (sel === l.id ? null : l.id)">
                 <td class="ho-lot">{{ l.lot }}</td>
                 <td class="ho-prod"><span class="ho-code">{{ l.code }}</span><span class="ho-desig">{{ l.desig }}</span></td>
-                <td v-for="ph in PHASES" :key="ph" class="ho-cell" :class="{ 'ho-cell-vide': !l.phases[ph] }">
-                  <template v-if="l.phases[ph]">
+                <td v-for="ph in PHASES" :key="ph" class="ho-cell" :class="{ 'ho-cell-na': !l.gamme.includes(ph), 'ho-cell-vide': l.gamme.includes(ph) && !l.phases[ph] }">
+                  <span v-if="!l.gamme.includes(ph)" class="ho-na">NA</span>
+                  <template v-else-if="l.phases[ph]">
                     <span class="ho-date"><span class="ho-lbl">D</span>{{ fmtDate(l.phases[ph].debut) }}</span>
                     <span class="ho-date"><span class="ho-lbl">F</span>{{ fmtDate(l.phases[ph].date) }}</span>
                     <span v-if="l.phases[ph].equip" class="ho-eq" :title="l.phases[ph].equip">{{ l.phases[ph].equip }}</span>
@@ -44,8 +45,8 @@
                   <span v-else>—</span>
                 </td>
                 <td class="ho-prog">
-                  <div class="ho-progbar"><div class="ho-progfill" :style="{ width: (nbPhasesFaites(l) / PHASES.length * 100) + '%' }"></div></div>
-                  <span class="ho-progtxt">{{ nbPhasesFaites(l) }}/{{ PHASES.length }}</span>
+                  <div class="ho-progbar"><div class="ho-progfill" :style="{ width: (nbPhasesFaites(l) / nbPhasesGamme(l) * 100) + '%' }"></div></div>
+                  <span class="ho-progtxt">{{ nbPhasesFaites(l) }}/{{ nbPhasesGamme(l) }}</span>
                 </td>
                 <td class="ho-duree">{{ dureeLot(l) }}</td>
                 <td><span class="ho-badge" :class="'st-' + clsStatut(l.statut)">{{ l.statut || '—' }}</span></td>
@@ -112,33 +113,46 @@ async function fetchAllPaged(make) {
 }
 
 function normPhase(p) { return /^(granulation|s[ée]chage)$/i.test(String(p).trim()) ? 'Granulation et Séchage' : p }
+function normGammeFab(g) {
+  if (!Array.isArray(g) || !g.length) return PHASES.slice()
+  const out = []
+  for (const ph of g) { const n = normPhase(ph); if (PHASES.includes(n) && !out.includes(n)) out.push(n) }
+  return out.length ? out : PHASES.slice()
+}
 
 async function charger() {
   chargement.value = true; erreur.value = ''
   try {
-    const rows = await fetchAllPaged(() => supabase.from('suivi_phases')
-      .select('ordre_id, phase, quantite_entree, quantite_sortie, date_debut, date_phase, statut, equipements(code, nom), ordres_fabrication(numero_lot, statut, produits(code_pf, designation))')
-      .eq('actif', true))
+    const [ofs, phs] = await Promise.all([
+      fetchAllPaged(() => supabase.from('ordres_fabrication')
+        .select('id, numero_lot, statut, date_fin_fabrication, produits(code_pf, designation, gamme)')
+        .order('id', { ascending: true })),
+      fetchAllPaged(() => supabase.from('suivi_phases')
+        .select('ordre_id, phase, quantite_entree, quantite_sortie, date_debut, date_phase, statut, equipements(code, nom)')
+        .eq('actif', true).order('ordre_id', { ascending: true }).order('id', { ascending: true }))
+    ])
     const map = {}
-    for (const r of rows) {
-      const oid = r.ordre_id; if (!oid) continue
-      const o = r.ordres_fabrication || {}
+    for (const o of ofs) {
       const pr = o.produits || {}
-      if (!map[oid]) map[oid] = { id: oid, lot: o.numero_lot || '—', code: pr.code_pf || '—', desig: pr.designation || '', statut: o.statut || '', phases: {} }
+      map[o.id] = { id: o.id, lot: o.numero_lot || '—', code: pr.code_pf || '—', desig: pr.designation || '', statut: o.statut || '', dateFin: o.date_fin_fabrication || null, gamme: normGammeFab(pr.gamme), phases: {} }
+    }
+    for (const r of phs) {
+      const e = map[r.ordre_id]; if (!e) continue
       const ph = normPhase(r.phase)
       const eq = r.equipements ? (r.equipements.code + (r.equipements.nom ? ' · ' + r.equipements.nom : '')) : ''
-      const prev = map[oid].phases[ph]
+      const prev = e.phases[ph]
       if (!prev || (r.date_phase && (!prev.date || r.date_phase > prev.date))) {
-        map[oid].phases[ph] = { date: r.date_phase, debut: r.date_debut, equip: eq, qteE: r.quantite_entree, qteS: r.quantite_sortie, statut: r.statut }
+        e.phases[ph] = { date: r.date_phase, debut: r.date_debut, equip: eq, qteE: r.quantite_entree, qteS: r.quantite_sortie, statut: r.statut }
       }
     }
-    lignes.value = Object.values(map)
+    lignes.value = Object.values(map).filter(l => l.dateFin || Object.keys(l.phases).length)
   } catch (e) { erreur.value = e.message || String(e) }
   chargement.value = false
 }
 onMounted(charger)
 
 function anneeLot(l) {
+  if (l.dateFin) return new Date(l.dateFin).getFullYear()
   for (const ph of PHASES) { const p = l.phases[ph]; if (p && p.date) return new Date(p.date).getFullYear() }
   return null
 }
@@ -186,7 +200,8 @@ function phasesDuLot(l) { return PHASES.filter(p => l.phases[p]) }
 function fmtDate(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? String(d) : x.toLocaleDateString('fr-FR') }
 function fmtNb(v) { if (v == null || v === '') return '—'; const n = Number(v); return isNaN(n) ? String(v) : n.toLocaleString('fr-FR') }
 function clsStatut(s) { const t = String(s || '').toLowerCase(); if (/termin|libér/.test(t)) return 'ok'; if (/cours/.test(t)) return 'run'; if (/rejet|rebut/.test(t)) return 'bad'; return 'todo' }
-function nbPhasesFaites(l) { let n = 0; for (const ph of PHASES) { const p = l.phases[ph]; if (p && (p.date || p.debut)) n++ } return n }
+function nbPhasesGamme(l) { return (l.gamme && l.gamme.length) ? l.gamme.length : PHASES.length }
+function nbPhasesFaites(l) { let n = 0; for (const ph of (l.gamme || PHASES)) { const p = l.phases[ph]; if (p && (p.date || p.debut)) n++ } return n }
 function dureePhase(p) { if (!p || !p.debut || !p.date) return '—'; const j = Math.round((new Date(p.date) - new Date(p.debut)) / 86400000); return j <= 0 ? '< 1 j' : j + ' j' }
 function exporterCSV() {
   const sep = ';'
@@ -197,8 +212,8 @@ function exporterCSV() {
   const rows = [head.map(esc).join(sep)]
   for (const l of lignesFiltrees.value) {
     const r = [l.lot, l.code, l.desig]
-    for (const ph of PHASES) { const p = l.phases[ph]; r.push(p ? fmtDate(p.debut) : '', p ? fmtDate(p.date) : '') }
-    r.push(nbPhasesFaites(l) + '/' + PHASES.length, dureeLot(l).replace(' j', '').replace('< 1', '0'), l.statut || '')
+    for (const ph of PHASES) { if (!l.gamme.includes(ph)) { r.push('NA', 'NA') } else { const p = l.phases[ph]; r.push(p ? fmtDate(p.debut) : '', p ? fmtDate(p.date) : '') } }
+    r.push(nbPhasesFaites(l) + '/' + nbPhasesGamme(l), dureeLot(l).replace(' j', '').replace('< 1', '0'), l.statut || '')
     rows.push(r.map(esc).join(sep))
   }
   const blob = new Blob(['\uFEFF' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' })
@@ -263,6 +278,8 @@ function exporterPDF() { window.print() }
 .ho-desig { color: #64748b; font-size: 11px; }
 .ho-cell { white-space: nowrap; }
 .ho-cell-vide { color: #cbd5e1; }
+.ho-cell-na { background: #f8fafc; }
+.ho-na { color: #cbd5e1; font-size: 10px; font-weight: 700; font-style: italic; }
 .ho-date { display: block; font-weight: 600; color: #334155; }
 .ho-lbl { display: inline-block; width: 13px; font-size: 9px; font-weight: 800; color: #a5b4fc; }
 .ho-eq { display: block; font-size: 10px; color: #94a3b8; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
