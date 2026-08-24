@@ -145,7 +145,7 @@ async function charger() {
         e.phases[ph] = { date: r.date_phase, debut: r.date_debut, equip: eq, qteE: r.quantite_entree, qteS: r.quantite_sortie, statut: r.statut }
       }
     }
-    lignes.value = Object.values(map).filter(l => l.dateFin || Object.keys(l.phases).length)
+    lignes.value = Object.values(map)
   } catch (e) { erreur.value = e.message || String(e) }
   chargement.value = false
 }
@@ -154,6 +154,8 @@ onMounted(charger)
 function anneeLot(l) {
   if (l.dateFin) return new Date(l.dateFin).getFullYear()
   for (const ph of PHASES) { const p = l.phases[ph]; if (p && p.date) return new Date(p.date).getFullYear() }
+  const d = String(l.lot || '').replace(/\D/g, '')
+  if (d.length >= 2) return 2000 + parseInt(d.slice(0, 2), 10)
   return null
 }
 const anneesDispo = computed(() => {
