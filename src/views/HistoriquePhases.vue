@@ -16,6 +16,16 @@
         <span class="ho-count">{{ lignesFiltrees.length }} lot(s)</span>
       </div>
 
+      <div v-if="!chargement && !erreur && lignesFiltrees.length" class="card ho-rdt-band">
+        <span class="ho-rdt-title">Rendement moyen par phase</span>
+        <div class="ho-rdt-grid">
+          <div v-for="r in rendementMoyen" :key="r.phase" class="ho-rdt-item">
+            <span class="ho-rdt-ph">{{ courtPhase(r.phase) }}</span>
+            <span class="ho-rdt-val" :class="clsRdt(r.moy)">{{ r.moy != null ? r.moy.toFixed(1) + '%' : '—' }}</span>
+            <span class="ho-rdt-n">{{ r.n }} lot{{ r.n > 1 ? 's' : '' }}</span>
+          </div>
+        </div>
+      </div>
       <div v-if="chargement" class="ho-load">Chargement de l'historique…</div>
       <div v-else-if="erreur" class="ho-err">{{ erreur }}</div>
       <div v-else class="card ho-tablecard">
@@ -41,6 +51,7 @@
                     <span class="ho-date"><span class="ho-lbl">D</span>{{ fmtDate(l.phases[ph].debut) }}</span>
                     <span class="ho-date"><span class="ho-lbl">F</span>{{ fmtDate(l.phases[ph].date) }}</span>
                     <span v-if="l.phases[ph].equip" class="ho-eq" :title="l.phases[ph].equip">{{ l.phases[ph].equip }}</span>
+                    <span v-if="rendementPhase(l.phases[ph]) != null" class="ho-rdt" :class="clsRdt(rendementPhase(l.phases[ph]))">R {{ rendementPhase(l.phases[ph]).toFixed(0) }}%</span>
                   </template>
                   <span v-else>—</span>
                 </td>
@@ -61,7 +72,7 @@
         <h3 class="ho-dt-title">Détail du lot {{ lotSel.lot }} — {{ lotSel.code }} <span class="ho-dt-desig">{{ lotSel.desig }}</span></h3>
         <div class="ho-scroll">
           <table class="ho-dtbl">
-            <thead><tr><th>Phase</th><th>Équipement</th><th class="r">Entrée (kg)</th><th class="r">Sortie (kg)</th><th>Début</th><th>Fin</th><th>Durée</th><th>Statut</th></tr></thead>
+            <thead><tr><th>Phase</th><th>Équipement</th><th class="r">Entrée (kg)</th><th class="r">Sortie (kg)</th><th>Début</th><th>Fin</th><th>Durée</th><th>Rendement</th><th>Statut</th></tr></thead>
             <tbody>
               <tr v-for="ph in phasesDuLot(lotSel)" :key="ph">
                 <td class="ho-dp">{{ ph }}</td>
@@ -71,6 +82,7 @@
                 <td>{{ fmtDate(lotSel.phases[ph].debut) }}</td>
                 <td>{{ fmtDate(lotSel.phases[ph].date) }}</td>
                 <td>{{ dureePhase(lotSel.phases[ph]) }}</td>
+                <td :class="clsRdt(rendementPhase(lotSel.phases[ph]))" style="font-weight:800">{{ rendementPhase(lotSel.phases[ph]) != null ? rendementPhase(lotSel.phases[ph]).toFixed(1) + '%' : '—' }}</td>
                 <td><span class="ho-badge sm" :class="'st-' + clsStatut(lotSel.phases[ph].statut)">{{ lotSel.phases[ph].statut || '—' }}</span></td>
               </tr>
             </tbody>
@@ -196,25 +208,35 @@ const lignesFiltrees = computed(() => {
   }).sort((a, b) => { const ka = lotKey(a.lot), kb = lotKey(b.lot); return (kb.an - ka.an) || (kb.seq - ka.seq) })
 })
 
+const rendementMoyen = computed(() => {
+  const acc = {}, cnt = {}
+  for (const ph of PHASES) { acc[ph] = 0; cnt[ph] = 0 }
+  for (const l of lignesFiltrees.value) {
+    for (const ph of PHASES) { const r = rendementPhase(l.phases[ph]); if (r != null) { acc[ph] += r; cnt[ph]++ } }
+  }
+  return PHASES.map(ph => ({ phase: ph, moy: cnt[ph] ? acc[ph] / cnt[ph] : null, n: cnt[ph] }))
+})
 const lotSel = computed(() => sel.value == null ? null : lignes.value.find(l => l.id === sel.value) || null)
 function phasesDuLot(l) { return PHASES.filter(p => l.phases[p]) }
 
 function fmtDate(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? String(d) : x.toLocaleDateString('fr-FR') }
 function fmtNb(v) { if (v == null || v === '') return '—'; const n = Number(v); return isNaN(n) ? String(v) : n.toLocaleString('fr-FR') }
 function clsStatut(s) { const t = String(s || '').toLowerCase(); if (/termin|libér/.test(t)) return 'ok'; if (/cours/.test(t)) return 'run'; if (/rejet|rebut/.test(t)) return 'bad'; return 'todo' }
+function rendementPhase(p) { if (!p) return null; const e = Number(p.qteE), so = Number(p.qteS); if (!(e > 0) || isNaN(so)) return null; return so / e * 100 }
+function clsRdt(r) { if (r == null) return ''; if (r >= 98) return 'rdt-ok'; if (r >= 92) return 'rdt-warn'; return 'rdt-bad' }
 function nbPhasesGamme(l) { return (l.gamme && l.gamme.length) ? l.gamme.length : PHASES.length }
 function nbPhasesFaites(l) { let n = 0; for (const ph of (l.gamme || PHASES)) { const p = l.phases[ph]; if (p && (p.date || p.debut)) n++ } return n }
 function dureePhase(p) { if (!p || !p.debut || !p.date) return '—'; const j = Math.round((new Date(p.date) - new Date(p.debut)) / 86400000); return j <= 0 ? '< 1 j' : j + ' j' }
 function exporterCSV() {
   const sep = ';'
   const head = ['N° Lot', 'Code', 'Désignation']
-  for (const ph of PHASES) { head.push(courtPhase(ph) + ' début', courtPhase(ph) + ' fin') }
+  for (const ph of PHASES) { head.push(courtPhase(ph) + ' début', courtPhase(ph) + ' fin', courtPhase(ph) + ' rdt%') }
   head.push('Phases faites', 'Durée (j)', 'Statut')
   const esc = (x) => '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"'
   const rows = [head.map(esc).join(sep)]
   for (const l of lignesFiltrees.value) {
     const r = [l.lot, l.code, l.desig]
-    for (const ph of PHASES) { if (!l.gamme.includes(ph)) { r.push('NA', 'NA') } else { const p = l.phases[ph]; r.push(p ? fmtDate(p.debut) : '', p ? fmtDate(p.date) : '') } }
+    for (const ph of PHASES) { if (!l.gamme.includes(ph)) { r.push('NA', 'NA', 'NA') } else { const p = l.phases[ph]; const rd = rendementPhase(p); r.push(p ? fmtDate(p.debut) : '', p ? fmtDate(p.date) : '', rd != null ? rd.toFixed(1) : '') } }
     r.push(nbPhasesFaites(l) + '/' + nbPhasesGamme(l), dureeLot(l).replace(' j', '').replace('< 1', '0'), l.statut || '')
     rows.push(r.map(esc).join(sep))
   }
@@ -282,6 +304,17 @@ function exporterPDF() { window.print() }
 .ho-cell-vide { color: #cbd5e1; }
 .ho-cell-na { background: #f8fafc; }
 .ho-na { color: #cbd5e1; font-size: 10px; font-weight: 700; font-style: italic; }
+.ho-rdt { display: block; font-size: 10px; font-weight: 800; margin-top: 1px; }
+.rdt-ok { color: #16a34a; }
+.rdt-warn { color: #d97706; }
+.rdt-bad { color: #dc2626; }
+.ho-rdt-band { display: flex; align-items: center; gap: 14px; padding: 8px 14px; margin-bottom: 10px; flex-wrap: wrap; }
+.ho-rdt-title { font-size: 11px; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: .04em; }
+.ho-rdt-grid { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+.ho-rdt-item { display: flex; flex-direction: column; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 12px; min-width: 88px; }
+.ho-rdt-ph { font-size: 10px; font-weight: 700; color: #64748b; }
+.ho-rdt-val { font-size: 16px; font-weight: 800; line-height: 1.1; }
+.ho-rdt-n { font-size: 9px; color: #94a3b8; }
 .ho-date { display: block; font-weight: 600; color: #334155; }
 .ho-lbl { display: inline-block; width: 13px; font-size: 9px; font-weight: 800; color: #a5b4fc; }
 .ho-eq { display: block; font-size: 10px; color: #94a3b8; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
