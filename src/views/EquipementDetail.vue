@@ -154,25 +154,50 @@ const moisRealises = computed(() => {
   for (let mo = 0; mo < 12; mo++) out[mo] = annee.value < anneeActuelle || (annee.value === anneeActuelle && mo < moisActuel)
   return out
 })
+// Réalisé par produit et par mois (boîtes fabriquées, depuis les OF)
+const realiseParProduitMois = computed(() => {
+  const m = {}
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    const d = new Date(o.date_fin_fabrication)
+    if (d.getFullYear() !== annee.value) continue
+    const pid = o.produit_id, mo = d.getMonth()
+    if (!m[pid]) m[pid] = Array(12).fill(0)
+    m[pid][mo] += num(o.boites_fabriquees)
+  }
+  return m
+})
 const occupationParMois = computed(() => {
   const out = Array(12).fill(null)
   const capaJour = postesEquip.value * 8 * nbMachines.value
+  // Nombre de mois restants (non réalisés)
+  let nbRest = 0
+  for (let mo = 0; mo < 12; mo++) if (!moisRealises.value[mo]) nbRest++
+  // Reste par produit (plan - réalisé), réparti également sur les mois restants
+  const restePP = {}
+  for (const p of produits.value) {
+    if (cadenceGroupe(p.id) <= 0) continue
+    const reste = Math.max(0, (planParProduit.value[p.id] || 0) - (realiseParProduit.value[p.id] || 0))
+    restePP[p.id] = nbRest > 0 ? reste / nbRest : 0
+  }
   for (let mo = 0; mo < 12; mo++) {
     const jm = joursOuvresMoisN(mo)
     const capaMois = jm * capaJour
-    if (moisRealises.value[mo]) {
-      // Mois réalisé : occupation = temps de fonctionnement réel / capacité
-      const hReel = (fonctParMois.value[mo] || 0) / 60
-      out[mo] = capaMois > 0 ? hReel / capaMois : 0
-      continue
-    }
-    // Mois courant + futurs : prévisionnel (depuis le plan)
     let heures = 0
-    for (const p of produits.value) {
-      const cad = cadenceGroupe(p.id); if (cad <= 0) continue
-      const planB = (planParProduitMois.value[p.id] || [])[mo] || 0
-      if (planB <= 0) continue
-      heures += heuresProduit(p.id, planB).total
+    if (moisRealises.value[mo]) {
+      // Mois réalisé : occupation de la quantité réellement produite ce mois
+      for (const p of produits.value) {
+        if (cadenceGroupe(p.id) <= 0) continue
+        const b = (realiseParProduitMois.value[p.id] || [])[mo] || 0
+        if (b > 0) heures += heuresProduit(p.id, b).total
+      }
+    } else {
+      // Mois restant : occupation de la quantité restante répartie
+      for (const p of produits.value) {
+        if (cadenceGroupe(p.id) <= 0) continue
+        const b = restePP[p.id] || 0
+        if (b > 0) heures += heuresProduit(p.id, b).total
+      }
     }
     out[mo] = capaMois > 0 ? heures / capaMois : 0
   }
@@ -342,7 +367,7 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
               <span class="ed-mm" :class="{ 'ed-mm-real': moisRealises[i] }">{{ MOIS[i].charAt(0) }}</span>
             </div>
           </div>
-          <p class="ed-hint"><b>Barres pleines</b> = réalisé (temps de fonctionnement). <b>Barres estompées</b> = prévisionnel (plan). Trait = 100 %. Clique une barre pour le détail.</p>
+          <p class="ed-hint"><b>Barres pleines</b> = réalisé (quantité produite). <b>Barres estompées</b> = restant (quantité restante répartie). Trait = 100 %. Clique une barre pour le détail.</p>
         </section>
       </div>
 
