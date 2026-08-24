@@ -30,7 +30,8 @@
                 <td class="ho-prod"><span class="ho-code">{{ l.code }}</span><span class="ho-desig">{{ l.desig }}</span></td>
                 <td v-for="ph in PHASES" :key="ph" class="ho-cell" :class="{ 'ho-cell-vide': !l.phases[ph] }">
                   <template v-if="l.phases[ph]">
-                    <span class="ho-date">{{ fmtDate(l.phases[ph].date) }}</span>
+                    <span class="ho-date"><span class="ho-lbl">D</span>{{ fmtDate(l.phases[ph].debut) }}</span>
+                    <span class="ho-date"><span class="ho-lbl">F</span>{{ fmtDate(l.phases[ph].date) }}</span>
                     <span v-if="l.phases[ph].equip" class="ho-eq" :title="l.phases[ph].equip">{{ l.phases[ph].equip }}</span>
                   </template>
                   <span v-else>—</span>
@@ -47,13 +48,14 @@
         <h3 class="ho-dt-title">Détail du lot {{ lotSel.lot }} — {{ lotSel.code }} <span class="ho-dt-desig">{{ lotSel.desig }}</span></h3>
         <div class="ho-scroll">
           <table class="ho-dtbl">
-            <thead><tr><th>Phase</th><th>Équipement</th><th class="r">Entrée (kg)</th><th class="r">Sortie (kg)</th><th>Date</th><th>Statut</th></tr></thead>
+            <thead><tr><th>Phase</th><th>Équipement</th><th class="r">Entrée (kg)</th><th class="r">Sortie (kg)</th><th>Début</th><th>Fin</th><th>Statut</th></tr></thead>
             <tbody>
               <tr v-for="ph in phasesDuLot(lotSel)" :key="ph">
                 <td class="ho-dp">{{ ph }}</td>
                 <td>{{ lotSel.phases[ph].equip || '—' }}</td>
                 <td class="r">{{ fmtNb(lotSel.phases[ph].qteE) }}</td>
                 <td class="r">{{ fmtNb(lotSel.phases[ph].qteS) }}</td>
+                <td>{{ fmtDate(lotSel.phases[ph].debut) }}</td>
                 <td>{{ fmtDate(lotSel.phases[ph].date) }}</td>
                 <td><span class="ho-badge sm" :class="'st-' + clsStatut(lotSel.phases[ph].statut)">{{ lotSel.phases[ph].statut || '—' }}</span></td>
               </tr>
@@ -100,7 +102,7 @@ async function charger() {
   chargement.value = true; erreur.value = ''
   try {
     const rows = await fetchAllPaged(() => supabase.from('suivi_phases')
-      .select('ordre_id, phase, quantite_entree, quantite_sortie, date_phase, statut, equipements(code, nom), ordres_fabrication(numero_lot, statut, produits(code_pf, designation))')
+      .select('ordre_id, phase, quantite_entree, quantite_sortie, date_debut, date_phase, statut, equipements(code, nom), ordres_fabrication(numero_lot, statut, produits(code_pf, designation))')
       .eq('actif', true))
     const map = {}
     for (const r of rows) {
@@ -112,7 +114,7 @@ async function charger() {
       const eq = r.equipements ? (r.equipements.code + (r.equipements.nom ? ' · ' + r.equipements.nom : '')) : ''
       const prev = map[oid].phases[ph]
       if (!prev || (r.date_phase && (!prev.date || r.date_phase > prev.date))) {
-        map[oid].phases[ph] = { date: r.date_phase, equip: eq, qteE: r.quantite_entree, qteS: r.quantite_sortie, statut: r.statut }
+        map[oid].phases[ph] = { date: r.date_phase, debut: r.date_debut, equip: eq, qteE: r.quantite_entree, qteS: r.quantite_sortie, statut: r.statut }
       }
     }
     lignes.value = Object.values(map)
@@ -177,6 +179,7 @@ function clsStatut(s) { const t = String(s || '').toLowerCase(); if (/termin|lib
 .ho-cell { white-space: nowrap; }
 .ho-cell-vide { color: #cbd5e1; }
 .ho-date { display: block; font-weight: 600; color: #334155; }
+.ho-lbl { display: inline-block; width: 13px; font-size: 9px; font-weight: 800; color: #a5b4fc; }
 .ho-eq { display: block; font-size: 10px; color: #94a3b8; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
 .ho-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .ho-badge.sm { font-size: 10px; padding: 1px 7px; }
