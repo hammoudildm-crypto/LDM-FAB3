@@ -266,7 +266,8 @@ function exporterPDF() { window.print() }
 .ho-load, .ho-err, .ho-empty { padding: 30px; text-align: center; color: #64748b; }
 .ho-err { color: #dc2626; }
 .ho-tablecard { padding: 0; overflow: hidden; }
-.ho-scroll { overflow-x: auto; }
+.ho-scroll { overflow: auto; }
+.ho-tablecard .ho-scroll { max-height: 72vh; }
 .ho-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .ho-tbl thead th { position: sticky; top: 0; background: #eef2ff; color: #4338ca; font-weight: 800; text-align: left; padding: 8px 10px; white-space: nowrap; border-bottom: 2px solid #e0e7ff; font-size: 11px; z-index: 2; }
 .ho-tbl tbody td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
