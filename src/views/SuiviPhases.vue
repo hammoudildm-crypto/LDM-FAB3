@@ -84,22 +84,18 @@ function onPhaseChange() {
 function remplirQuantites() {
   const lot = lotSelectionne.value
   if (!lot) return
+  // Remplissage automatique UNIQUEMENT pour la Pesée (poids vrac théorique).
+  // Les autres phases : entrée et sortie saisies manuellement.
+  if (form.phase !== 'Pesée') {
+    if (!form.id) { form.quantite_entree = ''; form.quantite_sortie = '' }
+    return
+  }
   const mm = lot.produits ? Number(lot.produits.poids_unitaire_mg || 0) : 0
   const upb = lot.produits ? Number(lot.produits.unites_par_boite || 0) : 0
   const qth = Number(lot.quantite_theorique || 0)
   const theoKg = (qth > 0 && mm > 0 && upb > 0) ? Math.round(qth * upb * mm / 1e6 * 100) / 100 : null
-  const gamme = normGamme((lot.produits && Array.isArray(lot.produits.gamme) && lot.produits.gamme.length) ? lot.produits.gamme : PHASES)
-  const idx = gamme.indexOf(form.phase)
-  let entree
-  if (idx <= 0) {
-    entree = theoKg
-  } else {
-    const prev = gamme[idx - 1]
-    const rec = phases.value.find(ph => ph.phase === prev && ph.quantite_sortie != null)
-    entree = rec ? Number(rec.quantite_sortie) : theoKg
-  }
-  form.quantite_entree = (entree != null) ? entree : ''
-  form.quantite_sortie = (form.phase === 'Pesée' || form.phase === 'Granulation') ? ((entree != null) ? entree : '') : ''
+  form.quantite_entree = (theoKg != null) ? theoKg : ''
+  form.quantite_sortie = (theoKg != null) ? theoKg : ''
 }
 
 async function fetchAllPaged(make) {
@@ -382,8 +378,8 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
                 <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
               </select>
             </label>
-            <label>Quantité entrée (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="250" disabled title="Figée = sortie de la phase précédente." /></label>
-            <label>Quantité sortie (kg)<input id="fp-sortie" v-model="form.quantite_sortie" type="number" step="any" placeholder="245" :disabled="['Pesée', 'Granulation'].includes(form.phase)" :title="['Pesée', 'Granulation'].includes(form.phase) ? 'Figée = entrée (pas de perte).' : 'À saisir : poids réel après pertes.'" /></label>
+            <label>Quantité entrée (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="250" :disabled="form.phase === 'Pesée'" :title="form.phase === 'Pesée' ? 'Automatique (poids vrac théorique).' : 'À saisir : poids réel entrant.'" /></label>
+            <label>Quantité sortie (kg)<input id="fp-sortie" v-model="form.quantite_sortie" type="number" step="any" placeholder="245" :disabled="form.phase === 'Pesée'" :title="form.phase === 'Pesée' ? 'Automatique.' : 'À saisir : poids réel après pertes.'" /></label>
             <label>Date début<input v-model="form.date_debut" type="date" /></label>
             <label>Date fin<input v-model="form.date_phase" type="date" /></label>
             <label>Statut (automatique)<input :value="form.date_phase ? 'Terminé' : (form.date_debut ? 'En cours' : 'À faire')" disabled title="À faire → En cours (date début) → Terminé (date fin)." /></label>
