@@ -170,16 +170,9 @@ const realiseParProduitMois = computed(() => {
 const occupationParMois = computed(() => {
   const out = Array(12).fill(null)
   const capaJour = postesEquip.value * 8 * nbMachines.value
-  // Nombre de mois restants (non réalisés)
-  let nbRest = 0
-  for (let mo = 0; mo < 12; mo++) if (!moisRealises.value[mo]) nbRest++
-  // Reste par produit (plan - réalisé), réparti également sur les mois restants
-  const restePP = {}
-  for (const p of produits.value) {
-    if (cadenceGroupe(p.id) <= 0) continue
-    const reste = Math.max(0, (planParProduit.value[p.id] || 0) - (realiseParProduit.value[p.id] || 0))
-    restePP[p.id] = nbRest > 0 ? reste / nbRest : 0
-  }
+  // Premier mois restant (non réalisé) : tout le reste y est placé
+  let premierRestant = -1
+  for (let mo = 0; mo < 12; mo++) { if (!moisRealises.value[mo]) { premierRestant = mo; break } }
   for (let mo = 0; mo < 12; mo++) {
     const jm = joursOuvresMoisN(mo)
     const capaMois = jm * capaJour
@@ -191,14 +184,15 @@ const occupationParMois = computed(() => {
         const b = (realiseParProduitMois.value[p.id] || [])[mo] || 0
         if (b > 0) heures += heuresProduit(p.id, b).total
       }
-    } else {
-      // Mois restant : occupation de la quantité restante répartie
+    } else if (mo === premierRestant) {
+      // Tout le reste (plan - réalisé) placé sur le premier mois restant
       for (const p of produits.value) {
         if (cadenceGroupe(p.id) <= 0) continue
-        const b = restePP[p.id] || 0
-        if (b > 0) heures += heuresProduit(p.id, b).total
+        const reste = Math.max(0, (planParProduit.value[p.id] || 0) - (realiseParProduit.value[p.id] || 0))
+        if (reste > 0) heures += heuresProduit(p.id, reste).total
       }
     }
+    // Les autres mois restants restent à 0
     out[mo] = capaMois > 0 ? heures / capaMois : 0
   }
   return out
@@ -367,7 +361,7 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
               <span class="ed-mm" :class="{ 'ed-mm-real': moisRealises[i] }">{{ MOIS[i].charAt(0) }}</span>
             </div>
           </div>
-          <p class="ed-hint"><b>Barres pleines</b> = réalisé (quantité produite). <b>Barres estompées</b> = restant (quantité restante répartie). Trait = 100 %. Clique une barre pour le détail.</p>
+          <p class="ed-hint"><b>Barres pleines</b> = réalisé (quantité produite). <b>Barre estompée</b> = tout le reste à faire, placé sur le mois courant. Trait = 100 %. Clique une barre pour le détail.</p>
         </section>
       </div>
 
