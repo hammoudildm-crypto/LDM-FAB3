@@ -8,6 +8,9 @@
           <option value="">Toutes années</option>
           <option v-for="a in anneesDispo" :key="a" :value="a">{{ a }}</option>
         </select>
+        <label class="ho-dflt">Du <input type="date" v-model="dateFrom" /></label>
+        <label class="ho-dflt">Au <input type="date" v-model="dateTo" /></label>
+        <button v-if="dateFrom || dateTo" class="ho-clear" @click="dateFrom = ''; dateTo = ''" title="Effacer la plage">✕</button>
         <span class="ho-count">{{ lignesFiltrees.length }} lot(s)</span>
       </div>
 
@@ -80,6 +83,8 @@ const chargement = ref(true)
 const erreur = ref('')
 const recherche = ref('')
 const annee = ref('')
+const dateFrom = ref('')
+const dateTo = ref('')
 const sel = ref(null)
 const lignes = ref([])
 
@@ -135,14 +140,27 @@ const anneesDispo = computed(() => {
 
 function lotKey(v) { const d = String(v || '').replace(/\D/g, ''); if (!d) return { an: -1, seq: -1 }; return { an: parseInt(d.slice(0, 2), 10), seq: parseInt(d.slice(2) || '0', 10) } }
 
+function dateLotMax(l) {
+  let max = 0
+  for (const ph of PHASES) { const p = l.phases[ph]; if (!p) continue; for (const d of [p.date, p.debut]) { if (d) { const t = new Date(d).getTime(); if (t > max) max = t } } }
+  return max
+}
+function dansPlage(l) {
+  if (!dateFrom.value && !dateTo.value) return true
+  const from = dateFrom.value ? new Date(dateFrom.value).getTime() : null
+  const to = dateTo.value ? new Date(dateTo.value + 'T23:59:59').getTime() : null
+  for (const ph of PHASES) { const p = l.phases[ph]; if (!p) continue; for (const d of [p.debut, p.date]) { if (!d) continue; const x = new Date(d).getTime(); if ((from == null || x >= from) && (to == null || x <= to)) return true } }
+  return false
+}
 const lignesFiltrees = computed(() => {
   const q = recherche.value.trim().toLowerCase()
   const an = annee.value ? Number(annee.value) : null
   return lignes.value.filter(l => {
     if (q && !((l.lot || '').toLowerCase().includes(q) || (l.code || '').toLowerCase().includes(q) || (l.desig || '').toLowerCase().includes(q))) return false
     if (an && anneeLot(l) !== an) return false
+    if (!dansPlage(l)) return false
     return true
-  }).sort((a, b) => { const ka = lotKey(a.lot), kb = lotKey(b.lot); return (kb.an - ka.an) || (kb.seq - ka.seq) })
+  }).sort((a, b) => { const d = dateLotMax(b) - dateLotMax(a); if (d) return d; const ka = lotKey(a.lot), kb = lotKey(b.lot); return (kb.an - ka.an) || (kb.seq - ka.seq) })
 })
 
 const lotSel = computed(() => sel.value == null ? null : lignes.value.find(l => l.id === sel.value) || null)
@@ -161,6 +179,11 @@ function clsStatut(s) { const t = String(s || '').toLowerCase(); if (/termin|lib
 .ho-search { flex: 1; min-width: 220px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
 .ho-search:focus, .ho-sel:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, .12); }
 .ho-sel { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
+.ho-dflt { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #475569; }
+.ho-dflt input { padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 12px; }
+.ho-dflt input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+.ho-clear { border: 1px solid #e2e8f0; background: #fff; color: #94a3b8; width: 28px; height: 28px; border-radius: 8px; cursor: pointer; font-weight: 700; }
+.ho-clear:hover { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
 .ho-count { font-size: 12px; font-weight: 700; color: #6366f1; background: #eef2ff; padding: 5px 10px; border-radius: 20px; }
 .ho-load, .ho-err, .ho-empty { padding: 30px; text-align: center; color: #64748b; }
 .ho-err { color: #dc2626; }
