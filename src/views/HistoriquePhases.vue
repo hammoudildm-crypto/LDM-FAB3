@@ -24,6 +24,7 @@
                 <th class="ho-th-lot">N° Lot</th>
                 <th class="ho-th-prod">Produit</th>
                 <th v-for="ph in PHASES" :key="ph">{{ courtPhase(ph) }}</th>
+                <th>Durée</th>
                 <th>Statut</th>
               </tr>
             </thead>
@@ -39,9 +40,10 @@
                   </template>
                   <span v-else>—</span>
                 </td>
+                <td class="ho-duree">{{ dureeLot(l) }}</td>
                 <td><span class="ho-badge" :class="'st-' + clsStatut(l.statut)">{{ l.statut || '—' }}</span></td>
               </tr>
-              <tr v-if="!lignesFiltrees.length"><td :colspan="PHASES.length + 3" class="ho-empty">Aucun lot ne correspond.</td></tr>
+              <tr v-if="!lignesFiltrees.length"><td :colspan="PHASES.length + 4" class="ho-empty">Aucun lot ne correspond.</td></tr>
             </tbody>
           </table>
         </div>
@@ -140,6 +142,13 @@ const anneesDispo = computed(() => {
 
 function lotKey(v) { const d = String(v || '').replace(/\D/g, ''); if (!d) return { an: -1, seq: -1 }; return { an: parseInt(d.slice(0, 2), 10), seq: parseInt(d.slice(2) || '0', 10) } }
 
+function dureeLot(l) {
+  let min = null, max = null
+  for (const ph of PHASES) { const p = l.phases[ph]; if (!p) continue; for (const d of [p.debut, p.date]) { if (!d) continue; const t = new Date(d).getTime(); if (min == null || t < min) min = t; if (max == null || t > max) max = t } }
+  if (min == null || max == null) return '—'
+  const j = Math.round((max - min) / 86400000)
+  return j <= 0 ? '< 1 j' : j + ' j'
+}
 function dateLotMax(l) {
   let max = 0
   for (const ph of PHASES) { const p = l.phases[ph]; if (!p) continue; for (const d of [p.date, p.debut]) { if (d) { const t = new Date(d).getTime(); if (t > max) max = t } } }
@@ -160,7 +169,7 @@ const lignesFiltrees = computed(() => {
     if (an && anneeLot(l) !== an) return false
     if (!dansPlage(l)) return false
     return true
-  }).sort((a, b) => { const ka = lotKey(a.lot), kb = lotKey(b.lot); return (ka.an - kb.an) || (ka.seq - kb.seq) })
+  }).sort((a, b) => { const ka = lotKey(a.lot), kb = lotKey(b.lot); return (kb.an - ka.an) || (kb.seq - ka.seq) })
 })
 
 const lotSel = computed(() => sel.value == null ? null : lignes.value.find(l => l.id === sel.value) || null)
@@ -196,6 +205,11 @@ function clsStatut(s) { const t = String(s || '').toLowerCase(); if (/termin|lib
 .ho-row:hover { background: #f5f7ff; }
 .ho-row.sel { background: #eef2ff; }
 .ho-lot { font-weight: 800; color: #1e293b; white-space: nowrap; }
+.ho-duree { font-weight: 700; color: #6366f1; white-space: nowrap; }
+.ho-tbl thead th.ho-th-lot { position: sticky; left: 0; z-index: 3; }
+.ho-tbl td.ho-lot { position: sticky; left: 0; background: #fff; z-index: 1; box-shadow: 2px 0 4px -2px rgba(0, 0, 0, .08); }
+.ho-row:hover td.ho-lot { background: #f5f7ff; }
+.ho-row.sel td.ho-lot { background: #eef2ff; }
 .ho-prod { min-width: 160px; }
 .ho-code { font-weight: 700; color: #4338ca; display: block; }
 .ho-desig { color: #64748b; font-size: 11px; }
