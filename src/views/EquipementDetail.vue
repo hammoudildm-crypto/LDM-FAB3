@@ -69,15 +69,17 @@ function heuresProduit(pid, boites) {
   return { prod, nett, total: prod + nett }
 }
 
+const phasesFab = ref([])
 async function charger() {
   chargement.value = true
-  const [re, rp, rc, rt, rpl, rof] = await Promise.all([
+  const [re, rp, rc, rt, rpl, rof, rsp] = await Promise.all([
     fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true)),
     fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, unites_par_boite, taille_lot, poids_lot_kg, poids_unitaire_mg').eq('actif', true)),
     fetchAllPaged(() => supabase.from('cadences_produit').select('*')),
     fetchAllPaged(() => supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf, designation)').gte('date', annee.value + '-01-01').lte('date', annee.value + '-12-31')),
     fetchAllPaged(() => supabase.from('plan_production').select('produit_id, annee, mois, quantite_planifiee').eq('annee', annee.value)),
-    fetchAllPaged(() => supabase.from('ordres_fabrication').select('produit_id, boites_fabriquees, date_fin_fabrication, statut'))
+    fetchAllPaged(() => supabase.from('ordres_fabrication').select('produit_id, boites_fabriquees, date_fin_fabrication, statut')),
+    fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, quantite_sortie, date_phase, ordres_fabrication(produit_id)').eq('actif', true).gte('date_phase', annee.value + '-01-01').lte('date_phase', annee.value + '-12-31'))
   ])
   equipements.value = re || []
   produits.value = rp || []
@@ -85,6 +87,7 @@ async function charger() {
   postes.value = rt || []
   plan.value = rpl || []
   ofs.value = rof || []
+  phasesFab.value = rsp || []
   chargement.value = false
 }
 onMounted(charger)
@@ -154,16 +157,32 @@ const moisRealises = computed(() => {
   for (let mo = 0; mo < 12; mo++) out[mo] = annee.value < anneeActuelle || (annee.value === anneeActuelle && mo < moisActuel)
   return out
 })
-// Réalisé par produit et par mois (boîtes fabriquées, depuis les OF)
+// Réalisé = quantité sortie (kg) de la DERNIÈRE phase de chaque lot, convertie en boîtes
+const ORDRE_PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
 const realiseParProduitMois = computed(() => {
+  // Pour chaque lot : garder la phase la plus avancée ayant une quantité sortie
+  const parLot = {}
+  for (const ph of phasesFab.value) {
+    const pid = ph.ordres_fabrication ? ph.ordres_fabrication.produit_id : null
+    if (!pid || ph.quantite_sortie == null || ph.quantite_sortie === '') continue
+    const idx = ORDRE_PHASES.indexOf(ph.phase)
+    const cur = parLot[ph.ordre_id]
+    if (!cur || idx >= cur.idx) parLot[ph.ordre_id] = { pid, idx, sortie: num(ph.quantite_sortie), date: ph.date_phase }
+  }
   const m = {}
-  for (const o of ofs.value) {
-    if (!o.date_fin_fabrication) continue
-    const d = new Date(o.date_fin_fabrication)
+  for (const oid in parLot) {
+    const r = parLot[oid]
+    if (!r.date) continue
+    const d = new Date(r.date)
     if (d.getFullYear() !== annee.value) continue
-    const pid = o.produit_id, mo = d.getMonth()
-    if (!m[pid]) m[pid] = Array(12).fill(0)
-    m[pid][mo] += num(o.boites_fabriquees)
+    const prod = produits.value.find(x => x.id === r.pid)
+    if (!prod) continue
+    const tl = num(prod.taille_lot); const plk = poidsLot(prod)
+    const kgParBoite = (tl > 0 && plk > 0) ? plk / tl : 0
+    const boites = kgParBoite > 0 ? r.sortie / kgParBoite : 0
+    const mo = d.getMonth()
+    if (!m[r.pid]) m[r.pid] = Array(12).fill(0)
+    m[r.pid][mo] += boites
   }
   return m
 })
@@ -232,7 +251,8 @@ const detailMois = computed(() => {
 })
 const realiseParProduit = computed(() => {
   const m = {}
-  for (const o of ofs.value) { const d = o.date_fin_fabrication ? new Date(o.date_fin_fabrication) : null; if (d && d.getFullYear() === annee.value) m[o.produit_id] = (m[o.produit_id] || 0) + num(o.boites_fabriquees) }
+  const rm = realiseParProduitMois.value
+  for (const pid in rm) m[pid] = rm[pid].reduce((a, b) => a + b, 0)
   return m
 })
 const produitProduitPoste = computed(() => { const m = {}; for (const s of postesGroupe.value) if (s.produit_id) m[s.produit_id] = (m[s.produit_id] || 0) + num(s.production_realisee); return m })
