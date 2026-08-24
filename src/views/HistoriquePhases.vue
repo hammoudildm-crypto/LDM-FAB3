@@ -160,7 +160,7 @@ const lignesFiltrees = computed(() => {
     if (an && anneeLot(l) !== an) return false
     if (!dansPlage(l)) return false
     return true
-  }).sort((a, b) => { const d = dateLotMax(b) - dateLotMax(a); if (d) return d; const ka = lotKey(a.lot), kb = lotKey(b.lot); return (kb.an - ka.an) || (kb.seq - ka.seq) })
+  }).sort((a, b) => { const ka = lotKey(a.lot), kb = lotKey(b.lot); return (ka.an - kb.an) || (ka.seq - kb.seq) })
 })
 
 const lotSel = computed(() => sel.value == null ? null : lignes.value.find(l => l.id === sel.value) || null)
