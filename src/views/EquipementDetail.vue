@@ -170,9 +170,18 @@ const realiseParProduitMois = computed(() => {
 const occupationParMois = computed(() => {
   const out = Array(12).fill(null)
   const capaJour = postesEquip.value * 8 * nbMachines.value
-  // Premier mois restant (non réalisé) : tout le reste y est placé
+  // Premier mois restant (non réalisé) : on y ajoute le retard des mois passés
   let premierRestant = -1
   for (let mo = 0; mo < 12; mo++) { if (!moisRealises.value[mo]) { premierRestant = mo; break } }
+  // Retard par produit = plan des mois passés - réalisé (ce qui n'a pas été produit à temps)
+  const retardPP = {}
+  for (const p of produits.value) {
+    if (cadenceGroupe(p.id) <= 0) continue
+    const pm = planParProduitMois.value[p.id] || []
+    let planPasse = 0
+    for (let mo = 0; mo < 12; mo++) if (moisRealises.value[mo]) planPasse += pm[mo] || 0
+    retardPP[p.id] = Math.max(0, planPasse - (realiseParProduit.value[p.id] || 0))
+  }
   for (let mo = 0; mo < 12; mo++) {
     const jm = joursOuvresMoisN(mo)
     const capaMois = jm * capaJour
@@ -184,15 +193,15 @@ const occupationParMois = computed(() => {
         const b = (realiseParProduitMois.value[p.id] || [])[mo] || 0
         if (b > 0) heures += heuresProduit(p.id, b).total
       }
-    } else if (mo === premierRestant) {
-      // Tout le reste (plan - réalisé) placé sur le premier mois restant
+    } else {
+      // Mois restant : plan initial du mois (+ retard cumulé sur le premier mois restant)
       for (const p of produits.value) {
         if (cadenceGroupe(p.id) <= 0) continue
-        const reste = Math.max(0, (planParProduit.value[p.id] || 0) - (realiseParProduit.value[p.id] || 0))
-        if (reste > 0) heures += heuresProduit(p.id, reste).total
+        let b = (planParProduitMois.value[p.id] || [])[mo] || 0
+        if (mo === premierRestant) b += retardPP[p.id] || 0
+        if (b > 0) heures += heuresProduit(p.id, b).total
       }
     }
-    // Les autres mois restants restent à 0
     out[mo] = capaMois > 0 ? heures / capaMois : 0
   }
   return out
@@ -361,7 +370,7 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
               <span class="ed-mm" :class="{ 'ed-mm-real': moisRealises[i] }">{{ MOIS[i].charAt(0) }}</span>
             </div>
           </div>
-          <p class="ed-hint"><b>Barres pleines</b> = réalisé (quantité produite). <b>Barre estompée</b> = tout le reste à faire, placé sur le mois courant. Trait = 100 %. Clique une barre pour le détail.</p>
+          <p class="ed-hint"><b>Barres pleines</b> = réalisé (quantité produite). <b>Barres estompées</b> = plan des mois à venir ; le <b>retard</b> des mois passés est ajouté au mois courant. Trait = 100 %. Clique une barre pour le détail.</p>
         </section>
       </div>
 
