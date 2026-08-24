@@ -37,6 +37,7 @@ import EquipementDetail from '../views/EquipementDetail.vue'
 import IndicateursQSE from '../views/IndicateursQSE.vue'
 import Cadences from '../views/Cadences.vue'
 import PassationConsigne from '../views/PassationConsigne.vue'
+import HistoriquePhases from '../views/HistoriquePhases.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Hub },
@@ -56,6 +57,7 @@ const routes = [
   { path: '/saisie-trs', name: 'saisie-trs', component: SaisieTRS },
   { path: '/encours', name: 'encours', component: EnCours },
   { path: '/dossier', name: 'dossier', component: DossierLot },
+  { path: '/historique', name: 'historique', component: HistoriquePhases },
   { path: '/ca', name: 'ca', component: ChiffreAffaires },
   { path: '/effectifs', name: 'effectifs', component: Effectifs },
   { path: '/audit', name: 'audit', component: JournalAudit },
