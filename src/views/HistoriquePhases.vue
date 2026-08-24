@@ -11,6 +11,8 @@
         <label class="ho-dflt">Du <input type="date" v-model="dateFrom" /></label>
         <label class="ho-dflt">Au <input type="date" v-model="dateTo" /></label>
         <button v-if="dateFrom || dateTo" class="ho-clear" @click="dateFrom = ''; dateTo = ''" title="Effacer la plage">✕</button>
+        <button class="ho-exp" @click="exporterCSV" title="Exporter en Excel (CSV)">⬇ Excel</button>
+        <button class="ho-exp" @click="exporterPDF" title="Imprimer / Enregistrer en PDF">⬇ PDF</button>
         <span class="ho-count">{{ lignesFiltrees.length }} lot(s)</span>
       </div>
 
@@ -24,6 +26,7 @@
                 <th class="ho-th-lot">N° Lot</th>
                 <th class="ho-th-prod">Produit</th>
                 <th v-for="ph in PHASES" :key="ph">{{ courtPhase(ph) }}</th>
+                <th>Progression</th>
                 <th>Durée</th>
                 <th>Statut</th>
               </tr>
@@ -40,10 +43,14 @@
                   </template>
                   <span v-else>—</span>
                 </td>
+                <td class="ho-prog">
+                  <div class="ho-progbar"><div class="ho-progfill" :style="{ width: (nbPhasesFaites(l) / PHASES.length * 100) + '%' }"></div></div>
+                  <span class="ho-progtxt">{{ nbPhasesFaites(l) }}/{{ PHASES.length }}</span>
+                </td>
                 <td class="ho-duree">{{ dureeLot(l) }}</td>
                 <td><span class="ho-badge" :class="'st-' + clsStatut(l.statut)">{{ l.statut || '—' }}</span></td>
               </tr>
-              <tr v-if="!lignesFiltrees.length"><td :colspan="PHASES.length + 4" class="ho-empty">Aucun lot ne correspond.</td></tr>
+              <tr v-if="!lignesFiltrees.length"><td :colspan="PHASES.length + 5" class="ho-empty">Aucun lot ne correspond.</td></tr>
             </tbody>
           </table>
         </div>
@@ -53,7 +60,7 @@
         <h3 class="ho-dt-title">Détail du lot {{ lotSel.lot }} — {{ lotSel.code }} <span class="ho-dt-desig">{{ lotSel.desig }}</span></h3>
         <div class="ho-scroll">
           <table class="ho-dtbl">
-            <thead><tr><th>Phase</th><th>Équipement</th><th class="r">Entrée (kg)</th><th class="r">Sortie (kg)</th><th>Début</th><th>Fin</th><th>Statut</th></tr></thead>
+            <thead><tr><th>Phase</th><th>Équipement</th><th class="r">Entrée (kg)</th><th class="r">Sortie (kg)</th><th>Début</th><th>Fin</th><th>Durée</th><th>Statut</th></tr></thead>
             <tbody>
               <tr v-for="ph in phasesDuLot(lotSel)" :key="ph">
                 <td class="ho-dp">{{ ph }}</td>
@@ -62,6 +69,7 @@
                 <td class="r">{{ fmtNb(lotSel.phases[ph].qteS) }}</td>
                 <td>{{ fmtDate(lotSel.phases[ph].debut) }}</td>
                 <td>{{ fmtDate(lotSel.phases[ph].date) }}</td>
+                <td>{{ dureePhase(lotSel.phases[ph]) }}</td>
                 <td><span class="ho-badge sm" :class="'st-' + clsStatut(lotSel.phases[ph].statut)">{{ lotSel.phases[ph].statut || '—' }}</span></td>
               </tr>
             </tbody>
@@ -178,6 +186,28 @@ function phasesDuLot(l) { return PHASES.filter(p => l.phases[p]) }
 function fmtDate(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? String(d) : x.toLocaleDateString('fr-FR') }
 function fmtNb(v) { if (v == null || v === '') return '—'; const n = Number(v); return isNaN(n) ? String(v) : n.toLocaleString('fr-FR') }
 function clsStatut(s) { const t = String(s || '').toLowerCase(); if (/termin|libér/.test(t)) return 'ok'; if (/cours/.test(t)) return 'run'; if (/rejet|rebut/.test(t)) return 'bad'; return 'todo' }
+function nbPhasesFaites(l) { let n = 0; for (const ph of PHASES) { const p = l.phases[ph]; if (p && (p.date || p.debut)) n++ } return n }
+function dureePhase(p) { if (!p || !p.debut || !p.date) return '—'; const j = Math.round((new Date(p.date) - new Date(p.debut)) / 86400000); return j <= 0 ? '< 1 j' : j + ' j' }
+function exporterCSV() {
+  const sep = ';'
+  const head = ['N° Lot', 'Code', 'Désignation']
+  for (const ph of PHASES) { head.push(courtPhase(ph) + ' début', courtPhase(ph) + ' fin') }
+  head.push('Phases faites', 'Durée (j)', 'Statut')
+  const esc = (x) => '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"'
+  const rows = [head.map(esc).join(sep)]
+  for (const l of lignesFiltrees.value) {
+    const r = [l.lot, l.code, l.desig]
+    for (const ph of PHASES) { const p = l.phases[ph]; r.push(p ? fmtDate(p.debut) : '', p ? fmtDate(p.date) : '') }
+    r.push(nbPhasesFaites(l) + '/' + PHASES.length, dureeLot(l).replace(' j', '').replace('< 1', '0'), l.statut || '')
+    rows.push(r.map(esc).join(sep))
+  }
+  const blob = new Blob(['\uFEFF' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = 'historique-operations.csv'; document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
+}
+function exporterPDF() { window.print() }
 </script>
 
 <style scoped>
@@ -206,10 +236,28 @@ function clsStatut(s) { const t = String(s || '').toLowerCase(); if (/termin|lib
 .ho-row.sel { background: #eef2ff; }
 .ho-lot { font-weight: 800; color: #1e293b; white-space: nowrap; }
 .ho-duree { font-weight: 700; color: #6366f1; white-space: nowrap; }
+.ho-th-lot, .ho-lot { min-width: 82px; max-width: 82px; }
 .ho-tbl thead th.ho-th-lot { position: sticky; left: 0; z-index: 3; }
-.ho-tbl td.ho-lot { position: sticky; left: 0; background: #fff; z-index: 1; box-shadow: 2px 0 4px -2px rgba(0, 0, 0, .08); }
-.ho-row:hover td.ho-lot { background: #f5f7ff; }
-.ho-row.sel td.ho-lot { background: #eef2ff; }
+.ho-tbl thead th.ho-th-prod { position: sticky; left: 82px; z-index: 3; }
+.ho-tbl td.ho-lot { position: sticky; left: 0; background: #fff; z-index: 1; }
+.ho-tbl td.ho-prod { position: sticky; left: 82px; background: #fff; z-index: 1; box-shadow: 2px 0 4px -2px rgba(0, 0, 0, .08); }
+.ho-row:hover td.ho-lot, .ho-row:hover td.ho-prod { background: #f5f7ff; }
+.ho-row.sel td.ho-lot, .ho-row.sel td.ho-prod { background: #eef2ff; }
+.ho-exp { border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca; font: inherit; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.ho-exp:hover { background: #e0e7ff; }
+.ho-prog { min-width: 90px; }
+.ho-progbar { height: 6px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-bottom: 3px; }
+.ho-progfill { height: 100%; background: linear-gradient(90deg, #818cf8, #4f46e5); border-radius: 4px; transition: width .3s; }
+.ho-progtxt { font-size: 10px; font-weight: 700; color: #64748b; }
+@media print {
+  .ho-bar, .ho-detail { display: none !important; }
+  .ho-page { background: #fff; }
+  .ho-wrap { max-width: none; padding: 0; }
+  .ho-tbl { font-size: 8.5px; }
+  .ho-tbl thead th, .ho-tbl td.ho-lot, .ho-tbl td.ho-prod { position: static !important; box-shadow: none !important; }
+  .card { border: none; box-shadow: none; }
+  .ho-eq { display: none; }
+}
 .ho-prod { min-width: 160px; }
 .ho-code { font-weight: 700; color: #4338ca; display: block; }
 .ho-desig { color: #64748b; font-size: 11px; }
