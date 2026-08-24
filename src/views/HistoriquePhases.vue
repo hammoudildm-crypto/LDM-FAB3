@@ -93,7 +93,7 @@ function courtPhase(p) { return COURT[p] || p }
 const chargement = ref(true)
 const erreur = ref('')
 const recherche = ref('')
-const annee = ref('')
+const annee = ref(new Date().getFullYear())
 const dateFrom = ref('')
 const dateTo = ref('')
 const sel = ref(null)
