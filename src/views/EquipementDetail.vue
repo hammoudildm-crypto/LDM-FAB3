@@ -79,7 +79,7 @@ async function charger() {
     fetchAllPaged(() => supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf, designation)').gte('date', annee.value + '-01-01').lte('date', annee.value + '-12-31')),
     fetchAllPaged(() => supabase.from('plan_production').select('produit_id, annee, mois, quantite_planifiee').eq('annee', annee.value)),
     fetchAllPaged(() => supabase.from('ordres_fabrication').select('produit_id, boites_fabriquees, date_fin_fabrication, statut')),
-    fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, quantite_sortie, date_phase, ordres_fabrication(produit_id)').eq('actif', true).gte('date_phase', annee.value + '-01-01').lte('date_phase', annee.value + '-12-31'))
+    fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, equipement_id, quantite_sortie, date_phase, ordres_fabrication(produit_id)').eq('actif', true).gte('date_phase', annee.value + '-01-01').lte('date_phase', annee.value + '-12-31'))
   ])
   equipements.value = re || []
   produits.value = rp || []
@@ -157,32 +157,23 @@ const moisRealises = computed(() => {
   for (let mo = 0; mo < 12; mo++) out[mo] = annee.value < anneeActuelle || (annee.value === anneeActuelle && mo < moisActuel)
   return out
 })
-// Réalisé = quantité sortie (kg) de la DERNIÈRE phase de chaque lot, convertie en boîtes
-const ORDRE_PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+// Réalisé = quantité sortie (kg) des phases réalisées SUR CET équipement, converties en boîtes
 const realiseParProduitMois = computed(() => {
-  // Pour chaque lot : garder la phase la plus avancée ayant une quantité sortie
-  const parLot = {}
-  for (const ph of phasesFab.value) {
-    const pid = ph.ordres_fabrication ? ph.ordres_fabrication.produit_id : null
-    if (!pid || ph.quantite_sortie == null || ph.quantite_sortie === '') continue
-    const idx = ORDRE_PHASES.indexOf(ph.phase)
-    const cur = parLot[ph.ordre_id]
-    if (!cur || idx >= cur.idx) parLot[ph.ordre_id] = { pid, idx, sortie: num(ph.quantite_sortie), date: ph.date_phase }
-  }
   const m = {}
-  for (const oid in parLot) {
-    const r = parLot[oid]
-    if (!r.date) continue
-    const d = new Date(r.date)
+  for (const ph of phasesFab.value) {
+    if (!idsGroupe.value.has(ph.equipement_id)) continue   // uniquement les phases de cet équipement
+    const pid = ph.ordres_fabrication ? ph.ordres_fabrication.produit_id : null
+    if (!pid || ph.quantite_sortie == null || ph.quantite_sortie === '' || !ph.date_phase) continue
+    const d = new Date(ph.date_phase)
     if (d.getFullYear() !== annee.value) continue
-    const prod = produits.value.find(x => x.id === r.pid)
+    const prod = produits.value.find(x => x.id === pid)
     if (!prod) continue
     const tl = num(prod.taille_lot); const plk = poidsLot(prod)
     const kgParBoite = (tl > 0 && plk > 0) ? plk / tl : 0
-    const boites = kgParBoite > 0 ? r.sortie / kgParBoite : 0
+    const boites = kgParBoite > 0 ? num(ph.quantite_sortie) / kgParBoite : 0
     const mo = d.getMonth()
-    if (!m[r.pid]) m[r.pid] = Array(12).fill(0)
-    m[r.pid][mo] += boites
+    if (!m[pid]) m[pid] = Array(12).fill(0)
+    m[pid][mo] += boites
   }
   return m
 })
