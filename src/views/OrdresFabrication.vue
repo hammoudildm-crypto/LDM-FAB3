@@ -302,6 +302,16 @@ async function desactiver(l) {
   if (res.error) { erreur.value = res.error.message; return }
   await chargerTout()
 }
+async function supprimer(l) {
+  if (!confirm('Supprimer DÉFINITIVEMENT le lot « ' + (l.numero_lot || '') + ' » ?\n\nCette action est irréversible et supprime aussi ses phases de fabrication et son conditionnement.')) return
+  erreur.value = ''
+  try {
+    let r = await supabase.from('suivi_phases').delete().eq('ordre_id', l.id); if (r.error) throw r.error
+    r = await supabase.from('conditionnement').delete().eq('ordre_id', l.id); if (r.error) throw r.error
+    r = await supabase.from('ordres_fabrication').delete().eq('id', l.id); if (r.error) throw r.error
+    await chargerTout()
+  } catch (e) { erreur.value = 'Suppression impossible : ' + (e.message || e) + ' (des données liées empêchent peut-être la suppression).' }
+}
 async function chargerDesactives() {
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
     .select('*, produits(code_pf, designation), equipements(code, nom)')
@@ -575,6 +585,7 @@ onMounted(async () => {
                   <template v-if="peutEditer">
                     <button v-if="l.statut === 'Terminé'" class="link release" @click="ouvrirSignature(l)">Libérer (signer)</button>
                     <button class="link" @click="modifier(l)">Modifier</button>
+                    <button class="link link-del" @click="supprimer(l)">Supprimer</button>
                     <button class="link danger" @click="desactiver(l)">Désactiver</button>
                   </template>
                 </td>
@@ -773,4 +784,6 @@ button.link.release { color: #166534; }
 /* 4 cases (déviation/triage) sur une seule ligne */
 .chk-row-1l { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
 .tri-lbl { font-size: 12px; font-weight: 700; color: #64748b; }
+.link.link-del { color: #dc2626; }
+.link.link-del:hover { color: #b91c1c; }
 </style>
