@@ -233,13 +233,27 @@ const detailMois = computed(() => {
   const jm = joursOuvresMoisN(mo)
   const capaMois = jm * capaJour
   const rows = []
+  // Même base que le graphe : réalisé (passé) / plan + retard (mois courant) / plan (futur)
+  let premierRestant = -1
+  for (let m2 = 0; m2 < 12; m2++) { if (!moisRealises.value[m2]) { premierRestant = m2; break } }
   for (const p of produits.value) {
     const cad = cadenceGroupe(p.id); if (cad <= 0) continue
-    const planB = (planParProduitMois.value[p.id] || [])[mo] || 0
-    if (planB <= 0) continue
+    let b
+    if (moisRealises.value[mo]) {
+      b = (realiseParProduitMois.value[p.id] || [])[mo] || 0
+    } else {
+      b = (planParProduitMois.value[p.id] || [])[mo] || 0
+      if (mo === premierRestant) {
+        const pm = planParProduitMois.value[p.id] || []
+        let planPasse = 0
+        for (let m2 = 0; m2 < 12; m2++) if (moisRealises.value[m2]) planPasse += pm[m2] || 0
+        b += Math.max(0, planPasse - (realiseParProduit.value[p.id] || 0))
+      }
+    }
+    if (b <= 0) continue
     const tl = num(p.taille_lot)
-    const h = heuresProduit(p.id, planB)
-    rows.push({ code: p.code_pf, desig: p.designation, plan: planB, lots: tl > 0 ? planB / tl : 0, tl, plk: poidsLot(p), cad, hParLot: cad > 0 ? poidsLot(p) / cad : 0, prod: h.prod, nett: h.nett, heures: h.total })
+    const h = heuresProduit(p.id, b)
+    rows.push({ code: p.code_pf, desig: p.designation, plan: b, lots: tl > 0 ? b / tl : 0, tl, plk: poidsLot(p), cad, hParLot: cad > 0 ? poidsLot(p) / cad : 0, prod: h.prod, nett: h.nett, heures: h.total })
   }
   rows.sort((a, b) => b.heures - a.heures)
   const totalH = rows.reduce((a, r) => a + r.heures, 0)
