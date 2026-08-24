@@ -5,6 +5,8 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
+const role = inject('role', ref(null))
+const estAdmin = computed(() => role.value === 'admin')
 const STATUTS = ['Planifié', 'En cours', 'Terminé', 'Libéré', 'Rejeté']
 const statutOriginal = ref('Planifié')  // statut réel du lot chargé (pour la sentinelle __auto__)
 
@@ -585,8 +587,8 @@ onMounted(async () => {
                   <template v-if="peutEditer">
                     <button v-if="l.statut === 'Terminé'" class="link release" @click="ouvrirSignature(l)">Libérer (signer)</button>
                     <button class="link" @click="modifier(l)">Modifier</button>
-                    <button class="link link-del" @click="supprimer(l)">Supprimer</button>
-                    <button class="link danger" @click="desactiver(l)">Désactiver</button>
+                    <button v-if="estAdmin" class="link link-del" @click="supprimer(l)">Supprimer</button>
+                    <button v-if="estAdmin" class="link danger" @click="desactiver(l)">Désactiver</button>
                   </template>
                 </td>
               </tr>
@@ -607,7 +609,7 @@ onMounted(async () => {
                   <td><span class="mono">{{ l.produits ? l.produits.code_pf : '—' }}</span><span class="desig"> {{ l.produits ? l.produits.designation : '' }}</span></td>
                   <td class="right">{{ fmt(l.quantite_theorique) }}</td>
                   <td><span class="badge" :class="classeStatut(l.statut)">{{ l.statut }}</span></td>
-                  <td class="right"><button v-if="peutEditer" class="link ok" @click="reactiver(l)">Réactiver</button></td>
+                  <td class="right"><button v-if="estAdmin" class="link ok" @click="reactiver(l)">Réactiver</button></td>
                 </tr>
                 <tr v-if="!lotsDesactives.length"><td colspan="5" class="empty">Aucun lot désactivé.</td></tr>
               </tbody>
