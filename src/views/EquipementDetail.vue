@@ -69,17 +69,15 @@ function heuresProduit(pid, boites) {
   return { prod, nett, total: prod + nett }
 }
 
-const phasesFab = ref([])
 async function charger() {
   chargement.value = true
-  const [re, rp, rc, rt, rpl, rof, rsp] = await Promise.all([
+  const [re, rp, rc, rt, rpl, rof] = await Promise.all([
     fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true)),
     fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, unites_par_boite, taille_lot, poids_lot_kg, poids_unitaire_mg').eq('actif', true)),
     fetchAllPaged(() => supabase.from('cadences_produit').select('*')),
     fetchAllPaged(() => supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf, designation)').gte('date', annee.value + '-01-01').lte('date', annee.value + '-12-31')),
     fetchAllPaged(() => supabase.from('plan_production').select('produit_id, annee, mois, quantite_planifiee').eq('annee', annee.value)),
-    fetchAllPaged(() => supabase.from('ordres_fabrication').select('produit_id, boites_fabriquees, date_fin_fabrication, statut')),
-    fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, equipement_id, quantite_sortie, date_phase, ordres_fabrication(produit_id)').eq('actif', true).gte('date_phase', annee.value + '-01-01').lte('date_phase', annee.value + '-12-31'))
+    fetchAllPaged(() => supabase.from('ordres_fabrication').select('produit_id, boites_fabriquees, date_fin_fabrication, statut'))
   ])
   equipements.value = re || []
   produits.value = rp || []
@@ -87,7 +85,6 @@ async function charger() {
   postes.value = rt || []
   plan.value = rpl || []
   ofs.value = rof || []
-  phasesFab.value = rsp || []
   chargement.value = false
 }
 onMounted(charger)
@@ -137,81 +134,22 @@ const planParProduitMois = computed(() => { const m = {}; for (const r of plan.v
 const postesEquip = computed(() => { if (postesRegime.value > 0) return postesRegime.value; const e = equipsGroupe.value[0] || {}; return num(e.postes, 3) })
 const regimeLabel = computed(() => { if (reg4Regime.value) return '4×8 · 24/7'; const po = postesEquip.value; const base = po >= 3 ? '3×8' : (po === 2 ? '2×8' : '1×8'); return weRegime.value ? base + ' + WE' : base })
 function joursOuvresMoisN(mo) { const d = new Date(annee.value, mo, 1); let n = 0; const facteurWE = reg4Regime.value ? 1 : (weRegime.value ? Math.min(1, 2 / (postesEquip.value || 3)) : 0); while (d.getMonth() === mo) { const wd = d.getDay(); if (wd === 0 || wd === 6) n += facteurWE; else n += 1; d.setDate(d.getDate() + 1) } return n }
-// Temps de fonctionnement réel (min) par mois, depuis les saisies
-const fonctParMois = computed(() => {
-  const out = Array(12).fill(0)
-  for (const sa of postesGroupe.value) {
-    if (!sa.date) continue
-    const mo = new Date(sa.date).getMonth()
-    if (mo < 0 || mo > 11) continue
-    const to = num(sa.temps_ouverture_min)
-    let arr = 0; for (const m of MOTIFS) arr += num(sa[m[1]])
-    out[mo] += Math.max(0, to - arr)
-  }
-  return out
-})
-// Mois réalisés (passés) vs prévisionnels
-const moisRealises = computed(() => {
-  const auj = new Date(); const moisActuel = auj.getMonth(); const anneeActuelle = auj.getFullYear()
-  const out = Array(12).fill(false)
-  for (let mo = 0; mo < 12; mo++) out[mo] = annee.value < anneeActuelle || (annee.value === anneeActuelle && mo < moisActuel)
-  return out
-})
-// Réalisé = quantité sortie (kg) des phases réalisées SUR CET équipement, converties en boîtes
-const realiseParProduitMois = computed(() => {
-  const m = {}
-  for (const ph of phasesFab.value) {
-    if (!idsGroupe.value.has(ph.equipement_id)) continue   // uniquement les phases de cet équipement
-    const pid = ph.ordres_fabrication ? ph.ordres_fabrication.produit_id : null
-    if (!pid || ph.quantite_sortie == null || ph.quantite_sortie === '' || !ph.date_phase) continue
-    const d = new Date(ph.date_phase)
-    if (d.getFullYear() !== annee.value) continue
-    const prod = produits.value.find(x => x.id === pid)
-    if (!prod) continue
-    const tl = num(prod.taille_lot); const plk = poidsLot(prod)
-    const kgParBoite = (tl > 0 && plk > 0) ? plk / tl : 0
-    const boites = kgParBoite > 0 ? num(ph.quantite_sortie) / kgParBoite : 0
-    const mo = d.getMonth()
-    if (!m[pid]) m[pid] = Array(12).fill(0)
-    m[pid][mo] += boites
-  }
-  return m
-})
 const occupationParMois = computed(() => {
   const out = Array(12).fill(null)
+  const auj = new Date(); const moisActuel = auj.getMonth(); const anneeActuelle = auj.getFullYear()
   const capaJour = postesEquip.value * 8 * nbMachines.value
-  // Premier mois restant (non réalisé) : on y ajoute le retard des mois passés
-  let premierRestant = -1
-  for (let mo = 0; mo < 12; mo++) { if (!moisRealises.value[mo]) { premierRestant = mo; break } }
-  // Retard par produit = plan des mois passés - réalisé (ce qui n'a pas été produit à temps)
-  const retardPP = {}
-  for (const p of produits.value) {
-    if (cadenceGroupe(p.id) <= 0) continue
-    const pm = planParProduitMois.value[p.id] || []
-    let planPasse = 0
-    for (let mo = 0; mo < 12; mo++) if (moisRealises.value[mo]) planPasse += pm[mo] || 0
-    retardPP[p.id] = Math.max(0, planPasse - (realiseParProduit.value[p.id] || 0))
-  }
   for (let mo = 0; mo < 12; mo++) {
+    if (annee.value === anneeActuelle && mo < moisActuel) continue
+    if (annee.value < anneeActuelle) continue
+    let heures = 0
+    for (const p of produits.value) {
+      const cad = cadenceGroupe(p.id); if (cad <= 0) continue
+      const planB = (planParProduitMois.value[p.id] || [])[mo] || 0
+      if (planB <= 0) continue
+      heures += heuresProduit(p.id, planB).total
+    }
     const jm = joursOuvresMoisN(mo)
     const capaMois = jm * capaJour
-    let heures = 0
-    if (moisRealises.value[mo]) {
-      // Mois réalisé : occupation de la quantité réellement produite ce mois
-      for (const p of produits.value) {
-        if (cadenceGroupe(p.id) <= 0) continue
-        const b = (realiseParProduitMois.value[p.id] || [])[mo] || 0
-        if (b > 0) heures += heuresProduit(p.id, b).total
-      }
-    } else {
-      // Mois restant : plan initial du mois (+ retard cumulé sur le premier mois restant)
-      for (const p of produits.value) {
-        if (cadenceGroupe(p.id) <= 0) continue
-        let b = (planParProduitMois.value[p.id] || [])[mo] || 0
-        if (mo === premierRestant) b += retardPP[p.id] || 0
-        if (b > 0) heures += heuresProduit(p.id, b).total
-      }
-    }
     out[mo] = capaMois > 0 ? heures / capaMois : 0
   }
   return out
@@ -224,27 +162,13 @@ const detailMois = computed(() => {
   const jm = joursOuvresMoisN(mo)
   const capaMois = jm * capaJour
   const rows = []
-  // Même base que le graphe : réalisé (passé) / plan + retard (mois courant) / plan (futur)
-  let premierRestant = -1
-  for (let m2 = 0; m2 < 12; m2++) { if (!moisRealises.value[m2]) { premierRestant = m2; break } }
   for (const p of produits.value) {
     const cad = cadenceGroupe(p.id); if (cad <= 0) continue
-    let b
-    if (moisRealises.value[mo]) {
-      b = (realiseParProduitMois.value[p.id] || [])[mo] || 0
-    } else {
-      b = (planParProduitMois.value[p.id] || [])[mo] || 0
-      if (mo === premierRestant) {
-        const pm = planParProduitMois.value[p.id] || []
-        let planPasse = 0
-        for (let m2 = 0; m2 < 12; m2++) if (moisRealises.value[m2]) planPasse += pm[m2] || 0
-        b += Math.max(0, planPasse - (realiseParProduit.value[p.id] || 0))
-      }
-    }
-    if (b <= 0) continue
+    const planB = (planParProduitMois.value[p.id] || [])[mo] || 0
+    if (planB <= 0) continue
     const tl = num(p.taille_lot)
-    const h = heuresProduit(p.id, b)
-    rows.push({ code: p.code_pf, desig: p.designation, plan: b, lots: tl > 0 ? b / tl : 0, tl, plk: poidsLot(p), cad, hParLot: cad > 0 ? poidsLot(p) / cad : 0, prod: h.prod, nett: h.nett, heures: h.total })
+    const h = heuresProduit(p.id, planB)
+    rows.push({ code: p.code_pf, desig: p.designation, plan: planB, lots: tl > 0 ? planB / tl : 0, tl, plk: poidsLot(p), cad, hParLot: cad > 0 ? poidsLot(p) / cad : 0, prod: h.prod, nett: h.nett, heures: h.total })
   }
   rows.sort((a, b) => b.heures - a.heures)
   const totalH = rows.reduce((a, r) => a + r.heures, 0)
@@ -256,8 +180,7 @@ const detailMois = computed(() => {
 })
 const realiseParProduit = computed(() => {
   const m = {}
-  const rm = realiseParProduitMois.value
-  for (const pid in rm) m[pid] = rm[pid].reduce((a, b) => a + b, 0)
+  for (const o of ofs.value) { const d = o.date_fin_fabrication ? new Date(o.date_fin_fabrication) : null; if (d && d.getFullYear() === annee.value) m[o.produit_id] = (m[o.produit_id] || 0) + num(o.boites_fabriquees) }
   return m
 })
 const produitProduitPoste = computed(() => { const m = {}; for (const s of postesGroupe.value) if (s.produit_id) m[s.produit_id] = (m[s.produit_id] || 0) + num(s.production_realisee); return m })
@@ -387,15 +310,15 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
               </tr>
             </tbody>
           </table>
-          <div class="ed-sub">📈 Occupation — réalisé &amp; prévisionnel</div>
+          <div class="ed-sub">📈 Occupation prévisionnelle — mois restants</div>
           <div class="ed-mchart tall">
-            <div v-for="(t, i) in occupationParMois" :key="i" class="ed-mcol" :class="{ 'ed-clic': t != null }" @click="t != null && (moisSel = i)" :title="MOIS[i] + ' : ' + (t == null ? '—' : (t * 100).toFixed(0) + ' % ' + (moisRealises[i] ? '(réalisé)' : '(prévisionnel)') + ' — cliquer pour le détail')">
+            <div v-for="(t, i) in occupationParMois" :key="i" class="ed-mcol" :class="{ 'ed-clic': t != null }" @click="t != null && (moisSel = i)" :title="MOIS[i] + ' : ' + (t == null ? 'écoulé' : (t * 100).toFixed(0) + ' % — cliquer pour le détail')">
               <span class="ed-mv" :class="t == null ? '' : 't-' + clsTaux(t)">{{ t == null ? '' : (t * 100).toFixed(0) }}</span>
-              <div class="ed-bararea"><div class="ed-refl2"></div><div class="ed-mbar" :class="[t == null ? 'gone' : 'b-' + clsTaux(t), moisRealises[i] ? 'ed-real' : 'ed-prev']" :style="{ height: t == null ? '2px' : Math.min(120, t * 100) + '%' }"></div></div>
-              <span class="ed-mm" :class="{ 'ed-mm-real': moisRealises[i] }">{{ MOIS[i].charAt(0) }}</span>
+              <div class="ed-bararea"><div class="ed-refl2"></div><div class="ed-mbar" :class="t == null ? 'gone' : 'b-' + clsTaux(t)" :style="{ height: t == null ? '2px' : Math.min(120, t * 100) + '%' }"></div></div>
+              <span class="ed-mm">{{ MOIS[i].charAt(0) }}</span>
             </div>
           </div>
-          <p class="ed-hint"><b>Barres pleines</b> = réalisé (quantité produite). <b>Barres estompées</b> = plan des mois à venir ; le <b>retard</b> des mois passés est ajouté au mois courant. Trait = 100 %. Clique une barre pour le détail.</p>
+          <p class="ed-hint">Barres grises = mois écoulés. Trait = 100 %. <b>Clique une barre</b> pour voir les produits qui chargent ce mois.</p>
         </section>
       </div>
 
@@ -541,9 +464,4 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
 .ed-mbar, .ed-occ-fill.t-x { }
 .ed-occ-fill.t-g { background: #16a34a; } .ed-occ-fill.t-a { background: #f59e0b; } .ed-occ-fill.t-r { background: #ef4444; } .ed-occ-fill.t-x { background: #991b1b; }
 @media (max-width: 860px) { .ed-grid { grid-template-columns: 1fr; } .ed-kpis, .ed-occ { flex-wrap: wrap; } .ed-kpi, .ed-occ-b { flex-basis: 46%; } }
-
-/* Occupation : réalisé (plein) vs prévisionnel (estompé) */
-.ed-mbar.ed-prev { opacity: .5; }
-.ed-mbar.ed-real { opacity: 1; }
-.ed-mm.ed-mm-real { color: #0f766e; font-weight: 800; }
 </style>
