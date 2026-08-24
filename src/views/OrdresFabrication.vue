@@ -20,7 +20,7 @@ const equipementsCond = computed(() => equipements.value.filter(e => {
 }))
 const filtreStatut = ref('')
 const rechercheLot = ref('')
-const anneeF = ref(0)
+const anneeF = ref(new Date().getFullYear())
 const moisF = ref(0)
 const lotDeb = ref('')
 const lotFin = ref('')
