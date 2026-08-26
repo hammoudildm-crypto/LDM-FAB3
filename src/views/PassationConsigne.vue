@@ -501,5 +501,8 @@ const consignesGroupees = computed(() => {
 .pc-pair .pc-field.pin input { width: 100%; box-sizing: border-box; text-align: center; letter-spacing: .15em; }
 .pc-grp .pc-nav-sep { margin-top: 0; padding-top: 0; border-top: none; color: #94a3b8; }
 .pc-grp .pc-filters { gap: 10px; }
-.pc-phase-top { margin-bottom: 10px; }
+.pc-phase-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.pc-phase-top .pc-nav-sep { margin: 0; padding: 0; border: none; white-space: nowrap; }
+.pc-phase-top .pc-phase-nav { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+.pc-phase-top .pc-phase-btn { text-align: center; padding: 6px 12px; white-space: nowrap; }
 </style>
