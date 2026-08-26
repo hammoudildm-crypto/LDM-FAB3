@@ -365,15 +365,15 @@ onMounted(charger)
             <button v-for="(y, i) in ANNEES_COMP" :key="y" type="button" class="an-btn" :class="{ on: anneesActives.has(y) }" @click="toggleAnnee(y)"><span class="an-dot" :style="{ background: COULEURS_ANNEES[i] }"></span>{{ y }}</button>
           </div>
         </div>
-        <div class="side-sec">
-          <div class="side-lbl">Atelier</div>
-          <div class="side-tg side-2col">
-            <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
-          </div>
-        </div>
       </aside>
         <div class="pa-content">
       <section class="card">
+        <div class="pa-atelier-bar">
+          <span class="pa-atelier-lbl">Atelier</span>
+          <div class="pa-atelier-tg">
+            <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
+          </div>
+        </div>
         <div class="card-head"><h2 class="card-title">Comparaison mensuelle par atelier</h2></div>
         <div class="chart-titre">{{ atelierSel }} — lots terminés par mois</div>
         <div class="chart-wrap">
@@ -567,7 +567,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .an-dot { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
 .btn-row button.an-btn.on .an-dot { background: #fff; }
 .chart-titre { font-size: 12px; font-weight: 700; color: #0f766e; margin: 2px 0 1px; }
-.chart-wrap { margin-top: 2px; height: 190px; }
+.chart-wrap { margin-top: 2px; }
 
 @media (max-width: 700px) {
   .kpi-grid { grid-template-columns: 1fr; }
@@ -604,4 +604,10 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .proj-warn { color: #b45309; font-weight: 700; }
 .proj-star { color: #b45309; font-weight: 800; cursor: help; }
 .proj-note { font-size: 12px; color: #64748b; line-height: 1.5; margin: 12px 0 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 12px; }
+.pa-atelier-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.pa-atelier-lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: #64748b; white-space: nowrap; }
+.pa-atelier-tg { display: flex; flex-wrap: wrap; gap: 5px; }
+.pa-atelier-tg button { border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 6px 11px; font: inherit; font-size: 12px; font-weight: 600; color: #64748b; cursor: pointer; white-space: nowrap; transition: all .12s; }
+.pa-atelier-tg button:hover { border-color: #99f6e4; background: #f0fdfa; }
+.pa-atelier-tg button.on { background: #0f766e; border-color: #0f766e; color: #fff; box-shadow: 0 2px 6px rgba(15,118,110,.28); }
 </style>
