@@ -541,14 +541,14 @@ onMounted(charger)
 .btn-exp:disabled { opacity: .45; cursor: not-allowed; }
 
 .table-scroll { overflow-x: auto; }
-table.grid { width: 100%; border-collapse: collapse; font-size: 11px; }
-table.grid th { text-align: center; font-size: 9px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; padding: 3px 3px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+table.grid { width: 100%; border-collapse: collapse; font-size: 8.5px; }
+table.grid th { text-align: center; font-size: 7px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; padding: 1px 2px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
 table.grid th.at-col { text-align: left; }
-table.grid td { padding: 2px 3px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
-.at-col { min-width: 92px; }
-.mois-col { width: 30px; }
-.tot-col { width: 60px; }
-.at-name { font-weight: 600; color: #1b2733; }
+table.grid td { padding: 1px 2px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
+.at-col { min-width: 66px; }
+.mois-col { width: 24px; }
+.tot-col { width: 50px; }
+.at-name { font-weight: 600; color: #1b2733; font-size: 8.5px; }
 .num { text-align: center; font-variant-numeric: tabular-nums; border-radius: 6px; }
 .num.strong { font-weight: 700; }
 .accent { color: #0f766e; }
