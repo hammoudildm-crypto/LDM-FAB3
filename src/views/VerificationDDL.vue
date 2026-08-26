@@ -562,7 +562,7 @@ table.mini { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.mini th { text-align: left; padding: 7px 6px; border-bottom: 2px solid #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; }
 table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
-.desig { color: #64748b; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.desig { color: #64748b; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .right { text-align: right; }
 .nowrap { white-space: nowrap; }
 .empty { color: #94a3b8; font-style: italic; font-size: 13px; }
@@ -649,7 +649,7 @@ table.mini td { padding: 3px 5px; }
 .verif-form select { min-width: 180px; }
 .btn-filtre { font-size: 11px; padding: 5px 9px; }
 .sup-opt { font-size: 11px; padding: 4px 7px; }
-.resv-sel { font-size: 11px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; max-width: 100px; }
+.resv-sel { font-size: 11px; padding: 3px 4px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; width: 92px; max-width: 92px; }
 .plan-ddl .pddl-grid { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .pddl-row { display: flex; justify-content: space-between; align-items: center; }
 .pddl-lbl { font-size: 11px; color: #64748b; }
