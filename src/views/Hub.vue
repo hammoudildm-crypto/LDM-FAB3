@@ -278,7 +278,7 @@ function setStyle(k) { style.value = k; if (k === 'lateral' && (selected.value =
 .m-convoyeur .ph-clock { font-family: 'Consolas', ui-monospace, monospace; font-size: 16px; font-weight: 600; color: #334155; letter-spacing: 2px; }
 .m-convoyeur .ph-status { font-size: 11.5px; font-weight: 700; color: #16a34a; letter-spacing: .5px; text-transform: uppercase; display: flex; align-items: center; gap: 7px; }
 .m-convoyeur .ph-status i { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 9px #22c55e; animation: blink 2s ease-in-out infinite; }
-.m-convoyeur .ligne-wrap { position: relative; padding: 44px 56px 60px; min-height: 480px; }
+.m-convoyeur .ligne-wrap { position: relative; padding: 84px 56px 60px; min-height: 480px; }
 .m-convoyeur .hint { text-align: center; font-size: 11.5px; font-weight: 700; color: #94a3b8; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 30px; }
 .m-convoyeur /* Convoyeur + stations */
 .line-band { position: relative; }
@@ -313,7 +313,7 @@ function setStyle(k) { style.value = k; if (k === 'lateral' && (selected.value =
 @media (max-width: 880px) {
 .m-convoyeur .ph { padding: 18px 20px; flex-wrap: wrap; gap: 10px; }
 .m-convoyeur .ph-sub { display: none; }
-.m-convoyeur .ligne-wrap { padding: 24px 18px 40px; min-height: 0; }
+.m-convoyeur .ligne-wrap { padding: 64px 18px 40px; min-height: 0; }
 .m-convoyeur .conveyor { display: none; }
 .m-convoyeur .stations { flex-direction: column; align-items: stretch; gap: 12px; }
 .m-convoyeur .station { align-items: stretch; }
