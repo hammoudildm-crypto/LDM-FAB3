@@ -557,11 +557,12 @@ async function devalider(l) {
 .prog-pct.warn { color: #b45309; }
 .hint { margin: -8px 0 14px; font-size: 12px; color: #94a3b8; }
 
+.v3-mid-scroll { overflow-x: auto; }
 table.mini { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.mini th { text-align: left; padding: 7px 6px; border-bottom: 2px solid #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; }
 table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
-.desig { color: #64748b; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.desig { color: #64748b; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .right { text-align: right; }
 .nowrap { white-space: nowrap; }
 .empty { color: #94a3b8; font-style: italic; font-size: 13px; }
