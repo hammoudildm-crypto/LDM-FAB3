@@ -407,7 +407,7 @@ async function devalider(l) {
         <div class="v3-mid-scroll">
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <table v-else class="mini">
-          <thead><tr><th>Lot</th><th>Produit</th><th>Réserver vérificateur</th><th class="right">Fin fab.</th><th class="right">Attente</th><th></th></tr></thead>
+          <thead><tr><th>Lot</th><th>Produit</th><th>Réserver</th><th class="right">Fin fab.</th><th class="right">Attente</th><th></th></tr></thead>
           <tbody>
             <template v-for="l in attente" :key="l.id">
               <tr :class="{ 'ddl-triage': triageIds.has(l.id) }">
@@ -562,7 +562,7 @@ table.mini { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.mini th { text-align: left; padding: 7px 6px; border-bottom: 2px solid #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; }
 table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
-.desig { color: #64748b; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.desig { color: #64748b; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .right { text-align: right; }
 .nowrap { white-space: nowrap; }
 .empty { color: #94a3b8; font-style: italic; font-size: 13px; }
@@ -622,7 +622,7 @@ table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
 .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
 .charts-row > .card { margin: 0; }
 @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
-.verif-3col { display: grid; grid-template-columns: 0.8fr 1.5fr 0.9fr; gap: 14px; align-items: stretch; }
+.verif-3col { display: grid; grid-template-columns: 0.8fr 1.7fr 0.65fr; gap: 14px; align-items: stretch; }
 .verif-3col > .v3-col { display: flex; flex-direction: column; gap: 14px; order: 1; align-self: stretch; margin-top: 0; }
 .verif-3col > .v3-mid { order: 2; margin: 0; align-self: stretch; margin-top: 0; }
 .verif-3col > .v3-right { order: 3; margin: 0; align-self: stretch; margin-top: 0; }
@@ -649,7 +649,7 @@ table.mini td { padding: 3px 5px; }
 .verif-form select { min-width: 180px; }
 .btn-filtre { font-size: 11px; padding: 5px 9px; }
 .sup-opt { font-size: 11px; padding: 4px 7px; }
-.resv-sel { font-size: 11px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; max-width: 150px; }
+.resv-sel { font-size: 11px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; max-width: 100px; }
 .plan-ddl .pddl-grid { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .pddl-row { display: flex; justify-content: space-between; align-items: center; }
 .pddl-lbl { font-size: 11px; color: #64748b; }
