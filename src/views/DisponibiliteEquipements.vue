@@ -926,7 +926,7 @@ onMounted(async () => {
 .chk input { width: 15px; height: 15px; cursor: pointer; }
 
 .atelier { margin-bottom: 26px; }
-.atelier-titre { font-size: 13px; font-weight: 700; margin: 0 0 7px; color: #0f172a; border-left: 3px solid #0f766e; padding-left: 8px; line-height: 1.25; }
+.atelier-titre { font-size: 11px; font-weight: 700; margin: 0 0 7px; color: #0f172a; border-left: 3px solid #0f766e; padding-left: 8px; line-height: 1.2; }
 .at-plan { display: block; font-size: 11px; font-weight: 600; color: #64748b; margin-top: 3px; }
 .tx-ok { color: #15803d; font-weight: 800; }
 .tx-bas { color: #dc2626; font-weight: 800; }
@@ -1017,7 +1017,7 @@ onMounted(async () => {
 .flow-step { font-size: 10.5px; padding: 3px 8px; }
 .searchbar input[type=text] { padding: 6px 10px; font-size: 12px; }
 .chk { font-size: 11.5px; }
-.atelier-titre { font-size: 12px; margin: 0 0 5px; }
+.atelier-titre { font-size: 10.5px; margin: 0 0 5px; }
 .at-plan { font-size: 10px; }
 .at-sum { font-size: 9.5px; }
 .board-h { font-size: 13px; margin: 12px 0 7px; }
