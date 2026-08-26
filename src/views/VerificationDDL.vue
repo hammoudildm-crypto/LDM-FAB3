@@ -111,6 +111,9 @@ function dateFinFab(l) {
   return derniere || l.date_fin_fabrication || null
 }
 function dateDDL(l) { return dateFinFab(l) || (l.ddl_verifie ? (l.date_fin_fabrication || l.date_lancement) : null) }
+function joursAttente(l) { const d = dateDDL(l); if (!d) return null; return Math.floor((Date.now() - new Date(d).getTime()) / 86400000) }
+function dureeAttente(l) { const j = joursAttente(l); if (j == null) return '—'; return j <= 0 ? 'Auj.' : j + ' j' }
+function clsAttente(l) { const j = joursAttente(l); if (j == null) return ''; if (j >= 15) return 'att-bad'; if (j >= 7) return 'att-warn'; return 'att-ok' }
 const produits = computed(() => lots.value.filter(l => {
   const d = dateDDL(l)
   return d && (anneeSel.value === 0 || anYear(d) === anneeSel.value)
@@ -404,7 +407,7 @@ async function devalider(l) {
         <div class="v3-mid-scroll">
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <table v-else class="mini">
-          <thead><tr><th>Lot</th><th>Produit</th><th>Réserver vérificateur</th><th class="right">Fin fab.</th><th></th></tr></thead>
+          <thead><tr><th>Lot</th><th>Produit</th><th>Réserver vérificateur</th><th class="right">Fin fab.</th><th class="right">Attente</th><th></th></tr></thead>
           <tbody>
             <template v-for="l in attente" :key="l.id">
               <tr :class="{ 'ddl-triage': triageIds.has(l.id) }">
@@ -418,10 +421,11 @@ async function devalider(l) {
                   <span v-else>{{ l.ddl_verificateur || '—' }}</span>
                 </td>
                 <td class="right nowrap">{{ fmtDate(dateDDL(l)) }}</td>
+                <td class="right nowrap" :class="clsAttente(l)" style="font-weight:800">{{ dureeAttente(l) }}</td>
                 <td class="right"><button v-if="peutEditer" class="link" @click="ouvrir(l)">Vérifier</button></td>
               </tr>
               <tr v-if="verifEnCours === l.id">
-                <td colspan="5">
+                <td colspan="6">
                   <div class="verif-form">
                     <select v-model="superviseurChoix" class="sv-sel">
                       <option value="">— Choisir un vérificateur —</option>
@@ -814,4 +818,7 @@ table.mini tbody tr:hover td { background: #faf9fe; }
 .pddl-val.k-ok { color: #16a34a !important; }
 .pddl-val.k-warn { color: #d97706 !important; }
 .pddl-val.k-bad { color: #dc2626 !important; }
+.att-ok { color: #16a34a; }
+.att-warn { color: #d97706; }
+.att-bad { color: #dc2626; }
 </style>
