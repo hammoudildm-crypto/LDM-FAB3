@@ -220,7 +220,7 @@ const consignesGroupees = computed(() => {
                 <label class="pc-field grow"><span>Responsable 2 · optionnel</span>
                   <select v-model="form.superviseur_sortant_2"><option value="">— Aucun —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
                 </label>
-                <label class="pc-field pin" v-if="form.superviseur_sortant_2"><span>🔒 PIN</span>
+                <label class="pc-field pin"><span>🔒 PIN</span>
                   <input type="password" v-model="form.pin_sortant_2" placeholder="••••" autocomplete="off" />
                 </label>
               </div>
@@ -237,17 +237,17 @@ const consignesGroupees = computed(() => {
                     </button>
                   </div>
                 </div>
-                <div class="pc-filter-col">
-                  <div class="pc-nav-sep">Phase</div>
-                  <div class="pc-phase-nav">
-                    <button type="button" class="pc-phase-btn" :class="{ active: !phaseSel }" @click="phaseSel = ''">Toutes</button>
-                    <button v-for="ph in phasesDisponibles" :key="ph" type="button" class="pc-phase-btn" :class="{ active: phaseSel === ph }" @click="phaseSel = ph">{{ ph }}</button>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
           <div class="pc-equip-right">
+            <div class="pc-phase-top">
+              <div class="pc-nav-sep">Phase</div>
+              <div class="pc-phase-nav">
+                <button type="button" class="pc-phase-btn" :class="{ active: !phaseSel }" @click="phaseSel = ''">Toutes</button>
+                <button v-for="ph in phasesDisponibles" :key="ph" type="button" class="pc-phase-btn" :class="{ active: phaseSel === ph }" @click="phaseSel = ph">{{ ph }}</button>
+              </div>
+            </div>
             <span class="pc-lbl eq">🏭 État &amp; tâches — {{ siteLabel(siteSel) }}<span v-if="phaseSel"> · {{ phaseSel }}</span></span>
             <div class="pc-equip-wrap">
               <table class="pc-equip-tbl">
@@ -501,4 +501,5 @@ const consignesGroupees = computed(() => {
 .pc-pair .pc-field.pin input { width: 100%; box-sizing: border-box; text-align: center; letter-spacing: .15em; }
 .pc-grp .pc-nav-sep { margin-top: 0; padding-top: 0; border-top: none; color: #94a3b8; }
 .pc-grp .pc-filters { gap: 10px; }
+.pc-phase-top { margin-bottom: 10px; }
 </style>
