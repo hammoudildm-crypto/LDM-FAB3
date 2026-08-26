@@ -145,7 +145,7 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('ordres_fabrication')
         .select('id, numero_lot, boites_fabriquees, date_fin_fabrication, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('conditionnement')
-        .select('quantite_conditionnee, date_conditionnement, equipements(nom, type), ordres_fabrication(numero_lot, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
+        .select('quantite_conditionnee, date_conditionnement, equipements(nom, type), ordres_fabrication(numero_lot, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
       fetchAllPaged(() => supabase.from('plan_production')
         .select('annee, mois, quantite_planifiee, equipements(nom, type), produits(gamme, code_pf, designation, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut'))
@@ -156,9 +156,20 @@ onMounted(async () => {
 
 const anYear = (d) => d ? new Date(d).getFullYear() : null
 
-const fabData = computed(() => fabRaw.value
-  .filter(o => o.date_fin_fabrication && anYear(o.date_fin_fabrication) === annee.value)
-  .map(o => ({ id: o.id, lot: o.numero_lot, equip: o.equipements ? o.equipements.nom : null, boites: o.boites_fabriquees, produit: o.produits })))
+const fabData = computed(() => {
+  const arr = fabRaw.value
+    .filter(o => o.date_fin_fabrication && anYear(o.date_fin_fabrication) === annee.value)
+    .map(o => ({ id: o.id, lot: o.numero_lot, equip: o.equipements ? o.equipements.nom : null, boites: o.boites_fabriquees, produit: o.produits }))
+  // Produits « direct conditionnement » (sans fabrication) : conditionné compté comme fabriqué
+  for (const c of condRaw.value) {
+    const of = c.ordres_fabrication
+    if (!of || of.date_fin_fabrication) continue
+    if (!c.date_conditionnement || anYear(c.date_conditionnement) !== annee.value) continue
+    const p = of.produits; const upb = p ? num(p.unites_par_boite) : 0
+    arr.push({ id: null, lot: of.numero_lot, equip: c.equipements ? c.equipements.nom : null, boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p })
+  }
+  return arr
+})
 
 const condData = computed(() => condRaw.value
   .filter(c => c.date_conditionnement && anYear(c.date_conditionnement) === annee.value)
@@ -250,7 +261,17 @@ const tauxGlobal = computed(() => totPlan.value > 0 ? Math.round(totBoites.value
 const moisCourant = new Date().getMonth() + 1
 const anMonth = (d) => d ? new Date(d).getMonth() + 1 : null
 const nomMois = computed(() => new Date(annee.value, moisCourant - 1, 1).toLocaleDateString('fr-FR', { month: 'long' }))
-const fabDataMois = computed(() => fabRaw.value.filter(o => o.date_fin_fabrication && anYear(o.date_fin_fabrication) === annee.value && anMonth(o.date_fin_fabrication) === moisCourant).map(o => ({ boites: o.boites_fabriquees, produit: o.produits })))
+const fabDataMois = computed(() => {
+  const arr = fabRaw.value.filter(o => o.date_fin_fabrication && anYear(o.date_fin_fabrication) === annee.value && anMonth(o.date_fin_fabrication) === moisCourant).map(o => ({ boites: o.boites_fabriquees, produit: o.produits }))
+  for (const c of condRaw.value) {
+    const of = c.ordres_fabrication
+    if (!of || of.date_fin_fabrication) continue
+    if (!c.date_conditionnement || anYear(c.date_conditionnement) !== annee.value || anMonth(c.date_conditionnement) !== moisCourant) continue
+    const p = of.produits; const upb = p ? num(p.unites_par_boite) : 0
+    arr.push({ boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p })
+  }
+  return arr
+})
 const condDataMois = computed(() => condRaw.value.filter(c => c.date_conditionnement && anYear(c.date_conditionnement) === annee.value && anMonth(c.date_conditionnement) === moisCourant).map(c => { const of = c.ordres_fabrication; const pp = of ? of.produits : null; const upb = pp ? num(pp.unites_par_boite) : 0; return { boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: pp } }))
 const srcMois = computed(() => onglet.value === 'fab' ? fabDataMois.value : condDataMois.value)
 const totBoitesMois = computed(() => srcMois.value.reduce((s, r) => s + num(r.boites), 0))
