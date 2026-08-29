@@ -7,6 +7,9 @@ import { ICONS, TINTS } from '../icons.js'
 
 const anneeCourante = new Date().getFullYear()
 const moisCourant = new Date().getMonth()   // 0-11
+function joursOuvresEntre(d1, d2) { let n = 0; const d = new Date(d1); d.setHours(0, 0, 0, 0); while (d <= d2) { const wd = d.getDay(); if (wd !== 0 && wd !== 6) n++; d.setDate(d.getDate() + 1) } return n }
+const joursEcoules = Math.max(1, joursOuvresEntre(new Date(new Date().getFullYear(), 0, 1), new Date()))
+const joursRestants = Math.max(1, joursOuvresEntre(new Date(), new Date(new Date().getFullYear(), 11, 31)))
 const ANNEES = []
 for (let a = anneeCourante - 4; a <= anneeCourante + 1; a++) ANNEES.push(a)
 const anneeSel = ref(anneeCourante)
@@ -209,7 +212,12 @@ function projectionAtelier(ph) {
   const vsN1 = totN1 > 0 ? Math.round((projTotal / totN1 - 1) * 100) : null
   const plan = planParAtelier.value[ph] || 0
   const pctPlan = plan > 0 ? Math.round((projTotal / plan) * 100) : null
-  return { ph, realise: realiseTotal, projTotal, reste: Math.max(0, projTotal - realiseTotal), methode, vsN1, plan, pctPlan }
+  const reste = plan > 0 ? Math.max(0, plan - realiseTotal) : Math.max(0, projTotal - realiseTotal)
+  const moisEcoules = mc + 1
+  const moisRestants = Math.max(1, 12 - mc - 1)
+  return { ph, realise: realiseTotal, projTotal, reste, methode, vsN1, plan, pctPlan,
+    realMens: realiseTotal / moisEcoules, realJour: realiseTotal / joursEcoules,
+    resteMens: reste / moisRestants, resteJour: reste / joursRestants }
 }
 const projectionsTable = computed(() => {
   return PHASES
@@ -329,9 +337,7 @@ onMounted(charger)
 
 <template>
   <div class="pa-page">
-    <PageHeader title="Production par atelier" tone="teal"
-      subtitle="Nombre de lots ayant terminé chaque étape, par atelier et par mois.">
-    </PageHeader>
+    <PageHeader title="Production par atelier" tone="teal" />
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="chargement" class="muted">Chargement…</p>
@@ -352,15 +358,15 @@ onMounted(charger)
           </select>
         </div>
         <div class="side-sec">
-          <div class="side-lbl">Années (comparaison)</div>
-          <div class="side-annees2">
-            <button v-for="(y, i) in ANNEES_COMP" :key="y" type="button" class="an-btn" :class="{ on: anneesActives.has(y) }" @click="toggleAnnee(y)"><span class="an-dot" :style="{ background: COULEURS_ANNEES[i] }"></span>{{ y }}</button>
+          <div class="side-lbl">Atelier</div>
+          <div class="pa-atelier-tg">
+            <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
           </div>
         </div>
         <div class="side-sec">
-          <div class="side-lbl">Atelier</div>
-          <div class="side-tg">
-            <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
+          <div class="side-lbl">Années (comparaison)</div>
+          <div class="side-annees2">
+            <button v-for="(y, i) in ANNEES_COMP" :key="y" type="button" class="an-btn" :class="{ on: anneesActives.has(y) }" @click="toggleAnnee(y)"><span class="an-dot" :style="{ background: COULEURS_ANNEES[i] }"></span>{{ y }}</button>
           </div>
         </div>
       </aside>
@@ -387,7 +393,7 @@ onMounted(charger)
             <thead>
               <tr>
                 <th class="at-col">Atelier</th>
-                <th v-for="m in MOIS" :key="m" class="mois-col">{{ m }}</th>
+                <th v-for="m in MOIS" :key="m" class="mois-col" :title="m">{{ m.charAt(0) }}</th>
                 <th class="tot-col">Total</th>
               </tr>
             </thead>
@@ -423,10 +429,14 @@ onMounted(charger)
             <tr>
               <th>Atelier</th>
               <th class="ta-r">Réalisé à ce jour</th>
+              <th class="ta-r">Réal. /mois</th>
+              <th class="ta-r">Réal. /jour</th>
               <th class="ta-r">Projection {{ anneeCourante }}</th>
               <th class="ta-r">Plan {{ anneeCourante }}</th>
               <th class="ta-r">% du plan</th>
-              <th class="ta-r">Reste à faire</th>
+              <th class="ta-r">Reste / plan</th>
+              <th class="ta-r">Reste /mois</th>
+              <th class="ta-r">Reste /jour</th>
               <th class="ta-r">vs {{ anneeCourante - 1 }}</th>
             </tr>
           </thead>
@@ -434,10 +444,14 @@ onMounted(charger)
             <tr v-for="r in projectionsTable" :key="r.ph" :class="{ 'proj-on': r.ph === atelierSel }">
               <td class="proj-at">{{ r.ph }}<span v-if="r.methode === 'lineaire'" class="proj-star" title="Sans historique saisonnier : projection linéaire">*</span></td>
               <td class="ta-r">{{ fmt(r.realise) }}</td>
+              <td class="ta-r">{{ fmt(Math.round(r.realMens)) }}</td>
+              <td class="ta-r">{{ fmt(Math.round(r.realJour)) }}</td>
               <td class="ta-r proj-val">{{ fmt(r.projTotal) }}</td>
               <td class="ta-r">{{ r.plan ? fmt(r.plan) : '—' }}</td>
               <td class="ta-r" :class="r.pctPlan == null ? '' : (r.pctPlan >= 100 ? 'proj-up' : (r.pctPlan >= 80 ? 'proj-warn' : 'proj-down'))">{{ r.pctPlan != null ? r.pctPlan + ' %' : '—' }}</td>
               <td class="ta-r proj-reste">{{ fmt(r.reste) }}</td>
+              <td class="ta-r">{{ fmt(Math.round(r.resteMens)) }}</td>
+              <td class="ta-r">{{ fmt(Math.round(r.resteJour)) }}</td>
               <td class="ta-r" :class="r.vsN1 == null ? '' : (r.vsN1 >= 0 ? 'proj-up' : 'proj-down')">
                 <template v-if="r.vsN1 != null">{{ r.vsN1 >= 0 ? '+' : '' }}{{ r.vsN1 }} %</template>
                 <template v-else>—</template>
@@ -446,9 +460,6 @@ onMounted(charger)
           </tbody>
         </table>
       </div>
-      <p class="proj-note">
-        <strong>Méthode :</strong> le réalisé des mois clôturés (janvier → {{ MOIS[moisCourant - 1] || '—' }}) est rapporté à l'année entière selon le <strong>profil saisonnier moyen</strong> des années passées. Le mois en cours ({{ MOIS[moisCourant] }}), partiel, n'entre pas dans le calcul. <span class="proj-star">*</span> atelier sans historique → projection linéaire (réalisé ÷ mois écoulés × 12).<br><strong>Plan :</strong> PDP converti en lots (boîtes planifiées ÷ taille de lot), réparti selon la gamme. <strong>% du plan</strong> = projection ÷ plan.
-      </p>
     </section>
       </div>
 
@@ -483,11 +494,11 @@ onMounted(charger)
 
 <style scoped>
 .pa-page { color: #1b2733; }
-.pa-layout { display: flex; gap: 14px; align-items: flex-start; }
-.pa-side { flex: 0 0 210px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: stretch; overflow: hidden; }
+.pa-layout { display: flex; gap: 10px; align-items: stretch; margin-bottom: 8px; }
+.pa-side { flex: 0 0 275px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: stretch; overflow: hidden; }
 .pa-content { flex: 1; min-width: 0; }
-.pa-row2 { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
-.pa-row2 > .card, .pa-row2 > .proj-card { flex: 1; min-width: 0; margin-bottom: 0; }
+.pa-row2 { display: flex; gap: 10px; align-items: stretch; margin-bottom: 8px; }
+.pa-row2 > .card, .pa-row2 > .proj-card { flex: 1 1 0; min-width: 0; margin-bottom: 0; display: flex; flex-direction: column; }
 @media (max-width: 1100px) { .pa-row2 { flex-direction: column; } .pa-row2 > .card, .pa-row2 > .proj-card { width: 100%; } }
 .side-sec { padding: 10px 12px; border-bottom: 1px solid #eef2f6; }
 .side-sec:last-child { border-bottom: none; }
@@ -496,11 +507,13 @@ onMounted(charger)
 .side-tg button { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 600; color: #64748b; padding: 6px 10px; cursor: pointer; text-align: left; }
 .side-tg button:hover { background: #eef2f7; }
 .side-tg button.on { background: #0f766e; border-color: #0f766e; color: #fff; }
+.side-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.side-2col button { font-size: 10.5px; padding: 6px 6px; text-align: center; white-space: normal; line-height: 1.15; }
 .side-select { width: 100%; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; color: #1b2733; background: #fff; box-sizing: border-box; cursor: pointer; }
-.side-annees2 { display: flex; flex-wrap: wrap; gap: 5px; }
-.side-annees2 .an-btn { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 11.5px; font-weight: 600; padding: 5px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #475569; cursor: pointer; }
+.side-annees2 { display: flex; flex-wrap: nowrap; gap: 3px; }
+.side-annees2 .an-btn { display: inline-flex; align-items: center; justify-content: center; gap: 3px; font: inherit; font-size: 10px; font-weight: 600; padding: 5px 3px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #475569; cursor: pointer; flex: 1; min-width: 0; }
 .side-annees2 .an-btn.on { border-color: #0f766e; background: #f0fdfa; color: #0f766e; }
-.side-annees2 .an-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.side-annees2 .an-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .side-annees { flex-direction: row; flex-wrap: wrap; }
 .side-annees button { flex: 1; min-width: 44px; text-align: center; padding: 7px 4px; }
 @media (max-width: 820px) { .pa-layout { flex-direction: column; } .pa-side { flex-basis: auto; width: 100%; position: static; } .side-tg { flex-direction: row; flex-wrap: wrap; } .side-tg button { flex: 1; } }
@@ -509,16 +522,16 @@ onMounted(charger)
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .muted { color: #94a3b8; }
 
-.kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
-.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 9px 12px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; padding: 6px 10px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .kpi-top { display: flex; align-items: center; gap: 10px; }
-.kpi-ic { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
-.kpi-ic svg { width: 19px; height: 19px; }
-.kpi-val { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.kpi-ic { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.kpi-ic svg { width: 15px; height: 15px; }
+.kpi-val { font-size: 14px; font-weight: 700; letter-spacing: -0.02em; }
 .kpi-val.accent { color: #0f766e; }
 .kpi-lbl { font-size: 10.5px; color: #64748b; margin-top: 3px; }
 
-.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 10px 12px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 7px 10px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .card-title { margin: 0; font-size: 13px; }
 .btn-exp { margin-left: auto; font-size: 13px; padding: 7px 12px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
@@ -526,14 +539,14 @@ onMounted(charger)
 .btn-exp:disabled { opacity: .45; cursor: not-allowed; }
 
 .table-scroll { overflow-x: auto; }
-table.grid { width: 100%; border-collapse: collapse; font-size: 11px; }
-table.grid th { text-align: center; font-size: 9px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; padding: 3px 3px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+table.grid { width: 100%; border-collapse: collapse; font-size: 8.5px; }
+table.grid th { text-align: center; font-size: 7px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; padding: 1px 2px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
 table.grid th.at-col { text-align: left; }
-table.grid td { padding: 2px 3px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
-.at-col { min-width: 92px; }
-.mois-col { width: 30px; }
-.tot-col { width: 60px; }
-.at-name { font-weight: 600; color: #1b2733; }
+table.grid td { padding: 1px 2px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
+.at-col { min-width: 66px; }
+.mois-col { width: 18px; }
+.tot-col { width: 50px; }
+.at-name { font-weight: 600; color: #1b2733; font-size: 8.5px; }
 .num { text-align: center; font-variant-numeric: tabular-nums; border-radius: 6px; }
 .num.strong { font-weight: 700; }
 .accent { color: #0f766e; }
@@ -552,7 +565,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .an-dot { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
 .btn-row button.an-btn.on .an-dot { background: #fff; }
 .chart-titre { font-size: 12px; font-weight: 700; color: #0f766e; margin: 2px 0 1px; }
-.chart-wrap { margin-top: 4px; }
+.chart-wrap { margin-top: 2px; }
 
 @media (max-width: 700px) {
   .kpi-grid { grid-template-columns: 1fr; }
@@ -570,7 +583,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-code { font-family: ui-monospace, monospace; font-weight: 600; color: #0f766e; white-space: nowrap; }
 .pa-des { color: #475569; }
 .pa-note { font-size: 12.5px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; padding: 8px 10px; border-radius: 7px; margin: 10px 0 0; }
-.proj-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 10px 12px; margin-top: 0; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.proj-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 7px 10px; margin-top: 0; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
 .proj-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .proj-title { margin: 0; font-size: 13px; color: #161c2e; }
 .proj-sub { font-size: 12.5px; color: #64748b; }
@@ -589,4 +602,24 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .proj-warn { color: #b45309; font-weight: 700; }
 .proj-star { color: #b45309; font-weight: 800; cursor: help; }
 .proj-note { font-size: 12px; color: #64748b; line-height: 1.5; margin: 12px 0 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 12px; }
+.pa-atelier-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.pa-atelier-lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: #64748b; white-space: nowrap; }
+.pa-atelier-tg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.pa-atelier-tg button { border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 6px 4px; font: inherit; font-size: 10px; font-weight: 600; color: #64748b; cursor: pointer; white-space: normal; text-align: center; line-height: 1.2; transition: all .12s; }
+.pa-atelier-tg button:hover { border-color: #99f6e4; background: #f0fdfa; }
+.pa-atelier-tg button.on { background: #0f766e; border-color: #0f766e; color: #fff; box-shadow: 0 2px 6px rgba(15,118,110,.28); }
+
+/* ===== Design moderne ===== */
+.kpi { border-radius: 13px; border-top: 3px solid #14b8a6; box-shadow: 0 4px 14px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.04); background: linear-gradient(158deg, #ffffff, #fbfcff); transition: box-shadow .2s ease, transform .2s ease; padding: 10px 13px; }
+.kpi:hover { box-shadow: 0 12px 26px rgba(16,24,40,.12); transform: translateY(-2px); }
+.kpi-val { font-size: 18px; font-variant-numeric: tabular-nums; }
+.kpi-ic { border-radius: 11px !important; box-shadow: 0 4px 10px rgba(16,24,40,.14) !important; }
+.card { border-radius: 14px; box-shadow: 0 4px 14px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.04); }
+.card-title { position: relative; padding-left: 13px; font-weight: 800; }
+.card-title::before { content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 4px; border-radius: 2px; background: linear-gradient(180deg, #2dd4bf, #0d9488); }
+.pa-side { border-radius: 14px; box-shadow: 0 4px 14px rgba(16,24,40,.05); }
+table.grid tbody tr:nth-child(even) td { background: #fafbfe; }
+table.grid tbody tr:hover td { background: #eef6f5; }
+.pa-atelier-tg button.on, .side-sec button.on { box-shadow: 0 2px 8px rgba(15,118,110,.25); }
+.pa-page { zoom: 0.82; }
 </style>
