@@ -57,6 +57,7 @@
             <th class="num">Taux (mois)</th>
             <th class="num">Lots</th>
             <th class="num">Chiffre d'affaires</th>
+            <th class="num">CA (mois)</th>
           </tr>
         </thead>
         <tbody>
@@ -70,6 +71,7 @@
             <td class="num"><span v-if="r.tauxMois != null" class="taux" :class="r.tauxMois >= 100 ? 'ok' : 'bas'">{{ r.tauxMois }}%</span><span v-else class="muted">—</span></td>
             <td class="num">{{ fmt(r.lots) }}</td>
             <td class="num ca">{{ fmtCA(r.ca) }}</td>
+            <td class="num ca">{{ fmtCA(r.caMois) }}</td>
           </tr>
         </tbody>
         <tfoot>
@@ -83,6 +85,7 @@
             <td class="num">{{ tauxGlobalMois != null ? tauxGlobalMois + '%' : '—' }}</td>
             <td class="num">{{ fmt(totLots) }}</td>
             <td class="num ca">{{ fmtCA(totCA) }}</td>
+            <td class="num ca">{{ fmtCA(totCAMois) }}</td>
           </tr>
         </tfoot>
       </table>
@@ -165,6 +168,10 @@ function phaseDeType(t) {
 function phaseDeEq(e) { return phaseDeType(e.type) || phaseDeType(e.nom) || phaseDeType(e.code) }
 function siteDeCode(code) { const c = (code || '').toUpperCase(); if (c.startsWith('PRH')) return 'hormonal'; if (c === 'PR054') return 'semi'; return 'seche' }
 // Mêmes équipements que Suivi de capacité (Forme sèche) : référentiel + phase reconnue + site sèche
+// Équipements autorisés (mêmes que Suivi de capacité — Forme sèche)
+const EQUIP_OK = ['Cabine de pesée', 'Granulation et Séchage COMASA', 'Granulation et Séchage GLATT', 'Mélangeur en V', 'Mélangeur en V 100L', 'Mélangeur GLATT à Bin', '1200i', 'Fe55', 'Gélules', 'Labortechnic', 'GLATT']
+const EQUIP_OK_SET = new Set(EQUIP_OK.map(x => x.toLowerCase().replace(/\s+/g, ' ').trim()))
+const normNom = (n) => (n || '').toLowerCase().replace(/\s+/g, ' ').trim()
 // Produit -> équipements, d'après la CADENCE (cadences_produit)
 const equipParProduit = computed(() => {
   const nomById = {}
@@ -172,7 +179,7 @@ const equipParProduit = computed(() => {
   const m = {}
   for (const c of cadences.value) {
     if (!(Number(c.cadence_nominale) > 0)) continue
-    const nom = nomById[c.equipement_id]; if (!nom) continue
+    const nom = nomById[c.equipement_id]; if (!nom || !EQUIP_OK_SET.has(normNom(nom))) continue
     if (!m[c.produit_id]) m[c.produit_id] = new Set()
     m[c.produit_id].add(nom)
   }
@@ -296,7 +303,7 @@ function planAgg(moisFiltre) {
       let machs = equipParProduit.value[r.produit_id]
       if ((!machs || !machs.size) && r.equipements && r.equipements.nom) machs = new Set([r.equipements.nom])
       if (!machs || !machs.size) continue
-      for (const nom of machs) acc[nom] = (acc[nom] || 0) + q
+      for (const nom of machs) { if (EQUIP_OK_SET.has(normNom(nom))) acc[nom] = (acc[nom] || 0) + q }
     } else {
       const cle = grp.value === 'equip' ? (r.equipements ? r.equipements.nom : null) : cleProduit(r.produits)
       if (cle == null) continue
@@ -314,7 +321,7 @@ const donnees = computed(() => {
   const acc = {}
   const parPhase = onglet.value === 'fab' && grp.value === 'phase'
   const parEquipFab = onglet.value === 'fab' && grp.value === 'equip'
-  const add = (cle, b, t, pc, mo) => { if (!acc[cle]) acc[cle] = { cle, boites: 0, boitesMois: 0, lots: 0, ca: 0 }; acc[cle].boites += b; if (mo === moisCourant) acc[cle].boitesMois += b; acc[cle].lots += t > 0 ? b / t : 0; acc[cle].ca += b * pc }
+  const add = (cle, b, t, pc, mo) => { if (!acc[cle]) acc[cle] = { cle, boites: 0, boitesMois: 0, lots: 0, ca: 0, caMois: 0 }; acc[cle].boites += b; if (mo === moisCourant) { acc[cle].boitesMois += b; acc[cle].caMois += b * pc } acc[cle].lots += t > 0 ? b / t : 0; acc[cle].ca += b * pc }
   for (const r of src) {
     if (!r.produit || !(num(r.boites) > 0)) continue
     const b = num(r.boites), t = num(r.produit.taille_lot), pc = num(r.produit.pcsu), mo = r.mois
@@ -326,7 +333,7 @@ const donnees = computed(() => {
       if (!machs || !machs.size) machs = equipsByOf.value[r.id]
       if ((!machs || !machs.size) && r.equip) machs = new Set([r.equip])
       if (!machs || !machs.size) continue
-      for (const nom of machs) add(nom, b, t, pc, mo)
+      for (const nom of machs) { if (EQUIP_OK_SET.has(normNom(nom))) add(nom, b, t, pc, mo) }
     } else {
       if (onglet.value === 'cond' && grp.value === 'equip' && estFabType(r.equipType)) continue
       add(cleGroupe(r), b, t, pc, mo)
