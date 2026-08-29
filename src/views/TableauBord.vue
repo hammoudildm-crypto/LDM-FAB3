@@ -145,6 +145,8 @@ const phasesByOf = computed(() => {
   return m
 })
 // Équipements de FABRICATION par OF (via les phases saisies, hors conditionnement)
+const equipRef = ref([])
+const equipRefNoms = computed(() => new Set(equipRef.value.map(e => (e.nom || '').trim())))
 const equipsByOf = computed(() => {
   const m = {}
   for (const sp of suiviRaw.value) {
@@ -162,16 +164,17 @@ watch(onglet, () => { if (onglet.value === 'cond' && grp.value === 'phase') grp.
 const fabRaw = ref([]); const condRaw = ref([]); const planRaw = ref([]); const suiviRaw = ref([])
 onMounted(async () => {
   try {
-    const [rf, rc, rp, rs] = await Promise.all([
+    const [rf, rc, rp, rs, re] = await Promise.all([
       fetchAllPaged(() => supabase.from('ordres_fabrication')
         .select('id, numero_lot, boites_fabriquees, date_fin_fabrication, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('conditionnement')
         .select('quantite_conditionnee, date_conditionnement, equipements(nom, type), ordres_fabrication(numero_lot, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
       fetchAllPaged(() => supabase.from('plan_production')
         .select('annee, mois, quantite_planifiee, equipements(nom, type), produits(gamme, code_pf, designation, donneurs_ordre(nom))')),
-      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, equipements(nom)'))
+      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, equipements(nom)')),
+      fetchAllPaged(() => supabase.from('equipements').select('nom').eq('actif', true))
     ])
-    fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs
+    fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs; equipRef.value = re.data || []
   } catch (e) { console.error(e) } finally { chargement.value = false }
 })
 
@@ -282,8 +285,8 @@ const donnees = computed(() => {
       for (const k of phs) add(PHASE_LBL[k] || k, b, t, pc, mo)
     } else if (parEquipFab) {
       const eqs = equipsByOf.value[r.id]
-      if (!eqs || !eqs.size) { add('Non attribué (fab)', b, t, pc, mo); continue }
-      for (const nom of eqs) add(nom, b, t, pc, mo)
+      if (!eqs || !eqs.size) continue
+      for (const nom of eqs) { if (equipRefNoms.value.has((nom || '').trim())) add(nom, b, t, pc, mo) }
     } else {
       if (onglet.value === 'cond' && grp.value === 'equip' && estFabType(r.equipType)) continue
       add(cleGroupe(r), b, t, pc, mo)
