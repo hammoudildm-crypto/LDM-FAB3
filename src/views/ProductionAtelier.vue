@@ -670,7 +670,7 @@ table.grid tbody tr:hover td { background: #eef6f5; }
 .at-row-active td { background: #f0fdfa !important; }
 
 /* ===== Alignement parfait des deux tableaux ===== */
-.pa-row2 .card-head, .pa-row2 .proj-head { height: 34px; box-sizing: border-box; margin-bottom: 10px; align-items: center; }
+.pa-row2 .card-head, .pa-row2 .proj-head { height: 34px; min-height: 34px; max-height: 34px; box-sizing: border-box; margin-bottom: 10px; align-items: center; overflow: hidden; flex-wrap: nowrap; }
 .pa-row2 table.grid thead, .pa-row2 .proj-table thead { display: table-header-group; }
 .pa-row2 table.grid thead th, .pa-row2 .proj-table thead th { height: 34px; box-sizing: border-box; vertical-align: bottom; padding-top: 0; padding-bottom: 5px; line-height: 1.1; }
 .pa-row2 table.grid tbody tr, .pa-row2 .proj-table tbody tr { height: 23px; }
