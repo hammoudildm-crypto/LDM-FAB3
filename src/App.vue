@@ -240,6 +240,7 @@ onMounted(async () => {
     if (saved) { theme.value = saved; document.documentElement.dataset.theme = saved }
     const sz = parseInt(localStorage.getItem('ldmfab-zoom') || '', 10)
     if (sz) zoom.value = Math.max(20, Math.min(200, sz))
+    if (window.innerWidth < 820) zoom.value = 100  // mobile/tablette : zoom 100% pour un responsive correct
     if (localStorage.getItem('ldmfab-sidebar-masquee') === '1') sidebarMasquee.value = true
   } catch (e) { /* ignore */ }
   document.addEventListener('click', onDocClick)
