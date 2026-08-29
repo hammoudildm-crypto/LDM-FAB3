@@ -53,7 +53,7 @@
         <div class="occ-content tbl-wrap">
         <table class="grid">
           <colgroup>
-            <col style="width:6%"><col style="width:21%"><col style="width:8%"><col style="width:8%"><col style="width:12%"><col style="width:12%"><col style="width:10%"><col style="width:15%"><col style="width:16%">
+            <col style="width:7%"><col style="width:22%"><col style="width:8%"><col style="width:8%"><col style="width:11%"><col style="width:11%"><col style="width:9%"><col style="width:12%"><col style="width:12%">
           </colgroup>
           <thead>
             <tr>
@@ -610,7 +610,7 @@ tbody tr.rt-x:hover td { background: #fef2f2; }
 .chip-btn:hover { background: #fee2e2; border-color: #ef4444; }
 
 /* Plafonner le tableau -> voir la KPI + cartes d'alerte du bas */
-.tbl-wrap { max-height: 55vh !important; overflow: auto !important; }
+.tbl-wrap { max-height: 55vh !important; overflow-y: auto !important; overflow-x: hidden !important; }
 .grid thead th { position: sticky; top: 0; z-index: 3; background: #f4f6f9; }
 .kpi-line { margin-top: 6px; }
 .kpi-mini { padding: 6px 10px !important; }
@@ -618,4 +618,5 @@ tbody tr.rt-x:hover td { background: #fef2f2; }
 .km-lbl { font-size: 9px !important; }
 .card.avert { padding: 6px 10px !important; margin-bottom: 5px !important; }
 .cap { zoom: 0.72; }
+.tbl-wrap .grid { width: 100%; table-layout: fixed; }
 </style>
