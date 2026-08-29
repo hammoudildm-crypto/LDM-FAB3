@@ -38,7 +38,7 @@
     <!-- Regroupement -->
     <div class="tb-grp">
       <span class="grp-lbl">Regrouper par :</span>
-      <button v-for="g in groupes" :key="g.k" type="button" :class="{ on: grp === g.k }" @click="grp = g.k">{{ g.lbl }}</button>
+      <button v-for="g in groupesVisibles" :key="g.k" type="button" :class="{ on: grp === g.k }" @click="grp = g.k">{{ g.lbl }}</button>
     </div>
 
     <!-- Tableau -->
@@ -82,7 +82,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { supabase } from '../supabase'
 
 const num = (v) => Number(v) || 0
@@ -123,8 +123,9 @@ const annee = ref(new Date().getFullYear())
 const chargement = ref(true)
 const groupes = [
   { k: 'lab', lbl: 'Laboratoire' }, { k: 'forme', lbl: 'Forme' },
-  { k: 'produit', lbl: 'Produit' }, { k: 'equip', lbl: 'Équipement' }
+  { k: 'produit', lbl: 'Produit' }, { k: 'equip', lbl: 'Équipement' }, { k: 'phase', lbl: 'Phase' }
 ]
+const groupesVisibles = computed(() => groupes.filter(g => g.k !== 'phase' || onglet.value === 'fab'))
 const LIB = { lab: 'Laboratoire', forme: 'Forme galénique', produit: 'Produit', equip: 'Équipement' }
 const libGroupe = computed(() => LIB[grp.value])
 const phasesByOf = computed(() => {
@@ -137,6 +138,20 @@ const phasesByOf = computed(() => {
   }
   return m
 })
+// Équipements de FABRICATION par OF (via les phases saisies, hors conditionnement)
+const equipsByOf = computed(() => {
+  const m = {}
+  for (const sp of suiviRaw.value) {
+    if (sp.statut !== 'Terminé') continue
+    const k = phaseKey(sp.phase); if (!k || k === 'conditionnement') continue
+    const nom = sp.equipements ? sp.equipements.nom : null
+    if (!nom) continue
+    if (!m[sp.ordre_id]) m[sp.ordre_id] = new Set()
+    m[sp.ordre_id].add(nom)
+  }
+  return m
+})
+watch(onglet, () => { if (onglet.value === 'cond' && grp.value === 'phase') grp.value = 'equip' })
 
 const fabRaw = ref([]); const condRaw = ref([]); const planRaw = ref([]); const suiviRaw = ref([])
 onMounted(async () => {
@@ -148,7 +163,7 @@ onMounted(async () => {
         .select('quantite_conditionnee, date_conditionnement, equipements(nom, type), ordres_fabrication(numero_lot, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
       fetchAllPaged(() => supabase.from('plan_production')
         .select('annee, mois, quantite_planifiee, equipements(nom, type), produits(gamme, code_pf, designation, donneurs_ordre(nom))')),
-      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut'))
+      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, equipements(nom)'))
     ])
     fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs
   } catch (e) { console.error(e) } finally { chargement.value = false }
@@ -207,7 +222,7 @@ function cleProduit(p) {
 function cleGroupe(r) { return grp.value === 'equip' ? (r.equip || 'Non attribué') : (cleProduit(r.produit) || 'Non attribué') }
 const planParGroupe = computed(() => {
   const acc = {}
-  const parPhase = false  // Fabrication regroupée par machine (équipement de l'OF), pas par phase
+  const parPhase = onglet.value === 'fab' && grp.value === 'phase'
   for (const r of planRaw.value) {
     if (Number(r.annee) !== annee.value) continue
     if (parPhase) {
@@ -231,7 +246,8 @@ const planParGroupe = computed(() => {
 const donnees = computed(() => {
   const src = onglet.value === 'fab' ? fabData.value : condData.value
   const acc = {}
-  const parPhase = false  // Fabrication regroupée par machine (équipement de l'OF), pas par phase
+  const parPhase = onglet.value === 'fab' && grp.value === 'phase'
+  const parEquipFab = onglet.value === 'fab' && grp.value === 'equip'
   const add = (cle, b, t, pc) => { if (!acc[cle]) acc[cle] = { cle, boites: 0, lots: 0, ca: 0 }; acc[cle].boites += b; acc[cle].lots += t > 0 ? b / t : 0; acc[cle].ca += b * pc }
   for (const r of src) {
     if (!r.produit || !(num(r.boites) > 0)) continue
@@ -239,6 +255,10 @@ const donnees = computed(() => {
     if (parPhase) {
       const phs = phasesByOf.value[r.id]; if (!phs) continue
       for (const k of phs) add(PHASE_LBL[k] || k, b, t, pc)
+    } else if (parEquipFab) {
+      const eqs = equipsByOf.value[r.id]
+      if (!eqs || !eqs.size) { add('Non attribué (fab)', b, t, pc); continue }
+      for (const nom of eqs) add(nom, b, t, pc)
     } else {
       if (onglet.value === 'cond' && grp.value === 'equip' && estFabType(r.equipType)) continue
       add(cleGroupe(r), b, t, pc)
