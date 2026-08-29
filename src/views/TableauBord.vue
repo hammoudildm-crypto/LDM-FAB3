@@ -149,6 +149,7 @@ const phasesByOf = computed(() => {
 })
 // Équipements de FABRICATION par OF (via les phases saisies, hors conditionnement)
 const equipRef = ref([])
+const cadences = ref([])
 function phaseDeType(t) {
   t = (t || '').toLowerCase()
   if (/pes[ée]|balance|bascule/.test(t)) return 'pesee'
@@ -164,12 +165,18 @@ function phaseDeType(t) {
 function phaseDeEq(e) { return phaseDeType(e.type) || phaseDeType(e.nom) || phaseDeType(e.code) }
 function siteDeCode(code) { const c = (code || '').toUpperCase(); if (c.startsWith('PRH')) return 'hormonal'; if (c === 'PR054') return 'semi'; return 'seche' }
 // Mêmes équipements que Suivi de capacité (Forme sèche) : référentiel + phase reconnue + site sèche
-const equipRefNoms = computed(() => {
-  const all = equipRef.value
-  if (!all.length) return null                    // référentiel non chargé -> pas de filtre
-  const filtres = all.filter(e => phaseDeEq(e) && siteDeCode(e.code) === 'seche')
-  const base = filtres.length ? filtres : all      // si le filtre vide tout -> tous les équipements du référentiel
-  return new Set(base.map(e => (e.nom || '').trim()))
+// Produit -> équipements, d'après la CADENCE (cadences_produit)
+const equipParProduit = computed(() => {
+  const nomById = {}
+  for (const e of equipRef.value) nomById[e.id] = (e.nom || '').trim()
+  const m = {}
+  for (const c of cadences.value) {
+    if (!(Number(c.cadence_nominale) > 0)) continue
+    const nom = nomById[c.equipement_id]; if (!nom) continue
+    if (!m[c.produit_id]) m[c.produit_id] = new Set()
+    m[c.produit_id].add(nom)
+  }
+  return m
 })
 const equipsByOf = computed(() => {
   const m = {}
@@ -188,17 +195,18 @@ watch(onglet, () => { if (onglet.value === 'cond' && grp.value === 'phase') grp.
 const fabRaw = ref([]); const condRaw = ref([]); const planRaw = ref([]); const suiviRaw = ref([])
 onMounted(async () => {
   try {
-    const [rf, rc, rp, rs, re] = await Promise.all([
+    const [rf, rc, rp, rs, re, rcad] = await Promise.all([
       fetchAllPaged(() => supabase.from('ordres_fabrication')
-        .select('id, numero_lot, boites_fabriquees, date_fin_fabrication, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
+        .select('id, produit_id, numero_lot, boites_fabriquees, date_fin_fabrication, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('conditionnement')
         .select('quantite_conditionnee, date_conditionnement, equipements(nom, type), ordres_fabrication(numero_lot, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
       fetchAllPaged(() => supabase.from('plan_production')
-        .select('annee, mois, quantite_planifiee, equipements(nom, type), produits(gamme, code_pf, designation, donneurs_ordre(nom))')),
+        .select('produit_id, annee, mois, quantite_planifiee, equipements(nom, type), produits(gamme, code_pf, designation, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, equipements(nom)')),
-      fetchAllPaged(() => supabase.from('equipements').select('nom, type, code').eq('actif', true))
+      fetchAllPaged(() => supabase.from('equipements').select('id, nom, type, code').eq('actif', true)),
+      fetchAllPaged(() => supabase.from('cadences_produit').select('produit_id, equipement_id, cadence_nominale'))
     ])
-    fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs; equipRef.value = re.data || []
+    fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs; equipRef.value = re.data || []; cadences.value = rcad.data || []
   } catch (e) { console.error(e) } finally { chargement.value = false }
 })
 
@@ -207,7 +215,7 @@ const anYear = (d) => d ? new Date(d).getFullYear() : null
 const fabData = computed(() => {
   const arr = fabRaw.value
     .filter(o => o.date_fin_fabrication && anYear(o.date_fin_fabrication) === annee.value)
-    .map(o => ({ id: o.id, lot: o.numero_lot, equip: o.equipements ? o.equipements.nom : null, boites: o.boites_fabriquees, produit: o.produits, mois: anMonth(o.date_fin_fabrication) }))
+    .map(o => ({ id: o.id, produit_id: o.produit_id, lot: o.numero_lot, equip: o.equipements ? o.equipements.nom : null, boites: o.boites_fabriquees, produit: o.produits, mois: anMonth(o.date_fin_fabrication) }))
   // Produits « direct conditionnement » (sans fabrication) : conditionné compté comme fabriqué
   for (const c of condRaw.value) {
     const of = c.ordres_fabrication
@@ -279,9 +287,8 @@ function planAgg(moisFiltre) {
       const seen = new Set()
       for (const phn of gamme) { const k = phaseKey(phn); if (!k || k === 'conditionnement' || seen.has(k)) continue; seen.add(k); const cle = PHASE_LBL[k] || k; acc[cle] = (acc[cle] || 0) + q }
     } else if (parEquipFab) {
-      const code = r.produits ? r.produits.code_pf : null
-      const machs = code ? machP[code] : null
-      if (!machs || !machs.size) { acc['Non attribué (fab)'] = (acc['Non attribué (fab)'] || 0) + q; continue }
+      const machs = equipParProduit.value[r.produit_id]
+      if (!machs || !machs.size) continue
       for (const nom of machs) acc[nom] = (acc[nom] || 0) + q
     } else {
       const cle = grp.value === 'equip' ? (r.equipements ? r.equipements.nom : null) : cleProduit(r.produits)
@@ -308,9 +315,9 @@ const donnees = computed(() => {
       const phs = phasesByOf.value[r.id]; if (!phs) continue
       for (const k of phs) add(PHASE_LBL[k] || k, b, t, pc, mo)
     } else if (parEquipFab) {
-      const eqs = equipsByOf.value[r.id]
-      if (!eqs || !eqs.size) continue
-      for (const nom of eqs) { if (!equipRefNoms.value || equipRefNoms.value.has((nom || '').trim())) add(nom, b, t, pc, mo) }
+      const machs = equipParProduit.value[r.produit_id]
+      if (!machs || !machs.size) continue
+      for (const nom of machs) add(nom, b, t, pc, mo)
     } else {
       if (onglet.value === 'cond' && grp.value === 'equip' && estFabType(r.equipType)) continue
       add(cleGroupe(r), b, t, pc, mo)
