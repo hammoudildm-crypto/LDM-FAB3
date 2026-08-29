@@ -610,7 +610,7 @@ tbody tr.rt-x:hover td { background: #fef2f2; }
 .chip-btn:hover { background: #fee2e2; border-color: #ef4444; }
 
 /* Plafonner le tableau -> voir la KPI + cartes d'alerte du bas */
-.tbl-wrap { max-height: 55vh !important; overflow-y: auto !important; overflow-x: hidden !important; }
+.tbl-wrap { max-height: 78vh !important; overflow-y: auto !important; overflow-x: hidden !important; }
 .grid thead th { position: sticky; top: 0; z-index: 3; background: #f4f6f9; }
 .kpi-line { margin-top: 6px; }
 .kpi-mini { padding: 6px 10px !important; }
