@@ -558,11 +558,11 @@ async function devalider(l) {
 .hint { margin: -8px 0 14px; font-size: 12px; color: #94a3b8; }
 
 .v3-mid-scroll { overflow-x: auto; }
-table.mini { width: 100%; border-collapse: collapse; font-size: 13px; }
-table.mini th { text-align: left; padding: 7px 6px; border-bottom: 2px solid #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; }
-table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
+table.mini { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+table.mini th { text-align: left; padding: 4px 5px; border-bottom: 2px solid #e2e8f0; font-size: 9.5px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; }
+table.mini td { padding: 4px 5px; border-bottom: 1px solid #eef2f6; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; font-size: 11px; white-space: nowrap; }
-.desig { color: #64748b; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.desig { color: #64748b; max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .right { text-align: right; }
 .nowrap { white-space: nowrap; }
 .empty { color: #94a3b8; font-style: italic; font-size: 13px; }
@@ -733,7 +733,7 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .verif-3col > .v3-col > .card:last-child { flex: 1 1 auto; }
 /* Lots en cours de triage (fabrication) */
 tr.ddl-triage td { background: #fef3c7; }
-tr.ddl-triage .mono::after { content: ' 🔍'; color: #b45309; font-size: .85em; font-weight: 700; white-space: nowrap; }
+tr.ddl-triage .mono::after { content: ' 🔍 triage'; color: #b45309; font-size: .6em; font-weight: 700; white-space: nowrap; }
 
 /* ============================================================= *
  * Refonte moderne — couche de surcharge (cohérence violet)
