@@ -407,7 +407,7 @@ async function devalider(l) {
         <div class="v3-mid-scroll">
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <table v-else class="mini">
-          <thead><tr><th class="th-verif"></th><th>Lot</th><th>Produit</th><th>Réserver</th><th class="right">Fin fab.</th><th class="right">Attente</th></tr></thead>
+          <thead><tr><th class="th-verif" style="width:62px"></th><th style="width:58px">Lot</th><th>Produit</th><th style="width:90px">Réserver</th><th class="right" style="width:74px">Fin fab.</th><th class="right" style="width:50px">Attente</th></tr></thead>
           <tbody>
             <template v-for="l in attente" :key="l.id">
               <tr :class="{ 'ddl-triage': triageIds.has(l.id) }">
@@ -558,11 +558,11 @@ async function devalider(l) {
 .hint { margin: -8px 0 14px; font-size: 12px; color: #94a3b8; }
 
 .v3-mid-scroll { overflow-x: auto; }
-table.mini { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+table.mini { width: 100%; border-collapse: collapse; font-size: 11.5px; table-layout: fixed; }
 table.mini th { text-align: left; padding: 4px 5px; border-bottom: 2px solid #e2e8f0; font-size: 9.5px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; }
 table.mini td { padding: 4px 5px; border-bottom: 1px solid #eef2f6; }
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; font-size: 11px; white-space: nowrap; }
-.desig { color: #64748b; max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.desig { color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .right { text-align: right; }
 .nowrap { white-space: nowrap; }
 .empty { color: #94a3b8; font-style: italic; font-size: 13px; }
