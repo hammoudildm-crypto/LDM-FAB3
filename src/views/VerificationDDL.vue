@@ -407,7 +407,7 @@ async function devalider(l) {
         <div class="v3-mid-scroll">
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <table v-else class="mini">
-          <thead><tr><th>Lot</th><th>Produit</th><th>Réserver</th><th class="right">Fin fab.</th><th class="right">Attente</th><th></th></tr></thead>
+          <thead><tr><th>Lot</th><th>Produit</th><th>Réserver</th><th class="right">Fin fab.</th><th class="right">Attente</th><th class="th-verif"></th></tr></thead>
           <tbody>
             <template v-for="l in attente" :key="l.id">
               <tr :class="{ 'ddl-triage': triageIds.has(l.id) }">
@@ -422,7 +422,7 @@ async function devalider(l) {
                 </td>
                 <td class="right nowrap">{{ fmtDate(dateDDL(l)) }}</td>
                 <td class="right nowrap" :class="clsAttente(l)" style="font-weight:800">{{ dureeAttente(l) }}</td>
-                <td class="right"><button v-if="peutEditer" class="link" @click="ouvrir(l)">Vérifier</button></td>
+                <td class="cell-verif"><button v-if="peutEditer" class="btn-verif" @click="ouvrir(l)">Vérifier</button></td>
               </tr>
               <tr v-if="verifEnCours === l.id">
                 <td colspan="6">
@@ -822,4 +822,8 @@ table.mini tbody tr:hover td { background: #faf9fe; }
 .att-ok { color: #16a34a; }
 .att-warn { color: #d97706; }
 .att-bad { color: #dc2626; }
+.cell-verif, .th-verif { position: sticky; right: 0; z-index: 1; background: #fff; box-shadow: -3px 0 5px -3px rgba(0,0,0,.12); text-align: center; }
+tr.ddl-triage .cell-verif { background: #fffbeb; }
+.btn-verif { border: 1px solid #0f766e; background: #0f766e; color: #fff; font: inherit; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.btn-verif:hover { background: #0d5c55; }
 </style>
