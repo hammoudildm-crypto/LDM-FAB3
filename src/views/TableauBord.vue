@@ -287,7 +287,8 @@ function planAgg(moisFiltre) {
       const seen = new Set()
       for (const phn of gamme) { const k = phaseKey(phn); if (!k || k === 'conditionnement' || seen.has(k)) continue; seen.add(k); const cle = PHASE_LBL[k] || k; acc[cle] = (acc[cle] || 0) + q }
     } else if (parEquipFab) {
-      const machs = equipParProduit.value[r.produit_id]
+      let machs = equipParProduit.value[r.produit_id]
+      if ((!machs || !machs.size) && r.equipements && r.equipements.nom) machs = new Set([r.equipements.nom])
       if (!machs || !machs.size) continue
       for (const nom of machs) acc[nom] = (acc[nom] || 0) + q
     } else {
@@ -315,7 +316,9 @@ const donnees = computed(() => {
       const phs = phasesByOf.value[r.id]; if (!phs) continue
       for (const k of phs) add(PHASE_LBL[k] || k, b, t, pc, mo)
     } else if (parEquipFab) {
-      const machs = equipParProduit.value[r.produit_id]
+      let machs = equipParProduit.value[r.produit_id]
+      if (!machs || !machs.size) machs = equipsByOf.value[r.id]
+      if ((!machs || !machs.size) && r.equip) machs = new Set([r.equip])
       if (!machs || !machs.size) continue
       for (const nom of machs) add(nom, b, t, pc, mo)
     } else {
