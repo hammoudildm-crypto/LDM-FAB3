@@ -60,7 +60,7 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
         <template v-if="chartStyle === 'aires'">
           <polygon v-for="(s, si) in series" :key="'a' + si" :points="area(s.data)" :fill="'url(#mc-g' + si + ')'" />
         </template>
-        <polyline v-for="(s, si) in series" :key="'l' + si" :points="pts(s.data)" fill="none" :stroke="s.color" :stroke-dasharray="s.dash ? '5 4' : ''" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+        <polyline v-for="(s, si) in series" :key="'l' + si" :points="pts(s.data)" fill="none" :stroke="s.color" :stroke-dasharray="s.dash ? '5 4' : ''" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
         <template v-for="(mo, i) in labels" :key="i">
           <template v-for="(s, si) in series" :key="'p' + si + '-' + i">
             <circle v-if="s.data[i] != null" :cx="x(i)" :cy="y(s.data[i])" r="3.3" :fill="colOf(s, s.data[i])" class="mc-pt"><title>{{ mo }} — {{ s.label }} : {{ format(s.data[i]) }}</title></circle>
@@ -95,10 +95,10 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
 .ch-switch button.on { background: #fff; color: #0f766e; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
 .line-ch { width: 100%; }
 .lch-svg { width: 100%; height: auto; display: block; overflow: visible; }
-.lch-grid { stroke: #eef2f6; stroke-width: 1; }
+.lch-grid { stroke: #e2e8f0; stroke-width: 1; }
 .mc-pt { stroke: #fff; stroke-width: 1.5; cursor: pointer; }
 .mc-pt:hover { r: 5; }
-.lch-lbl { fill: #94a3b8; font-size: 13px; font-weight: 600; }
+.lch-lbl { fill: #64748b; font-size: 13px; font-weight: 700; }
 .ch { display: flex; align-items: flex-end; gap: 3px; height: 200px; padding-top: 24px; }
 .ch-group { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; height: 100%; }
 .ch-bars { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
