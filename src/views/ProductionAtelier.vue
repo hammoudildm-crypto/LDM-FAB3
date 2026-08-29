@@ -265,6 +265,19 @@ function projectionAtelier(ph) {
 const projectionsTable = computed(() => {
   return PHASES.map(ph => projectionAtelier(ph))
 })
+const projTotaux = computed(() => {
+  const rows = projectionsTable.value
+  const sum = (k) => rows.reduce((s, r) => s + (r[k] || 0), 0)
+  const realise = sum('realise'), projTotal = sum('projTotal'), plan = sum('plan'), reste = sum('reste')
+  let totN1 = 0
+  for (const r of rows) totN1 += totalAtelierAnnee(r.ph, anneeCourante - 1)
+  return {
+    realise, realMens: sum('realMens'), realJour: sum('realJour'), projTotal, plan,
+    pctPlan: plan > 0 ? Math.round(projTotal / plan * 100) : null,
+    reste, resteMens: sum('resteMens'), resteJour: sum('resteJour'),
+    vsN1: totN1 > 0 ? Math.round((projTotal / totN1 - 1) * 100) : null
+  }
+})
 const atelierSel = ref('Compression')
 const anneesActives = ref(new Set(ANNEES_COMP))
 function toggleAnnee(y) {
@@ -499,6 +512,21 @@ onMounted(charger)
               </td>
             </tr>
           </tbody>
+          <tfoot>
+            <tr class="proj-total">
+              <td class="proj-at">Total</td>
+              <td class="ta-r">{{ fmt(projTotaux.realise) }}</td>
+              <td class="ta-r">{{ fmt(Math.round(projTotaux.realMens)) }}</td>
+              <td class="ta-r">{{ fmt(Math.round(projTotaux.realJour)) }}</td>
+              <td class="ta-r proj-val">{{ fmt(projTotaux.projTotal) }}</td>
+              <td class="ta-r">{{ projTotaux.plan ? fmt(projTotaux.plan) : '—' }}</td>
+              <td class="ta-r" :class="projTotaux.pctPlan == null ? '' : (projTotaux.pctPlan >= 100 ? 'proj-up' : (projTotaux.pctPlan >= 80 ? 'proj-warn' : 'proj-down'))">{{ projTotaux.pctPlan != null ? projTotaux.pctPlan + ' %' : '—' }}</td>
+              <td class="ta-r proj-reste">{{ fmt(projTotaux.reste) }}</td>
+              <td class="ta-r">{{ fmt(Math.round(projTotaux.resteMens)) }}</td>
+              <td class="ta-r">{{ fmt(Math.round(projTotaux.resteJour)) }}</td>
+              <td class="ta-r" :class="projTotaux.vsN1 == null ? '' : (projTotaux.vsN1 >= 0 ? 'proj-up' : 'proj-down')"><template v-if="projTotaux.vsN1 != null">{{ projTotaux.vsN1 >= 0 ? '+' : '' }}{{ projTotaux.vsN1 }} %</template><template v-else>—</template></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </section>
@@ -685,4 +713,6 @@ tbody tr:first-child td.mois-actuel-col { box-shadow: inset 2px 0 0 #f59e0b, ins
 .pa-row2 table.grid tbody td, .pa-row2 .proj-table tbody td { height: 22px !important; line-height: 22px !important; padding-top: 0 !important; padding-bottom: 0 !important; vertical-align: middle !important; }
 .pa-row2 .at-name { display: inline-block !important; vertical-align: middle !important; line-height: 22px !important; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pa-row2 .num, .pa-row2 .proj-at, .pa-row2 table.grid tbody td *, .pa-row2 .proj-table tbody td * { line-height: 22px !important; }
+.proj-total td { font-weight: 800; border-top: 2px solid #cbd5e1; background: #f1f5f9; }
+.proj-total .proj-val { color: #0f766e; }
 </style>
