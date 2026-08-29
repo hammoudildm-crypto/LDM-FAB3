@@ -434,7 +434,7 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
 </template>
 
 <style scoped>
-.ed { color: #1b2733; zoom: 0.85; }
+.ed { color: #1b2733; zoom: 0.72; }
 .ed-top { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
 .ed-back { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 14px; font: inherit; font-weight: 600; font-size: 13px; color: #475569; cursor: pointer; }
 .ed-back:hover { background: #e2e8f0; }
