@@ -621,4 +621,5 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 table.grid tbody tr:nth-child(even) td { background: #fafbfe; }
 table.grid tbody tr:hover td { background: #eef6f5; }
 .pa-atelier-tg button.on, .side-sec button.on { box-shadow: 0 2px 8px rgba(15,118,110,.25); }
+.pa-page { zoom: 0.82; }
 </style>
