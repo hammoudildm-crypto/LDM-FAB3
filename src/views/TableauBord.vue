@@ -149,7 +149,22 @@ const phasesByOf = computed(() => {
 })
 // Équipements de FABRICATION par OF (via les phases saisies, hors conditionnement)
 const equipRef = ref([])
-const equipRefNoms = computed(() => new Set(equipRef.value.map(e => (e.nom || '').trim())))
+function phaseDeType(t) {
+  t = (t || '').toLowerCase()
+  if (/pes[ée]|balance|bascule/.test(t)) return 'pesee'
+  if (/granul/.test(t)) return 'granulation'
+  if (/s[ée]ch/.test(t)) return 'sechage'
+  if (/mélang|melang/.test(t)) return 'melange'
+  if (/gélule|gelule|remplis|encapsul|capsul/.test(t)) return 'remplissage'
+  if (/compress|presse|compri/.test(t)) return 'compression'
+  if (/pellicul|enrob|coat|dragé|drage/.test(t)) return 'pelliculage'
+  if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)) return 'conditionnement'
+  return null
+}
+function phaseDeEq(e) { return phaseDeType(e.type) || phaseDeType(e.nom) || phaseDeType(e.code) }
+function siteDeCode(code) { const c = (code || '').toUpperCase(); if (c.startsWith('PRH')) return 'hormonal'; if (c === 'PR054') return 'semi'; return 'seche' }
+// Mêmes équipements que Suivi de capacité (Forme sèche) : référentiel + phase reconnue + site sèche
+const equipRefNoms = computed(() => new Set(equipRef.value.filter(e => phaseDeEq(e) && siteDeCode(e.code) === 'seche').map(e => (e.nom || '').trim())))
 const equipsByOf = computed(() => {
   const m = {}
   for (const sp of suiviRaw.value) {
@@ -175,7 +190,7 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('plan_production')
         .select('annee, mois, quantite_planifiee, equipements(nom, type), produits(gamme, code_pf, designation, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, equipements(nom)')),
-      fetchAllPaged(() => supabase.from('equipements').select('nom').eq('actif', true))
+      fetchAllPaged(() => supabase.from('equipements').select('nom, type, code').eq('actif', true))
     ])
     fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs; equipRef.value = re.data || []
   } catch (e) { console.error(e) } finally { chargement.value = false }
