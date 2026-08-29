@@ -866,4 +866,15 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .card-title { font-weight: 800; letter-spacing: -.01em; color: #0f172a; }
 .taux-ok { background: #dcfce7; padding: 2px 7px; border-radius: 6px; }
 .taux-bas { background: #fee2e2; padding: 2px 7px; border-radius: 6px; }
+
+/* ===== Développement design ===== */
+.kpi { border-top: 3px solid #cbd5e1; }
+.kpi:has(.plan-tag) { border-top-color: #6366f1; }
+.kpi:has(.fab-tag) { border-top-color: #10b981; }
+.kpi:has(.cond-tag) { border-top-color: #0ea5e9; }
+.kpi:has(.antic-tag) { border-top-color: #f59e0b; }
+.card-title { position: relative; padding-left: 14px; }
+.card-title::before { content: ''; position: absolute; left: 0; top: 3px; bottom: 3px; width: 4px; border-radius: 2px; background: linear-gradient(180deg, #2dd4bf, #0d9488); }
+.kpi-ic { box-shadow: 0 2px 6px rgba(16,24,40,.10); }
+.kpi-tag { box-shadow: inset 0 0 0 1px rgba(0,0,0,.03); }
 </style>
