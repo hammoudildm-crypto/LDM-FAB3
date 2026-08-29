@@ -679,4 +679,10 @@ table.grid tbody tr:hover td { background: #eef6f5; }
 th.mois-actuel-col { background: #fef3c7; color: #b45309; font-weight: 800; }
 td.mois-actuel-col { box-shadow: inset 2px 0 0 #f59e0b, inset -2px 0 0 #f59e0b; }
 tbody tr:first-child td.mois-actuel-col { box-shadow: inset 2px 0 0 #f59e0b, inset -2px 0 0 #f59e0b, inset 0 2px 0 #f59e0b; }
+
+/* ===== Alignement forcé des lignes (identiques dans les 2 tableaux) ===== */
+.pa-row2 table.grid tbody tr, .pa-row2 .proj-table tbody tr { height: 22px !important; }
+.pa-row2 table.grid tbody td, .pa-row2 .proj-table tbody td { height: 22px !important; line-height: 22px !important; padding-top: 0 !important; padding-bottom: 0 !important; vertical-align: middle !important; }
+.pa-row2 .at-name { display: inline-block !important; vertical-align: middle !important; line-height: 22px !important; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pa-row2 .num, .pa-row2 .proj-at, .pa-row2 table.grid tbody td *, .pa-row2 .proj-table tbody td * { line-height: 22px !important; }
 </style>
