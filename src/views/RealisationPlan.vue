@@ -348,11 +348,26 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 
     <p v-if="msg" class="alert">{{ msg }}</p>
 
-    <div class="rp-synth">
-      <span class="rp-synth-lbl">📊 Avancement du plan {{ anneeSel }}</span>
-      <div class="rp-synth-bar"><div class="rp-synth-fill" :style="{ width: Math.min(100, pctFab || 0) + '%' }"></div></div>
-      <span class="rp-synth-val"><b>{{ fmtPct(pctFab) }}</b> fabriqué · <b>{{ fmtPct(pctCond) }}</b> conditionné</span>
-    </div>
+    <section class="rp-cockpit">
+      <div class="rp-ck-head">
+        <span class="rp-ck-eyebrow">Suivi de production</span>
+        <h2 class="rp-ck-h">Avancement du plan {{ anneeSel }}</h2>
+      </div>
+      <div class="rp-ck-metrics">
+        <div class="rp-ck-metric">
+          <div class="rp-ck-row"><span class="rp-ck-lbl"><span class="rp-ck-dot fab"></span>Fabrication</span><span class="rp-ck-pct">{{ fmtPct(pctFab) }}</span></div>
+          <div class="rp-ck-track"><div class="rp-ck-fill fab" :style="{ width: Math.min(100, pctFab || 0) + '%' }"></div></div>
+        </div>
+        <div class="rp-ck-metric">
+          <div class="rp-ck-row"><span class="rp-ck-lbl"><span class="rp-ck-dot cond"></span>Conditionnement</span><span class="rp-ck-pct">{{ fmtPct(pctCond) }}</span></div>
+          <div class="rp-ck-track"><div class="rp-ck-fill cond" :style="{ width: Math.min(100, pctCond || 0) + '%' }"></div></div>
+        </div>
+      </div>
+      <div class="rp-ck-total">
+        <div class="rp-ck-num">{{ fmt(planTotal) }}</div>
+        <div class="rp-ck-cap">boîtes planifiées</div>
+      </div>
+    </section>
 
     <div class="kpi-grid k4">
       <div class="kpi kpi-clic" @click="modalGlobal = true" title="Voir la comparaison mensuelle complète">
@@ -821,11 +836,26 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .kpi-fill { height: 100%; border-radius: 4px; transition: width .4s; }
 .kpi-fill.fab { background: linear-gradient(90deg, #34d399, #059669); }
 .kpi-fill.cond { background: linear-gradient(90deg, #38bdf8, #0284c7); }
-.rp-synth { display: flex; align-items: center; gap: 16px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); flex-wrap: wrap; }
-.rp-synth-lbl { font-size: 13px; font-weight: 800; color: #0f172a; white-space: nowrap; }
-.rp-synth-bar { flex: 1; min-width: 180px; height: 14px; background: #eef2f6; border-radius: 8px; overflow: hidden; }
-.rp-synth-fill { height: 100%; background: linear-gradient(90deg, #14b8a6, #0d9488); border-radius: 8px; transition: width .5s; }
-.rp-synth-val { font-size: 13px; color: #475569; white-space: nowrap; }
+.rp-cockpit { display: grid; grid-template-columns: auto 1fr auto; gap: 30px; align-items: center; background: linear-gradient(135deg, #0e2a33 0%, #123a44 55%, #0f3038 100%); border-radius: 16px; padding: 20px 28px; margin-bottom: 20px; box-shadow: 0 12px 34px rgba(14,42,51,.28); color: #e2e8f0; position: relative; overflow: hidden; }
+.rp-cockpit::after { content: ''; position: absolute; top: -40%; right: -60px; width: 220px; height: 220px; background: radial-gradient(circle, rgba(45,212,191,.16), transparent 70%); pointer-events: none; }
+.rp-ck-eyebrow { font-size: 10px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; color: #5eead4; }
+.rp-ck-h { margin: 5px 0 0; font-size: 19px; font-weight: 800; color: #fff; letter-spacing: -.01em; white-space: nowrap; }
+.rp-ck-metrics { display: flex; flex-direction: column; gap: 13px; min-width: 220px; }
+.rp-ck-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+.rp-ck-lbl { font-size: 12px; font-weight: 600; color: #cbd5e1; display: flex; align-items: center; gap: 8px; }
+.rp-ck-dot { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+.rp-ck-dot.fab { background: #2dd4bf; color: #2dd4bf; } .rp-ck-dot.cond { background: #38bdf8; color: #38bdf8; }
+.rp-ck-pct { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; }
+.rp-ck-track { height: 9px; background: rgba(255,255,255,.10); border-radius: 6px; overflow: hidden; }
+.rp-ck-fill { height: 100%; border-radius: 6px; transition: width .7s cubic-bezier(.4,0,.2,1); }
+.rp-ck-fill.fab { background: linear-gradient(90deg, #2dd4bf, #14b8a6); }
+.rp-ck-fill.cond { background: linear-gradient(90deg, #38bdf8, #0ea5e9); }
+.rp-ck-total { text-align: right; position: relative; z-index: 1; }
+.rp-ck-num { font-size: 32px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; letter-spacing: -.02em; line-height: 1; }
+.rp-ck-cap { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #94a3b8; margin-top: 6px; }
+@media (max-width: 760px) { .rp-cockpit { grid-template-columns: 1fr; gap: 16px; padding: 16px 18px; } .rp-ck-total { text-align: left; } .rp-ck-h { white-space: normal; } }
+.kpi-val { font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.kpi { background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); }
 .kpi { transition: box-shadow .15s ease, transform .15s ease; }
 .kpi:hover { box-shadow: 0 8px 20px rgba(16,24,40,.10); transform: translateY(-2px); }
 .card { transition: box-shadow .15s ease; }
