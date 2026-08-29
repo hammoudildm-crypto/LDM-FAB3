@@ -348,6 +348,12 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 
     <p v-if="msg" class="alert">{{ msg }}</p>
 
+    <div class="rp-synth">
+      <span class="rp-synth-lbl">📊 Avancement du plan {{ anneeSel }}</span>
+      <div class="rp-synth-bar"><div class="rp-synth-fill" :style="{ width: Math.min(100, pctFab || 0) + '%' }"></div></div>
+      <span class="rp-synth-val"><b>{{ fmtPct(pctFab) }}</b> fabriqué · <b>{{ fmtPct(pctCond) }}</b> conditionné</span>
+    </div>
+
     <div class="kpi-grid k4">
       <div class="kpi kpi-clic" @click="modalGlobal = true" title="Voir la comparaison mensuelle complète">
         <div class="kpi-tag plan-tag">Plan <span class="kpi-go">→ mensuel</span></div>
@@ -357,11 +363,13 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
       <div class="kpi">
         <div class="kpi-tag fab-tag">Fabrication réalisée</div>
         <div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><div class="kpi-val">{{ fmt(fabTotal) }}</div></div>
+        <div class="kpi-bar"><div class="kpi-fill fab" :style="{ width: Math.min(100, pctFab || 0) + '%' }"></div></div>
         <div class="kpi-lbl">{{ fmtPct(pctFab) }} du plan · {{ fmtDA(fabCA) }}</div>
       </div>
       <div class="kpi">
         <div class="kpi-tag cond-tag">Conditionnement réalisé</div>
         <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(condTotal) }}</div></div>
+        <div class="kpi-bar"><div class="kpi-fill cond" :style="{ width: Math.min(100, pctCond || 0) + '%' }"></div></div>
         <div class="kpi-lbl">{{ fmtPct(pctCond) }} du plan · {{ fmtDA(condCA) }}</div>
       </div>
       <div class="kpi">
@@ -755,7 +763,7 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .rp-back { background: #0f766e; color: #fff; border: none; border-radius: 8px; font: inherit; font-weight: 600; padding: 8px 16px; cursor: pointer; }
 .rp-back:hover { background: #0c5f59; }
 .rp-fullpage .rp-md-sub { margin-left: auto; color: #64748b; font-size: 13px; }
-.rp-fullpage .rp-md-body { flex: 1; overflow: auto; padding: 22px 26px; }
+.rp-fullpage .rp-md-body { flex: 1; overflow: auto; padding: 12px 16px; zoom: 0.85; }
 .rp-scroll { overflow-x: auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
 .rp-detail { width: 100%; border-collapse: collapse; }
 .rp-detail thead th { text-align: left; font-size: 11.5px; color: #64748b; font-weight: 600; padding: 7px 12px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
@@ -807,4 +815,25 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .ca-table td { padding: 6px 8px; border-bottom: 1px solid #fef3c7; }
 .ca-table .ta-r { text-align: right; font-variant-numeric: tabular-nums; }
 .ca-code { font-family: ui-monospace, monospace; font-weight: 700; color: #b45309; white-space: nowrap; }
+
+/* ===== Polish design ===== */
+.kpi-bar { height: 6px; background: #eef2f6; border-radius: 4px; overflow: hidden; margin: 8px 0 2px; }
+.kpi-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+.kpi-fill.fab { background: linear-gradient(90deg, #34d399, #059669); }
+.kpi-fill.cond { background: linear-gradient(90deg, #38bdf8, #0284c7); }
+.rp-synth { display: flex; align-items: center; gap: 16px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); flex-wrap: wrap; }
+.rp-synth-lbl { font-size: 13px; font-weight: 800; color: #0f172a; white-space: nowrap; }
+.rp-synth-bar { flex: 1; min-width: 180px; height: 14px; background: #eef2f6; border-radius: 8px; overflow: hidden; }
+.rp-synth-fill { height: 100%; background: linear-gradient(90deg, #14b8a6, #0d9488); border-radius: 8px; transition: width .5s; }
+.rp-synth-val { font-size: 13px; color: #475569; white-space: nowrap; }
+.kpi { transition: box-shadow .15s ease, transform .15s ease; }
+.kpi:hover { box-shadow: 0 8px 20px rgba(16,24,40,.10); transform: translateY(-2px); }
+.card { transition: box-shadow .15s ease; }
+.card:hover { box-shadow: 0 4px 16px rgba(16,24,40,.07); }
+.grp-plan { background: #eef2ff; } .grp-fab { background: #ecfdf5; } .grp-cond { background: #fff7ed; }
+.rp-detail tbody tr:nth-child(even) td { background: #fafbfe; }
+.rp-detail tbody tr:hover td { background: #eef6f5; }
+.card-title { font-weight: 800; letter-spacing: -.01em; color: #0f172a; }
+.taux-ok { background: #dcfce7; padding: 2px 7px; border-radius: 6px; }
+.taux-bas { background: #fee2e2; padding: 2px 7px; border-radius: 6px; }
 </style>
