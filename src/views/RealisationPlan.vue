@@ -1,415 +1,899 @@
-<template>
-  <div class="tb">
-    <header class="tb-head">
-      <div>
-        <h1 class="tb-title">Tableau de bord</h1>
-        <p class="tb-sub">Production par catégorie et par lot — boîtes & chiffre d'affaires</p>
-      </div>
-      <div class="tb-year">
-        <label>Année</label>
-        <select v-model.number="annee">
-          <option v-for="a in annees" :key="a" :value="a">{{ a }}</option>
-        </select>
-      </div>
-    </header>
-
-    <!-- Onglets Fabrication / Conditionnement -->
-    <div class="tb-tabs">
-      <button type="button" :class="{ on: onglet === 'fab' }" class="tb-tab fab" @click="onglet = 'fab'">Fabrication</button>
-      <button type="button" :class="{ on: onglet === 'cond' }" class="tb-tab cond" @click="onglet = 'cond'">Conditionnement</button>
-    </div>
-
-    <!-- Synthèse -->
-    <div class="tb-kpis">
-      <div class="tb-kpi"><span class="k-lbl">Plan (boîtes)</span><span class="k-val">{{ totPlan ? fmt(totPlan) : '—' }}</span></div>
-      <div class="tb-kpi"><span class="k-lbl">{{ onglet === 'fab' ? 'Fabriqué' : 'Conditionné' }}</span><span class="k-val">{{ fmt(totBoites) }}</span></div>
-      <div class="tb-kpi"><span class="k-lbl">Taux</span><span class="k-val" :class="tauxGlobal != null && tauxGlobal < 100 ? 'v-bas' : ''">{{ tauxGlobal != null ? tauxGlobal + '%' : '—' }}</span></div>
-      <div class="tb-kpi"><span class="k-lbl">Chiffre d'affaires</span><span class="k-val">{{ fmtCA(totCA) }}</span></div>
-    </div>
-
-    <div class="tb-mois-lbl">Mois en cours — {{ nomMois }} {{ annee }}</div>
-    <div class="tb-kpis">
-      <div class="tb-kpi tb-kpi-m"><span class="k-lbl">Plan (boîtes)</span><span class="k-val">{{ totPlanMois ? fmt(totPlanMois) : '—' }}</span></div>
-      <div class="tb-kpi tb-kpi-m"><span class="k-lbl">{{ onglet === 'fab' ? 'Fabriqué' : 'Conditionné' }}</span><span class="k-val">{{ fmt(totBoitesMois) }}</span></div>
-      <div class="tb-kpi tb-kpi-m"><span class="k-lbl">Taux</span><span class="k-val" :class="tauxGlobalMois != null && tauxGlobalMois < 100 ? 'v-bas' : ''">{{ tauxGlobalMois != null ? tauxGlobalMois + '%' : '—' }}</span></div>
-      <div class="tb-kpi tb-kpi-m"><span class="k-lbl">Chiffre d'affaires</span><span class="k-val">{{ fmtCA(totCAMois) }}</span></div>
-    </div>
-
-    <!-- Regroupement -->
-    <div class="tb-grp">
-      <span class="grp-lbl">Regrouper par :</span>
-      <button v-for="g in groupesVisibles" :key="g.k" type="button" :class="{ on: grp === g.k }" @click="grp = g.k">{{ g.lbl }}</button>
-    </div>
-
-    <!-- Tableau -->
-    <div class="tb-card">
-      <div v-if="chargement" class="tb-empty">Chargement…</div>
-      <div v-else-if="!donnees.length" class="tb-empty">Aucune donnée de {{ onglet === 'fab' ? 'fabrication' : 'conditionnement' }} pour {{ annee }}.</div>
-      <table v-else class="tb-table">
-        <thead>
-          <tr>
-            <th>{{ libGroupe }}</th>
-            <th class="num">Plan</th>
-            <th class="num">{{ onglet === 'fab' ? 'Fabriqué' : 'Conditionné' }}</th>
-            <th class="num">Taux</th>
-            <th class="num">Réalisé (mois)</th>
-            <th class="num">Taux (mois)</th>
-            <th class="num">Lots</th>
-            <th class="num">Chiffre d'affaires</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in donnees" :key="r.cle">
-            <td class="g-nom">{{ r.cle }}</td>
-            <td class="num">{{ r.plan ? fmt(r.plan) : '—' }}</td>
-            <td class="num">{{ fmt(r.boites) }}</td>
-            <td class="num"><span v-if="r.taux != null" class="taux" :class="r.taux >= 100 ? 'ok' : 'bas'">{{ r.taux }}%</span><span v-else class="muted">—</span></td>
-            <td class="num">{{ r.boitesMois ? fmt(r.boitesMois) : '—' }}</td>
-            <td class="num"><span v-if="r.tauxMois != null" class="taux" :class="r.tauxMois >= 100 ? 'ok' : 'bas'">{{ r.tauxMois }}%</span><span v-else class="muted">—</span></td>
-            <td class="num">{{ fmt(r.lots) }}</td>
-            <td class="num ca">{{ fmtCA(r.ca) }}</td>
-          </tr>
-        </tbody>
-        <tfoot>
-          <tr class="tot">
-            <td>Total {{ annee }}</td>
-            <td class="num">{{ totPlan ? fmt(totPlan) : '—' }}</td>
-            <td class="num">{{ fmt(totBoites) }}</td>
-            <td class="num">{{ tauxGlobal != null ? tauxGlobal + '%' : '—' }}</td>
-            <td class="num">{{ totBoitesMois ? fmt(totBoitesMois) : '—' }}</td>
-            <td class="num">{{ tauxGlobalMois != null ? tauxGlobalMois + '%' : '—' }}</td>
-            <td class="num">{{ fmt(totLots) }}</td>
-            <td class="num ca">{{ fmtCA(totCA) }}</td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-  </div>
-</template>
-
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
+import { ICONS, TINTS } from '../icons.js'
+import PageHeader from '../components/PageHeader.vue'
+import MiniChart from '../components/MiniChart.vue'
 
-const num = (v) => Number(v) || 0
-const fmt = (v) => Math.round(num(v)).toLocaleString('fr-FR')
-const fmtCA = (v) => v > 0 ? Math.round(num(v)).toLocaleString('fr-FR') + ' DA' : '—'
+const anneeCourante = new Date().getFullYear()
+const ANNEES = []
+for (let a = anneeCourante - 4; a <= anneeCourante + 1; a++) ANNEES.push(a)
+const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+
+const anneeSel = ref(anneeCourante)
+const planRows = ref([])
+const realRows = ref([])
+const condRows = ref([])
+const ofs = ref([])
+const msg = ref('')
 
 async function fetchAllPaged(make) {
-  const out = []; let from = 0; const size = 1000
-  while (true) {
-    const { data, error } = await make().range(from, from + size - 1)
-    if (error) throw error
-    out.push(...(data || []))
-    if (!data || data.length < size) break
+  const size = 1000
+  let from = 0, all = []
+  for (;;) {
+    const r = await make().range(from, from + size - 1)
+    if (r.error) return { error: r.error, data: all }
+    all = all.concat(r.data || [])
+    if (!r.data || r.data.length < size) break
     from += size
   }
-  return out
+  return { data: all, error: null }
 }
 
-const CANON_FAB = ['Pesée', 'Granulation', 'Mélange', 'Compression', 'Pelliculage']
-function phaseKey(nom) {
-  const t = String(nom || '').trim().toLowerCase()
-  if (!t) return null
-  if (/gran|s[ée]ch/.test(t)) return 'granulation'
-  if (/pes/.test(t)) return 'pesee'
-  if (/m[ée]lang/.test(t)) return 'melange'
-  if (/compress/.test(t)) return 'compression'
-  if (/rempliss|g[ée]lul/.test(t)) return 'remplissage'
-  if (/pellicul|enrob/.test(t)) return 'pelliculage'
-  if (/condition/.test(t)) return 'conditionnement'
-  return null
+async function charger() {
+  msg.value = ''
+  const rp = await fetchAllPaged(() => supabase.from('plan_production')
+    .select('annee, mois, quantite_planifiee, equipements(nom), produits(code_pf, designation, pcsu, taille_lot)'))
+  if (rp.error) { msg.value = rp.error.message; return }
+  planRows.value = rp.data
+
+  const rr = await fetchAllPaged(() => supabase.from('realisations')
+    .select('annee, mois, quantite_realisee, produits(code_pf, designation, pcsu)'))
+  if (rr.error) { msg.value = rr.error.message; return }
+  realRows.value = rr.data
+
+  const rc = await fetchAllPaged(() => supabase.from('conditionnement')
+    .select('quantite_conditionnee, date_conditionnement, equipements(nom), ordres_fabrication(date_fin_fabrication, produits(code_pf, designation, pcsu, unites_par_boite, taille_lot, forme))')
+    .eq('actif', true))
+  if (rc.error) { msg.value = rc.error.message; return }
+  condRows.value = rc.data
+
+  const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication')
+    .select('boites_fabriquees, date_fin_fabrication, equipements(nom), produits(code_pf, designation, pcsu, taille_lot)')
+    .eq('actif', true))
+  if (ro.error) { msg.value = ro.error.message; return }
+  ofs.value = ro.data
 }
-const PHASE_LBL = { pesee: 'Pesée', granulation: 'Granulation / Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage gélules', pelliculage: 'Pelliculage' }
-const FAB_PH = new Set(['pesee', 'granulation', 'melange', 'compression', 'remplissage', 'pelliculage'])
-const estFabType = (type) => FAB_PH.has(phaseKey(type))
-const onglet = ref('fab')       // fab | cond
-const grp = ref('lab')          // lab | forme | produit | lot
-const annee = ref(new Date().getFullYear())
-const chargement = ref(true)
-const groupes = [
-  { k: 'lab', lbl: 'Laboratoire' }, { k: 'forme', lbl: 'Forme' },
-  { k: 'produit', lbl: 'Produit' }, { k: 'equip', lbl: 'Équipement' }, { k: 'phase', lbl: 'Phase' }
-]
-const groupesVisibles = computed(() => groupes.filter(g => g.k !== 'phase' || onglet.value === 'fab'))
-const LIB = { lab: 'Laboratoire', forme: 'Forme galénique', produit: 'Produit', equip: 'Équipement' }
-const libGroupe = computed(() => LIB[grp.value])
-const phasesByOf = computed(() => {
-  const m = {}
-  for (const sp of suiviRaw.value) {
-    if (sp.statut !== 'Terminé') continue
-    const k = phaseKey(sp.phase); if (!k || k === 'conditionnement') continue
-    if (!m[sp.ordre_id]) m[sp.ordre_id] = new Set()
-    m[sp.ordre_id].add(k)
-  }
-  return m
-})
-// Équipements de FABRICATION par OF (via les phases saisies, hors conditionnement)
-const equipsByOf = computed(() => {
-  const m = {}
-  for (const sp of suiviRaw.value) {
-    if (sp.statut !== 'Terminé') continue
-    const k = phaseKey(sp.phase); if (!k || k === 'conditionnement') continue
-    const nom = sp.equipements ? sp.equipements.nom : null
-    if (!nom) continue
-    if (!m[sp.ordre_id]) m[sp.ordre_id] = new Set()
-    m[sp.ordre_id].add(nom)
-  }
-  return m
-})
-watch(onglet, () => { if (onglet.value === 'cond' && grp.value === 'phase') grp.value = 'equip' })
+onMounted(charger)
 
-const fabRaw = ref([]); const condRaw = ref([]); const planRaw = ref([]); const suiviRaw = ref([])
-onMounted(async () => {
-  try {
-    const [rf, rc, rp, rs] = await Promise.all([
-      fetchAllPaged(() => supabase.from('ordres_fabrication')
-        .select('id, numero_lot, boites_fabriquees, date_fin_fabrication, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
-      fetchAllPaged(() => supabase.from('conditionnement')
-        .select('quantite_conditionnee, date_conditionnement, equipements(nom, type), ordres_fabrication(numero_lot, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
-      fetchAllPaged(() => supabase.from('plan_production')
-        .select('annee, mois, quantite_planifiee, equipements(nom, type), produits(gamme, code_pf, designation, donneurs_ordre(nom))')),
-      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, equipements(nom)'))
-    ])
-    fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs
-  } catch (e) { console.error(e) } finally { chargement.value = false }
-})
-
-const anYear = (d) => d ? new Date(d).getFullYear() : null
-
-const fabData = computed(() => {
-  const arr = fabRaw.value
-    .filter(o => o.date_fin_fabrication && anYear(o.date_fin_fabrication) === annee.value)
-    .map(o => ({ id: o.id, lot: o.numero_lot, equip: o.equipements ? o.equipements.nom : null, boites: o.boites_fabriquees, produit: o.produits, mois: anMonth(o.date_fin_fabrication) }))
-  // Produits « direct conditionnement » (sans fabrication) : conditionné compté comme fabriqué
-  for (const c of condRaw.value) {
-    const of = c.ordres_fabrication
-    if (!of || of.date_fin_fabrication) continue
-    if (!c.date_conditionnement || anYear(c.date_conditionnement) !== annee.value) continue
-    const p = of.produits; const upb = p ? num(p.unites_par_boite) : 0
-    arr.push({ id: null, lot: of.numero_lot, equip: c.equipements ? c.equipements.nom : null, boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p, mois: anMonth(c.date_conditionnement) })
-  }
-  return arr
-})
-
-const condData = computed(() => condRaw.value
-  .filter(c => c.date_conditionnement && anYear(c.date_conditionnement) === annee.value)
-  .map(c => {
-    const of = c.ordres_fabrication; const p = of ? of.produits : null
-    const upb = p ? num(p.unites_par_boite) : 0
-    return { lot: of ? of.numero_lot : null, equip: c.equipements ? c.equipements.nom : null, equipType: c.equipements ? c.equipements.type : null, boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p, mois: anMonth(c.date_conditionnement) }
-  }))
-
-const annees = computed(() => {
-  const s = new Set()
-  fabRaw.value.forEach(o => { const y = anYear(o.date_fin_fabrication); if (y) s.add(y) })
-  condRaw.value.forEach(c => { const y = anYear(c.date_conditionnement); if (y) s.add(y) })
-  s.add(new Date().getFullYear())
-  return [...s].sort((a, b) => b - a)
-})
-
-function formeDe(desig) {
-  const d = (desig || '').toLowerCase()
-  if (/g[ée]lule|caps/.test(d)) return 'Gélule'
-  if (/comprim|\bcp\b|\bc\.?p\.?\b|pellicul|dispers|effervesc|\bcpr?\b/.test(d)) return 'Comprimé'
-  if (/sachet|poudre|granul/.test(d)) return 'Sachet / Poudre'
-  if (/sirop|solut|susp|goutte|\bml\b|\bfl\b/.test(d)) return 'Liquide'
-  if (/pommade|cr[èe]me|\bgel\b|topique|onguent/.test(d)) return 'Topique'
-  if (/suppos|ovule/.test(d)) return 'Suppositoire / Ovule'
-  return 'Autre'
+const num = (v) => Number(v || 0)
+const condBoites = (c) => {
+  const p = c.ordres_fabrication && c.ordres_fabrication.produits ? c.ordres_fabrication.produits : null
+  const upb = p ? num(p.unites_par_boite) : 0
+  if (!upb || c.quantite_conditionnee == null) return 0
+  return Math.floor(num(c.quantite_conditionnee) / upb)
 }
-function cleProduit(p) {
-  if (!p) return null
-  if (grp.value === 'lab') return (p.donneurs_ordre && p.donneurs_ordre.nom) || 'Non attribué'
-  if (grp.value === 'forme') return formeDe(p.designation)
-  if (grp.value === 'produit') return (p.code_pf || '?') + ' — ' + (p.designation || '')
-  return null
-}
-function cleGroupe(r) { return grp.value === 'equip' ? (r.equip || 'Non attribué') : (cleProduit(r.produit) || 'Non attribué') }
-const machinesParProduit = computed(() => {
-  const m = {}
-  for (const o of fabRaw.value) {
-    const code = o.produits ? o.produits.code_pf : null
-    const eqs = equipsByOf.value[o.id]
-    if (!code || !eqs) continue
-    if (!m[code]) m[code] = new Set()
-    for (const nom of eqs) m[code].add(nom)
-  }
-  return m
+
+// --- Séries mensuelles (boîtes) ---
+const planParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const r of planRows.value) if (Number(r.annee) === anneeSel.value && r.mois >= 1 && r.mois <= 12) a[r.mois - 1] += num(r.quantite_planifiee)
+  return a
 })
-function planAgg(moisFiltre) {
+const estDirectCond = (p) => !!(p && String(p.forme || '').toLowerCase() === 'seringue')
+const fabReelParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    const d = new Date(o.date_fin_fabrication)
+    if (d.getFullYear() !== anneeSel.value) continue
+    a[d.getMonth()] += num(o.boites_fabriquees)
+  }
+  // Produits « direct conditionnement » (seringue, ex. Rebif) : conditionné = fabriqué
+  for (const c of condRows.value) {
+    const o = c.ordres_fabrication
+    const p = (o && o.produits) || {}
+    if (!o || o.date_fin_fabrication || !c.date_conditionnement) continue
+    const d = new Date(c.date_conditionnement)
+    if (d.getFullYear() !== anneeSel.value) continue
+    a[d.getMonth()] += condBoites(c)
+  }
+  return a
+})
+// Anticipation : fabriqué en N-1, conditionné en N -> crédité à la fabrication de N (au mois de conditionnement)
+const condFabAnnee = (c) => {
+  const o = c.ordres_fabrication
+  return o && o.date_fin_fabrication ? new Date(o.date_fin_fabrication).getFullYear() : null
+}
+const anticipParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const c of condRows.value) {
+    if (!c.date_conditionnement) continue
+    const d = new Date(c.date_conditionnement)
+    if (d.getFullYear() === anneeSel.value && condFabAnnee(c) === anneeSel.value - 1) a[d.getMonth()] += condBoites(c)
+  }
+  return a
+})
+const anticipTotal = computed(() => anticipParMois.value.reduce((s, x) => s + x, 0))
+const fabParMois = computed(() => fabReelParMois.value)
+const condParMois = computed(() => {
+  const a = Array(12).fill(0)
+  for (const c of condRows.value) {
+    if (!c.date_conditionnement) continue
+    const d = new Date(c.date_conditionnement)
+    if (d.getFullYear() === anneeSel.value) a[d.getMonth()] += condBoites(c)
+  }
+  return a
+})
+
+// --- Clic sur une barre : détail du mois par produit ---
+const SERIES_RP = ['Plan', 'Fabrication', 'Conditionnement']
+const modalRP = ref(null)   // { mois, si }
+function ouvrirBarre(i, si) { modalRP.value = { mois: i, si: si == null ? 1 : si } }
+const detailBarre = computed(() => {
+  const m = modalRP.value
+  if (!m) return []
   const acc = {}
-  const parPhase = onglet.value === 'fab' && grp.value === 'phase'
-  const parEquipFab = onglet.value === 'fab' && grp.value === 'equip'
-  const machP = machinesParProduit.value
-  for (const r of planRaw.value) {
-    if (Number(r.annee) !== annee.value) continue
-    if (moisFiltre != null && Number(r.mois) !== moisFiltre) continue
-    const q = num(r.quantite_planifiee)
-    if (parPhase) {
-      const p = r.produits; if (!p) continue
-      const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
-      const seen = new Set()
-      for (const phn of gamme) { const k = phaseKey(phn); if (!k || k === 'conditionnement' || seen.has(k)) continue; seen.add(k); const cle = PHASE_LBL[k] || k; acc[cle] = (acc[cle] || 0) + q }
-    } else if (parEquipFab) {
-      const code = r.produits ? r.produits.code_pf : null
-      const machs = code ? machP[code] : null
-      if (!machs || !machs.size) { acc['Non attribué (fab)'] = (acc['Non attribué (fab)'] || 0) + q; continue }
-      for (const nom of machs) acc[nom] = (acc[nom] || 0) + q
-    } else {
-      const cle = grp.value === 'equip' ? (r.equipements ? r.equipements.nom : null) : cleProduit(r.produits)
-      if (cle == null) continue
-      if (onglet.value === 'cond' && grp.value === 'equip' && r.equipements && estFabType(r.equipements.type)) continue
-      acc[cle] = (acc[cle] || 0) + q
+  const rec = (p) => {
+    if (!p) return null
+    const k = p.code_pf || '—'
+    if (!acc[k]) acc[k] = { code: k, desig: p.designation || '', taille: num(p.taille_lot), pcsu: num(p.pcsu), plan: 0, fab: 0, cond: 0 }
+    return acc[k]
+  }
+  for (const r of planRows.value) {
+    if (Number(r.annee) !== anneeSel.value || Number(r.mois) !== m.mois + 1) continue
+    const e = rec(r.produits); if (e) e.plan += num(r.quantite_planifiee)
+  }
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    const d = new Date(o.date_fin_fabrication)
+    if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
+    const e = rec(o.produits); if (e) e.fab += num(o.boites_fabriquees)
+  }
+  for (const c of condRows.value) {
+    const o = c.ordres_fabrication
+    const p = (o && o.produits) || {}
+    if (!o || o.date_fin_fabrication || !c.date_conditionnement) continue
+    const d = new Date(c.date_conditionnement)
+    if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
+    const e = rec(p); if (e) e.fab += condBoites(c)
+  }
+  for (const c of condRows.value) {
+    if (!c.date_conditionnement) continue
+    const d = new Date(c.date_conditionnement)
+    if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
+    const e = rec(c.ordres_fabrication ? c.ordres_fabrication.produits : null); if (e) e.cond += condBoites(c)
+  }
+  return Object.values(acc).filter(r => r.plan > 0 || r.fab > 0 || r.cond > 0).sort((a, b) => (b.fab + b.cond + b.plan) - (a.fab + a.cond + a.plan))
+})
+const totPlan = computed(() => detailBarre.value.reduce((s, r) => s + r.plan, 0))
+const totFab = computed(() => detailBarre.value.reduce((s, r) => s + r.fab, 0))
+const totCond = computed(() => detailBarre.value.reduce((s, r) => s + r.cond, 0))
+const totFabCA = computed(() => detailBarre.value.reduce((s, r) => s + r.fab * r.pcsu, 0))
+const totCondCA = computed(() => detailBarre.value.reduce((s, r) => s + r.cond * r.pcsu, 0))
+const lotsTxt = (b, t) => t > 0 ? fmt(Math.round(b / t)) : '—'
+const fmtCA = (v) => v > 0 ? fmt(Math.round(v)) + ' DA' : '—'
+const tauxTxt = (r, plan) => plan > 0 ? Math.round(r / plan * 100) + '%' : '—'
+const modalGlobal = ref(false)
+const ongletEquip = ref('fab')
+const detailEquip = computed(() => {
+  const acc = {}
+  const rec = (nom) => { const k = nom || 'Non attribué'; if (!acc[k]) acc[k] = { nom: k, plan: 0, boites: 0, lots: 0, ca: 0 }; return acc[k] }
+  for (const r of planRows.value) {
+    if (Number(r.annee) !== anneeSel.value) continue
+    rec(r.equipements ? r.equipements.nom : null).plan += num(r.quantite_planifiee)
+  }
+  if (ongletEquip.value === 'fab') {
+    for (const o of ofs.value) {
+      if (!o.date_fin_fabrication || new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+      const e = rec(o.equipements ? o.equipements.nom : null)
+      const b = num(o.boites_fabriquees), p = o.produits, t = num(p && p.taille_lot), pc = num(p && p.pcsu)
+      e.boites += b; e.lots += t > 0 ? b / t : 0; e.ca += b * pc
+    }
+  } else {
+    for (const c of condRows.value) {
+      if (!c.date_conditionnement || new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
+      const e = rec(c.equipements ? c.equipements.nom : null)
+      const p = c.ordres_fabrication ? c.ordres_fabrication.produits : null
+      const b = condBoites(c), t = num(p && p.taille_lot), pc = num(p && p.pcsu)
+      e.boites += b; e.lots += t > 0 ? b / t : 0; e.ca += b * pc
     }
   }
-  return acc
-}
-const planParGroupe = computed(() => planAgg(null))
-const planParGroupeMois = computed(() => planAgg(moisCourant))
-
-const donnees = computed(() => {
-  const src = onglet.value === 'fab' ? fabData.value : condData.value
+  return Object.values(acc).map(e => ({ ...e, lots: Math.round(e.lots), taux: e.plan > 0 ? Math.round(e.boites / e.plan * 100) : null })).sort((a, b) => b.boites - a.boites)
+})
+const totEqPlan = computed(() => detailEquip.value.reduce((s, e) => s + e.plan, 0))
+const totEqBoites = computed(() => detailEquip.value.reduce((s, e) => s + e.boites, 0))
+const totEqLots = computed(() => detailEquip.value.reduce((s, e) => s + e.lots, 0))
+const totEqCA = computed(() => detailEquip.value.reduce((s, e) => s + e.ca, 0))
+const serieGlobal = computed(() => [
+  { label: 'Plan', color: '#4338ca', dash: true, data: planParMois.value },
+  { label: 'Fabriqué', color: '#0f766e', data: fabParMois.value },
+  { label: 'Conditionné', color: '#c2410c', data: condParMois.value }
+])
+const vueGlob = ref('produit')
+const detailAnnuel = computed(() => {
   const acc = {}
-  const parPhase = onglet.value === 'fab' && grp.value === 'phase'
-  const parEquipFab = onglet.value === 'fab' && grp.value === 'equip'
-  const add = (cle, b, t, pc, mo) => { if (!acc[cle]) acc[cle] = { cle, boites: 0, boitesMois: 0, lots: 0, ca: 0 }; acc[cle].boites += b; if (mo === moisCourant) acc[cle].boitesMois += b; acc[cle].lots += t > 0 ? b / t : 0; acc[cle].ca += b * pc }
-  for (const r of src) {
-    if (!r.produit || !(num(r.boites) > 0)) continue
-    const b = num(r.boites), t = num(r.produit.taille_lot), pc = num(r.produit.pcsu), mo = r.mois
-    if (parPhase) {
-      const phs = phasesByOf.value[r.id]; if (!phs) continue
-      for (const k of phs) add(PHASE_LBL[k] || k, b, t, pc, mo)
-    } else if (parEquipFab) {
-      const eqs = equipsByOf.value[r.id]
-      if (!eqs || !eqs.size) { add('Non attribué (fab)', b, t, pc, mo); continue }
-      for (const nom of eqs) add(nom, b, t, pc, mo)
-    } else {
-      if (onglet.value === 'cond' && grp.value === 'equip' && estFabType(r.equipType)) continue
-      add(cleGroupe(r), b, t, pc, mo)
-    }
-  }
-  const pg = planParGroupe.value
-  const pgm = planParGroupeMois.value
-  return Object.values(acc).map(g => {
-    const plan = pg[g.cle] || 0
-    const planMois = pgm[g.cle] || 0
-    return { ...g, lots: Math.round(g.lots), plan, taux: plan > 0 ? Math.round(g.boites / plan * 100) : null, planMois, tauxMois: planMois > 0 ? Math.round(g.boitesMois / planMois * 100) : null }
-  }).sort((a, b) => b.boites - a.boites)
+  const rec = (pr) => { if (!pr) return null; const k = pr.code_pf || '—'; if (!acc[k]) acc[k] = { code: k, desig: pr.designation || '', taille: num(pr.taille_lot), pcsu: num(pr.pcsu), plan: 0, fab: 0, cond: 0 }; return acc[k] }
+  for (const r of planRows.value) { if (Number(r.annee) !== anneeSel.value) continue; const e = rec(r.produits); if (e) e.plan += num(r.quantite_planifiee) }
+  for (const o of ofs.value) { if (!o.date_fin_fabrication) continue; const d = new Date(o.date_fin_fabrication); if (d.getFullYear() !== anneeSel.value) continue; const e = rec(o.produits); if (e) e.fab += num(o.boites_fabriquees) }
+  for (const c of condRows.value) { if (!c.date_conditionnement) continue; const d = new Date(c.date_conditionnement); if (d.getFullYear() !== anneeSel.value) continue; const e = rec(c.ordres_fabrication ? c.ordres_fabrication.produits : null); if (e) e.cond += condBoites(c) }
+  return Object.values(acc).filter(r => r.plan > 0 || r.fab > 0 || r.cond > 0).sort((a, b) => (b.fab + b.cond + b.plan) - (a.fab + a.cond + a.plan))
 })
 
-const totBoites = computed(() => donnees.value.reduce((s, g) => s + g.boites, 0))
-const totLots = computed(() => donnees.value.reduce((s, g) => s + g.lots, 0))
-const totCA = computed(() => donnees.value.reduce((s, g) => s + g.ca, 0))
-const maxBoites = computed(() => Math.max(1, ...donnees.value.map(g => g.boites)))
-const totPlan = computed(() => donnees.value.reduce((s, g) => s + g.plan, 0))
-const tauxGlobal = computed(() => totPlan.value > 0 ? Math.round(totBoites.value / totPlan.value * 100) : null)
-// --- Mois en cours ---
-const moisCourant = new Date().getMonth() + 1
-const anMonth = (d) => d ? new Date(d).getMonth() + 1 : null
-const nomMois = computed(() => new Date(annee.value, moisCourant - 1, 1).toLocaleDateString('fr-FR', { month: 'long' }))
-const fabDataMois = computed(() => {
-  const arr = fabRaw.value.filter(o => o.date_fin_fabrication && anYear(o.date_fin_fabrication) === annee.value && anMonth(o.date_fin_fabrication) === moisCourant).map(o => ({ boites: o.boites_fabriquees, produit: o.produits }))
-  for (const c of condRaw.value) {
-    const of = c.ordres_fabrication
-    if (!of || of.date_fin_fabrication) continue
-    if (!c.date_conditionnement || anYear(c.date_conditionnement) !== annee.value || anMonth(c.date_conditionnement) !== moisCourant) continue
-    const p = of.produits; const upb = p ? num(p.unites_par_boite) : 0
-    arr.push({ boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p })
-  }
-  return arr
+const planTotal = computed(() => planParMois.value.reduce((s, x) => s + x, 0))
+const fabTotal = computed(() => fabParMois.value.reduce((s, x) => s + x, 0))
+const condTotal = computed(() => condParMois.value.reduce((s, x) => s + x, 0))
+const moisCourant = new Date().getMonth()
+const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+const objectifMois = computed(() => planParMois.value[moisCourant])
+const fabMois = computed(() => fabParMois.value[moisCourant])
+const condMois = computed(() => condParMois.value[moisCourant])
+const moisTopFab = computed(() => { let idx = -1, mx = -1; fabParMois.value.forEach((v, i) => { if (v > mx) { mx = v; idx = i } }); return mx > 0 ? { nom: MOIS_LONG[idx], val: mx } : null })
+const moisTopCond = computed(() => { let idx = -1, mx = -1; condParMois.value.forEach((v, i) => { if (v > mx) { mx = v; idx = i } }); return mx > 0 ? { nom: MOIS_LONG[idx], val: mx } : null })
+
+// --- Valorisation CA (boîtes × PCSU) ---
+const planCA = computed(() => {
+  let ca = 0
+  for (const r of planRows.value) if (Number(r.annee) === anneeSel.value) ca += num(r.quantite_planifiee) * num(r.produits && r.produits.pcsu)
+  return ca
 })
-const condDataMois = computed(() => condRaw.value.filter(c => c.date_conditionnement && anYear(c.date_conditionnement) === annee.value && anMonth(c.date_conditionnement) === moisCourant).map(c => { const of = c.ordres_fabrication; const pp = of ? of.produits : null; const upb = pp ? num(pp.unites_par_boite) : 0; return { boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: pp } }))
-const srcMois = computed(() => onglet.value === 'fab' ? fabDataMois.value : condDataMois.value)
-const totBoitesMois = computed(() => srcMois.value.reduce((s, r) => s + num(r.boites), 0))
-const totCAMois = computed(() => srcMois.value.reduce((s, r) => s + num(r.boites) * (r.produit ? num(r.produit.pcsu) : 0), 0))
-const totPlanMois = computed(() => { let tot = 0; for (const r of planRaw.value) { if (Number(r.annee) === annee.value && Number(r.mois) === moisCourant) tot += num(r.quantite_planifiee) } return tot })
-const tauxGlobalMois = computed(() => totPlanMois.value > 0 ? Math.round(totBoitesMois.value / totPlanMois.value * 100) : null)
+const fabReelCA = computed(() => {
+  let ca = 0
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication || new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+    ca += num(o.boites_fabriquees) * num(o.produits && o.produits.pcsu)
+  }
+  return ca
+})
+const anticipCA = computed(() => {
+  let ca = 0
+  for (const c of condRows.value) {
+    if (!c.date_conditionnement || new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
+    if (condFabAnnee(c) !== anneeSel.value - 1) continue
+    const p = c.ordres_fabrication && c.ordres_fabrication.produits ? c.ordres_fabrication.produits : null
+    ca += condBoites(c) * num(p && p.pcsu)
+  }
+  return ca
+})
+const fabCA = computed(() => fabReelCA.value)
+const condCA = computed(() => {
+  let ca = 0
+  for (const c of condRows.value) {
+    if (!c.date_conditionnement) continue
+    if (new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
+    const p = c.ordres_fabrication && c.ordres_fabrication.produits ? c.ordres_fabrication.produits : null
+    ca += condBoites(c) * num(p && p.pcsu)
+  }
+  return ca
+})
+
+// --- Contrôle : produits SANS PCSU -> leurs boîtes comptent, leur CA vaut 0 ---
+const ouvertSansPcsu = ref(false)
+const sansPcsu = computed(() => {
+  const m = {}
+  const entree = (p) => {
+    if (!p || num(p.pcsu) > 0) return null
+    const k = p.code_pf || '—'
+    if (!m[k]) m[k] = { code: k, desig: p.designation || '', fab: 0, cond: 0 }
+    return m[k]
+  }
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication) continue
+    if (new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+    const b = num(o.boites_fabriquees); if (b <= 0) continue
+    const e = entree(o.produits); if (e) e.fab += b
+  }
+  for (const c of condRows.value) {
+    if (!c.date_conditionnement) continue
+    if (new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
+    const b = condBoites(c); if (b <= 0) continue
+    const e = entree(c.ordres_fabrication ? c.ordres_fabrication.produits : null); if (e) e.cond += b
+  }
+  return Object.values(m).sort((a, b) => (b.fab + b.cond) - (a.fab + a.cond))
+})
+const boitesSansPcsu = computed(() => sansPcsu.value.reduce((s, r) => s + r.fab + r.cond, 0))
+
+const pctFab = computed(() => planTotal.value > 0 ? (fabTotal.value / planTotal.value) * 100 : null)
+const pctCond = computed(() => planTotal.value > 0 ? (condTotal.value / planTotal.value) * 100 : null)
+const maxMois = computed(() => {
+  let m = 0
+  for (let i = 0; i < 12; i++) m = Math.max(m, planParMois.value[i], fabParMois.value[i], condParMois.value[i])
+  return m || 1
+})
+
+// --- Par produit ---
+const parProduit = computed(() => {
+  const m = {}
+  const ent = (code, nom) => { if (!m[code]) m[code] = { code, nom, plan: 0, fab: 0, cond: 0, ca: 0 }; return m[code] }
+  for (const r of planRows.value) if (Number(r.annee) === anneeSel.value && r.produits) ent(r.produits.code_pf, r.produits.designation).plan += num(r.quantite_planifiee)
+  for (const o of ofs.value) {
+    if (!o.date_fin_fabrication || new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+    if (o.produits) ent(o.produits.code_pf, o.produits.designation).fab += num(o.boites_fabriquees)
+  }
+  for (const c of condRows.value) {
+    if (!c.date_conditionnement || new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
+    const o = c.ordres_fabrication
+    const p = o && o.produits ? o.produits : null
+    if (!p) continue
+    const e = ent(p.code_pf, p.designation)
+    const b = condBoites(c)
+    e.cond += b; e.ca += b * num(p.pcsu)
+    if (!o.date_fin_fabrication) e.fab += b   // direct conditionnement (ex. Rebif) : conditionné = fabriqué
+  }
+  return Object.values(m).sort((a, b) => (b.plan - a.plan) || (b.fab - a.fab))
+})
+
+// --- Filtre de recherche (Détail par produit) ---
+const rechercheProduit = ref('')
+const parProduitFiltres = computed(() => {
+  const q = rechercheProduit.value.trim().toLowerCase()
+  if (!q) return parProduit.value
+  return parProduit.value.filter(p => (p.code && String(p.code).toLowerCase().includes(q)) || (p.nom && String(p.nom).toLowerCase().includes(q)))
+})
+
+const w = (v) => (Math.min(100, (v / maxMois.value) * 100)) + '%'
+
+// --- Graphe en courbes (SVG) ---
+const CH = { w: 820, h: 250, pl: 12, pr: 12, pt: 14, pb: 28 }
+function chX(i) { return CH.pl + (i / 11) * (CH.w - CH.pl - CH.pr) }
+function chY(v) { const m = maxMois.value || 1; return CH.h - CH.pb - (Math.min(v, m) / m) * (CH.h - CH.pt - CH.pb) }
+function chPts(arr) { return arr.map((v, i) => chX(i) + ',' + chY(v)).join(' ') }
+function chArea(arr) { const base = CH.h - CH.pb; return chX(0) + ',' + base + ' ' + chPts(arr) + ' ' + chX(11) + ',' + base }
+const chartType = ref('courbes') // 'courbes' | 'aires' | 'barres'
+const fmt = (n) => n == null ? '—' : Number(Math.round(n)).toLocaleString('fr-FR')
+const fmtDA = (n) => n == null ? '—' : Number(Math.round(n)).toLocaleString('fr-FR') + ' DA'
+const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 </script>
 
+<template>
+  <div class="rp-page">
+    <PageHeader title="Réalisation vs Plan" tone="teal">
+      <label class="annee-sel">
+        <select v-model.number="anneeSel">
+          <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
+        </select>
+      </label>
+    </PageHeader>
+
+    <p v-if="msg" class="alert">{{ msg }}</p>
+
+    <section class="rp-cockpit">
+      <div class="rp-ck-head">
+        <span class="rp-ck-eyebrow">Suivi de production</span>
+        <h2 class="rp-ck-h">Avancement du plan {{ anneeSel }}</h2>
+      </div>
+      <div class="rp-ck-metrics">
+        <div class="rp-ck-metric">
+          <div class="rp-ck-row"><span class="rp-ck-lbl"><span class="rp-ck-dot fab"></span>Fabrication</span><span class="rp-ck-pct">{{ fmtPct(pctFab) }}</span></div>
+          <div class="rp-ck-track"><div class="rp-ck-fill fab" :style="{ width: Math.min(100, pctFab || 0) + '%' }"></div></div>
+        </div>
+        <div class="rp-ck-metric">
+          <div class="rp-ck-row"><span class="rp-ck-lbl"><span class="rp-ck-dot cond"></span>Conditionnement</span><span class="rp-ck-pct">{{ fmtPct(pctCond) }}</span></div>
+          <div class="rp-ck-track"><div class="rp-ck-fill cond" :style="{ width: Math.min(100, pctCond || 0) + '%' }"></div></div>
+        </div>
+      </div>
+      <div class="rp-ck-total">
+        <div class="rp-ck-num">{{ fmt(planTotal) }}</div>
+        <div class="rp-ck-cap">boîtes planifiées</div>
+      </div>
+    </section>
+
+    <div class="kpi-grid k4">
+      <div class="kpi kpi-clic" @click="modalGlobal = true" title="Voir la comparaison mensuelle complète">
+        <div class="kpi-tag plan-tag">Plan <span class="kpi-go">→ mensuel</span></div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(planTotal) }}</div></div>
+        <div class="kpi-lbl">boîtes · {{ fmtDA(planCA) }}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-tag fab-tag">Fabrication réalisée</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><div class="kpi-val">{{ fmt(fabTotal) }}</div></div>
+        <div class="kpi-bar"><div class="kpi-fill fab" :style="{ width: Math.min(100, pctFab || 0) + '%' }"></div></div>
+        <div class="kpi-lbl">{{ fmtPct(pctFab) }} du plan · {{ fmtDA(fabCA) }}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-tag cond-tag">Conditionnement réalisé</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(condTotal) }}</div></div>
+        <div class="kpi-bar"><div class="kpi-fill cond" :style="{ width: Math.min(100, pctCond || 0) + '%' }"></div></div>
+        <div class="kpi-lbl">{{ fmtPct(pctCond) }} du plan · {{ fmtDA(condCA) }}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-tag antic-tag">Anticipation N-1</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><div class="kpi-val">{{ fmt(anticipTotal) }}</div></div>
+        <div class="kpi-lbl">fab. {{ anneeSel - 1 }} → cond. {{ anneeSel }} · {{ fmtDA(anticipCA) }}</div>
+      </div>
+    </div>
+
+    <section v-if="sansPcsu.length" class="ca-warn">
+      <div class="ca-warn-head" @click="ouvertSansPcsu = !ouvertSansPcsu">
+        <h3>⚠ {{ sansPcsu.length }} produit(s) sans PCSU — CA sous-estimé</h3>
+        <span class="ca-chev">{{ ouvertSansPcsu ? '▾ masquer' : '▸ afficher le détail' }}</span>
+      </div>
+      <p class="ca-warn-txt">
+        Ces produits totalisent <strong>{{ fmt(boitesSansPcsu) }} boîtes</strong> en {{ anneeSel }}, mais leur PCSU
+        n'est pas renseigné : leurs boîtes sont comptées, leur CA vaut <strong>0</strong>. Les montants ci-dessus sont
+        donc <strong>incomplets</strong>. À corriger dans Référentiels › Produits.
+      </p>
+      <div v-show="ouvertSansPcsu" class="ca-scroll">
+        <table class="ca-table">
+          <thead><tr><th>Code</th><th>Produit</th><th class="ta-r">Boîtes fabriquées</th><th class="ta-r">Boîtes conditionnées</th></tr></thead>
+          <tbody>
+            <tr v-for="r in sansPcsu" :key="r.code">
+              <td class="ca-code">{{ r.code }}</td>
+              <td>{{ r.desig }}</td>
+              <td class="ta-r">{{ r.fab ? fmt(r.fab) : '—' }}</td>
+              <td class="ta-r">{{ r.cond ? fmt(r.cond) : '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="kpi-grid k5">
+      <div class="kpi">
+        <div class="kpi-tag plan-tag">Objectif du mois</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.target"></svg></span><div class="kpi-val">{{ fmt(objectifMois) }}</div></div>
+        <div class="kpi-lbl">{{ MOIS_LONG[moisCourant] }} {{ anneeSel }} · boîtes</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-tag fab-tag">Fabrication du mois</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><div class="kpi-val">{{ fmt(fabMois) }}</div></div>
+        <div class="kpi-lbl">{{ MOIS_LONG[moisCourant] }} · réalisé</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-tag cond-tag">Conditionnement du mois</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ fmt(condMois) }}</div></div>
+        <div class="kpi-lbl">{{ MOIS_LONG[moisCourant] }} · réalisé</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-tag fab-tag">Meilleur mois — fab.</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.factory"></svg></span><div class="kpi-val">{{ moisTopFab ? moisTopFab.nom : '—' }}</div></div>
+        <div class="kpi-lbl"><template v-if="moisTopFab">{{ fmt(moisTopFab.val) }} boîtes</template><template v-else>—</template></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-tag cond-tag">Meilleur mois — cond.</div>
+        <div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span><div class="kpi-val">{{ moisTopCond ? moisTopCond.nom : '—' }}</div></div>
+        <div class="kpi-lbl"><template v-if="moisTopCond">{{ fmt(moisTopCond.val) }} boîtes</template><template v-else>—</template></div>
+      </div>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h3 class="card-title">Comparaison mensuelle (boîtes)</h3>
+        <div class="legend">
+          <span><i class="dot plan"></i>Plan</span>
+          <span><i class="dot fab"></i>Fabrication</span>
+          <span><i class="dot cond"></i>Conditionnement</span>
+        </div>
+      </div>
+      <MiniChart :labels="MOIS" :format="fmt" :max="maxMois" show-values clickable @pick="ouvrirBarre"
+        :value-format="v => v == null ? '' : (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? Math.round(v / 1e3) + 'K' : String(v))"
+        :series="[
+          { label: 'Plan', color: '#94a3b8', data: planParMois, dash: true },
+          { label: 'Fabrication', color: '#059669', data: fabParMois },
+          { label: 'Conditionnement', color: '#0284c7', data: condParMois }
+        ]" />
+    </section>
+
+    <section class="card" style="margin-top: 22px">
+      <div class="card-head">
+        <h3 class="card-title">Détail par produit ({{ parProduitFiltres.length }})</h3>
+        <input v-model="rechercheProduit" type="search" class="prod-search" placeholder="Rechercher un produit (code ou désignation)…" />
+      </div>
+      <div v-if="!parProduit.length" class="empty">Aucune donnée pour {{ anneeSel }}.</div>
+      <div v-else-if="!parProduitFiltres.length" class="empty">Aucun produit ne correspond à « {{ rechercheProduit }} ».</div>
+      <div v-else class="table-scroll">
+        <table class="grid">
+          <thead>
+            <tr>
+              <th class="sticky">Produit</th>
+              <th class="ta-r">Plan (bts)</th>
+              <th class="ta-r">Fab. réalisée (bts)</th>
+              <th class="ta-r">Cond. réalisé (bts)</th>
+              <th class="ta-r">% plan (cond.)</th>
+              <th class="ta-r">CA cond. réalisé</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="p in parProduitFiltres" :key="p.code">
+              <td class="sticky"><span class="mono">{{ p.code }}</span> <span class="desig">{{ p.nom }}</span></td>
+              <td class="ta-r">{{ fmt(p.plan) }}</td>
+              <td class="ta-r fab-txt">{{ fmt(p.fab) }}</td>
+              <td class="ta-r cond-txt">{{ fmt(p.cond) }}</td>
+              <td class="ta-r">{{ p.plan > 0 ? ((p.cond / p.plan) * 100).toFixed(0) + ' %' : '—' }}</td>
+              <td class="ta-r strong">{{ fmtDA(p.ca) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+    <section class="card" style="margin-top: 22px">
+      <div class="rp-eq-head">
+        <h3 class="card-title">Détail par équipement</h3>
+        <div class="rp-eq-tabs">
+          <button type="button" :class="{ on: ongletEquip === 'fab' }" @click="ongletEquip = 'fab'">Fabrication</button>
+          <button type="button" :class="{ on: ongletEquip === 'cond' }" @click="ongletEquip = 'cond'">Conditionnement</button>
+        </div>
+      </div>
+      <div v-if="!detailEquip.length" class="empty">Aucune donnée pour {{ anneeSel }}.</div>
+      <div v-else class="rp-scroll">
+        <table class="grid rp-detail">
+          <thead><tr><th>Équipement</th><th class="rp-num">Plan</th><th class="rp-num">{{ ongletEquip === 'fab' ? 'Fabriqué' : 'Conditionné' }}</th><th class="rp-num">Taux</th><th class="rp-num">Lots</th><th class="rp-num">CA</th></tr></thead>
+          <tbody>
+            <tr v-for="e in detailEquip" :key="e.nom">
+              <td class="rp-code">{{ e.nom }}</td>
+              <td class="rp-num">{{ e.plan ? fmt(e.plan) : '—' }}</td>
+              <td class="rp-num">{{ fmt(e.boites) }}</td>
+              <td class="rp-num" :class="e.taux != null ? (e.taux >= 100 ? 'taux-ok' : 'taux-bas') : ''">{{ e.taux != null ? e.taux + '%' : '—' }}</td>
+              <td class="rp-num">{{ fmt(e.lots) }}</td>
+              <td class="rp-num">{{ fmtCA(e.ca) }}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr class="tot">
+              <td>Total {{ anneeSel }}</td>
+              <td class="rp-num">{{ totEqPlan ? fmt(totEqPlan) : '—' }}</td>
+              <td class="rp-num">{{ fmt(totEqBoites) }}</td>
+              <td class="rp-num">{{ totEqPlan > 0 ? Math.round(totEqBoites / totEqPlan * 100) + '%' : '—' }}</td>
+              <td class="rp-num">{{ fmt(totEqLots) }}</td>
+              <td class="rp-num">{{ fmtCA(totEqCA) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
+    <div v-if="modalRP" class="rp-fullpage">
+      <div class="rp-md-head">
+        <button class="rp-back" @click="modalRP = null">← Retour</button>
+        <h3>Détail par produit — {{ MOIS_LONG[modalRP.mois] }} {{ anneeSel }}</h3>
+        <span class="rp-md-sub">{{ detailBarre.length }} produit(s)</span>
+      </div>
+      <div class="rp-md-body">
+        <div v-if="!detailBarre.length" class="empty">Aucune donnée pour ce mois.</div>
+        <div v-else class="rp-scroll">
+          <table class="grid rp-detail">
+            <thead>
+              <tr>
+                <th rowspan="2">Code produit</th><th rowspan="2">Désignation</th>
+                <th colspan="2" class="grp grp-plan">Plan</th>
+                <th colspan="4" class="grp grp-fab">Fabriqué</th>
+                <th colspan="4" class="grp grp-cond">Conditionné</th>
+              </tr>
+              <tr class="sub2">
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th>
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th><th class="rp-num">CA</th><th class="rp-num">Taux</th>
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th><th class="rp-num">CA</th><th class="rp-num">Taux</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in detailBarre" :key="r.code">
+                <td class="rp-code">{{ r.code }}</td>
+                <td class="rp-des">{{ r.desig }}</td>
+                <td class="rp-num">{{ r.plan ? fmt(r.plan) : '—' }}</td>
+                <td class="rp-num">{{ lotsTxt(r.plan, r.taille) }}</td>
+                <td class="rp-num">{{ r.fab ? fmt(r.fab) : '—' }}</td>
+                <td class="rp-num">{{ lotsTxt(r.fab, r.taille) }}</td>
+                <td class="rp-num">{{ fmtCA(r.fab * r.pcsu) }}</td>
+                <td class="rp-num" :class="r.plan > 0 ? (r.fab / r.plan >= 1 ? 'taux-ok' : 'taux-bas') : ''">{{ tauxTxt(r.fab, r.plan) }}</td>
+                <td class="rp-num">{{ r.cond ? fmt(r.cond) : '—' }}</td>
+                <td class="rp-num">{{ lotsTxt(r.cond, r.taille) }}</td>
+                <td class="rp-num">{{ fmtCA(r.cond * r.pcsu) }}</td>
+                <td class="rp-num" :class="r.plan > 0 ? (r.cond / r.plan >= 1 ? 'taux-ok' : 'taux-bas') : ''">{{ tauxTxt(r.cond, r.plan) }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="tot">
+                <td colspan="2">Total</td>
+                <td class="rp-num">{{ fmt(totPlan) }}</td><td class="rp-num">—</td>
+                <td class="rp-num">{{ fmt(totFab) }}</td><td class="rp-num">—</td><td class="rp-num">{{ fmtCA(totFabCA) }}</td><td class="rp-num">{{ tauxTxt(totFab, totPlan) }}</td>
+                <td class="rp-num">{{ fmt(totCond) }}</td><td class="rp-num">—</td><td class="rp-num">{{ fmtCA(totCondCA) }}</td><td class="rp-num">{{ tauxTxt(totCond, totPlan) }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div v-if="modalGlobal" class="rp-fullpage">
+      <div class="rp-md-head">
+        <button class="rp-back" @click="modalGlobal = false">← Retour</button>
+        <h3>Comparaison mensuelle (boîtes) — {{ anneeSel }}</h3>
+        <span class="rp-md-sub">Plan · Fabriqué · Conditionné</span>
+      </div>
+      <div class="rp-md-body">
+        <div class="glob-kpis">
+          <div class="glob-k"><span class="glob-lbl">Plan</span><span class="glob-v">{{ fmt(planTotal) }}</span><span class="glob-u">boîtes · {{ fmtDA(planCA) }}</span></div>
+          <div class="glob-k"><span class="glob-lbl">Fabriqué</span><span class="glob-v">{{ fmt(fabTotal) }}</span><span class="glob-u">{{ tauxTxt(fabTotal, planTotal) }} du plan · {{ fmtDA(fabCA) }}</span></div>
+          <div class="glob-k"><span class="glob-lbl">Conditionné</span><span class="glob-v">{{ fmt(condTotal) }}</span><span class="glob-u">{{ tauxTxt(condTotal, planTotal) }} du plan · {{ fmtDA(condCA) }}</span></div>
+        </div>
+        <div class="glob-tabs">
+          <button type="button" :class="{ on: vueGlob === 'produit' }" @click="vueGlob = 'produit'">Par produit (année)</button>
+          <button type="button" :class="{ on: vueGlob === 'mois' }" @click="vueGlob = 'mois'">Par mois</button>
+        </div>
+        <div v-if="vueGlob === 'produit'" class="rp-scroll">
+          <table class="grid rp-detail">
+            <thead>
+              <tr>
+                <th rowspan="2">Code produit</th><th rowspan="2">Désignation</th>
+                <th colspan="2" class="grp grp-plan">Plan</th>
+                <th colspan="4" class="grp grp-fab">Fabriqué</th>
+                <th colspan="4" class="grp grp-cond">Conditionné</th>
+              </tr>
+              <tr class="sub2">
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th>
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th><th class="rp-num">CA</th><th class="rp-num">Taux</th>
+                <th class="rp-num">Boîtes</th><th class="rp-num">Lots</th><th class="rp-num">CA</th><th class="rp-num">Taux</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in detailAnnuel" :key="r.code">
+                <td class="rp-code">{{ r.code }}</td>
+                <td class="rp-des">{{ r.desig }}</td>
+                <td class="rp-num">{{ r.plan ? fmt(r.plan) : '—' }}</td>
+                <td class="rp-num">{{ lotsTxt(r.plan, r.taille) }}</td>
+                <td class="rp-num">{{ r.fab ? fmt(r.fab) : '—' }}</td>
+                <td class="rp-num">{{ lotsTxt(r.fab, r.taille) }}</td>
+                <td class="rp-num">{{ fmtCA(r.fab * r.pcsu) }}</td>
+                <td class="rp-num" :class="r.plan > 0 ? (r.fab / r.plan >= 1 ? 'taux-ok' : 'taux-bas') : ''">{{ tauxTxt(r.fab, r.plan) }}</td>
+                <td class="rp-num">{{ r.cond ? fmt(r.cond) : '—' }}</td>
+                <td class="rp-num">{{ lotsTxt(r.cond, r.taille) }}</td>
+                <td class="rp-num">{{ fmtCA(r.cond * r.pcsu) }}</td>
+                <td class="rp-num" :class="r.plan > 0 ? (r.cond / r.plan >= 1 ? 'taux-ok' : 'taux-bas') : ''">{{ tauxTxt(r.cond, r.plan) }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="tot">
+                <td colspan="2">Total {{ anneeSel }}</td>
+                <td class="rp-num">{{ fmt(planTotal) }}</td><td class="rp-num">—</td>
+                <td class="rp-num">{{ fmt(fabTotal) }}</td><td class="rp-num">—</td><td class="rp-num">{{ fmtCA(fabCA) }}</td><td class="rp-num">{{ tauxTxt(fabTotal, planTotal) }}</td>
+                <td class="rp-num">{{ fmt(condTotal) }}</td><td class="rp-num">—</td><td class="rp-num">{{ fmtCA(condCA) }}</td><td class="rp-num">{{ tauxTxt(condTotal, planTotal) }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div v-else class="glob-chart">
+          <MiniChart :labels="MOIS" :format="fmt" :value-format="fmt" show-values :series="serieGlobal" />
+        </div>
+        <div v-if="vueGlob === 'mois'" class="rp-scroll">
+          <table class="grid rp-detail">
+            <thead><tr><th>Mois</th><th class="rp-num">Plan</th><th class="rp-num">Fabriqué</th><th class="rp-num">Taux fab.</th><th class="rp-num">Conditionné</th><th class="rp-num">Taux cond.</th></tr></thead>
+            <tbody>
+              <tr v-for="(lib, i) in MOIS" :key="i">
+                <td>{{ MOIS_LONG[i] }}</td>
+                <td class="rp-num">{{ planParMois[i] ? fmt(planParMois[i]) : '—' }}</td>
+                <td class="rp-num">{{ fabParMois[i] ? fmt(fabParMois[i]) : '—' }}</td>
+                <td class="rp-num" :class="planParMois[i] > 0 ? (fabParMois[i] / planParMois[i] >= 1 ? 'taux-ok' : 'taux-bas') : ''">{{ tauxTxt(fabParMois[i], planParMois[i]) }}</td>
+                <td class="rp-num">{{ condParMois[i] ? fmt(condParMois[i]) : '—' }}</td>
+                <td class="rp-num" :class="planParMois[i] > 0 ? (condParMois[i] / planParMois[i] >= 1 ? 'taux-ok' : 'taux-bas') : ''">{{ tauxTxt(condParMois[i], planParMois[i]) }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="tot"><td>Total {{ anneeSel }}</td><td class="rp-num">{{ fmt(planTotal) }}</td><td class="rp-num">{{ fmt(fabTotal) }}</td><td class="rp-num">{{ tauxTxt(fabTotal, planTotal) }}</td><td class="rp-num">{{ fmt(condTotal) }}</td><td class="rp-num">{{ tauxTxt(condTotal, planTotal) }}</td></tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+</template>
+
 <style scoped>
-.tb { padding: 26px 34px 50px; max-width: 1180px; margin: 0 auto; color: #1e293b; font-family: 'Segoe UI', system-ui, sans-serif; }
-.tb-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
-.tb-title { margin: 0; font-size: 24px; font-weight: 800; color: #0f172a; }
-.tb-sub { margin: 4px 0 0; font-size: 13px; color: #64748b; }
-.tb-year { display: flex; align-items: center; gap: 8px; }
-.tb-year label { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #94a3b8; }
-.tb-year select { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 9px; font: inherit; font-size: 14px; font-weight: 600; }
+.rp-page { color: #1b2733; }
+.rp-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
+.rp-head h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
+.sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
+.annee-sel { display: flex; flex-direction: column; font-size: 11px; font-weight: 600; color: #64748b; gap: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.annee-sel select { font-size: 14px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 600; color: #1b2733; min-width: 110px; }
+.alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 
-.tb-tabs { display: flex; gap: 8px; margin-bottom: 18px; }
-.tb-tab { flex: 1; background: #fff; border: 1.5px solid #e2e8f0; border-radius: 12px; font: inherit; font-size: 15px; font-weight: 700; padding: 13px; cursor: pointer; color: #64748b; transition: all .18s ease; }
-.tb-tab.fab.on { background: #14b8a6; border-color: #14b8a6; color: #fff; box-shadow: 0 8px 20px rgba(20,184,166,.28); }
-.tb-tab.cond.on { background: #0ea5e9; border-color: #0ea5e9; color: #fff; box-shadow: 0 8px 20px rgba(14,165,233,.28); }
+.kpi-grid { display: grid; gap: 14px; margin-bottom: 22px; }
+.kpi-grid.k3 { grid-template-columns: repeat(3, 1fr); }
+.kpi-grid.k4 { grid-template-columns: repeat(4, 1fr); }
+.kpi-grid.k5 { grid-template-columns: repeat(5, 1fr); }
+.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.kpi-tag { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 3px 8px; border-radius: 999px; margin-bottom: 8px; }
+.plan-tag { background: #f1f5f9; color: #475569; }
+.fab-tag { background: #ccfbf1; color: #0f766e; }
+.cond-tag { background: #dbeafe; color: #1d4ed8; }
+.antic-tag { background: #fef3c7; color: #92400e; }
+.kpi-val { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+.kpi-lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
+.note { font-size: 12px; color: #475569; margin: -12px 0 22px; background: #fffbeb; border: 1px solid #fde68a; padding: 8px 12px; border-radius: 8px; }
 
-.tb-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-.tb-kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 15px 18px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 4px 14px rgba(30,41,59,.05); }
-.k-lbl { font-size: 12px; font-weight: 700; color: #64748b; }
-.k-val { font-size: 22px; font-weight: 800; color: #0f172a; }
-.tb-mois-lbl { font-size: 12px; font-weight: 800; color: #0f766e; margin: 4px 0 10px; text-transform: uppercase; letter-spacing: 0.5px; }
-.tb-kpi-m { border-left: 3px solid #14b8a6; }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.prod-search { font-size: 13px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 240px; max-width: 100%; }
+.prod-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.card-title { margin: 0; font-size: 16px; }
+.rp-eq-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.rp-eq-tabs { display: flex; gap: 8px; }
+.rp-eq-tabs button { background: #fff; border: 1.5px solid #e2e8f0; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 16px; cursor: pointer; color: #64748b; }
+.rp-eq-tabs button.on:nth-child(1) { background: #14b8a6; border-color: #14b8a6; color: #fff; }
+.rp-eq-tabs button.on:nth-child(2) { background: #0ea5e9; border-color: #0ea5e9; color: #fff; }
+.legend { display: flex; gap: 16px; font-size: 12px; color: #475569; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.dot.plan, .bar-fill.plan { background: #94a3b8; }
+.dot.fab, .bar-fill.fab { background: #0f766e; }
+.dot.cond, .bar-fill.cond { background: #2563eb; }
+.ch { display: flex; align-items: flex-end; gap: 3px; height: 180px; padding-top: 8px; }
+.ch-group { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; height: 100%; }
+.ch-bars { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
+.ch-bar { width: 30%; max-width: 11px; border-radius: 3px 3px 1px 1px; min-height: 2px; transition: height .45s cubic-bezier(.4,0,.2,1); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
+.ch-bar.plan { background: linear-gradient(180deg, #cbd5e1, #94a3b8); }
+.ch-bar.fab { background: linear-gradient(180deg, #2dd4bf, #0f766e); }
+.ch-bar.cond { background: linear-gradient(180deg, #60a5fa, #2563eb); }
+.ch-bar:hover { filter: brightness(1.08); }
+.ch-lbl { font-size: 10px; color: #94a3b8; margin-top: 6px; font-weight: 600; }
+.line-ch { width: 100%; margin-top: 4px; }
+.ch-switch { display: inline-flex; gap: 2px; background: #f1f5f9; border-radius: 8px; padding: 3px; }
+.ch-switch button { background: none; border: 0; font-family: inherit; font-size: 12px; font-weight: 600; color: #64748b; padding: 5px 11px; border-radius: 6px; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.ch-switch button.on { background: #fff; color: #0f766e; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
+html[data-theme="sombre"] .ch-switch, html[data-theme="minuit"] .ch-switch { background: #0f1830; }
+html[data-theme="sombre"] .ch-switch button.on, html[data-theme="minuit"] .ch-switch button.on { background: #243049; color: #2dd4bf; }
+.lch-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.lch-grid { stroke: #eef2f6; stroke-width: 1; }
+.lch-line { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.lch-line.plan { stroke: #94a3b8; stroke-dasharray: 5 4; }
+.lch-line.fab { stroke: #0f766e; }
+.lch-line.cond { stroke: #2563eb; }
+.lch-pt { stroke: #fff; stroke-width: 1.5; cursor: pointer; }
+.lch-pt.plan { fill: #94a3b8; }
+.lch-pt.fab { fill: #0f766e; }
+.lch-pt.cond { fill: #2563eb; }
+.lch-pt:hover { r: 5; }
+.lch-lbl { fill: #94a3b8; font-size: 13px; font-weight: 600; }
+html[data-theme="sombre"] .lch-grid, html[data-theme="minuit"] .lch-grid { stroke: #2a3650; }
+html[data-theme="sombre"] .lch-pt, html[data-theme="minuit"] .lch-pt { stroke: #161f33; }
 
-.tb-grp { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-.grp-lbl { font-size: 12px; font-weight: 700; color: #64748b; margin-right: 4px; }
-.tb-grp button { background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; font: inherit; font-size: 12.5px; font-weight: 600; padding: 7px 15px; cursor: pointer; color: #475569; }
-.tb-grp button.on { background: #0f172a; border-color: #0f172a; color: #fff; }
+.mois-bloc { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+.mois-bloc:last-child { border-bottom: 0; }
+.mois-nom { width: 38px; font-weight: 700; font-size: 13px; color: #475569; flex-shrink: 0; }
+.series { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.serie { display: flex; align-items: center; gap: 10px; }
+.bar-track { flex: 1; height: 9px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 999px; min-width: 2px; }
+.serie-val { width: 92px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; color: #1b2733; flex-shrink: 0; }
 
-.tb-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 6px 6px; box-shadow: 0 8px 22px rgba(30,41,59,.06); overflow: hidden; }
-.tb-empty { padding: 40px; text-align: center; color: #94a3b8; font-size: 14px; }
-.tb-table { width: 100%; border-collapse: collapse; }
-.tb-table thead th { text-align: left; font-size: 11.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: #64748b; padding: 12px 16px; border-bottom: 2px solid #f1f5f9; }
-.tb-table thead th.num { text-align: right; }
-.tb-table tbody td { padding: 11px 16px; font-size: 13.5px; border-bottom: 1px solid #f5f7fa; }
-.tb-table tbody tr:hover td { background: #f8fafc; }
-.g-nom { font-weight: 600; color: #1e293b; }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
-.ca { font-weight: 700; color: #0f766e; }
-.taux { font-weight: 800; }
-.taux.ok { color: #15803d; }
-.taux.bas { color: #dc2626; }
-.muted { color: #cbd5e1; }
-.k-val.v-bas { color: #dc2626; }
-.w-bar { width: 150px; }
-.bar { display: block; height: 8px; background: #eef2f7; border-radius: 4px; overflow: hidden; }
-.bar-in { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #14b8a6, #0ea5e9); }
-.tb-table tfoot .tot td { font-weight: 800; padding: 13px 16px; border-top: 2px solid #e2e8f0; background: #f8fafc; }
+.table-scroll { overflow-x: auto; }
+table.grid { border-collapse: collapse; font-size: 13px; width: 100%; }
+table.grid th { text-align: left; padding: 9px 10px; border-bottom: 2px solid #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; white-space: nowrap; }
+table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
+.ta-r { text-align: right; }
+.sticky { position: sticky; left: 0; background: #fff; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.desig { color: #64748b; }
+.fab-txt { color: #0f766e; font-weight: 600; }
+.cond-txt { color: #1d4ed8; font-weight: 600; }
+.strong { font-weight: 700; }
+.empty { color: #94a3b8; font-style: italic; font-size: 13px; }
 
-@media (max-width: 820px) {
-  .tb { padding: 18px; } .tb-kpis { grid-template-columns: repeat(2, 1fr); }
-  .w-bar { display: none; }
+@media (max-width: 980px) {
+  .kpi-grid.k4, .kpi-grid.k5 { grid-template-columns: 1fr 1fr; }
 }
-/* Compact */
-.tb { padding: 12px 20px 20px; }
-.tb-head { margin-bottom: 10px; }
-.tb-title { font-size: 18px; }
-.tb-sub { font-size: 11px; margin-top: 2px; }
-.tb-year select { padding: 6px 10px; font-size: 13px; }
-.tb-tabs { gap: 6px; margin-bottom: 10px; }
-.tb-tab { font-size: 13px; padding: 9px; }
-.tb-kpis { gap: 10px; margin-bottom: 12px; }
-.tb-kpi { padding: 10px 14px; }
-.tb-kpi .k-val, .tb-kpi b, .tb-kpi strong { font-size: 19px; }
-.tb-grp { margin-bottom: 10px; }
-.tb-grp button { font-size: 11.5px; padding: 5px 12px; }
-.tb-table thead th { padding: 7px 12px; font-size: 10.5px; }
-.tb-table tbody td { padding: 6px 12px; font-size: 12px; }
-.tb-table tfoot .tot td { padding: 7px 12px; }
-.tb-empty { padding: 26px; font-size: 13px; }
-/* Ultra compact */
-.tb { padding: 8px 14px 14px; }
-.tb-title { font-size: 15px; }
-.tb-sub { display: none; }
-.tb-head { margin-bottom: 6px; }
-.tb-year select { padding: 5px 8px; font-size: 12px; }
-.tb-tabs { gap: 6px; margin-bottom: 8px; }
-.tb-tab { font-size: 12px; padding: 7px; border-radius: 9px; }
-.tb-kpis { gap: 8px; margin-bottom: 8px; }
-.tb-kpi { padding: 7px 11px; border-radius: 11px; gap: 2px; }
-.tb-kpi .k-val { font-size: 16px; }
-.tb-kpi .k-lbl { font-size: 9.5px; }
-.tb-grp { margin-bottom: 7px; }
-.tb-grp button { font-size: 10.5px; padding: 4px 10px; }
-.tb-table thead th { padding: 5px 10px; font-size: 10px; }
-.tb-table tbody td { padding: 4px 10px; font-size: 11px; }
-.tb-table tfoot .tot td { padding: 5px 10px; }
-.tb-empty { padding: 18px; font-size: 12px; }
+@media (max-width: 760px) {
+  .kpi-grid.k3, .kpi-grid.k4, .kpi-grid.k5 { grid-template-columns: 1fr; }
+  .serie-val { width: 70px; }
+}
+.modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.rp-fullpage { position: fixed; inset: 0; background: #f8fafc; z-index: 200; display: flex; flex-direction: column; }
+.rp-fullpage .rp-md-head { display: flex; align-items: center; gap: 16px; padding: 16px 26px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+.rp-fullpage .rp-md-head h3 { margin: 0; font-size: 18px; }
+.rp-back { background: #0f766e; color: #fff; border: none; border-radius: 8px; font: inherit; font-weight: 600; padding: 8px 16px; cursor: pointer; }
+.rp-back:hover { background: #0c5f59; }
+.rp-fullpage .rp-md-sub { margin-left: auto; color: #64748b; font-size: 13px; }
+.rp-fullpage .rp-md-body { flex: 1; overflow: auto; padding: 12px 16px; zoom: 0.85; }
+.rp-scroll { overflow-x: auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
+.rp-detail { width: 100%; border-collapse: collapse; }
+.rp-detail thead th { text-align: left; font-size: 11.5px; color: #64748b; font-weight: 600; padding: 7px 12px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+.rp-detail thead th.rp-num { text-align: right; }
+.rp-detail .grp { text-align: center; border-bottom: 2px solid currentColor; }
+.grp-plan { color: #4338ca; } .grp-fab { color: #0f766e; } .grp-cond { color: #c2410c; }
+.rp-detail .sub2 th { font-size: 11px; font-weight: 500; }
+.rp-detail tbody td { padding: 6px 12px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+.rp-detail .rp-num { text-align: right; white-space: nowrap; }
+.rp-detail .rp-code { font-family: ui-monospace, monospace; font-weight: 600; }
+.rp-detail tfoot .tot td { font-weight: 700; border-top: 2px solid #cbd5e1; padding: 9px 12px; font-size: 13px; background: #f8fafc; }
+.taux-ok { color: #15803d; font-weight: 700; }
+.taux-bas { color: #dc2626; font-weight: 700; }
+.kpi-clic { cursor: pointer; transition: box-shadow .15s ease, transform .15s ease; }
+.kpi-clic:hover { box-shadow: 0 8px 20px rgba(67,56,202,.18); transform: translateY(-2px); }
+.kpi-go { font-size: 10px; font-weight: 700; opacity: .8; }
+.glob-kpis { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.glob-k { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 22px; display: flex; flex-direction: column; gap: 2px; min-width: 170px; }
+.glob-lbl { font-size: 12px; font-weight: 700; color: #64748b; }
+.glob-v { font-size: 26px; font-weight: 800; }
+.glob-u { font-size: 12px; color: #94a3b8; }
+.glob-chart { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 20px; }
+.glob-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.glob-tabs button { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; padding: 8px 16px; cursor: pointer; color: #475569; }
+.glob-tabs button.on { background: #0f766e; color: #fff; border-color: #0f766e; }
+.rp-detail thead th { text-align: left; font-size: 11.5px; color: #64748b; font-weight: 600; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
+.rp-detail thead th.rp-num { text-align: right; }
+.rp-modal { background: #fff; border-radius: 14px; width: min(580px, 100%); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+.rp-md-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; }
+.rp-md-head h3 { margin: 0; font-size: 15.5px; }
+.rp-md-x { background: none; border: 0; font-size: 17px; color: #94a3b8; cursor: pointer; }
+.rp-tabs { display: flex; gap: 6px; padding: 0 18px 10px; }
+.rp-tabs button { background: #f1f5f9; border: 0; font-family: inherit; font-size: 12px; font-weight: 600; color: #64748b; padding: 5px 12px; border-radius: 7px; cursor: pointer; }
+.rp-tabs button.on { background: #0f766e; color: #fff; }
+.rp-md-sub { padding: 8px 18px; font-size: 12.5px; color: #64748b; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; }
+.rp-md-body { overflow-y: auto; padding: 6px 18px 16px; }
+.rp-code { font-family: ui-monospace, monospace; font-weight: 700; color: #0f766e; white-space: nowrap; }
+.rp-des { color: #475569; }
+.rp-num { text-align: right; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ca-note { font-size: 12.5px; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 12px; margin: 0 0 14px; line-height: 1.5; }
+.ca-warn { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 13px 16px; margin: 0 0 16px; }
+.ca-warn-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; gap: 10px; }
+.ca-warn-head h3 { margin: 0; font-size: 15px; color: #92400e; }
+.ca-chev { font-size: 12px; color: #b45309; font-weight: 600; white-space: nowrap; }
+.ca-warn-txt { font-size: 13px; color: #78350f; margin: 8px 0 0; line-height: 1.5; }
+.ca-scroll { overflow-x: auto; margin-top: 12px; }
+.ca-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ca-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #92400e; padding: 6px 8px; border-bottom: 2px solid #fde68a; white-space: nowrap; }
+.ca-table td { padding: 6px 8px; border-bottom: 1px solid #fef3c7; }
+.ca-table .ta-r { text-align: right; font-variant-numeric: tabular-nums; }
+.ca-code { font-family: ui-monospace, monospace; font-weight: 700; color: #b45309; white-space: nowrap; }
+
+/* ===== Polish design ===== */
+.kpi-bar { height: 6px; background: #eef2f6; border-radius: 4px; overflow: hidden; margin: 8px 0 2px; }
+.kpi-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+.kpi-fill.fab { background: linear-gradient(90deg, #34d399, #059669); }
+.kpi-fill.cond { background: linear-gradient(90deg, #38bdf8, #0284c7); }
+.rp-cockpit { display: grid; grid-template-columns: auto 1fr auto; gap: 30px; align-items: center; background: linear-gradient(135deg, #0e2a33 0%, #123a44 55%, #0f3038 100%); border-radius: 16px; padding: 20px 28px; margin-bottom: 20px; box-shadow: 0 12px 34px rgba(14,42,51,.28); color: #e2e8f0; position: relative; overflow: hidden; }
+.rp-cockpit::after { content: ''; position: absolute; top: -40%; right: -60px; width: 220px; height: 220px; background: radial-gradient(circle, rgba(45,212,191,.16), transparent 70%); pointer-events: none; }
+.rp-ck-eyebrow { font-size: 10px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; color: #5eead4; }
+.rp-ck-h { margin: 5px 0 0; font-size: 19px; font-weight: 800; color: #fff; letter-spacing: -.01em; white-space: nowrap; }
+.rp-ck-metrics { display: flex; flex-direction: column; gap: 13px; min-width: 220px; }
+.rp-ck-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+.rp-ck-lbl { font-size: 12px; font-weight: 600; color: #cbd5e1; display: flex; align-items: center; gap: 8px; }
+.rp-ck-dot { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+.rp-ck-dot.fab { background: #2dd4bf; color: #2dd4bf; } .rp-ck-dot.cond { background: #38bdf8; color: #38bdf8; }
+.rp-ck-pct { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; }
+.rp-ck-track { height: 9px; background: rgba(255,255,255,.10); border-radius: 6px; overflow: hidden; }
+.rp-ck-fill { height: 100%; border-radius: 6px; transition: width .7s cubic-bezier(.4,0,.2,1); }
+.rp-ck-fill.fab { background: linear-gradient(90deg, #2dd4bf, #14b8a6); }
+.rp-ck-fill.cond { background: linear-gradient(90deg, #38bdf8, #0ea5e9); }
+.rp-ck-total { text-align: right; position: relative; z-index: 1; }
+.rp-ck-num { font-size: 32px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; letter-spacing: -.02em; line-height: 1; }
+.rp-ck-cap { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #94a3b8; margin-top: 6px; }
+@media (max-width: 760px) { .rp-cockpit { grid-template-columns: 1fr; gap: 16px; padding: 16px 18px; } .rp-ck-total { text-align: left; } .rp-ck-h { white-space: normal; } }
+.kpi-val { font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.kpi { background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); }
+.kpi { transition: box-shadow .15s ease, transform .15s ease; }
+.kpi:hover { box-shadow: 0 8px 20px rgba(16,24,40,.10); transform: translateY(-2px); }
+.card { transition: box-shadow .15s ease; }
+.card:hover { box-shadow: 0 4px 16px rgba(16,24,40,.07); }
+.grp-plan { background: #eef2ff; } .grp-fab { background: #ecfdf5; } .grp-cond { background: #fff7ed; }
+.rp-detail tbody tr:nth-child(even) td { background: #fafbfe; }
+.rp-detail tbody tr:hover td { background: #eef6f5; }
+.card-title { font-weight: 800; letter-spacing: -.01em; color: #0f172a; }
+.taux-ok { background: #dcfce7; padding: 2px 7px; border-radius: 6px; }
+.taux-bas { background: #fee2e2; padding: 2px 7px; border-radius: 6px; }
+
+/* ===== Développement design ===== */
+.kpi { border-top: 3px solid #cbd5e1; }
+.kpi:has(.plan-tag) { border-top-color: #6366f1; }
+.kpi:has(.fab-tag) { border-top-color: #10b981; }
+.kpi:has(.cond-tag) { border-top-color: #0ea5e9; }
+.kpi:has(.antic-tag) { border-top-color: #f59e0b; }
+.card-title { position: relative; padding-left: 14px; }
+.card-title::before { content: ''; position: absolute; left: 0; top: 3px; bottom: 3px; width: 4px; border-radius: 2px; background: linear-gradient(180deg, #2dd4bf, #0d9488); }
+.kpi-ic { box-shadow: 0 2px 6px rgba(16,24,40,.10); }
+.kpi-tag { box-shadow: inset 0 0 0 1px rgba(0,0,0,.03); }
+
+/* ===== Cartes modernes ===== */
+.kpi { border-radius: 18px; padding: 18px 18px 16px; box-shadow: 0 6px 18px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.04); background: linear-gradient(158deg, #ffffff 0%, #fbfcff 100%); transition: box-shadow .2s ease, transform .2s ease; }
+.kpi:hover { box-shadow: 0 18px 38px rgba(16,24,40,.14), 0 2px 6px rgba(16,24,40,.05); transform: translateY(-4px); }
+.kpi-val { font-size: 28px; font-weight: 800; }
+.kpi-ic { border-radius: 13px !important; box-shadow: 0 5px 12px rgba(16,24,40,.16) !important; }
+.kpi-tag { font-size: 10px; letter-spacing: .05em; padding: 4px 9px; }
+.kpi-lbl { font-size: 11.5px; }
+.card { border-radius: 18px; box-shadow: 0 6px 18px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.04); }
+/* petite mise en avant du liseré de statut (dégradé) */
+.kpi:has(.plan-tag) { border-top: 3px solid #6366f1; }
+.kpi:has(.fab-tag) { border-top: 3px solid #10b981; }
+.kpi:has(.cond-tag) { border-top: 3px solid #0ea5e9; }
+.kpi:has(.antic-tag) { border-top: 3px solid #f59e0b; }
+
+/* ===== Compact : tient jusqu'au graphe ===== */
+.rp-page { zoom: 0.75; }
+.rp-cockpit { padding: 13px 24px; margin-bottom: 12px; }
+.rp-ck-metrics { gap: 9px; }
+.rp-ck-num { font-size: 28px; }
+.kpi-grid { gap: 12px; margin-bottom: 12px; }
+.kpi { padding: 13px 16px 11px; }
+.kpi-val { font-size: 24px; }
+.kpi-lbl { margin-top: 3px; }
+.kpi-tag { margin-bottom: 6px; }
+.card-head { margin-bottom: 10px; }
 </style>
