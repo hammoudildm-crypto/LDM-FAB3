@@ -337,9 +337,7 @@ onMounted(charger)
 
 <template>
   <div class="pa-page">
-    <PageHeader title="Production par atelier" tone="teal"
-      subtitle="Nombre de lots ayant terminé chaque étape, par atelier et par mois.">
-    </PageHeader>
+    <PageHeader title="Production par atelier" tone="teal" />
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="chargement" class="muted">Chargement…</p>
@@ -395,7 +393,7 @@ onMounted(charger)
             <thead>
               <tr>
                 <th class="at-col">Atelier</th>
-                <th v-for="m in MOIS" :key="m" class="mois-col">{{ m }}</th>
+                <th v-for="m in MOIS" :key="m" class="mois-col" :title="m">{{ m.charAt(0) }}</th>
                 <th class="tot-col">Total</th>
               </tr>
             </thead>
@@ -497,7 +495,7 @@ onMounted(charger)
 <style scoped>
 .pa-page { color: #1b2733; }
 .pa-layout { display: flex; gap: 10px; align-items: stretch; margin-bottom: 8px; }
-.pa-side { flex: 0 0 260px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: stretch; overflow: hidden; }
+.pa-side { flex: 0 0 230px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: stretch; overflow: hidden; }
 .pa-content { flex: 1; min-width: 0; }
 .pa-row2 { display: flex; gap: 10px; align-items: stretch; margin-bottom: 8px; }
 .pa-row2 > .card, .pa-row2 > .proj-card { flex: 1 1 0; min-width: 0; margin-bottom: 0; display: flex; flex-direction: column; }
@@ -546,7 +544,7 @@ table.grid th { text-align: center; font-size: 7px; text-transform: uppercase; l
 table.grid th.at-col { text-align: left; }
 table.grid td { padding: 1px 2px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
 .at-col { min-width: 66px; }
-.mois-col { width: 24px; }
+.mois-col { width: 18px; }
 .tot-col { width: 50px; }
 .at-name { font-weight: 600; color: #1b2733; font-size: 8.5px; }
 .num { text-align: center; font-variant-numeric: tabular-nums; border-radius: 6px; }
