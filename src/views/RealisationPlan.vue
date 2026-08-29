@@ -877,4 +877,18 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .card-title::before { content: ''; position: absolute; left: 0; top: 3px; bottom: 3px; width: 4px; border-radius: 2px; background: linear-gradient(180deg, #2dd4bf, #0d9488); }
 .kpi-ic { box-shadow: 0 2px 6px rgba(16,24,40,.10); }
 .kpi-tag { box-shadow: inset 0 0 0 1px rgba(0,0,0,.03); }
+
+/* ===== Cartes modernes ===== */
+.kpi { border-radius: 18px; padding: 18px 18px 16px; box-shadow: 0 6px 18px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.04); background: linear-gradient(158deg, #ffffff 0%, #fbfcff 100%); transition: box-shadow .2s ease, transform .2s ease; }
+.kpi:hover { box-shadow: 0 18px 38px rgba(16,24,40,.14), 0 2px 6px rgba(16,24,40,.05); transform: translateY(-4px); }
+.kpi-val { font-size: 28px; font-weight: 800; }
+.kpi-ic { border-radius: 13px !important; box-shadow: 0 5px 12px rgba(16,24,40,.16) !important; }
+.kpi-tag { font-size: 10px; letter-spacing: .05em; padding: 4px 9px; }
+.kpi-lbl { font-size: 11.5px; }
+.card { border-radius: 18px; box-shadow: 0 6px 18px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.04); }
+/* petite mise en avant du liseré de statut (dégradé) */
+.kpi:has(.plan-tag) { border-top: 3px solid #6366f1; }
+.kpi:has(.fab-tag) { border-top: 3px solid #10b981; }
+.kpi:has(.cond-tag) { border-top: 3px solid #0ea5e9; }
+.kpi:has(.antic-tag) { border-top: 3px solid #f59e0b; }
 </style>
