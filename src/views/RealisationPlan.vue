@@ -337,13 +337,7 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 
 <template>
   <div class="rp-page">
-    <PageHeader title="Réalisation vs Plan" tone="teal">
-      <label class="annee-sel">Année
-        <select v-model.number="anneeSel">
-          <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
-        </select>
-      </label>
-    </PageHeader>
+    <PageHeader title="Réalisation vs Plan" tone="teal" />
 
     <p v-if="msg" class="alert">{{ msg }}</p>
 
