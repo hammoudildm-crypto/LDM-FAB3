@@ -278,6 +278,13 @@ const projTotaux = computed(() => {
     vsN1: totN1 > 0 ? Math.round((projTotal / totN1 - 1) * 100) : null
   }
 })
+const projKpis = computed(() => {
+  const rows = projectionsTable.value.filter(r => r.plan > 0)
+  const atteignent = rows.filter(r => r.pctPlan != null && r.pctPlan >= 100).length
+  let pire = null
+  for (const r of rows) { if (r.pctPlan == null) continue; if (!pire || r.pctPlan < pire.pctPlan) pire = r }
+  return { avancement: projTotaux.value.pctPlan, atteignent, total: rows.length, pire, vsN1: projTotaux.value.vsN1 }
+})
 const atelierSel = ref('Compression')
 const anneesActives = ref(new Set(ANNEES_COMP))
 function toggleAnnee(y) {
@@ -529,6 +536,12 @@ onMounted(charger)
           </tfoot>
         </table>
       </div>
+      <div class="proj-kpis">
+        <div class="proj-kpi"><div class="proj-kpi-v" :class="projKpis.avancement == null ? '' : (projKpis.avancement >= 100 ? 'pk-up' : (projKpis.avancement >= 80 ? 'pk-warn' : 'pk-down'))">{{ projKpis.avancement != null ? projKpis.avancement + ' %' : '—' }}</div><div class="proj-kpi-l">Avancement du plan · projeté fin {{ anneeCourante }}</div></div>
+        <div class="proj-kpi"><div class="proj-kpi-v">{{ projKpis.atteignent }}/{{ projKpis.total }}</div><div class="proj-kpi-l">Ateliers atteignant leur plan</div></div>
+        <div class="proj-kpi"><div class="proj-kpi-v" :class="projKpis.pire && projKpis.pire.pctPlan < 100 ? 'pk-down' : 'pk-up'">{{ projKpis.pire ? projKpis.pire.pctPlan + ' %' : '—' }}</div><div class="proj-kpi-l">Plus en retard : {{ projKpis.pire ? projKpis.pire.ph : '—' }}</div></div>
+        <div class="proj-kpi"><div class="proj-kpi-v" :class="projKpis.vsN1 == null ? '' : (projKpis.vsN1 >= 0 ? 'pk-up' : 'pk-down')">{{ projKpis.vsN1 != null ? (projKpis.vsN1 >= 0 ? '+' : '') + projKpis.vsN1 + ' %' : '—' }}</div><div class="proj-kpi-l">Projection vs {{ anneeCourante - 1 }}</div></div>
+      </div>
     </section>
       </div>
 
@@ -715,4 +728,9 @@ tbody tr:first-child td.mois-actuel-col { box-shadow: inset 2px 0 0 #f59e0b, ins
 .pa-row2 .num, .pa-row2 .proj-at, .pa-row2 table.grid tbody td *, .pa-row2 .proj-table tbody td * { line-height: 22px !important; }
 .proj-total td { font-weight: 800; border-top: 2px solid #cbd5e1; background: #f1f5f9; }
 .proj-total .proj-val { color: #0f766e; }
+.proj-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+.proj-kpi { background: linear-gradient(158deg, #ffffff, #f8fafc); border: 1px solid #eef1f6; border-radius: 11px; padding: 9px 11px; box-shadow: 0 2px 8px rgba(16,24,40,.05); }
+.proj-kpi-v { font-size: 19px; font-weight: 800; color: #1e293b; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.proj-kpi-l { font-size: 10px; color: #64748b; font-weight: 600; margin-top: 2px; }
+.pk-up { color: #15803d; } .pk-warn { color: #b45309; } .pk-down { color: #dc2626; }
 </style>
