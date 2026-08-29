@@ -539,14 +539,14 @@ onMounted(charger)
 .btn-exp:disabled { opacity: .45; cursor: not-allowed; }
 
 .table-scroll { overflow-x: auto; }
-table.grid { width: 100%; border-collapse: collapse; font-size: 8.5px; }
+table.grid { width: 100%; border-collapse: collapse; font-size: 8.5px; table-layout: fixed; }
 table.grid th { text-align: center; font-size: 7px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; padding: 1px 2px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
 table.grid th.at-col { text-align: left; }
 table.grid td { padding: 1px 2px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
-.at-col { min-width: 66px; }
-.mois-col { width: 18px; }
-.tot-col { width: 50px; }
-.at-name { font-weight: 600; color: #1b2733; font-size: 8.5px; }
+.at-col { min-width: 42px; width: 42px; }
+.mois-col { width: 12px; }
+.tot-col { width: 32px; }
+.at-name { font-weight: 600; color: #1b2733; font-size: 8.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .num { text-align: center; font-variant-numeric: tabular-nums; border-radius: 6px; }
 .num.strong { font-weight: 700; }
 .accent { color: #0f766e; }
