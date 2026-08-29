@@ -886,7 +886,7 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .kpi:has(.antic-tag) { border-top: 3px solid #f59e0b; }
 
 /* ===== Compact : tient jusqu'au graphe ===== */
-.rp-page { zoom: 0.92; }
+.rp-page { zoom: 0.82; }
 .rp-cockpit { padding: 13px 24px; margin-bottom: 12px; }
 .rp-ck-metrics { gap: 9px; }
 .rp-ck-num { font-size: 28px; }
