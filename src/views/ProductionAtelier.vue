@@ -606,8 +606,8 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .proj-note { font-size: 12px; color: #64748b; line-height: 1.5; margin: 12px 0 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 12px; }
 .pa-atelier-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .pa-atelier-lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: #64748b; white-space: nowrap; }
-.pa-atelier-tg { display: flex; flex-wrap: wrap; gap: 5px; }
-.pa-atelier-tg button { border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 6px 11px; font: inherit; font-size: 12px; font-weight: 600; color: #64748b; cursor: pointer; white-space: nowrap; transition: all .12s; }
+.pa-atelier-tg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.pa-atelier-tg button { border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 6px 4px; font: inherit; font-size: 10px; font-weight: 600; color: #64748b; cursor: pointer; white-space: normal; text-align: center; line-height: 1.2; transition: all .12s; }
 .pa-atelier-tg button:hover { border-color: #99f6e4; background: #f0fdfa; }
 .pa-atelier-tg button.on { background: #0f766e; border-color: #0f766e; color: #fff; box-shadow: 0 2px 6px rgba(15,118,110,.28); }
 
