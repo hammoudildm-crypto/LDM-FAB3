@@ -360,6 +360,12 @@ onMounted(charger)
           </select>
         </div>
         <div class="side-sec">
+          <div class="side-lbl">Atelier</div>
+          <div class="pa-atelier-tg">
+            <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
+          </div>
+        </div>
+        <div class="side-sec">
           <div class="side-lbl">Années (comparaison)</div>
           <div class="side-annees2">
             <button v-for="(y, i) in ANNEES_COMP" :key="y" type="button" class="an-btn" :class="{ on: anneesActives.has(y) }" @click="toggleAnnee(y)"><span class="an-dot" :style="{ background: COULEURS_ANNEES[i] }"></span>{{ y }}</button>
@@ -368,12 +374,6 @@ onMounted(charger)
       </aside>
         <div class="pa-content">
       <section class="card">
-        <div class="pa-atelier-bar">
-          <span class="pa-atelier-lbl">Atelier</span>
-          <div class="pa-atelier-tg">
-            <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
-          </div>
-        </div>
         <div class="card-head"><h2 class="card-title">Comparaison mensuelle par atelier</h2></div>
         <div class="chart-titre">{{ atelierSel }} — lots terminés par mois</div>
         <div class="chart-wrap">
