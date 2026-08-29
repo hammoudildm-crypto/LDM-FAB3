@@ -561,7 +561,7 @@ async function devalider(l) {
 table.mini { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.mini th { text-align: left; padding: 7px 6px; border-bottom: 2px solid #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; }
 table.mini td { padding: 7px 6px; border-bottom: 1px solid #eef2f6; }
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; font-size: 11px; white-space: nowrap; }
 .desig { color: #64748b; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .right { text-align: right; }
 .nowrap { white-space: nowrap; }
@@ -733,7 +733,7 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .verif-3col > .v3-col > .card:last-child { flex: 1 1 auto; }
 /* Lots en cours de triage (fabrication) */
 tr.ddl-triage td { background: #fef3c7; }
-tr.ddl-triage .mono::after { content: ' 🔍 triage'; color: #b45309; font-size: .78em; font-weight: 700; white-space: nowrap; }
+tr.ddl-triage .mono::after { content: ' 🔍'; color: #b45309; font-size: .85em; font-weight: 700; white-space: nowrap; }
 
 /* ============================================================= *
  * Refonte moderne — couche de surcharge (cohérence violet)
