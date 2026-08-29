@@ -610,4 +610,17 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-atelier-tg button { border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 6px 11px; font: inherit; font-size: 12px; font-weight: 600; color: #64748b; cursor: pointer; white-space: nowrap; transition: all .12s; }
 .pa-atelier-tg button:hover { border-color: #99f6e4; background: #f0fdfa; }
 .pa-atelier-tg button.on { background: #0f766e; border-color: #0f766e; color: #fff; box-shadow: 0 2px 6px rgba(15,118,110,.28); }
+
+/* ===== Design moderne ===== */
+.kpi { border-radius: 13px; border-top: 3px solid #14b8a6; box-shadow: 0 4px 14px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.04); background: linear-gradient(158deg, #ffffff, #fbfcff); transition: box-shadow .2s ease, transform .2s ease; padding: 10px 13px; }
+.kpi:hover { box-shadow: 0 12px 26px rgba(16,24,40,.12); transform: translateY(-2px); }
+.kpi-val { font-size: 18px; font-variant-numeric: tabular-nums; }
+.kpi-ic { border-radius: 11px !important; box-shadow: 0 4px 10px rgba(16,24,40,.14) !important; }
+.card { border-radius: 14px; box-shadow: 0 4px 14px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.04); }
+.card-title { position: relative; padding-left: 13px; font-weight: 800; }
+.card-title::before { content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 4px; border-radius: 2px; background: linear-gradient(180deg, #2dd4bf, #0d9488); }
+.pa-side { border-radius: 14px; box-shadow: 0 4px 14px rgba(16,24,40,.05); }
+table.grid tbody tr:nth-child(even) td { background: #fafbfe; }
+table.grid tbody tr:hover td { background: #eef6f5; }
+.pa-atelier-tg button.on, .side-sec button.on { box-shadow: 0 2px 8px rgba(15,118,110,.25); }
 </style>
