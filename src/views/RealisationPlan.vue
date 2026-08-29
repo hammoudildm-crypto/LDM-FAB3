@@ -337,8 +337,7 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 
 <template>
   <div class="rp-page">
-    <PageHeader title="Réalisation vs Plan" tone="teal"
-      subtitle="Fabrication et conditionnement réalisés (boîtes) comparés au plan, et leur valorisation en CA.">
+    <PageHeader title="Réalisation vs Plan" tone="teal">
       <label class="annee-sel">Année
         <select v-model.number="anneeSel">
           <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
@@ -393,12 +392,6 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
         <div class="kpi-lbl">fab. {{ anneeSel - 1 }} → cond. {{ anneeSel }} · {{ fmtDA(anticipCA) }}</div>
       </div>
     </div>
-
-    <p class="ca-note">
-      <strong>Comment le CA est calculé :</strong> boîtes × <strong>PCSU actuel</strong> du produit (Référentiels › Produits).
-      C'est la <strong>valorisation</strong> du vrac fabriqué et du conditionnement réalisé — pas un CA encaissé.
-      Le PCSU n'est pas historisé : le modifier revalorise aussi les années passées.
-    </p>
 
     <section v-if="sansPcsu.length" class="ca-warn">
       <div class="ca-warn-head" @click="ouvertSansPcsu = !ouvertSansPcsu">
