@@ -52,6 +52,7 @@
             <th class="num">Plan</th>
             <th class="num">{{ onglet === 'fab' ? 'Fabriqué' : 'Conditionné' }}</th>
             <th class="num">Taux</th>
+            <th class="num">Plan (mois)</th>
             <th class="num">Réalisé (mois)</th>
             <th class="num">Taux (mois)</th>
             <th class="num">Lots</th>
@@ -64,6 +65,7 @@
             <td class="num">{{ r.plan ? fmt(r.plan) : '—' }}</td>
             <td class="num">{{ fmt(r.boites) }}</td>
             <td class="num"><span v-if="r.taux != null" class="taux" :class="r.taux >= 100 ? 'ok' : 'bas'">{{ r.taux }}%</span><span v-else class="muted">—</span></td>
+            <td class="num">{{ r.planMois ? fmt(r.planMois) : '—' }}</td>
             <td class="num">{{ r.boitesMois ? fmt(r.boitesMois) : '—' }}</td>
             <td class="num"><span v-if="r.tauxMois != null" class="taux" :class="r.tauxMois >= 100 ? 'ok' : 'bas'">{{ r.tauxMois }}%</span><span v-else class="muted">—</span></td>
             <td class="num">{{ fmt(r.lots) }}</td>
@@ -76,6 +78,7 @@
             <td class="num">{{ totPlan ? fmt(totPlan) : '—' }}</td>
             <td class="num">{{ fmt(totBoites) }}</td>
             <td class="num">{{ tauxGlobal != null ? tauxGlobal + '%' : '—' }}</td>
+            <td class="num">{{ totPlanMois ? fmt(totPlanMois) : '—' }}</td>
             <td class="num">{{ totBoitesMois ? fmt(totBoitesMois) : '—' }}</td>
             <td class="num">{{ tauxGlobalMois != null ? tauxGlobalMois + '%' : '—' }}</td>
             <td class="num">{{ fmt(totLots) }}</td>
