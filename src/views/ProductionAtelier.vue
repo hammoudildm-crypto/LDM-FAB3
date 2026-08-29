@@ -220,9 +220,7 @@ function projectionAtelier(ph) {
     resteMens: reste / moisRestants, resteJour: reste / joursRestants }
 }
 const projectionsTable = computed(() => {
-  return PHASES
-    .map(ph => projectionAtelier(ph))
-    .filter(r => r.realise > 0 || r.projTotal > 0 || r.plan > 0)
+  return PHASES.map(ph => projectionAtelier(ph))
 })
 const atelierSel = ref('Compression')
 const anneesActives = ref(new Set(ANNEES_COMP))
