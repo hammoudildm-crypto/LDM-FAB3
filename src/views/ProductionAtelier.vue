@@ -626,9 +626,11 @@ table.grid tbody tr:hover td { background: #eef6f5; }
 .at-row-active .at-name { color: #0f766e; font-weight: 800; box-shadow: inset 3px 0 0 #0f766e; }
 .at-row-active td { background: #f0fdfa !important; }
 
-/* ===== Aligner les deux tableaux au même niveau ===== */
-.pa-row2 .card-head, .pa-row2 .proj-head { min-height: 26px; margin-bottom: 12px; align-items: center; }
-.pa-row2 table.grid thead th, .pa-row2 .proj-table thead th { height: 30px; box-sizing: border-box; vertical-align: bottom; padding-top: 2px; padding-bottom: 4px; }
-.pa-row2 table.grid tbody td, .pa-row2 .proj-table tbody td { height: 20px; box-sizing: border-box; padding-top: 2px; padding-bottom: 2px; }
-.pa-row2 table.grid tfoot td, .pa-row2 .proj-table tfoot td { height: 20px; box-sizing: border-box; }
+/* ===== Alignement parfait des deux tableaux ===== */
+.pa-row2 .card-head, .pa-row2 .proj-head { height: 34px; box-sizing: border-box; margin-bottom: 10px; align-items: center; }
+.pa-row2 table.grid thead, .pa-row2 .proj-table thead { display: table-header-group; }
+.pa-row2 table.grid thead th, .pa-row2 .proj-table thead th { height: 34px; box-sizing: border-box; vertical-align: bottom; padding-top: 0; padding-bottom: 5px; line-height: 1.1; }
+.pa-row2 table.grid tbody tr, .pa-row2 .proj-table tbody tr { height: 23px; }
+.pa-row2 table.grid tbody td, .pa-row2 .proj-table tbody td { height: 23px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; line-height: 23px; vertical-align: middle; }
+.pa-row2 table.grid tfoot td, .pa-row2 .proj-table tfoot td { height: 23px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; line-height: 23px; }
 </style>
