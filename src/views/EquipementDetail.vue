@@ -136,17 +136,15 @@ const regimeLabel = computed(() => { if (reg4Regime.value) return '4×8 · 24/7'
 function joursOuvresMoisN(mo) { const d = new Date(annee.value, mo, 1); let n = 0; const facteurWE = reg4Regime.value ? 1 : (weRegime.value ? Math.min(1, 2 / (postesEquip.value || 3)) : 0); while (d.getMonth() === mo) { const wd = d.getDay(); if (wd === 0 || wd === 6) n += facteurWE; else n += 1; d.setDate(d.getDate() + 1) } return n }
 const occupationParMois = computed(() => {
   const out = Array(12).fill(null)
-  const auj = new Date(); const moisActuel = auj.getMonth(); const anneeActuelle = auj.getFullYear()
   const capaJour = postesEquip.value * 8 * nbMachines.value
   for (let mo = 0; mo < 12; mo++) {
-    if (annee.value === anneeActuelle && mo < moisActuel) continue
-    if (annee.value < anneeActuelle) continue
+    const passe = moisEstPasse(mo)
     let heures = 0
     for (const p of produits.value) {
       const cad = cadenceGroupe(p.id); if (cad <= 0) continue
-      const planB = (planParProduitMois.value[p.id] || [])[mo] || 0
-      if (planB <= 0) continue
-      heures += heuresProduit(p.id, planB).total
+      const qte = passe ? ((realiseParProduitMois.value[p.id] || [])[mo] || 0) : ((planParProduitMois.value[p.id] || [])[mo] || 0)
+      if (qte <= 0) continue
+      heures += heuresProduit(p.id, qte).total
     }
     const jm = joursOuvresMoisN(mo)
     const capaMois = jm * capaJour
@@ -183,6 +181,18 @@ const realiseParProduit = computed(() => {
   for (const o of ofs.value) { const d = o.date_fin_fabrication ? new Date(o.date_fin_fabrication) : null; if (d && d.getFullYear() === annee.value) m[o.produit_id] = (m[o.produit_id] || 0) + num(o.boites_fabriquees) }
   return m
 })
+const realiseParProduitMois = computed(() => {
+  const m = {}
+  for (const o of ofs.value) {
+    const d = o.date_fin_fabrication ? new Date(o.date_fin_fabrication) : null
+    if (!d || d.getFullYear() !== annee.value) continue
+    const mo = d.getMonth()
+    if (!m[o.produit_id]) m[o.produit_id] = Array(12).fill(0)
+    m[o.produit_id][mo] += num(o.boites_fabriquees)
+  }
+  return m
+})
+function moisEstPasse(mo) { const a = new Date(); return (annee.value < a.getFullYear()) || (annee.value === a.getFullYear() && mo < a.getMonth()) }
 const produitProduitPoste = computed(() => { const m = {}; for (const s of postesGroupe.value) if (s.produit_id) m[s.produit_id] = (m[s.produit_id] || 0) + num(s.production_realisee); return m })
 
 // Top 10 produits sur la ligne : produits ayant une cadence sur le groupe, triés par plan
@@ -336,15 +346,15 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
               </tr>
             </tbody>
           </table>
-          <div class="ed-sub">📈 Occupation prévisionnelle — mois restants</div>
+          <div class="ed-sub">📈 Occupation mensuelle — réalisé (écoulé) + prévu (restant)</div>
           <div class="ed-mchart tall">
-            <div v-for="(t, i) in occupationParMois" :key="i" class="ed-mcol" :class="{ 'ed-clic': t != null }" @click="t != null && (moisSel = i)" :title="MOIS[i] + ' : ' + (t == null ? 'écoulé' : (t * 100).toFixed(0) + ' % — cliquer pour le détail')">
+            <div v-for="(t, i) in occupationParMois" :key="i" class="ed-mcol" :class="{ 'ed-clic': t != null, 'ed-passe': moisEstPasse(i) }" @click="t != null && (moisSel = i)" :title="MOIS[i] + ' : ' + (t == null ? '—' : (moisEstPasse(i) ? 'réalisé ' : 'prévu ') + (t * 100).toFixed(0) + ' % — cliquer pour le détail')">
               <span class="ed-mv" :class="t == null ? '' : 't-' + clsTaux(t)">{{ t == null ? '' : (t * 100).toFixed(0) }}</span>
               <div class="ed-bararea"><div class="ed-refl2"></div><div class="ed-mbar" :class="t == null ? 'gone' : 'b-' + clsTaux(t)" :style="{ height: t == null ? '2px' : Math.min(120, t * 100) + '%' }"></div></div>
               <span class="ed-mm">{{ MOIS[i].charAt(0) }}</span>
             </div>
           </div>
-          <p class="ed-hint">Barres grises = mois écoulés. Trait = 100 %. <b>Clique une barre</b> pour voir les produits qui chargent ce mois.</p>
+          <p class="ed-hint">Mois écoulés (hachurés) = <b>réalisé</b> · mois restants = <b>prévu</b>. Trait = 100 %. <b>Clique une barre</b> pour le détail.</p>
         </section>
       </div>
 
@@ -501,4 +511,6 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
 .ed-mbar, .ed-occ-fill.t-x { }
 .ed-occ-fill.t-g { background: #16a34a; } .ed-occ-fill.t-a { background: #f59e0b; } .ed-occ-fill.t-r { background: #ef4444; } .ed-occ-fill.t-x { background: #991b1b; }
 @media (max-width: 860px) { .ed-grid { grid-template-columns: 1fr; } .ed-kpis, .ed-occ { flex-wrap: wrap; } .ed-kpi, .ed-occ-b { flex-basis: 46%; } }
+.ed-mcol.ed-passe .ed-mbar { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.35) 0 3px, transparent 3px 6px); }
+.ed-mcol.ed-passe .ed-mm { font-weight: 800; }
 </style>
