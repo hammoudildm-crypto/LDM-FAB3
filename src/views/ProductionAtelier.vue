@@ -18,6 +18,7 @@ const anneeSel = ref(anneeCourante)
 const PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Livraison Vrac', 'Conditionnement']
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
 const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+const moisActuelIdx = computed(() => anneeSel.value === anneeCourante ? new Date().getMonth() : -1)
 
 const phases = ref([])
 const conds = ref([])
@@ -391,14 +392,14 @@ onMounted(charger)
             <thead>
               <tr>
                 <th class="at-col">Atelier</th>
-                <th v-for="m in MOIS" :key="m" class="mois-col" :title="m">{{ m.charAt(0) }}</th>
+                <th v-for="(m, i) in MOIS" :key="m" class="mois-col" :class="{ 'mois-actuel-col': i === moisActuelIdx }" :title="m">{{ m.charAt(0) }}</th>
                 <th class="tot-col">Total</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="ph in PHASES" :key="ph" :class="{ cond: ph === 'Conditionnement', 'at-row-active': atelierSel === ph }" @click="atelierSel = ph" :title="'Afficher ' + ph + ' dans le graphe'">
                 <td class="at-name">{{ ph }}</td>
-                <td v-for="(n, i) in matrice[ph]" :key="i" class="num"
+                <td v-for="(n, i) in matrice[ph]" :key="i" class="num" :class="{ 'mois-actuel-col': i === moisActuelIdx }"
                     :style="n ? { background: 'rgba(15,118,110,' + (0.08 + intensite(n) * 0.55) + ')', color: intensite(n) > 0.6 ? '#fff' : '#0f5c54' } : null">
                   {{ n || '·' }}
                 </td>
@@ -409,7 +410,7 @@ onMounted(charger)
             <tfoot v-if="grandTotal">
               <tr>
                 <td class="strong">Total</td>
-                <td v-for="(n, i) in totalColonne" :key="i" class="num strong">{{ n || '·' }}</td>
+                <td v-for="(n, i) in totalColonne" :key="i" class="num strong" :class="{ 'mois-actuel-col': i === moisActuelIdx }">{{ n || '·' }}</td>
                 <td class="num strong accent">{{ grandTotal }}</td>
               </tr>
             </tfoot>
@@ -633,4 +634,7 @@ table.grid tbody tr:hover td { background: #eef6f5; }
 .pa-row2 table.grid tbody tr, .pa-row2 .proj-table tbody tr { height: 23px; }
 .pa-row2 table.grid tbody td, .pa-row2 .proj-table tbody td { height: 23px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; line-height: 23px; vertical-align: middle; }
 .pa-row2 table.grid tfoot td, .pa-row2 .proj-table tfoot td { height: 23px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; line-height: 23px; }
+th.mois-actuel-col { background: #fef3c7; color: #b45309; font-weight: 800; }
+td.mois-actuel-col { box-shadow: inset 2px 0 0 #f59e0b, inset -2px 0 0 #f59e0b; }
+tbody tr:first-child td.mois-actuel-col { box-shadow: inset 2px 0 0 #f59e0b, inset -2px 0 0 #f59e0b, inset 0 2px 0 #f59e0b; }
 </style>
