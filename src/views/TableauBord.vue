@@ -243,8 +243,14 @@ const annees = computed(() => {
   return [...s].sort((a, b) => b - a)
 })
 
-function formeDe(desig) {
-  const d = (desig || '').toLowerCase()
+function formeDe(p) {
+  // 1) d'après la GAMME de fabrication (le vrai procédé)
+  const g = (p && Array.isArray(p.gamme)) ? p.gamme.map(x => (x || '').toLowerCase()) : []
+  if (g.some(x => /g[ée]lule|remplis|encapsul/.test(x))) return 'Gélule'
+  if (g.some(x => /compress|compri/.test(x))) return 'Comprimé'
+  if (g.some(x => /pellicul/.test(x))) return 'Comprimé'
+  // 2) sinon d'après la désignation
+  const d = ((p && p.designation) || '').toLowerCase()
   if (/g[ée]lule|caps/.test(d)) return 'Gélule'
   if (/comprim|\bcp\b|\bc\.?p\.?\b|pellicul|dispers|effervesc|\bcpr?\b/.test(d)) return 'Comprimé'
   if (/sachet|poudre|granul/.test(d)) return 'Sachet / Poudre'
@@ -256,7 +262,7 @@ function formeDe(desig) {
 function cleProduit(p) {
   if (!p) return null
   if (grp.value === 'lab') return (p.donneurs_ordre && p.donneurs_ordre.nom) || 'Non attribué'
-  if (grp.value === 'forme') return formeDe(p.designation)
+  if (grp.value === 'forme') return formeDe(p)
   if (grp.value === 'produit') return (p.code_pf || '?') + ' — ' + (p.designation || '')
   return null
 }
