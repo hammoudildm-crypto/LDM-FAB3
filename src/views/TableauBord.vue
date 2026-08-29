@@ -412,4 +412,5 @@ const tauxGlobalMois = computed(() => totPlanMois.value > 0 ? Math.round(totBoit
 .tb-table tbody td { padding: 4px 10px; font-size: 11px; }
 .tb-table tfoot .tot td { padding: 5px 10px; }
 .tb-empty { padding: 18px; font-size: 12px; }
+.tb { zoom: 0.85; }
 </style>
