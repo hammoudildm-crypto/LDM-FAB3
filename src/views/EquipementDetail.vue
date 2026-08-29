@@ -228,6 +228,32 @@ const occupationRestante = computed(() => {
   return { boitesRestantes, chargeJ, jrsRest, taux: capaRest > 0 ? chargeJ / jrsRest : 0 }
 })
 
+// --- Occupation réalisée (ce qui a été fabriqué depuis le début de l'année) ---
+function joursOuvresEcoules() {
+  const auj = new Date(); auj.setHours(0, 0, 0, 0)
+  const debut = new Date(annee.value, 0, 1)
+  let fin = auj
+  if (auj.getFullYear() > annee.value) fin = new Date(annee.value, 11, 31)
+  if (auj.getFullYear() < annee.value) return 0
+  const facteurWE = reg4Regime.value ? 1 : (weRegime.value ? Math.min(1, 2 / (postesEquip.value || 3)) : 0)
+  let d = new Date(debut); let n = 0
+  while (d <= fin) { const wd = d.getDay(); if (wd === 0 || wd === 6) n += facteurWE; else n += 1; d = new Date(d.getTime() + 86400000) }
+  return n
+}
+const occupationRealisee = computed(() => {
+  let heures = 0, boitesRealisees = 0
+  for (const p of produits.value) {
+    const cad = cadenceGroupe(p.id); if (cad <= 0) continue
+    const realB = realiseParProduit.value[p.id] || 0
+    if (realB <= 0) continue
+    boitesRealisees += realB
+    heures += heuresProduit(p.id, realB).total
+  }
+  const chargeJ = (postesEquip.value * 8 * nbMachines.value) > 0 ? heures / (postesEquip.value * 8 * nbMachines.value) : 0
+  const jrsEcoules = joursOuvresEcoules()
+  return { boitesRealisees, chargeJ, jrsEcoules, taux: jrsEcoules > 0 ? chargeJ / jrsEcoules : 0 }
+})
+
 function pct(v) { return (v * 100).toFixed(1) }
 function clsTaux(t) { if (t > 1) return 'x'; if (t > 0.9) return 'r'; if (t >= 0.7) return 'a'; return 'g' }
 function retour() { router.push({ path: '/capacite' }) }
@@ -323,6 +349,17 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
       </div>
 
       <!-- Occupation restante détaillée -->
+      <section class="ed-card">
+        <h2 class="ed-ct">📅 Occupation réalisée — depuis le début de l'année</h2>
+        <div class="ed-occ">
+          <div class="ed-occ-b"><div class="ed-occ-v">{{ Math.round(occupationRealisee.boitesRealisees).toLocaleString('fr-FR') }}</div><div class="ed-occ-l">Boîtes fabriquées</div></div>
+          <div class="ed-occ-b"><div class="ed-occ-v">{{ occupationRealisee.chargeJ.toFixed(1) }} j</div><div class="ed-occ-l">Charge réalisée (machine)</div></div>
+          <div class="ed-occ-b"><div class="ed-occ-v">{{ Math.round(occupationRealisee.jrsEcoules) }} j</div><div class="ed-occ-l">Jours ouvrés écoulés</div></div>
+          <div class="ed-occ-b hi"><div class="ed-occ-v" :class="'t-' + clsTaux(occupationRealisee.taux)">{{ pct(occupationRealisee.taux) }} %</div><div class="ed-occ-l">Taux d'occupation réalisé</div></div>
+        </div>
+        <div class="ed-occ-bar"><div class="ed-occ-fill" :class="'t-' + clsTaux(occupationRealisee.taux)" :style="{ width: Math.min(100, occupationRealisee.taux * 100) + '%' }"></div></div>
+      </section>
+
       <section class="ed-card">
         <h2 class="ed-ct">📅 Occupation prévisionnelle — reste de l'année</h2>
         <div class="ed-occ">
