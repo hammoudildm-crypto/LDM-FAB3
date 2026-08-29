@@ -322,8 +322,7 @@ async function devalider(l) {
 
 <template>
   <div class="vd-page">
-    <PageHeader title="Vérification des dossiers de lot" tone="violet"
-      subtitle="Suivi de la vérification des DDL de fabrication par vérificateur">
+    <PageHeader title="Vérification des dossiers de lot" tone="violet">
       <label class="annee-sel">Année
         <select v-model.number="anneeSel">
           <option :value="0">Toutes</option>
