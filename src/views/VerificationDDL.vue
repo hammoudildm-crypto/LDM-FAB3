@@ -825,4 +825,5 @@ table.mini tbody tr:hover td { background: #faf9fe; }
 tr.ddl-triage .cell-verif { background: #fffbeb; }
 .btn-verif { border: 1px solid #0f766e; background: #0f766e; color: #fff; font: inherit; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
 .btn-verif:hover { background: #0d5c55; }
+.vd-page { zoom: 0.82; }
 </style>
