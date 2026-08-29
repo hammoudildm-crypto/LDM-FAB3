@@ -451,8 +451,8 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
         :value-format="v => v == null ? '' : (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? Math.round(v / 1e3) + 'K' : String(v))"
         :series="[
           { label: 'Plan', color: '#94a3b8', data: planParMois, dash: true },
-          { label: 'Fabrication', color: '#0f766e', data: fabParMois },
-          { label: 'Conditionnement', color: '#2563eb', data: condParMois }
+          { label: 'Fabrication', color: '#059669', data: fabParMois },
+          { label: 'Conditionnement', color: '#0284c7', data: condParMois }
         ]" />
     </section>
 
