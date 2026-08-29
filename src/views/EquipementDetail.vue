@@ -130,6 +130,9 @@ const arretsGroupe = computed(() => {
 
 // --- Plan / réalisé par produit ---
 const planParProduit = computed(() => { const m = {}; for (const r of plan.value) m[r.produit_id] = (m[r.produit_id] || 0) + num(r.quantite_planifiee); return m })
+const planTotalAtelier = computed(() => { let t = 0; for (const p of produits.value) { if (cadenceGroupe(p.id) <= 0) continue; t += planParProduit.value[p.id] || 0 } return t })
+const fabPlusRestant = computed(() => occupationRealisee.value.boitesRealisees + occupationRestante.value.boitesRestantes)
+const surProduction = computed(() => Math.max(0, fabPlusRestant.value - planTotalAtelier.value))
 const planParProduitMois = computed(() => { const m = {}; for (const r of plan.value) { const pid = r.produit_id, mo = num(r.mois) - 1; if (!m[pid]) m[pid] = Array(12).fill(0); if (mo >= 0 && mo < 12) m[pid][mo] += num(r.quantite_planifiee) } return m })
 const postesEquip = computed(() => { if (postesRegime.value > 0) return postesRegime.value; const e = equipsGroupe.value[0] || {}; return num(e.postes, 3) })
 const regimeLabel = computed(() => { if (reg4Regime.value) return '4×8 · 24/7'; const po = postesEquip.value; const base = po >= 3 ? '3×8' : (po === 2 ? '2×8' : '1×8'); return weRegime.value ? base + ' + WE' : base })
@@ -359,6 +362,13 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
       </div>
 
       <!-- Occupation restante détaillée -->
+      <section class="ed-card ed-plan-banner">
+        <div class="ed-plan-row"><span class="ed-plan-lbl">📋 Plan total 2026 (atelier)</span><span class="ed-plan-val">{{ Math.round(planTotalAtelier).toLocaleString('fr-FR') }} boîtes</span></div>
+        <div class="ed-plan-row"><span class="ed-plan-lbl">Fabriquées + restantes</span><span class="ed-plan-val" :class="{ 'ed-plan-over': surProduction > 0 }">{{ Math.round(fabPlusRestant).toLocaleString('fr-FR') }} boîtes</span></div>
+        <p v-if="surProduction > 0" class="ed-alert">⚠️ Dépasse le plan de {{ Math.round(surProduction).toLocaleString('fr-FR') }} boîtes → sur-production sur certains produits (réalisé &gt; plan).</p>
+        <p v-else class="ed-plan-ok">✓ Cohérent : fabriquées + restantes = plan total 2026.</p>
+      </section>
+
       <section class="ed-card">
         <h2 class="ed-ct">📅 Occupation réalisée — depuis le début de l'année</h2>
         <div class="ed-occ">
@@ -513,4 +523,10 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
 @media (max-width: 860px) { .ed-grid { grid-template-columns: 1fr; } .ed-kpis, .ed-occ { flex-wrap: wrap; } .ed-kpi, .ed-occ-b { flex-basis: 46%; } }
 .ed-mcol.ed-passe .ed-mbar { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.35) 0 3px, transparent 3px 6px); }
 .ed-mcol.ed-passe .ed-mm { font-weight: 800; }
+.ed-plan-banner { padding: 12px 16px; }
+.ed-plan-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; gap: 12px; }
+.ed-plan-lbl { font-size: 12px; color: #64748b; font-weight: 700; }
+.ed-plan-val { font-size: 15px; font-weight: 800; color: #1b2733; white-space: nowrap; }
+.ed-plan-over { color: #dc2626; }
+.ed-plan-ok { color: #16a34a; font-size: 12px; font-weight: 600; margin: 6px 0 0; }
 </style>
