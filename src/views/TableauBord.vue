@@ -164,7 +164,13 @@ function phaseDeType(t) {
 function phaseDeEq(e) { return phaseDeType(e.type) || phaseDeType(e.nom) || phaseDeType(e.code) }
 function siteDeCode(code) { const c = (code || '').toUpperCase(); if (c.startsWith('PRH')) return 'hormonal'; if (c === 'PR054') return 'semi'; return 'seche' }
 // Mêmes équipements que Suivi de capacité (Forme sèche) : référentiel + phase reconnue + site sèche
-const equipRefNoms = computed(() => new Set(equipRef.value.filter(e => phaseDeEq(e) && siteDeCode(e.code) === 'seche').map(e => (e.nom || '').trim())))
+const equipRefNoms = computed(() => {
+  const all = equipRef.value
+  if (!all.length) return null                    // référentiel non chargé -> pas de filtre
+  const filtres = all.filter(e => phaseDeEq(e) && siteDeCode(e.code) === 'seche')
+  const base = filtres.length ? filtres : all      // si le filtre vide tout -> tous les équipements du référentiel
+  return new Set(base.map(e => (e.nom || '').trim()))
+})
 const equipsByOf = computed(() => {
   const m = {}
   for (const sp of suiviRaw.value) {
@@ -304,7 +310,7 @@ const donnees = computed(() => {
     } else if (parEquipFab) {
       const eqs = equipsByOf.value[r.id]
       if (!eqs || !eqs.size) continue
-      for (const nom of eqs) { if (equipRefNoms.value.has((nom || '').trim())) add(nom, b, t, pc, mo) }
+      for (const nom of eqs) { if (!equipRefNoms.value || equipRefNoms.value.has((nom || '').trim())) add(nom, b, t, pc, mo) }
     } else {
       if (onglet.value === 'cond' && grp.value === 'equip' && estFabType(r.equipType)) continue
       add(cleGroupe(r), b, t, pc, mo)
