@@ -337,7 +337,13 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 
 <template>
   <div class="rp-page">
-    <PageHeader title="Réalisation vs Plan" tone="teal" />
+    <PageHeader title="Réalisation vs Plan" tone="teal">
+      <label class="annee-sel">
+        <select v-model.number="anneeSel">
+          <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
+        </select>
+      </label>
+    </PageHeader>
 
     <p v-if="msg" class="alert">{{ msg }}</p>
 
@@ -880,7 +886,7 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .kpi:has(.antic-tag) { border-top: 3px solid #f59e0b; }
 
 /* ===== Compact : tient jusqu'au graphe ===== */
-.rp-page { zoom: 0.82; }
+.rp-page { zoom: 0.75; }
 .rp-cockpit { padding: 13px 24px; margin-bottom: 12px; }
 .rp-ck-metrics { gap: 9px; }
 .rp-ck-num { font-size: 28px; }
