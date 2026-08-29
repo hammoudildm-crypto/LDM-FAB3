@@ -38,7 +38,7 @@
     <!-- Regroupement -->
     <div class="tb-grp">
       <span class="grp-lbl">Regrouper par :</span>
-      <button v-for="g in groupes" :key="g.k" type="button" :class="{ on: grp === g.k }" @click="grp = g.k">{{ (onglet === 'fab' && g.k === 'equip') ? 'Phase' : g.lbl }}</button>
+      <button v-for="g in groupes" :key="g.k" type="button" :class="{ on: grp === g.k }" @click="grp = g.k">{{ g.lbl }}</button>
     </div>
 
     <!-- Tableau -->
@@ -126,7 +126,7 @@ const groupes = [
   { k: 'produit', lbl: 'Produit' }, { k: 'equip', lbl: 'Équipement' }
 ]
 const LIB = { lab: 'Laboratoire', forme: 'Forme galénique', produit: 'Produit', equip: 'Équipement' }
-const libGroupe = computed(() => (onglet.value === 'fab' && grp.value === 'equip') ? 'Phase' : LIB[grp.value])
+const libGroupe = computed(() => LIB[grp.value])
 const phasesByOf = computed(() => {
   const m = {}
   for (const sp of suiviRaw.value) {
@@ -207,7 +207,7 @@ function cleProduit(p) {
 function cleGroupe(r) { return grp.value === 'equip' ? (r.equip || 'Non attribué') : (cleProduit(r.produit) || 'Non attribué') }
 const planParGroupe = computed(() => {
   const acc = {}
-  const parPhase = onglet.value === 'fab' && grp.value === 'equip'
+  const parPhase = false  // Fabrication regroupée par machine (équipement de l'OF), pas par phase
   for (const r of planRaw.value) {
     if (Number(r.annee) !== annee.value) continue
     if (parPhase) {
@@ -231,7 +231,7 @@ const planParGroupe = computed(() => {
 const donnees = computed(() => {
   const src = onglet.value === 'fab' ? fabData.value : condData.value
   const acc = {}
-  const parPhase = onglet.value === 'fab' && grp.value === 'equip'
+  const parPhase = false  // Fabrication regroupée par machine (équipement de l'OF), pas par phase
   const add = (cle, b, t, pc) => { if (!acc[cle]) acc[cle] = { cle, boites: 0, lots: 0, ca: 0 }; acc[cle].boites += b; acc[cle].lots += t > 0 ? b / t : 0; acc[cle].ca += b * pc }
   for (const r of src) {
     if (!r.produit || !(num(r.boites) > 0)) continue
