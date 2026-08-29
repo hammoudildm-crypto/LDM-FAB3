@@ -627,4 +627,10 @@ table.grid tbody tr:hover td { background: #eef6f5; }
 .pa-row2 > .card table.grid tbody tr { cursor: pointer; }
 .at-row-active .at-name { color: #0f766e; font-weight: 800; box-shadow: inset 3px 0 0 #0f766e; }
 .at-row-active td { background: #f0fdfa !important; }
+
+/* ===== Aligner les deux tableaux au même niveau ===== */
+.pa-row2 .card-head, .pa-row2 .proj-head { min-height: 26px; margin-bottom: 12px; align-items: center; }
+.pa-row2 table.grid thead th, .pa-row2 .proj-table thead th { height: 30px; box-sizing: border-box; vertical-align: bottom; padding-top: 2px; padding-bottom: 4px; }
+.pa-row2 table.grid tbody td, .pa-row2 .proj-table tbody td { height: 20px; box-sizing: border-box; padding-top: 2px; padding-bottom: 2px; }
+.pa-row2 table.grid tfoot td, .pa-row2 .proj-table tfoot td { height: 20px; box-sizing: border-box; }
 </style>
