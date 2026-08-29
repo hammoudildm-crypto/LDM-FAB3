@@ -633,7 +633,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .proj-table th { text-align: left; font-size: 8.5px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; padding: 3px 5px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
 .proj-table td { padding: 2px 5px; border-bottom: 1px solid #f1f5f9; }
 .proj-table .ta-r { text-align: right; font-variant-numeric: tabular-nums; }
-.proj-at { font-weight: 600; color: #1a2233; font-size: 11px; }
+.proj-at { font-weight: 600; color: #1a2233; font-size: 11px; white-space: nowrap; }
 .proj-val { font-weight: 800; color: #0f766e; }
 .proj-reste { color: #475569; }
 .proj-on { background: #f0fdfa; }
@@ -674,7 +674,7 @@ table.grid tbody tr:hover td { background: #eef6f5; }
 .pa-row2 table.grid thead, .pa-row2 .proj-table thead { display: table-header-group; }
 .pa-row2 table.grid thead th, .pa-row2 .proj-table thead th { height: 34px; box-sizing: border-box; vertical-align: bottom; padding-top: 0; padding-bottom: 5px; line-height: 1.1; }
 .pa-row2 table.grid tbody tr, .pa-row2 .proj-table tbody tr { height: 23px; }
-.pa-row2 table.grid tbody td, .pa-row2 .proj-table tbody td { height: 23px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; line-height: 23px; vertical-align: middle; }
+.pa-row2 table.grid tbody td, .pa-row2 .proj-table tbody td { height: 23px; max-height: 23px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; line-height: 23px; vertical-align: middle; white-space: nowrap; overflow: hidden; }
 .pa-row2 table.grid tfoot td, .pa-row2 .proj-table tfoot td { height: 23px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; line-height: 23px; }
 th.mois-actuel-col { background: #fef3c7; color: #b45309; font-weight: 800; }
 td.mois-actuel-col { box-shadow: inset 2px 0 0 #f59e0b, inset -2px 0 0 #f59e0b; }
