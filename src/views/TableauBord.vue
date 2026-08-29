@@ -328,7 +328,7 @@ const tauxGlobalMois = computed(() => totPlanMois.value > 0 ? Math.round(totBoit
 </script>
 
 <style scoped>
-.tb { padding: 26px 34px 50px; max-width: 1180px; margin: 0 auto; color: #1e293b; font-family: 'Segoe UI', system-ui, sans-serif; }
+.tb { padding: 26px 34px 50px; max-width: 1600px; margin: 0 auto; color: #1e293b; font-family: 'Segoe UI', system-ui, sans-serif; }
 .tb-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
 .tb-title { margin: 0; font-size: 24px; font-weight: 800; color: #0f172a; }
 .tb-sub { margin: 4px 0 0; font-size: 13px; color: #64748b; }
@@ -412,5 +412,5 @@ const tauxGlobalMois = computed(() => totPlanMois.value > 0 ? Math.round(totBoit
 .tb-table tbody td { padding: 4px 10px; font-size: 11px; }
 .tb-table tfoot .tot td { padding: 5px 10px; }
 .tb-empty { padding: 18px; font-size: 12px; }
-.tb { zoom: 0.85; }
+.tb { zoom: 0.75; }
 </style>
