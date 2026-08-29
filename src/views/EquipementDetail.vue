@@ -163,11 +163,14 @@ const detailMois = computed(() => {
   const rows = []
   for (const p of produits.value) {
     const cad = cadenceGroupe(p.id); if (cad <= 0) continue
-    const planB = passe ? ((realiseParProduitMois.value[p.id] || [])[mo] || 0) : ((planParProduitMois.value[p.id] || [])[mo] || 0)
-    if (planB <= 0) continue
+    const brut = passe ? ((realiseParProduitMois.value[p.id] || [])[mo] || 0) : ((planParProduitMois.value[p.id] || [])[mo] || 0)
+    if (brut <= 0) continue
     const tl = num(p.taille_lot)
+    const lotsArr = tl > 0 ? Math.round(brut / tl) : 0            // lots arrondis (entiers)
+    const planB = tl > 0 ? lotsArr * tl : brut                    // quantité théorique = lots entiers × taille de lot
+    if (planB <= 0) continue
     const h = heuresProduit(p.id, planB)
-    rows.push({ code: p.code_pf, desig: p.designation, plan: planB, lots: tl > 0 ? planB / tl : 0, tl, plk: poidsLot(p), cad, hParLot: cad > 0 ? poidsLot(p) / cad : 0, prod: h.prod, nett: h.nett, heures: h.total })
+    rows.push({ code: p.code_pf, desig: p.designation, plan: planB, lots: lotsArr, tl, plk: poidsLot(p), cad, hParLot: cad > 0 ? poidsLot(p) / cad : 0, prod: h.prod, nett: h.nett, heures: h.total })
   }
   rows.sort((a, b) => b.heures - a.heures)
   const totalH = rows.reduce((a, r) => a + r.heures, 0)
@@ -396,7 +399,7 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
               <tr v-for="r in detailMois.rows" :key="r.code">
                 <td><b class="ed-plien" @click="ouvrirProduit(r.code)" title="Vérifier la fiche produit (Référentiels)">{{ r.code }}</b><span class="ed-pdesig"> — {{ r.desig }}</span></td>
                 <td class="r">{{ r.plan.toLocaleString('fr-FR') }}</td>
-                <td class="r">{{ r.lots.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
+                <td class="r">{{ r.lots.toLocaleString('fr-FR') }}</td>
                 <td class="r">{{ r.tl.toLocaleString('fr-FR') }}</td>
                 <td class="r">{{ r.plk.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }}</td>
                 <td class="r">{{ r.cad.toLocaleString('fr-FR') }}</td>
