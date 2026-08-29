@@ -407,10 +407,11 @@ async function devalider(l) {
         <div class="v3-mid-scroll">
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <table v-else class="mini">
-          <thead><tr><th>Lot</th><th>Produit</th><th>Réserver</th><th class="right">Fin fab.</th><th class="right">Attente</th><th class="th-verif"></th></tr></thead>
+          <thead><tr><th class="th-verif"></th><th>Lot</th><th>Produit</th><th>Réserver</th><th class="right">Fin fab.</th><th class="right">Attente</th></tr></thead>
           <tbody>
             <template v-for="l in attente" :key="l.id">
               <tr :class="{ 'ddl-triage': triageIds.has(l.id) }">
+                <td class="cell-verif"><button v-if="peutEditer" class="btn-verif" @click="ouvrir(l)">Vérifier</button></td>
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td class="desig">{{ prodNom(l) }}</td>
                 <td>
@@ -422,7 +423,6 @@ async function devalider(l) {
                 </td>
                 <td class="right nowrap">{{ fmtDate(dateDDL(l)) }}</td>
                 <td class="right nowrap" :class="clsAttente(l)" style="font-weight:800">{{ dureeAttente(l) }}</td>
-                <td class="cell-verif"><button v-if="peutEditer" class="btn-verif" @click="ouvrir(l)">Vérifier</button></td>
               </tr>
               <tr v-if="verifEnCours === l.id">
                 <td colspan="6">
@@ -649,7 +649,7 @@ table.mini td { padding: 3px 5px; }
 .verif-form select { min-width: 180px; }
 .btn-filtre { font-size: 11px; padding: 5px 9px; }
 .sup-opt { font-size: 11px; padding: 4px 7px; }
-.resv-sel { font-size: 11px; padding: 3px 4px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; width: 92px; max-width: 92px; }
+.resv-sel { font-size: 10px; padding: 3px 3px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; width: 74px; max-width: 74px; }
 .plan-ddl .pddl-grid { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .pddl-row { display: flex; justify-content: space-between; align-items: center; }
 .pddl-lbl { font-size: 11px; color: #64748b; }
@@ -822,7 +822,7 @@ table.mini tbody tr:hover td { background: #faf9fe; }
 .att-ok { color: #16a34a; }
 .att-warn { color: #d97706; }
 .att-bad { color: #dc2626; }
-.cell-verif, .th-verif { position: sticky; right: 0; z-index: 1; background: #fff; box-shadow: -3px 0 5px -3px rgba(0,0,0,.12); text-align: center; }
+.cell-verif, .th-verif { position: sticky; left: 0; z-index: 1; background: #fff; box-shadow: 3px 0 5px -3px rgba(0,0,0,.12); text-align: center; padding-left: 2px; }
 tr.ddl-triage .cell-verif { background: #fffbeb; }
 .btn-verif { border: 1px solid #0f766e; background: #0f766e; color: #fff; font: inherit; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
 .btn-verif:hover { background: #0d5c55; }
