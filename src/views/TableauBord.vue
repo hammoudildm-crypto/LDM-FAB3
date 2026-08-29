@@ -52,6 +52,8 @@
             <th class="num">Plan</th>
             <th class="num">{{ onglet === 'fab' ? 'Fabriqué' : 'Conditionné' }}</th>
             <th class="num">Taux</th>
+            <th class="num">Réalisé (mois)</th>
+            <th class="num">Taux (mois)</th>
             <th class="num">Lots</th>
             <th class="num">Chiffre d'affaires</th>
           </tr>
@@ -62,6 +64,8 @@
             <td class="num">{{ r.plan ? fmt(r.plan) : '—' }}</td>
             <td class="num">{{ fmt(r.boites) }}</td>
             <td class="num"><span v-if="r.taux != null" class="taux" :class="r.taux >= 100 ? 'ok' : 'bas'">{{ r.taux }}%</span><span v-else class="muted">—</span></td>
+            <td class="num">{{ r.boitesMois ? fmt(r.boitesMois) : '—' }}</td>
+            <td class="num"><span v-if="r.tauxMois != null" class="taux" :class="r.tauxMois >= 100 ? 'ok' : 'bas'">{{ r.tauxMois }}%</span><span v-else class="muted">—</span></td>
             <td class="num">{{ fmt(r.lots) }}</td>
             <td class="num ca">{{ fmtCA(r.ca) }}</td>
           </tr>
@@ -72,6 +76,8 @@
             <td class="num">{{ totPlan ? fmt(totPlan) : '—' }}</td>
             <td class="num">{{ fmt(totBoites) }}</td>
             <td class="num">{{ tauxGlobal != null ? tauxGlobal + '%' : '—' }}</td>
+            <td class="num">{{ totBoitesMois ? fmt(totBoitesMois) : '—' }}</td>
+            <td class="num">{{ tauxGlobalMois != null ? tauxGlobalMois + '%' : '—' }}</td>
             <td class="num">{{ fmt(totLots) }}</td>
             <td class="num ca">{{ fmtCA(totCA) }}</td>
           </tr>
@@ -174,14 +180,14 @@ const anYear = (d) => d ? new Date(d).getFullYear() : null
 const fabData = computed(() => {
   const arr = fabRaw.value
     .filter(o => o.date_fin_fabrication && anYear(o.date_fin_fabrication) === annee.value)
-    .map(o => ({ id: o.id, lot: o.numero_lot, equip: o.equipements ? o.equipements.nom : null, boites: o.boites_fabriquees, produit: o.produits }))
+    .map(o => ({ id: o.id, lot: o.numero_lot, equip: o.equipements ? o.equipements.nom : null, boites: o.boites_fabriquees, produit: o.produits, mois: anMonth(o.date_fin_fabrication) }))
   // Produits « direct conditionnement » (sans fabrication) : conditionné compté comme fabriqué
   for (const c of condRaw.value) {
     const of = c.ordres_fabrication
     if (!of || of.date_fin_fabrication) continue
     if (!c.date_conditionnement || anYear(c.date_conditionnement) !== annee.value) continue
     const p = of.produits; const upb = p ? num(p.unites_par_boite) : 0
-    arr.push({ id: null, lot: of.numero_lot, equip: c.equipements ? c.equipements.nom : null, boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p })
+    arr.push({ id: null, lot: of.numero_lot, equip: c.equipements ? c.equipements.nom : null, boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p, mois: anMonth(c.date_conditionnement) })
   }
   return arr
 })
@@ -191,7 +197,7 @@ const condData = computed(() => condRaw.value
   .map(c => {
     const of = c.ordres_fabrication; const p = of ? of.produits : null
     const upb = p ? num(p.unites_par_boite) : 0
-    return { lot: of ? of.numero_lot : null, equip: c.equipements ? c.equipements.nom : null, equipType: c.equipements ? c.equipements.type : null, boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p }
+    return { lot: of ? of.numero_lot : null, equip: c.equipements ? c.equipements.nom : null, equipType: c.equipements ? c.equipements.type : null, boites: upb > 0 ? Math.floor(num(c.quantite_conditionnee) / upb) : 0, produit: p, mois: anMonth(c.date_conditionnement) }
   }))
 
 const annees = computed(() => {
@@ -220,54 +226,75 @@ function cleProduit(p) {
   return null
 }
 function cleGroupe(r) { return grp.value === 'equip' ? (r.equip || 'Non attribué') : (cleProduit(r.produit) || 'Non attribué') }
-const planParGroupe = computed(() => {
+const machinesParProduit = computed(() => {
+  const m = {}
+  for (const o of fabRaw.value) {
+    const code = o.produits ? o.produits.code_pf : null
+    const eqs = equipsByOf.value[o.id]
+    if (!code || !eqs) continue
+    if (!m[code]) m[code] = new Set()
+    for (const nom of eqs) m[code].add(nom)
+  }
+  return m
+})
+function planAgg(moisFiltre) {
   const acc = {}
   const parPhase = onglet.value === 'fab' && grp.value === 'phase'
+  const parEquipFab = onglet.value === 'fab' && grp.value === 'equip'
+  const machP = machinesParProduit.value
   for (const r of planRaw.value) {
     if (Number(r.annee) !== annee.value) continue
+    if (moisFiltre != null && Number(r.mois) !== moisFiltre) continue
+    const q = num(r.quantite_planifiee)
     if (parPhase) {
       const p = r.produits; if (!p) continue
       const gamme = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : []
       const seen = new Set()
-      for (const phn of gamme) { const k = phaseKey(phn); if (!k || k === 'conditionnement' || seen.has(k)) continue; seen.add(k)
-        const cle = PHASE_LBL[k] || k
-        acc[cle] = (acc[cle] || 0) + num(r.quantite_planifiee)
-      }
+      for (const phn of gamme) { const k = phaseKey(phn); if (!k || k === 'conditionnement' || seen.has(k)) continue; seen.add(k); const cle = PHASE_LBL[k] || k; acc[cle] = (acc[cle] || 0) + q }
+    } else if (parEquipFab) {
+      const code = r.produits ? r.produits.code_pf : null
+      const machs = code ? machP[code] : null
+      if (!machs || !machs.size) { acc['Non attribué (fab)'] = (acc['Non attribué (fab)'] || 0) + q; continue }
+      for (const nom of machs) acc[nom] = (acc[nom] || 0) + q
     } else {
       const cle = grp.value === 'equip' ? (r.equipements ? r.equipements.nom : null) : cleProduit(r.produits)
       if (cle == null) continue
       if (onglet.value === 'cond' && grp.value === 'equip' && r.equipements && estFabType(r.equipements.type)) continue
-      acc[cle] = (acc[cle] || 0) + num(r.quantite_planifiee)
+      acc[cle] = (acc[cle] || 0) + q
     }
   }
   return acc
-})
+}
+const planParGroupe = computed(() => planAgg(null))
+const planParGroupeMois = computed(() => planAgg(moisCourant))
 
 const donnees = computed(() => {
   const src = onglet.value === 'fab' ? fabData.value : condData.value
   const acc = {}
   const parPhase = onglet.value === 'fab' && grp.value === 'phase'
   const parEquipFab = onglet.value === 'fab' && grp.value === 'equip'
-  const add = (cle, b, t, pc) => { if (!acc[cle]) acc[cle] = { cle, boites: 0, lots: 0, ca: 0 }; acc[cle].boites += b; acc[cle].lots += t > 0 ? b / t : 0; acc[cle].ca += b * pc }
+  const add = (cle, b, t, pc, mo) => { if (!acc[cle]) acc[cle] = { cle, boites: 0, boitesMois: 0, lots: 0, ca: 0 }; acc[cle].boites += b; if (mo === moisCourant) acc[cle].boitesMois += b; acc[cle].lots += t > 0 ? b / t : 0; acc[cle].ca += b * pc }
   for (const r of src) {
     if (!r.produit || !(num(r.boites) > 0)) continue
-    const b = num(r.boites), t = num(r.produit.taille_lot), pc = num(r.produit.pcsu)
+    const b = num(r.boites), t = num(r.produit.taille_lot), pc = num(r.produit.pcsu), mo = r.mois
     if (parPhase) {
       const phs = phasesByOf.value[r.id]; if (!phs) continue
-      for (const k of phs) add(PHASE_LBL[k] || k, b, t, pc)
+      for (const k of phs) add(PHASE_LBL[k] || k, b, t, pc, mo)
     } else if (parEquipFab) {
       const eqs = equipsByOf.value[r.id]
-      if (!eqs || !eqs.size) { add('Non attribué (fab)', b, t, pc); continue }
-      for (const nom of eqs) add(nom, b, t, pc)
+      if (!eqs || !eqs.size) { add('Non attribué (fab)', b, t, pc, mo); continue }
+      for (const nom of eqs) add(nom, b, t, pc, mo)
     } else {
       if (onglet.value === 'cond' && grp.value === 'equip' && estFabType(r.equipType)) continue
-      add(cleGroupe(r), b, t, pc)
+      add(cleGroupe(r), b, t, pc, mo)
     }
   }
   const pg = planParGroupe.value
+  const pgm = planParGroupeMois.value
   return Object.values(acc).map(g => {
     const plan = pg[g.cle] || 0
-    return { ...g, lots: Math.round(g.lots), plan, taux: plan > 0 ? Math.round(g.boites / plan * 100) : null }
+    const planMois = pgm[g.cle] || 0
+    return { ...g, lots: Math.round(g.lots), plan, taux: plan > 0 ? Math.round(g.boites / plan * 100) : null, planMois, tauxMois: planMois > 0 ? Math.round(g.boitesMois / planMois * 100) : null }
   }).sort((a, b) => b.boites - a.boites)
 })
 
