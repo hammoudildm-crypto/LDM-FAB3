@@ -156,13 +156,14 @@ const moisSel = ref(route.query.mois != null && route.query.mois !== '' ? Number
 const detailMois = computed(() => {
   if (moisSel.value == null) return null
   const mo = moisSel.value
+  const passe = moisEstPasse(mo)
   const capaJour = postesEquip.value * 8 * nbMachines.value
   const jm = joursOuvresMoisN(mo)
   const capaMois = jm * capaJour
   const rows = []
   for (const p of produits.value) {
     const cad = cadenceGroupe(p.id); if (cad <= 0) continue
-    const planB = (planParProduitMois.value[p.id] || [])[mo] || 0
+    const planB = passe ? ((realiseParProduitMois.value[p.id] || [])[mo] || 0) : ((planParProduitMois.value[p.id] || [])[mo] || 0)
     if (planB <= 0) continue
     const tl = num(p.taille_lot)
     const h = heuresProduit(p.id, planB)
@@ -174,7 +175,7 @@ const detailMois = computed(() => {
   const totalNett = rows.reduce((a, r) => a + r.nett, 0)
   const totalPlan = rows.reduce((a, r) => a + r.plan, 0)
   const totalLots = rows.reduce((a, r) => a + r.lots, 0)
-  return { mo, label: MOIS[mo], rows, totalH, totalProd, totalNett, totalPlan, totalLots, capaMois, jm, taux: capaMois > 0 ? totalH / capaMois : 0 }
+  return { mo, label: MOIS[mo], rows, totalH, totalProd, totalNett, totalPlan, totalLots, capaMois, jm, passe, taux: capaMois > 0 ? totalH / capaMois : 0 }
 })
 const realiseParProduit = computed(() => {
   const m = {}
@@ -390,7 +391,7 @@ function ouvrirProduit(code) { if (code) router.push({ path: '/referentiels', qu
           </div>
           <p class="ed-mod-s"><b>{{ Math.round(detailMois.totalH) }} h</b> = {{ Math.round(detailMois.totalProd) }} h production + {{ Math.round(detailMois.totalNett) }} h nettoyage (VDLP/VDLT/réglage) · capacité {{ Math.round(detailMois.jm) }} j × {{ postesEquip * 8 }} h × {{ nbMachines }} machine(s) = {{ Math.round(detailMois.capaMois) }} h</p>
           <table v-if="detailMois.rows.length" class="ed-tbl">
-            <thead><tr><th>Produit</th><th class="r">Plan (bts)</th><th class="r">Lots</th><th class="r">Taille lot (bts)</th><th class="r">Poids lot (kg)</th><th class="r">Cadence</th><th class="r">h / lot</th><th class="r">Prod (h)</th><th class="r">Nett (h)</th><th class="r">Total (h)</th><th class="r">Part</th></tr></thead>
+            <thead><tr><th>Produit</th><th class="r">{{ detailMois.passe ? 'Réalisé (bts)' : 'Plan (bts)' }}</th><th class="r">Lots</th><th class="r">Taille lot (bts)</th><th class="r">Poids lot (kg)</th><th class="r">Cadence</th><th class="r">h / lot</th><th class="r">Prod (h)</th><th class="r">Nett (h)</th><th class="r">Total (h)</th><th class="r">Part</th></tr></thead>
             <tbody>
               <tr v-for="r in detailMois.rows" :key="r.code">
                 <td><b class="ed-plien" @click="ouvrirProduit(r.code)" title="Vérifier la fiche produit (Référentiels)">{{ r.code }}</b><span class="ed-pdesig"> — {{ r.desig }}</span></td>
