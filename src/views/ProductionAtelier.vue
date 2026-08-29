@@ -398,7 +398,7 @@ onMounted(charger)
               </tr>
             </thead>
             <tbody>
-              <tr v-for="ph in PHASES" :key="ph" :class="{ cond: ph === 'Conditionnement' }">
+              <tr v-for="ph in PHASES" :key="ph" :class="{ cond: ph === 'Conditionnement', 'at-row-active': atelierSel === ph }" @click="atelierSel = ph" :title="'Afficher ' + ph + ' dans le graphe'">
                 <td class="at-name">{{ ph }}</td>
                 <td v-for="(n, i) in matrice[ph]" :key="i" class="num"
                     :style="n ? { background: 'rgba(15,118,110,' + (0.08 + intensite(n) * 0.55) + ')', color: intensite(n) > 0.6 ? '#fff' : '#0f5c54' } : null">
@@ -624,4 +624,7 @@ table.grid tbody tr:hover td { background: #eef6f5; }
 .pa-page { zoom: 0.72; }
 .pa-row2 > .card { flex: 1 1 0; }
 .pa-row2 > .proj-card { flex: 1.3 1 0; }
+.pa-row2 > .card table.grid tbody tr { cursor: pointer; }
+.at-row-active .at-name { color: #0f766e; font-weight: 800; box-shadow: inset 3px 0 0 #0f766e; }
+.at-row-active td { background: #f0fdfa !important; }
 </style>
