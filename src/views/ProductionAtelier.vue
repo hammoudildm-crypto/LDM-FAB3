@@ -10,6 +10,48 @@ const moisCourant = new Date().getMonth()   // 0-11
 function joursOuvresEntre(d1, d2) { let n = 0; const d = new Date(d1); d.setHours(0, 0, 0, 0); while (d <= d2) { const wd = d.getDay(); if (wd !== 0 && wd !== 6) n++; d.setDate(d.getDate() + 1) } return n }
 const joursEcoules = Math.max(1, joursOuvresEntre(new Date(new Date().getFullYear(), 0, 1), new Date()))
 const joursRestants = Math.max(1, joursOuvresEntre(new Date(), new Date(new Date().getFullYear(), 11, 31)))
+
+// --- Régime de travail par équipement (défini sur Suivi de capacité, stocké localement) ---
+const equipements = ref([])
+let regimeEquip = {}, reqEquip = {}
+try { regimeEquip = JSON.parse(localStorage.getItem('sc_reg_equip') || '{}') } catch (e) { /* ignore */ }
+try { reqEquip = JSON.parse(localStorage.getItem('sc_req_we') || '{}') } catch (e) { /* ignore */ }
+function phaseDeType(type) {
+  const t = (type || '').toLowerCase()
+  if (/pes[ée]|balance|bascule/.test(t)) return 'pesee'
+  if (/granul/.test(t)) return 'granulation'
+  if (/s[ée]ch/.test(t)) return 'sechage'
+  if (/mélang|melang/.test(t)) return 'melange'
+  if (/gélule|gelule|remplis|encapsul|capsul/.test(t)) return 'remplissage'
+  if (/compress|presse|compri/.test(t)) return 'compression'
+  if (/pellicul|enrob|coat|dragé|drage/.test(t)) return 'pelliculage'
+  if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)) return 'conditionnement'
+  return null
+}
+const PHASE_TO_KEYS = {
+  'Pesée': ['pesee'], 'Granulation et Séchage': ['granulation', 'sechage'], 'Mélange': ['melange'],
+  'Compression': ['compression'], 'Remplissage Gélules': ['remplissage'], 'Pelliculage': ['pelliculage'],
+  'Livraison Vrac': [], 'Conditionnement': ['conditionnement']
+}
+// Régime effectif d'une phase = le meilleur régime parmi ses équipements
+function regimePhase(ph) {
+  const keys = PHASE_TO_KEYS[ph] || []
+  if (!keys.length) return { postes: 3, we: false }
+  let maxPostes = 0, we = false, found = false
+  for (const e of equipements.value) {
+    const k = phaseDeType(e.type) || phaseDeType(e.nom) || phaseDeType(e.code)
+    if (!k || !keys.includes(k)) continue
+    found = true
+    const r = regimeEquip[e.id]
+    let postes = 3
+    if (r === '4') { postes = 3; we = true }
+    else if (r) postes = Number(r)
+    if (reqEquip[e.id]) we = true
+    if (postes > maxPostes) maxPostes = postes
+  }
+  return found ? { postes: maxPostes || 3, we } : { postes: 3, we: false }
+}
+function joursOuvresRegime(we, d1, d2) { let n = 0; const d = new Date(d1); d.setHours(0, 0, 0, 0); while (d <= d2) { const wd = d.getDay(); if (we || (wd !== 0 && wd !== 6)) n++; d.setDate(d.getDate() + 1) } return n }
 const ANNEES = []
 for (let a = anneeCourante - 4; a <= anneeCourante + 1; a++) ANNEES.push(a)
 const anneeSel = ref(anneeCourante)
@@ -62,6 +104,8 @@ async function charger() {
   const rpl = await fetchAllPaged(() => supabase.from('plan_production')
     .select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot)'))
   if (!rpl.error) planRows.value = rpl.data || []   // table absente -> on reste sur le temps réel
+  const req = await fetchAllPaged(() => supabase.from('equipements').select('id, nom, type, code').eq('actif', true))
+  if (!req.error) equipements.value = req.data || []
   chargement.value = false
 }
 
@@ -200,15 +244,13 @@ function projectionAtelier(ph) {
   const realiseTotal = data.reduce((s, x) => s + x, 0)      // réalisé (mois courant partiel inclus)
   let realiseClos = 0
   for (let m = 0; m < mc; m++) realiseClos += data[m]        // mois entièrement clôturés
-  let projTotal = null, methode = 'lineaire'
-  const prof = profilSaisonnier(ph)
-  if (prof && mc > 0) {
-    let frac = 0
-    for (let m = 0; m < mc; m++) frac += prof[m]
-    if (frac > 0.02) { projTotal = realiseClos / frac; methode = 'saison' }
-  }
-  if (projTotal == null) projTotal = mc > 0 ? realiseClos * 12 / mc : realiseTotal
-  projTotal = Math.max(Math.round(projTotal), realiseTotal)  // jamais sous le réalisé
+  // A+2 : projection = rythme réalisé/jour ouvré étendu sur les jours ouvrés de l'année selon le régime
+  const reg = regimePhase(ph)
+  const jEc = Math.max(1, joursOuvresRegime(reg.we, new Date(anneeCourante, 0, 1), new Date()))
+  const jTot = joursOuvresRegime(reg.we, new Date(anneeCourante, 0, 1), new Date(anneeCourante, 11, 31))
+  let methode = 'regime'
+  let projTotal = realiseTotal > 0 ? Math.round(realiseTotal / jEc * jTot) : 0
+  projTotal = Math.max(projTotal, realiseTotal)  // jamais sous le réalisé
   const totN1 = totalAtelierAnnee(ph, anneeCourante - 1)
   const vsN1 = totN1 > 0 ? Math.round((projTotal / totN1 - 1) * 100) : null
   const plan = planParAtelier.value[ph] || 0
