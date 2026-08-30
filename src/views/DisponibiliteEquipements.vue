@@ -1177,4 +1177,5 @@ select:focus, input:focus { outline: none !important; border-color: #06b6d4 !imp
 
 /* Tuile KPI à valeur texte (ex. atelier le plus chargé) : police réduite */
 .kpi-val.kpi-val-sm { font-size: 12px !important; line-height: 1.2; word-break: break-word; }
+.de-page { zoom: 0.8; }
 </style>
