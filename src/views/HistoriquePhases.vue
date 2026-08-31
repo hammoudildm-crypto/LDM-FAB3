@@ -26,6 +26,16 @@
           </div>
         </div>
       </div>
+      <div v-if="!chargement && !erreur && lignesFiltrees.length" class="card ho-rdt-band ho-rdt-mois">
+        <span class="ho-rdt-title">Rendement moyen par phase — mois en cours</span>
+        <div class="ho-rdt-grid">
+          <div v-for="r in rendementMoyenMois" :key="r.phase" class="ho-rdt-item">
+            <span class="ho-rdt-ph">{{ courtPhase(r.phase) }}</span>
+            <span class="ho-rdt-val" :class="clsRdt(r.moy)">{{ r.moy != null ? r.moy.toFixed(1) + '%' : '—' }}</span>
+            <span class="ho-rdt-n">{{ r.n }} lot{{ r.n > 1 ? 's' : '' }}</span>
+          </div>
+        </div>
+      </div>
       <div v-if="chargement" class="ho-load">Chargement de l'historique…</div>
       <div v-else-if="erreur" class="ho-err">{{ erreur }}</div>
       <div v-else class="card ho-tablecard">
@@ -216,6 +226,19 @@ const rendementMoyen = computed(() => {
   }
   return PHASES.map(ph => ({ phase: ph, moy: cnt[ph] ? acc[ph] / cnt[ph] : null, n: cnt[ph] }))
 })
+const rendementMoyenMois = computed(() => {
+  const acc = {}, cnt = {}
+  const now = new Date(), moisC = now.getMonth(), anC = now.getFullYear()
+  for (const ph of PHASES) { acc[ph] = 0; cnt[ph] = 0 }
+  for (const l of lignesFiltrees.value) {
+    for (const ph of PHASES) {
+      const pdata = l.phases[ph]; if (!pdata || !pdata.date) continue
+      const d = new Date(pdata.date); if (d.getMonth() !== moisC || d.getFullYear() !== anC) continue
+      const r = rendementPhase(pdata); if (r != null) { acc[ph] += r; cnt[ph]++ }
+    }
+  }
+  return PHASES.map(ph => ({ phase: ph, moy: cnt[ph] ? acc[ph] / cnt[ph] : null, n: cnt[ph] }))
+})
 const lotSel = computed(() => sel.value == null ? null : lignes.value.find(l => l.id === sel.value) || null)
 function phasesDuLot(l) { return PHASES.filter(p => l.phases[p]) }
 
@@ -334,4 +357,7 @@ function exporterPDF() { window.print() }
 .ho-dtbl .r, .ho-dtbl th.r { text-align: right; }
 .ho-dp { font-weight: 700; color: #334155; }
 @media (max-width: 700px) { .ho-tbl { font-size: 11px; } .ho-eq { display: none; } }
+.ho-page { zoom: 0.8; }
+.ho-rdt-mois .ho-rdt-title { color: #4f46e5; }
+.ho-rdt-mois { border-left: 3px solid #6366f1; }
 </style>
