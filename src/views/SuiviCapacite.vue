@@ -17,12 +17,19 @@
         <div class="kpi warn"><div class="kpi-v">{{ kpiSurcharge }}</div><div class="kpi-l">En surcharge</div></div>
         <div class="kpi k-teal"><div class="kpi-v">{{ joursAnnee }}</div><div class="kpi-l">Jours ouvrés {{ annee }}</div></div>
       </div>
-      <h2 class="card-title">Occupation annuelle — {{ siteSel === 'tous' ? 'Tous sites' : (SITES.find(s => s.key === siteSel) || {}).label }}<span v-if="phaseSel"> · {{ PHASE_NOM[phaseSel] || phaseSel }}</span> · {{ lignesTableau.length }} équip. · {{ joursAnnee }} j ouvrés</h2>
+      <h2 class="card-title">Occupation annuelle — {{ siteSel === 'tous' ? 'Tous sites' : (SITES.find(s => s.key === siteSel) || {}).label }}<span v-if="phaseSel"> · {{ PHASE_NOM[phaseSel] || phaseSel }}</span><span v-if="produitFiltre"> · Produit : {{ (prodById[produitFiltre] || {}).code_pf }}</span> · {{ lignesTableau.length }} équip. · {{ joursAnnee }} j ouvrés</h2>
       <div class="occ-layout">
         <aside class="occ-side">
           <div class="side-sec">
             <div class="side-lbl">Année</div>
             <select class="side-select" v-model.number="annee"><option v-for="a in annees" :key="a" :value="a">{{ a }}</option></select>
+          </div>
+          <div class="side-sec">
+            <div class="side-lbl">Produit</div>
+            <select class="side-select" v-model="produitFiltre">
+              <option value="">Tous les produits</option>
+              <option v-for="p in produitsListe" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
+            </select>
           </div>
           <div class="side-sec">
             <div class="side-lbl">Nettoyage &amp; réglage</div>
@@ -164,6 +171,8 @@ const NOM_KEY = {}
 for (const [k, v] of Object.entries(PHASE_NOM)) NOM_KEY[v.toLowerCase()] = k
 
 const produits = ref([]), equipements = ref([]), cadences = ref([]), plans = ref([])
+const produitFiltre = ref('')
+const produitsListe = computed(() => [...produits.value].sort((a, b) => (a.code_pf || '').localeCompare(b.code_pf || '')))
 const chargement = ref(true)
 const annee = ref(new Date().getFullYear())
 const regime = ref('auto')
@@ -335,6 +344,7 @@ const lignes = computed(() => {
     for (let mi = 0; mi < 12; mi++) {
       let occH = 0
       for (const [pid, tab] of Object.entries(planAgg.value)) {
+        if (produitFiltre.value && String(pid) !== String(produitFiltre.value)) continue
         const boites = tab[mi]; if (!boites) continue
         const gk = gammeKeys.value[pid]
         const p = prodById.value[pid] || {}
