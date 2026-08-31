@@ -16,6 +16,16 @@ const equipements = ref([])
 let regimeEquip = {}, reqEquip = {}
 try { regimeEquip = JSON.parse(localStorage.getItem('sc_reg_equip') || '{}') } catch (e) { /* ignore */ }
 try { reqEquip = JSON.parse(localStorage.getItem('sc_req_we') || '{}') } catch (e) { /* ignore */ }
+// Suivi de capacité enregistre le régime sous la clé du GROUPE (nom de base en minuscules :
+// « Granulation COMASA » -> "comasa"), pas sous l'id de l'équipement. Même normalisation ici.
+const PREFIXE_OP = /^(granulation|s[ée]chage|s[ée]choir|m[ée]lange|pes[ée]e|compression|remplissage|encapsulation|pelliculage|enrobage|conditionnement)\s+(?!et\s)/i
+function baseNom(nom) {
+  const n = String(nom || '').trim().replace(PREFIXE_OP, '')
+  return n.replace(/\s+(\d{1,2})\s*$/, (m, d) => (Number(d) <= 20 ? '' : m)).trim()
+}
+function cleRegime(e) { const n = e.nom || e.code || ''; return (baseNom(n) || String(n)).toLowerCase().trim() }
+function regimeDe(e) { return regimeEquip[cleRegime(e)] || regimeEquip[e.id] || '' }
+function reqWeDe(e) { return !!(reqEquip[cleRegime(e)] || reqEquip[e.id]) }
 function phaseDeType(type) {
   const t = (type || '').toLowerCase()
   if (/pes[ée]|balance|bascule/.test(t)) return 'pesee'
@@ -36,22 +46,33 @@ const PHASE_TO_KEYS = {
 // Régime effectif d'une phase = le meilleur régime parmi ses équipements
 function regimePhase(ph) {
   const keys = PHASE_TO_KEYS[ph] || []
-  if (!keys.length) return { postes: 3, we: false }
-  let maxPostes = 0, we = false, found = false
+  if (!keys.length) return { postes: 3, we: false, reg4: false }
+  let maxPostes = 0, we = false, reg4 = false, found = false
   for (const e of equipements.value) {
     const k = phaseDeType(e.type) || phaseDeType(e.nom) || phaseDeType(e.code)
     if (!k || !keys.includes(k)) continue
     found = true
-    const r = regimeEquip[e.id]
+    const r = regimeDe(e)
     let postes = 3
-    if (r === '4') { postes = 3; we = true }
+    if (r === '4') { postes = 3; we = true; reg4 = true }   // 4×8 = 24/7, week-end plein
     else if (r) postes = Number(r)
-    if (reqEquip[e.id]) we = true
+    if (reqWeDe(e)) we = true                               // réquisition WE = 2×8 le samedi/dimanche
     if (postes > maxPostes) maxPostes = postes
   }
-  return found ? { postes: maxPostes || 3, we } : { postes: 3, we: false }
+  return found ? { postes: maxPostes || 3, we, reg4 } : { postes: 3, we: false, reg4: false }
 }
-function joursOuvresRegime(we, d1, d2) { let n = 0; const d = new Date(d1); d.setHours(0, 0, 0, 0); while (d <= d2) { const wd = d.getDay(); if (we || (wd !== 0 && wd !== 6)) n++; d.setDate(d.getDate() + 1) } return n }
+// Jours ouvrés selon le régime : 4×8 -> week-end compté 1 j ; réquisition WE -> au prorata (2 postes / n)
+function joursOuvresRegime(reg, d1, d2) {
+  const facteurWE = reg.reg4 ? 1 : (reg.we ? Math.min(1, 2 / (reg.postes || 3)) : 0)
+  let n = 0; const d = new Date(d1); d.setHours(0, 0, 0, 0)
+  while (d <= d2) { const wd = d.getDay(); n += (wd === 0 || wd === 6) ? facteurWE : 1; d.setDate(d.getDate() + 1) }
+  return n
+}
+function labelRegime(reg) {
+  if (reg.reg4) return '4×8 · 24/7'
+  const base = reg.postes >= 3 ? '3×8' : (reg.postes === 2 ? '2×8' : '1×8')
+  return reg.we ? base + ' + WE' : base
+}
 const ANNEES = []
 for (let a = anneeCourante - 4; a <= anneeCourante + 1; a++) ANNEES.push(a)
 const anneeSel = ref(anneeCourante)
@@ -246,8 +267,8 @@ function projectionAtelier(ph) {
   for (let m = 0; m < mc; m++) realiseClos += data[m]        // mois entièrement clôturés
   // A+2 : projection = rythme réalisé/jour ouvré étendu sur les jours ouvrés de l'année selon le régime
   const reg = regimePhase(ph)
-  const jEc = Math.max(1, joursOuvresRegime(reg.we, new Date(anneeCourante, 0, 1), new Date()))
-  const jTot = joursOuvresRegime(reg.we, new Date(anneeCourante, 0, 1), new Date(anneeCourante, 11, 31))
+  const jEc = Math.max(1, joursOuvresRegime(reg, new Date(anneeCourante, 0, 1), new Date()))
+  const jTot = joursOuvresRegime(reg, new Date(anneeCourante, 0, 1), new Date(anneeCourante, 11, 31))
   let methode = 'regime'
   let projTotal = realiseTotal > 0 ? Math.round(realiseTotal / jEc * jTot) : 0
   projTotal = Math.max(projTotal, realiseTotal)  // jamais sous le réalisé
@@ -259,6 +280,7 @@ function projectionAtelier(ph) {
   const moisEcoules = mc + 1
   const moisRestants = Math.max(1, 12 - mc - 1)
   return { ph, realise: realiseTotal, projTotal, reste, methode, vsN1, plan, pctPlan,
+    jEc, jTot, regLabel: labelRegime(reg),
     realMens: realiseTotal / moisEcoules, realJour: realiseTotal / jEc,
     resteMens: reste / moisRestants, resteJour: reste / Math.max(1, jTot - jEc) }
 }
@@ -506,7 +528,7 @@ onMounted(charger)
               <td class="proj-at">{{ r.ph }}<span v-if="r.methode === 'lineaire'" class="proj-star" title="Sans historique saisonnier : projection linéaire">*</span></td>
               <td class="ta-r">{{ fmt(r.realise) }}</td>
               <td class="ta-r">{{ fmt(Math.round(r.realMens)) }}</td>
-              <td class="ta-r">{{ fmt(Math.round(r.realJour)) }}</td>
+              <td class="ta-r" :title="'Régime ' + r.regLabel + ' — ' + fmt(Math.round(r.jEc)) + ' j écoulés / ' + fmt(Math.round(r.jTot)) + ' j sur l\'année'">{{ fmt(Math.round(r.realJour)) }}</td>
               <td class="ta-r proj-val">{{ fmt(r.projTotal) }}</td>
               <td class="ta-r">{{ r.plan ? fmt(r.plan) : '—' }}</td>
               <td class="ta-r" :class="r.pctPlan == null ? '' : (r.pctPlan >= 100 ? 'proj-up' : (r.pctPlan >= 80 ? 'proj-warn' : 'proj-down'))">{{ r.pctPlan != null ? r.pctPlan + ' %' : '—' }}</td>
