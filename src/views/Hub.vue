@@ -609,16 +609,21 @@ function setStyle(k) { style.value = k; if (k === 'lateral' && (selected.value =
 .m-hero .ph-status i { animation: none; }
 .m-hero .hero, .m-hero .hero-link { transition: none; }
 }
-.hub-login { position: fixed; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center; background: rgba(13,32,40,.6); backdrop-filter: blur(4px); }
-.hub-login-card { background: #fff; border-radius: 18px; padding: 34px 36px; width: 340px; max-width: 90vw; box-shadow: 0 24px 60px rgba(0,0,0,.35); text-align: center; }
-.hub-login-brand { font-weight: 800; letter-spacing: .04em; color: #0f766e; margin-bottom: 8px; }
-.hub-login-card h2 { margin: 0 0 18px; font-size: 21px; color: #0f2a33; }
-.hub-login-card input { width: 100%; box-sizing: border-box; padding: 12px 13px; margin-bottom: 11px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; }
-.hub-login-card input:focus { outline: none; border-color: #0f766e; box-shadow: 0 0 0 3px rgba(15,118,110,.15); }
-.hub-login-btn { width: 100%; padding: 13px; border: none; border-radius: 10px; background: #0f766e; color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; text-decoration: none; }
-.hub-login-btn:hover { background: #0d655e; }
+.hub-login { position: fixed; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center;
+  background:
+    linear-gradient(rgba(148,163,184,.06) 1px, transparent 1px) 0 0 / 100% 34px,
+    linear-gradient(90deg, rgba(148,163,184,.06) 1px, transparent 1px) 0 0 / 34px 100%,
+    linear-gradient(155deg, #f2f6fb 0%, #e7eef6 100%); }
+.hub-login-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 34px 36px; width: 340px; max-width: 90vw; box-shadow: 0 20px 50px rgba(15,23,42,.15); text-align: center; }
+.hub-login-brand { display: flex; align-items: center; justify-content: center; gap: 9px; font-size: 21px; font-weight: 800; letter-spacing: -.4px; color: #0f172a; margin-bottom: 12px; }
+.hub-login-brand::before { content: '▸'; color: #5b9bd5; }
+.hub-login-card h2 { margin: 0 0 18px; font-size: 15px; text-transform: uppercase; letter-spacing: .1em; color: #94a3b8; font-weight: 700; }
+.hub-login-card input { width: 100%; box-sizing: border-box; padding: 12px 13px; margin-bottom: 11px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; background: #f8fafc; }
+.hub-login-card input:focus { outline: none; border-color: #5b9bd5; background: #fff; box-shadow: 0 0 0 3px rgba(91,155,213,.18); }
+.hub-login-btn { width: 100%; padding: 13px; border: none; border-radius: 10px; background: #5b9bd5; color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; text-decoration: none; box-shadow: 0 3px 10px rgba(91,155,213,.4); transition: background .12s ease; }
+.hub-login-btn:hover { background: #4a8ac4; }
 .hub-login-btn:disabled { opacity: .6; cursor: default; }
 .hub-login-err { color: #dc2626; font-size: 13px; margin: 12px 0 0; }
 .hub-login-alt { display: inline-block; margin-top: 14px; font-size: 12.5px; color: #64748b; text-decoration: none; }
-.hub-login-alt:hover { color: #0f766e; text-decoration: underline; }
+.hub-login-alt:hover { color: #5b9bd5; text-decoration: underline; }
 </style>
