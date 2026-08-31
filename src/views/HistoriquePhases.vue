@@ -340,10 +340,10 @@ function exporterPDF() { window.print() }
 .rdt-ok { color: #16a34a; }
 .rdt-warn { color: #d97706; }
 .rdt-bad { color: #dc2626; }
-.ho-rdt-band { display: flex; align-items: center; gap: 14px; padding: 8px 14px; margin-bottom: 10px; flex-wrap: wrap; }
-.ho-rdt-title { font-size: 11px; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: .04em; }
-.ho-rdt-grid { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
-.ho-rdt-item { display: flex; flex-direction: column; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 12px; min-width: 88px; }
+.ho-rdt-band { display: block; padding: 8px 14px; margin-bottom: 10px; }
+.ho-rdt-title { display: block; margin-bottom: 7px; font-size: 11px; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: .04em; }
+.ho-rdt-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.ho-rdt-item { display: flex; flex-direction: column; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 6px; }
 .ho-rdt-ph { font-size: 10px; font-weight: 700; color: #64748b; }
 .ho-rdt-val { font-size: 16px; font-weight: 800; line-height: 1.1; }
 .ho-rdt-n { font-size: 9px; color: #94a3b8; }
