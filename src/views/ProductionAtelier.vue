@@ -259,8 +259,8 @@ function projectionAtelier(ph) {
   const moisEcoules = mc + 1
   const moisRestants = Math.max(1, 12 - mc - 1)
   return { ph, realise: realiseTotal, projTotal, reste, methode, vsN1, plan, pctPlan,
-    realMens: realiseTotal / moisEcoules, realJour: realiseTotal / joursEcoules,
-    resteMens: reste / moisRestants, resteJour: reste / joursRestants }
+    realMens: realiseTotal / moisEcoules, realJour: realiseTotal / jEc,
+    resteMens: reste / moisRestants, resteJour: reste / Math.max(1, jTot - jEc) }
 }
 const projectionsTable = computed(() => {
   return PHASES.map(ph => projectionAtelier(ph))
