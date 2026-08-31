@@ -17,19 +17,15 @@
       </div>
 
       <div v-if="!chargement && !erreur && lignesFiltrees.length" class="card ho-rdt-band">
-        <span class="ho-rdt-title">Rendement moyen par phase</span>
+        <div class="ho-rdt-head">
+          <span class="ho-rdt-title">Rendement moyen par phase<span v-if="moisRdt !== ''"> — {{ MOIS_NOMS[Number(moisRdt)] }}</span></span>
+          <select v-model="moisRdt" class="ho-rdt-select">
+            <option value="">Tous les mois</option>
+            <option v-for="(m, i) in MOIS_NOMS" :key="i" :value="String(i)">{{ m }}</option>
+          </select>
+        </div>
         <div class="ho-rdt-grid">
           <div v-for="r in rendementMoyen" :key="r.phase" class="ho-rdt-item">
-            <span class="ho-rdt-ph">{{ courtPhase(r.phase) }}</span>
-            <span class="ho-rdt-val" :class="clsRdt(r.moy)">{{ r.moy != null ? r.moy.toFixed(1) + '%' : '—' }}</span>
-            <span class="ho-rdt-n">{{ r.n }} lot{{ r.n > 1 ? 's' : '' }}</span>
-          </div>
-        </div>
-      </div>
-      <div v-if="!chargement && !erreur && lignesFiltrees.length" class="card ho-rdt-band ho-rdt-mois">
-        <span class="ho-rdt-title">Rendement moyen par phase — mois en cours</span>
-        <div class="ho-rdt-grid">
-          <div v-for="r in rendementMoyenMois" :key="r.phase" class="ho-rdt-item">
             <span class="ho-rdt-ph">{{ courtPhase(r.phase) }}</span>
             <span class="ho-rdt-val" :class="clsRdt(r.moy)">{{ r.moy != null ? r.moy.toFixed(1) + '%' : '—' }}</span>
             <span class="ho-rdt-n">{{ r.n }} lot{{ r.n > 1 ? 's' : '' }}</span>
@@ -218,22 +214,16 @@ const lignesFiltrees = computed(() => {
   }).sort((a, b) => { const ka = lotKey(a.lot), kb = lotKey(b.lot); return (kb.an - ka.an) || (kb.seq - ka.seq) })
 })
 
+const MOIS_NOMS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+const moisRdt = ref(String(new Date().getMonth()))
 const rendementMoyen = computed(() => {
   const acc = {}, cnt = {}
-  for (const ph of PHASES) { acc[ph] = 0; cnt[ph] = 0 }
-  for (const l of lignesFiltrees.value) {
-    for (const ph of PHASES) { const r = rendementPhase(l.phases[ph]); if (r != null) { acc[ph] += r; cnt[ph]++ } }
-  }
-  return PHASES.map(ph => ({ phase: ph, moy: cnt[ph] ? acc[ph] / cnt[ph] : null, n: cnt[ph] }))
-})
-const rendementMoyenMois = computed(() => {
-  const acc = {}, cnt = {}
-  const now = new Date(), moisC = now.getMonth(), anC = now.getFullYear()
+  const fm = moisRdt.value !== '' ? Number(moisRdt.value) : null
   for (const ph of PHASES) { acc[ph] = 0; cnt[ph] = 0 }
   for (const l of lignesFiltrees.value) {
     for (const ph of PHASES) {
-      const pdata = l.phases[ph]; if (!pdata || !pdata.date) continue
-      const d = new Date(pdata.date); if (d.getMonth() !== moisC || d.getFullYear() !== anC) continue
+      const pdata = l.phases[ph]; if (!pdata) continue
+      if (fm != null) { if (!pdata.date) continue; if (new Date(pdata.date).getMonth() !== fm) continue }
       const r = rendementPhase(pdata); if (r != null) { acc[ph] += r; cnt[ph]++ }
     }
   }
@@ -360,4 +350,7 @@ function exporterPDF() { window.print() }
 .ho-page { zoom: 0.8; }
 .ho-rdt-mois .ho-rdt-title { color: #4f46e5; }
 .ho-rdt-mois { border-left: 3px solid #6366f1; }
+.ho-rdt-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+.ho-rdt-select { font: inherit; font-size: 12px; font-weight: 600; padding: 5px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #4f46e5; cursor: pointer; }
+.ho-rdt-select:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
 </style>
