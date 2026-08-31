@@ -617,6 +617,6 @@ tbody tr.rt-x:hover td { background: #fef2f2; }
 .km-val { font-size: 14px !important; }
 .km-lbl { font-size: 9px !important; }
 .card.avert { padding: 6px 10px !important; margin-bottom: 5px !important; }
-.cap { zoom: 0.72; }
+.cap { zoom: 0.85; }
 .tbl-wrap .grid { width: 100%; table-layout: fixed; }
 </style>
