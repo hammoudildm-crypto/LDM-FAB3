@@ -708,7 +708,7 @@ table.grid tbody tr:hover td { background: #eef6f5; }
 .pa-row2 > .proj-card { flex: 1.3 1 0; }
 .pa-row2 > .card table.grid tbody tr { cursor: pointer; }
 .at-row-active .at-name { color: #0f766e; font-weight: 800; box-shadow: inset 3px 0 0 #0f766e; }
-.at-row-active td { background: #f0fdfa !important; }
+.at-row-active td { background: #f0fdfa !important; color: #0f172a !important; }
 
 /* ===== Alignement parfait des deux tableaux ===== */
 .pa-row2 .card-head, .pa-row2 .proj-head { height: 34px; min-height: 34px; max-height: 34px; box-sizing: border-box; margin-bottom: 10px; align-items: center; overflow: hidden; flex-wrap: nowrap; }
