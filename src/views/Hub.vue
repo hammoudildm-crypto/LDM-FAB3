@@ -1,5 +1,16 @@
 <template>
   <div class="hub-root">
+    <div v-if="!authSession" class="hub-login">
+      <div class="hub-login-card">
+        <div class="hub-login-brand">ProdTrack</div>
+        <h2>Connexion</h2>
+        <input v-model="authEmail" type="email" placeholder="E-mail" autocomplete="username" @keyup.enter="seConnecter" />
+        <input v-model="authPassword" type="password" placeholder="Mot de passe" autocomplete="current-password" @keyup.enter="seConnecter" />
+        <button class="hub-login-btn" @click="seConnecter" :disabled="authEnCours">{{ authEnCours ? 'Connexion…' : 'Se connecter' }}</button>
+        <p v-if="authErreur" class="hub-login-err">{{ authErreur }}</p>
+        <a href="#/login" class="hub-login-alt">Lien magique / mot de passe oublié</a>
+      </div>
+    </div>
       <div class="m-convoyeur" v-if="style === 'convoyeur'">
     <header class="ph">
       <div class="ph-brand"><span class="ph-mark">▸</span>ProdTrack<span class="ph-sub">Chaîne de production</span></div>
@@ -192,6 +203,19 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { supabase } from '../supabase'
+const authSession = ref(null)
+const authEmail = ref(''), authPassword = ref(''), authErreur = ref(''), authEnCours = ref(false)
+supabase.auth.getSession().then(({ data }) => { authSession.value = data.session })
+supabase.auth.onAuthStateChange((_e, sess) => { authSession.value = sess })
+async function seConnecter() {
+  authErreur.value = ''
+  if (!authEmail.value.trim() || !authPassword.value) { authErreur.value = 'E-mail et mot de passe requis.'; return }
+  authEnCours.value = true
+  const res = await supabase.auth.signInWithPassword({ email: authEmail.value.trim(), password: authPassword.value })
+  authEnCours.value = false
+  if (res.error) authErreur.value = 'E-mail ou mot de passe incorrect.'
+}
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -585,4 +609,16 @@ function setStyle(k) { style.value = k; if (k === 'lateral' && (selected.value =
 .m-hero .ph-status i { animation: none; }
 .m-hero .hero, .m-hero .hero-link { transition: none; }
 }
+.hub-login { position: fixed; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center; background: rgba(13,32,40,.6); backdrop-filter: blur(4px); }
+.hub-login-card { background: #fff; border-radius: 18px; padding: 30px 32px; width: 350px; max-width: 90vw; box-shadow: 0 24px 60px rgba(0,0,0,.35); text-align: center; }
+.hub-login-brand { font-weight: 800; letter-spacing: .04em; color: #0f766e; margin-bottom: 6px; }
+.hub-login-card h2 { margin: 0 0 18px; font-size: 21px; color: #0f2a33; }
+.hub-login-card input { width: 100%; box-sizing: border-box; padding: 12px 13px; margin-bottom: 11px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; }
+.hub-login-card input:focus { outline: none; border-color: #0f766e; box-shadow: 0 0 0 3px rgba(15,118,110,.15); }
+.hub-login-btn { width: 100%; padding: 13px; border: none; border-radius: 10px; background: #0f766e; color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; }
+.hub-login-btn:hover { background: #0d655e; }
+.hub-login-btn:disabled { opacity: .6; cursor: default; }
+.hub-login-err { color: #dc2626; font-size: 13px; margin: 12px 0 0; }
+.hub-login-alt { display: inline-block; margin-top: 14px; font-size: 12.5px; color: #64748b; text-decoration: none; }
+.hub-login-alt:hover { color: #0f766e; text-decoration: underline; }
 </style>
