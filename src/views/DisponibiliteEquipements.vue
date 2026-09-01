@@ -459,24 +459,37 @@ const qualiteAnnee = computed(() => {
 })
 // Répartition par atelier sur les lots actuellement en file (attente + en cours)
 const qualiteParAtelier = computed(() => {
-  const compte = (lots) => {
-    let tri = 0, dev = 0
-    for (const l of lots) { if (l.triage || l.triageCond) tri++; if (l.deviation || l.deviationCond) dev++ }
-    return { tot: lots.length, tri, dev }
+  const compte = (lots, pk) => {
+    let tri = 0
+    const devLots = []
+    for (const l of lots) {
+      if (l.triage || l.triageCond) tri++
+      if (l.deviation || l.deviationCond) devLots.push({ id: l.id, lot: l.lot, code: l.code, desig: l.desig, deviation: !!l.deviation, deviationCond: !!l.deviationCond, pk })
+    }
+    return { tot: lots.length, tri, dev: devLots.length, devLots }
   }
   const rows = []
   const pes = attentePeseeList.value.map(l => ({
+    id: l.id, lot: l.lot, code: l.code, desig: l.desig,
     triage: triageIds.value.has(l.id), triageCond: triageCondIds.value.has(l.id),
     deviation: deviationIds.value.has(l.id), deviationCond: deviationCondIds.value.has(l.id)
   }))
-  const p = compte(pes)
+  const p = compte(pes, 'pesee')
   if (p.tot) rows.push({ label: 'Pesée (attente)', ...p })
-  for (const ph of vueFile.value) rows.push({ label: ph.phase.label, ...compte([...ph.attente, ...ph.cours]) })
+  for (const ph of vueFile.value) rows.push({ label: ph.phase.label, ...compte([...ph.attente, ...ph.cours], ph.key) })
   let cond = []
   for (const g of vueCondLignes.value) cond = cond.concat(g.attente, g.cours)
-  const c = compte(cond)
+  const c = compte(cond, 'conditionnement')
   if (c.tot) rows.push({ label: 'Conditionnement', ...c })
   return rows.map(r => ({ ...r, pctDev: r.tot ? Math.round(r.dev / r.tot * 100) : 0 }))
+})
+// Dépliage du détail des lots en déviation (clic sur la colonne « Avec déviation »)
+const devOuvert = ref(null)
+function toggleDev(label, n) { if (!n) return; devOuvert.value = devOuvert.value === label ? null : label }
+const devLotsTous = computed(() => {
+  const out = []
+  for (const r of qualiteParAtelier.value) for (const l of r.devLots) out.push({ ...l, atelier: r.label })
+  return out
 })
 const qualiteTotaux = computed(() => {
   const t = qualiteParAtelier.value.reduce((a, r) => ({ tot: a.tot + r.tot, tri: a.tri + r.tri, dev: a.dev + r.dev }), { tot: 0, tri: 0, dev: 0 })
@@ -711,26 +724,67 @@ onMounted(async () => {
           <table v-if="qualiteParAtelier.length" class="qual-tbl">
             <thead><tr><th>Atelier</th><th class="qnum">Lots en file</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th>Part déviation</th></tr></thead>
             <tbody>
-              <tr v-for="r in qualiteParAtelier" :key="r.label">
-                <td class="q-at">{{ r.label }}</td>
-                <td class="qnum">{{ fmt(r.tot) }}</td>
-                <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
-                <td class="qnum" :class="{ 'q-bad': r.dev > 0 }">{{ r.dev || '—' }}</td>
-                <td>
-                  <div class="q-prog">
-                    <div class="qp-bar"><div class="qp-fill" :class="{ bad: r.pctDev >= 20 }" :style="{ width: Math.min(100, r.pctDev) + '%' }"></div></div>
-                    <span class="qp-pct">{{ r.pctDev }}%</span>
-                  </div>
-                </td>
-              </tr>
+              <template v-for="r in qualiteParAtelier" :key="r.label">
+                <tr>
+                  <td class="q-at">{{ r.label }}</td>
+                  <td class="qnum">{{ fmt(r.tot) }}</td>
+                  <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
+                  <td class="qnum" :class="{ 'q-bad': r.dev > 0, 'q-clic': r.dev > 0 }" @click="toggleDev(r.label, r.dev)" :title="r.dev ? 'Voir les lots en déviation' : ''">
+                    {{ r.dev || '—' }}<span v-if="r.dev" class="q-caret">{{ devOuvert === r.label ? '▾' : '▸' }}</span>
+                  </td>
+                  <td>
+                    <div class="q-prog">
+                      <div class="qp-bar"><div class="qp-fill" :class="{ bad: r.pctDev >= 20 }" :style="{ width: Math.min(100, r.pctDev) + '%' }"></div></div>
+                      <span class="qp-pct">{{ r.pctDev }}%</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="devOuvert === r.label" class="q-detail">
+                  <td colspan="5">
+                    <table class="qd-tbl">
+                      <thead><tr><th>N° lot</th><th>Produit</th><th>Déviation</th></tr></thead>
+                      <tbody>
+                        <tr v-for="l in r.devLots" :key="l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
+                          <td class="qd-lot">{{ l.lot }}</td>
+                          <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
+                          <td>
+                            <span v-if="l.deviation" class="qd-tag qd-fab">Fabrication</span>
+                            <span v-if="l.deviationCond" class="qd-tag qd-cond">Conditionnement</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              </template>
             </tbody>
             <tfoot>
               <tr class="q-tot">
                 <td class="q-at">Total</td>
                 <td class="qnum">{{ fmt(qualiteTotaux.tot) }}</td>
                 <td class="qnum">{{ qualiteTotaux.tri || '—' }}</td>
-                <td class="qnum">{{ qualiteTotaux.dev || '—' }}</td>
+                <td class="qnum" :class="{ 'q-clic': qualiteTotaux.dev > 0 }" @click="toggleDev('__tous__', qualiteTotaux.dev)" :title="qualiteTotaux.dev ? 'Voir tous les lots en déviation' : ''">
+                  {{ qualiteTotaux.dev || '—' }}<span v-if="qualiteTotaux.dev" class="q-caret">{{ devOuvert === '__tous__' ? '▾' : '▸' }}</span>
+                </td>
                 <td><span class="qp-pct">{{ qualiteTotaux.pctDev }}%</span></td>
+              </tr>
+              <tr v-if="devOuvert === '__tous__'" class="q-detail">
+                <td colspan="5">
+                  <table class="qd-tbl">
+                    <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier</th><th>Déviation</th></tr></thead>
+                    <tbody>
+                      <tr v-for="l in devLotsTous" :key="l.atelier + '-' + l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
+                        <td class="qd-lot">{{ l.lot }}</td>
+                        <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
+                        <td>{{ l.atelier }}</td>
+                        <td>
+                          <span v-if="l.deviation" class="qd-tag qd-fab">Fabrication</span>
+                          <span v-if="l.deviationCond" class="qd-tag qd-cond">Conditionnement</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </td>
               </tr>
             </tfoot>
           </table>
@@ -1214,6 +1268,19 @@ onMounted(async () => {
 .qp-fill { height: 100%; background: #f59e0b; border-radius: 999px; transition: width .2s; }
 .qp-fill.bad { background: #dc2626; }
 .qp-pct { font-size: 11px; font-weight: 700; color: #64748b; min-width: 32px; text-align: right; }
+.qual-tbl .q-clic { cursor: pointer; user-select: none; }
+.qual-tbl .q-clic:hover { text-decoration: underline; }
+.q-caret { font-size: 9px; margin-left: 4px; color: #94a3b8; }
+.q-detail > td { background: #fff7f7; padding: 8px 10px; }
+.qd-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.qd-tbl th { text-align: left; font-size: 10px; color: #94a3b8; font-weight: 700; padding: 3px 6px; }
+.qd-tbl td { padding: 4px 6px; border-top: 1px solid #fee2e2; color: #1e293b; }
+.qd-tbl tbody tr { cursor: pointer; transition: background .12s; }
+.qd-tbl tbody tr:hover { background: #fee2e2; }
+.qd-lot { font-weight: 700; }
+.qd-tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; margin-right: 4px; }
+.qd-fab { background: #fee2e2; color: #b91c1c; }
+.qd-cond { background: #ffe4e6; color: #9f1239; }
 /* Lots en cours de triage */
 .triage-box { background: #fef3c7; border: 1px solid #fde68a; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
 .triage-h { margin: 0 0 10px; font-size: 15px; font-weight: 800; color: #92400e; }
