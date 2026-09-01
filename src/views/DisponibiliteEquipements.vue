@@ -693,20 +693,23 @@ onMounted(async () => {
 
       <!-- ===================== FILE D'ATTENTE ===================== -->
       <div v-show="ongletDispo === 'file'">
-        <div class="kpi-grid k3">
-          <div class="kpi" v-for="(k, i) in kpisFile" :key="i">
-            <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
-            <div class="kpi-lbl">{{ k.l }}</div>
-          </div>
-        </div>
         <section class="qual-box">
           <h3 class="qual-h">Charge, triage et déviations par atelier</h3>
-          <div class="kpi-grid k3 qual-kpis">
-            <div class="kpi" v-for="(k, i) in kpisQualite" :key="i">
+          <p class="qual-sub">File de production</p>
+          <div class="kpi-grid qual-kpis">
+            <div class="kpi" v-for="(k, i) in kpisFile" :key="'f' + i">
               <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
               <div class="kpi-lbl">{{ k.l }}</div>
             </div>
           </div>
+          <p class="qual-sub">Qualité</p>
+          <div class="kpi-grid qual-kpis">
+            <div class="kpi" v-for="(k, i) in kpisQualite" :key="'q' + i">
+              <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
+              <div class="kpi-lbl">{{ k.l }}</div>
+            </div>
+          </div>
+          <p class="qual-sub">Détail par atelier</p>
           <table v-if="qualiteParAtelier.length" class="qual-tbl">
             <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th></tr></thead>
             <tbody>
@@ -1240,7 +1243,12 @@ onMounted(async () => {
 /* Qualité — triage et déviations */
 .qual-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .qual-h { margin: 0 0 12px; font-size: 15px; font-weight: 800; color: #0f172a; }
-.qual-kpis { margin-bottom: 14px; }
+.qual-kpis { grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 9px; margin-bottom: 12px; }
+.qual-kpis .kpi { padding: 10px 12px; border-radius: 10px; box-shadow: none; }
+.qual-kpis .kpi-val { font-size: 19px; }
+.qual-kpis .kpi-val-sm { font-size: 13px; }
+.qual-kpis .kpi-lbl { font-size: 10.5px; margin-top: 2px; line-height: 1.25; }
+.qual-sub { margin: 0 0 6px; font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: #94a3b8; }
 .qual-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .qual-tbl th { text-align: left; font-size: 11px; color: #64748b; font-weight: 700; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
 .qual-tbl td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
