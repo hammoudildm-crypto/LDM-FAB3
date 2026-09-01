@@ -412,9 +412,11 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
             <label>Date fin<input v-model="form.date_phase" type="date" /></label>
             <label>Statut (automatique)<input :value="form.date_phase ? 'Terminé' : (form.date_debut ? 'En cours' : 'À faire')" disabled title="À faire → En cours (date début) → Terminé (date fin)." /></label>
             <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
-            <label class="wide dev-chk"><input type="checkbox" v-model="form.deviation" /> Déviation sur cette étape</label>
-            <label v-if="form.deviation" class="wide">Motif de la déviation<input v-model="form.deviation_motif" placeholder="Ex. : arrêt émulseur en cours de lot" /></label>
-            <label class="wide tri-chk"><input type="checkbox" v-model="form.en_triage" @change="majTriagePhase" /> Triage sur cette étape</label>
+            <div class="qa-row">
+              <label class="qa-chk qa-dev"><input type="checkbox" v-model="form.deviation" /> Déviation sur cette étape</label>
+              <label class="qa-chk qa-tri"><input type="checkbox" v-model="form.en_triage" @change="majTriagePhase" /> Triage sur cette étape</label>
+            </div>
+            <label v-if="form.deviation" :class="{ wide: !form.en_triage }">Motif de la déviation<input v-model="form.deviation_motif" placeholder="Ex. : arrêt émulseur en cours de lot" /></label>
             <label v-if="form.en_triage">Triage — début<input v-model="form.triage_debut" type="date" /></label>
             <label v-if="form.en_triage">Triage — fin<input v-model="form.triage_fin" type="date" title="Tant qu'elle est vide, le lot reste compté « en triage »." /></label>
             <div class="form-actions">
@@ -553,12 +555,13 @@ button.link.danger { color: #b91c1c; }
 .ac-filtre input { flex: 1; min-width: 220px; max-width: 380px; padding: 7px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
 .ac-count { font-size: 12.5px; color: #64748b; font-weight: 600; }
 .ac-vide { text-align: center; color: #94a3b8; padding: 14px; font-style: italic; }
-/* Déviation déclarée à l'étape */
-.dev-chk { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #b91c1c; }
-.dev-chk input { width: auto; }
+/* Déviation et triage déclarés à l'étape — les deux cases sur une seule ligne */
+.form-grid .qa-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin: 2px 0 -4px; }
+.form-grid .qa-chk { flex-direction: row; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.form-grid .qa-chk input[type="checkbox"] { width: 15px; height: 15px; margin: 0; accent-color: currentColor; }
+.form-grid .qa-dev { color: #b91c1c; }
+.form-grid .qa-tri { color: #b45309; }
 .dev-tag { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: #fee2e2; color: #b91c1c; vertical-align: middle; }
-.tri-chk { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #b45309; }
-.tri-chk input { width: auto; }
 .tri-tag { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: #fef3c7; color: #b45309; vertical-align: middle; }
 .tri-tag.clos { background: #dcfce7; color: #15803d; }
 </style>
