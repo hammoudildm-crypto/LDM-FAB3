@@ -36,12 +36,14 @@ const message = ref('')
 
 const form = reactive({
   id: null, phase: 'Pesée', equipement_id: '', quantite_entree: '',
-  quantite_sortie: '', date_debut: '', date_phase: '', statut: 'Terminé', commentaire: ''
+  quantite_sortie: '', date_debut: '', date_phase: '', statut: 'Terminé', commentaire: '',
+  deviation: false, deviation_motif: ''
 })
 function resetForm() {
   Object.assign(form, {
     id: null, phase: 'Pesée', equipement_id: '', quantite_entree: '',
-    quantite_sortie: '', date_debut: '', date_phase: '', statut: 'Terminé', commentaire: ''
+    quantite_sortie: '', date_debut: '', date_phase: '', statut: 'Terminé', commentaire: '',
+    deviation: false, deviation_motif: ''
   })
 }
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
@@ -193,7 +195,9 @@ async function enregistrer() {
     date_debut: form.date_debut || null,
     date_phase: form.date_phase || null,
     statut: statutPhase,
-    commentaire: form.commentaire.trim() || null
+    commentaire: form.commentaire.trim() || null,
+    deviation: !!form.deviation,
+    deviation_motif: form.deviation ? (form.deviation_motif.trim() || null) : null
   }
   const res = form.id
     ? await supabase.from('suivi_phases').update(payload).eq('id', form.id)
@@ -228,7 +232,7 @@ async function enregistrer() {
 // Dates automatiques du lot depuis les phases : lancement = 1re date de phase ; fin fab = date de la phase finale terminée
 async function majDatesLot(oid) {
   if (!oid) return
-  const r = await supabase.from('suivi_phases').select('phase, statut, date_debut, date_phase').eq('ordre_id', oid).eq('actif', true)
+  const r = await supabase.from('suivi_phases').select('phase, statut, date_debut, date_phase, deviation').eq('ordre_id', oid).eq('actif', true)
   if (r.error) return
   const rows = r.data || []
   let minD = null
@@ -237,9 +241,12 @@ async function majDatesLot(oid) {
   const gamme = normGamme(lot && lot.produits ? lot.produits.gamme : null)
   const phaseFin = phaseFinaleGamme(gamme)
   const finale = rows.find(p => p.statut === 'Terminé' && (phaseFin ? p.phase === phaseFin : ['Compression', 'Remplissage Gélules', 'Pelliculage'].includes(p.phase)))
+  // Report automatique de la déviation au niveau du lot : vrai dès qu'une phase active est en déviation.
+  // C'est ce champ que lisent le BRFT, les indicateurs QSE, les pages DDL et le rapport hebdo.
   await supabase.from('ordres_fabrication').update({
     date_lancement: minD || null,
-    date_fin_fabrication: finale ? (finale.date_phase || finale.date_debut || null) : null
+    date_fin_fabrication: finale ? (finale.date_phase || finale.date_debut || null) : null,
+    deviation: rows.some(p => !!p.deviation)
   }).eq('id', oid)
 }
 
@@ -247,7 +254,8 @@ function modifier(p) {
   Object.assign(form, {
     id: p.id, phase: p.phase, equipement_id: p.equipement_id || '',
     quantite_entree: (p.quantite_entree != null && p.quantite_entree !== '') ? p.quantite_entree : (entreeEffective(p) ?? ''), quantite_sortie: p.quantite_sortie ?? '',
-    date_debut: p.date_debut || '', date_phase: p.date_phase || '', statut: p.statut || 'Terminé', commentaire: p.commentaire || ''
+    date_debut: p.date_debut || '', date_phase: p.date_phase || '', statut: p.statut || 'Terminé', commentaire: p.commentaire || '',
+    deviation: !!p.deviation, deviation_motif: p.deviation_motif || ''
   })
 }
 async function desactiver(p) {
@@ -384,6 +392,8 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
             <label>Date fin<input v-model="form.date_phase" type="date" /></label>
             <label>Statut (automatique)<input :value="form.date_phase ? 'Terminé' : (form.date_debut ? 'En cours' : 'À faire')" disabled title="À faire → En cours (date début) → Terminé (date fin)." /></label>
             <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
+            <label class="wide dev-chk"><input type="checkbox" v-model="form.deviation" /> Déviation sur cette étape</label>
+            <label v-if="form.deviation" class="wide">Motif de la déviation<input v-model="form.deviation_motif" placeholder="Ex. : arrêt émulseur en cours de lot" /></label>
             <div class="form-actions">
               <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Ajouter la phase' }}</button>
               <button v-if="form.id" class="btn ghost" @click="resetForm">Annuler</button>
@@ -406,7 +416,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
               </thead>
               <tbody>
                 <tr v-for="p in phases" :key="p.id">
-                  <td class="strong">{{ p.phase }}</td>
+                  <td class="strong">{{ p.phase }}<span v-if="p.deviation" class="dev-tag" :title="p.deviation_motif || 'Déviation déclarée sur cette étape'">déviation</span></td>
                   <td>{{ p.equipements ? p.equipements.code : '—' }}</td>
                   <td class="right">{{ fmt(entreeEffective(p)) }}</td>
                   <td class="right">{{ fmt(p.quantite_sortie) }}</td>
@@ -520,4 +530,8 @@ button.link.danger { color: #b91c1c; }
 .ac-filtre input { flex: 1; min-width: 220px; max-width: 380px; padding: 7px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
 .ac-count { font-size: 12.5px; color: #64748b; font-weight: 600; }
 .ac-vide { text-align: center; color: #94a3b8; padding: 14px; font-style: italic; }
+/* Déviation déclarée à l'étape */
+.dev-chk { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #b91c1c; }
+.dev-chk input { width: auto; }
+.dev-tag { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: #fee2e2; color: #b91c1c; vertical-align: middle; }
 </style>
