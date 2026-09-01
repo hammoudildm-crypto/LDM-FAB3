@@ -302,6 +302,19 @@ async function chargerACompleter() {
     .not('ordres_fabrication.date_fin_fabrication', 'is', null)
   if (!r.error) aCompleter.value = r.data || []
 }
+// Ouvre directement l'étape en triage du lot, curseur sur la date de fin
+async function ouvrirPhaseEnTriage() {
+  await chargerPhases()
+  const ph = phases.value.find(p => p.en_triage && !p.triage_fin)
+  if (!ph) {
+    message.value = "Ce lot est marqué en triage au niveau du lot, mais aucune étape ne porte le triage. Coche « Triage sur cette étape » sur l'étape concernée."
+    return
+  }
+  modifier(ph)
+  await nextTick()
+  const el = document.getElementById('fp-triage-fin')
+  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus() }
+}
 async function allerVersLot(x) {
   lotId.value = x.ordre_id
   await chargerPhases()
@@ -318,7 +331,10 @@ onMounted(async () => {
   const q = route.query.lot ?? route.query.ordre
   if (q != null && q !== '') {
     const found = lots.value.find(l => String(l.id) === String(q))
-    if (found) lotId.value = found.id
+    if (found) {
+      lotId.value = found.id
+      if (route.query.triage != null) await ouvrirPhaseEnTriage()
+    }
   }
 })
 watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
@@ -418,7 +434,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
             </div>
             <label v-if="form.deviation" :class="{ wide: !form.en_triage }">Motif de la déviation<input v-model="form.deviation_motif" placeholder="Ex. : arrêt émulseur en cours de lot" /></label>
             <label v-if="form.en_triage">Triage — début<input v-model="form.triage_debut" type="date" /></label>
-            <label v-if="form.en_triage">Triage — fin<input v-model="form.triage_fin" type="date" title="Tant qu'elle est vide, le lot reste compté « en triage »." /></label>
+            <label v-if="form.en_triage">Triage — fin<input id="fp-triage-fin" v-model="form.triage_fin" type="date" title="Tant qu'elle est vide, le lot reste compté « en triage »." /></label>
             <div class="form-actions">
               <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Ajouter la phase' }}</button>
               <button v-if="form.id" class="btn ghost" @click="resetForm">Annuler</button>
