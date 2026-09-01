@@ -466,11 +466,14 @@ const qualiteParAtelier = computed(() => {
       if (l.triage || l.triageCond) tri++
       if (l.deviation || l.deviationCond) devLots.push({ id: l.id, lot: l.lot, code: l.code, desig: l.desig, deviation: !!l.deviation, deviationCond: !!l.deviationCond, pk })
     }
-    return { tot: attente.length + cours.length, att: attente.length, enc: cours.length, tri, dev: devLots.length, devLots }
+    const bts = (arr) => arr.reduce((n, l) => n + (Number(l.boites) || 0), 0)
+    return { tot: attente.length + cours.length, att: attente.length, enc: cours.length,
+      bts: bts(attente) + bts(cours), btsAtt: bts(attente), btsEnc: bts(cours),
+      tri, dev: devLots.length, devLots }
   }
   const rows = []
   const pes = attentePeseeList.value.map(l => ({
-    id: l.id, lot: l.lot, code: l.code, desig: l.desig,
+    id: l.id, lot: l.lot, code: l.code, desig: l.desig, boites: l.boites,
     triage: triageIds.value.has(l.id), triageCond: triageCondIds.value.has(l.id),
     deviation: deviationIds.value.has(l.id), deviationCond: deviationCondIds.value.has(l.id)
   }))
@@ -494,7 +497,7 @@ const devLotsTous = computed(() => {
   return out
 })
 const qualiteTotaux = computed(() => {
-  const t = qualiteParAtelier.value.reduce((a, r) => ({ tot: a.tot + r.tot, att: a.att + r.att, enc: a.enc + r.enc, tri: a.tri + r.tri, dev: a.dev + r.dev }), { tot: 0, att: 0, enc: 0, tri: 0, dev: 0 })
+  const t = qualiteParAtelier.value.reduce((a, r) => ({ tot: a.tot + r.tot, att: a.att + r.att, enc: a.enc + r.enc, bts: a.bts + r.bts, tri: a.tri + r.tri, dev: a.dev + r.dev }), { tot: 0, att: 0, enc: 0, bts: 0, tri: 0, dev: 0 })
   return { ...t, pctDev: t.tot ? Math.round(t.dev / t.tot * 100) : 0 }
 })
 const kpisQualite = computed(() => {
@@ -711,7 +714,7 @@ onMounted(async () => {
           </div>
           <p class="qual-sub">Détail par atelier</p>
           <table v-if="qualiteParAtelier.length" class="qual-tbl">
-            <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th></tr></thead>
+            <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">Boîtes</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th></tr></thead>
             <tbody>
               <template v-for="r in qualiteParAtelier" :key="r.label">
                 <tr>
@@ -722,6 +725,7 @@ onMounted(async () => {
                       <span class="qc-val">{{ fmt(r.tot) }}<span v-if="r.att" class="qc-att"> · {{ r.att }} att.</span><span v-if="r.enc" class="qc-enc"> · {{ r.enc }} en cours</span></span>
                     </div>
                   </td>
+                  <td class="qnum q-bts" :title="fmt(r.btsAtt) + ' bts en attente · ' + fmt(r.btsEnc) + ' bts en cours'">{{ fmt(r.bts) }} <span class="unit">bts</span></td>
                   <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
                   <td class="qnum" :class="{ 'q-bad': r.dev > 0, 'q-clic': r.dev > 0 }" @click="toggleDev(r.label, r.dev)" :title="r.dev ? 'Voir les lots en déviation' : ''">
                     {{ r.dev || '—' }}<span v-if="r.dev" class="q-caret">{{ devOuvert === r.label ? '▾' : '▸' }}</span>
@@ -729,7 +733,7 @@ onMounted(async () => {
                   <td class="qnum" :class="{ 'q-bad': r.pctDev >= 20 }">{{ r.pctDev }}%</td>
                 </tr>
                 <tr v-if="devOuvert === r.label" class="q-detail">
-                  <td colspan="5">
+                  <td colspan="6">
                     <table class="qd-tbl">
                       <thead><tr><th>N° lot</th><th>Produit</th><th>Déviation</th></tr></thead>
                       <tbody>
@@ -751,6 +755,7 @@ onMounted(async () => {
               <tr class="q-tot">
                 <td class="q-at">Total</td>
                 <td class="qc-tot">{{ fmt(qualiteTotaux.tot) }}<span v-if="qualiteTotaux.att" class="qc-att"> · {{ qualiteTotaux.att }} att.</span><span v-if="qualiteTotaux.enc" class="qc-enc"> · {{ qualiteTotaux.enc }} en cours</span></td>
+                <td class="qnum q-bts">{{ fmt(qualiteTotaux.bts) }} <span class="unit">bts</span></td>
                 <td class="qnum">{{ qualiteTotaux.tri || '—' }}</td>
                 <td class="qnum" :class="{ 'q-clic': qualiteTotaux.dev > 0 }" @click="toggleDev('__tous__', qualiteTotaux.dev)" :title="qualiteTotaux.dev ? 'Voir tous les lots en déviation' : ''">
                   {{ qualiteTotaux.dev || '—' }}<span v-if="qualiteTotaux.dev" class="q-caret">{{ devOuvert === '__tous__' ? '▾' : '▸' }}</span>
@@ -758,7 +763,7 @@ onMounted(async () => {
                 <td class="qnum">{{ qualiteTotaux.pctDev }}%</td>
               </tr>
               <tr v-if="devOuvert === '__tous__'" class="q-detail">
-                <td colspan="5">
+                <td colspan="6">
                   <table class="qd-tbl">
                     <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier</th><th>Déviation</th></tr></thead>
                     <tbody>
@@ -1256,6 +1261,8 @@ onMounted(async () => {
 .qual-tbl .q-at { font-weight: 600; }
 .qual-tbl .q-warn { color: #b45309; font-weight: 700; }
 .qual-tbl .q-bad { color: #dc2626; font-weight: 700; }
+.qual-tbl .q-bts { color: #0f766e; font-weight: 700; }
+.qual-tbl .q-bts .unit { font-size: 10px; font-weight: 600; color: #94a3b8; }
 .qual-tbl .q-tot td { border-top: 2px solid #e2e8f0; border-bottom: none; font-weight: 800; background: #f8fafc; }
 .qual-tbl .qcharge-h { min-width: 190px; }
 .q-charge { display: flex; align-items: center; gap: 9px; }
