@@ -574,7 +574,8 @@ function ouvrirLot(l, phaseKey) {
   if (phaseKey === 'conditionnement') router.push({ path: '/conditionnement', query: { lot: l.id } })
   else router.push({ path: '/suivi', query: { lot: l.id } })
 }
-function ouvrirTriageFin(id) { router.push({ path: '/ordres', query: { edit: id } }) }
+// La fin de triage se saisit désormais sur l'étape, dans Suivi des phases
+function ouvrirTriageFin(id) { router.push({ path: '/suivi', query: { lot: id, triage: 1 } }) }
 const qteEdit = reactive({})
 watch(lotsTriage, (lots) => { for (const l of lots) if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: l.qteATrier || 0, triee: l.qteTriee || 0 } }, { immediate: true })
 function pctTriage(id) { const q = qteEdit[id] || {}; const t = Number(q.aTrier) || 0; return t > 0 ? Math.min(100, Math.round((Number(q.triee) || 0) / t * 100)) : 0 }
@@ -950,7 +951,7 @@ onMounted(async () => {
             <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th class="tnum">À trier (Kg)</th><th class="tnum">Triée (Kg)</th><th>Avancement</th><th></th></tr></thead>
             <tbody>
               <tr v-for="l in lotsTriage" :key="l.id" class="triage-row">
-                <td class="t-lot" @click="ouvrirTriageFin(l.id)" title="Ouvrir l'OF (date de fin de triage)">{{ l.lot }}</td>
+                <td class="t-lot" @click="ouvrirTriageFin(l.id)" title="Ouvrir l'étape en triage pour saisir la date de fin">{{ l.lot }}</td>
                 <td @click="ouvrirTriageFin(l.id)">{{ l.code }} — {{ l.desig }}</td>
                 <td>{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
                 <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop /></td>
