@@ -54,7 +54,7 @@ function resetForm() {
 }
 function majTriage(quel) {
   const auj = new Date().toISOString().slice(0, 10)
-  if (quel === 'fab' && form.en_triage && !form.triage_debut) form.triage_debut = auj
+  // volet 'fab' retiré : le triage fabrication se déclare dans Suivi des phases
   if (quel === 'cond' && form.en_triage_cond && !form.triage_cond_debut) form.triage_cond_debut = auj
 }
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
@@ -252,11 +252,10 @@ async function enregistrer() {
     commentaire: form.commentaire.trim() || null,
     // deviation : NE PLUS ÉCRIRE ICI. Le champ est calculé depuis suivi_phases.deviation
     // par majDatesLot() dans Suivi des phases. L'écrire ici écraserait le report.
-    en_triage: !!form.en_triage,
+    // en_triage / triage_debut / triage_fin : NE PLUS ÉCRIRE ICI non plus.
+    // Reportés depuis suivi_phases par majDatesLot() dans Suivi des phases.
     deviation_cond: !!form.deviation_cond,
     en_triage_cond: !!form.en_triage_cond,
-    triage_debut: form.triage_debut || null,
-    triage_fin: form.triage_fin || null,
     triage_cond_debut: form.triage_cond_debut || null,
     triage_cond_fin: form.triage_cond_fin || null
   }
@@ -502,13 +501,14 @@ onMounted(async () => {
           <div class="wide chk-row chk-row-1l">
             <label class="chk chk-ro" title="Se déclare désormais sur la page Suivi des phases, à l'étape concernée. Cet indicateur est le report automatique des phases du lot."><input type="checkbox" :checked="form.deviation" disabled /> Déviation fabrication <span class="ro-note">(voir Suivi des phases)</span></label>
             <label class="chk"><input type="checkbox" v-model="form.deviation_cond" /> Déviation conditionnement</label>
-            <label class="chk"><input type="checkbox" v-model="form.en_triage" @change="majTriage('fab')" /> En triage fabrication</label>
+            <label class="chk chk-ro" title="Se déclare désormais sur la page Suivi des phases, à l'étape concernée. Cet indicateur est le report automatique des phases du lot."><input type="checkbox" :checked="form.en_triage" disabled /> En triage fabrication <span class="ro-note">(voir Suivi des phases)</span></label>
             <label class="chk"><input type="checkbox" v-model="form.en_triage_cond" @change="majTriage('cond')" /> En triage conditionnement</label>
           </div>
           <div class="wide chk-row" v-if="form.en_triage">
             <span class="tri-lbl">Triage fabrication :</span>
-            <label class="tri-d">Début <input type="date" v-model="form.triage_debut" /></label>
-            <label class="tri-d">Fin <input type="date" v-model="form.triage_fin" /></label>
+            <label class="tri-d">Début <input type="date" :value="form.triage_debut" disabled /></label>
+            <label class="tri-d">Fin <input type="date" :value="form.triage_fin" disabled /></label>
+            <span class="ro-note">report des étapes — se saisit dans Suivi des phases</span>
           </div>
           <div class="wide chk-row" v-if="form.en_triage_cond">
             <span class="tri-lbl">Triage conditionnement :</span>
