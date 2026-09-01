@@ -37,16 +37,19 @@ const message = ref('')
 const form = reactive({
   id: null, phase: 'Pesée', equipement_id: '', quantite_entree: '',
   quantite_sortie: '', date_debut: '', date_phase: '', statut: 'Terminé', commentaire: '',
-  deviation: false, deviation_motif: ''
+  deviation: false, deviation_motif: '',
+  en_triage: false, triage_debut: '', triage_fin: ''
 })
 function resetForm() {
   Object.assign(form, {
     id: null, phase: 'Pesée', equipement_id: '', quantite_entree: '',
     quantite_sortie: '', date_debut: '', date_phase: '', statut: 'Terminé', commentaire: '',
-    deviation: false, deviation_motif: ''
+    deviation: false, deviation_motif: '',
+    en_triage: false, triage_debut: '', triage_fin: ''
   })
 }
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
+function majTriagePhase() { if (form.en_triage && !form.triage_debut) form.triage_debut = new Date().toISOString().slice(0, 10) }
 
 const lotSelectionne = computed(() => lots.value.find(l => l.id === lotId.value) || null)
 watch(lotId, () => {
@@ -197,7 +200,10 @@ async function enregistrer() {
     statut: statutPhase,
     commentaire: form.commentaire.trim() || null,
     deviation: !!form.deviation,
-    deviation_motif: form.deviation ? (form.deviation_motif.trim() || null) : null
+    deviation_motif: form.deviation ? (form.deviation_motif.trim() || null) : null,
+    en_triage: !!form.en_triage,
+    triage_debut: form.en_triage ? (form.triage_debut || null) : null,
+    triage_fin: form.en_triage ? (form.triage_fin || null) : null
   }
   const res = form.id
     ? await supabase.from('suivi_phases').update(payload).eq('id', form.id)
@@ -232,7 +238,7 @@ async function enregistrer() {
 // Dates automatiques du lot depuis les phases : lancement = 1re date de phase ; fin fab = date de la phase finale terminée
 async function majDatesLot(oid) {
   if (!oid) return
-  const r = await supabase.from('suivi_phases').select('phase, statut, date_debut, date_phase, deviation').eq('ordre_id', oid).eq('actif', true)
+  const r = await supabase.from('suivi_phases').select('phase, statut, date_debut, date_phase, deviation, en_triage, triage_debut, triage_fin').eq('ordre_id', oid).eq('actif', true)
   if (r.error) return
   const rows = r.data || []
   let minD = null
@@ -243,10 +249,23 @@ async function majDatesLot(oid) {
   const finale = rows.find(p => p.statut === 'Terminé' && (phaseFin ? p.phase === phaseFin : ['Compression', 'Remplissage Gélules', 'Pelliculage'].includes(p.phase)))
   // Report automatique de la déviation au niveau du lot : vrai dès qu'une phase active est en déviation.
   // C'est ce champ que lisent le BRFT, les indicateurs QSE, les pages DDL et le rapport hebdo.
+  // Report du triage : « en triage » dès qu'une phase l'est. La date de fin ne remonte que si
+  // TOUTES les phases en triage sont closes, pour préserver le test en_triage && !triage_fin
+  // utilisé partout ailleurs dans l'application.
+  const tri = rows.filter(p => !!p.en_triage)
+  const triOuverts = tri.filter(p => !p.triage_fin)
+  let triDeb = null, triFin = null
+  for (const p of tri) {
+    if (p.triage_debut && (!triDeb || p.triage_debut < triDeb)) triDeb = p.triage_debut
+    if (p.triage_fin && (!triFin || p.triage_fin > triFin)) triFin = p.triage_fin
+  }
   await supabase.from('ordres_fabrication').update({
     date_lancement: minD || null,
     date_fin_fabrication: finale ? (finale.date_phase || finale.date_debut || null) : null,
-    deviation: rows.some(p => !!p.deviation)
+    deviation: rows.some(p => !!p.deviation),
+    en_triage: tri.length > 0,
+    triage_debut: triDeb,
+    triage_fin: (tri.length && !triOuverts.length) ? triFin : null
   }).eq('id', oid)
 }
 
@@ -255,7 +274,8 @@ function modifier(p) {
     id: p.id, phase: p.phase, equipement_id: p.equipement_id || '',
     quantite_entree: (p.quantite_entree != null && p.quantite_entree !== '') ? p.quantite_entree : (entreeEffective(p) ?? ''), quantite_sortie: p.quantite_sortie ?? '',
     date_debut: p.date_debut || '', date_phase: p.date_phase || '', statut: p.statut || 'Terminé', commentaire: p.commentaire || '',
-    deviation: !!p.deviation, deviation_motif: p.deviation_motif || ''
+    deviation: !!p.deviation, deviation_motif: p.deviation_motif || '',
+    en_triage: !!p.en_triage, triage_debut: p.triage_debut || '', triage_fin: p.triage_fin || ''
   })
 }
 async function desactiver(p) {
@@ -394,6 +414,9 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
             <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
             <label class="wide dev-chk"><input type="checkbox" v-model="form.deviation" /> Déviation sur cette étape</label>
             <label v-if="form.deviation" class="wide">Motif de la déviation<input v-model="form.deviation_motif" placeholder="Ex. : arrêt émulseur en cours de lot" /></label>
+            <label class="wide tri-chk"><input type="checkbox" v-model="form.en_triage" @change="majTriagePhase" /> Triage sur cette étape</label>
+            <label v-if="form.en_triage">Triage — début<input v-model="form.triage_debut" type="date" /></label>
+            <label v-if="form.en_triage">Triage — fin<input v-model="form.triage_fin" type="date" title="Tant qu'elle est vide, le lot reste compté « en triage »." /></label>
             <div class="form-actions">
               <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Ajouter la phase' }}</button>
               <button v-if="form.id" class="btn ghost" @click="resetForm">Annuler</button>
@@ -416,7 +439,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
               </thead>
               <tbody>
                 <tr v-for="p in phases" :key="p.id">
-                  <td class="strong">{{ p.phase }}<span v-if="p.deviation" class="dev-tag" :title="p.deviation_motif || 'Déviation déclarée sur cette étape'">déviation</span></td>
+                  <td class="strong">{{ p.phase }}<span v-if="p.deviation" class="dev-tag" :title="p.deviation_motif || 'Déviation déclarée sur cette étape'">déviation</span><span v-if="p.en_triage" class="tri-tag" :class="{ clos: p.triage_fin }" :title="p.triage_fin ? 'Triage clos le ' + p.triage_fin : 'Triage en cours sur cette étape'">triage</span></td>
                   <td>{{ p.equipements ? p.equipements.code : '—' }}</td>
                   <td class="right">{{ fmt(entreeEffective(p)) }}</td>
                   <td class="right">{{ fmt(p.quantite_sortie) }}</td>
@@ -534,4 +557,8 @@ button.link.danger { color: #b91c1c; }
 .dev-chk { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #b91c1c; }
 .dev-chk input { width: auto; }
 .dev-tag { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: #fee2e2; color: #b91c1c; vertical-align: middle; }
+.tri-chk { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #b45309; }
+.tri-chk input { width: auto; }
+.tri-tag { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: #fef3c7; color: #b45309; vertical-align: middle; }
+.tri-tag.clos { background: #dcfce7; color: #15803d; }
 </style>
