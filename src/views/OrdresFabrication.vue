@@ -39,8 +39,8 @@ const form = reactive({
   id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
   date_reception: '', date_fin_validite: '',
   date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: '',
-  deviation: false, en_triage: false, deviation_cond: false, en_triage_cond: false,
-  triage_debut: '', triage_fin: '', triage_cond_debut: '', triage_cond_fin: ''
+  deviation_cond: false, en_triage_cond: false,
+  triage_cond_debut: '', triage_cond_fin: ''
 })
 function resetForm() {
   statutOriginal.value = 'Planifié'
@@ -48,8 +48,8 @@ function resetForm() {
     id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
     date_reception: '', date_fin_validite: '',
     date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: '',
-    deviation: false, en_triage: false, deviation_cond: false, en_triage_cond: false,
-    triage_debut: '', triage_fin: '', triage_cond_debut: '', triage_cond_fin: ''
+    deviation_cond: false, en_triage_cond: false,
+    triage_cond_debut: '', triage_cond_fin: ''
   })
 }
 function majTriage(quel) {
@@ -293,8 +293,8 @@ function modifier(l) {
     quantite_theorique: l.quantite_theorique ?? '', date_lancement: l.date_lancement || '',
     date_reception: l.date_reception || '', date_fin_validite: l.date_fin_validite || '',
     date_fin_fabrication: l.date_fin_fabrication || '',
-    statut: ['Libéré', 'Rejeté'].includes(l.statut) ? l.statut : '__auto__', equipement_id: l.equipement_id || '', commentaire: l.commentaire || '', deviation: !!l.deviation, en_triage: !!l.en_triage, deviation_cond: !!l.deviation_cond, en_triage_cond: !!l.en_triage_cond,
-    triage_debut: l.triage_debut || '', triage_fin: l.triage_fin || '', triage_cond_debut: l.triage_cond_debut || '', triage_cond_fin: l.triage_cond_fin || ''
+    statut: ['Libéré', 'Rejeté'].includes(l.statut) ? l.statut : '__auto__', equipement_id: l.equipement_id || '', commentaire: l.commentaire || '', deviation_cond: !!l.deviation_cond, en_triage_cond: !!l.en_triage_cond,
+    triage_cond_debut: l.triage_cond_debut || '', triage_cond_fin: l.triage_cond_fin || ''
   })
 }
 async function desactiver(l) {
@@ -499,16 +499,8 @@ onMounted(async () => {
           </label>
           <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
           <div class="wide chk-row chk-row-1l">
-            <label class="chk chk-ro" title="Se déclare désormais sur la page Suivi des phases, à l'étape concernée. Cet indicateur est le report automatique des phases du lot."><input type="checkbox" :checked="form.deviation" disabled /> Déviation fabrication <span class="ro-note">(voir Suivi des phases)</span></label>
             <label class="chk"><input type="checkbox" v-model="form.deviation_cond" /> Déviation conditionnement</label>
-            <label class="chk chk-ro" title="Se déclare désormais sur la page Suivi des phases, à l'étape concernée. Cet indicateur est le report automatique des phases du lot."><input type="checkbox" :checked="form.en_triage" disabled /> En triage fabrication <span class="ro-note">(voir Suivi des phases)</span></label>
             <label class="chk"><input type="checkbox" v-model="form.en_triage_cond" @change="majTriage('cond')" /> En triage conditionnement</label>
-          </div>
-          <div class="wide chk-row" v-if="form.en_triage">
-            <span class="tri-lbl">Triage fabrication :</span>
-            <label class="tri-d">Début <input type="date" :value="form.triage_debut" disabled /></label>
-            <label class="tri-d">Fin <input type="date" :value="form.triage_fin" disabled /></label>
-            <span class="ro-note">report des étapes — se saisit dans Suivi des phases</span>
           </div>
           <div class="wide chk-row" v-if="form.en_triage_cond">
             <span class="tri-lbl">Triage conditionnement :</span>
@@ -789,7 +781,4 @@ button.link.release { color: #166534; }
 .tri-lbl { font-size: 12px; font-weight: 700; color: #64748b; }
 .link.link-del { color: #dc2626; }
 .link.link-del:hover { color: #b91c1c; }
-/* Indicateur déviation en lecture seule (déclaration déplacée dans Suivi des phases) */
-.chk-ro { opacity: .85; cursor: help; }
-.ro-note { font-size: 10px; color: #94a3b8; font-weight: 600; }
 </style>
