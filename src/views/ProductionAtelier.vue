@@ -329,6 +329,8 @@ function tendance(data, nMois) {
   for (let m = 0; m < n; m++) out[m] = Math.max(0, Math.round((a + b * m) * 10) / 10)
   return out
 }
+// Index de la série correspondant à l'année en cours, pour colorer sa barre du mois en cours
+const idxSerieAnneeCourante = computed(() => seriesChart.value.findIndex(s => s.label === String(anneeCourante)))
 const seriesChart = computed(() => {
   const ans = ANNEES_COMP.filter(y => anneesActives.value.has(y))
   const base = ans.map(y => ({
@@ -458,7 +460,7 @@ onMounted(charger)
         <div class="card-head"><h2 class="card-title">Comparaison mensuelle par atelier</h2></div>
         <div class="chart-titre">{{ atelierSel }} — lots terminés par mois</div>
         <div class="chart-wrap">
-          <MiniChart v-if="seriesChart.length" :series="seriesChart" :labels="MOIS" :show-switch="true" :show-values="true" clickable @pick="ouvrirBarrePA" />
+          <MiniChart v-if="seriesChart.length" :series="seriesChart" :labels="MOIS" :show-switch="true" :show-values="true" :current-index="moisCourant" :current-serie="idxSerieAnneeCourante" clickable @pick="ouvrirBarrePA" />
           <p v-else class="empty">Sélectionne au moins une année pour afficher le graphe.</p>
         </div>
       </section>
