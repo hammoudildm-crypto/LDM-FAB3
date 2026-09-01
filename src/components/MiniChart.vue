@@ -13,8 +13,16 @@ const props = defineProps({
   spacer: { type: Boolean, default: false },
   clickable: { type: Boolean, default: false },
   showValues: { type: Boolean, default: false },
-  valueFormat: { type: Function, default: null }
+  valueFormat: { type: Function, default: null },
+  // Mise en avant du mois en cours : index dans `labels` (-1 = désactivé)
+  currentIndex: { type: Number, default: -1 },
+  // Série dont la barre est recolorée dans ce mois (-1 = aucune, seule la bande du mois s'affiche)
+  currentSerie: { type: Number, default: -1 }
 })
+function estEnCours(i, si) {
+  return props.currentIndex >= 0 && i === props.currentIndex
+    && props.currentSerie >= 0 && si === props.currentSerie
+}
 const emit = defineEmits(['pick'])
 const vfmt = computed(() => props.valueFormat || props.format)
 
@@ -56,6 +64,7 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
             <stop offset="100%" :stop-color="s.color" stop-opacity="0" />
           </linearGradient>
         </defs>
+        <rect v-if="currentIndex >= 0" :x="x(currentIndex) - bandW / 2" :y="CH.pt" :width="bandW" :height="CH.h - CH.pt - CH.pb" class="lch-now" />
         <line v-for="g in gl" :key="'gr' + g" :x1="CH.pl" :x2="CH.w - CH.pr" :y1="gridY(g)" :y2="gridY(g)" class="lch-grid" />
         <template v-if="chartStyle === 'aires'">
           <polygon v-for="(s, si) in series" :key="'a' + si" :points="area(s.data)" :fill="'url(#mc-g' + si + ')'" />
@@ -66,7 +75,7 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
             <circle v-if="s.data[i] != null" :cx="x(i)" :cy="y(s.data[i])" r="3.3" :fill="colOf(s, s.data[i])" class="mc-pt"><title>{{ mo }} — {{ s.label }} : {{ format(s.data[i]) }}</title></circle>
             <text v-if="showValues && s.data[i] != null" :x="x(i)" :y="y(s.data[i]) - 7" text-anchor="middle" class="mc-val" :class="{ multi: series.length > 1 }" :fill="series.length > 1 ? s.color : '#334155'">{{ vfmt(s.data[i]) }}</text>
           </template>
-          <text :x="x(i)" :y="CH.h - 8" text-anchor="middle" class="lch-lbl">{{ mo }}</text>
+          <text :x="x(i)" :y="CH.h - 8" text-anchor="middle" class="lch-lbl" :class="{ now: i === currentIndex }">{{ mo }}</text>
         </template>
         <template v-if="clickable">
           <rect v-for="(mo, i) in labels" :key="'h' + i" :x="x(i) - bandW / 2" :y="CH.pt" :width="bandW" :height="CH.h - CH.pt - CH.pb" fill="transparent" class="mc-hit" @click="emit('pick', i)"><title>{{ mo }}</title></rect>
@@ -75,10 +84,10 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
     </div>
 
     <div v-else class="ch">
-      <div v-for="(mo, i) in labels" :key="i" class="ch-group">
+      <div v-for="(mo, i) in labels" :key="i" class="ch-group" :class="{ 'grp-now': i === currentIndex }">
         <div class="ch-bars">
           <template v-for="(s, si) in series" :key="si">
-            <div v-if="s.data[i] != null" class="ch-bar" :class="{ clic: clickable }" @click.stop="clickable && emit('pick', i, si)" :style="{ height: barH(s.data[i]), backgroundColor: colOf(s, s.data[i]), width: (series.length === 1 ? 82 : Math.floor(84 / series.length)) + '%', maxWidth: (series.length === 1 ? 34 : Math.floor(72 / series.length)) + 'px' }" :title="mo + ' — ' + s.label + ' : ' + format(s.data[i])"><span v-if="showValues && s.data[i]" class="ch-val" :class="{ rot: series.length > 1 }">{{ vfmt(s.data[i]) }}</span></div>
+            <div v-if="s.data[i] != null" class="ch-bar" :class="{ clic: clickable, 'bar-now': estEnCours(i, si) }" @click.stop="clickable && emit('pick', i, si)" :style="{ height: barH(s.data[i]), backgroundColor: colOf(s, s.data[i]), width: (series.length === 1 ? 82 : Math.floor(84 / series.length)) + '%', maxWidth: (series.length === 1 ? 34 : Math.floor(72 / series.length)) + 'px' }" :title="mo + ' — ' + s.label + ' : ' + format(s.data[i]) + (estEnCours(i, si) ? ' (mois en cours, incomplet)' : '')"><span v-if="showValues && s.data[i]" class="ch-val" :class="{ rot: series.length > 1 }">{{ vfmt(s.data[i]) }}</span></div>
           </template>
         </div>
         <div class="ch-lbl">{{ mo }}</div>
@@ -111,6 +120,13 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
 .mc-val.multi { font-size: 15px; }
 .ch-bar:hover { filter: brightness(1.08); }
 .ch-lbl { font-size: 10px; color: #94a3b8; margin-top: 6px; font-weight: 600; }
+/* Mois en cours : couleur distincte (le !important est nécessaire pour passer devant
+   le backgroundColor inline de la série) */
+.ch-bar.bar-now { background-color: #f59e0b !important; box-shadow: 0 0 0 1.5px #b45309 inset; }
+.ch-group.grp-now { background: rgba(245, 158, 11, .10); border-radius: 8px; }
+.ch-group.grp-now .ch-lbl { color: #b45309; font-weight: 800; }
+.lch-now { fill: rgba(245, 158, 11, .12); }
+.lch-lbl.now { fill: #b45309; font-weight: 800; }
 .mc-hit { cursor: pointer; }
 .mc-hit:hover { fill: rgba(15,118,110,.06); }
 .ch-group.clic { cursor: pointer; border-radius: 6px; transition: background .15s ease; }
