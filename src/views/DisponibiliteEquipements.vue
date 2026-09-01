@@ -75,7 +75,7 @@ async function charger() {
   equipements.value = re.data || []
 
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, en_triage, triage_debut, triage_fin, qte_a_trier, qte_triee, en_triage_cond, triage_cond_debut, triage_cond_fin, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite, taille_lot, poids_unitaire_mg), equipements(code, nom)')
+    .select('id, numero_lot, statut, deviation, deviation_cond, en_triage, triage_debut, triage_fin, qte_a_trier, qte_triee, en_triage_cond, triage_cond_debut, triage_cond_fin, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite, taille_lot, poids_unitaire_mg), equipements(code, nom)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
@@ -235,6 +235,9 @@ const lotsTriage = computed(() => {
 
 const triageIds = computed(() => new Set(lotsTriage.value.map(l => l.id)))
 const triageCondIds = computed(() => new Set(ofs.value.filter(o => !!o.en_triage_cond && !o.triage_cond_fin).map(o => o.id)))
+// Déviations déclarées sur l'OF (page Ordres de fabrication)
+const deviationIds = computed(() => new Set(ofs.value.filter(o => !!o.deviation).map(o => o.id)))
+const deviationCondIds = computed(() => new Set(ofs.value.filter(o => !!o.deviation_cond).map(o => o.id)))
 // File par phase : lots à l'étape courante (en attente = étape précédente finie ; en cours = démarrée)
 const anneeCourante = new Date().getFullYear()
 const planParPhase = computed(() => {
@@ -285,7 +288,7 @@ const queuePhase = computed(() => {
     // Fabrication finie = dernière phase de la gamme du produit terminée (critère fiable, pas la date).
     const kDern = gamme.length ? phaseKey(gamme[gamme.length - 1]) : null
     const fabTerminee = !!o.date_fin_fabrication || !!(kDern && pl[kDern] && pl[kDern].statut === 'Terminé')
-    const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
+    const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), deviation: deviationIds.value.has(o.id), deviationCond: deviationCondIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !fabTerminee) ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
     if (directCond) {
@@ -440,6 +443,64 @@ const kpisFile = computed(() => {
     { v: fmt(perimes), l: "OF périmés", tint: perimes > 0 ? TINTS.rose : TINTS.slate, ic: ICONS.alert },
   ]
 })
+// ===== Qualité : suivi du triage et des déviations =====
+// Population annuelle : lots dont la fabrication est terminée dans l'année (même base que le rapport hebdo).
+const qualiteAnnee = computed(() => {
+  const finis = ofs.value.filter(o => o.date_fin_fabrication
+    && new Date(o.date_fin_fabrication).getFullYear() === anneeCourante
+    && ['Terminé', 'Libéré', 'Rejeté'].includes(o.statut))
+  const brft = (k) => finis.length ? Math.round(finis.filter(o => o.statut !== 'Rejeté' && !o[k]).length / finis.length * 1000) / 10 : null
+  return {
+    finis: finis.length,
+    devFab: finis.filter(o => !!o.deviation).length,
+    devCond: finis.filter(o => !!o.deviation_cond).length,
+    brftFab: brft('deviation'), brftCond: brft('deviation_cond')
+  }
+})
+// Répartition par atelier sur les lots actuellement en file (attente + en cours)
+const qualiteParAtelier = computed(() => {
+  const compte = (lots) => {
+    let tri = 0, dev = 0
+    for (const l of lots) { if (l.triage || l.triageCond) tri++; if (l.deviation || l.deviationCond) dev++ }
+    return { tot: lots.length, tri, dev }
+  }
+  const rows = []
+  const pes = attentePeseeList.value.map(l => ({
+    triage: triageIds.value.has(l.id), triageCond: triageCondIds.value.has(l.id),
+    deviation: deviationIds.value.has(l.id), deviationCond: deviationCondIds.value.has(l.id)
+  }))
+  const p = compte(pes)
+  if (p.tot) rows.push({ label: 'Pesée (attente)', ...p })
+  for (const ph of vueFile.value) rows.push({ label: ph.phase.label, ...compte([...ph.attente, ...ph.cours]) })
+  let cond = []
+  for (const g of vueCondLignes.value) cond = cond.concat(g.attente, g.cours)
+  const c = compte(cond)
+  if (c.tot) rows.push({ label: 'Conditionnement', ...c })
+  return rows.map(r => ({ ...r, pctDev: r.tot ? Math.round(r.dev / r.tot * 100) : 0 }))
+})
+const qualiteTotaux = computed(() => {
+  const t = qualiteParAtelier.value.reduce((a, r) => ({ tot: a.tot + r.tot, tri: a.tri + r.tri, dev: a.dev + r.dev }), { tot: 0, tri: 0, dev: 0 })
+  return { ...t, pctDev: t.tot ? Math.round(t.dev / t.tot * 100) : 0 }
+})
+const kpisQualite = computed(() => {
+  const q = qualiteAnnee.value
+  const enTriFab = lotsTriage.value.length
+  const enTriCond = triageCondIds.value.size
+  let aTrier = 0, triee = 0
+  for (const l of lotsTriage.value) { const e = qteEdit[l.id] || {}; aTrier += Number(e.aTrier) || 0; triee += Number(e.triee) || 0 }
+  const pctTri = aTrier > 0 ? Math.min(100, Math.round(triee / aTrier * 100)) : null
+  const devProd = qualiteTotaux.value.dev
+  return [
+    { v: fmt(enTriFab), l: 'Lots en triage — fabrication', tint: enTriFab ? TINTS.amber : TINTS.slate, ic: ICONS.hourglass },
+    { v: fmt(enTriCond), l: 'Lots en triage — conditionnement', tint: enTriCond ? TINTS.amber : TINTS.slate, ic: ICONS.package },
+    { v: pctTri == null ? '—' : pctTri + ' %', l: 'Avancement du triage (Kg triés / à trier)', tint: TINTS.blue, ic: ICONS.percent },
+    { v: fmt(devProd), l: 'Lots en file avec déviation', tint: devProd ? TINTS.rose : TINTS.slate, ic: ICONS.alert },
+    { v: fmt(q.devFab), l: 'Déviations fabrication ' + anneeCourante, tint: q.devFab ? TINTS.rose : TINTS.slate, ic: ICONS.flask },
+    { v: q.brftFab == null ? '—' : q.brftFab + ' %', l: 'BRFT fabrication ' + anneeCourante + ' (' + q.finis + ' lots)', tint: TINTS.emerald, ic: ICONS.check },
+    { v: q.brftCond == null ? '—' : q.brftCond + ' %', l: 'BRFT conditionnement ' + anneeCourante, tint: TINTS.teal, ic: ICONS.check },
+  ]
+})
+
 const chargeAteliers = computed(() => {
   const arr = vueFile.value.map(ph => ({ label: ph.phase.label, attente: ph.attente.length, cours: ph.cours.length, total: ph.attente.length + ph.cours.length }))
   if (attentePeseeList.value.length) arr.unshift({ label: "Pesée (attente)", attente: attentePeseeList.value.length, cours: 0, total: attentePeseeList.value.length })
@@ -800,6 +861,41 @@ onMounted(async () => {
             </div>
           </section>
         </div>
+        <section class="qual-box">
+          <h3 class="qual-h">Qualité — triage et déviations</h3>
+          <div class="kpi-grid k3 qual-kpis">
+            <div class="kpi" v-for="(k, i) in kpisQualite" :key="i">
+              <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
+              <div class="kpi-lbl">{{ k.l }}</div>
+            </div>
+          </div>
+          <table v-if="qualiteParAtelier.length" class="qual-tbl">
+            <thead><tr><th>Atelier</th><th class="qnum">Lots en file</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th>Part déviation</th></tr></thead>
+            <tbody>
+              <tr v-for="r in qualiteParAtelier" :key="r.label">
+                <td class="q-at">{{ r.label }}</td>
+                <td class="qnum">{{ fmt(r.tot) }}</td>
+                <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
+                <td class="qnum" :class="{ 'q-bad': r.dev > 0 }">{{ r.dev || '—' }}</td>
+                <td>
+                  <div class="q-prog">
+                    <div class="qp-bar"><div class="qp-fill" :class="{ bad: r.pctDev >= 20 }" :style="{ width: Math.min(100, r.pctDev) + '%' }"></div></div>
+                    <span class="qp-pct">{{ r.pctDev }}%</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="q-tot">
+                <td class="q-at">Total</td>
+                <td class="qnum">{{ fmt(qualiteTotaux.tot) }}</td>
+                <td class="qnum">{{ qualiteTotaux.tri || '—' }}</td>
+                <td class="qnum">{{ qualiteTotaux.dev || '—' }}</td>
+                <td><span class="qp-pct">{{ qualiteTotaux.pctDev }}%</span></td>
+              </tr>
+            </tfoot>
+          </table>
+        </section>
         <section class="triage-box">
           <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
           <table v-if="lotsTriage.length" class="triage-tbl">
@@ -1101,6 +1197,23 @@ onMounted(async () => {
 .atelier-titre { font-size: 10.5px; margin: 0 0 3px; }
 .at-plan { font-size: 9px; }
 .searchbar input[type=text] { padding: 4px 8px; font-size: 10.5px; }
+/* Qualité — triage et déviations */
+.qual-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.qual-h { margin: 0 0 12px; font-size: 15px; font-weight: 800; color: #0f172a; }
+.qual-kpis { margin-bottom: 14px; }
+.qual-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.qual-tbl th { text-align: left; font-size: 11px; color: #64748b; font-weight: 700; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+.qual-tbl td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
+.qual-tbl .qnum { text-align: right; white-space: nowrap; }
+.qual-tbl .q-at { font-weight: 600; }
+.qual-tbl .q-warn { color: #b45309; font-weight: 700; }
+.qual-tbl .q-bad { color: #dc2626; font-weight: 700; }
+.qual-tbl .q-tot td { border-top: 2px solid #e2e8f0; border-bottom: none; font-weight: 800; background: #f8fafc; }
+.q-prog { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+.qp-bar { flex: 1; height: 6px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.qp-fill { height: 100%; background: #f59e0b; border-radius: 999px; transition: width .2s; }
+.qp-fill.bad { background: #dc2626; }
+.qp-pct { font-size: 11px; font-weight: 700; color: #64748b; min-width: 32px; text-align: right; }
 /* Lots en cours de triage */
 .triage-box { background: #fef3c7; border: 1px solid #fde68a; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
 .triage-h { margin: 0 0 10px; font-size: 15px; font-weight: 800; color: #92400e; }
