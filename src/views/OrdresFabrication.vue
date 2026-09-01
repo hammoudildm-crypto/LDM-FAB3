@@ -250,7 +250,8 @@ async function enregistrer() {
     statut: statutFinal,
     equipement_id: form.equipement_id || null,
     commentaire: form.commentaire.trim() || null,
-    deviation: !!form.deviation,
+    // deviation : NE PLUS ÉCRIRE ICI. Le champ est calculé depuis suivi_phases.deviation
+    // par majDatesLot() dans Suivi des phases. L'écrire ici écraserait le report.
     en_triage: !!form.en_triage,
     deviation_cond: !!form.deviation_cond,
     en_triage_cond: !!form.en_triage_cond,
@@ -499,7 +500,7 @@ onMounted(async () => {
           </label>
           <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
           <div class="wide chk-row chk-row-1l">
-            <label class="chk"><input type="checkbox" v-model="form.deviation" /> Déviation fabrication</label>
+            <label class="chk chk-ro" title="Se déclare désormais sur la page Suivi des phases, à l'étape concernée. Cet indicateur est le report automatique des phases du lot."><input type="checkbox" :checked="form.deviation" disabled /> Déviation fabrication <span class="ro-note">(voir Suivi des phases)</span></label>
             <label class="chk"><input type="checkbox" v-model="form.deviation_cond" /> Déviation conditionnement</label>
             <label class="chk"><input type="checkbox" v-model="form.en_triage" @change="majTriage('fab')" /> En triage fabrication</label>
             <label class="chk"><input type="checkbox" v-model="form.en_triage_cond" @change="majTriage('cond')" /> En triage conditionnement</label>
@@ -788,4 +789,7 @@ button.link.release { color: #166534; }
 .tri-lbl { font-size: 12px; font-weight: 700; color: #64748b; }
 .link.link-del { color: #dc2626; }
 .link.link-del:hover { color: #b91c1c; }
+/* Indicateur déviation en lecture seule (déclaration déplacée dans Suivi des phases) */
+.chk-ro { opacity: .85; cursor: help; }
+.ro-note { font-size: 10px; color: #94a3b8; font-weight: 600; }
 </style>
