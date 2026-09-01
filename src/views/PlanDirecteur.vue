@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted, watch, inject } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
+import { ICONS, TINTS } from '../icons'
 
 const peutEditer = inject('peutEditer', ref(true))
 
@@ -116,6 +117,23 @@ function totalMois(m) {
 }
 const totalGeneral = computed(() => produits.value.reduce((s, p) => s + totalLigne(p), 0))
 const valeurGenerale = computed(() => produits.value.reduce((s, p) => s + valeurLigne(p), 0))
+// KPI du plan de l'année sélectionnée
+const kpisPlan = computed(() => {
+  const nbPlanifies = produits.value.filter(p => totalLigne(p) > 0).length
+  const nbSansPlan = produits.value.length - nbPlanifies
+  let moisPic = 0, valPic = 0
+  for (let m = 1; m <= 12; m++) { const v = totalMois(m); if (v > valPic) { valPic = v; moisPic = m } }
+  const moy = totalGeneral.value / 12
+  const M = (n) => n >= 1e6 ? (n / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' M' : fmt(Math.round(n))
+  return [
+    { v: M(totalGeneral.value), l: 'Boîtes planifiées ' + annee.value, tint: TINTS.indigo, ic: ICONS.box },
+    { v: M(valeurGenerale.value) + ' DA', l: 'Valeur du plan', tint: TINTS.emerald, ic: ICONS.money },
+    { v: fmt(nbPlanifies) + ' / ' + fmt(produits.value.length), l: 'Produits planifiés', tint: TINTS.blue, ic: ICONS.pill },
+    { v: valPic ? MOIS[moisPic - 1] : '—', l: valPic ? ('Mois le plus chargé (' + M(valPic) + ')') : 'Mois le plus chargé', tint: TINTS.violet, ic: ICONS.calendar },
+    { v: M(moy), l: 'Moyenne mensuelle', tint: TINTS.teal, ic: ICONS.activity },
+    { v: fmt(nbSansPlan), l: 'Produits sans plan', tint: nbSansPlan ? TINTS.amber : TINTS.slate, ic: ICONS.alert },
+  ]
+})
 
 async function enregistrer() {
   erreur.value = ''
@@ -224,6 +242,12 @@ watch(annee, chargerPlan)
       </div>
     </PageHeader>
 
+    <div v-if="produits.length" class="kpi-grid pdp-kpis">
+      <div class="kpi" v-for="(k, i) in kpisPlan" :key="i">
+        <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val">{{ k.v }}</div></div>
+        <div class="kpi-lbl">{{ k.l }}</div>
+      </div>
+    </div>
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="message" class="ok">{{ message }}</p>
 
@@ -277,7 +301,7 @@ watch(annee, chargerPlan)
       </table>
     </div>
 
-    <p class="hint">Astuce : laisse une case vide ou mets <strong>0</strong> s'il n'y a pas de production planifiée. Clique <strong>Enregistrer le plan</strong> pour sauvegarder toute la grille. La valeur est calculée à partir du PCSU de chaque produit.<br><strong>Importer un fichier</strong> : Excel/CSV avec <strong>Code PF</strong> en colonne 1 et les mois <strong>Jan → Déc</strong> en colonnes 2 à 13 ; les valeurs remplissent la grille de l'année choisie (clique ensuite Enregistrer).</p>
+    <details class="hint"><summary>Aide à la saisie et à l'import</summary><p>Astuce : laisse une case vide ou mets <strong>0</strong> s'il n'y a pas de production planifiée. Clique <strong>Enregistrer le plan</strong> pour sauvegarder toute la grille. La valeur est calculée à partir du PCSU de chaque produit.<br><strong>Importer un fichier</strong> : Excel/CSV avec <strong>Code PF</strong> en colonne 1 et les mois <strong>Jan → Déc</strong> en colonnes 2 à 13 ; les valeurs remplissent la grille de l'année choisie (clique ensuite Enregistrer).</p></details>
   </div>
 </template>
 
@@ -309,7 +333,7 @@ watch(annee, chargerPlan)
 .search-count { font-size: 13px; color: #64748b; font-weight: 600; }
 .no-result { text-align: center; color: #94a3b8; padding: 20px; font-size: 14px; }
 
-.table-scroll { overflow: auto; max-height: calc(100vh - 178px); background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
+.table-scroll { overflow: auto; max-height: calc(100vh - 248px); background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
 table.grid { border-collapse: collapse; font-size: 12px; width: 100%; }
 table.grid th { background: #f8fafc; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; padding: 5px 6px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
 table.grid td { padding: 2px 6px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
@@ -334,6 +358,19 @@ tfoot td { border-top: 2px solid #e2e8f0; background: #f8fafc; }
 tfoot .sticky { background: #f8fafc; }
 
 .hint { color: #64748b; font-size: 12px; margin-top: 8px; }
+.hint summary { cursor: pointer; font-weight: 700; color: #475569; list-style: none; }
+.hint summary::-webkit-details-marker { display: none; }
+.hint summary::before { content: "▸ "; color: #94a3b8; }
+.hint[open] summary::before { content: "▾ "; }
+.hint p { margin: 6px 0 0; }
+/* Bandeau KPI compact, en tête de page */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(152px, 1fr)); gap: 8px; margin: 0 0 10px; }
+.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 11px; }
+.kpi-top { display: flex; align-items: center; gap: 8px; }
+.kpi-ic { width: 24px; height: 24px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.kpi-ic svg { width: 14px; height: 14px; }
+.kpi-val { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; color: #0f172a; }
+.kpi-lbl { font-size: 10px; color: #64748b; margin-top: 2px; line-height: 1.25; }
 .cond-cell select { padding: 2px 5px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 11px; max-width: 118px; }
 /* build 2026-08-07 : colonne ligne cond. */
 </style>
