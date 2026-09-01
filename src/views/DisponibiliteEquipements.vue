@@ -700,6 +700,41 @@ onMounted(async () => {
             </div>
           </div>
         </section>
+        <section class="qual-box">
+          <h3 class="qual-h">Qualité — triage et déviations</h3>
+          <div class="kpi-grid k3 qual-kpis">
+            <div class="kpi" v-for="(k, i) in kpisQualite" :key="i">
+              <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
+              <div class="kpi-lbl">{{ k.l }}</div>
+            </div>
+          </div>
+          <table v-if="qualiteParAtelier.length" class="qual-tbl">
+            <thead><tr><th>Atelier</th><th class="qnum">Lots en file</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th>Part déviation</th></tr></thead>
+            <tbody>
+              <tr v-for="r in qualiteParAtelier" :key="r.label">
+                <td class="q-at">{{ r.label }}</td>
+                <td class="qnum">{{ fmt(r.tot) }}</td>
+                <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
+                <td class="qnum" :class="{ 'q-bad': r.dev > 0 }">{{ r.dev || '—' }}</td>
+                <td>
+                  <div class="q-prog">
+                    <div class="qp-bar"><div class="qp-fill" :class="{ bad: r.pctDev >= 20 }" :style="{ width: Math.min(100, r.pctDev) + '%' }"></div></div>
+                    <span class="qp-pct">{{ r.pctDev }}%</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="q-tot">
+                <td class="q-at">Total</td>
+                <td class="qnum">{{ fmt(qualiteTotaux.tot) }}</td>
+                <td class="qnum">{{ qualiteTotaux.tri || '—' }}</td>
+                <td class="qnum">{{ qualiteTotaux.dev || '—' }}</td>
+                <td><span class="qp-pct">{{ qualiteTotaux.pctDev }}%</span></td>
+              </tr>
+            </tfoot>
+          </table>
+        </section>
         <div class="searchbar">
           <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
           <label class="filtre-chk"><input type="checkbox" v-model="filtreUrgent" /> Urgents (&gt;{{ SEUIL_URGENT }} j)</label>
@@ -861,41 +896,6 @@ onMounted(async () => {
             </div>
           </section>
         </div>
-        <section class="qual-box">
-          <h3 class="qual-h">Qualité — triage et déviations</h3>
-          <div class="kpi-grid k3 qual-kpis">
-            <div class="kpi" v-for="(k, i) in kpisQualite" :key="i">
-              <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
-              <div class="kpi-lbl">{{ k.l }}</div>
-            </div>
-          </div>
-          <table v-if="qualiteParAtelier.length" class="qual-tbl">
-            <thead><tr><th>Atelier</th><th class="qnum">Lots en file</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th>Part déviation</th></tr></thead>
-            <tbody>
-              <tr v-for="r in qualiteParAtelier" :key="r.label">
-                <td class="q-at">{{ r.label }}</td>
-                <td class="qnum">{{ fmt(r.tot) }}</td>
-                <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
-                <td class="qnum" :class="{ 'q-bad': r.dev > 0 }">{{ r.dev || '—' }}</td>
-                <td>
-                  <div class="q-prog">
-                    <div class="qp-bar"><div class="qp-fill" :class="{ bad: r.pctDev >= 20 }" :style="{ width: Math.min(100, r.pctDev) + '%' }"></div></div>
-                    <span class="qp-pct">{{ r.pctDev }}%</span>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr class="q-tot">
-                <td class="q-at">Total</td>
-                <td class="qnum">{{ fmt(qualiteTotaux.tot) }}</td>
-                <td class="qnum">{{ qualiteTotaux.tri || '—' }}</td>
-                <td class="qnum">{{ qualiteTotaux.dev || '—' }}</td>
-                <td><span class="qp-pct">{{ qualiteTotaux.pctDev }}%</span></td>
-              </tr>
-            </tfoot>
-          </table>
-        </section>
         <section class="triage-box">
           <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
           <table v-if="lotsTriage.length" class="triage-tbl">
