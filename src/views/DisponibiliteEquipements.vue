@@ -459,14 +459,14 @@ const qualiteAnnee = computed(() => {
 })
 // Répartition par atelier sur les lots actuellement en file (attente + en cours)
 const qualiteParAtelier = computed(() => {
-  const compte = (lots, pk) => {
+  const compte = (attente, cours, pk) => {
     let tri = 0
     const devLots = []
-    for (const l of lots) {
+    for (const l of [...attente, ...cours]) {
       if (l.triage || l.triageCond) tri++
       if (l.deviation || l.deviationCond) devLots.push({ id: l.id, lot: l.lot, code: l.code, desig: l.desig, deviation: !!l.deviation, deviationCond: !!l.deviationCond, pk })
     }
-    return { tot: lots.length, tri, dev: devLots.length, devLots }
+    return { tot: attente.length + cours.length, att: attente.length, enc: cours.length, tri, dev: devLots.length, devLots }
   }
   const rows = []
   const pes = attentePeseeList.value.map(l => ({
@@ -474,14 +474,16 @@ const qualiteParAtelier = computed(() => {
     triage: triageIds.value.has(l.id), triageCond: triageCondIds.value.has(l.id),
     deviation: deviationIds.value.has(l.id), deviationCond: deviationCondIds.value.has(l.id)
   }))
-  const p = compte(pes, 'pesee')
+  const p = compte(pes, [], 'pesee')
   if (p.tot) rows.push({ label: 'Pesée (attente)', ...p })
-  for (const ph of vueFile.value) rows.push({ label: ph.phase.label, ...compte([...ph.attente, ...ph.cours], ph.key) })
-  let cond = []
-  for (const g of vueCondLignes.value) cond = cond.concat(g.attente, g.cours)
-  const c = compte(cond, 'conditionnement')
+  for (const ph of vueFile.value) rows.push({ label: ph.phase.label, ...compte(ph.attente, ph.cours, ph.key) })
+  let cAtt = [], cCours = []
+  for (const g of vueCondLignes.value) { cAtt = cAtt.concat(g.attente); cCours = cCours.concat(g.cours) }
+  const c = compte(cAtt, cCours, 'conditionnement')
   if (c.tot) rows.push({ label: 'Conditionnement', ...c })
-  return rows.map(r => ({ ...r, pctDev: r.tot ? Math.round(r.dev / r.tot * 100) : 0 }))
+  // Charge relative : barre proportionnelle à l'atelier le plus chargé (reprend « Charge par atelier »)
+  const max = Math.max(1, ...rows.map(r => r.tot))
+  return rows.map(r => ({ ...r, pct: Math.round(r.tot / max * 100), pctDev: r.tot ? Math.round(r.dev / r.tot * 100) : 0 }))
 })
 // Dépliage du détail des lots en déviation (clic sur la colonne « Avec déviation »)
 const devOuvert = ref(null)
@@ -492,7 +494,7 @@ const devLotsTous = computed(() => {
   return out
 })
 const qualiteTotaux = computed(() => {
-  const t = qualiteParAtelier.value.reduce((a, r) => ({ tot: a.tot + r.tot, tri: a.tri + r.tri, dev: a.dev + r.dev }), { tot: 0, tri: 0, dev: 0 })
+  const t = qualiteParAtelier.value.reduce((a, r) => ({ tot: a.tot + r.tot, att: a.att + r.att, enc: a.enc + r.enc, tri: a.tri + r.tri, dev: a.dev + r.dev }), { tot: 0, att: 0, enc: 0, tri: 0, dev: 0 })
   return { ...t, pctDev: t.tot ? Math.round(t.dev / t.tot * 100) : 0 }
 })
 const kpisQualite = computed(() => {
@@ -514,12 +516,6 @@ const kpisQualite = computed(() => {
   ]
 })
 
-const chargeAteliers = computed(() => {
-  const arr = vueFile.value.map(ph => ({ label: ph.phase.label, attente: ph.attente.length, cours: ph.cours.length, total: ph.attente.length + ph.cours.length }))
-  if (attentePeseeList.value.length) arr.unshift({ label: "Pesée (attente)", attente: attentePeseeList.value.length, cours: 0, total: attentePeseeList.value.length })
-  const max = Math.max(1, ...arr.map(x => x.total))
-  return arr.map(x => ({ ...x, pct: Math.round(x.total / max * 100) })).sort((a, b) => b.total - a.total)
-})
 // Lots planifiés EN ATTENTE DE PESÉE : réception OF faite, pesée pas encore terminée
 const attentePeseeList = computed(() => {
   const rq = recherche.value.trim().toLowerCase()
@@ -703,18 +699,8 @@ onMounted(async () => {
             <div class="kpi-lbl">{{ k.l }}</div>
           </div>
         </div>
-        <section v-if="chargeAteliers.length" class="card charge-card">
-          <h3 class="card-title">Charge par atelier — lots en file</h3>
-          <div class="charge-list">
-            <div v-for="c in chargeAteliers" :key="c.label" class="charge-row">
-              <span class="charge-lbl">{{ c.label }}</span>
-              <div class="charge-bar-wrap"><div class="charge-bar" :style="{ width: c.pct + '%' }"></div></div>
-              <span class="charge-val">{{ c.total }}<span v-if="c.attente" class="charge-att"> · {{ c.attente }} att.</span></span>
-            </div>
-          </div>
-        </section>
         <section class="qual-box">
-          <h3 class="qual-h">Qualité — triage et déviations</h3>
+          <h3 class="qual-h">Charge, triage et déviations par atelier</h3>
           <div class="kpi-grid k3 qual-kpis">
             <div class="kpi" v-for="(k, i) in kpisQualite" :key="i">
               <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
@@ -722,22 +708,22 @@ onMounted(async () => {
             </div>
           </div>
           <table v-if="qualiteParAtelier.length" class="qual-tbl">
-            <thead><tr><th>Atelier</th><th class="qnum">Lots en file</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th>Part déviation</th></tr></thead>
+            <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th></tr></thead>
             <tbody>
               <template v-for="r in qualiteParAtelier" :key="r.label">
                 <tr>
                   <td class="q-at">{{ r.label }}</td>
-                  <td class="qnum">{{ fmt(r.tot) }}</td>
+                  <td>
+                    <div class="q-charge">
+                      <div class="qc-bar"><div class="qc-fill" :style="{ width: r.pct + '%' }"></div></div>
+                      <span class="qc-val">{{ fmt(r.tot) }}<span v-if="r.att" class="qc-att"> · {{ r.att }} att.</span><span v-if="r.enc" class="qc-enc"> · {{ r.enc }} en cours</span></span>
+                    </div>
+                  </td>
                   <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
                   <td class="qnum" :class="{ 'q-bad': r.dev > 0, 'q-clic': r.dev > 0 }" @click="toggleDev(r.label, r.dev)" :title="r.dev ? 'Voir les lots en déviation' : ''">
                     {{ r.dev || '—' }}<span v-if="r.dev" class="q-caret">{{ devOuvert === r.label ? '▾' : '▸' }}</span>
                   </td>
-                  <td>
-                    <div class="q-prog">
-                      <div class="qp-bar"><div class="qp-fill" :class="{ bad: r.pctDev >= 20 }" :style="{ width: Math.min(100, r.pctDev) + '%' }"></div></div>
-                      <span class="qp-pct">{{ r.pctDev }}%</span>
-                    </div>
-                  </td>
+                  <td class="qnum" :class="{ 'q-bad': r.pctDev >= 20 }">{{ r.pctDev }}%</td>
                 </tr>
                 <tr v-if="devOuvert === r.label" class="q-detail">
                   <td colspan="5">
@@ -761,12 +747,12 @@ onMounted(async () => {
             <tfoot>
               <tr class="q-tot">
                 <td class="q-at">Total</td>
-                <td class="qnum">{{ fmt(qualiteTotaux.tot) }}</td>
+                <td class="qc-tot">{{ fmt(qualiteTotaux.tot) }}<span v-if="qualiteTotaux.att" class="qc-att"> · {{ qualiteTotaux.att }} att.</span><span v-if="qualiteTotaux.enc" class="qc-enc"> · {{ qualiteTotaux.enc }} en cours</span></td>
                 <td class="qnum">{{ qualiteTotaux.tri || '—' }}</td>
                 <td class="qnum" :class="{ 'q-clic': qualiteTotaux.dev > 0 }" @click="toggleDev('__tous__', qualiteTotaux.dev)" :title="qualiteTotaux.dev ? 'Voir tous les lots en déviation' : ''">
                   {{ qualiteTotaux.dev || '—' }}<span v-if="qualiteTotaux.dev" class="q-caret">{{ devOuvert === '__tous__' ? '▾' : '▸' }}</span>
                 </td>
-                <td><span class="qp-pct">{{ qualiteTotaux.pctDev }}%</span></td>
+                <td class="qnum">{{ qualiteTotaux.pctDev }}%</td>
               </tr>
               <tr v-if="devOuvert === '__tous__'" class="q-detail">
                 <td colspan="5">
@@ -1263,11 +1249,14 @@ onMounted(async () => {
 .qual-tbl .q-warn { color: #b45309; font-weight: 700; }
 .qual-tbl .q-bad { color: #dc2626; font-weight: 700; }
 .qual-tbl .q-tot td { border-top: 2px solid #e2e8f0; border-bottom: none; font-weight: 800; background: #f8fafc; }
-.q-prog { display: flex; align-items: center; gap: 8px; min-width: 120px; }
-.qp-bar { flex: 1; height: 6px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
-.qp-fill { height: 100%; background: #f59e0b; border-radius: 999px; transition: width .2s; }
-.qp-fill.bad { background: #dc2626; }
-.qp-pct { font-size: 11px; font-weight: 700; color: #64748b; min-width: 32px; text-align: right; }
+.qual-tbl .qcharge-h { min-width: 190px; }
+.q-charge { display: flex; align-items: center; gap: 9px; }
+.qc-bar { flex: 1; min-width: 60px; height: 13px; background: #ecfeff; border-radius: 999px; overflow: hidden; }
+.qc-fill { height: 100%; background: linear-gradient(90deg, #22d3ee, #0891b2); border-radius: 999px; min-width: 2px; transition: width .3s ease; }
+.qc-val { font-size: 12px; font-weight: 800; color: #0891b2; white-space: nowrap; }
+.qc-att { font-weight: 600; color: #94a3b8; font-size: 10px; }
+.qc-enc { font-weight: 600; color: #64748b; font-size: 10px; }
+.qc-tot { font-size: 13px; font-weight: 800; color: #0891b2; white-space: nowrap; }
 .qual-tbl .q-clic { cursor: pointer; user-select: none; }
 .qual-tbl .q-clic:hover { text-decoration: underline; }
 .q-caret { font-size: 9px; margin-left: 4px; color: #94a3b8; }
@@ -1345,14 +1334,6 @@ select:focus, input:focus { outline: none !important; border-color: #06b6d4 !imp
 .searchbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .filtre-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #475569; cursor: pointer; white-space: nowrap; padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; }
 .filtre-chk input { accent-color: #0891b2; width: 15px; height: 15px; }
-.charge-card { margin: 10px 0 0; }
-.charge-list { display: flex; flex-direction: column; gap: 5px; }
-.charge-row { display: grid; grid-template-columns: 160px 1fr auto; align-items: center; gap: 10px; }
-.charge-lbl { font-size: 12px; font-weight: 600; color: #334155; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.charge-bar-wrap { background: #ecfeff; border-radius: 999px; height: 13px; overflow: hidden; }
-.charge-bar { height: 100%; background: linear-gradient(90deg, #22d3ee, #0891b2); border-radius: 999px; min-width: 2px; transition: width .3s ease; }
-.charge-val { font-size: 12px; font-weight: 800; color: #0891b2; white-space: nowrap; min-width: 30px; text-align: right; }
-.charge-att { font-weight: 600; color: #94a3b8; font-size: 10px; }
 @media (max-width: 700px) { .charge-row { grid-template-columns: 100px 1fr auto; } .charge-lbl { font-size: 10px; } }
 
 /* Tuile KPI à valeur texte (ex. atelier le plus chargé) : police réduite */
