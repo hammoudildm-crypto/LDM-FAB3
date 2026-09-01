@@ -7,7 +7,36 @@ const peutEditer = inject('peutEditer', ref(true))
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 const anneeCourante = new Date().getFullYear()
-const ANNEES = [anneeCourante - 1, anneeCourante, anneeCourante + 1, anneeCourante + 2]
+// Horizon du plan : années au-delà de anneeCourante + 2, ajoutées à la demande et mémorisées.
+const CLE_HORIZON = 'pd_horizon_annees'
+const horizon = ref(0)
+try { horizon.value = Math.max(0, parseInt(localStorage.getItem(CLE_HORIZON) || '0', 10) || 0) } catch (e) { /* ignore */ }
+// Année la plus lointaine ayant déjà des données : elle reste toujours proposée,
+// même si l'horizon local est plus court (autre poste, autre navigateur).
+const anneeMaxPlan = ref(0)
+const ANNEES = computed(() => {
+  const fin = Math.max(anneeCourante + 2 + horizon.value, anneeMaxPlan.value)
+  const out = []
+  for (let a = anneeCourante - 1; a <= fin; a++) out.push(a)
+  return out
+})
+function ajouterAnnee() {
+  horizon.value++
+  try { localStorage.setItem(CLE_HORIZON, String(horizon.value)) } catch (e) { /* ignore */ }
+  annee.value = ANNEES.value[ANNEES.value.length - 1]
+}
+// Ne retire qu'une année vide : celles qui portent des données restent couvertes par anneeMaxPlan.
+const peutRetirerAnnee = computed(() => horizon.value > 0 && ANNEES.value[ANNEES.value.length - 1] > anneeMaxPlan.value)
+function retirerAnnee() {
+  if (!peutRetirerAnnee.value) return
+  horizon.value--
+  try { localStorage.setItem(CLE_HORIZON, String(horizon.value)) } catch (e) { /* ignore */ }
+  if (!ANNEES.value.includes(annee.value)) annee.value = ANNEES.value[ANNEES.value.length - 1]
+}
+async function chargerAnneeMax() {
+  const r = await supabase.from('plan_production').select('annee').order('annee', { ascending: false }).limit(1)
+  anneeMaxPlan.value = Number(r.data && r.data[0] ? r.data[0].annee : 0) || 0
+}
 
 const annee = ref(anneeCourante)
 const produits = ref([])
@@ -107,6 +136,7 @@ async function enregistrer() {
     if (ins.error) { erreur.value = ins.error.message; enCours.value = false; return }
   }
   enCours.value = false
+  await chargerAnneeMax()
   message.value = rows.length ? ('Plan ' + annee.value + ' enregistré (' + rows.length + ' valeurs).') : ('Plan ' + annee.value + ' vidé — aucune valeur enregistrée.')
 }
 
@@ -163,7 +193,7 @@ async function importerFichier(e) {
 }
 function fmt(n) { return n == null ? '' : Number(n).toLocaleString('fr-FR') }
 
-onMounted(async () => { await chargerProduits(); await chargerPlan() })
+onMounted(async () => { await chargerAnneeMax(); await chargerProduits(); await chargerPlan() })
 watch(annee, chargerPlan)
 </script>
 
@@ -173,9 +203,13 @@ watch(annee, chargerPlan)
       subtitle="Plan de fabrication par produit et par mois (quantités en unités / boîtes).">
       <div class="controls">
         <label class="annee">Année
-          <select v-model.number="annee">
-            <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
-          </select>
+          <div class="annee-row">
+            <select v-model.number="annee">
+              <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
+            </select>
+            <button v-if="peutEditer" type="button" class="an-btn" title="Ajouter l'année suivante au plan" @click="ajouterAnnee">+</button>
+            <button v-if="peutEditer" type="button" class="an-btn" :disabled="!peutRetirerAnnee" title="Retirer la dernière année (seulement si elle ne contient aucune donnée)" @click="retirerAnnee">−</button>
+          </div>
         </label>
         <button v-if="peutEditer" class="btn ghost" :disabled="enCours || !produits.length" @click="declencherImport">
           Importer un fichier
@@ -255,6 +289,10 @@ watch(annee, chargerPlan)
 .controls { display: flex; align-items: flex-end; gap: 12px; }
 .annee { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
 .annee select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 600; color: #1b2733; }
+.annee-row { display: flex; align-items: stretch; gap: 5px; }
+.an-btn { width: 32px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #475569; font-size: 17px; font-weight: 700; line-height: 1; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.an-btn:hover:not(:disabled) { background: #eef2ff; color: #4338ca; border-color: #a5b4fc; }
+.an-btn:disabled { opacity: .4; cursor: not-allowed; }
 
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .ok { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
