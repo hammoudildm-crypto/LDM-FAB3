@@ -91,6 +91,7 @@ async function charger() {
   suivi.value = rs.data || []
 
   await chargerSacs()
+  await chargerControlesAql()
   const rpl = await fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produits(gamme)'))
   if (!rpl.error) planRows.value = rpl.data || []
 
@@ -509,6 +510,7 @@ const qualiteTotaux = computed(() => {
 })
 const kpisQualite = computed(() => {
   const q = qualiteAnnee.value
+  const a = aqlStats.value
   const enTriFab = lotsTriage.value.length
   const enTriCond = triageCondIds.value.size
   let aTrier = 0, triee = 0
@@ -523,6 +525,10 @@ const kpisQualite = computed(() => {
     { v: fmt(q.devFab), l: 'Déviations fabrication ' + anneeCourante, tint: q.devFab ? TINTS.rose : TINTS.slate, ic: ICONS.flask },
     { v: q.brftFab == null ? '—' : q.brftFab + ' %', l: 'BRFT fabrication ' + anneeCourante + ' (' + q.finis + ' lots)', tint: TINTS.emerald, ic: ICONS.check },
     { v: q.brftCond == null ? '—' : q.brftCond + ' %', l: 'BRFT conditionnement ' + anneeCourante, tint: TINTS.teal, ic: ICONS.check },
+    { v: fmt(a.n), l: 'Contrôles AQL ' + anneeCourante, tint: TINTS.indigo, ic: ICONS.clipboard },
+    { v: a.taux == null ? '—' : a.taux + ' %', l: 'Taux d\'acceptation AQL', tint: a.taux != null && a.taux < 100 ? TINTS.amber : TINTS.emerald, ic: ICONS.target },
+    { v: fmt(a.refuses), l: 'Contrôles AQL refusés ' + anneeCourante, tint: a.refuses ? TINTS.rose : TINTS.slate, ic: ICONS.xCircle },
+    { v: fmt(a.aControler), l: 'Lots à contrôler (compression close, sans AQL)', tint: a.aControler ? TINTS.amber : TINTS.slate, ic: ICONS.hourglass },
   ]
 })
 
@@ -593,6 +599,33 @@ watch(poidsSac, (v) => { try { localStorage.setItem(CLE_POIDS_SAC, String(Number
 const sacs = ref([])
 const sacsOuvert = ref(null)
 const majSac = ref('')
+// ===== Contrôles AQL =====
+const controlesAql = ref([])
+async function chargerControlesAql() {
+  const r = await fetchAllPaged(() => supabase.from('controles_aql').select('ordre_id, phase, verdict, controle_le'))
+  // Table absente (migration 006 non passée) : on n'affiche rien plutôt que de casser la page.
+  controlesAql.value = r.error || !Array.isArray(r.data) ? [] : r.data
+}
+const aqlStats = computed(() => {
+  const liste = Array.isArray(controlesAql.value) ? controlesAql.value : []
+  const annee = liste.filter(x => x.controle_le && new Date(x.controle_le).getFullYear() === anneeCourante)
+  const refuses = annee.filter(x => x.verdict === 'Refusé').length
+  const controles = new Set(liste.map(x => x.ordre_id))
+  // Lots encore en production dont la compression est terminée mais sans aucun contrôle AQL
+  let aControler = 0
+  const pl = phasesLot.value
+  for (const o of ofs.value) {
+    if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
+    const c = (pl[o.id] || {}).compression
+    if (!c || c.statut !== 'Terminé') continue
+    if (!controles.has(o.id)) aControler++
+  }
+  return {
+    n: annee.length, refuses,
+    taux: annee.length ? Math.round((annee.length - refuses) / annee.length * 1000) / 10 : null,
+    aControler
+  }
+})
 async function chargerSacs() {
   const r = await fetchAllPaged(() => supabase.from('triage_sacs').select('id, ordre_id, numero_sac, coche_par, coche_le'))
   // fetchAllPaged renvoie { data, error } : si la table n'existe pas encore, on reste sur une liste vide.
