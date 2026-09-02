@@ -90,6 +90,7 @@ async function charger() {
   if (rs.error) { erreur.value = rs.error.message; chargement.value = false; return }
   suivi.value = rs.data || []
 
+  await chargerSacs()
   const rpl = await fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produits(gamme)'))
   if (!rpl.error) planRows.value = rpl.data || []
 
@@ -576,6 +577,60 @@ function ouvrirLot(l, phaseKey) {
 }
 // La fin de triage se saisit désormais sur l'étape, dans Suivi des phases
 function ouvrirTriageFin(id) { router.push({ path: '/suivi', query: { lot: id, triage: 1 } }) }
+// ===== Triage sac par sac =====
+// Nombre de sacs = ceil(Kg à trier / poids du sac). Un sac coché = trié et conforme.
+const CLE_POIDS_SAC = 'dispo_poids_sac'
+const poidsSac = ref(25)
+try { const v = Number(localStorage.getItem(CLE_POIDS_SAC)); if (v > 0) poidsSac.value = v } catch (e) { /* ignore */ }
+watch(poidsSac, (v) => { try { localStorage.setItem(CLE_POIDS_SAC, String(Number(v) > 0 ? v : 25)) } catch (e) { /* ignore */ } })
+const sacs = ref([])            // lignes triage_sacs
+const sacsOuvert = ref(null)    // id du lot déplié
+const majSac = ref('')
+async function chargerSacs() {
+  const r = await fetchAllPaged(() => supabase.from('triage_sacs').select('id, ordre_id, numero_sac'))
+  sacs.value = r || []
+}
+const sacsParLot = computed(() => {
+  const m = {}
+  for (const x of sacs.value) { if (!m[x.ordre_id]) m[x.ordre_id] = new Set(); m[x.ordre_id].add(x.numero_sac) }
+  return m
+})
+function nbSacs(l) {
+  const q = Number((qteEdit[l.id] || {}).aTrier) || 0
+  const ps = Number(poidsSac.value) || 0
+  return ps > 0 ? Math.ceil(q / ps) : 0
+}
+function sacCoche(l, n) { const s = sacsParLot.value[l.id]; return !!(s && s.has(n)) }
+function nbSacsCoches(l) {
+  const s = sacsParLot.value[l.id]; if (!s) return 0
+  const tot = nbSacs(l)
+  let n = 0; for (const v of s) if (v <= tot) n++   // on ignore les sacs au-delà du total courant
+  return n
+}
+function pctSacs(l) { const t = nbSacs(l); return t > 0 ? Math.round(nbSacsCoches(l) / t * 100) : 0 }
+async function basculerSac(l, n) {
+  majSac.value = ''
+  if (sacCoche(l, n)) {
+    const r = await supabase.from('triage_sacs').delete().eq('ordre_id', l.id).eq('numero_sac', n)
+    if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
+    sacs.value = sacs.value.filter(x => !(x.ordre_id === l.id && x.numero_sac === n))
+  } else {
+    let email = null
+    try { const se = await supabase.auth.getSession(); email = se.data && se.data.session ? se.data.session.user.email : null } catch (e) { /* ignore */ }
+    const r = await supabase.from('triage_sacs').insert({ ordre_id: l.id, numero_sac: n, conforme: true, coche_par: email }).select('id').single()
+    if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
+    sacs.value = sacs.value.concat([{ id: r.data ? r.data.id : null, ordre_id: l.id, numero_sac: n }])
+  }
+}
+async function cocherTousSacs(l) {
+  const tot = nbSacs(l)
+  for (let n = 1; n <= tot; n++) if (!sacCoche(l, n)) await basculerSac(l, n)
+}
+async function decocherTousSacs(l) {
+  const tot = nbSacs(l)
+  for (let n = 1; n <= tot; n++) if (sacCoche(l, n)) await basculerSac(l, n)
+}
+function toggleSacs(l) { sacsOuvert.value = sacsOuvert.value === l.id ? null : l.id }
 const qteEdit = reactive({})
 watch(lotsTriage, (lots) => { for (const l of lots) if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: l.qteATrier || 0, triee: l.qteTriee || 0 } }, { immediate: true })
 function pctTriage(id) { const q = qteEdit[id] || {}; const t = Number(q.aTrier) || 0; return t > 0 ? Math.min(100, Math.round((Number(q.triee) || 0) / t * 100)) : 0 }
@@ -946,22 +1001,48 @@ onMounted(async () => {
           </section>
         </div>
         <section class="triage-box">
-          <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
+          <div class="triage-head">
+            <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
+            <label class="sac-poids">Poids du sac<input type="number" min="0.1" step="any" v-model.number="poidsSac" /> Kg</label>
+          </div>
+          <p v-if="majSac" class="sac-err">{{ majSac }}</p>
           <table v-if="lotsTriage.length" class="triage-tbl">
-            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th class="tnum">À trier (Kg)</th><th class="tnum">Triée (Kg)</th><th>Avancement</th><th></th></tr></thead>
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th class="tnum">À trier (Kg)</th><th class="tnum">Triée (Kg)</th><th class="tnum">Sacs conformes</th><th>Avancement</th><th></th></tr></thead>
             <tbody>
-              <tr v-for="l in lotsTriage" :key="l.id" class="triage-row">
+              <template v-for="l in lotsTriage" :key="l.id">
+              <tr class="triage-row">
                 <td class="t-lot" @click="ouvrirTriageFin(l.id)" title="Ouvrir l'étape en triage pour saisir la date de fin">{{ l.lot }}</td>
                 <td @click="ouvrirTriageFin(l.id)">{{ l.code }} — {{ l.desig }}</td>
                 <td>{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
                 <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop /></td>
                 <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].triee" class="tq" @click.stop /></td>
+                <td class="tnum">
+                  <button type="button" class="sac-btn" :class="{ ok: nbSacs(l) > 0 && nbSacsCoches(l) >= nbSacs(l) }" :disabled="!nbSacs(l)" @click.stop="toggleSacs(l)" :title="nbSacs(l) ? 'Détail des sacs' : 'Renseigne les Kg à trier et le poids du sac'">
+                    {{ nbSacsCoches(l) }} / {{ nbSacs(l) || '—' }}<span v-if="nbSacs(l)" class="sac-caret">{{ sacsOuvert === l.id ? '▾' : '▸' }}</span>
+                  </button>
+                </td>
                 <td class="t-prog">
                   <div class="tp-bar"><div class="tp-fill" :class="{ full: pctTriage(l.id) >= 100 }" :style="{ width: pctTriage(l.id) + '%' }"></div></div>
                   <span class="tp-pct">{{ pctTriage(l.id) }}%</span>
                 </td>
                 <td><button class="tq-save" @click.stop="sauverTriage(l)" title="Enregistrer">💾</button></td>
               </tr>
+              <tr v-if="sacsOuvert === l.id && nbSacs(l)" class="sac-detail">
+                <td colspan="8">
+                  <div class="sac-bar">
+                    <span class="sac-tit">{{ nbSacs(l) }} sacs de {{ poidsSac }} Kg — coche un sac quand son triage est terminé et conforme</span>
+                    <button type="button" class="sac-act" @click="cocherTousSacs(l)">Tout cocher</button>
+                    <button type="button" class="sac-act" @click="decocherTousSacs(l)">Tout décocher</button>
+                  </div>
+                  <div class="sac-grid">
+                    <button v-for="n in nbSacs(l)" :key="n" type="button" class="sac-chip" :class="{ on: sacCoche(l, n) }" @click="basculerSac(l, n)" :title="'Sac ' + n + (sacCoche(l, n) ? ' — conforme' : ' — à trier')">
+                      <span class="sac-tick">{{ sacCoche(l, n) ? "✓" : "" }}</span>{{ n }}
+                    </button>
+                  </div>
+                  <div class="sac-pied">{{ nbSacsCoches(l) }} / {{ nbSacs(l) }} sacs conformes · {{ pctSacs(l) }} % · équivaut à {{ fmt(nbSacsCoches(l) * poidsSac) }} Kg triés</div>
+                </td>
+              </tr>
+              </template>
             </tbody>
           </table>
           <p v-else class="triage-vide">Aucun lot coché « En triage fabrication » pour l'instant (case à cocher sur la page Ordres de fabrication).</p>
@@ -1287,6 +1368,26 @@ onMounted(async () => {
 .qd-fab { background: #fee2e2; color: #b91c1c; }
 .qd-cond { background: #ffe4e6; color: #9f1239; }
 /* Lots en cours de triage */
+.triage-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.sac-poids { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #92400e; white-space: nowrap; }
+.sac-poids input { width: 62px; padding: 3px 6px; border: 1px solid #fcd34d; border-radius: 6px; font: inherit; font-size: 12px; text-align: right; }
+.sac-err { margin: 6px 0 0; font-size: 12px; font-weight: 700; color: #b91c1c; }
+.sac-btn { background: none; border: 1px solid #e2e8f0; border-radius: 7px; padding: 2px 8px; font: inherit; font-size: 12px; font-weight: 800; color: #b45309; cursor: pointer; white-space: nowrap; }
+.sac-btn:hover:not(:disabled) { background: #fffbeb; border-color: #fcd34d; }
+.sac-btn:disabled { opacity: .45; cursor: default; color: #94a3b8; }
+.sac-btn.ok { color: #15803d; border-color: #86efac; background: #f0fdf4; }
+.sac-caret { font-size: 9px; margin-left: 4px; color: #94a3b8; }
+.sac-detail > td { background: #fffdf5; padding: 10px 12px; }
+.sac-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.sac-tit { font-size: 11px; font-weight: 700; color: #92400e; }
+.sac-act { background: #fff; border: 1px solid #fcd34d; border-radius: 999px; padding: 2px 10px; font: inherit; font-size: 11px; font-weight: 700; color: #b45309; cursor: pointer; }
+.sac-act:hover { background: #fef3c7; }
+.sac-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.sac-chip { display: inline-flex; align-items: center; gap: 3px; min-width: 46px; justify-content: center; padding: 5px 8px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; font: inherit; font-size: 12px; font-weight: 700; color: #64748b; cursor: pointer; transition: background .12s, border-color .12s, color .12s; }
+.sac-chip:hover { border-color: #fcd34d; background: #fffbeb; }
+.sac-chip.on { background: #dcfce7; border-color: #86efac; color: #15803d; }
+.sac-tick { font-size: 11px; }
+.sac-pied { margin-top: 8px; font-size: 11px; font-weight: 700; color: #64748b; }
 .triage-box { background: #fef3c7; border: 1px solid #fde68a; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
 .triage-h { margin: 0 0 10px; font-size: 15px; font-weight: 800; color: #92400e; }
 .triage-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
