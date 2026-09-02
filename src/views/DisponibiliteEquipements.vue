@@ -612,27 +612,50 @@ function nbSacsCoches(l) {
   return n
 }
 function pctSacs(l) { const t = nbSacs(l); return t > 0 ? Math.round(nbSacsCoches(l) / t * 100) : 0 }
-async function basculerSac(l, n) {
+// Kg réellement triés : les sacs pleins valent poidsSac, le DERNIER ne vaut que le reliquat.
+function kgSacs(l) {
+  const q = Number((qteEdit[l.id] || {}).aTrier) || 0
+  const ps = Number(poidsSac.value) || 0
+  const tot = nbSacs(l)
+  if (tot <= 0 || ps <= 0) return 0
+  const reste = q - (tot - 1) * ps
+  let kg = 0
+  for (let n = 1; n <= tot; n++) if (sacCoche(l, n)) kg += (n === tot ? reste : ps)
+  return Math.round(kg * 100) / 100
+}
+// Reporte les sacs cochés dans « Triée (Kg) » et enregistre.
+async function syncKgTries(l) {
+  if (!qteEdit[l.id]) return
+  const kg = kgSacs(l)
+  qteEdit[l.id].triee = kg
+  const r = await supabase.from('ordres_fabrication').update({ qte_triee: kg }).eq('id', l.id)
+  if (r.error) majSac.value = 'Erreur : ' + r.error.message
+}
+async function basculerSac(l, n, sync) {
   majSac.value = ''
   if (sacCoche(l, n)) {
     const r = await supabase.from('triage_sacs').delete().eq('ordre_id', l.id).eq('numero_sac', n)
     if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
     sacs.value = sacs.value.filter(x => !(x.ordre_id === l.id && x.numero_sac === n))
+    if (sync !== false) await syncKgTries(l)
   } else {
     let email = null
     try { const se = await supabase.auth.getSession(); email = se.data && se.data.session ? se.data.session.user.email : null } catch (e) { /* ignore */ }
     const r = await supabase.from('triage_sacs').insert({ ordre_id: l.id, numero_sac: n, conforme: true, coche_par: email }).select('id').single()
     if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
     sacs.value = sacs.value.concat([{ id: r.data ? r.data.id : null, ordre_id: l.id, numero_sac: n }])
+    if (sync !== false) await syncKgTries(l)
   }
 }
 async function cocherTousSacs(l) {
   const tot = nbSacs(l)
-  for (let n = 1; n <= tot; n++) if (!sacCoche(l, n)) await basculerSac(l, n)
+  for (let n = 1; n <= tot; n++) if (!sacCoche(l, n)) await basculerSac(l, n, false)
+  await syncKgTries(l)
 }
 async function decocherTousSacs(l) {
   const tot = nbSacs(l)
-  for (let n = 1; n <= tot; n++) if (sacCoche(l, n)) await basculerSac(l, n)
+  for (let n = 1; n <= tot; n++) if (sacCoche(l, n)) await basculerSac(l, n, false)
+  await syncKgTries(l)
 }
 function toggleSacs(l) { sacsOuvert.value = sacsOuvert.value === l.id ? null : l.id }
 const qteEdit = reactive({})
@@ -1043,7 +1066,7 @@ onMounted(async () => {
                       <span class="sac-tick">{{ sacCoche(l, n) ? "✓" : "" }}</span>{{ n }}
                     </button>
                   </div>
-                  <div class="sac-pied">{{ nbSacsCoches(l) }} / {{ nbSacs(l) }} sacs conformes · {{ pctSacs(l) }} % · équivaut à {{ fmt(nbSacsCoches(l) * poidsSac) }} Kg triés</div>
+                  <div class="sac-pied">{{ nbSacsCoches(l) }} / {{ nbSacs(l) }} sacs conformes · {{ pctSacs(l) }} % · {{ fmt(kgSacs(l)) }} Kg reportés automatiquement dans « Triée (Kg) »<span v-if="nbSacs(l) > 1"> · dernier sac : {{ fmt(Math.round((((qteEdit[l.id] || {}).aTrier || 0) - (nbSacs(l) - 1) * poidsSac) * 100) / 100) }} Kg</span></div>
                 </td>
               </tr>
               </template>
