@@ -330,6 +330,10 @@ const AQL_PHASES_FIXES = ['Compression']
 const controlesAql = ref([])
 const aqlForm = reactive({ phase: '', tailleLot: '', niveau: 'II', aql: 0.65, defauts: 0, commentaire: '' })
 function normPhaseAql(x) { return /^(granulation|s[ée]chage)$/i.test(String(x).trim()) ? 'Granulation et Séchage' : x }
+const gammeDefinie = computed(() => {
+  const pr = (lotSelectionne.value || {}).produits || {}
+  return Array.isArray(pr.gamme) && pr.gamme.length > 0
+})
 const gammeLot = computed(() => {
   const pr = (lotSelectionne.value || {}).produits || {}
   const g = Array.isArray(pr.gamme) ? pr.gamme : []
@@ -338,13 +342,25 @@ const gammeLot = computed(() => {
   return out.length ? out : PHASES.slice()
 })
 // Compression + la DERNIÈRE étape de la gamme du produit
-const phasesAql = computed(() => {
+// Seules deux étapes ouvrent droit au contrôle AQL : la Compression, et la DERNIÈRE
+// étape de la gamme du produit. Si la Compression est déjà la dernière, il n'y en a qu'une.
+const phasesEligibles = computed(() => {
   const g = gammeLot.value
   const out = []
   for (const f of AQL_PHASES_FIXES) if (g.includes(f)) out.push(f)
   const derniere = g[g.length - 1]
   if (derniere && !out.includes(derniere)) out.push(derniere)
   return out
+})
+// Une étape éligible n'est proposée que si elle est effectivement déclarée sur le lot :
+// on ne contrôle pas un prélèvement sur une étape qui n'a pas eu lieu.
+const phasesAql = computed(() => {
+  const declarees = new Set((phases.value || []).map(x => x.phase))
+  return phasesEligibles.value.filter(ph => declarees.has(ph))
+})
+const statutPhaseAql = computed(() => {
+  const rec = (phases.value || []).find(x => x.phase === aqlForm.phase)
+  return rec ? (rec.statut || '') : ''
 })
 const tailleLotDefaut = computed(() => {
   const o = lotSelectionne.value || {}
@@ -372,6 +388,7 @@ async function enregistrerAql() {
   erreur.value = ''; message.value = ''
   const p = planAql.value
   if (!aqlForm.phase) { erreur.value = 'Choisis l\'étape contrôlée.'; return }
+  if (!phasesEligibles.value.includes(aqlForm.phase)) { erreur.value = 'Le contrôle AQL n\'est prévu que pour la Compression et la dernière étape de fabrication.'; return }
   if (!p) { erreur.value = 'Aucun plan d\'échantillonnage : vérifie la taille du lot et l\'AQL choisie.'; return }
   let email = null
   try { const se = await supabase.auth.getSession(); email = se.data && se.data.session ? se.data.session.user.email : null } catch (e) { /* ignore */ }
@@ -556,22 +573,25 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
             </table>
           </div>
         </section>
-        <section class="card aql-card" v-if="phasesAql.length">
+        <section class="card aql-card" v-if="phasesEligibles.length">
           <h2 class="card-title">Contrôle AQL — ISO 2859-1, échantillonnage simple, contrôle normal</h2>
-          <div class="form-grid" v-if="peutEditer">
+          <p class="aql-regle">Réservé à la <strong>Compression</strong> et à la <strong>dernière étape de fabrication</strong>. Pour ce produit : {{ phasesEligibles.join(" et ") }}.<span v-if="!gammeDefinie" class="aql-warn"> Gamme non renseignée sur le produit : ces étapes sont déduites de la gamme standard.</span></p>
+          <p v-if="!phasesAql.length" class="aql-vide">Aucune de ces étapes n'est encore déclarée sur ce lot. Saisis l'étape dans le tableau ci-dessus, puis reviens ici.</p>
+          <div class="form-grid" v-if="peutEditer && phasesAql.length">
             <label>Étape contrôlée<select v-model="aqlForm.phase"><option v-for="ph in phasesAql" :key="ph" :value="ph">{{ ph }}</option></select></label>
             <label>Taille du lot (unités)<input v-model.number="aqlForm.tailleLot" type="number" min="2" /></label>
             <label>Niveau de contrôle<select v-model="aqlForm.niveau"><option v-for="n in NIVEAUX" :key="n" :value="n">{{ n }}</option></select></label>
             <label>AQL<select v-model.number="aqlForm.aql"><option v-for="a in AQLS" :key="a" :value="a">{{ a }}</option></select></label>
           </div>
-          <div v-if="planAql" class="aql-plan">
+          <p v-if="phasesAql.length && statutPhaseAql && statutPhaseAql !== 'Terminé'" class="aql-warn-l">Étape « {{ aqlForm.phase }} » au statut « {{ statutPhaseAql }} » : le contrôle sera enregistré, mais l'étape n'est pas close.</p>
+          <div v-if="planAql && phasesAql.length" class="aql-plan">
             <span class="aql-pill">Lettre-code <strong>{{ planAql.lettreLot }}</strong></span>
             <span class="aql-pill">Échantillon <strong>{{ planAql.n }}</strong> unités</span>
             <span class="aql-pill">Acceptation <strong>Ac {{ planAql.ac }}</strong> / Rejet <strong>Re {{ planAql.re }}</strong></span>
             <span v-if="planAql.cent" class="aql-pill warn">Échantillon ≥ lot : contrôle à 100 %</span>
             <span v-if="planAql.deplacement" class="aql-pill warn" :title="planAql.deplacement > 0 ? 'La norme renvoie au premier plan en dessous : échantillon plus grand.' : 'La norme renvoie au premier plan au-dessus : échantillon plus petit.'">Plan décalé par la norme ({{ planAql.deplacement > 0 ? "↓" : "↑" }} lettre {{ planAql.lettre }})</span>
           </div>
-          <p v-else class="aql-vide">Renseigne une taille de lot d'au moins 2 unités pour obtenir un plan.</p>
+          <p v-else-if="phasesAql.length" class="aql-vide">Renseigne une taille de lot d'au moins 2 unités pour obtenir un plan.</p>
           <div v-if="planAql && peutEditer" class="aql-pied">
             <label class="aql-def">Défauts trouvés<input v-model.number="aqlForm.defauts" type="number" min="0" class="adef" /></label>
             <input v-model="aqlForm.commentaire" class="aql-com" placeholder="Commentaire (nature des défauts, remarques)" />
@@ -696,6 +716,9 @@ button.link.danger { color: #b91c1c; }
 .aql-pill { background: #eef2ff; color: #4338ca; border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 700; }
 .aql-pill.warn { background: #fef3c7; color: #b45309; }
 .aql-vide { font-size: 12px; color: #94a3b8; font-style: italic; margin: 10px 0; }
+.aql-regle { font-size: 12px; color: #475569; margin: 0 0 10px; }
+.aql-warn { color: #b45309; font-weight: 700; }
+.aql-warn-l { font-size: 12px; font-weight: 700; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 6px 10px; margin: 10px 0 0; }
 .aql-hist { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 16px; }
 .aql-hist th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .02em; color: #94a3b8; font-weight: 800; padding: 5px 7px; border-bottom: 1px solid #e2e8f0; }
 .aql-hist td { padding: 5px 7px; border-bottom: 1px solid #f1f5f9; color: #1e293b; white-space: nowrap; }
