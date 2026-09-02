@@ -1,107 +1,52 @@
 <script setup>
-import { ref, reactive, computed, onMounted, watch, inject, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
-import { planPourLot, AQLS, NIVEAUX, verdictClasse } from '../aql'
 import PageHeader from '../components/PageHeader.vue'
+import { ICONS, TINTS } from '../icons.js'
 
-const peutEditer = inject('peutEditer', ref(true))
-const lotPartage = inject('lotPartage', null)
+const router = useRouter()
 
-const PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
-const STATUTS = ['À faire', 'En cours', 'Terminé']
-
-const lots = ref([])
-const rechercheLot = ref('')
 const equipements = ref([])
-const lotId = ref('')
-const aCompleter = ref([])
-const filtreAC = ref('')
-const aCompleterFiltre = computed(() => {
-  const q = filtreAC.value.trim().toLowerCase()
-  const base = !q ? aCompleter.value : aCompleter.value.filter(x => {
-    const o = x.ordres_fabrication || {}, pr = o.produits || {}
-    return (o.numero_lot || '').toLowerCase().includes(q) || (pr.code_pf || '').toLowerCase().includes(q) || (pr.designation || '').toLowerCase().includes(q)
-  })
-  // Tri systématique par n° de lot (regroupe les phases d'un même lot).
-  return base.slice().sort((a, b) => {
-    const la = a.ordres_fabrication ? String(a.ordres_fabrication.numero_lot || '') : ''
-    const lb = b.ordres_fabrication ? String(b.ordres_fabrication.numero_lot || '') : ''
-    return la.localeCompare(lb, undefined, { numeric: true })
-  })
-})
-const ouvertACompleter = ref(false)
-const phases = ref([])
+const ateliers = ref([])
+const ofs = ref([])
+const conds = ref([])
+const suivi = ref([])
+const planRows = ref([])
+const ongletDispo = ref('file')
 const erreur = ref('')
-const message = ref('')
+const chargement = ref(true)
+const recherche = ref('')
 
-const form = reactive({
-  id: null, phase: 'Pesée', equipement_id: '', quantite_entree: '',
-  quantite_sortie: '', date_debut: '', date_phase: '', statut: 'Terminé', commentaire: '',
-  deviation: false, deviation_motif: '',
-  en_triage: false, triage_debut: '', triage_fin: ''
-})
-function resetForm() {
-  Object.assign(form, {
-    id: null, phase: 'Pesée', equipement_id: '', quantite_entree: '',
-    quantite_sortie: '', date_debut: '', date_phase: '', statut: 'Terminé', commentaire: '',
-    deviation: false, deviation_motif: '',
-    en_triage: false, triage_debut: '', triage_fin: ''
-  })
-}
-function toNum(v) { return v === '' || v === null ? null : Number(v) }
-function majTriagePhase() { if (form.en_triage && !form.triage_debut) form.triage_debut = new Date().toISOString().slice(0, 10) }
+const anneeSel = ref(new Date().getFullYear())
+const enCoursOnly = ref(true)
 
-const lotSelectionne = computed(() => lots.value.find(l => l.id === lotId.value) || null)
-watch(lotId, () => {
-  if (lotPartage && lotSelectionne.value) lotPartage.value = { produitId: lotSelectionne.value.produit_id || '', numeroLot: lotSelectionne.value.numero_lot || '' }
-})
-const lotsFiltres = computed(() => {
-  const q = rechercheLot.value.trim().toLowerCase()
-  if (!q) return lots.value
-  return lots.value.filter(l => {
-    const p = l.produits
-    const code = p ? String(p.code_pf || '') : ''
-    const desig = p ? String(p.designation || '') : ''
-    return code.toLowerCase().includes(q) || desig.toLowerCase().includes(q) || String(l.numero_lot || '').toLowerCase().includes(q)
-  })
-})
+// Phases de fabrication -> colonne de rendement dans ordres_fabrication.
+// Un lot "passe" par une phase si le rendement de cette phase est renseigné.
+// Gamme de fabrication : ordre logique des phases.
+const PHASES = [
+  { key: 'pesee',           ordre: 1, label: 'Pesée',               ic: ICONS.hash,     tint: TINTS.slate },
+  { key: 'granulation',     ordre: 2, label: 'Granulation',         ic: ICONS.flask,    tint: TINTS.teal },
+  { key: 'sechage',         ordre: 3, label: 'Séchage',             ic: ICONS.activity, tint: TINTS.cyan },
+  { key: 'melange',         ordre: 4, label: 'Mélange',             ic: ICONS.layers,   tint: TINTS.blue },
+  { key: 'compression',     ordre: 5, label: 'Compression',         ic: ICONS.pill,     tint: TINTS.violet },
+  { key: 'remplissage',     ordre: 6, label: 'Remplissage gélules', ic: ICONS.package,  tint: TINTS.indigo },
+  { key: 'pelliculage',     ordre: 7, label: 'Pelliculage',         ic: ICONS.target,   tint: TINTS.amber },
+  { key: 'conditionnement', ordre: 8, label: 'Conditionnement',     ic: ICONS.box,      tint: TINTS.green },
+]
 
-// Équipements filtrés selon la phase sélectionnée (type = phase)
-const equipementsFiltres = computed(() => {
-  const f = equipements.value.filter(e => e.type === form.phase)
-  if (f.length) {
-    if (form.equipement_id && !f.some(e => e.id === form.equipement_id)) {
-      const sel = equipements.value.find(e => e.id === form.equipement_id)
-      if (sel) return [sel, ...f]
-    }
-    return f
-  }
-  return equipements.value
-})
-function onPhaseChange() {
-  if (form.equipement_id && !equipements.value.some(e => e.id === form.equipement_id && e.type === form.phase)) {
-    form.equipement_id = ''
-  }
-  remplirQuantites()
-}
-// Auto : entrée FIGÉE = sortie de la phase précédente (1re phase = poids vrac théorique).
-// Sortie = auto pour Pesée/Granulation, VIDE dès le Séchage (saisie manuelle).
-function remplirQuantites() {
-  const lot = lotSelectionne.value
-  if (!lot) return
-  // Remplissage automatique UNIQUEMENT pour la Pesée (poids vrac théorique).
-  // Les autres phases : entrée et sortie saisies manuellement.
-  if (form.phase !== 'Pesée') {
-    if (!form.id) { form.quantite_entree = ''; form.quantite_sortie = '' }
-    return
-  }
-  const mm = lot.produits ? Number(lot.produits.poids_unitaire_mg || 0) : 0
-  const upb = lot.produits ? Number(lot.produits.unites_par_boite || 0) : 0
-  const qth = Number(lot.quantite_theorique || 0)
-  const theoKg = (qth > 0 && mm > 0 && upb > 0) ? Math.round(qth * upb * mm / 1e6 * 100) / 100 : null
-  form.quantite_entree = (theoKg != null) ? theoKg : ''
-  form.quantite_sortie = (theoKg != null) ? theoKg : ''
+// Déduit la phase à partir du type d'équipement (robuste aux variantes de libellé).
+function phaseDeType(type) {
+  const t = (type || '').toLowerCase()
+  if (/pes[ée]|balance|bascule/.test(t)) return 'pesee'
+  if (/granul/.test(t)) return 'granulation'
+  if (/séch|sech/.test(t)) return 'sechage'
+  if (/mélang|melang/.test(t)) return 'melange'
+  if (/gélule|gelule|remplis|encapsul|capsul/.test(t)) return 'remplissage'
+  if (/compress|presse|compri/.test(t)) return 'compression'
+  if (/pellicul|enrob|coat|dragé|drage/.test(t)) return 'pelliculage'
+  if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)) return 'conditionnement'
+  return null
 }
 
 async function fetchAllPaged(make) {
@@ -117,651 +62,1521 @@ async function fetchAllPaged(make) {
   return { data: all, error: null }
 }
 
-async function chargerBase() {
+async function charger() {
+  chargement.value = true
   erreur.value = ''
-  const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, produit_id, quantite_theorique, statut, produits(code_pf, designation, gamme, poids_unitaire_mg, unites_par_boite)')
-    .eq('actif', true).order('id', { ascending: false }))
-  if (rl.error) { erreur.value = rl.error.message; return }
-  lots.value = rl.data
 
-  const re = await supabase.from('equipements').select('id, code, nom, type').eq('actif', true).order('code')
-  if (re.error) { erreur.value = re.error.message; return }
-  equipements.value = re.data
+  const ra = await supabase.from('ateliers').select('id, code, nom').eq('actif', true).order('code')
+  if (ra.error) { erreur.value = ra.error.message; chargement.value = false; return }
+  ateliers.value = ra.data || []
+
+  const re = await supabase.from('equipements').select('id, code, nom, type, atelier_id').eq('actif', true).order('code')
+  if (re.error) { erreur.value = re.error.message; chargement.value = false; return }
+  equipements.value = re.data || []
+
+  const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
+    .select('id, numero_lot, statut, produit_id, deviation, deviation_cond, en_triage, triage_debut, triage_fin, qte_a_trier, qte_triee, en_triage_cond, triage_cond_debut, triage_cond_fin, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite, taille_lot, poids_unitaire_mg, poids_sac_kg), equipements(code, nom)')
+    .eq('actif', true))
+  if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
+  ofs.value = rof.data || []
+
+  const rc = await fetchAllPaged(() => supabase.from('conditionnement')
+    .select('ordre_id, equipement_id, statut, quantite_conditionnee').eq('actif', true))
+  if (rc.error) { erreur.value = rc.error.message; chargement.value = false; return }
+  conds.value = rc.data || []
+
+  const rs = await fetchAllPaged(() => supabase.from('suivi_phases')
+    .select('ordre_id, phase, statut, date_phase, date_debut, en_triage, triage_debut, triage_fin').eq('actif', true))
+  if (rs.error) { erreur.value = rs.error.message; chargement.value = false; return }
+  suivi.value = rs.data || []
+
+  await chargerSacs()
+  const rpl = await fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produits(gamme)'))
+  if (!rpl.error) planRows.value = rpl.data || []
+
+  chargement.value = false
 }
 
-async function chargerPhases() {
-  phases.value = []
-  message.value = ''
-  if (!lotId.value) return
-  erreur.value = ''
-  const r = await supabase.from('suivi_phases')
-    .select('*, equipements(code, nom)')
-    .eq('ordre_id', lotId.value).eq('actif', true)
-    .order('date_phase', { ascending: true, nullsFirst: true }).order('id', { ascending: true })
-  if (r.error) { erreur.value = r.error.message; return }
-  phases.value = r.data
+function anneeDe(o) {
+  return o.date_fin_fabrication ? new Date(o.date_fin_fabrication).getFullYear() : null
 }
 
-const ORDRE_PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
-// Fusionne les étapes Granulation et Séchage d'une gamme en une seule opération « Granulation et Séchage »
-function normGamme(g) {
-  if (!Array.isArray(g)) return g
-  const out = []
-  for (const ph of g) {
-    const p = /^(granulation|s[ée]chage)$/i.test(String(ph).trim()) ? 'Granulation et Séchage' : ph
-    if (!out.includes(p)) out.push(p)
-  }
-  return out
-}
-// Entrée effective : la quantité entrée saisie, sinon la sortie de la phase précédente (repli)
-function entreeEffective(p) {
-  if (p.quantite_entree != null && p.quantite_entree !== '') return Number(p.quantite_entree)
-  const idx = ORDRE_PHASES.indexOf(p.phase)
-  for (let i = idx - 1; i >= 0; i--) {
-    const prev = phases.value.find(ph => ph.phase === ORDRE_PHASES[i] && ph.quantite_sortie != null && ph.quantite_sortie !== '')
-    if (prev) return Number(prev.quantite_sortie)
-  }
-  return null
-}
-function rendement(p) {
-  const e = entreeEffective(p), s = p.quantite_sortie
-  if (e == null || e === 0 || s == null || s === '') return null
-  return (Number(s) / Number(e)) * 100
-}
-const rendementGlobal = computed(() => {
-  let r = 1, compte = 0
-  for (const p of phases.value) {
-    const rp = rendement(p)
-    if (rp != null) { r *= rp / 100; compte++ }
-  }
-  return compte ? r * 100 : null
+const anneesDispo = computed(() => {
+  const s = new Set()
+  for (const o of ofs.value) { const a = anneeDe(o); if (a) s.add(a) }
+  s.add(new Date().getFullYear())
+  return Array.from(s).sort((a, b) => b - a)
 })
 
-function phaseFinaleGamme(g) {
-  if (!Array.isArray(g) || !g.length) return null
-  for (let i = PHASES.length - 1; i >= 0; i--) if (g.includes(PHASES[i])) return PHASES[i]
+// Lots retenus selon l'année de fabrication (0 = toutes).
+const lotsAnnee = computed(() => {
+  if (anneeSel.value === 0) return ofs.value
+  return ofs.value.filter(o => anneeDe(o) === anneeSel.value)
+})
+
+// Produits en cours : au moins un lot lancé mais non terminé (état courant, toutes années).
+const produitsEnCours = computed(() => {
+  const s = new Set()
+  for (const o of ofs.value) {
+    if (o.produits && o.date_lancement && !o.date_fin_fabrication) s.add(o.produits.code_pf)
+  }
+  return s
+})
+
+// Lots conditionnés (au moins un enregistrement de conditionnement).
+const ordresConditionnes = computed(() => {
+  const s = new Set()
+  for (const c of conds.value) s.add(c.ordre_id)
+  return s
+})
+// Lots dont le conditionnement est DÉFINITIF (au moins un enregistrement Terminé/Libéré)
+const condTermine = computed(() => {
+  const s = new Set()
+  for (const c of conds.value) if (c.statut === 'Terminé' || c.statut === 'Libéré') s.add(c.ordre_id)
+  return s
+})
+// Boîtes conditionnées cumulées par lot
+const condBoxParLot = computed(() => {
+  const upb = {}
+  for (const o of ofs.value) upb[o.id] = o.produits ? Number(o.produits.unites_par_boite || 0) : 0
+  const m = {}
+  for (const c of conds.value) {
+    const u = upb[c.ordre_id] || 0
+    if (u <= 0) continue
+    m[c.ordre_id] = (m[c.ordre_id] || 0) + Math.floor(Number(c.quantite_conditionnee || 0) / u)
+  }
+  return m
+})
+// Conditionnement complet : statut Terminé/Libéré OU quantité conditionnée >= 85 % du fabriqué
+// (couvre l'historique conditionné sans statut de clôture)
+const condComplet = computed(() => {
+  const s = new Set(condTermine.value)
+  const cb = condBoxParLot.value
+  for (const o of ofs.value) {
+    if (s.has(o.id)) continue
+    const avail = Number(o.boites_fabriquees || 0) || Number(o.quantite_theorique || 0)
+    if (avail > 0 && (cb[o.id] || 0) >= avail * 0.85) s.add(o.id)
+  }
+  return s
+})
+
+// Équipements utilisés dans le module conditionnement -> considérés atelier de conditionnement
+const condEquipIds = computed(() => {
+  const s = new Set()
+  for (const c of conds.value) if (c.equipement_id) s.add(c.equipement_id)
+  return s
+})
+// Phase d'un équipement : par son type, sinon 'conditionnement' s'il sert au conditionnement
+function phaseEquip(e) {
+  const k = phaseDeType(e.type)
+  if (k) return k
+  if (condEquipIds.value.has(e.id)) return 'conditionnement'
   return null
 }
 
-async function enregistrer() {
-  erreur.value = ''
-  message.value = ''
-  if (!lotId.value) { erreur.value = 'Choisis d\'abord un lot.'; return }
-  const oid = lotId.value
-  const statutPhase = form.date_phase ? 'Terminé' : (form.date_debut ? 'En cours' : 'À faire')
-  const payload = {
-    ordre_id: lotId.value,
-    phase: form.phase,
-    equipement_id: form.equipement_id || null,
-    quantite_entree: toNum(form.quantite_entree),
-    quantite_sortie: toNum(form.quantite_sortie),
-    date_debut: form.date_debut || null,
-    date_phase: form.date_phase || null,
-    statut: statutPhase,
-    commentaire: form.commentaire.trim() || null,
-    deviation: !!form.deviation,
-    deviation_motif: form.deviation ? (form.deviation_motif.trim() || null) : null,
-    en_triage: !!form.en_triage,
-    triage_debut: form.en_triage ? (form.triage_debut || null) : null,
-    triage_fin: form.en_triage ? (form.triage_fin || null) : null
-  }
-  const res = form.id
-    ? await supabase.from('suivi_phases').update(payload).eq('id', form.id)
-    : await supabase.from('suivi_phases').insert(payload)
-  if (res.error) { erreur.value = res.error.message; return }
-  // Clôture de la VRAIE phase finale (gamme du produit) -> date fin fab + statut Terminé
-  let finDeFab = false
-  const gamme = normGamme(lotSelectionne.value && lotSelectionne.value.produits ? lotSelectionne.value.produits.gamme : null)
-  const phaseFin = phaseFinaleGamme(gamme)
-  const estPhaseFinale = phaseFin
-    ? form.phase === phaseFin
-    : ['Compression', 'Remplissage Gélules', 'Pelliculage'].includes(form.phase)  // repli si gamme non définie
-  if (estPhaseFinale && statutPhase === 'Terminé') {
-    const maj = { date_fin_fabrication: form.date_phase || new Date().toISOString().slice(0, 10) }
-    const st = lotSelectionne.value ? lotSelectionne.value.statut : null
-    if (st !== 'Libéré' && st !== 'Rejeté' && st !== 'Terminé') maj.statut = 'En cours'
-    // Tranche « live » : boîtes fabriquées = sortie finale (kg) -> comprimés -> boîtes
-    const pr = lotSelectionne.value ? lotSelectionne.value.produits : null
-    const mm = pr ? Number(pr.poids_unitaire_mg || 0) : 0
-    const upb = pr ? Number(pr.unites_par_boite || 0) : 0
-    const kg = toNum(form.quantite_sortie)
-    if (kg && mm > 0 && upb > 0) maj.boites_fabriquees = Math.floor(kg * 1e6 / mm / upb)
-    const ru = await supabase.from('ordres_fabrication').update(maj).eq('id', lotId.value)
-    if (!ru.error) { finDeFab = true; await chargerBase() }
-  }
-  message.value = (form.id ? 'Phase mise à jour.' : 'Phase ajoutée.') + (finDeFab ? ' Fin de fabrication : lot daté, boîtes fabriquées calculées, vrac prêt à conditionner → il entre dans la file DDL.' : '')
-  resetForm()
-  await chargerPhases()
-  await majDatesLot(oid)
+// ============ FILE D'ATTENTE PAR ATELIER (temps réel) ============
+const PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage: 'Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage Gélules', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
+const NOM_KEY = {}
+for (const [k, v] of Object.entries(PHASE_NOM)) NOM_KEY[v.toLowerCase()] = k
+// Nom de phase (gamme ou suivi) -> clé canonique. Granulation / Séchage / « Granulation et Séchage » -> 'granulation' (fusionnés).
+function phaseKey(nom) {
+  const t = String(nom || '').trim().toLowerCase()
+  if (!t) return null
+  if (/granul|s[ée]ch/.test(t)) return 'granulation'
+  return NOM_KEY[t] || null
 }
+const CANON_FAB = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
 
-// Dates automatiques du lot depuis les phases : lancement = 1re date de phase ; fin fab = date de la phase finale terminée
-async function majDatesLot(oid) {
-  if (!oid) return
-  const r = await supabase.from('suivi_phases').select('phase, statut, date_debut, date_phase, deviation, en_triage, triage_debut, triage_fin').eq('ordre_id', oid).eq('actif', true)
-  if (r.error) return
-  const rows = r.data || []
-  let minD = null
-  for (const p of rows) { const d = p.date_debut || p.date_phase; if (d && (!minD || d < minD)) minD = d }
-  const lot = lots.value.find(l => l.id === oid)
-  const gamme = normGamme(lot && lot.produits ? lot.produits.gamme : null)
-  const phaseFin = phaseFinaleGamme(gamme)
-  const finale = rows.find(p => p.statut === 'Terminé' && (phaseFin ? p.phase === phaseFin : ['Compression', 'Remplissage Gélules', 'Pelliculage'].includes(p.phase)))
-  // Report automatique de la déviation au niveau du lot : vrai dès qu'une phase active est en déviation.
-  // C'est ce champ que lisent le BRFT, les indicateurs QSE, les pages DDL et le rapport hebdo.
-  // Report du triage : « en triage » dès qu'une phase l'est. La date de fin ne remonte que si
-  // TOUTES les phases en triage sont closes, pour préserver le test en_triage && !triage_fin
-  // utilisé partout ailleurs dans l'application.
-  const tri = rows.filter(p => !!p.en_triage)
-  const triOuverts = tri.filter(p => !p.triage_fin)
-  let triDeb = null, triFin = null
-  for (const p of tri) {
-    if (p.triage_debut && (!triDeb || p.triage_debut < triDeb)) triDeb = p.triage_debut
-    if (p.triage_fin && (!triFin || p.triage_fin > triFin)) triFin = p.triage_fin
+// Statut de chaque phase par lot (depuis suivi_phases)
+const phasesLot = computed(() => {
+  const m = {}
+  const sechEtat = {}
+  for (const sp of suivi.value) {
+    const id = sp.ordre_id, k = phaseKey(sp.phase)
+    if (!k) continue
+    if (!m[id]) m[id] = {}
+    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut || null }
+    const cur = m[id][k]
+    if (!cur || sp.statut === 'Terminé') m[id][k] = rec
+    const nl = String(sp.phase || '').toLowerCase()
+    if (/s[ée]ch/.test(nl) && !/granul/.test(nl)) {
+      if (!sechEtat[id]) sechEtat[id] = { present: false, termine: false }
+      sechEtat[id].present = true
+      if (sp.statut === 'Terminé') sechEtat[id].termine = true
+    }
   }
-  await supabase.from('ordres_fabrication').update({
-    date_lancement: minD || null,
-    date_fin_fabrication: finale ? (finale.date_phase || finale.date_debut || null) : null,
-    deviation: rows.some(p => !!p.deviation),
-    en_triage: tri.length > 0,
-    triage_debut: triDeb,
-    triage_fin: (tri.length && !triOuverts.length) ? triFin : null
-  }).eq('id', oid)
-}
+  // Fusion : « Granulation et Séchage » terminé SEULEMENT si le séchage (saisi à part) est terminé
+  for (const id in m) {
+    const g = m[id].granulation
+    if (g && g.statut === 'Terminé') {
+      const se = sechEtat[id]
+      const apres = m[id].compression || m[id].remplissage || m[id].pelliculage || m[id].conditionnement
+      if (se && se.present && !se.termine && !apres) m[id].granulation = { statut: 'En cours', date: g.date }
+    }
+  }
+  return m
+})
 
-function modifier(p) {
-  Object.assign(form, {
-    id: p.id, phase: p.phase, equipement_id: p.equipement_id || '',
-    quantite_entree: (p.quantite_entree != null && p.quantite_entree !== '') ? p.quantite_entree : (entreeEffective(p) ?? ''), quantite_sortie: p.quantite_sortie ?? '',
-    date_debut: p.date_debut || '', date_phase: p.date_phase || '', statut: p.statut || 'Terminé', commentaire: p.commentaire || '',
-    deviation: !!p.deviation, deviation_motif: p.deviation_motif || '',
-    en_triage: !!p.en_triage, triage_debut: p.triage_debut || '', triage_fin: p.triage_fin || ''
+// Lots en cours de triage (ordres_fabrication.en_triage === 'Triage')
+const lotsTriage = computed(() => {
+  const pl = phasesLot.value
+  return ofs.value.filter(o => !!o.en_triage && !o.triage_fin).map(o => {
+    const prod = o.produits || {}
+    const eq = o.equipements || {}
+    let phaseAct = ''
+    const ph = pl[o.id] || {}
+    for (const P of PHASES) { const rec = ph[P.key]; if (rec && rec.statut !== 'Terminé') { phaseAct = P.label; break } }
+    const upbT = Number(prod.unites_par_boite) || 0, pmgT = Number(prod.poids_unitaire_mg) || 0
+    const boitesT = Number(o.boites_fabriquees) || Number(prod.taille_lot) || 0
+    const kgLot = Math.round((boitesT * upbT * pmgT) / 1e6 * 100) / 100
+    const aTrierDef = o.qte_a_trier != null ? o.qte_a_trier : kgLot
+    return { id: o.id, produitId: o.produit_id, poidsSacProd: prod.poids_sac_kg, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin || '', qteATrier: aTrierDef, qteTriee: o.qte_triee != null ? o.qte_triee : 0 }
   })
+})
+
+const triageIds = computed(() => new Set(lotsTriage.value.map(l => l.id)))
+const triageCondIds = computed(() => new Set(ofs.value.filter(o => !!o.en_triage_cond && !o.triage_cond_fin).map(o => o.id)))
+// Déviations déclarées sur l'OF (page Ordres de fabrication)
+const deviationIds = computed(() => new Set(ofs.value.filter(o => !!o.deviation).map(o => o.id)))
+const deviationCondIds = computed(() => new Set(ofs.value.filter(o => !!o.deviation_cond).map(o => o.id)))
+// File par phase : lots à l'étape courante (en attente = étape précédente finie ; en cours = démarrée)
+const anneeCourante = new Date().getFullYear()
+const planParPhase = computed(() => {
+  const acc = {}
+  for (const r of planRows.value) {
+    if (Number(r.annee) !== anneeCourante) continue
+    const p = r.produits; if (!p) continue
+    const g = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : CANON_FAB
+    const vus = new Set(); for (const ph of g) { const k = phaseKey(ph); if (k) vus.add(k) }
+    for (const k of vus) acc[k] = (acc[k] || 0) + Number(r.quantite_planifiee || 0)
+  }
+  return acc
+})
+const realiseParPhase = computed(() => {
+  const acc = {}
+  for (const o of ofs.value) {
+    const d = o.date_lancement
+    if (!d || new Date(d).getFullYear() !== anneeCourante) continue
+    const pl = phasesLot.value[o.id] || {}
+    const b = Number(o.quantite_theorique || 0)
+    for (const k in pl) { const st = pl[k].statut; if (st === 'Terminé' || st === 'En cours') acc[k] = (acc[k] || 0) + b }
+  }
+  return acc
+})
+function infoPhase(k) {
+  const plan = planParPhase.value[k] || 0, realise = realiseParPhase.value[k] || 0
+  return { plan, realise, taux: plan > 0 ? Math.round(realise / plan * 100) : null }
 }
-async function desactiver(p) {
-  if (!confirm('Supprimer la phase « ' + p.phase + ' » ?')) return
-  erreur.value = ''
-  const res = await supabase.from('suivi_phases').update({ actif: false }).eq('id', p.id)
-  if (res.error) { erreur.value = res.error.message; return }
-  await chargerPhases()
-  await majDatesLot(p.ordre_id)
+// Produit « direct conditionnement » (ex. seringues importées type Rebif) : pas d'étape de fabrication
+function estDirectCond(p) { return !!(p && String(p.forme || '').toLowerCase() === 'seringue') }
+const queuePhase = computed(() => {
+  const q = {}
+  for (const ph of PHASES) q[ph.key] = { attente: [], cours: [] }
+  const condFini = condComplet.value
+  const condAny = ordresConditionnes.value
+  for (const o of ofs.value) {
+    const directCond = estDirectCond(o.produits)
+    if (condFini.has(o.id)) continue
+    if (!directCond && !o.date_lancement && !o.date_fin_fabrication) continue
+    if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
+    const pl = phasesLot.value[o.id] || {}
+    const stat = (nom) => (pl[phaseKey(nom)] || {}).statut
+    const gammeB = (o.produits && Array.isArray(o.produits.gamme) && o.produits.gamme.length) ? o.produits.gamme : CANON_FAB
+    const gamme = []; let _pk = null
+    for (const _ph of gammeB) { const _k = phaseKey(_ph); if (_k && _k === _pk) continue; gamme.push(_ph); _pk = _k }
+    gamme.sort((a, b) => ((PHASES.find(x => x.key === phaseKey(a)) || {}).ordre || 99) - ((PHASES.find(x => x.key === phaseKey(b)) || {}).ordre || 99))
+    const p = o.produits || {}
+    // Fabrication finie = dernière phase de la gamme du produit terminée (critère fiable, pas la date).
+    const kDern = gamme.length ? phaseKey(gamme[gamme.length - 1]) : null
+    const fabTerminee = !!o.date_fin_fabrication || !!(kDern && pl[kDern] && pl[kDern].statut === 'Terminé')
+    const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), deviation: deviationIds.value.has(o.id), deviationCond: deviationCondIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
+      validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !fabTerminee) ? (new Date(o.date_fin_validite) < new Date()) : false,
+      reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
+    if (directCond) {
+      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_lancement || o.date_reception || o.date_fin_fabrication })
+      continue
+    }
+    // Règle : le lot est à sa PREMIÈRE phase de gamme NON terminée.
+    //   Conditionnement uniquement si TOUTES les phases de la gamme sont terminées.
+    if (Object.keys(pl).length === 0) {
+      if (o.date_fin_fabrication) {
+        (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_fin_fabrication })
+      } else {
+        const k0 = phaseKey(gamme[0])
+        if (k0 && q[k0]) q[k0].attente.push({ ...base, date: o.date_lancement })
+      }
+      continue
+    }
+    let curIdx = -1
+    for (let i = 0; i < gamme.length; i++) {
+      const kk = phaseKey(gamme[i]); const rr = kk ? pl[kk] : null
+      if (!rr || rr.statut !== 'Terminé') { curIdx = i; break }
+    }
+    if (curIdx < 0) {
+      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_fin_fabrication || o.date_lancement })
+    } else {
+      const kCur = phaseKey(gamme[curIdx]); const rCur = kCur ? pl[kCur] : null
+      if (kCur && q[kCur]) {
+        if (rCur && rCur.statut === 'En cours') q[kCur].cours.push({ ...base, date: (rCur && rCur.date) || o.date_lancement })
+        else q[kCur].attente.push({ ...base, date: (rCur && rCur.date) || o.date_lancement })
+      }
+    }
+  }
+  const byDate = (a, b) => String(a.lot || '').localeCompare(String(b.lot || ''), undefined, { numeric: true })
+  for (const k in q) { q[k].attente.sort(byDate); q[k].cours.sort(byDate) }
+  return q
+})
+
+// Phases couvertes par chaque atelier (via ses équipements)
+const phasesParAtelier = computed(() => {
+  const m = {}
+  for (const e of equipements.value) { const k = phaseEquip(e); if (!k) continue; (m[e.atelier_id] = m[e.atelier_id] || new Set()).add(k) }
+  return m
+})
+
+// --- Filtres + priorité ---
+const filtrePerime = ref(false)
+const filtreUrgent = ref(false)
+const SEUIL_URGENT = 15
+function estUrgent(l) {
+  if (l && l.perime) return true
+  if (!l || !l.date) return false
+  return Math.floor((Date.now() - new Date(l.date)) / 86400000) >= SEUIL_URGENT
+}
+function lotMatch(l) {
+  const rq = recherche.value.trim().toLowerCase()
+  if (rq && !((l.lot || "").toLowerCase().includes(rq) || (l.code || "").toLowerCase().includes(rq) || (l.desig || "").toLowerCase().includes(rq))) return false
+  if (filtrePerime.value && !l.perime) return false
+  if (filtreUrgent.value && !estUrgent(l)) return false
+  return true
 }
 
-function classeStatut(s) {
-  return { 'À faire': 'st-todo', 'En cours': 'st-cours', 'Terminé': 'st-fini' }[s] || 'st-todo'
+// Vue file FABRICATION : une colonne par PHASE (dédupliquée, hors pesée/conditionnement)
+const vueFile = computed(() => {
+  const q = queuePhase.value
+  const rq = recherche.value.trim().toLowerCase()
+  const mL = lotMatch
+  const presentes = new Set()
+  for (const a of ateliers.value) {
+    const keys = phasesParAtelier.value[a.id]
+    if (keys) for (const k of keys) if (k !== 'conditionnement' && k !== 'pesee') presentes.add(k)
+  }
+  const liste = [...presentes].map(k => {
+    const ph = PHASES.find(p => p.key === k)
+    const attente = (q[k] ? q[k].attente : []).filter(mL)
+    const cours = (q[k] ? q[k].cours : []).filter(mL)
+    return { key: k, phase: ph, attente, cours, volAttente: attente.reduce((s, l) => s + l.boites, 0), volCours: cours.reduce((s, l) => s + l.boites, 0), ...infoPhase(k) }
+  }).filter(x => x.phase)
+  // Fusionner Granulation + Séchage en une seule colonne (même opération)
+  const gran = liste.find(x => x.key === 'granulation')
+  const sech = liste.find(x => x.key === 'sechage')
+  if (gran || sech) {
+    const byDate = (a, b) => String(a.lot || '').localeCompare(String(b.lot || ''), undefined, { numeric: true })
+    const ref = gran || sech
+    const attente = [...(gran ? gran.attente : []), ...(sech ? sech.attente : [])].sort(byDate)
+    const cours = [...(gran ? gran.cours : []), ...(sech ? sech.cours : [])].sort(byDate)
+    const merged = {
+      key: 'gran_sech',
+      phase: { key: 'gran_sech', label: 'Granulation et séchage', ordre: ref.phase.ordre, ic: ref.phase.ic, tint: ref.phase.tint },
+      attente, cours,
+      volAttente: attente.reduce((s, l) => s + l.boites, 0), volCours: cours.reduce((s, l) => s + l.boites, 0), ...infoPhase('granulation')
+    }
+    const rest = liste.filter(x => x.key !== 'granulation' && x.key !== 'sechage')
+    rest.push(merged)
+    return rest.sort((a, b) => a.phase.ordre - b.phase.ordre)
+  }
+  return liste.sort((a, b) => a.phase.ordre - b.phase.ordre)
+})
+
+// Planning CONDITIONNEMENT : lots regroupés par LIGNE RÉSERVÉE (equipement_id de l'ordre)
+const vueCondLignes = computed(() => {
+  const qc = queuePhase.value.conditionnement
+  const rq = recherche.value.trim().toLowerCase()
+  const mL = lotMatch
+  const groups = {}
+  // Toutes les lignes de conditionnement, MÊME SANS LOT (pour visualiser l'utilisation).
+  // Exception : pendant une recherche, on ne garde que les lignes concernées.
+  if (!rq) {
+    for (const e of equipements.value) {
+      if (phaseEquip(e) !== 'conditionnement') continue
+      groups[e.id] = { id: e.id, label: e.code + (e.nom ? ' — ' + e.nom : ''), reserve: true, attente: [], cours: [] }
+    }
+  }
+  const add = (l, type) => {
+    if (!mL(l)) return
+    const key = l.reserveId || '__none__'
+    if (!groups[key]) groups[key] = { id: key, label: l.reserveLabel || 'Non réservé', reserve: !!l.reserveId, attente: [], cours: [] }
+    groups[key][type].push(l)
+  }
+  for (const l of qc.cours) add(l, 'cours')
+  for (const l of qc.attente) add(l, 'attente')
+  return Object.values(groups).map(g => ({ ...g,
+    volAttente: g.attente.reduce((s, l) => s + l.boites, 0), volCours: g.cours.reduce((s, l) => s + l.boites, 0),
+    tot: g.attente.length + g.cours.length }))
+    .sort((a, b) => (a.reserve === b.reserve ? b.tot - a.tot : (a.reserve ? -1 : 1)))
+})
+
+const kpisFile = computed(() => {
+  let attFab = 0, coursFab = 0, secs = 0, maxCharge = 0, atelierMax = "—"
+  for (const ph of vueFile.value) {
+    attFab += ph.attente.length; coursFab += ph.cours.length
+    if (ph.attente.length === 0 && ph.cours.length === 0) secs++
+    const ch = ph.attente.length + ph.cours.length
+    if (ch > maxCharge) { maxCharge = ch; atelierMax = ph.phase.label }
+  }
+  let attCond = 0, coursCond = 0
+  for (const g of vueCondLignes.value) { attCond += g.attente.length; coursCond += g.cours.length; if (g.reserve && g.tot === 0) secs++ }
+  const pesee = attentePeseeList.value.length
+  let perimes = 0, sommeJ = 0, nbJ = 0
+  const scan = (l, att) => { if (l.perime) perimes++; if (att && l.date) { sommeJ += Math.max(0, Math.floor((Date.now() - new Date(l.date)) / 86400000)); nbJ++ } }
+  for (const l of attentePeseeList.value) scan(l, true)
+  for (const ph of vueFile.value) { ph.attente.forEach(l => scan(l, true)); ph.cours.forEach(l => scan(l, false)) }
+  for (const g of vueCondLignes.value) { g.attente.forEach(l => scan(l, true)); g.cours.forEach(l => scan(l, false)) }
+  const delai = nbJ ? Math.round(sommeJ / nbJ) : 0
+  const totalProd = pesee + attFab + attCond + coursFab + coursCond
+  return [
+    { v: fmt(totalProd), l: "Lots en production", tint: TINTS.cyan, ic: ICONS.layers },
+    { v: fmt(pesee + attFab + attCond), l: "Lots en attente", tint: TINTS.amber, ic: ICONS.hourglass },
+    { v: fmt(coursFab + coursCond), l: "Lots en cours", tint: TINTS.blue, ic: ICONS.activity },
+    { v: fmt(secs), l: "Ateliers à sec (risque)", tint: TINTS.rose, ic: ICONS.alert },
+    { v: atelierMax, l: "Atelier le plus chargé" + (maxCharge ? " (" + maxCharge + ")" : ""), tint: TINTS.indigo, ic: ICONS.factory, small: true },
+    { v: delai + " j", l: "Délai moyen d'attente", tint: TINTS.violet, ic: ICONS.gauge },
+    { v: fmt(perimes), l: "OF périmés", tint: perimes > 0 ? TINTS.rose : TINTS.slate, ic: ICONS.alert },
+  ]
+})
+// ===== Qualité : suivi du triage et des déviations =====
+// Population annuelle : lots dont la fabrication est terminée dans l'année (même base que le rapport hebdo).
+const qualiteAnnee = computed(() => {
+  const finis = ofs.value.filter(o => o.date_fin_fabrication
+    && new Date(o.date_fin_fabrication).getFullYear() === anneeCourante
+    && ['Terminé', 'Libéré', 'Rejeté'].includes(o.statut))
+  const brft = (k) => finis.length ? Math.round(finis.filter(o => o.statut !== 'Rejeté' && !o[k]).length / finis.length * 1000) / 10 : null
+  return {
+    finis: finis.length,
+    devFab: finis.filter(o => !!o.deviation).length,
+    devCond: finis.filter(o => !!o.deviation_cond).length,
+    brftFab: brft('deviation'), brftCond: brft('deviation_cond')
+  }
+})
+// Répartition par atelier sur les lots actuellement en file (attente + en cours)
+const qualiteParAtelier = computed(() => {
+  const compte = (attente, cours, pk) => {
+    let tri = 0
+    const devLots = []
+    for (const l of [...attente, ...cours]) {
+      if (l.triage || l.triageCond) tri++
+      if (l.deviation || l.deviationCond) devLots.push({ id: l.id, lot: l.lot, code: l.code, desig: l.desig, deviation: !!l.deviation, deviationCond: !!l.deviationCond, pk })
+    }
+    const bts = (arr) => arr.reduce((n, l) => n + (Number(l.boites) || 0), 0)
+    return { tot: attente.length + cours.length, att: attente.length, enc: cours.length,
+      bts: bts(attente) + bts(cours), btsAtt: bts(attente), btsEnc: bts(cours),
+      tri, dev: devLots.length, devLots }
+  }
+  const rows = []
+  const pes = attentePeseeList.value.map(l => ({
+    id: l.id, lot: l.lot, code: l.code, desig: l.desig, boites: l.boites,
+    triage: triageIds.value.has(l.id), triageCond: triageCondIds.value.has(l.id),
+    deviation: deviationIds.value.has(l.id), deviationCond: deviationCondIds.value.has(l.id)
+  }))
+  const p = compte(pes, [], 'pesee')
+  if (p.tot) rows.push({ label: 'Pesée (attente)', ...p })
+  for (const ph of vueFile.value) rows.push({ label: ph.phase.label, ...compte(ph.attente, ph.cours, ph.key) })
+  let cAtt = [], cCours = []
+  for (const g of vueCondLignes.value) { cAtt = cAtt.concat(g.attente); cCours = cCours.concat(g.cours) }
+  const c = compte(cAtt, cCours, 'conditionnement')
+  if (c.tot) rows.push({ label: 'Conditionnement', ...c })
+  // Charge relative : barre proportionnelle à l'atelier le plus chargé (reprend « Charge par atelier »)
+  const max = Math.max(1, ...rows.map(r => r.tot))
+  return rows.map(r => ({ ...r, pct: Math.round(r.tot / max * 100), pctDev: r.tot ? Math.round(r.dev / r.tot * 100) : 0 }))
+})
+// Dépliage du détail des lots en déviation (clic sur la colonne « Avec déviation »)
+const devOuvert = ref(null)
+function toggleDev(label, n) { if (!n) return; devOuvert.value = devOuvert.value === label ? null : label }
+const devLotsTous = computed(() => {
+  const out = []
+  for (const r of qualiteParAtelier.value) for (const l of r.devLots) out.push({ ...l, atelier: r.label })
+  return out
+})
+const qualiteTotaux = computed(() => {
+  const t = qualiteParAtelier.value.reduce((a, r) => ({ tot: a.tot + r.tot, att: a.att + r.att, enc: a.enc + r.enc, bts: a.bts + r.bts, tri: a.tri + r.tri, dev: a.dev + r.dev }), { tot: 0, att: 0, enc: 0, bts: 0, tri: 0, dev: 0 })
+  return { ...t, pctDev: t.tot ? Math.round(t.dev / t.tot * 100) : 0 }
+})
+const kpisQualite = computed(() => {
+  const q = qualiteAnnee.value
+  const enTriFab = lotsTriage.value.length
+  const enTriCond = triageCondIds.value.size
+  let aTrier = 0, triee = 0
+  for (const l of lotsTriage.value) { const e = qteEdit[l.id] || {}; aTrier += Number(e.aTrier) || 0; triee += Number(e.triee) || 0 }
+  const pctTri = aTrier > 0 ? Math.min(100, Math.round(triee / aTrier * 100)) : null
+  const devProd = qualiteTotaux.value.dev
+  return [
+    { v: fmt(enTriFab), l: 'Lots en triage — fabrication', tint: enTriFab ? TINTS.amber : TINTS.slate, ic: ICONS.hourglass },
+    { v: fmt(enTriCond), l: 'Lots en triage — conditionnement', tint: enTriCond ? TINTS.amber : TINTS.slate, ic: ICONS.package },
+    { v: pctTri == null ? '—' : pctTri + ' %', l: 'Avancement du triage (Kg triés / à trier)', tint: TINTS.blue, ic: ICONS.percent },
+    { v: fmt(devProd), l: 'Lots en file avec déviation', tint: devProd ? TINTS.rose : TINTS.slate, ic: ICONS.alert },
+    { v: fmt(q.devFab), l: 'Déviations fabrication ' + anneeCourante, tint: q.devFab ? TINTS.rose : TINTS.slate, ic: ICONS.flask },
+    { v: q.brftFab == null ? '—' : q.brftFab + ' %', l: 'BRFT fabrication ' + anneeCourante + ' (' + q.finis + ' lots)', tint: TINTS.emerald, ic: ICONS.check },
+    { v: q.brftCond == null ? '—' : q.brftCond + ' %', l: 'BRFT conditionnement ' + anneeCourante, tint: TINTS.teal, ic: ICONS.check },
+  ]
+})
+
+// Lots planifiés EN ATTENTE DE PESÉE : réception OF faite, pesée pas encore terminée
+const attentePeseeList = computed(() => {
+  const rq = recherche.value.trim().toLowerCase()
+  const mL = lotMatch
+  const cc = condComplet.value
+  const now = new Date()
+  const res = []
+  for (const o of ofs.value) {
+    if (!o.date_reception && !o.date_lancement) continue
+    if (o.date_fin_fabrication) continue
+    if (cc.has(o.id)) continue
+    if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
+    const pl = phasesLot.value[o.id] || {}
+    if ((pl['pesee'] || {}).statut === 'Terminé') continue // pesée effectuée -> le lot disparaît
+    if (Object.keys(pl).some(k => k !== 'pesee')) continue // a une phase au-delà de la pesée -> plus en attente de pesée
+    const p = o.produits || {}
+    res.push({
+      id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '',
+      boites: Number(o.quantite_theorique || 0), date: o.date_reception || o.date_lancement,
+      validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !o.date_fin_fabrication) ? (new Date(o.date_fin_validite) < now) : false
+    })
+  }
+  return res.filter(mL).sort((a, b) => String(a.lot || '').localeCompare(String(b.lot || ''), undefined, { numeric: true }))
+})
+
+// OF planifiés, pas encore reçus (ni démarrés) -> en attente de réception
+const attenteReceptionList = computed(() => {
+  const rq = recherche.value.trim().toLowerCase()
+  const mL = lotMatch
+  const cc = condComplet.value
+  const res = []
+  for (const o of ofs.value) {
+    if (o.date_reception || o.date_lancement || o.date_fin_fabrication) continue
+    if (cc.has(o.id)) continue
+    if (o.statut === 'Libéré' || o.statut === 'Rejeté' || o.statut === 'Terminé') continue
+    const p = o.produits || {}
+    if (estDirectCond(p)) continue
+    res.push({ id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), validite: o.date_fin_validite || null })
+  }
+  return res.filter(mL).sort((a, b) => String(a.lot || '').localeCompare(String(b.lot || ''), undefined, { numeric: true }))
+})
+
+function joursDepuis(d) { if (!d) return '—'; const j = Math.floor((Date.now() - new Date(d)) / 86400000); return j <= 0 ? 'auj.' : j + ' j' }
+function ageClass(d) {
+  if (!d) return ''
+  const j = Math.floor((Date.now() - new Date(d)) / 86400000)
+  if (j >= 7) return 'age-danger'
+  if (j >= 3) return 'age-warn'
+  return ''
 }
 function fmtDate(d) { if (!d) return '—'; const x = new Date(d); if (isNaN(x)) return String(d); return (/[T ]\\d{2}:/.test(String(d)) ? x.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' ' : '') + x.toLocaleDateString('fr-FR') }
-function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
-function fmtPct(n) { return n == null ? '—' : n.toFixed(1) + ' %' }
-
-async function chargerACompleter() {
-  const r = await supabase.from('suivi_phases')
-    .select('id, phase, quantite_entree, quantite_sortie, ordre_id, ordres_fabrication!inner(numero_lot, date_fin_fabrication, produits(code_pf, designation))')
-    .eq('actif', true)
-    .or('quantite_sortie.is.null,quantite_sortie.eq.0')
-    .not('ordres_fabrication.date_fin_fabrication', 'is', null)
-  if (!r.error) aCompleter.value = r.data || []
+function ouvrirLot(l, phaseKey) {
+  if (phaseKey === 'conditionnement') router.push({ path: '/conditionnement', query: { lot: l.id } })
+  else router.push({ path: '/suivi', query: { lot: l.id } })
 }
-// Ouvre directement l'étape en triage du lot, curseur sur la date de fin
-async function ouvrirPhaseEnTriage() {
-  await chargerPhases()
-  const ph = phases.value.find(p => p.en_triage && !p.triage_fin)
-  if (!ph) {
-    message.value = "Ce lot est marqué en triage au niveau du lot, mais aucune étape ne porte le triage. Coche « Triage sur cette étape » sur l'étape concernée."
-    return
+// La fin de triage se saisit sur l'étape, dans Suivi des phases
+function ouvrirTriageFin(id) { router.push({ path: '/suivi', query: { lot: id, triage: 1 } }) }
+// ===== Triage sac par sac =====
+// Nombre de sacs = ceil(Kg à trier / poids du sac du produit). Un sac coché = trié et conforme.
+const CLE_POIDS_SAC = 'dispo_poids_sac'   // défaut, pour les produits sans poids de sac renseigné
+const poidsProd = reactive({})            // surcharges locales après enregistrement, par produit
+const poidsSac = ref(25)
+try { const v = Number(localStorage.getItem(CLE_POIDS_SAC)); if (v > 0) poidsSac.value = v } catch (e) { /* ignore */ }
+watch(poidsSac, (v) => { try { localStorage.setItem(CLE_POIDS_SAC, String(Number(v) > 0 ? v : 25)) } catch (e) { /* ignore */ } })
+const sacs = ref([])
+const sacsOuvert = ref(null)
+const majSac = ref('')
+async function chargerSacs() {
+  const r = await fetchAllPaged(() => supabase.from('triage_sacs').select('id, ordre_id, numero_sac, coche_par, coche_le'))
+  // fetchAllPaged renvoie { data, error } : si la table n'existe pas encore, on reste sur une liste vide.
+  if (r.error) { sacs.value = []; majSac.value = 'Suivi par sac indisponible : ' + r.error.message; return }
+  sacs.value = Array.isArray(r.data) ? r.data : []
+}
+const sacsParLot = computed(() => {
+  const m = {}
+  const liste = Array.isArray(sacs.value) ? sacs.value : []
+  for (const x of liste) { if (!m[x.ordre_id]) m[x.ordre_id] = new Set(); m[x.ordre_id].add(x.numero_sac) }
+  return m
+})
+// Poids du sac : celui du produit s'il est renseigné, sinon le défaut de la page.
+function poidsSacDe(l) {
+  const loc = poidsProd[l.produitId]
+  const v = Number(loc !== undefined ? loc : l.poidsSacProd) || 0
+  return v > 0 ? v : (Number(poidsSac.value) || 0)
+}
+async function sauverPoidsSac(l, val) {
+  majSac.value = ''
+  if (!l.produitId) { majSac.value = 'Produit inconnu pour ce lot : poids de sac non enregistrable.'; return }
+  const n = Number(val) || 0
+  const r = await supabase.from('produits').update({ poids_sac_kg: n > 0 ? n : null }).eq('id', l.produitId)
+  if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
+  poidsProd[l.produitId] = n > 0 ? n : null
+  await syncKgTries(l)
+}
+function nbSacs(l) {
+  const q = Number((qteEdit[l.id] || {}).aTrier) || 0
+  const ps = poidsSacDe(l)
+  return ps > 0 ? Math.ceil(q / ps) : 0
+}
+function sacCoche(l, n) { const s = sacsParLot.value[l.id]; return !!(s && s.has(n)) }
+function nbSacsCoches(l) {
+  const s = sacsParLot.value[l.id]; if (!s) return 0
+  const tot = nbSacs(l)
+  let n = 0; for (const v of s) if (v <= tot) n++
+  return n
+}
+function pctSacs(l) { const t = nbSacs(l); return t > 0 ? Math.round(nbSacsCoches(l) / t * 100) : 0 }
+// Kg réellement triés : les sacs pleins valent poidsSac, le DERNIER ne vaut que le reliquat.
+function kgSacs(l) {
+  const q = Number((qteEdit[l.id] || {}).aTrier) || 0
+  const ps = poidsSacDe(l)
+  const tot = nbSacs(l)
+  if (tot <= 0 || ps <= 0) return 0
+  const reste = q - (tot - 1) * ps
+  let kg = 0
+  for (let n = 1; n <= tot; n++) if (sacCoche(l, n)) kg += (n === tot ? reste : ps)
+  return Math.round(kg * 100) / 100
+}
+async function syncKgTries(l) {
+  if (!qteEdit[l.id]) return
+  const kg = kgSacs(l)
+  qteEdit[l.id].triee = kg
+  const r = await supabase.from('ordres_fabrication').update({ qte_triee: kg }).eq('id', l.id)
+  if (r.error) majSac.value = 'Erreur : ' + r.error.message
+}
+async function basculerSac(l, n, sync) {
+  majSac.value = ''
+  if (sacCoche(l, n)) {
+    const r = await supabase.from('triage_sacs').delete().eq('ordre_id', l.id).eq('numero_sac', n)
+    if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
+    sacs.value = sacs.value.filter(x => !(x.ordre_id === l.id && x.numero_sac === n))
+  } else {
+    let email = null
+    try { const se = await supabase.auth.getSession(); email = se.data && se.data.session ? se.data.session.user.email : null } catch (e) { /* ignore */ }
+    const r = await supabase.from('triage_sacs').insert({ ordre_id: l.id, numero_sac: n, conforme: true, coche_par: email }).select('id, ordre_id, numero_sac, coche_par, coche_le').single()
+    if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
+    sacs.value = sacs.value.concat([r.data || { ordre_id: l.id, numero_sac: n }])
   }
-  modifier(ph)
-  await nextTick()
-  const el = document.getElementById('fp-triage-fin')
-  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus() }
+  if (sync !== false) await syncKgTries(l)
 }
-async function allerVersLot(x) {
-  lotId.value = x.ordre_id
-  await chargerPhases()
-  const ph = phases.value.find(p => p.id === x.id)
-  if (ph) modifier(ph)
-  await nextTick()
-  const el = document.getElementById('fp-sortie')
-  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus() }
+async function cocherTousSacs(l) {
+  const tot = nbSacs(l)
+  for (let n = 1; n <= tot; n++) if (!sacCoche(l, n)) await basculerSac(l, n, false)
+  await syncKgTries(l)
 }
-// ===== Contrôle AQL (ISO 2859-1) =====
-const AQL_PHASES_FIXES = ['Compression']
-const controlesAql = ref([])
-const aqlForm = reactive({ phase: '', tailleLot: '', niveau: 'II', aqlC: 0.065, aqlMa: 0.65, aqlMi: 2.5, defC: 0, defMa: 0, defMi: 0, commentaire: '' })
-function normPhaseAql(x) { return /^(granulation|s[ée]chage)$/i.test(String(x).trim()) ? 'Granulation et Séchage' : x }
-const gammeLot = computed(() => {
-  const pr = (lotSelectionne.value || {}).produits || {}
-  const g = Array.isArray(pr.gamme) ? pr.gamme : []
-  const out = []
-  for (const x of g) { const n = normPhaseAql(x); if (PHASES.includes(n) && !out.includes(n)) out.push(n) }
-  return out.length ? out : PHASES.slice()
-})
-// Compression + la DERNIÈRE étape de la gamme du produit
-const phasesAql = computed(() => {
-  const g = gammeLot.value
-  const out = []
-  for (const f of AQL_PHASES_FIXES) if (g.includes(f)) out.push(f)
-  const derniere = g[g.length - 1]
-  if (derniere && !out.includes(derniere)) out.push(derniere)
-  return out
-})
-const tailleLotDefaut = computed(() => {
-  const o = lotSelectionne.value || {}
-  const pr = o.produits || {}
-  const b = Number(o.quantite_theorique) || 0
-  const u = Number(pr.unites_par_boite) || 0
-  return b > 0 && u > 0 ? b * u : 0
-})
-// Chaque classe garde son propre plan ; l'échantillon retenu est le PLUS GRAND des trois,
-// comme le veut la pratique quand plusieurs AQL sont contrôlées sur le même prélèvement.
-const planAql = computed(() => {
-  const taille = Number(aqlForm.tailleLot) || 0
-  if (taille < 2) return null
-  const c = planPourLot(taille, aqlForm.aqlC, aqlForm.niveau)
-  const ma = planPourLot(taille, aqlForm.aqlMa, aqlForm.niveau)
-  const mi = planPourLot(taille, aqlForm.aqlMi, aqlForm.niveau)
-  if (!c && !ma && !mi) return null
-  const n = Math.max(c ? c.n : 0, ma ? ma.n : 0, mi ? mi.n : 0)
-  const lettreLot = (c || ma || mi).lettreLot
-  return { lettreLot, n, cent: (c || ma || mi).cent, c, ma, mi, tailles: [c, ma, mi].filter(Boolean).map(x => x.n) }
-})
-const verdictAql = computed(() => {
-  const p = planAql.value
-  if (!p) return null
-  const v = [
-    p.c ? verdictClasse(aqlForm.defC, p.c.ac) : null,
-    p.ma ? verdictClasse(aqlForm.defMa, p.ma.ac) : null,
-    p.mi ? verdictClasse(aqlForm.defMi, p.mi.ac) : null
-  ]
-  return v.includes('Refusé') ? 'Refusé' : 'Accepté'
-})
-async function chargerAql() {
-  if (!lotId.value) { controlesAql.value = []; return }
-  const r = await supabase.from('controles_aql').select('*').eq('ordre_id', lotId.value).order('controle_le', { ascending: false })
-  if (r.error) { controlesAql.value = []; return }
-  controlesAql.value = Array.isArray(r.data) ? r.data : []
+async function decocherTousSacs(l) {
+  const tot = nbSacs(l)
+  for (let n = 1; n <= tot; n++) if (sacCoche(l, n)) await basculerSac(l, n, false)
+  await syncKgTries(l)
 }
-async function enregistrerAql() {
-  erreur.value = ''; message.value = ''
-  const p = planAql.value
-  if (!aqlForm.phase) { erreur.value = 'Choisis l\'étape contrôlée.'; return }
-  if (!p) { erreur.value = 'Aucun plan d\'échantillonnage : vérifie la taille du lot et les AQL choisies.'; return }
-  let email = null
-  try { const se = await supabase.auth.getSession(); email = se.data && se.data.session ? se.data.session.user.email : null } catch (e) { /* ignore */ }
-  const r = await supabase.from('controles_aql').insert({
-    ordre_id: lotId.value, phase: aqlForm.phase,
-    taille_lot: Number(aqlForm.tailleLot), niveau: aqlForm.niveau,
-    lettre: p.lettreLot, taille_echantillon: p.n, controle_100: !!p.cent,
-    aql_critique: aqlForm.aqlC, ac_critique: p.c ? p.c.ac : null, def_critique: Number(aqlForm.defC) || 0,
-    aql_majeur: aqlForm.aqlMa, ac_majeur: p.ma ? p.ma.ac : null, def_majeur: Number(aqlForm.defMa) || 0,
-    aql_mineur: aqlForm.aqlMi, ac_mineur: p.mi ? p.mi.ac : null, def_mineur: Number(aqlForm.defMi) || 0,
-    verdict: verdictAql.value, commentaire: aqlForm.commentaire.trim() || null, controle_par: email
-  })
-  if (r.error) { erreur.value = r.error.message; return }
-  message.value = 'Contrôle AQL enregistré : ' + verdictAql.value + '.'
-  aqlForm.defC = 0; aqlForm.defMa = 0; aqlForm.defMi = 0; aqlForm.commentaire = ''
-  await chargerAql()
+function toggleSacs(l) { sacsOuvert.value = sacsOuvert.value === l.id ? null : l.id }
+
+// ===== Historique des triages clos =====
+const histOuvert = ref(null)
+function toggleHist(id) { histOuvert.value = histOuvert.value === id ? null : id }
+function joursEntre(a, b) {
+  if (!a || !b) return null
+  const d = Math.round((new Date(b) - new Date(a)) / 86400000)
+  return d >= 0 ? d : null
 }
-async function supprimerAql(x) {
-  if (!confirm('Supprimer ce contrôle AQL ?')) return
-  const r = await supabase.from('controles_aql').delete().eq('id', x.id)
-  if (r.error) { erreur.value = r.error.message; return }
-  await chargerAql()
-}
-function dateHeureAql(v) {
+function dateHeure(v) {
   if (!v) return '—'
   const d = new Date(v)
   return isNaN(d) ? '—' : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
-watch(lotId, async () => {
-  await chargerAql()
-  aqlForm.phase = phasesAql.value[phasesAql.value.length - 1] || ''
-  aqlForm.tailleLot = tailleLotDefaut.value || ''
+function sacsDuLot(id) {
+  const liste = Array.isArray(sacs.value) ? sacs.value : []
+  return liste.filter(x => x.ordre_id === id).sort((a, b) => a.numero_sac - b.numero_sac)
+}
+// Étape réellement déclarée en triage, lue sur suivi_phases et non devinée
+const etapeTriage = computed(() => {
+  const m = {}
+  for (const sp of suivi.value) if (sp.en_triage) m[sp.ordre_id] = sp.phase
+  return m
 })
-const route = useRoute()
-onMounted(async () => {
-  await chargerBase()
-  await chargerACompleter()
-  const q = route.query.lot ?? route.query.ordre
-  if (q != null && q !== '') {
-    const found = lots.value.find(l => String(l.id) === String(q))
-    if (found) {
-      lotId.value = found.id
-      if (route.query.triage != null) await ouvrirPhaseEnTriage()
+const triagesClos = computed(() => {
+  return ofs.value.filter(o => !!o.en_triage && !!o.triage_fin).map(o => {
+    const prod = o.produits || {}
+    const aTrier = Number(o.qte_a_trier) || 0
+    const triee = Number(o.qte_triee) || 0
+    return {
+      id: o.id, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '',
+      phase: etapeTriage.value[o.id] || '', debut: o.triage_debut || '', fin: o.triage_fin,
+      duree: joursEntre(o.triage_debut, o.triage_fin), aTrier, triee,
+      pct: aTrier > 0 ? Math.min(100, Math.round(triee / aTrier * 100)) : 0
     }
+  }).sort((a, b) => String(b.fin).localeCompare(String(a.fin)))
+})
+const histoTotaux = computed(() => {
+  const r = triagesClos.value
+  const durees = r.map(x => x.duree).filter(d => d != null)
+  return {
+    n: r.length,
+    kg: Math.round(r.reduce((s, x) => s + x.triee, 0) * 100) / 100,
+    duree: durees.length ? Math.round(durees.reduce((s, d) => s + d, 0) / durees.length * 10) / 10 : null
   }
 })
-watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
+const qteEdit = reactive({})
+watch(lotsTriage, (lots) => { for (const l of lots) if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: l.qteATrier || 0, triee: l.qteTriee || 0 } }, { immediate: true })
+function pctTriage(id) { const q = qteEdit[id] || {}; const t = Number(q.aTrier) || 0; return t > 0 ? Math.min(100, Math.round((Number(q.triee) || 0) / t * 100)) : 0 }
+async function sauverTriage(l) {
+  const q = qteEdit[l.id] || {}
+  const r = await supabase.from('ordres_fabrication').update({ qte_a_trier: Number(q.aTrier) || 0, qte_triee: Number(q.triee) || 0 }).eq('id', l.id)
+  if (r.error) { alert('Enregistrement échoué : ' + r.error.message + ' — as-tu ajouté les colonnes qte_a_trier / qte_triee ?'); return }
+  await charger()
+}
+
+// Pour chaque phase : { code_pf -> { code, desig, lots, boites } }
+const produitsParPhase = computed(() => {
+  const res = {}
+  for (const ph of PHASES) res[ph.key] = {}
+  const add = (key, o, p) => {
+    const m = res[key]
+    if (!m[p.code_pf]) m[p.code_pf] = { code: p.code_pf, desig: p.designation || '', lots: 0, boites: 0 }
+    m[p.code_pf].lots++
+    m[p.code_pf].boites += Number(o.quantite_theorique || 0)
+  }
+  const estGelule = (p) => /gélule|gelule|capsule/.test((p.forme || '').toLowerCase())
+  for (const o of lotsAnnee.value) {
+    const p = o.produits
+    if (!p) continue
+    add('pesee', o, p)                                                   // tout lot fabriqué est pesé
+    if (o.rdt_granulation != null) { add('granulation', o, p); add('sechage', o, p) }
+    if (o.rdt_melange != null) add('melange', o, p)
+    if (o.rdt_compression != null) add(estGelule(p) ? 'remplissage' : 'compression', o, p)
+    if (o.rdt_pelliculage != null) add('pelliculage', o, p)
+    if (ordresConditionnes.value.has(o.id)) add('conditionnement', o, p)
+  }
+  return res
+})
+
+// Ateliers -> équipements enrichis (phase + produits + totaux), filtrés par recherche.
+const vue = computed(() => {
+  const q = recherche.value.trim().toLowerCase()
+  const match = (e, prods) => {
+    if (!q) return true
+    if ((e.code || '').toLowerCase().includes(q)) return true
+    if ((e.nom || '').toLowerCase().includes(q)) return true
+    if ((e.type || '').toLowerCase().includes(q)) return true
+    return prods.some(p => p.code.toLowerCase().includes(q) || p.desig.toLowerCase().includes(q))
+  }
+  return ateliers.value.map(a => {
+    const eqs = equipements.value
+      .filter(e => e.atelier_id === a.id)
+      .map(e => {
+        const ph = PHASES.find(x => x.key === phaseEquip(e)) || null
+        let prods = ph ? Object.values(produitsParPhase.value[ph.key]).sort((x, y) => y.boites - x.boites) : []
+        if (enCoursOnly.value) prods = prods.filter(p => produitsEnCours.value.has(p.code))
+        return {
+          ...e, phase: ph, prods,
+          totalLots: prods.reduce((s, p) => s + p.lots, 0),
+          totalBoites: prods.reduce((s, p) => s + p.boites, 0),
+        }
+      })
+      .filter(e => match(e, e.prods))
+    eqs.sort((x, y) => (x.phase ? x.phase.ordre : 99) - (y.phase ? y.phase.ordre : 99))
+    const minOrdre = eqs.reduce((m, e) => Math.min(m, e.phase ? e.phase.ordre : 99), 99)
+    return { ...a, eqs, minOrdre }
+  }).filter(a => a.eqs.length > 0).sort((a, b) => a.minOrdre - b.minOrdre)
+})
+
+// KPIs globaux
+const nbAteliers = computed(() => vue.value.length)
+const nbEquipements = computed(() => equipements.value.length)
+const nbProduitsDistincts = computed(() => {
+  const s = new Set()
+  for (const ph of PHASES) for (const c of Object.keys(produitsParPhase.value[ph.key])) {
+    if (!enCoursOnly.value || produitsEnCours.value.has(c)) s.add(c)
+  }
+  return s.size
+})
+
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
+function fmtC(n) {
+  if (n == null || isNaN(n)) return '—'
+  if (Math.abs(n) >= 1000) return Number(n).toLocaleString('fr-FR', { notation: 'compact', maximumSignificantDigits: 2 })
+  return Number(n).toLocaleString('fr-FR')
+}
+
+const kpis = computed(() => [
+  { v: fmt(nbAteliers.value),         l: 'Ateliers',              tint: TINTS.indigo, ic: ICONS.factory },
+  { v: fmt(nbEquipements.value),      l: 'Équipements',           tint: TINTS.blue,   ic: ICONS.gauge },
+  { v: fmt(nbProduitsDistincts.value),l: enCoursOnly.value ? 'Produits en cours' : 'Produits fabriqués', tint: TINTS.teal, ic: ICONS.pill },
+])
+
+onMounted(async () => {
+  const r = await supabase.auth.getSession()
+  if (r.data && r.data.session) await charger()
+  else chargement.value = false
+})
 </script>
 
 <template>
-  <div class="ph-page">
-    <PageHeader title="Suivi de fabrication" tone="blue"
-      subtitle="Détail des phases d'un lot — quantités entrée / sortie et rendements." />
+  <div class="de-page">
+    <PageHeader title="Disponibilité des produits par atelier" tone="cyan">
+      <label class="annee-sel">Année de fabrication
+        <select v-model.number="anneeSel">
+          <option :value="0">Toutes années</option>
+          <option v-for="a in anneesDispo" :key="a" :value="a">{{ a }}</option>
+        </select>
+      </label>
+    </PageHeader>
 
-    <p v-if="erreur" class="alert">{{ erreur }}</p>
-    <p v-if="message" class="ok">{{ message }}</p>
+    <p v-if="erreur" class="err">{{ erreur }}</p>
+    <p v-if="chargement" class="muted">Chargement…</p>
 
-    <div v-if="!lots.length" class="empty-card">
-      Aucun lot. Va d'abord dans <strong>Ordres de fabrication</strong> créer un lot — tu pourras ensuite suivre ses phases ici.
-    </div>
+    <template v-if="!chargement">
+      <div class="flow">
+        <template v-for="(ph, i) in PHASES" :key="ph.key">
+          <span class="flow-step" :style="ph.tint"><span class="flow-ic"><svg viewBox="0 0 24 24" v-html="ph.ic"></svg></span>{{ ph.label }}</span>
+          <span v-if="i < PHASES.length - 1" class="flow-arrow">→</span>
+        </template>
+      </div>
 
-    <template v-else>
-      <section class="card" v-if="aCompleter.length">
-        <div class="ac-head" @click="ouvertACompleter = !ouvertACompleter">
-          <h2 class="card-title">Phases à compléter <span class="ac-badge">{{ aCompleter.length }}</span></h2>
-          <span class="ac-chev">{{ ouvertACompleter ? '▾' : '▸' }}</span>
-        </div>
-        <div v-show="ouvertACompleter">
-          <p class="ac-hint">Lots terminés en fabrication dont une phase n'a pas de quantité sortie. Clique « Corriger » pour ouvrir le lot.</p>
-          <div class="ac-filtre">
-            <input v-model="filtreAC" type="search" placeholder="Filtrer par n° de lot, code ou désignation…" />
-            <span v-if="filtreAC" class="ac-count">{{ aCompleterFiltre.length }} / {{ aCompleter.length }} lot(s)</span>
-          </div>
-          <div class="ac-scroll">
-            <table class="ac-table">
-              <thead><tr><th>Lot</th><th>Produit</th><th>Phase</th><th class="ac-r">Entrée (kg)</th><th>Fin fab.</th><th></th></tr></thead>
-              <tbody>
-                <tr v-for="x in aCompleterFiltre" :key="x.id">
-                  <td class="ac-mono">{{ x.ordres_fabrication.numero_lot }}</td>
-                  <td><span v-if="x.ordres_fabrication.produits"><strong>{{ x.ordres_fabrication.produits.code_pf }}</strong><span class="ac-desig">{{ x.ordres_fabrication.produits.designation }}</span></span><span v-else>—</span></td>
-                  <td>{{ x.phase }}</td>
-                  <td class="ac-r">{{ x.quantite_entree != null ? fmt(x.quantite_entree) : '—' }}</td>
-                  <td class="ac-nowrap">{{ x.ordres_fabrication.date_fin_fabrication }}</td>
-                  <td class="ac-r"><button class="ac-link" @click="allerVersLot(x)">Corriger ›</button></td>
-                </tr>
-                <tr v-if="filtreAC && !aCompleterFiltre.length"><td colspan="6" class="ac-vide">Aucune phase ne correspond au filtre.</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+      <!-- Onglet « Fabriqués par équipement » supprimé : vue File d'attente uniquement -->
 
-      <section class="card">
-        <label class="lot-select">Recherche produit / lot
-          <input v-model="rechercheLot" type="search" class="lot-search" placeholder="Code produit, désignation ou n° de lot…" />
-        </label>
-        <label class="lot-select">Lot <span class="lot-count">{{ lotsFiltres.length }}</span>
-          <select v-model="lotId">
-            <option value="">— Choisir un lot —</option>
-            <option v-for="l in lotsFiltres" :key="l.id" :value="l.id">
-              {{ l.numero_lot }} · {{ l.produits ? l.produits.code_pf + ' ' + l.produits.designation : '' }}
-            </option>
-          </select>
-          <span v-if="rechercheLot && !lotsFiltres.length" class="lot-vide">Aucun lot ne correspond à « {{ rechercheLot }} ».</span>
-        </label>
-
-        <div v-if="lotSelectionne" class="lot-info">
-          <div><span class="lbl">Produit</span>{{ lotSelectionne.produits ? lotSelectionne.produits.designation : '—' }}</div>
-          <div><span class="lbl">Qté théorique</span>{{ fmt(lotSelectionne.quantite_theorique) }}</div>
-          <div><span class="lbl">Statut lot</span>{{ lotSelectionne.statut }}</div>
-          <div v-if="rendementGlobal != null" class="rdt-global">
-            <span class="lbl">Rendement cumulé</span><strong>{{ fmtPct(rendementGlobal) }}</strong>
-          </div>
-        </div>
-      </section>
-
-      <template v-if="lotId">
-        <section class="card" v-if="peutEditer">
-          <h2 class="card-title">{{ form.id ? 'Modifier la phase' : 'Ajouter une phase' }}</h2>
-          <div class="form-grid">
-            <label>Phase
-              <select v-model="form.phase" @change="onPhaseChange">
-                <option v-for="ph in PHASES" :key="ph" :value="ph">{{ ph }}</option>
-              </select>
-            </label>
-            <label>Ligne / équipement — {{ form.phase }}
-              <select v-model="form.equipement_id">
-                <option value="">—</option>
-                <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
-              </select>
-            </label>
-            <label>Quantité entrée (kg)<input v-model="form.quantite_entree" type="number" step="any" placeholder="250" :disabled="form.phase === 'Pesée'" :title="form.phase === 'Pesée' ? 'Automatique (poids vrac théorique).' : 'À saisir : poids réel entrant.'" /></label>
-            <label>Quantité sortie (kg)<input id="fp-sortie" v-model="form.quantite_sortie" type="number" step="any" placeholder="245" :disabled="form.phase === 'Pesée'" :title="form.phase === 'Pesée' ? 'Automatique.' : 'À saisir : poids réel après pertes.'" /></label>
-            <label>Date début<input v-model="form.date_debut" type="date" /></label>
-            <label>Date fin<input v-model="form.date_phase" type="date" /></label>
-            <label>Statut (automatique)<input :value="form.date_phase ? 'Terminé' : (form.date_debut ? 'En cours' : 'À faire')" disabled title="À faire → En cours (date début) → Terminé (date fin)." /></label>
-            <label class="wide">Commentaire<input v-model="form.commentaire" placeholder="Remarque éventuelle" /></label>
-            <div class="qa-row">
-              <label class="qa-chk qa-dev"><input type="checkbox" v-model="form.deviation" /> Déviation sur cette étape</label>
-              <label class="qa-chk qa-tri"><input type="checkbox" v-model="form.en_triage" @change="majTriagePhase" /> Triage sur cette étape</label>
-            </div>
-            <label v-if="form.deviation" :class="{ wide: !form.en_triage }">Motif de la déviation<input v-model="form.deviation_motif" placeholder="Ex. : arrêt émulseur en cours de lot" /></label>
-            <label v-if="form.en_triage">Triage — début<input v-model="form.triage_debut" type="date" /></label>
-            <label v-if="form.en_triage">Triage — fin<input id="fp-triage-fin" v-model="form.triage_fin" type="date" title="Tant qu'elle est vide, le lot reste compté « en triage »." /></label>
-            <div class="form-actions">
-              <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Ajouter la phase' }}</button>
-              <button v-if="form.id" class="btn ghost" @click="resetForm">Annuler</button>
+      <!-- ===================== FILE D'ATTENTE ===================== -->
+      <div v-show="ongletDispo === 'file'">
+        <section class="qual-box">
+          <h3 class="qual-h">Charge, triage et déviations par atelier</h3>
+          <p class="qual-sub">File de production</p>
+          <div class="kpi-grid qual-kpis">
+            <div class="kpi" v-for="(k, i) in kpisFile" :key="'f' + i">
+              <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
+              <div class="kpi-lbl">{{ k.l }}</div>
             </div>
           </div>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <h2 class="card-title">Phases du lot</h2>
-            <span class="count">{{ phases.length }}</span>
+          <p class="qual-sub">Qualité</p>
+          <div class="kpi-grid qual-kpis">
+            <div class="kpi" v-for="(k, i) in kpisQualite" :key="'q' + i">
+              <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
+              <div class="kpi-lbl">{{ k.l }}</div>
+            </div>
           </div>
-          <div class="table-scroll">
-            <table class="grid">
-              <thead>
+          <p class="qual-sub">Détail par atelier</p>
+          <table v-if="qualiteParAtelier.length" class="qual-tbl">
+            <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">Boîtes</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th></tr></thead>
+            <tbody>
+              <template v-for="r in qualiteParAtelier" :key="r.label">
                 <tr>
-                  <th>Phase</th><th>Ligne</th><th class="right">Entrée (kg)</th><th class="right">Sortie (kg)</th>
-                  <th class="right">Rendement</th><th>Début</th><th>Fin</th><th>Statut</th><th class="right">Actions</th>
+                  <td class="q-at">{{ r.label }}</td>
+                  <td>
+                    <div class="q-charge">
+                      <div class="qc-bar"><div class="qc-fill" :style="{ width: r.pct + '%' }"></div></div>
+                      <span class="qc-val">{{ fmt(r.tot) }}<span v-if="r.att" class="qc-att"> · {{ r.att }} att.</span><span v-if="r.enc" class="qc-enc"> · {{ r.enc }} en cours</span></span>
+                    </div>
+                  </td>
+                  <td class="qnum q-bts" :title="fmt(r.btsAtt) + ' bts en attente · ' + fmt(r.btsEnc) + ' bts en cours'">{{ fmt(r.bts) }} <span class="unit">bts</span></td>
+                  <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
+                  <td class="qnum" :class="{ 'q-bad': r.dev > 0, 'q-clic': r.dev > 0 }" @click="toggleDev(r.label, r.dev)" :title="r.dev ? 'Voir les lots en déviation' : ''">
+                    {{ r.dev || '—' }}<span v-if="r.dev" class="q-caret">{{ devOuvert === r.label ? '▾' : '▸' }}</span>
+                  </td>
+                  <td class="qnum" :class="{ 'q-bad': r.pctDev >= 20 }">{{ r.pctDev }}%</td>
                 </tr>
-              </thead>
-              <tbody>
-                <tr v-for="p in phases" :key="p.id">
-                  <td class="strong">{{ p.phase }}<span v-if="p.deviation" class="dev-tag" :title="p.deviation_motif || 'Déviation déclarée sur cette étape'">déviation</span><span v-if="p.en_triage" class="tri-tag" :class="{ clos: p.triage_fin }" :title="p.triage_fin ? 'Triage clos le ' + p.triage_fin : 'Triage en cours sur cette étape'">triage</span></td>
-                  <td>{{ p.equipements ? p.equipements.code : '—' }}</td>
-                  <td class="right">{{ fmt(entreeEffective(p)) }}</td>
-                  <td class="right">{{ fmt(p.quantite_sortie) }}</td>
-                  <td class="right" :class="rendement(p) != null && rendement(p) < 95 ? 'rdt-bas' : ''">{{ fmtPct(rendement(p)) }}</td>
-                  <td>{{ fmtDate(p.date_debut) }}</td>
-                  <td>{{ fmtDate(p.date_phase) }}</td>
-                  <td><span class="badge" :class="classeStatut(p.statut)">{{ p.statut }}</span></td>
-                  <td class="right nowrap">
-                    <template v-if="peutEditer">
-                      <button class="link" @click="modifier(p)">Modifier</button>
-                      <button class="link danger" @click="desactiver(p)">Supprimer</button>
-                    </template>
+                <tr v-if="devOuvert === r.label" class="q-detail">
+                  <td colspan="6">
+                    <table class="qd-tbl">
+                      <thead><tr><th>N° lot</th><th>Produit</th><th>Déviation</th></tr></thead>
+                      <tbody>
+                        <tr v-for="l in r.devLots" :key="l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
+                          <td class="qd-lot">{{ l.lot }}</td>
+                          <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
+                          <td>
+                            <span v-if="l.deviation" class="qd-tag qd-fab">Fabrication</span>
+                            <span v-if="l.deviationCond" class="qd-tag qd-cond">Conditionnement</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </td>
                 </tr>
-                <tr v-if="!phases.length"><td colspan="8" class="empty">Aucune phase. Ajoute-en une ci-dessus.</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-        <section class="card aql-card" v-if="phasesAql.length">
-          <h2 class="card-title">Contrôle AQL — ISO 2859-1, échantillonnage simple, contrôle normal</h2>
-          <div class="form-grid" v-if="peutEditer">
-            <label>Étape contrôlée<select v-model="aqlForm.phase"><option v-for="ph in phasesAql" :key="ph" :value="ph">{{ ph }}</option></select></label>
-            <label>Taille du lot (unités)<input v-model.number="aqlForm.tailleLot" type="number" min="2" /></label>
-            <label>Niveau de contrôle<select v-model="aqlForm.niveau"><option v-for="n in NIVEAUX" :key="n" :value="n">{{ n }}</option></select></label>
-            <label>AQL critique<select v-model.number="aqlForm.aqlC"><option v-for="a in AQLS" :key="a" :value="a">{{ a }}</option></select></label>
-            <label>AQL majeur<select v-model.number="aqlForm.aqlMa"><option v-for="a in AQLS" :key="a" :value="a">{{ a }}</option></select></label>
-            <label>AQL mineur<select v-model.number="aqlForm.aqlMi"><option v-for="a in AQLS" :key="a" :value="a">{{ a }}</option></select></label>
-          </div>
-          <div v-if="planAql" class="aql-plan">
-            <span class="aql-pill">Lettre-code <strong>{{ planAql.lettreLot }}</strong></span>
-            <span class="aql-pill">Échantillon <strong>{{ planAql.n }}</strong> unités</span>
-            <span v-if="planAql.cent" class="aql-pill warn">Échantillon ≥ lot : contrôle à 100 %</span>
-            <span v-if="new Set(planAql.tailles).size > 1" class="aql-pill warn" title="Les flèches de la norme donnent des échantillons différents selon l'AQL. Le plus grand est retenu et chaque critère y est appliqué.">Échantillons différents selon la classe — le plus grand est retenu</span>
-          </div>
-          <p v-else class="aql-vide">Renseigne une taille de lot d'au moins 2 unités pour obtenir un plan.</p>
-          <table v-if="planAql && peutEditer" class="aql-tbl">
-            <thead><tr><th>Classe</th><th class="anum">AQL</th><th class="anum">Ac</th><th class="anum">Re</th><th class="anum">Défauts trouvés</th><th>Verdict</th></tr></thead>
-            <tbody>
-              <tr>
-                <td class="acl crit">Critique</td><td class="anum">{{ aqlForm.aqlC }}</td>
-                <td class="anum">{{ planAql.c ? planAql.c.ac : "—" }}</td><td class="anum">{{ planAql.c ? planAql.c.re : "—" }}</td>
-                <td class="anum"><input v-model.number="aqlForm.defC" type="number" min="0" class="adef" /></td>
-                <td :class="planAql.c && aqlForm.defC > planAql.c.ac ? 'av-ko' : 'av-ok'">{{ planAql.c ? (aqlForm.defC > planAql.c.ac ? "Refusé" : "Accepté") : "—" }}</td>
-              </tr>
-              <tr>
-                <td class="acl maj">Majeur</td><td class="anum">{{ aqlForm.aqlMa }}</td>
-                <td class="anum">{{ planAql.ma ? planAql.ma.ac : "—" }}</td><td class="anum">{{ planAql.ma ? planAql.ma.re : "—" }}</td>
-                <td class="anum"><input v-model.number="aqlForm.defMa" type="number" min="0" class="adef" /></td>
-                <td :class="planAql.ma && aqlForm.defMa > planAql.ma.ac ? 'av-ko' : 'av-ok'">{{ planAql.ma ? (aqlForm.defMa > planAql.ma.ac ? "Refusé" : "Accepté") : "—" }}</td>
-              </tr>
-              <tr>
-                <td class="acl min">Mineur</td><td class="anum">{{ aqlForm.aqlMi }}</td>
-                <td class="anum">{{ planAql.mi ? planAql.mi.ac : "—" }}</td><td class="anum">{{ planAql.mi ? planAql.mi.re : "—" }}</td>
-                <td class="anum"><input v-model.number="aqlForm.defMi" type="number" min="0" class="adef" /></td>
-                <td :class="planAql.mi && aqlForm.defMi > planAql.mi.ac ? 'av-ko' : 'av-ok'">{{ planAql.mi ? (aqlForm.defMi > planAql.mi.ac ? "Refusé" : "Accepté") : "—" }}</td>
-              </tr>
+              </template>
             </tbody>
-          </table>
-          <div v-if="planAql && peutEditer" class="aql-pied">
-            <input v-model="aqlForm.commentaire" class="aql-com" placeholder="Commentaire (nature des défauts, remarques)" />
-            <span class="aql-verdict" :class="verdictAql === 'Refusé' ? 'av-ko' : 'av-ok'">Verdict : {{ verdictAql }}</span>
-            <button class="btn" @click="enregistrerAql">Enregistrer le contrôle</button>
-          </div>
-          <table v-if="controlesAql.length" class="aql-hist">
-            <thead><tr><th>Date</th><th>Étape</th><th class="anum">Lot</th><th class="anum">Éch.</th><th>Critique</th><th>Majeur</th><th>Mineur</th><th>Verdict</th><th>Par</th><th></th></tr></thead>
-            <tbody>
-              <tr v-for="x in controlesAql" :key="x.id">
-                <td>{{ dateHeureAql(x.controle_le) }}</td>
-                <td>{{ x.phase }}</td>
-                <td class="anum">{{ x.taille_lot }}</td>
-                <td class="anum">{{ x.taille_echantillon }}<span v-if="x.controle_100" class="a100"> (100 %)</span></td>
-                <td>{{ x.def_critique }} / Ac {{ x.ac_critique == null ? "—" : x.ac_critique }} <span class="aaql">AQL {{ x.aql_critique }}</span></td>
-                <td>{{ x.def_majeur }} / Ac {{ x.ac_majeur == null ? "—" : x.ac_majeur }} <span class="aaql">AQL {{ x.aql_majeur }}</span></td>
-                <td>{{ x.def_mineur }} / Ac {{ x.ac_mineur == null ? "—" : x.ac_mineur }} <span class="aaql">AQL {{ x.aql_mineur }}</span></td>
-                <td :class="x.verdict === 'Refusé' ? 'av-ko' : 'av-ok'">{{ x.verdict }}</td>
-                <td class="apar">{{ x.controle_par || "—" }}</td>
-                <td><button v-if="peutEditer" class="asup" @click="supprimerAql(x)" title="Supprimer">🗑</button></td>
+            <tfoot>
+              <tr class="q-tot">
+                <td class="q-at">Total</td>
+                <td class="qc-tot">{{ fmt(qualiteTotaux.tot) }}<span v-if="qualiteTotaux.att" class="qc-att"> · {{ qualiteTotaux.att }} att.</span><span v-if="qualiteTotaux.enc" class="qc-enc"> · {{ qualiteTotaux.enc }} en cours</span></td>
+                <td class="qnum q-bts">{{ fmt(qualiteTotaux.bts) }} <span class="unit">bts</span></td>
+                <td class="qnum">{{ qualiteTotaux.tri || '—' }}</td>
+                <td class="qnum" :class="{ 'q-clic': qualiteTotaux.dev > 0 }" @click="toggleDev('__tous__', qualiteTotaux.dev)" :title="qualiteTotaux.dev ? 'Voir tous les lots en déviation' : ''">
+                  {{ qualiteTotaux.dev || '—' }}<span v-if="qualiteTotaux.dev" class="q-caret">{{ devOuvert === '__tous__' ? '▾' : '▸' }}</span>
+                </td>
+                <td class="qnum">{{ qualiteTotaux.pctDev }}%</td>
               </tr>
-            </tbody>
+              <tr v-if="devOuvert === '__tous__'" class="q-detail">
+                <td colspan="6">
+                  <table class="qd-tbl">
+                    <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier</th><th>Déviation</th></tr></thead>
+                    <tbody>
+                      <tr v-for="l in devLotsTous" :key="l.atelier + '-' + l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
+                        <td class="qd-lot">{{ l.lot }}</td>
+                        <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
+                        <td>{{ l.atelier }}</td>
+                        <td>
+                          <span v-if="l.deviation" class="qd-tag qd-fab">Fabrication</span>
+                          <span v-if="l.deviationCond" class="qd-tag qd-cond">Conditionnement</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </section>
-      </template>
+        <div class="searchbar">
+          <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
+          <label class="filtre-chk"><input type="checkbox" v-model="filtreUrgent" /> Urgents (&gt;{{ SEUIL_URGENT }} j)</label>
+          <label class="filtre-chk"><input type="checkbox" v-model="filtrePerime" /> OF périmés</label>
+        </div>        <h3 class="board-h">Fabrication — files par atelier</h3>
+        <p class="note">
+          Chaque lot apparaît dans l'atelier de son <strong>étape courante</strong> : « en cours » s'il y est démarré, « en attente » si l'étape précédente est terminée.
+          Une file <strong>vide</strong> = atelier à sec (risque de rupture). Les lots les plus anciens sont en haut.
+        </p>
+        <p v-if="vueFile.length === 0" class="muted">Aucun lot en production actuellement (un lot apparaît dès qu'il est lancé et suivi phase par phase).</p>
 
-      <div v-else class="hint-select">Choisis un lot ci-dessus pour saisir et voir ses phases.</div>
+        <div class="file-board">
+        <section class="atelier">
+          <h2 class="atelier-titre"><span class="at-name">OF planifiés</span>
+            <span class="at-sum">{{ attenteReceptionList.length }} en attente de réception</span>
+          </h2>
+          <div class="eq-grid">
+            <div class="card phase-card reception" :class="{ rupture: !attenteReceptionList.length }">
+              <div class="eq-head">
+                <div class="eq-ident">
+                  <span class="eq-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.clipboard"></svg></span>
+                  <div><div class="eq-code">En attente de réception</div><div class="eq-nom">OF planifiés, non reçus</div></div>
+                </div>
+              </div>
+              <div class="q-block">
+                <div class="q-title attente">À recevoir — {{ attenteReceptionList.length }} OF</div>
+                <div v-if="attenteReceptionList.length" class="prod-scroll">
+                  <table class="grid"><tbody>
+                    <tr v-for="l in attenteReceptionList" :key="l.id" class="lot-row" @click="ouvrirLot(l, 'pesee')" title="Ouvrir le suivi de fabrication de ce lot">
+                      <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
+                      <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
+                    </tr>
+                  </tbody></table>
+                </div>
+                <p v-else class="empty">Aucun OF planifié en attente de réception.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="atelier">
+          <h2 class="atelier-titre"><span class="at-name">Réception OF</span>
+            <span class="at-sum">{{ attentePeseeList.length }} en attente de pesée</span>
+          </h2>
+          <div class="eq-grid">
+            <div class="card phase-card reception" :class="{ rupture: !attentePeseeList.length }">
+              <div class="eq-head">
+                <div class="eq-ident">
+                  <span class="eq-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span>
+                  <div><div class="eq-code">En attente de pesée</div><div class="eq-nom">Reçus, avant pesée</div></div>
+                </div>
+              </div>
+              <div class="q-block">
+                <div class="q-title attente">À peser — {{ attentePeseeList.length }} lot(s)</div>
+                <div v-if="attentePeseeList.length" class="prod-scroll">
+                  <table class="grid"><tbody>
+                    <tr v-for="l in attentePeseeList" :key="l.id" class="lot-row" :class="{ 'row-perime': l.perime }" @click="ouvrirLot(l, 'pesee')" title="Ouvrir le suivi de fabrication de ce lot">
+                      <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
+                      <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
+                      <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
+                    </tr>
+                  </tbody></table>
+                </div>
+                <p v-else class="empty">Aucun lot en attente de pesée.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section v-for="ph in vueFile" :key="ph.key" class="atelier">
+          <h2 class="atelier-titre"><span class="at-name">Atelier de {{ ph.phase.label }}</span><span v-if="ph.plan" class="at-plan">Plan {{ fmtC(ph.plan) }} · Réalisé {{ fmtC(ph.realise) }} · <span :class="ph.taux >= 100 ? 'tx-ok' : 'tx-bas'">{{ ph.taux }}%</span></span>
+            <span class="at-sum">{{ ph.attente.length }} en attente · {{ ph.cours.length }} en cours</span>
+          </h2>
+          <div class="eq-grid">
+            <div class="card phase-card" :class="{ rupture: !ph.attente.length && !ph.cours.length }">
+              <div class="eq-head">
+                <div class="eq-ident">
+                  <span class="eq-ic" :style="ph.phase.tint"><svg viewBox="0 0 24 24" v-html="ph.phase.ic"></svg></span>
+                  <div><div class="eq-code">{{ ph.phase.label }}</div><div class="eq-nom">File de l'atelier</div></div>
+                </div>
+                <span v-if="!ph.attente.length && !ph.cours.length" class="phase-badge rupt-badge">À sec ⚠</span>
+              </div>
+
+              <div class="q-block">
+                <div class="q-title cours">En cours — {{ ph.cours.length }} lot(s) · {{ fmtC(ph.volCours) }} bts</div>
+                <div v-if="ph.cours.length" class="prod-scroll">
+                  <table class="grid"><tbody>
+                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
+                      <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
+                      <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
+                      <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
+                    </tr>
+                  </tbody></table>
+                </div>
+                <p v-else class="empty">Aucun lot en cours.</p>
+              </div>
+
+              <div class="q-block">
+                <div class="q-title attente">En attente — {{ ph.attente.length }} lot(s) · {{ fmtC(ph.volAttente) }} bts</div>
+                <div v-if="ph.attente.length" class="prod-scroll">
+                  <table class="grid"><tbody>
+                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
+                      <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
+                      <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
+                      <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
+                    </tr>
+                  </tbody></table>
+                </div>
+                <p v-else class="empty">Rien en attente.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+        </div>
+
+        <h3 class="board-h">Conditionnement — planning par ligne réservée</h3>
+        <p class="note">Chaque colonne = une <strong>ligne de conditionnement réservée</strong> (champ « Ligne / équipement » de l'ordre de fabrication). Les lots fabriqués non encore conditionnés y sont regroupés. « Non réservé » = lots sans ligne assignée.</p>
+        <p v-if="!vueCondLignes.length" class="muted">Aucun lot à conditionner pour le moment.</p>
+        <div class="file-board">
+          <section v-for="g in vueCondLignes" :key="g.id" class="atelier">
+            <h2 class="atelier-titre"><span class="at-name">{{ g.label }}</span>
+              <span class="at-sum">{{ g.attente.length }} en attente · {{ g.cours.length }} en cours</span>
+            </h2>
+            <div class="eq-grid">
+              <div class="card phase-card" :class="{ rupture: !g.reserve || !g.tot }">
+                <div class="eq-head">
+                  <div class="eq-ident">
+                    <span class="eq-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.box"></svg></span>
+                    <div><div class="eq-code">Conditionnement</div><div class="eq-nom">{{ g.reserve ? 'Ligne réservée' : 'Sans réservation' }}</div></div>
+                  </div>
+                  <span v-if="!g.reserve" class="phase-badge rupt-badge">à affecter</span>
+                  <span v-else-if="!g.tot" class="phase-badge rupt-badge">Libre</span>
+                </div>
+                <div class="q-block">
+                  <div class="q-title cours">En cours — {{ g.cours.length }} lot(s) · {{ fmtC(g.volCours) }} bts</div>
+                  <div v-if="g.cours.length" class="prod-scroll">
+                    <table class="grid"><tbody>
+                      <tr v-for="l in g.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
+                        <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
+                        <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
+                        <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
+                      </tr>
+                    </tbody></table>
+                  </div>
+                  <p v-else class="empty">Aucun lot en cours.</p>
+                </div>
+                <div class="q-block">
+                  <div class="q-title attente">En attente — {{ g.attente.length }} lot(s) · {{ fmtC(g.volAttente) }} bts</div>
+                  <div v-if="g.attente.length" class="prod-scroll">
+                    <table class="grid"><tbody>
+                      <tr v-for="l in g.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
+                        <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
+                        <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
+                        <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
+                      </tr>
+                    </tbody></table>
+                  </div>
+                  <p v-else class="empty">Rien en attente.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+        <section class="triage-box">
+          <div class="triage-head">
+            <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
+            <label class="sac-poids" title="Utilisé pour les produits dont le poids de sac n'est pas renseigné">Poids de sac par défaut<input type="number" min="0.1" step="any" v-model.number="poidsSac" /> Kg</label>
+          </div>
+          <p v-if="majSac" class="sac-err">{{ majSac }}</p>
+          <table v-if="lotsTriage.length" class="triage-tbl">
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th class="tnum">À trier (Kg)</th><th class="tnum">Triée (Kg)</th><th class="tnum">Sacs conformes</th><th>Avancement</th><th></th></tr></thead>
+            <tbody>
+              <template v-for="l in lotsTriage" :key="l.id">
+              <tr class="triage-row">
+                <td class="t-lot" @click="ouvrirTriageFin(l.id)" title="Ouvrir l'étape en triage pour saisir la date de fin">{{ l.lot }}</td>
+                <td @click="ouvrirTriageFin(l.id)">{{ l.code }} — {{ l.desig }}</td>
+                <td>{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
+                <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop /></td>
+                <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].triee" class="tq" @click.stop /></td>
+                <td class="tnum">
+                  <button type="button" class="sac-btn" :class="{ ok: nbSacs(l) > 0 && nbSacsCoches(l) >= nbSacs(l) }" :disabled="!nbSacs(l)" @click.stop="toggleSacs(l)" :title="nbSacs(l) ? 'Détail des sacs' : 'Renseigne les Kg à trier et le poids du sac'">
+                    {{ nbSacsCoches(l) }} / {{ nbSacs(l) || '—' }}<span v-if="nbSacs(l)" class="sac-caret">{{ sacsOuvert === l.id ? '▾' : '▸' }}</span>
+                  </button>
+                </td>
+                <td class="t-prog">
+                  <div class="tp-bar"><div class="tp-fill" :class="{ full: pctTriage(l.id) >= 100 }" :style="{ width: pctTriage(l.id) + '%' }"></div></div>
+                  <span class="tp-pct">{{ pctTriage(l.id) }}%</span>
+                </td>
+                <td><button class="tq-save" @click.stop="sauverTriage(l)" title="Enregistrer">💾</button></td>
+              </tr>
+              <tr v-if="sacsOuvert === l.id && nbSacs(l)" class="sac-detail">
+                <td colspan="8">
+                  <div class="sac-bar">
+                    <span class="sac-tit">{{ nbSacs(l) }} sacs — coche un sac quand son triage est terminé et conforme</span>
+                    <label class="sac-pp">Poids du sac · {{ l.code }}<input type="number" min="0" step="any" :value="poidsSacDe(l)" @change="sauverPoidsSac(l, $event.target.value)" title="Enregistré sur le produit, donc valable pour tous ses lots" /> Kg</label>
+                    <button type="button" class="sac-act" @click="cocherTousSacs(l)">Tout cocher</button>
+                    <button type="button" class="sac-act" @click="decocherTousSacs(l)">Tout décocher</button>
+                  </div>
+                  <div class="sac-grid">
+                    <button v-for="n in nbSacs(l)" :key="n" type="button" class="sac-chip" :class="{ on: sacCoche(l, n) }" @click="basculerSac(l, n)" :title="'Sac ' + n + (sacCoche(l, n) ? ' — conforme' : ' — à trier')">
+                      <span class="sac-tick">{{ sacCoche(l, n) ? '✓' : '' }}</span>{{ n }}
+                    </button>
+                  </div>
+                  <div class="sac-pied">{{ nbSacsCoches(l) }} / {{ nbSacs(l) }} sacs conformes · {{ pctSacs(l) }} % · {{ fmt(kgSacs(l)) }} Kg reportés automatiquement dans « Triée (Kg) »<span v-if="nbSacs(l) > 1"> · dernier sac : {{ fmt(Math.round((((qteEdit[l.id] || {}).aTrier || 0) - (nbSacs(l) - 1) * poidsSacDe(l)) * 100) / 100) }} Kg</span></div>
+                </td>
+              </tr>
+              </template>
+            </tbody>
+          </table>
+          <p v-else class="triage-vide">Aucun lot coché « En triage fabrication » pour l'instant (case à cocher sur la page Ordres de fabrication).</p>
+        </section>
+        <section v-if="triagesClos.length" class="histo-box">
+          <div class="triage-head">
+            <h3 class="histo-h">📜 Historique des triages ({{ histoTotaux.n }})</h3>
+            <span class="histo-res">{{ fmt(histoTotaux.kg) }} Kg triés<span v-if="histoTotaux.duree != null"> · {{ histoTotaux.duree }} j de durée moyenne</span></span>
+          </div>
+          <table class="histo-tbl">
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th>Début</th><th>Fin</th><th class="tnum">Durée</th><th class="tnum">À trier</th><th class="tnum">Triée</th><th class="tnum">Sacs</th></tr></thead>
+            <tbody>
+              <template v-for="h in triagesClos" :key="h.id">
+                <tr class="histo-row" :class="{ ouvert: histOuvert === h.id }" @click="toggleHist(h.id)">
+                  <td class="strong">{{ h.lot }}</td>
+                  <td>{{ h.code }}<span v-if="h.desig" class="hdesig"> — {{ h.desig }}</span></td>
+                  <td>{{ h.phase || "—" }}</td>
+                  <td>{{ h.debut || "—" }}</td>
+                  <td class="strong">{{ h.fin }}</td>
+                  <td class="tnum">{{ h.duree != null ? h.duree + " j" : "—" }}</td>
+                  <td class="tnum">{{ fmt(h.aTrier) }}</td>
+                  <td class="tnum">{{ fmt(h.triee) }} <span class="hpct">({{ h.pct }} %)</span></td>
+                  <td class="tnum">{{ sacsDuLot(h.id).length || "—" }}<span v-if="sacsDuLot(h.id).length" class="sac-caret">{{ histOuvert === h.id ? "▾" : "▸" }}</span></td>
+                </tr>
+                <tr v-if="histOuvert === h.id" class="histo-detail">
+                  <td colspan="9">
+                    <div v-if="sacsDuLot(h.id).length" class="hd-liste">
+                      <div v-for="x in sacsDuLot(h.id)" :key="x.numero_sac" class="hd-sac">
+                        <span class="hd-num">Sac {{ x.numero_sac }}</span>
+                        <span class="hd-qui">{{ x.coche_par || "auteur inconnu" }}</span>
+                        <span class="hd-quand">{{ dateHeure(x.coche_le) }}</span>
+                      </div>
+                    </div>
+                    <p v-else class="hd-vide">Aucun sac enregistré pour ce lot : le triage a été clos avant la mise en place du suivi par sac.</p>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <!-- ===================== RÉTROSPECTIVE ===================== -->
+      <div v-show="ongletDispo === 'retro'">
+      <div class="kpi-grid k3">
+        <div class="kpi" v-for="(k, i) in kpis" :key="i">
+          <div class="kpi-top">
+            <span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span>
+            <div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div>
+          </div>
+          <div class="kpi-lbl">{{ k.l }}</div>
+        </div>
+      </div>
+
+      <div class="searchbar">
+        <input v-model="recherche" type="text" placeholder="Rechercher un équipement, un type ou un produit…" />
+        <label class="chk"><input type="checkbox" v-model="enCoursOnly" /> Uniquement les produits en cours</label>
+      </div>
+
+      <p class="note">
+        Un produit apparaît sous un équipement dès qu'un de ses lots passe par la phase correspondante.
+        Les équipements d'un même type partagent la même liste (la machine exacte n'est pas tracée par lot).
+        Un produit est « en cours » s'il a au moins un lot lancé et non terminé.
+      </p>
+
+      <p v-if="vue.length === 0" class="muted">Aucun équipement ne correspond.</p>
+
+      <section v-for="a in vue" :key="a.id" class="atelier">
+        <h2 class="atelier-titre">{{ a.code }} — {{ a.nom }}</h2>
+        <div class="eq-grid">
+          <div v-for="e in a.eqs" :key="e.id" class="card eq-card">
+            <div class="eq-head">
+              <div class="eq-ident">
+                <span class="eq-ic" :style="e.phase ? e.phase.tint : { background: '#f1f5f9', color: '#94a3b8' }">
+                  <svg viewBox="0 0 24 24" v-html="e.phase ? e.phase.ic : ICONS.gauge"></svg>
+                </span>
+                <div>
+                  <div class="eq-code">{{ e.code }}</div>
+                  <div class="eq-nom">{{ e.nom }}</div>
+                </div>
+              </div>
+              <span v-if="e.phase" class="phase-badge" :style="e.phase.tint">{{ e.phase.label }}</span>
+              <span v-else class="phase-badge muted-badge">type non reconnu</span>
+            </div>
+
+            <div class="eq-stats">
+              <span><strong>{{ fmt(e.prods.length) }}</strong> produits</span>
+              <span><strong>{{ fmt(e.totalLots) }}</strong> lots</span>
+              <span><strong>{{ fmtC(e.totalBoites) }}</strong> boîtes</span>
+            </div>
+
+            <div v-if="e.prods.length" class="prod-scroll">
+              <table class="grid">
+                <thead>
+                  <tr><th>Produit</th><th class="num">Lots</th><th class="num">Boîtes</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="p in e.prods" :key="p.code">
+                    <td><span class="pf">{{ p.code }}</span> <span class="pd">{{ p.desig }}</span></td>
+                    <td class="num">{{ fmt(p.lots) }}</td>
+                    <td class="num">{{ fmt(p.boites) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p v-else class="empty">
+              {{ e.phase ? (enCoursOnly ? 'Aucun produit en cours sur cette phase.' : 'Aucun produit sur cette phase pour l\'année sélectionnée.') : 'Type non associé à une phase (Granulation, Mélange, Compression, Pelliculage, Conditionnement).' }}
+            </p>
+          </div>
+        </div>
+      </section>
+      </div>
     </template>
   </div>
 </template>
 
 <style scoped>
-.ph-page { color: #1b2733; }
-.ph-head { margin: 4px 0 18px; }
-.ph-head h1 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
-.ph-head .sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
+.de-page { color: #1b2733; }
+.de-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
+.de-head h1 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
+.sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
+.annee-sel { font-size: 13px; color: #475569; display: flex; flex-direction: column; gap: 4px; }
+.annee-sel select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: #fff; }
+.err { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; }
+.muted { color: #94a3b8; }
+.note { color: #64748b; font-size: 11px; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 7px; padding: 6px 10px; margin: 0 0 10px; }
 
-.alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
-.ok { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
-.empty-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; color: #475569; text-align: center; font-size: 15px; }
+.kpi-grid { display: grid; gap: 14px; margin-bottom: 14px; }
+.k3 { grid-template-columns: repeat(3, 1fr); }
+.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.kpi-val { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+.kpi-lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
 
-.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 22px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
-.card-title { margin: 0 0 14px; font-size: 17px; }
-.card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.card-head .card-title { margin: 0; }
-.count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+.searchbar { margin-bottom: 14px; }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 12px 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 2px rgba(16,24,40,.04); margin-bottom: 16px; }
+.flow-step { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px; }
+.flow-ic { display: inline-flex; }
+.flow-ic svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.flow-arrow { color: #cbd5e1; font-weight: 700; }
+.searchbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.searchbar input[type=text] { flex: 1; min-width: 240px; max-width: 460px; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+.chk { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: #475569; cursor: pointer; white-space: nowrap; }
+.chk input { width: 15px; height: 15px; cursor: pointer; }
 
-.lot-select { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; max-width: 520px; }
-.lot-select select { font-size: 14px; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 500; color: #1b2733; }
-.lot-select select:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
-.lot-select { margin-bottom: 12px; }
-.lot-search { font-size: 14px; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 500; color: #1b2733; }
-.lot-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
-.lot-count { display: inline-block; background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
-.lot-vide { font-size: 12px; color: #b45309; font-weight: 500; }
+.atelier { margin-bottom: 26px; }
+.atelier-titre { font-size: 11px; font-weight: 700; margin: 0 0 7px; color: #0f172a; border-left: 3px solid #0f766e; padding-left: 8px; line-height: 1.2; }
+.at-plan { display: block; font-size: 11px; font-weight: 600; color: #64748b; margin-top: 3px; }
+.tx-ok { color: #15803d; font-weight: 800; }
+.tx-bas { color: #dc2626; font-weight: 800; }
+/* Réserve 2 lignes pour le nom -> titres 1 ligne alignés sur les titres 2 lignes (cartes homogènes) */
+.at-name { display: block; min-height: 2.5em; }
+.at-sum { display: block; font-size: 10.5px; font-weight: 500; color: #64748b; margin: 2px 0 0 11px; }
+/* File d'attente en colonnes (façon Kanban) */
+.file-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; align-items: stretch; }
+.board-h { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; color: #0f172a; margin: 26px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #e2e8f0; }
+.board-h:first-of-type { margin-top: 6px; }
+.cond-plan-h { font-size: 17px; font-weight: 700; margin: 26px 0 6px; color: #0f172a; }
+.file-board .atelier { margin-bottom: 0; }
+.file-board .eq-grid { grid-template-columns: 1fr; flex: 1; }
+.file-board .phase-card { height: 100%; }
+.file-board .atelier { min-width: 0; display: flex; flex-direction: column; }
+.file-board .prod-scroll { overflow-x: hidden; height: 180px; }
+/* Hauteur fixe des boites internes -> toutes les cartes a la meme hauteur */
+.file-board .q-block .empty { height: 180px; display: flex; align-items: center; justify-content: center; }
+/* Réception OF (1 seul bloc) : son bloc remplit la carte -> meme hauteur que les cartes a 2 blocs */
+.file-board .reception .q-block { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.file-board .reception .prod-scroll { flex: 1; height: auto; min-height: 0; max-height: 282px; }
+.file-board .reception .q-block .empty { flex: 1; height: auto; min-height: 0; }
+/* Bloc En cours = souvent 1 seul lot -> plus court (En attente garde 180px pour plusieurs lots) */
+.file-board .q-block:has(.q-title.cours) .prod-scroll { height: 72px; }
+.file-board .q-block:has(.q-title.cours) .empty { height: 72px; }
+.pf, .pd { overflow-wrap: anywhere; }
+.lot-row { cursor: pointer; }
+.lot-row:hover td { background: #f0f9ff; }
+.lot-row:hover .pf { color: #0891b2; text-decoration: underline; }
+.perime-tag { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 700; color: #b91c1c; background: #fee2e2; padding: 1px 6px; border-radius: 999px; }
+.lot-sub { display: block; font-size: 10.5px; color: #64748b; margin-top: 2px; }
+.unit { font-size: 10px; color: #94a3b8; font-weight: 500; }
+.row-perime td { background: #fff5f6; }
+/* Onglets */
+.de-tabs { display: flex; gap: 4px; background: #fff; border: 1px solid #e9edf2; border-radius: 12px; padding: 5px; margin: 0 0 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); width: fit-content; }
+.de-tabs button { background: none; border: 0; padding: 9px 16px; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer; border-radius: 8px; font-family: inherit; transition: color .15s ease, background .15s ease; }
+.de-tabs button:hover { color: #0891b2; }
+.de-tabs button.on { color: #0891b2; background: #ecfeff; }
+/* Cartes de file */
+.phase-card { display: flex; flex-direction: column; gap: 7px; padding: 11px 12px !important; border-radius: 11px !important; }
+.phase-card.rupture { border-color: #fecdd3; background: #fff5f6; }
+.rupt-badge { background: #fee2e2; color: #b91c1c; }
+.q-block { border-top: 1px solid #f1f5f9; padding-top: 6px; }
+.q-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
+.q-title.cours { color: #2563eb; }
+.q-title.attente { color: #b45309; }
+.age { color: #64748b; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.age.age-warn { color: #b45309; font-weight: 700; }
+.age.age-danger { color: #b91c1c; font-weight: 700; }
+.eq-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.eq-card { display: flex; flex-direction: column; }
+.eq-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+.eq-ident { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.eq-ic { width: 27px; height: 27px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.eq-ic svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.eq-code { font-weight: 700; font-size: 13px; }
+.eq-nom { font-size: 10.5px; color: #64748b; }
+.phase-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.muted-badge { background: #f1f5f9; color: #94a3b8; }
 
-.lot-info { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #eef2f6; font-size: 14px; }
-.lot-info .lbl { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; margin-bottom: 2px; }
-.rdt-global strong { color: #0f766e; font-size: 16px; }
+.eq-stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: #64748b; padding: 8px 0 10px; border-top: 1px solid #f1f5f9; }
+.eq-stats strong { color: #0f172a; font-size: 14px; }
 
-.form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: end; }
-.form-grid label { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
-.form-grid .wide { grid-column: span 2; }
-.form-grid input, .form-grid select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 400; }
-.form-grid input:focus, .form-grid select:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
-.form-grid input:disabled { background: #f1f5f9; color: #64748b; cursor: not-allowed; }
-.hint-q { font-weight: 500; font-size: 11px; color: #94a3b8; }
-.form-actions { display: flex; gap: 8px; align-items: end; grid-column: 1 / -1; }
+.prod-scroll { max-height: 230px; overflow-y: auto; border: 1px solid #eef2f6; border-radius: 7px; }
+.grid { width: 100%; border-collapse: collapse; }
+.grid th { position: sticky; top: 0; background: #f8fafc; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+.grid td { padding: 4px 7px; border-bottom: 1px solid #f1f5f9; font-size: 11.5px; }
+.grid tr:last-child td { border-bottom: none; }
+.num { text-align: right; white-space: nowrap; }
+.pf { font-weight: 600; color: #0f766e; }
+.pd { color: #475569; }
+.empty { font-size: 11px; color: #94a3b8; margin: 3px 0 0; }
+/* Cadre interne harmonisé : le bloc vide a le même encadré que le tableau (.prod-scroll) */
+.q-block .empty { border: 1px solid #eef2f6; border-radius: 7px; background: #f8fafc; padding: 12px 10px; text-align: center; margin: 0; }
+/* redeploy 2026-08-06 */
+/* Ultra compact */
+.de-head h1 { font-size: 15px; }
+.sub { font-size: 10px; margin-top: 2px; }
+.de-head { margin-bottom: 6px; }
+.annee-sel select { padding: 5px 8px; font-size: 12px; }
+.err { padding: 6px 10px; font-size: 12px; }
+.note { padding: 4px 8px; margin: 0 0 6px; font-size: 10px; }
+.kpi { padding: 8px 11px; border-radius: 10px; }
+.kpi-val { font-size: 16px; }
+.kpi-lbl { font-size: 9.5px; margin-top: 2px; }
+.flow { padding: 7px 10px; gap: 4px; margin-bottom: 8px; }
+.flow-step { font-size: 10.5px; padding: 3px 8px; }
+.searchbar input[type=text] { padding: 6px 10px; font-size: 12px; }
+.chk { font-size: 11.5px; }
+.atelier-titre { font-size: 10.5px; margin: 0 0 5px; }
+.at-plan { font-size: 10px; }
+.at-sum { font-size: 9.5px; }
+.board-h { font-size: 13px; margin: 12px 0 7px; }
+.cond-plan-h { font-size: 14px; margin: 12px 0 5px; }
+.de-tabs { margin: 0 0 8px; padding: 3px; }
+.de-tabs button { font-size: 12px; padding: 6px 12px; }
+.phase-card { padding: 7px 9px !important; gap: 4px; }
+.q-title { font-size: 9.5px; margin-bottom: 3px; }
+.card { padding: 9px 11px; }
+.eq-code { font-size: 12px; }
+.eq-nom { font-size: 9.5px; }
+.eq-stats { font-size: 11px; padding: 5px 0 6px; gap: 10px; }
+.eq-stats strong { font-size: 12px; }
+.phase-badge { font-size: 10px; padding: 2px 8px; }
+.grid th { font-size: 10px; padding: 4px 6px; }
+.grid td { padding: 2px 6px; font-size: 10.5px; }
+.lot-sub { font-size: 9.5px; }
+.q-block .empty { padding: 8px; }
+/* Encore plus compact */
+.de-head h1 { font-size: 13px; }
+.sub { display: none; }
+.de-head { margin-bottom: 5px; }
+.kpi { padding: 6px 9px; }
+.kpi-val { font-size: 14px; }
+.kpi-lbl { font-size: 9px; }
+.flow { padding: 5px 8px; margin-bottom: 6px; gap: 3px; }
+.flow-step { font-size: 9.5px; padding: 2px 6px; }
+.searchbar input[type=text] { padding: 5px 8px; font-size: 11px; }
+.atelier-titre { font-size: 11px; margin: 0 0 4px; }
+.at-plan { font-size: 9.5px; }
+.at-sum { font-size: 9px; }
+.board-h { font-size: 12px; margin: 9px 0 5px; }
+.cond-plan-h { font-size: 12px; margin: 9px 0 4px; }
+.de-tabs button { font-size: 11px; padding: 5px 10px; }
+.phase-card { padding: 5px 7px !important; gap: 3px; }
+.card { padding: 6px 9px; }
+.eq-code { font-size: 11px; }
+.eq-nom { font-size: 9px; }
+.eq-stats { font-size: 10px; padding: 4px 0 5px; gap: 8px; }
+.eq-stats strong { font-size: 11px; }
+.phase-badge { font-size: 9.5px; padding: 2px 7px; }
+.grid th { font-size: 9.5px; padding: 3px 5px; }
+.grid td { padding: 2px 5px; font-size: 10px; }
+.lot-sub { font-size: 9px; }
+/* Réduction maximale */
+.flow { display: none; }
+.note { display: none; }
+.de-head h1 { font-size: 12px; }
+.de-head { margin-bottom: 4px; }
+.kpi { padding: 5px 8px; }
+.kpi-val { font-size: 13px; }
+.board-h { font-size: 11px; margin: 6px 0 4px; padding-bottom: 4px; }
+.cond-plan-h { font-size: 11px; margin: 6px 0 4px; }
+.de-tabs { margin: 0 0 6px; padding: 2px; }
+.de-tabs button { font-size: 10.5px; padding: 4px 9px; }
+.card { padding: 5px 8px; }
+.phase-card { padding: 4px 6px !important; gap: 3px; }
+.eq-stats { padding: 3px 0 4px; gap: 7px; font-size: 9.5px; }
+.eq-stats strong { font-size: 10.5px; }
+.grid th { font-size: 9px; padding: 2px 5px; }
+.grid td { padding: 1px 5px; font-size: 9.5px; }
+.atelier-titre { font-size: 10.5px; margin: 0 0 3px; }
+.searchbar input[type=text] { padding: 4px 8px; font-size: 10.5px; }
+/* Réduction supplémentaire de résolution */
+.de-head h1 { font-size: 12px; }
+.sub { display: none; }
+.flow { display: none; }
+.note { display: none; }
+.de-head { margin-bottom: 4px; }
+.kpi { padding: 5px 8px; }
+.kpi-val { font-size: 13px; }
+.kpi-lbl { font-size: 9px; }
+.board-h { font-size: 11px; margin: 6px 0 4px; padding-bottom: 4px; }
+.cond-plan-h { font-size: 11px; margin: 6px 0 4px; }
+.card { padding: 5px 8px; }
+.phase-card { padding: 4px 6px !important; gap: 3px; }
+.eq-stats { padding: 3px 0 4px; gap: 7px; font-size: 9.5px; }
+.eq-stats strong { font-size: 10.5px; }
+.grid th { font-size: 9px; padding: 2px 5px; }
+.grid td { padding: 1px 5px; font-size: 9.5px; }
+.atelier-titre { font-size: 10.5px; margin: 0 0 3px; }
+.at-plan { font-size: 9px; }
+.searchbar input[type=text] { padding: 4px 8px; font-size: 10.5px; }
+/* Qualité — triage et déviations */
+.qual-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.qual-h { margin: 0 0 12px; font-size: 15px; font-weight: 800; color: #0f172a; }
+.qual-kpis { grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 9px; margin-bottom: 12px; }
+.qual-kpis .kpi { padding: 10px 12px; border-radius: 10px; box-shadow: none; }
+.qual-kpis .kpi-val { font-size: 19px; }
+.qual-kpis .kpi-val-sm { font-size: 13px; }
+.qual-kpis .kpi-lbl { font-size: 10.5px; margin-top: 2px; line-height: 1.25; }
+.qual-sub { margin: 0 0 6px; font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: #94a3b8; }
+.qual-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.qual-tbl th { text-align: left; font-size: 11px; color: #64748b; font-weight: 700; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+.qual-tbl td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
+.qual-tbl .qnum { text-align: right; white-space: nowrap; }
+.qual-tbl .q-at { font-weight: 600; }
+.qual-tbl .q-warn { color: #b45309; font-weight: 700; }
+.qual-tbl .q-bad { color: #dc2626; font-weight: 700; }
+.qual-tbl .q-bts { color: #0f766e; font-weight: 700; }
+.qual-tbl .q-bts .unit { font-size: 10px; font-weight: 600; color: #94a3b8; }
+.qual-tbl .q-tot td { border-top: 2px solid #e2e8f0; border-bottom: none; font-weight: 800; background: #f8fafc; }
+.qual-tbl .qcharge-h { min-width: 190px; }
+.q-charge { display: flex; align-items: center; gap: 9px; }
+.qc-bar { flex: 1; min-width: 60px; height: 13px; background: #ecfeff; border-radius: 999px; overflow: hidden; }
+.qc-fill { height: 100%; background: linear-gradient(90deg, #22d3ee, #0891b2); border-radius: 999px; min-width: 2px; transition: width .3s ease; }
+.qc-val { font-size: 12px; font-weight: 800; color: #0891b2; white-space: nowrap; }
+.qc-att { font-weight: 600; color: #94a3b8; font-size: 10px; }
+.qc-enc { font-weight: 600; color: #64748b; font-size: 10px; }
+.qc-tot { font-size: 13px; font-weight: 800; color: #0891b2; white-space: nowrap; }
+.qual-tbl .q-clic { cursor: pointer; user-select: none; }
+.qual-tbl .q-clic:hover { text-decoration: underline; }
+.q-caret { font-size: 9px; margin-left: 4px; color: #94a3b8; }
+.q-detail > td { background: #fff7f7; padding: 8px 10px; }
+.qd-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.qd-tbl th { text-align: left; font-size: 10px; color: #94a3b8; font-weight: 700; padding: 3px 6px; }
+.qd-tbl td { padding: 4px 6px; border-top: 1px solid #fee2e2; color: #1e293b; }
+.qd-tbl tbody tr { cursor: pointer; transition: background .12s; }
+.qd-tbl tbody tr:hover { background: #fee2e2; }
+.qd-lot { font-weight: 700; }
+.qd-tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; margin-right: 4px; }
+.qd-fab { background: #fee2e2; color: #b91c1c; }
+.qd-cond { background: #ffe4e6; color: #9f1239; }
+/* Lots en cours de triage */
+.triage-box { background: #fef3c7; border: 1px solid #fde68a; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
+.triage-h { margin: 0 0 10px; font-size: 15px; font-weight: 800; color: #92400e; }
+.triage-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.triage-tbl th { text-align: left; font-size: 11px; color: #a16207; padding: 4px 8px; border-bottom: 1px solid #fde68a; }
+.triage-tbl td { padding: 5px 8px; border-bottom: 1px solid #fde68a55; color: #451a03; }
+.triage-tbl .t-lot { font-weight: 700; cursor: pointer; }
+.triage-tbl .tnum { text-align: right; white-space: nowrap; }
+.triage-tbl .tq { width: 72px; text-align: right; font: inherit; padding: 3px 6px; border: 1px solid #fcd34d; border-radius: 6px; background: #fffef7; }
+.t-prog { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.tp-bar { flex: 1; height: 9px; background: #fde68a; border-radius: 6px; overflow: hidden; }
+.tp-fill { height: 100%; background: #f59e0b; border-radius: 6px; transition: width .2s; }
+.tp-fill.full { background: #16a34a; }
+.tp-pct { font-size: 11.5px; font-weight: 800; color: #92400e; min-width: 34px; text-align: right; }
+.tq-save { background: #f59e0b; color: #fff; border: none; border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 13px; }
+.tq-save:hover { background: #d97706; }
+.triage-row { cursor: pointer; transition: background .12s; }
+.triage-row:hover { background: #fde68a; }
+.triage-row:hover .t-lot { text-decoration: underline; }
+.lot-row.en-triage { background: #fef3c7; }
+.lot-row.en-triage > td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
+.lot-row.en-triage .pf::after { content: ' 🔍 triage'; color: #b45309; font-size: .78em; font-weight: 700; }
+.lot-row.en-triage-cond { background: #fef3c7; }
+.lot-row.en-triage-cond > td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
+.lot-row.en-triage-cond .pf::after { content: ' 🔍 triage cond.'; color: #b45309; font-size: .78em; font-weight: 700; }
+.triage-vide { font-size: 12px; color: #92400e; margin: 0; }
+/* Historique des triages */
+.histo-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; margin: 14px 0 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.histo-h { margin: 0; font-size: 14px; font-weight: 800; color: #0f172a; }
+.histo-res { font-size: 11px; font-weight: 700; color: #64748b; white-space: nowrap; }
+.histo-tbl { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+.histo-tbl th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .02em; color: #94a3b8; font-weight: 800; padding: 4px 7px; border-bottom: 1px solid #e2e8f0; }
+.histo-tbl td { padding: 4px 7px; border-bottom: 1px solid #f1f5f9; color: #1e293b; white-space: nowrap; }
+.histo-tbl .tnum { text-align: right; }
+.histo-tbl .strong { font-weight: 700; }
+.hdesig { color: #94a3b8; }
+.hpct { font-size: 10px; color: #94a3b8; font-weight: 600; }
+.histo-row { cursor: pointer; transition: background .12s; }
+.histo-row:hover, .histo-row.ouvert { background: #f8fafc; }
+.histo-detail > td { background: #f8fafc; padding: 8px 10px; }
+.hd-liste { display: flex; flex-wrap: wrap; gap: 6px; }
+.hd-sac { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 9px; font-size: 11px; }
+.hd-num { font-weight: 800; color: #15803d; }
+.hd-qui { color: #475569; font-weight: 600; }
+.hd-quand { color: #94a3b8; }
+.hd-vide { margin: 0; font-size: 11px; color: #94a3b8; font-style: italic; }
+.triage-vide code { background: #fde68a; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
 
-.btn { background: #0f766e; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.btn:hover { background: #0c5f59; }
-.btn.ghost { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
-.btn.ghost:hover { background: #f8fafc; }
+/* ============================================================= *
+ * Refonte moderne — couche de surcharge (cohérence cyan)
+ * ============================================================= */
+.de-page :deep(h1) { font-size: 20px !important; }
+.card, .kpi { border-color: #e0edf1 !important; border-radius: 13px !important; box-shadow: 0 1px 3px rgba(8,145,178,.05) !important; }
+.kpi-val { color: #0891b2 !important; }
+.atelier-titre { color: #0e7490 !important; font-weight: 800 !important; letter-spacing: -.01em; border-left: 3px solid #06b6d4; padding-left: 8px; }
+.q-title, .card-title { color: #0e7490 !important; font-weight: 800 !important; letter-spacing: -.01em; }
+.q-title { border-left: 3px solid #22d3ee; padding-left: 7px; }
 
-.table-scroll { overflow-x: auto; }
-table.grid { width: 100%; border-collapse: collapse; font-size: 14px; }
-table.grid th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
-table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space: nowrap; }
-table.grid tr:hover td { background: #f8fafc; }
-.right { text-align: right; }
-.nowrap { white-space: nowrap; }
-.strong { font-weight: 700; }
-.empty { color: #94a3b8; text-align: center; padding: 18px; font-style: italic; }
-.rdt-bas { color: #b91c1c; font-weight: 700; }
+/* Bloc atelier / équipement */
+.atelier { border-color: #e0edf1 !important; border-radius: 13px !important; }
+.eq-head { border-bottom-color: #e6f4f7 !important; }
+.eq-ic { color: #0891b2 !important; background: #ecfeff !important; }
+.phase-card { border-color: #e6f4f7 !important; border-radius: 11px !important; }
 
-.badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-.st-todo { background: #f1f5f9; color: #475569; }
-.st-cours { background: #dbeafe; color: #1e40af; }
-.st-fini { background: #dcfce7; color: #166534; }
+/* Tableaux */
+.grid th { color: #0891b2 !important; background: #ecfeff !important; }
+.lot-row:hover td, .lot-row:hover { background: #f2fdff; }
 
-button.link { background: none; border: 0; color: #0f766e; font-size: 13px; font-weight: 600; cursor: pointer; padding: 2px 6px; }
-button.link:hover { text-decoration: underline; }
-button.link.danger { color: #b91c1c; }
+/* Onglets */
+.de-tabs button.on { color: #0891b2 !important; background: #ecfeff !important; box-shadow: inset 0 -2px 0 #06b6d4; }
 
-.hint-select { color: #64748b; font-size: 14px; padding: 8px 2px; }
+/* Badges / puces */
+.phase-badge { background: #ecfeff !important; color: #0e7490 !important; border-color: #a5f0fc !important; }
+.attente { color: #0891b2; }
 
-@media (max-width: 820px) {
-  .form-grid { grid-template-columns: 1fr 1fr; }
-  .form-grid .wide { grid-column: span 2; }
-}
-.ac-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
-.ac-badge { display: inline-block; background: #f59e0b; color: #fff; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 10px; margin-left: 6px; }
-.ac-chev { color: #94a3b8; }
-.ac-hint { color: #64748b; font-size: 13px; margin: 8px 0 12px; }
-.ac-scroll { overflow-x: auto; }
-.ac-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.ac-table th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 8px 10px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
-.ac-table td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
-.ac-r { text-align: right; }
-.ac-mono { font-family: ui-monospace, monospace; font-weight: 600; }
-.ac-nowrap { white-space: nowrap; }
-.ac-link { background: none; border: 0; color: #2563eb; font-weight: 600; cursor: pointer; font-size: 13px; }
-.ac-link:hover { text-decoration: underline; }
-.ac-desig { display: block; font-size: 12px; color: #64748b; margin-top: 2px; }
-.ac-filtre { display: flex; align-items: center; gap: 12px; margin: 0 0 11px; flex-wrap: wrap; }
-.ac-filtre input { flex: 1; min-width: 220px; max-width: 380px; padding: 7px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
-.ac-count { font-size: 12.5px; color: #64748b; font-weight: 600; }
-.ac-vide { text-align: center; color: #94a3b8; padding: 14px; font-style: italic; }
-/* Contrôle AQL */
-.aql-card { margin-top: 14px; }
-.aql-plan { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-.aql-pill { background: #eef2ff; color: #4338ca; border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 700; }
-.aql-pill.warn { background: #fef3c7; color: #b45309; }
-.aql-vide { font-size: 12px; color: #94a3b8; font-style: italic; margin: 10px 0; }
-.aql-tbl, .aql-hist { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
-.aql-tbl th, .aql-hist th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .02em; color: #94a3b8; font-weight: 800; padding: 5px 7px; border-bottom: 1px solid #e2e8f0; }
-.aql-tbl td, .aql-hist td { padding: 5px 7px; border-bottom: 1px solid #f1f5f9; color: #1e293b; white-space: nowrap; }
-.aql-tbl .anum, .aql-hist .anum { text-align: right; }
-.acl { font-weight: 800; }
-.acl.crit { color: #b91c1c; }
-.acl.maj { color: #b45309; }
-.acl.min { color: #0891b2; }
-.adef { width: 74px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 12px; text-align: right; }
-.av-ok { color: #15803d; font-weight: 800; }
-.av-ko { color: #dc2626; font-weight: 800; }
-.aql-pied { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
-.aql-com { flex: 1; min-width: 220px; padding: 7px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
-.aql-verdict { font-size: 14px; }
-.aql-hist { margin-top: 16px; }
-.aaql { font-size: 10px; color: #94a3b8; font-weight: 600; }
-.a100 { font-size: 10px; color: #b45309; font-weight: 700; }
-.apar { color: #64748b; }
-.asup { background: none; border: 0; cursor: pointer; font-size: 13px; opacity: .6; }
-.asup:hover { opacity: 1; }
-/* Déviation et triage déclarés à l'étape — les deux cases sur une seule ligne */
-.form-grid .qa-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin: 2px 0 -4px; }
-.form-grid .qa-chk { flex-direction: row; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-.form-grid .qa-chk input[type="checkbox"] { width: 15px; height: 15px; margin: 0; accent-color: currentColor; }
-.form-grid .qa-dev { color: #b91c1c; }
-.form-grid .qa-tri { color: #b45309; }
-.dev-tag { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: #fee2e2; color: #b91c1c; vertical-align: middle; }
-.tri-tag { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: #fef3c7; color: #b45309; vertical-align: middle; }
-.tri-tag.clos { background: #dcfce7; color: #15803d; }
+/* Champs / focus */
+select:focus, input:focus { outline: none !important; border-color: #06b6d4 !important; box-shadow: 0 0 0 3px rgba(6,182,212,.12) !important; }
+
+
+/* Développements : KPI auto-fit + filtres + graphe de charge + urgence */
+.kpi-grid.k3 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important; }
+.searchbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.filtre-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #475569; cursor: pointer; white-space: nowrap; padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; }
+.filtre-chk input { accent-color: #0891b2; width: 15px; height: 15px; }
+@media (max-width: 700px) { .charge-row { grid-template-columns: 100px 1fr auto; } .charge-lbl { font-size: 10px; } }
+
+/* Tuile KPI à valeur texte (ex. atelier le plus chargé) : police réduite */
+.kpi-val.kpi-val-sm { font-size: 12px !important; line-height: 1.2; word-break: break-word; }
+.de-page { zoom: 0.8; }
 </style>
