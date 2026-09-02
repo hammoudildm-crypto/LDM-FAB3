@@ -588,11 +588,15 @@ const sacsOuvert = ref(null)    // id du lot déplié
 const majSac = ref('')
 async function chargerSacs() {
   const r = await fetchAllPaged(() => supabase.from('triage_sacs').select('id, ordre_id, numero_sac'))
-  sacs.value = r || []
+  // fetchAllPaged renvoie { data, error } : ne jamais affecter l'objet lui-même à sacs.
+  // Si la table n'existe pas encore (migration 004 non passée), on reste sur une liste vide.
+  if (r.error) { sacs.value = []; majSac.value = 'Suivi par sac indisponible : ' + r.error.message; return }
+  sacs.value = Array.isArray(r.data) ? r.data : []
 }
 const sacsParLot = computed(() => {
   const m = {}
-  for (const x of sacs.value) { if (!m[x.ordre_id]) m[x.ordre_id] = new Set(); m[x.ordre_id].add(x.numero_sac) }
+  const liste = Array.isArray(sacs.value) ? sacs.value : []
+  for (const x of liste) { if (!m[x.ordre_id]) m[x.ordre_id] = new Set(); m[x.ordre_id].add(x.numero_sac) }
   return m
 })
 function nbSacs(l) {
