@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted, watch, inject, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
+import { planPourLot, AQLS, NIVEAUX, verdictClasse } from '../aql'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
@@ -324,6 +325,100 @@ async function allerVersLot(x) {
   const el = document.getElementById('fp-sortie')
   if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus() }
 }
+// ===== Contrôle AQL (ISO 2859-1) =====
+const AQL_PHASES_FIXES = ['Compression']
+const controlesAql = ref([])
+const aqlForm = reactive({ phase: '', tailleLot: '', niveau: 'II', aqlC: 0.065, aqlMa: 0.65, aqlMi: 2.5, defC: 0, defMa: 0, defMi: 0, commentaire: '' })
+function normPhaseAql(x) { return /^(granulation|s[ée]chage)$/i.test(String(x).trim()) ? 'Granulation et Séchage' : x }
+const gammeLot = computed(() => {
+  const pr = (lotSelectionne.value || {}).produits || {}
+  const g = Array.isArray(pr.gamme) ? pr.gamme : []
+  const out = []
+  for (const x of g) { const n = normPhaseAql(x); if (PHASES.includes(n) && !out.includes(n)) out.push(n) }
+  return out.length ? out : PHASES.slice()
+})
+// Compression + la DERNIÈRE étape de la gamme du produit
+const phasesAql = computed(() => {
+  const g = gammeLot.value
+  const out = []
+  for (const f of AQL_PHASES_FIXES) if (g.includes(f)) out.push(f)
+  const derniere = g[g.length - 1]
+  if (derniere && !out.includes(derniere)) out.push(derniere)
+  return out
+})
+const tailleLotDefaut = computed(() => {
+  const o = lotSelectionne.value || {}
+  const pr = o.produits || {}
+  const b = Number(o.quantite_theorique) || 0
+  const u = Number(pr.unites_par_boite) || 0
+  return b > 0 && u > 0 ? b * u : 0
+})
+// Chaque classe garde son propre plan ; l'échantillon retenu est le PLUS GRAND des trois,
+// comme le veut la pratique quand plusieurs AQL sont contrôlées sur le même prélèvement.
+const planAql = computed(() => {
+  const taille = Number(aqlForm.tailleLot) || 0
+  if (taille < 2) return null
+  const c = planPourLot(taille, aqlForm.aqlC, aqlForm.niveau)
+  const ma = planPourLot(taille, aqlForm.aqlMa, aqlForm.niveau)
+  const mi = planPourLot(taille, aqlForm.aqlMi, aqlForm.niveau)
+  if (!c && !ma && !mi) return null
+  const n = Math.max(c ? c.n : 0, ma ? ma.n : 0, mi ? mi.n : 0)
+  const lettreLot = (c || ma || mi).lettreLot
+  return { lettreLot, n, cent: (c || ma || mi).cent, c, ma, mi, tailles: [c, ma, mi].filter(Boolean).map(x => x.n) }
+})
+const verdictAql = computed(() => {
+  const p = planAql.value
+  if (!p) return null
+  const v = [
+    p.c ? verdictClasse(aqlForm.defC, p.c.ac) : null,
+    p.ma ? verdictClasse(aqlForm.defMa, p.ma.ac) : null,
+    p.mi ? verdictClasse(aqlForm.defMi, p.mi.ac) : null
+  ]
+  return v.includes('Refusé') ? 'Refusé' : 'Accepté'
+})
+async function chargerAql() {
+  if (!lotId.value) { controlesAql.value = []; return }
+  const r = await supabase.from('controles_aql').select('*').eq('ordre_id', lotId.value).order('controle_le', { ascending: false })
+  if (r.error) { controlesAql.value = []; return }
+  controlesAql.value = Array.isArray(r.data) ? r.data : []
+}
+async function enregistrerAql() {
+  erreur.value = ''; message.value = ''
+  const p = planAql.value
+  if (!aqlForm.phase) { erreur.value = 'Choisis l\'étape contrôlée.'; return }
+  if (!p) { erreur.value = 'Aucun plan d\'échantillonnage : vérifie la taille du lot et les AQL choisies.'; return }
+  let email = null
+  try { const se = await supabase.auth.getSession(); email = se.data && se.data.session ? se.data.session.user.email : null } catch (e) { /* ignore */ }
+  const r = await supabase.from('controles_aql').insert({
+    ordre_id: lotId.value, phase: aqlForm.phase,
+    taille_lot: Number(aqlForm.tailleLot), niveau: aqlForm.niveau,
+    lettre: p.lettreLot, taille_echantillon: p.n, controle_100: !!p.cent,
+    aql_critique: aqlForm.aqlC, ac_critique: p.c ? p.c.ac : null, def_critique: Number(aqlForm.defC) || 0,
+    aql_majeur: aqlForm.aqlMa, ac_majeur: p.ma ? p.ma.ac : null, def_majeur: Number(aqlForm.defMa) || 0,
+    aql_mineur: aqlForm.aqlMi, ac_mineur: p.mi ? p.mi.ac : null, def_mineur: Number(aqlForm.defMi) || 0,
+    verdict: verdictAql.value, commentaire: aqlForm.commentaire.trim() || null, controle_par: email
+  })
+  if (r.error) { erreur.value = r.error.message; return }
+  message.value = 'Contrôle AQL enregistré : ' + verdictAql.value + '.'
+  aqlForm.defC = 0; aqlForm.defMa = 0; aqlForm.defMi = 0; aqlForm.commentaire = ''
+  await chargerAql()
+}
+async function supprimerAql(x) {
+  if (!confirm('Supprimer ce contrôle AQL ?')) return
+  const r = await supabase.from('controles_aql').delete().eq('id', x.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  await chargerAql()
+}
+function dateHeureAql(v) {
+  if (!v) return '—'
+  const d = new Date(v)
+  return isNaN(d) ? '—' : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+watch(lotId, async () => {
+  await chargerAql()
+  aqlForm.phase = phasesAql.value[phasesAql.value.length - 1] || ''
+  aqlForm.tailleLot = tailleLotDefaut.value || ''
+})
 const route = useRoute()
 onMounted(async () => {
   await chargerBase()
@@ -477,6 +572,69 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
             </table>
           </div>
         </section>
+        <section class="card aql-card" v-if="phasesAql.length">
+          <h2 class="card-title">Contrôle AQL — ISO 2859-1, échantillonnage simple, contrôle normal</h2>
+          <div class="form-grid" v-if="peutEditer">
+            <label>Étape contrôlée<select v-model="aqlForm.phase"><option v-for="ph in phasesAql" :key="ph" :value="ph">{{ ph }}</option></select></label>
+            <label>Taille du lot (unités)<input v-model.number="aqlForm.tailleLot" type="number" min="2" /></label>
+            <label>Niveau de contrôle<select v-model="aqlForm.niveau"><option v-for="n in NIVEAUX" :key="n" :value="n">{{ n }}</option></select></label>
+            <label>AQL critique<select v-model.number="aqlForm.aqlC"><option v-for="a in AQLS" :key="a" :value="a">{{ a }}</option></select></label>
+            <label>AQL majeur<select v-model.number="aqlForm.aqlMa"><option v-for="a in AQLS" :key="a" :value="a">{{ a }}</option></select></label>
+            <label>AQL mineur<select v-model.number="aqlForm.aqlMi"><option v-for="a in AQLS" :key="a" :value="a">{{ a }}</option></select></label>
+          </div>
+          <div v-if="planAql" class="aql-plan">
+            <span class="aql-pill">Lettre-code <strong>{{ planAql.lettreLot }}</strong></span>
+            <span class="aql-pill">Échantillon <strong>{{ planAql.n }}</strong> unités</span>
+            <span v-if="planAql.cent" class="aql-pill warn">Échantillon ≥ lot : contrôle à 100 %</span>
+            <span v-if="new Set(planAql.tailles).size > 1" class="aql-pill warn" title="Les flèches de la norme donnent des échantillons différents selon l'AQL. Le plus grand est retenu et chaque critère y est appliqué.">Échantillons différents selon la classe — le plus grand est retenu</span>
+          </div>
+          <p v-else class="aql-vide">Renseigne une taille de lot d'au moins 2 unités pour obtenir un plan.</p>
+          <table v-if="planAql && peutEditer" class="aql-tbl">
+            <thead><tr><th>Classe</th><th class="anum">AQL</th><th class="anum">Ac</th><th class="anum">Re</th><th class="anum">Défauts trouvés</th><th>Verdict</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="acl crit">Critique</td><td class="anum">{{ aqlForm.aqlC }}</td>
+                <td class="anum">{{ planAql.c ? planAql.c.ac : "—" }}</td><td class="anum">{{ planAql.c ? planAql.c.re : "—" }}</td>
+                <td class="anum"><input v-model.number="aqlForm.defC" type="number" min="0" class="adef" /></td>
+                <td :class="planAql.c && aqlForm.defC > planAql.c.ac ? 'av-ko' : 'av-ok'">{{ planAql.c ? (aqlForm.defC > planAql.c.ac ? "Refusé" : "Accepté") : "—" }}</td>
+              </tr>
+              <tr>
+                <td class="acl maj">Majeur</td><td class="anum">{{ aqlForm.aqlMa }}</td>
+                <td class="anum">{{ planAql.ma ? planAql.ma.ac : "—" }}</td><td class="anum">{{ planAql.ma ? planAql.ma.re : "—" }}</td>
+                <td class="anum"><input v-model.number="aqlForm.defMa" type="number" min="0" class="adef" /></td>
+                <td :class="planAql.ma && aqlForm.defMa > planAql.ma.ac ? 'av-ko' : 'av-ok'">{{ planAql.ma ? (aqlForm.defMa > planAql.ma.ac ? "Refusé" : "Accepté") : "—" }}</td>
+              </tr>
+              <tr>
+                <td class="acl min">Mineur</td><td class="anum">{{ aqlForm.aqlMi }}</td>
+                <td class="anum">{{ planAql.mi ? planAql.mi.ac : "—" }}</td><td class="anum">{{ planAql.mi ? planAql.mi.re : "—" }}</td>
+                <td class="anum"><input v-model.number="aqlForm.defMi" type="number" min="0" class="adef" /></td>
+                <td :class="planAql.mi && aqlForm.defMi > planAql.mi.ac ? 'av-ko' : 'av-ok'">{{ planAql.mi ? (aqlForm.defMi > planAql.mi.ac ? "Refusé" : "Accepté") : "—" }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="planAql && peutEditer" class="aql-pied">
+            <input v-model="aqlForm.commentaire" class="aql-com" placeholder="Commentaire (nature des défauts, remarques)" />
+            <span class="aql-verdict" :class="verdictAql === 'Refusé' ? 'av-ko' : 'av-ok'">Verdict : {{ verdictAql }}</span>
+            <button class="btn" @click="enregistrerAql">Enregistrer le contrôle</button>
+          </div>
+          <table v-if="controlesAql.length" class="aql-hist">
+            <thead><tr><th>Date</th><th>Étape</th><th class="anum">Lot</th><th class="anum">Éch.</th><th>Critique</th><th>Majeur</th><th>Mineur</th><th>Verdict</th><th>Par</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="x in controlesAql" :key="x.id">
+                <td>{{ dateHeureAql(x.controle_le) }}</td>
+                <td>{{ x.phase }}</td>
+                <td class="anum">{{ x.taille_lot }}</td>
+                <td class="anum">{{ x.taille_echantillon }}<span v-if="x.controle_100" class="a100"> (100 %)</span></td>
+                <td>{{ x.def_critique }} / Ac {{ x.ac_critique == null ? "—" : x.ac_critique }} <span class="aaql">AQL {{ x.aql_critique }}</span></td>
+                <td>{{ x.def_majeur }} / Ac {{ x.ac_majeur == null ? "—" : x.ac_majeur }} <span class="aaql">AQL {{ x.aql_majeur }}</span></td>
+                <td>{{ x.def_mineur }} / Ac {{ x.ac_mineur == null ? "—" : x.ac_mineur }} <span class="aaql">AQL {{ x.aql_mineur }}</span></td>
+                <td :class="x.verdict === 'Refusé' ? 'av-ko' : 'av-ok'">{{ x.verdict }}</td>
+                <td class="apar">{{ x.controle_par || "—" }}</td>
+                <td><button v-if="peutEditer" class="asup" @click="supprimerAql(x)" title="Supprimer">🗑</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
       </template>
 
       <div v-else class="hint-select">Choisis un lot ci-dessus pour saisir et voir ses phases.</div>
@@ -571,6 +729,32 @@ button.link.danger { color: #b91c1c; }
 .ac-filtre input { flex: 1; min-width: 220px; max-width: 380px; padding: 7px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
 .ac-count { font-size: 12.5px; color: #64748b; font-weight: 600; }
 .ac-vide { text-align: center; color: #94a3b8; padding: 14px; font-style: italic; }
+/* Contrôle AQL */
+.aql-card { margin-top: 14px; }
+.aql-plan { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.aql-pill { background: #eef2ff; color: #4338ca; border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 700; }
+.aql-pill.warn { background: #fef3c7; color: #b45309; }
+.aql-vide { font-size: 12px; color: #94a3b8; font-style: italic; margin: 10px 0; }
+.aql-tbl, .aql-hist { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+.aql-tbl th, .aql-hist th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .02em; color: #94a3b8; font-weight: 800; padding: 5px 7px; border-bottom: 1px solid #e2e8f0; }
+.aql-tbl td, .aql-hist td { padding: 5px 7px; border-bottom: 1px solid #f1f5f9; color: #1e293b; white-space: nowrap; }
+.aql-tbl .anum, .aql-hist .anum { text-align: right; }
+.acl { font-weight: 800; }
+.acl.crit { color: #b91c1c; }
+.acl.maj { color: #b45309; }
+.acl.min { color: #0891b2; }
+.adef { width: 74px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 12px; text-align: right; }
+.av-ok { color: #15803d; font-weight: 800; }
+.av-ko { color: #dc2626; font-weight: 800; }
+.aql-pied { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.aql-com { flex: 1; min-width: 220px; padding: 7px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
+.aql-verdict { font-size: 14px; }
+.aql-hist { margin-top: 16px; }
+.aaql { font-size: 10px; color: #94a3b8; font-weight: 600; }
+.a100 { font-size: 10px; color: #b45309; font-weight: 700; }
+.apar { color: #64748b; }
+.asup { background: none; border: 0; cursor: pointer; font-size: 13px; opacity: .6; }
+.asup:hover { opacity: 1; }
 /* Déviation et triage déclarés à l'étape — les deux cases sur une seule ligne */
 .form-grid .qa-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin: 2px 0 -4px; }
 .form-grid .qa-chk { flex-direction: row; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
