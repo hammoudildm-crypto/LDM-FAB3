@@ -588,7 +588,7 @@ const sacs = ref([])            // lignes triage_sacs
 const sacsOuvert = ref(null)    // id du lot déplié
 const majSac = ref('')
 async function chargerSacs() {
-  const r = await fetchAllPaged(() => supabase.from('triage_sacs').select('id, ordre_id, numero_sac'))
+  const r = await fetchAllPaged(() => supabase.from('triage_sacs').select('id, ordre_id, numero_sac, coche_par, coche_le'))
   // fetchAllPaged renvoie { data, error } : ne jamais affecter l'objet lui-même à sacs.
   // Si la table n'existe pas encore (migration 004 non passée), on reste sur une liste vide.
   if (r.error) { sacs.value = []; majSac.value = 'Suivi par sac indisponible : ' + r.error.message; return }
@@ -659,7 +659,7 @@ async function basculerSac(l, n, sync) {
     try { const se = await supabase.auth.getSession(); email = se.data && se.data.session ? se.data.session.user.email : null } catch (e) { /* ignore */ }
     const r = await supabase.from('triage_sacs').insert({ ordre_id: l.id, numero_sac: n, conforme: true, coche_par: email }).select('id').single()
     if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
-    sacs.value = sacs.value.concat([{ id: r.data ? r.data.id : null, ordre_id: l.id, numero_sac: n }])
+    sacs.value = sacs.value.concat([{ id: r.data ? r.data.id : null, ordre_id: l.id, numero_sac: n, coche_par: email, coche_le: new Date().toISOString() }])
     if (sync !== false) await syncKgTries(l)
   }
 }
@@ -674,6 +674,49 @@ async function decocherTousSacs(l) {
   await syncKgTries(l)
 }
 function toggleSacs(l) { sacsOuvert.value = sacsOuvert.value === l.id ? null : l.id }
+// ===== Historique des triages clos =====
+const histOuvert = ref(null)
+function toggleHist(id) { histOuvert.value = histOuvert.value === id ? null : id }
+function joursEntre(a, b) {
+  if (!a || !b) return null
+  const d = Math.round((new Date(b) - new Date(a)) / 86400000)
+  return d >= 0 ? d : null
+}
+const triagesClos = computed(() => {
+  const pl = phasesLot.value
+  return ofs.value.filter(o => !!o.en_triage && !!o.triage_fin).map(o => {
+    const prod = o.produits || {}
+    const ph = pl[o.id] || {}
+    let phaseAct = ''
+    for (const P of PHASES) { const rec = ph[P.key]; if (rec && rec.statut !== 'Terminé') { phaseAct = P.label; break } }
+    const aTrier = Number(o.qte_a_trier) || 0
+    const triee = Number(o.qte_triee) || 0
+    return {
+      id: o.id, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '',
+      phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin,
+      duree: joursEntre(o.triage_debut, o.triage_fin), aTrier, triee,
+      pct: aTrier > 0 ? Math.min(100, Math.round(triee / aTrier * 100)) : 0
+    }
+  }).sort((a, b) => String(b.fin).localeCompare(String(a.fin)))
+})
+const histoTotaux = computed(() => {
+  const r = triagesClos.value
+  const durees = r.map(x => x.duree).filter(d => d != null)
+  return {
+    n: r.length,
+    kg: Math.round(r.reduce((s, x) => s + x.triee, 0) * 100) / 100,
+    duree: durees.length ? Math.round(durees.reduce((s, d) => s + d, 0) / durees.length * 10) / 10 : null
+  }
+})
+function sacsDuLot(id) {
+  const liste = Array.isArray(sacs.value) ? sacs.value : []
+  return liste.filter(x => x.ordre_id === id).sort((a, b) => a.numero_sac - b.numero_sac)
+}
+function dateHeure(v) {
+  if (!v) return '—'
+  const d = new Date(v)
+  return isNaN(d) ? '—' : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
 const qteEdit = reactive({})
 watch(lotsTriage, (lots) => { for (const l of lots) if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: l.qteATrier || 0, triee: l.qteTriee || 0 } }, { immediate: true })
 function pctTriage(id) { const q = qteEdit[id] || {}; const t = Number(q.aTrier) || 0; return t > 0 ? Math.min(100, Math.round((Number(q.triee) || 0) / t * 100)) : 0 }
@@ -1091,6 +1134,42 @@ onMounted(async () => {
           </table>
           <p v-else class="triage-vide">Aucun lot coché « En triage fabrication » pour l'instant (case à cocher sur la page Ordres de fabrication).</p>
         </section>
+        <section v-if="triagesClos.length" class="histo-box">
+          <div class="triage-head">
+            <h3 class="histo-h">📜 Historique des triages ({{ histoTotaux.n }})</h3>
+            <span class="histo-res">{{ fmt(histoTotaux.kg) }} Kg triés<span v-if="histoTotaux.duree != null"> · {{ histoTotaux.duree }} j de durée moyenne</span></span>
+          </div>
+          <table class="histo-tbl">
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th>Début</th><th>Fin</th><th class="tnum">Durée</th><th class="tnum">À trier</th><th class="tnum">Triée</th><th class="tnum">Sacs</th></tr></thead>
+            <tbody>
+              <template v-for="h in triagesClos" :key="h.id">
+                <tr class="histo-row" :class="{ ouvert: histOuvert === h.id }" @click="toggleHist(h.id)">
+                  <td class="strong">{{ h.lot }}</td>
+                  <td>{{ h.code }}<span v-if="h.desig" class="hdesig"> — {{ h.desig }}</span></td>
+                  <td>{{ h.phase || "—" }}</td>
+                  <td>{{ h.debut || "—" }}</td>
+                  <td class="strong">{{ h.fin }}</td>
+                  <td class="tnum">{{ h.duree != null ? h.duree + " j" : "—" }}</td>
+                  <td class="tnum">{{ fmt(h.aTrier) }}</td>
+                  <td class="tnum">{{ fmt(h.triee) }} <span class="hpct">({{ h.pct }} %)</span></td>
+                  <td class="tnum">{{ sacsDuLot(h.id).length || "—" }}<span v-if="sacsDuLot(h.id).length" class="sac-caret">{{ histOuvert === h.id ? "▾" : "▸" }}</span></td>
+                </tr>
+                <tr v-if="histOuvert === h.id" class="histo-detail">
+                  <td colspan="9">
+                    <div v-if="sacsDuLot(h.id).length" class="hd-liste">
+                      <div v-for="x in sacsDuLot(h.id)" :key="x.numero_sac" class="hd-sac">
+                        <span class="hd-num">Sac {{ x.numero_sac }}</span>
+                        <span class="hd-qui">{{ x.coche_par || "auteur inconnu" }}</span>
+                        <span class="hd-quand">{{ dateHeure(x.coche_le) }}</span>
+                      </div>
+                    </div>
+                    <p v-else class="hd-vide">Aucun sac enregistré pour ce lot : le triage a été clos avant la mise en place du suivi par sac.</p>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </section>
       </div>
 
       <!-- ===================== RÉTROSPECTIVE ===================== -->
@@ -1434,6 +1513,26 @@ onMounted(async () => {
 .sac-chip.on { background: #dcfce7; border-color: #86efac; color: #15803d; }
 .sac-tick { font-size: 11px; }
 .sac-pied { margin-top: 8px; font-size: 11px; font-weight: 700; color: #64748b; }
+/* Historique des triages */
+.histo-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; margin: 14px 0 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.histo-h { margin: 0; font-size: 14px; font-weight: 800; color: #0f172a; }
+.histo-res { font-size: 11px; font-weight: 700; color: #64748b; white-space: nowrap; }
+.histo-tbl { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+.histo-tbl th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .02em; color: #94a3b8; font-weight: 800; padding: 4px 7px; border-bottom: 1px solid #e2e8f0; }
+.histo-tbl td { padding: 4px 7px; border-bottom: 1px solid #f1f5f9; color: #1e293b; white-space: nowrap; }
+.histo-tbl .tnum { text-align: right; }
+.histo-tbl .strong { font-weight: 700; }
+.hdesig { color: #94a3b8; }
+.hpct { font-size: 10px; color: #94a3b8; font-weight: 600; }
+.histo-row { cursor: pointer; transition: background .12s; }
+.histo-row:hover, .histo-row.ouvert { background: #f8fafc; }
+.histo-detail > td { background: #f8fafc; padding: 8px 10px; }
+.hd-liste { display: flex; flex-wrap: wrap; gap: 6px; }
+.hd-sac { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 9px; font-size: 11px; }
+.hd-num { font-weight: 800; color: #15803d; }
+.hd-qui { color: #475569; font-weight: 600; }
+.hd-quand { color: #94a3b8; }
+.hd-vide { margin: 0; font-size: 11px; color: #94a3b8; font-style: italic; }
 .triage-box { background: #fef3c7; border: 1px solid #fde68a; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
 .triage-h { margin: 0 0 10px; font-size: 15px; font-weight: 800; color: #92400e; }
 .triage-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
