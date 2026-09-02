@@ -218,6 +218,12 @@ const phasesLot = computed(() => {
 })
 
 // Lots en cours de triage (ordres_fabrication.en_triage === 'Triage')
+// Ancienneté du triage en nombre (le joursDepuis() existant renvoie une chaîne, inutilisable pour trier).
+function joursOuvertTriage(d) {
+  if (!d) return null
+  const n = Math.floor((Date.now() - new Date(d).getTime()) / 86400000)
+  return n >= 0 ? n : null
+}
 const lotsTriage = computed(() => {
   const pl = phasesLot.value
   return ofs.value.filter(o => !!o.en_triage && !o.triage_fin).map(o => {
@@ -230,8 +236,8 @@ const lotsTriage = computed(() => {
     const boitesT = Number(o.boites_fabriquees) || Number(prod.taille_lot) || 0
     const kgLot = Math.round((boitesT * upbT * pmgT) / 1e6 * 100) / 100
     const aTrierDef = o.qte_a_trier != null ? o.qte_a_trier : kgLot
-    return { id: o.id, produitId: o.produit_id, poidsSacProd: prod.poids_sac_kg, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin || '', qteATrier: aTrierDef, qteTriee: o.qte_triee != null ? o.qte_triee : 0 }
-  })
+    return { id: o.id, produitId: o.produit_id, poidsSacProd: prod.poids_sac_kg, jours: joursOuvertTriage(o.triage_debut), lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin || '', qteATrier: aTrierDef, qteTriee: o.qte_triee != null ? o.qte_triee : 0 }
+  }).sort((a, b) => (b.jours == null ? -1 : b.jours) - (a.jours == null ? -1 : a.jours))   // les plus anciens en tête
 })
 
 const triageIds = computed(() => new Set(lotsTriage.value.map(l => l.id)))
@@ -643,7 +649,9 @@ async function syncKgTries(l) {
   const kg = kgSacs(l)
   qteEdit[l.id].triee = kg
   const r = await supabase.from('ordres_fabrication').update({ qte_triee: kg }).eq('id', l.id)
-  if (r.error) majSac.value = 'Erreur : ' + r.error.message
+  if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
+  const o = ofs.value.find(x => x.id === l.id)   // sinon la ligne resterait marquée « à enregistrer »
+  if (o) o.qte_triee = kg
 }
 async function basculerSac(l, n, sync) {
   majSac.value = ''
@@ -720,6 +728,26 @@ const histoTotaux = computed(() => {
 const qteEdit = reactive({})
 watch(lotsTriage, (lots) => { for (const l of lots) if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: l.qteATrier || 0, triee: l.qteTriee || 0 } }, { immediate: true })
 function pctTriage(id) { const q = qteEdit[id] || {}; const t = Number(q.aTrier) || 0; return t > 0 ? Math.min(100, Math.round((Number(q.triee) || 0) / t * 100)) : 0 }
+// Une ligne est « à enregistrer » tant que la saisie diffère de ce qui est en base.
+function estModifie(l) {
+  const q = qteEdit[l.id]
+  if (!q) return false
+  return (Number(q.aTrier) || 0) !== (Number(l.qteATrier) || 0) || (Number(q.triee) || 0) !== (Number(l.qteTriee) || 0)
+}
+const resumeTriage = computed(() => {
+  let aTrier = 0, triee = 0, prets = 0, vieux = 0
+  for (const l of lotsTriage.value) {
+    const q = qteEdit[l.id] || {}
+    aTrier += Number(q.aTrier) || 0
+    triee += Number(q.triee) || 0
+    if (pctTriage(l.id) >= 100) prets++
+    if (l.jours != null && l.jours > 14) vieux++
+  }
+  return {
+    aTrier: Math.round(aTrier * 100) / 100, triee: Math.round(triee * 100) / 100,
+    pct: aTrier > 0 ? Math.min(100, Math.round(triee / aTrier * 100)) : 0, prets, vieux
+  }
+})
 async function sauverTriage(l) {
   const q = qteEdit[l.id] || {}
   const r = await supabase.from('ordres_fabrication').update({ qte_a_trier: Number(q.aTrier) || 0, qte_triee: Number(q.triee) || 0 }).eq('id', l.id)
@@ -1092,14 +1120,22 @@ onMounted(async () => {
             <label class="sac-poids" title="Utilisé pour les produits dont le poids de sac n'est pas renseigné">Poids de sac par défaut<input type="number" min="0.1" step="any" v-model.number="poidsSac" /> Kg</label>
           </div>
           <p v-if="majSac" class="sac-err">{{ majSac }}</p>
+          <div v-if="lotsTriage.length" class="tr-resume">
+            <span class="trr"><b>{{ fmt(resumeTriage.aTrier) }}</b> Kg à trier</span>
+            <span class="trr"><b>{{ fmt(resumeTriage.triee) }}</b> Kg triés</span>
+            <span class="trr trr-bar"><span class="trrb"><span class="trrf" :style="{ width: resumeTriage.pct + '%' }"></span></span><b>{{ resumeTriage.pct }} %</b></span>
+            <span v-if="resumeTriage.prets" class="trr ok">{{ resumeTriage.prets }} lot(s) à 100 % — à clore</span>
+            <span v-if="resumeTriage.vieux" class="trr ko">{{ resumeTriage.vieux }} lot(s) ouverts depuis plus de 14 j</span>
+          </div>
           <table v-if="lotsTriage.length" class="triage-tbl">
-            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th class="tnum">À trier (Kg)</th><th class="tnum">Triée (Kg)</th><th class="tnum">Sacs conformes</th><th>Avancement</th><th></th></tr></thead>
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th class="tnum">Ouvert</th><th class="tnum">À trier (Kg)</th><th class="tnum">Triée (Kg)</th><th class="tnum">Sacs conformes</th><th>Avancement</th><th></th></tr></thead>
             <tbody>
               <template v-for="l in lotsTriage" :key="l.id">
-              <tr class="triage-row">
+              <tr class="triage-row" :class="{ pret: pctTriage(l.id) >= 100, vieux: l.jours != null && l.jours > 14 }">
                 <td class="t-lot" @click="ouvrirTriageFin(l.id)" title="Ouvrir l'étape en triage pour saisir la date de fin">{{ l.lot }}</td>
-                <td @click="ouvrirTriageFin(l.id)">{{ l.code }} — {{ l.desig }}</td>
-                <td>{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
+                <td class="t-prod" @click="ouvrirTriageFin(l.id)"><span class="t-code">{{ l.code }}</span><span v-if="l.desig" class="t-desig">{{ l.desig }}</span></td>
+                <td class="t-etape">{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
+                <td class="tnum t-age" :class="l.jours == null ? '' : (l.jours > 14 ? 'ko' : (l.jours > 7 ? 'warn' : ''))" :title="l.debut ? 'Triage ouvert le ' + l.debut : 'Date de début non renseignée'">{{ l.jours == null ? "—" : l.jours + " j" }}</td>
                 <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop /></td>
                 <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].triee" class="tq" @click.stop /></td>
                 <td class="tnum">
@@ -1109,12 +1145,16 @@ onMounted(async () => {
                 </td>
                 <td class="t-prog">
                   <div class="tp-bar"><div class="tp-fill" :class="{ full: pctTriage(l.id) >= 100 }" :style="{ width: pctTriage(l.id) + '%' }"></div></div>
-                  <span class="tp-pct">{{ pctTriage(l.id) }}%</span>
+                  <span class="tp-pct" :class="{ full: pctTriage(l.id) >= 100 }">{{ pctTriage(l.id) }}%</span>
                 </td>
-                <td><button class="tq-save" @click.stop="sauverTriage(l)" title="Enregistrer">💾</button></td>
+                <td class="t-act">
+                  <button v-if="estModifie(l)" class="tq-save dirty" @click.stop="sauverTriage(l)" title="Modifications non enregistrées — cliquer pour enregistrer">Enregistrer</button>
+                  <button v-else-if="pctTriage(l.id) >= 100" class="tq-clore" @click.stop="ouvrirTriageFin(l.id)" title="Saisir la date de fin de triage dans Suivi des phases">Clore ▸</button>
+                  <span v-else class="tq-ok" title="À jour">✓</span>
+                </td>
               </tr>
               <tr v-if="sacsOuvert === l.id && nbSacs(l)" class="sac-detail">
-                <td colspan="8">
+                <td colspan="9">
                   <div class="sac-bar">
                     <span class="sac-tit">{{ nbSacs(l) }} sacs — coche un sac quand son triage est terminé et conforme</span>
                     <label class="sac-pp">Poids du sac · {{ l.code }}<input type="number" min="0" step="any" :value="poidsSacDe(l)" @change="sauverPoidsSac(l, $event.target.value)" title="Enregistré sur le produit, donc valable pour tous ses lots" /> Kg</label>
@@ -1515,6 +1555,30 @@ onMounted(async () => {
 .lot-row.en-triage-cond { background: #fef3c7; }
 .lot-row.en-triage-cond > td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
 .lot-row.en-triage-cond .pf::after { content: ' 🔍 triage cond.'; color: #b45309; font-size: .78em; font-weight: 700; }
+.tr-resume { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 8px 0 4px; font-size: 11px; color: #92400e; }
+.trr { white-space: nowrap; }
+.trr b { font-size: 13px; font-weight: 800; }
+.trr-bar { display: flex; align-items: center; gap: 7px; }
+.trrb { width: 110px; height: 7px; background: #fde68a; border-radius: 999px; overflow: hidden; }
+.trrf { display: block; height: 100%; background: #b45309; border-radius: 999px; transition: width .3s ease; }
+.trr.ok { color: #15803d; font-weight: 800; }
+.trr.ko { color: #b91c1c; font-weight: 800; }
+.t-prod { line-height: 1.2; }
+.t-code { display: block; font-weight: 700; }
+.t-desig { display: block; font-size: 10px; color: #a16207; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-etape { font-size: 11px; }
+.t-age { font-weight: 700; }
+.t-age.warn { color: #b45309; }
+.t-age.ko { color: #b91c1c; }
+.triage-row.pret { background: rgba(34, 197, 94, .09); }
+.triage-row.vieux td:first-child { box-shadow: inset 3px 0 0 #dc2626; }
+.tp-pct.full { color: #15803d; }
+.t-act { white-space: nowrap; }
+.tq-save.dirty { background: #b45309; color: #fff; border: 0; border-radius: 7px; padding: 3px 10px; font-size: 11px; font-weight: 800; cursor: pointer; }
+.tq-save.dirty:hover { background: #92400e; }
+.tq-clore { background: #dcfce7; color: #15803d; border: 1px solid #86efac; border-radius: 7px; padding: 3px 10px; font-size: 11px; font-weight: 800; cursor: pointer; }
+.tq-clore:hover { background: #bbf7d0; }
+.tq-ok { color: #86efac; font-weight: 800; font-size: 13px; }
 .triage-vide { font-size: 12px; color: #92400e; margin: 0; }
 /* Historique des triages */
 .histo-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; margin: 14px 0 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
