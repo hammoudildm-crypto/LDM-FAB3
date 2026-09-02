@@ -75,7 +75,7 @@ async function charger() {
   equipements.value = re.data || []
 
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, deviation, deviation_cond, en_triage, triage_debut, triage_fin, qte_a_trier, qte_triee, en_triage_cond, triage_cond_debut, triage_cond_fin, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite, taille_lot, poids_unitaire_mg), equipements(code, nom)')
+    .select('id, numero_lot, statut, produit_id, deviation, deviation_cond, en_triage, triage_debut, triage_fin, qte_a_trier, qte_triee, en_triage_cond, triage_cond_debut, triage_cond_fin, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite, taille_lot, poids_unitaire_mg, poids_sac_kg), equipements(code, nom)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
@@ -230,7 +230,7 @@ const lotsTriage = computed(() => {
     const boitesT = Number(o.boites_fabriquees) || Number(prod.taille_lot) || 0
     const kgLot = Math.round((boitesT * upbT * pmgT) / 1e6 * 100) / 100
     const aTrierDef = o.qte_a_trier != null ? o.qte_a_trier : kgLot
-    return { id: o.id, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin || '', qteATrier: aTrierDef, qteTriee: o.qte_triee != null ? o.qte_triee : 0 }
+    return { id: o.id, produitId: o.produit_id, poidsSacProd: prod.poids_sac_kg, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin || '', qteATrier: aTrierDef, qteTriee: o.qte_triee != null ? o.qte_triee : 0 }
   })
 })
 
@@ -579,7 +579,8 @@ function ouvrirLot(l, phaseKey) {
 function ouvrirTriageFin(id) { router.push({ path: '/suivi', query: { lot: id, triage: 1 } }) }
 // ===== Triage sac par sac =====
 // Nombre de sacs = ceil(Kg à trier / poids du sac). Un sac coché = trié et conforme.
-const CLE_POIDS_SAC = 'dispo_poids_sac'
+const CLE_POIDS_SAC = 'dispo_poids_sac'   // défaut, pour les produits sans poids de sac renseigné
+const poidsProd = reactive({})            // surcharges locales après enregistrement, par produit
 const poidsSac = ref(25)
 try { const v = Number(localStorage.getItem(CLE_POIDS_SAC)); if (v > 0) poidsSac.value = v } catch (e) { /* ignore */ }
 watch(poidsSac, (v) => { try { localStorage.setItem(CLE_POIDS_SAC, String(Number(v) > 0 ? v : 25)) } catch (e) { /* ignore */ } })
@@ -599,9 +600,24 @@ const sacsParLot = computed(() => {
   for (const x of liste) { if (!m[x.ordre_id]) m[x.ordre_id] = new Set(); m[x.ordre_id].add(x.numero_sac) }
   return m
 })
+// Poids du sac : celui du produit s'il est renseigné, sinon le défaut de la page.
+function poidsSacDe(l) {
+  const loc = poidsProd[l.produitId]
+  const v = Number(loc !== undefined ? loc : l.poidsSacProd) || 0
+  return v > 0 ? v : (Number(poidsSac.value) || 0)
+}
+async function sauverPoidsSac(l, val) {
+  majSac.value = ''
+  if (!l.produitId) { majSac.value = 'Produit inconnu pour ce lot : poids de sac non enregistrable.'; return }
+  const n = Number(val) || 0
+  const r = await supabase.from('produits').update({ poids_sac_kg: n > 0 ? n : null }).eq('id', l.produitId)
+  if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
+  poidsProd[l.produitId] = n > 0 ? n : null
+  await syncKgTries(l)   // le nombre de sacs change, on réaligne les Kg triés
+}
 function nbSacs(l) {
   const q = Number((qteEdit[l.id] || {}).aTrier) || 0
-  const ps = Number(poidsSac.value) || 0
+  const ps = poidsSacDe(l)
   return ps > 0 ? Math.ceil(q / ps) : 0
 }
 function sacCoche(l, n) { const s = sacsParLot.value[l.id]; return !!(s && s.has(n)) }
@@ -615,7 +631,7 @@ function pctSacs(l) { const t = nbSacs(l); return t > 0 ? Math.round(nbSacsCoche
 // Kg réellement triés : les sacs pleins valent poidsSac, le DERNIER ne vaut que le reliquat.
 function kgSacs(l) {
   const q = Number((qteEdit[l.id] || {}).aTrier) || 0
-  const ps = Number(poidsSac.value) || 0
+  const ps = poidsSacDe(l)
   const tot = nbSacs(l)
   if (tot <= 0 || ps <= 0) return 0
   const reste = q - (tot - 1) * ps
@@ -1030,7 +1046,7 @@ onMounted(async () => {
         <section class="triage-box">
           <div class="triage-head">
             <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
-            <label class="sac-poids">Poids du sac<input type="number" min="0.1" step="any" v-model.number="poidsSac" /> Kg</label>
+            <label class="sac-poids" title="Utilisé pour les produits dont le poids de sac n'est pas renseigné">Poids de sac par défaut<input type="number" min="0.1" step="any" v-model.number="poidsSac" /> Kg</label>
           </div>
           <p v-if="majSac" class="sac-err">{{ majSac }}</p>
           <table v-if="lotsTriage.length" class="triage-tbl">
@@ -1057,7 +1073,8 @@ onMounted(async () => {
               <tr v-if="sacsOuvert === l.id && nbSacs(l)" class="sac-detail">
                 <td colspan="8">
                   <div class="sac-bar">
-                    <span class="sac-tit">{{ nbSacs(l) }} sacs de {{ poidsSac }} Kg — coche un sac quand son triage est terminé et conforme</span>
+                    <span class="sac-tit">{{ nbSacs(l) }} sacs — coche un sac quand son triage est terminé et conforme</span>
+                    <label class="sac-pp">Poids du sac · {{ l.code }}<input type="number" min="0" step="any" :value="poidsSacDe(l)" @change="sauverPoidsSac(l, $event.target.value)" title="Enregistré sur le produit, donc valable pour tous ses lots" /> Kg</label>
                     <button type="button" class="sac-act" @click="cocherTousSacs(l)">Tout cocher</button>
                     <button type="button" class="sac-act" @click="decocherTousSacs(l)">Tout décocher</button>
                   </div>
@@ -1066,7 +1083,7 @@ onMounted(async () => {
                       <span class="sac-tick">{{ sacCoche(l, n) ? "✓" : "" }}</span>{{ n }}
                     </button>
                   </div>
-                  <div class="sac-pied">{{ nbSacsCoches(l) }} / {{ nbSacs(l) }} sacs conformes · {{ pctSacs(l) }} % · {{ fmt(kgSacs(l)) }} Kg reportés automatiquement dans « Triée (Kg) »<span v-if="nbSacs(l) > 1"> · dernier sac : {{ fmt(Math.round((((qteEdit[l.id] || {}).aTrier || 0) - (nbSacs(l) - 1) * poidsSac) * 100) / 100) }} Kg</span></div>
+                  <div class="sac-pied">{{ nbSacsCoches(l) }} / {{ nbSacs(l) }} sacs conformes · {{ pctSacs(l) }} % · {{ fmt(kgSacs(l)) }} Kg reportés automatiquement dans « Triée (Kg) »<span v-if="nbSacs(l) > 1"> · dernier sac : {{ fmt(Math.round((((qteEdit[l.id] || {}).aTrier || 0) - (nbSacs(l) - 1) * poidsSacDe(l)) * 100) / 100) }} Kg</span></div>
                 </td>
               </tr>
               </template>
@@ -1397,6 +1414,8 @@ onMounted(async () => {
 /* Lots en cours de triage */
 .triage-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
 .sac-poids { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #92400e; white-space: nowrap; }
+.sac-pp { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #92400e; white-space: nowrap; }
+.sac-pp input { width: 62px; padding: 3px 6px; border: 1px solid #fcd34d; border-radius: 6px; font: inherit; font-size: 12px; text-align: right; }
 .sac-poids input { width: 62px; padding: 3px 6px; border: 1px solid #fcd34d; border-radius: 6px; font: inherit; font-size: 12px; text-align: right; }
 .sac-err { margin: 6px 0 0; font-size: 12px; font-weight: 700; color: #b91c1c; }
 .sac-btn { background: none; border: 1px solid #e2e8f0; border-radius: 7px; padding: 2px 8px; font: inherit; font-size: 12px; font-weight: 800; color: #b45309; cursor: pointer; white-space: nowrap; }
