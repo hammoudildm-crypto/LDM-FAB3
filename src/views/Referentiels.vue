@@ -42,12 +42,15 @@ const erreur = ref('')
 const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet', 'blister', 'seringue']
 const GAMME_PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
 // Fusionne les anciennes étapes « Granulation » + « Séchage » en une seule « Granulation et Séchage »
-// Poids théorique du lot déduit de la taille de lot et du poids unitaire, en kg.
+// Poids théorique du lot, en kg. ATTENTION : taille_lot est un nombre de BOÎTES, pas d'unités.
+// Formule commune à PlanningEquipements, SuiviCapacite et EquipementDetail :
+//   taille_lot (boîtes) × unités/boîte × poids unitaire (mg) / 1e6
 const poidsLotCalcule = computed(() => {
-  const t = Number(formP.taille_lot) || 0
-  const u = Number(formP.poids_unitaire_mg) || 0
-  if (t <= 0 || u <= 0) return null
-  return Math.round(t * u / 1e6 * 100) / 100
+  const boites = Number(formP.taille_lot) || 0
+  const uPar = Number(formP.unites_par_boite) || 0
+  const mg = Number(formP.poids_unitaire_mg) || 0
+  if (boites <= 0 || uPar <= 0 || mg <= 0) return null
+  return Math.round(boites * uPar * mg / 1e6 * 100) / 100
 })
 function appliquerPoidsLot() { if (poidsLotCalcule.value != null) formP.poids_lot_kg = poidsLotCalcule.value }
 function normGammeR(g) {
@@ -575,7 +578,8 @@ onMounted(async () => {
         <label>Poids unitaire ({{ formP.forme === 'seringue' ? 'mg / unité' : 'mg' }})<input v-model="formP.poids_unitaire_mg" type="number" step="any" placeholder="350" /></label>
         <label>Taille de lot<input v-model="formP.taille_lot" type="number" placeholder="500000" /></label>
         <label>Poids du lot (kg)<input v-model="formP.poids_lot_kg" type="number" step="any" placeholder="175" />
-          <span v-if="poidsLotCalcule != null" class="pl-calc">Calculé : {{ poidsLotCalcule }} kg <button type="button" class="pl-apply" @click="appliquerPoidsLot">appliquer</button></span>
+          <span v-if="poidsLotCalcule != null" class="pl-calc" :title="formP.taille_lot + ' boîtes × ' + formP.unites_par_boite + ' u/boîte × ' + formP.poids_unitaire_mg + ' mg / 1 000 000'">Calculé : {{ poidsLotCalcule }} kg <button type="button" class="pl-apply" @click="appliquerPoidsLot">appliquer</button></span>
+          <span v-else class="pl-calc">Calcul indisponible : renseigne taille de lot, unités/boîte et poids unitaire.</span>
         </label>
         <label>Durée de vie (mois)<input v-model="formP.duree_vie_mois" type="number" placeholder="36" /></label>
         <label>AQL<input v-model="formP.aql" placeholder="0.65" /></label>
