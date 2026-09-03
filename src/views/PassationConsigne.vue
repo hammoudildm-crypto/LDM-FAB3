@@ -149,11 +149,18 @@ async function prendreConnaissance(c) {
 function fmtDate(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString('fr-FR') }
 function fmtDateTime(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? d : x.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }
 
-const nbEnAttente = computed(() => consignes.value.filter(c => !c.pris_connaissance).length)
+const tousSites = ref(false)
+function siteDeConsigne(c) { return c.site || 'seche' }
+const consignesFiltrees = computed(() => tousSites.value
+  ? consignes.value
+  : consignes.value.filter(c => siteDeConsigne(c) === siteSel.value))
+// Combien sont masquées par le filtre, pour ne pas laisser croire qu'il n'y a rien
+const nbAutresSites = computed(() => consignes.value.length - consignes.value.filter(c => siteDeConsigne(c) === siteSel.value).length)
+const nbEnAttente = computed(() => consignesFiltrees.value.filter(c => !c.pris_connaissance).length)
 function fmtDateLong(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) }
 const consignesGroupees = computed(() => {
   const parJour = {}
-  for (const c of consignes.value) { const j = c.date_shift || '?'; if (!parJour[j]) parJour[j] = {}; const sh = c.shift || '?'; if (!parJour[j][sh]) parJour[j][sh] = []; parJour[j][sh].push(c) }
+  for (const c of consignesFiltrees.value) { const j = c.date_shift || '?'; if (!parJour[j]) parJour[j] = {}; const sh = c.shift || '?'; if (!parJour[j][sh]) parJour[j][sh] = []; parJour[j][sh].push(c) }
   const jours = Object.keys(parJour).sort((a, b) => String(b).localeCompare(String(a)))
   return jours.map(j => ({ jour: j, shifts: SHIFTS.filter(sh => parJour[j][sh.key]).map(sh => ({ key: sh.key, label: sh.label, items: parJour[j][sh.key] })) }))
 })
@@ -274,9 +281,13 @@ const consignesGroupees = computed(() => {
     </section>
 
     <section class="pc-card">
-      <h2 class="pc-title">Consignes <span v-if="nbEnAttente" class="pc-count">{{ nbEnAttente }} en attente de lecture</span></h2>
+      <div class="pc-cons-head">
+        <h2 class="pc-title">Consignes — {{ tousSites ? "tous les sites" : siteLabel(siteSel) }}<span v-if="nbEnAttente" class="pc-count">{{ nbEnAttente }} en attente de lecture</span></h2>
+        <label class="pc-tous"><input type="checkbox" v-model="tousSites" /> Tous les sites<span v-if="!tousSites && nbAutresSites" class="pc-tous-n"> ({{ nbAutresSites }} masquée(s))</span></label>
+      </div>
       <p v-if="chargement" class="pc-muted">Chargement…</p>
       <p v-else-if="!consignes.length" class="pc-muted">Aucune consigne enregistrée pour l'instant.</p>
+      <p v-else-if="!consignesFiltrees.length" class="pc-muted">Aucune consigne pour {{ siteLabel(siteSel) }}. {{ nbAutresSites }} consigne(s) existent sur les autres sites — coche « Tous les sites » pour les voir.</p>
       <div v-else class="pc-groupes">
         <div v-for="g in consignesGroupees" :key="g.jour" class="pc-jour">
           <h3 class="pc-jour-t">📅 {{ fmtDateLong(g.jour) }}</h3>
@@ -335,6 +346,10 @@ const consignesGroupees = computed(() => {
 .pc-err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 9px 13px; border-radius: 10px; font-size: 13px; margin: 12px 0; }
 
 .pc-card { background: #fff; border: 1px solid #eef0f4; border-radius: 14px; padding: 10px 13px; margin-top: 10px; box-shadow: 0 1px 3px rgba(15,23,42,.05); }
+.pc-cons-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pc-tous { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: #475569; cursor: pointer; white-space: nowrap; }
+.pc-tous input { width: auto; margin: 0; }
+.pc-tous-n { color: #94a3b8; font-weight: 600; }
 .pc-title { margin: 0 0 9px; font-size: 12.5px; font-weight: 800; letter-spacing: -.01em; color: #1e1b3a; display: flex; align-items: center; gap: 8px; padding-left: 8px; border-left: 3px solid #7c3aed; }
 .pc-count { font-size: 11px; font-weight: 800; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; border-radius: 20px; padding: 3px 11px; }
 
