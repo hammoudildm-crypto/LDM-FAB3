@@ -16,10 +16,18 @@ const refreshTick = ref(0)
 const presenceOuverte = ref(false)
 // --- Synchronisation périodique automatique (recharge les pages de consultation) ---
 const AUTO_REFRESH_MS = 300000 // 5 minutes (filet de sécurité ; le temps réel gère l'instantané)
-const ROUTES_SANS_AUTO = ['/ordres', '/suivi', '/conditionnement', '/saisie-trs', '/plan', '/referentiels', '/cadences', '/habilitations', '/effectifs', '/verification-ddl', '/verification-ddl-aq', '/verification-ddl-cond', '/compte', '/login']
+// Écrans où l'on saisit : jamais de rechargement automatique, il effacerait le travail en cours.
+const ROUTES_SANS_AUTO = ['/ordres', '/suivi', '/conditionnement', '/saisie-trs', '/plan', '/referentiels', '/cadences', '/habilitations', '/effectifs', '/verification-ddl', '/verification-ddl-aq', '/verification-ddl-cond', '/compte', '/login', '/dispo-equipements', '/passation', '/capacite', '/ordonnancement', '/qse', '/equipement']
 let autoRefreshTimer = null
 // Ne jamais recharger pendant qu'un opérateur saisit (champ focalisé) ou qu'une fenêtre est ouverte
 const refreshEnAttente = ref(false)
+// Verrou posé par une page qui a des modifications non enregistrées.
+// Une liste de routes s'oublie ; ce compteur, lui, suit l'état réel de l'écran.
+const verrousEdition = ref(0)
+provide('verrouEdition', {
+  poser: () => { verrousEdition.value++ },
+  liberer: () => { verrousEdition.value = Math.max(0, verrousEdition.value - 1) }
+})
 function enSaisie() {
   if (typeof document === 'undefined') return false
   const el = document.activeElement
@@ -29,17 +37,19 @@ function enSaisie() {
 }
 function surFinSaisie() {
   setTimeout(() => {
-    if (refreshEnAttente.value && !enSaisie() && !ROUTES_SANS_AUTO.includes(route.path)) { refreshEnAttente.value = false; refreshTick.value++ }
+    if (refreshEnAttente.value && !enSaisie() && verrousEdition.value === 0 && !ROUTES_SANS_AUTO.includes(route.path)) { refreshEnAttente.value = false; refreshTick.value++ }
   }, 500)
 }
 function autoRefresh() {
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+  if (verrousEdition.value > 0) return  // modifications non enregistrées à l'écran
   if (ROUTES_SANS_AUTO.includes(route.path)) return  // ne pas interrompre un écran de saisie
   if (enSaisie()) { refreshEnAttente.value = true; return }  // opérateur en train de saisir : on diffère
   refreshTick.value++
 }
 let canalSync = null
 function onDbChange() {
+  if (verrousEdition.value > 0) return  // modifications non enregistrées à l'écran
   if (ROUTES_SANS_AUTO.includes(route.path)) return  // pas de rechargement pendant une saisie
   if (enSaisie()) { refreshEnAttente.value = true; return }  // opérateur en train de saisir : on diffère
   refreshTick.value++
