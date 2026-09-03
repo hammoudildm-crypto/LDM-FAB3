@@ -727,6 +727,9 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 /* 3 colonnes alignées en bas (même hauteur) */
 .verif-3col { align-items: stretch !important; }
 .verif-3col > .v3-col, .verif-3col > .v3-mid { height: calc(100vh - 240px) !important; max-height: calc(100vh - 240px) !important; overflow-y: auto; }
+/* Colonne de droite : pas de barre de défilement propre, elle se déroule avec la page.
+   Placé APRÈS la règle ci-dessus : même spécificité, c'est l'ordre qui tranche. */
+.verif-3col > .v3-right { height: auto !important; max-height: none !important; overflow-y: visible !important; align-self: start !important; }
 
 /* Colonnes de même hauteur : bas aligné */
 .verif-3col > .v3-col > .card:last-child { flex: 1 1 auto; }
