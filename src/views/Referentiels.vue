@@ -42,6 +42,14 @@ const erreur = ref('')
 const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet', 'blister', 'seringue']
 const GAMME_PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
 // Fusionne les anciennes étapes « Granulation » + « Séchage » en une seule « Granulation et Séchage »
+// Poids théorique du lot déduit de la taille de lot et du poids unitaire, en kg.
+const poidsLotCalcule = computed(() => {
+  const t = Number(formP.taille_lot) || 0
+  const u = Number(formP.poids_unitaire_mg) || 0
+  if (t <= 0 || u <= 0) return null
+  return Math.round(t * u / 1e6 * 100) / 100
+})
+function appliquerPoidsLot() { if (poidsLotCalcule.value != null) formP.poids_lot_kg = poidsLotCalcule.value }
 function normGammeR(g) {
   if (!Array.isArray(g)) return []
   const out = []
@@ -80,12 +88,12 @@ function resetDO() { Object.assign(formDO, { id: null, code: '', nom: '', activi
 // --- Produit ---
 const formP = reactive({
   id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-  unites_par_boite: '', poids_unitaire_mg: '', taille_lot: '', duree_vie_mois: '', aql: '', pcsu: '', gamme: []
+  unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', aql: '', pcsu: '', gamme: []
 })
 function resetP() {
   Object.assign(formP, {
     id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-    unites_par_boite: '', poids_unitaire_mg: '', taille_lot: '', duree_vie_mois: '', aql: '', pcsu: '', gamme: []
+    unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', aql: '', pcsu: '', gamme: []
   })
 }
 
@@ -301,6 +309,7 @@ async function enregistrerP() {
     donneur_ordre_id: formP.donneur_ordre_id || null,
     unites_par_boite: toNum(formP.unites_par_boite),
     poids_unitaire_mg: toNum(formP.poids_unitaire_mg),
+    poids_lot_kg: toNum(formP.poids_lot_kg),
     taille_lot: toNum(formP.taille_lot),
     duree_vie_mois: toNum(formP.duree_vie_mois),
     aql: formP.aql.trim() || null,
@@ -318,7 +327,7 @@ function modifierP(p) {
   Object.assign(formP, {
     id: p.id, code_pf: p.code_pf, designation: p.designation, forme: p.forme || '',
     donneur_ordre_id: p.donneur_ordre_id || '',
-    unites_par_boite: p.unites_par_boite ?? '', poids_unitaire_mg: p.poids_unitaire_mg ?? '', taille_lot: p.taille_lot ?? '',
+    unites_par_boite: p.unites_par_boite ?? '', poids_unitaire_mg: p.poids_unitaire_mg ?? '', poids_lot_kg: p.poids_lot_kg ?? '', taille_lot: p.taille_lot ?? '',
     duree_vie_mois: p.duree_vie_mois ?? '', aql: p.aql || '', pcsu: p.pcsu ?? '',
     gamme: normGammeR(p.gamme)
   })
@@ -565,6 +574,9 @@ onMounted(async () => {
         <label>Unités / boîte<input v-model="formP.unites_par_boite" type="number" placeholder="30" /></label>
         <label>Poids unitaire ({{ formP.forme === 'seringue' ? 'mg / unité' : 'mg' }})<input v-model="formP.poids_unitaire_mg" type="number" step="any" placeholder="350" /></label>
         <label>Taille de lot<input v-model="formP.taille_lot" type="number" placeholder="500000" /></label>
+        <label>Poids du lot (kg)<input v-model="formP.poids_lot_kg" type="number" step="any" placeholder="175" />
+          <span v-if="poidsLotCalcule != null" class="pl-calc">Calculé : {{ poidsLotCalcule }} kg <button type="button" class="pl-apply" @click="appliquerPoidsLot">appliquer</button></span>
+        </label>
         <label>Durée de vie (mois)<input v-model="formP.duree_vie_mois" type="number" placeholder="36" /></label>
         <label>AQL<input v-model="formP.aql" placeholder="0.65" /></label>
         <label>PCSU<input v-model="formP.pcsu" type="number" step="any" placeholder="12.50" /></label>
@@ -598,7 +610,7 @@ onMounted(async () => {
           <thead>
             <tr>
               <th>Code PF</th><th>Désignation</th><th>Forme</th><th>Donneur d'ordre</th>
-              <th class="right">U/boîte</th><th class="right">Poids (mg)</th><th class="right">Taille lot</th><th class="right">PCSU</th>
+              <th class="right">U/boîte</th><th class="right">Poids (mg)</th><th class="right">Poids lot (kg)</th><th class="right">Taille lot</th><th class="right">PCSU</th>
               <th>Phase finale</th>
               <th class="right">Actions</th>
             </tr>
@@ -611,6 +623,7 @@ onMounted(async () => {
               <td>{{ p.donneurs_ordre ? p.donneurs_ordre.nom : '—' }}</td>
               <td class="right">{{ p.unites_par_boite ?? '—' }}</td>
               <td class="right">{{ p.poids_unitaire_mg ?? '—' }}</td>
+              <td class="right">{{ p.poids_lot_kg ?? '—' }}</td>
               <td class="right">{{ p.taille_lot ?? '—' }}</td>
               <td class="right">{{ p.pcsu ?? '—' }}</td>
               <td><span v-if="phaseFinaleP(p.gamme)" class="gamme-badge">{{ phaseFinaleP(p.gamme) }}</span><span v-else class="gamme-none">non définie</span></td>
@@ -805,6 +818,8 @@ button.link.danger { color: #b91c1c; }
 .p-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .p-filtre { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
 .p-count { font-size: 12px; font-weight: 600; color: #475569; background: #f1f5f9; padding: 4px 10px; border-radius: 999px; margin-left: auto; }
+.pl-calc { display: block; margin-top: 3px; font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: none; letter-spacing: 0; }
+.pl-apply { border: 0; background: none; padding: 0 0 0 4px; font: inherit; font-size: 10px; font-weight: 800; color: #0f766e; cursor: pointer; text-decoration: underline; }
 .gamme-field { grid-column: 1 / -1; }
 .gamme-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 4px; }
 .gamme-chk { display: inline-flex; align-items: center; gap: 5px; font-weight: 400; font-size: 13px; color: #334155; }
