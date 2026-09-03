@@ -1544,11 +1544,16 @@ onMounted(async () => {
 /* Qualité — triage et déviations */
 .qual-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .qual-h { margin: 0 0 12px; font-size: 15px; font-weight: 800; color: #0f172a; }
-.qual-kpis { grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 9px; margin-bottom: 12px; }
+/* 7 colonnes fixes : les deux bandeaux (File de production et Qualité) s'alignent colonne par
+   colonne. En auto-fit, un bandeau de 7 tuiles et un de 11 ne donnaient pas la même largeur. */
+.qual-kpis { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 9px; margin-bottom: 12px; }
 .qual-kpis .kpi { padding: 10px 12px; border-radius: 10px; box-shadow: none; }
 .qual-kpis .kpi-val { font-size: 19px; }
 .qual-kpis .kpi-val-sm { font-size: 13px; }
 .qual-kpis .kpi-lbl { font-size: 10.5px; margin-top: 2px; line-height: 1.25; }
+@media (max-width: 1200px) { .qual-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 900px)  { .qual-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px)  { .qual-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .qual-sub { margin: 0 0 6px; font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: #94a3b8; }
 .qual-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .qual-tbl th { text-align: left; font-size: 11px; color: #64748b; font-weight: 700; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
@@ -1713,7 +1718,6 @@ select:focus, input:focus { outline: none !important; border-color: #06b6d4 !imp
 .searchbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .filtre-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #475569; cursor: pointer; white-space: nowrap; padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; }
 .filtre-chk input { accent-color: #0891b2; width: 15px; height: 15px; }
-@media (max-width: 700px) { .charge-row { grid-template-columns: 100px 1fr auto; } .charge-lbl { font-size: 10px; } }
 
 /* Tuile KPI à valeur texte (ex. atelier le plus chargé) : police réduite */
 .kpi-val.kpi-val-sm { font-size: 12px !important; line-height: 1.2; word-break: break-word; }
