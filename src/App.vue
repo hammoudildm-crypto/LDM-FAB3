@@ -318,7 +318,7 @@ async function signOut() {
       <RouterLink v-for="a in alertes" :key="a.id" :to="{ path: '/ordres', query: { edit: a.id } }"
         class="notif-item" :class="{ perime: a.jours <= 0 }" @click="alertesOuvertes = false; sidebarOpen = false">
         <div class="notif-lot">{{ a.lot }} <span class="notif-desig">{{ a.code ? a.code + ' — ' : '' }}{{ a.desig }}</span></div>
-        <div class="notif-when">{{ a.jours <= 0 ? '⛔ OF non valide (expiré)' : '⏳ Expire dans ' + a.jours + ' j' }} · {{ a.dateStr }}</div>
+        <div class="notif-when">{{ a.jours <= 0 ? '⛔ OF non valide (expiré)' : '⌛ Expire dans ' + a.jours + ' j' }} · {{ a.dateStr }}</div>
       </RouterLink>
       <p v-if="!alertes.length" class="notif-empty">Aucune alerte de validité.</p>
     </div>
@@ -352,7 +352,7 @@ async function signOut() {
         <button class="zoom-btn solo cloche" @click.stop="alertesOuvertes = !alertesOuvertes" :title="(alertes.length || 'Aucune') + ' alerte(s) de validité'">🔔<span v-if="alertes.length" class="cloche-badge">{{ alertes.length }}</span></button>
         <template v-if="session">
           <RouterLink to="/compte" class="tb-acct" @click="sidebarOpen = false" title="Mon compte">Compte<span v-if="role" class="role-badge" :class="'r-' + role">{{ roleLabel }}</span></RouterLink>
-          <button type="button" class="tb-signout" @click="signOut" title="Déconnexion">⏻</button>
+          <button type="button" class="tb-signout" @click="signOut" title="Déconnexion" aria-label="Déconnexion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v9" /><path d="M6.5 6.6a8 8 0 1 0 11 0" /></svg></button>
         </template>
         <RouterLink v-else to="/login" class="tb-acct" @click="sidebarOpen = false">Connexion</RouterLink>
       </header>
@@ -627,7 +627,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .tb-drop-head { font-size: 12px; font-weight: 700; color: var(--topbar-text); margin-bottom: 6px; }
 .tb-acct { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--topbar-muted); font-size: 13px; font-weight: 600; padding: 6px 10px; border: 1px solid var(--topbar-border); border-radius: 8px; white-space: nowrap; }
 .tb-acct:hover { color: var(--topbar-text); border-color: var(--topbar-muted); }
-.tb-signout { background: transparent; color: var(--topbar-muted); border: 1px solid var(--topbar-border); padding: 6px 11px; border-radius: 8px; font-size: 15px; cursor: pointer; line-height: 1; }
+.tb-signout { background: transparent; color: var(--topbar-muted); border: 1px solid var(--topbar-border); padding: 6px 11px; border-radius: 8px; cursor: pointer; line-height: 0; display: inline-flex; align-items: center; justify-content: center; }
+.tb-signout svg { width: 16px; height: 16px; display: block; }
 .tb-signout:hover { color: #fca5a5; border-color: #fca5a5; }
 @media (max-width: 900px) and (orientation: portrait), (hover: none) and (pointer: coarse) and (orientation: portrait) { .app-topbar .burger, .tb-brand { display: inline-flex; } .tb-acct { display: none; } }
 /* Mode application (ajoutée à l'écran d'accueil) : réserver la barre d'état,
