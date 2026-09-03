@@ -577,9 +577,12 @@ onMounted(async () => {
         <label>Unités / boîte<input v-model="formP.unites_par_boite" type="number" placeholder="30" /></label>
         <label>Poids unitaire ({{ formP.forme === 'seringue' ? 'mg / unité' : 'mg' }})<input v-model="formP.poids_unitaire_mg" type="number" step="any" placeholder="350" /></label>
         <label>Taille de lot<input v-model="formP.taille_lot" type="number" placeholder="500000" /></label>
-        <label>Poids du lot (kg)<input v-model="formP.poids_lot_kg" type="number" step="any" placeholder="175" />
-          <span v-if="poidsLotCalcule != null" class="pl-calc" :title="formP.taille_lot + ' boîtes × ' + formP.unites_par_boite + ' u/boîte × ' + formP.poids_unitaire_mg + ' mg / 1 000 000'">Calculé : {{ poidsLotCalcule }} kg <button type="button" class="pl-apply" @click="appliquerPoidsLot">appliquer</button></span>
-          <span v-else class="pl-calc">Calcul indisponible : renseigne taille de lot, unités/boîte et poids unitaire.</span>
+        <label>
+          <span class="pl-lab">Poids du lot (kg)
+            <button v-if="poidsLotCalcule != null" type="button" class="pl-apply" @click="appliquerPoidsLot" :title="formP.taille_lot + ' boîtes × ' + formP.unites_par_boite + ' u/boîte × ' + formP.poids_unitaire_mg + ' mg / 1 000 000 = ' + poidsLotCalcule + ' kg — cliquer pour appliquer'">calc. {{ poidsLotCalcule }}</button>
+            <span v-else class="pl-calc" title="Renseigne taille de lot, unités/boîte et poids unitaire pour obtenir le calcul.">calc. —</span>
+          </span>
+          <input v-model="formP.poids_lot_kg" type="number" step="any" placeholder="175" />
         </label>
         <label>Durée de vie (mois)<input v-model="formP.duree_vie_mois" type="number" placeholder="36" /></label>
         <label>AQL<input v-model="formP.aql" placeholder="0.65" /></label>
@@ -783,7 +786,7 @@ onMounted(async () => {
 .p-grid { grid-template-columns: repeat(4, 1fr) auto; }
 .a-grid { grid-template-columns: 1fr 2.4fr auto; }
 .e-grid { grid-template-columns: 1fr 1.8fr 1.6fr 1fr auto; }
-.form-grid label { display: flex; flex-direction: column; font-size: 11px; font-weight: 600; color: #475569; gap: 3px; }
+.form-grid label { display: flex; flex-direction: column; font-size: 11px; font-weight: 600; color: #475569; gap: 3px; min-width: 0; }
 .form-grid input, .form-grid select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 400; }
 .form-grid input:focus, .form-grid select:focus { outline: 2px solid #0f766e; outline-offset: 0; border-color: #0f766e; }
 .form-actions { display: flex; gap: 8px; align-items: end; }
@@ -822,8 +825,11 @@ button.link.danger { color: #b91c1c; }
 .p-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .p-filtre { font-size: 12px; padding: 5px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
 .p-count { font-size: 12px; font-weight: 600; color: #475569; background: #f1f5f9; padding: 4px 10px; border-radius: 999px; margin-left: auto; }
-.pl-calc { display: block; margin-top: 3px; font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: none; letter-spacing: 0; }
-.pl-apply { border: 0; background: none; padding: 0 0 0 4px; font: inherit; font-size: 10px; font-weight: 800; color: #0f766e; cursor: pointer; text-decoration: underline; }
+/* L'aide au calcul tient sur la LIGNE DU LIBELLÉ : sans quoi elle ajoute une ligne sous le
+   champ et désaligne toute la rangée du formulaire. */
+.pl-lab { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; min-width: 0; }
+.pl-calc { font-size: 10px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
+.pl-apply { border: 0; background: none; padding: 0; font: inherit; font-size: 10px; font-weight: 800; color: #0f766e; cursor: pointer; text-decoration: underline; white-space: nowrap; }
 .gamme-field { grid-column: 1 / -1; }
 .gamme-checks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 3px; }
 .gamme-chk { display: inline-flex; align-items: center; gap: 5px; font-weight: 400; font-size: 12px; color: #334155; }
