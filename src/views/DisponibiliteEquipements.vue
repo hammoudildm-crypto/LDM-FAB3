@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
@@ -759,6 +759,24 @@ const histoTotaux = computed(() => {
   }
 })
 const qteEdit = reactive({})
+// Verrou anti-rechargement : tant qu'une saisie n'est pas enregistrée, App.vue ne recharge pas.
+const verrouEdition = inject('verrouEdition', null)
+let verrouPose = false
+const aDesModifs = computed(() => {
+  for (const l of lotsTriage.value) {
+    const q = qteEdit[l.id]
+    if (!q) continue
+    if ((Number(q.aTrier) || 0) !== (Number(l.qteATrier) || 0)) return true
+    if ((Number(q.triee) || 0) !== (Number(l.qteTriee) || 0)) return true
+  }
+  return sacsOuvert.value != null || devOuvert.value != null || histOuvert.value != null
+})
+watch(aDesModifs, (v) => {
+  if (!verrouEdition) return
+  if (v && !verrouPose) { verrouEdition.poser(); verrouPose = true }
+  else if (!v && verrouPose) { verrouEdition.liberer(); verrouPose = false }
+})
+onUnmounted(() => { if (verrouEdition && verrouPose) { verrouEdition.liberer(); verrouPose = false } })
 watch(lotsTriage, (lots) => { for (const l of lots) if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: l.qteATrier || 0, triee: l.qteTriee || 0 } }, { immediate: true })
 function pctTriage(id) { const q = qteEdit[id] || {}; const t = Number(q.aTrier) || 0; return t > 0 ? Math.min(100, Math.round((Number(q.triee) || 0) / t * 100)) : 0 }
 // Une ligne est « à enregistrer » tant que la saisie diffère de ce qui est en base.
