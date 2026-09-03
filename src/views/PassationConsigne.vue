@@ -150,6 +150,14 @@ function fmtDate(d) { if (!d) return '—'; const x = new Date(d); return isNaN(
 function fmtDateTime(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? d : x.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }
 
 const tousSites = ref(false)
+// Repli des consignes : les non lues restent ouvertes (elles demandent une signature),
+// les autres sont repliées pour que la page reste lisible.
+const ouverts = ref({})
+function estOuvert(c) { return ouverts.value[c.id] !== undefined ? ouverts.value[c.id] : !c.pris_connaissance }
+function basculerConsigne(c) { ouverts.value = { ...ouverts.value, [c.id]: !estOuvert(c) } }
+function toutReplier() { const m = {}; for (const c of consignesFiltrees.value) m[c.id] = false; ouverts.value = m }
+function toutDeplier() { const m = {}; for (const c of consignesFiltrees.value) m[c.id] = true; ouverts.value = m }
+function nbEquip(c) { return Array.isArray(c.equipements_etat) ? c.equipements_etat.length : 0 }
 function siteDeConsigne(c) { return c.site || 'seche' }
 const consignesFiltrees = computed(() => tousSites.value
   ? consignes.value
@@ -283,7 +291,11 @@ const consignesGroupees = computed(() => {
     <section class="pc-card">
       <div class="pc-cons-head">
         <h2 class="pc-title">Consignes — {{ tousSites ? "tous les sites" : siteLabel(siteSel) }}<span v-if="nbEnAttente" class="pc-count">{{ nbEnAttente }} en attente de lecture</span></h2>
+        <div class="pc-cons-act">
+          <button type="button" class="pc-mini" @click="toutReplier">Tout replier</button>
+          <button type="button" class="pc-mini" @click="toutDeplier">Tout déplier</button>
         <label class="pc-tous"><input type="checkbox" v-model="tousSites" /> Tous les sites<span v-if="!tousSites && nbAutresSites" class="pc-tous-n"> ({{ nbAutresSites }} masquée(s))</span></label>
+        </div>
       </div>
       <p v-if="chargement" class="pc-muted">Chargement…</p>
       <p v-else-if="!consignes.length" class="pc-muted">Aucune consigne enregistrée pour l'instant.</p>
@@ -295,13 +307,15 @@ const consignesGroupees = computed(() => {
             <div class="pc-shift-t" :class="'sh-' + sh.key">{{ sh.label }} <span class="pc-shift-n">{{ sh.items.length }} consigne(s)</span></div>
             <div class="pc-list">
               <article v-for="c in sh.items" :key="c.id" class="pc-item" :class="{ 'pc-nonlu': !c.pris_connaissance }">
-                <header class="pc-head">
+                <header class="pc-head" @click="basculerConsigne(c)" :title="estOuvert(c) ? 'Replier' : 'Déplier'">
+                  <span class="pc-caret">{{ estOuvert(c) ? "▾" : "▸" }}</span>
                   <span v-if="c.site || c.phase" class="pc-sitephase">{{ siteLabel(c.site || 'seche') }}<template v-if="c.phase && c.phase !== 'Toutes'"> · {{ c.phase }}</template></span>
             <span class="pc-sortant">Sortant : <b>{{ c.superviseur_sortant }}{{ c.superviseur_sortant_2 ? ' & ' + c.superviseur_sortant_2 : '' }}</b></span>
             <span v-if="!c.pris_connaissance" class="pc-badge">Non lu</span>
+            <span v-if="nbEquip(c)" class="pc-nbeq">{{ nbEquip(c) }} équipement(s)</span>
           </header>
 
-          <div v-if="c.equipements_etat && c.equipements_etat.length" class="pc-equip-hist">
+          <div v-if="estOuvert(c) && c.equipements_etat && c.equipements_etat.length" class="pc-equip-hist">
             <table class="pc-equip-tbl histo">
               <thead><tr><th>Équipement</th><th>Site</th><th>État</th><th>Lot</th><th class="ok">✅ Réalisé</th><th class="todo">📋 À réaliser</th></tr></thead>
               <tbody>
@@ -316,9 +330,9 @@ const consignesGroupees = computed(() => {
               </tbody>
             </table>
           </div>
-          <p v-else class="pc-muted">Aucun détail équipement.</p>
+          <p v-else-if="estOuvert(c)" class="pc-muted">Aucun détail équipement.</p>
 
-          <footer class="pc-foot">
+          <footer v-if="estOuvert(c)" class="pc-foot">
             <div v-if="c.pris_connaissance" class="pc-ack ok">✓ Pris connaissance par <b>{{ c.superviseur_entrant }}{{ c.superviseur_entrant_2 ? ' & ' + c.superviseur_entrant_2 : '' }}</b> le {{ fmtDateTime(c.pris_connaissance_le) }}</div>
             <div v-else-if="peutEditer" class="pc-ack-form">
               <select v-model="entrant1[c.id]"><option value="">— Entrant 1 —</option><option v-for="s in superviseurs" :key="s" :value="s">{{ s }}</option></select>
@@ -347,6 +361,11 @@ const consignesGroupees = computed(() => {
 
 .pc-card { background: #fff; border: 1px solid #eef0f4; border-radius: 14px; padding: 10px 13px; margin-top: 10px; box-shadow: 0 1px 3px rgba(15,23,42,.05); }
 .pc-cons-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pc-cons-act { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pc-mini { border: 1px solid #e6e2f4; background: #fff; border-radius: 7px; padding: 3px 10px; font: inherit; font-size: 11px; font-weight: 700; color: #6d28d9; cursor: pointer; }
+.pc-mini:hover { background: #f5f3ff; }
+.pc-caret { font-size: 10px; color: #a78bfa; font-weight: 800; }
+.pc-nbeq { font-size: 10.5px; font-weight: 700; color: #64748b; background: #f1f5f9; border-radius: 20px; padding: 2px 9px; }
 .pc-tous { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: #475569; cursor: pointer; white-space: nowrap; }
 .pc-tous input { width: auto; margin: 0; }
 .pc-tous-n { color: #94a3b8; font-weight: 600; }
@@ -412,26 +431,26 @@ const consignesGroupees = computed(() => {
 .pc-btn.sm { padding: 7px 14px; font-size: 12.5px; border-radius: 9px; }
 
 .pc-muted { color: #94a3b8; font-size: 13px; padding: 8px; }
-.pc-list { display: flex; flex-direction: column; gap: 12px; }
-.pc-groupes { display: flex; flex-direction: column; gap: 16px; }
-.pc-jour-t { margin: 0 0 8px; font-size: 13px; font-weight: 800; color: #0f172a; text-transform: capitalize; border-bottom: 2px solid #ede9fe; padding-bottom: 5px; }
-.pc-shift-grp { margin-bottom: 12px; margin-left: 2px; }
-.pc-shift-t { font-weight: 800; font-size: 12.5px; padding: 6px 13px; border-radius: 9px; margin-bottom: 10px; display: inline-flex; align-items: center; gap: 8px; }
+.pc-list { display: flex; flex-direction: column; gap: 5px; }
+.pc-groupes { display: flex; flex-direction: column; gap: 10px; }
+.pc-jour-t { margin: 0 0 5px; font-size: 12.5px; font-weight: 800; color: #0f172a; text-transform: capitalize; border-bottom: 2px solid #ede9fe; padding-bottom: 3px; }
+.pc-shift-grp { margin-bottom: 8px; margin-left: 2px; }
+.pc-shift-t { font-weight: 800; font-size: 12px; padding: 4px 11px; border-radius: 8px; margin-bottom: 6px; display: inline-flex; align-items: center; gap: 8px; }
 .pc-shift-n { font-size: 11px; background: rgba(0,0,0,.10); border-radius: 20px; padding: 2px 9px; }
 .pc-shift-t.sh-matin { background: #fef9c3; color: #a16207; }
 .pc-shift-t.sh-apres-midi { background: #ffedd5; color: #c2410c; }
 .pc-shift-t.sh-nuit { background: #e0e7ff; color: #4338ca; }
 
-.pc-item { border: 1px solid #eceaf4; border-radius: 11px; padding: 9px 12px; background: #fff; transition: box-shadow .12s; }
+.pc-item { border: 1px solid #eceaf4; border-radius: 10px; padding: 5px 10px; background: #fff; transition: box-shadow .12s; }
 .pc-item:hover { box-shadow: 0 2px 10px rgba(15,23,42,.06); }
 .pc-item.pc-nonlu { border-left: 4px solid #f59e0b; background: #fffdf7; }
-.pc-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.pc-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin: 0; cursor: pointer; user-select: none; }
 .pc-shift { font-weight: 800; color: #6d28d9; background: #ede9fe; border-radius: 7px; padding: 3px 11px; font-size: 12.5px; }
 .pc-datechip { font-weight: 700; color: #334155; font-size: 12.5px; }
 .pc-sitephase { font-weight: 800; color: #4f46e5; background: #eef2ff; border: 1px solid #e0e7ff; border-radius: 7px; padding: 3px 10px; font-size: 11.5px; }
 .pc-sortant { font-size: 12.5px; color: #9a3412; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 7px; padding: 3px 10px; }
 .pc-badge { margin-left: auto; font-size: 10px; font-weight: 800; color: #92400e; background: #fde68a; border-radius: 20px; padding: 3px 10px; text-transform: uppercase; letter-spacing: .05em; }
-.pc-equip-hist { margin: 6px 0 12px; overflow-x: auto; }
+.pc-equip-hist { margin: 8px 0 10px; overflow-x: auto; }
 .pc-equip-tbl.histo { border: 1px solid #eef2f7; border-radius: 10px; }
 .pc-td-txt { white-space: pre-wrap; color: #1e293b; max-width: 260px; }
 
