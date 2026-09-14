@@ -380,12 +380,12 @@ async function devalider(l) {
     <div class="verif-3col">
       <section class="card z-graph1">
         <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
-        <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
+        <MiniChart pref-key="ddl-verifies-mois" :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
         <p v-if="!verifParMois.some(v => v)" class="empty">Aucun DDL vérifié<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
       </section>
       <section class="card z-graph2">
         <h3 class="card-title">Dossiers en attente de vérification par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
-        <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :clickable="true" @pick="ouvrirMois" :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" />
+        <MiniChart pref-key="ddl-attente-mois" :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :clickable="true" @pick="ouvrirMois" :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" />
         <p class="chart-hint-vd">Clique sur une barre pour voir les dossiers en attente ce mois-là.</p>
         <p v-if="!attenteParMois.some(v => v)" class="empty">Aucun DDL en attente<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
       </section>
@@ -491,7 +491,8 @@ async function devalider(l) {
         </div>
       </div>
       <div v-if="!verifiesFiltres.length" class="empty">Aucun DDL vérifié pour ces critères.</div>
-      <table v-else class="mini">
+      <div v-else class="z-verifies-scroll">
+      <table class="mini">
         <thead><tr><th>Lot</th><th>Produit</th><th>Vérificateur</th><th class="right">Date d'envoi</th><th></th></tr></thead>
         <tbody>
           <template v-for="l in verifiesAffiches" :key="l.id">
@@ -523,6 +524,7 @@ async function devalider(l) {
           </template>
         </tbody>
       </table>
+      </div>
       <p v-if="verifiesFiltres.length > verifiesAffiches.length" class="empty">
         … {{ fmt(verifiesFiltres.length - verifiesAffiches.length) }} autres (affichage limité à {{ LIMITE }} ; affine la recherche ou les dates).
       </p>
@@ -581,6 +583,21 @@ async function devalider(l) {
 /* Tablette : deux colonnes, la liste passe pleine largeur. */
 @media (max-width: 1200px) {
   .verif-3col { grid-template-columns: 1fr 1fr; grid-template-areas: "obj taux" "att att" "g1 g2"; }
+}
+
+/* Bureau : la page tient dans une hauteur d'écran. Chaque zone a une hauteur bornée
+   et défile chez elle, la page elle-même ne s'allonge plus. */
+@media (min-width: 821px) {
+  .verif-3col { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); max-height: calc(100vh - 300px); }
+  .verif-3col > .card { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .z-graph1 :deep(.ch), .z-graph2 :deep(.ch) { height: 108px !important; padding-top: 16px !important; }
+  .z-graph1 :deep(.line-ch), .z-graph2 :deep(.line-ch) { height: 108px !important; overflow: hidden; }
+  .z-graph1 :deep(.lch-svg), .z-graph2 :deep(.lch-svg) { height: 108px !important; }
+  .z-taux { overflow-y: auto; }
+  .z-verifies { max-height: 220px; display: flex; flex-direction: column; }
+  .z-verifies .hist-head { flex: 0 0 auto; }
+  .z-verifies > div:last-child, .z-verifies table { min-height: 0; }
+  .z-verifies-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
 }
 
 /* Bureau : compaction d'ensemble. Remplace l'ancien zoom global, qui faussait
