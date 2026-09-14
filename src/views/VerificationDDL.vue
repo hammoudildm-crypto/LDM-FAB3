@@ -378,6 +378,7 @@ async function devalider(l) {
     </section>
 
     <div class="verif-3col">
+      <div class="z-left">
       <section class="card z-graph1">
         <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
         <MiniChart pref-key="ddl-verifies-mois" :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
@@ -389,6 +390,7 @@ async function devalider(l) {
         <p class="chart-hint-vd">Clique sur une barre pour voir les dossiers en attente ce mois-là.</p>
         <p v-if="!attenteParMois.some(v => v)" class="empty">Aucun DDL en attente<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
       </section>
+      </div>
 
       <div class="z-side">
       <section class="card plan-ddl z-objectif">
