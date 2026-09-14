@@ -597,7 +597,6 @@ async function devalider(l) {
   .z-verifies-scroll::-webkit-scrollbar { width: 7px; }
   .z-verifies-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 }
-}
 
 /* Bureau : compaction d'ensemble. Remplace l'ancien zoom global, qui faussait
    la hauteur de défilement sur mobile et les calculs en vh. */
