@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { chartStyle } from '../chartPref'
 
 const props = defineProps({
@@ -10,6 +10,8 @@ const props = defineProps({
   max: { type: Number, default: 0 },        // max imposé (sinon calculé)
   min: { type: Number, default: 0 },         // base d'échelle (zoom)
   showSwitch: { type: Boolean, default: true },
+  // Clé de mémorisation propre à ce graphe. Vide = préférence partagée par toute l'app.
+  prefKey: { type: String, default: '' },
   spacer: { type: Boolean, default: false },
   clickable: { type: Boolean, default: false },
   showValues: { type: Boolean, default: false },
@@ -24,6 +26,21 @@ function estEnCours(i, si) {
     && props.currentSerie >= 0 && si === props.currentSerie
 }
 const emit = defineEmits(['pick'])
+// Style du graphe : propre à l'instance si prefKey est fourni, partagé sinon.
+const styleLocal = ref('courbes')
+if (props.prefKey) {
+  let v = null
+  try { v = localStorage.getItem('ldmfab-chart-' + props.prefKey) } catch (e) { /* ignore */ }
+  styleLocal.value = v || chartStyle.value   // 1re ouverture : on part du style courant
+}
+const styleGraphe = computed({
+  get: () => (props.prefKey ? styleLocal.value : chartStyle.value),
+  set: (v) => {
+    if (!props.prefKey) { chartStyle.value = v; return }
+    styleLocal.value = v
+    try { localStorage.setItem('ldmfab-chart-' + props.prefKey, v) } catch (e) { /* ignore */ }
+  }
+})
 const vfmt = computed(() => props.valueFormat || props.format)
 
 const CH = { w: 820, h: 240, pl: 12, pr: 12, pt: 32, pb: 26 }
@@ -50,13 +67,13 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
 <template>
   <div class="mc">
     <div v-if="showSwitch" class="ch-switch">
-      <button :class="{ on: chartStyle === 'courbes' }" @click="chartStyle = 'courbes'">Courbes</button>
-      <button :class="{ on: chartStyle === 'aires' }" @click="chartStyle = 'aires'">Aires</button>
-      <button :class="{ on: chartStyle === 'barres' }" @click="chartStyle = 'barres'">Barres</button>
+      <button :class="{ on: styleGraphe === 'courbes' }" @click="styleGraphe = 'courbes'">Courbes</button>
+      <button :class="{ on: styleGraphe === 'aires' }" @click="styleGraphe = 'aires'">Aires</button>
+      <button :class="{ on: styleGraphe === 'barres' }" @click="styleGraphe = 'barres'">Barres</button>
     </div>
     <div v-else-if="spacer" class="ch-switch-spacer"></div>
 
-    <div v-if="chartStyle !== 'barres'" class="line-ch">
+    <div v-if="styleGraphe !== 'barres'" class="line-ch">
       <svg :viewBox="'0 0 ' + CH.w + ' ' + CH.h" class="lch-svg">
         <defs>
           <linearGradient v-for="(s, si) in series" :key="'g' + si" :id="'mc-g' + si" x1="0" y1="0" x2="0" y2="1">
@@ -66,7 +83,7 @@ const gl = [0, 0.25, 0.5, 0.75, 1]
         </defs>
         <rect v-if="currentIndex >= 0" :x="x(currentIndex) - bandW / 2" :y="CH.pt" :width="bandW" :height="CH.h - CH.pt - CH.pb" class="lch-now" />
         <line v-for="g in gl" :key="'gr' + g" :x1="CH.pl" :x2="CH.w - CH.pr" :y1="gridY(g)" :y2="gridY(g)" class="lch-grid" />
-        <template v-if="chartStyle === 'aires'">
+        <template v-if="styleGraphe === 'aires'">
           <polygon v-for="(s, si) in series" :key="'a' + si" :points="area(s.data)" :fill="'url(#mc-g' + si + ')'" />
         </template>
         <polyline v-for="(s, si) in series" :key="'l' + si" :points="pts(s.data)" fill="none" :stroke="s.color" :stroke-dasharray="s.dash ? '5 4' : ''" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
