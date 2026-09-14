@@ -390,6 +390,7 @@ async function devalider(l) {
         <p v-if="!attenteParMois.some(v => v)" class="empty">Aucun DDL en attente<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
       </section>
 
+      <div class="z-side">
       <section class="card plan-ddl z-objectif">
         <h3 class="card-title">Objectif du mois — {{ MOIS[moisCourant - 1] }}</h3>
         <p class="hint">DDL à vérifier ce mois (PDP)</p>
@@ -424,6 +425,7 @@ async function devalider(l) {
           <div class="bar-track"><div class="bar-fill" :class="s.taux >= 100 ? 'ok' : 'part'" :style="{ width: s.taux + '%' }"></div></div>
         </div>
       </section>
+      </div>
 
       <section class="card v3-mid z-attente">
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
@@ -565,12 +567,15 @@ async function devalider(l) {
    Le placement bureau passe par grid-template-areas, l'ordre du DOM étant celui
    voulu sur téléphone. Plus aucun order ni display:contents à maintenir. */
 .verif-3col { display: grid; gap: 10px; grid-template-columns: 0.85fr 1.7fr 0.7fr; align-items: start;
-  grid-template-areas: "g1 att obj" "g2 att taux"; }
+  grid-template-areas: "g1 att side" "g2 att side"; }
 .z-graph1 { grid-area: g1; }
 .z-graph2 { grid-area: g2; }
 .z-attente { grid-area: att; min-width: 0; }
-.z-objectif { grid-area: obj; }
-.z-taux { grid-area: taux; }
+/* Objectif et Taux dans une même zone : Taux se place juste sous Objectif,
+   sans subir la hauteur de la colonne des graphes. */
+.z-side { grid-area: side; display: flex; flex-direction: column; gap: 10px; min-width: 0; align-self: start; }
+.z-side > .card { margin: 0; min-width: 0; }
+.z-taux { min-height: 0; }
 .verif-3col > .card { margin: 0; min-width: 0; }
 /* La liste centrale défile seule ; les autres cartes suivent la page. */
 .z-attente { display: flex; flex-direction: column; max-height: calc(100vh - 168px); overflow: hidden; }
@@ -582,7 +587,9 @@ async function devalider(l) {
 
 /* Tablette : deux colonnes, la liste passe pleine largeur. */
 @media (max-width: 1200px) {
-  .verif-3col { grid-template-columns: 1fr 1fr; grid-template-areas: "obj taux" "att att" "g1 g2"; }
+  .verif-3col { grid-template-columns: 1fr 1fr; grid-template-areas: "side side" "att att" "g1 g2"; }
+  .z-side { flex-direction: row; align-items: start; }
+  .z-side > .card { flex: 1 1 0; }
 }
 
 /* Bureau : on raccourcit la page en bornant les DEUX LISTES longues, chacune dans son
@@ -610,7 +617,8 @@ async function devalider(l) {
 /* Téléphone : empilement simple, dans l'ordre du DOM. */
 @media (max-width: 820px) {
   .verif-3col { display: block; }
-  .verif-3col > .card { width: 100%; margin: 0 0 10px; }
+  .verif-3col > .card, .z-side > .card { width: 100%; margin: 0 0 10px; }
+  .z-side { display: block; }
   .z-attente { display: block; max-height: none; overflow-x: auto; }
   .v3-mid-scroll { overflow: visible; max-height: none; }
   .z-attente table.mini { min-width: 600px; }
