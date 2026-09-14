@@ -829,4 +829,36 @@ tr.ddl-triage .cell-verif { background: #fffbeb; }
 .btn-verif { border: 1px solid #0f766e; background: #0f766e; color: #fff; font: inherit; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
 .btn-verif:hover { background: #0d5c55; }
 .vd-page { zoom: 0.82; }
+
+/* ===================== AFFICHAGE TÉLÉPHONE =====================
+   Placé en dernier : plusieurs règles plus haut portent !important, seul
+   l'ordre d'écriture permet de les neutraliser. */
+@media (max-width: 820px) {
+  /* Le zoom global fausse la hauteur de page sur mobile : d'où la grande zone vide. */
+  .vd-page { zoom: 1 !important; }
+
+  /* Une seule colonne, sans grille : plus aucune piste ne peut écraser une carte. */
+  .verif-3col { display: block !important; grid-template-columns: none !important; }
+  .verif-3col > * {
+    width: 100% !important; grid-column: auto !important; order: 0 !important;
+    height: auto !important; max-height: none !important; overflow: visible !important;
+    margin: 0 0 10px !important; align-self: auto !important;
+  }
+  .verif-3col > .v3-col { display: flex !important; flex-direction: column !important; gap: 10px !important; }
+
+  /* Le tableau central défile horizontalement au lieu d'être comprimé. */
+  .verif-3col > .v3-mid { display: block !important; overflow-x: auto !important; }
+  .v3-mid-scroll { overflow: visible !important; max-height: none !important; min-height: 0 !important; }
+  .v3-mid table.mini { min-width: 620px; table-layout: auto !important; }
+  .v3-mid table.mini th, .v3-mid table.mini td { white-space: nowrap !important; overflow: visible !important; text-overflow: clip !important; }
+
+  /* Les en-têtes collants se superposent quand la page défile en entier. */
+  .v3-mid .card-title { position: static !important; }
+  .v3-mid table.mini thead th { position: static !important; }
+  .cell-verif, .th-verif { position: static !important; box-shadow: none !important; }
+
+  /* Graphiques : hauteur imposée par les règles bureau, illisible sur 6 cm de large. */
+  .v3-col :deep(.ch), .v3-col :deep(.line-ch), .v3-col :deep(.lch-svg) { height: 130px !important; }
+  .charts-row { grid-template-columns: 1fr !important; }
+}
 </style>
