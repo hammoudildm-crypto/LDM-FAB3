@@ -573,11 +573,14 @@ async function devalider(l) {
    ce qui creusait un vide entre les deux graphes. */
 .verif-3col { display: grid; gap: 8px; grid-template-columns: 0.85fr 1.7fr 0.7fr; align-items: stretch;
   grid-template-areas: "left att side";
-  grid-auto-rows: max(300px, calc(100vh - 620px)); }
+  /* Hauteur de rangée calée sur la colonne de gauche : deux cartes de graphe empilées.
+     Valeur fixe et non dépendante de la fenêtre, pour que l'alignement soit stable. */
+  grid-auto-rows: 400px; }
 .z-left { grid-area: left; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
 .z-left > .card { margin: 0; min-width: 0; }
 /* Les graphes se partagent la hauteur de la colonne. */
-.z-graph1, .z-graph2 { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.z-graph1, .z-graph2 { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.z-graph1 :deep(.mc), .z-graph2 :deep(.mc) { flex: 1 1 auto; min-height: 0; }
 .z-attente { grid-area: att; min-width: 0; min-height: 0; }
 /* Objectif et Taux dans une même zone : Taux se place juste sous Objectif,
    sans subir la hauteur de la colonne des graphes. */
@@ -607,9 +610,9 @@ async function devalider(l) {
    propre conteneur défilant. Aucune contrainte de hauteur sur la grille ni sur les cartes :
    une hauteur imposée au conteneur fait déborder le contenu et chevaucher la section suivante. */
 @media (min-width: 821px) {
-  .z-graph1 :deep(.ch), .z-graph2 :deep(.ch) { height: 76px; padding-top: 12px; }
-  .z-graph1 :deep(.line-ch), .z-graph2 :deep(.line-ch) { height: 76px; overflow: hidden; }
-  .z-graph1 :deep(.lch-svg), .z-graph2 :deep(.lch-svg) { height: 76px; }
+  .z-graph1 :deep(.ch), .z-graph2 :deep(.ch) { height: 132px; padding-top: 16px; }
+  .z-graph1 :deep(.line-ch), .z-graph2 :deep(.line-ch) { height: 132px; overflow: hidden; }
+  .z-graph1 :deep(.lch-svg), .z-graph2 :deep(.lch-svg) { height: 132px; }
   /* Le conteneur défile, la carte garde sa hauteur naturelle. */
   .z-verifies-scroll { max-height: 165px; overflow-y: auto; }
   .z-verifies-scroll::-webkit-scrollbar { width: 7px; }
@@ -677,6 +680,8 @@ async function devalider(l) {
 .prog-nom { font-size: 13px; font-weight: 600; color: #1b2733; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
 .prog-pct { font-size: 13px; font-weight: 700; color: #0f766e; flex-shrink: 0; }
 .bar-track { height: 10px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+/* Liste des vérificateurs : barre plus fine pour faire tenir les 8 sans défilement. */
+.z-taux .bar-track { height: 6px; }
 .bar-fill { height: 100%; border-radius: 999px; min-width: 2px; }
 .bar-fill.prod { background: #0f766e; }
 .bar-fill.ok { background: #16a34a; }
