@@ -172,6 +172,34 @@ const verifParMois = computed(() => {
 
 const nbVerifies = computed(() => verifies.value.length)
 const nbAttente = computed(() => attente.value.length)
+// Répartition des DDL en attente. Mêmes définitions que le BRFT plus haut :
+// « en triage » = en_triage sans date de fin, « déviation » = drapeau de l'OF.
+function enTriageDdl(l) { return !!l.en_triage && !l.triage_fin }
+function enDeviationDdl(l) { return !!l.deviation }
+const repartitionAttente = computed(() => {
+  let propres = 0, triage = 0, deviation = 0, deux = 0
+  for (const l of attente.value) {
+    const t = enTriageDdl(l), d = enDeviationDdl(l)
+    if (t) triage++
+    if (d) deviation++
+    if (t && d) deux++
+    if (!t && !d) propres++
+  }
+  return { propres, triage, deviation, deux }
+})
+// Filtre optionnel : null = tout, sinon 'propres' | 'triage' | 'deviation'
+const filtreAttente = ref(null)
+function basculerFiltreAttente(v) { filtreAttente.value = filtreAttente.value === v ? null : v }
+const attenteFiltree = computed(() => {
+  const f = filtreAttente.value
+  if (!f) return attente.value
+  return attente.value.filter(l => {
+    const t = enTriageDdl(l), d = enDeviationDdl(l)
+    if (f === 'triage') return t
+    if (f === 'deviation') return d
+    return !t && !d
+  })
+})
 const taux = computed(() => {
   const tot = nbVerifies.value + nbAttente.value
   return tot > 0 ? (nbVerifies.value / tot) * 100 : null
@@ -403,12 +431,22 @@ async function devalider(l) {
 
       <section class="card v3-mid">
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
+        <div class="att-rep">
+          <button type="button" class="ar-chip ar-ok" :class="{ on: filtreAttente === 'propres' }" @click="basculerFiltreAttente('propres')" title="Ni triage en cours, ni déviation — cliquer pour filtrer">
+            <b>{{ repartitionAttente.propres }}</b> sans triage ni déviation</button>
+          <button type="button" class="ar-chip ar-tri" :class="{ on: filtreAttente === 'triage' }" @click="basculerFiltreAttente('triage')" title="Triage en cours (en_triage sans date de fin) — cliquer pour filtrer">
+            <b>{{ repartitionAttente.triage }}</b> avec triage</button>
+          <button type="button" class="ar-chip ar-dev" :class="{ on: filtreAttente === 'deviation' }" @click="basculerFiltreAttente('deviation')" title="Déviation fabrication déclarée — cliquer pour filtrer">
+            <b>{{ repartitionAttente.deviation }}</b> avec déviation</button>
+          <span v-if="repartitionAttente.deux" class="ar-note">dont {{ repartitionAttente.deux }} cumulant les deux</span>
+        </div>
         <div class="v3-mid-scroll">
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
+        <div v-else-if="!attenteFiltree.length" class="empty">Aucun DDL dans cette catégorie.</div>
         <table v-else class="mini">
           <thead><tr><th class="th-verif" style="width:62px"></th><th style="width:58px">Lot</th><th>Produit</th><th style="width:90px">Réserver</th><th class="right" style="width:74px">Fin fab.</th><th class="right" style="width:50px">Attente</th></tr></thead>
           <tbody>
-            <template v-for="l in attente" :key="l.id">
+            <template v-for="l in attenteFiltree" :key="l.id">
               <tr :class="{ 'ddl-triage': triageIds.has(l.id) }">
                 <td class="cell-verif"><button v-if="peutEditer" class="btn-verif" @click="ouvrir(l)">Vérifier</button></td>
                 <td class="mono">{{ l.numero_lot }}</td>
@@ -733,6 +771,16 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 
 /* Colonnes de même hauteur : bas aligné */
 .verif-3col > .v3-col > .card:last-child { flex: 1 1 auto; }
+/* Répartition des DDL en attente */
+.att-rep { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 7px; margin: 0 0 7px; }
+.ar-chip { border: 1px solid #e2e8f0; background: #fff; border-radius: 999px; padding: 2px 9px; font: inherit; font-size: 10.5px; font-weight: 600; color: #475569; cursor: pointer; white-space: nowrap; }
+.ar-chip b { font-size: 12px; font-weight: 800; }
+.ar-chip:hover { border-color: #cbd5e1; background: #f8fafc; }
+.ar-chip.on { box-shadow: inset 0 0 0 1px currentColor; }
+.ar-ok { color: #15803d; border-color: #bbf7d0; }
+.ar-tri { color: #b45309; border-color: #fde68a; }
+.ar-dev { color: #b91c1c; border-color: #fecaca; }
+.ar-note { font-size: 10px; color: #94a3b8; font-weight: 600; }
 /* Lots en cours de triage (fabrication) */
 tr.ddl-triage td { background: #fef3c7; }
 tr.ddl-triage .mono::after { content: ' 🔍 triage'; color: #b45309; font-size: .6em; font-weight: 700; white-space: nowrap; }
