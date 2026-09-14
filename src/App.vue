@@ -605,6 +605,8 @@ h2 { font-size: 17px !important; }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--accent-bright); outline-offset: 2px; border-radius: 5px;
 }
+/* Téléphone : la marge de 22 px de chaque côté ampute plus de 10 % de la largeur utile. */
+@media (max-width: 820px) { main { padding: 10px 8px !important; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 .online-box { border: 1px solid var(--topbar-border); border-radius: 8px; padding: 8px 10px; }
 .online-head { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--topbar-text); margin-bottom: 6px; }
