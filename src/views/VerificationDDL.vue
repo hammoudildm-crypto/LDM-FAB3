@@ -913,6 +913,26 @@ tr.ddl-triage .cell-verif { background: #fffbeb; }
   .v3-mid table.mini thead th { position: static !important; }
   .cell-verif, .th-verif { position: static !important; box-shadow: none !important; }
 
+  /* Cartes resserrées : sur 6 cm de large, chaque pixel de marge compte. */
+  .vd-page :deep(.card), .verif-3col .card { padding: 9px 10px !important; border-radius: 10px !important; }
+  .card-title { font-size: 12px !important; margin-bottom: 6px !important; }
+
+  /* Bandeau de chiffres : en flex, les six items partaient en escalier.
+     Une grille de trois colonnes les range proprement. */
+  .plan-ddl-top .pddl-top-row { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 8px 6px !important; }
+  .plan-ddl-top .pddl-top-item { gap: 0 !important; min-width: 0 !important; }
+  .plan-ddl-top .pddl-top-item .pddl-val { font-size: 15px !important; }
+  .plan-ddl-top .pddl-lbl { font-size: 9.5px !important; }
+  .plan-ddl-top .pddl-top-bar { grid-column: 1 / -1 !important; min-width: 0 !important; }
+
+  /* Répartition des DDL en attente : une pastille par ligne serait illisible,
+     on les laisse s'enrouler mais sans déborder. */
+  .att-rep { gap: 4px !important; }
+  .ar-chip { font-size: 10px !important; padding: 2px 8px !important; }
+
+  /* Liste des vérificateurs : nom et taux sur la même ligne, barre en dessous. */
+  .v3-right table, .v3-right .card { max-width: 100% !important; }
+
   /* Graphiques : hauteur prévue pour une colonne étroite de bureau. */
   .v3-col :deep(.ch), .v3-col :deep(.line-ch), .v3-col :deep(.lch-svg) { height: 130px !important; }
   .charts-row { grid-template-columns: 1fr !important; }
