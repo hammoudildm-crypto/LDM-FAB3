@@ -479,7 +479,7 @@ async function devalider(l) {
       </section>
     </div>
 
-    <section class="card span2 z-verifies" style="margin-top: 22px">
+    <section class="card span2 z-verifies" style="margin-top: 12px">
       <div class="hist-head">
         <h3 class="card-title">DDL vérifiés</h3>
         <span class="hist-count">{{ verifiesFiltres.length }}</span>
@@ -562,7 +562,7 @@ async function devalider(l) {
    Les cartes sont des enfants DIRECTS de .verif-3col, sans colonne intermédiaire.
    Le placement bureau passe par grid-template-areas, l'ordre du DOM étant celui
    voulu sur téléphone. Plus aucun order ni display:contents à maintenir. */
-.verif-3col { display: grid; gap: 14px; grid-template-columns: 0.85fr 1.7fr 0.7fr; align-items: start;
+.verif-3col { display: grid; gap: 10px; grid-template-columns: 0.85fr 1.7fr 0.7fr; align-items: start;
   grid-template-areas: "g1 att obj" "g2 att taux"; }
 .z-graph1 { grid-area: g1; }
 .z-graph2 { grid-area: g2; }
@@ -571,7 +571,7 @@ async function devalider(l) {
 .z-taux { grid-area: taux; }
 .verif-3col > .card { margin: 0; min-width: 0; }
 /* La liste centrale défile seule ; les autres cartes suivent la page. */
-.z-attente { display: flex; flex-direction: column; max-height: calc(100vh - 210px); overflow: hidden; }
+.z-attente { display: flex; flex-direction: column; max-height: calc(100vh - 168px); overflow: hidden; }
 .z-attente .card-title { flex: 0 0 auto; }
 .v3-mid-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
 .v3-mid-scroll::-webkit-scrollbar { width: 7px; }
@@ -581,6 +581,15 @@ async function devalider(l) {
 /* Tablette : deux colonnes, la liste passe pleine largeur. */
 @media (max-width: 1200px) {
   .verif-3col { grid-template-columns: 1fr 1fr; grid-template-areas: "obj taux" "att att" "g1 g2"; }
+}
+
+/* Bureau : compaction d'ensemble. Remplace l'ancien zoom global, qui faussait
+   la hauteur de défilement sur mobile et les calculs en vh. */
+@media (min-width: 821px) {
+  .vd-page { font-size: 13px; }
+  .vd-page :deep(h1) { font-size: 19px !important; }
+  .prog-nom, .prog-pct { font-size: 11.5px; }
+  .hint { margin: -4px 0 8px; font-size: 11px; }
 }
 
 /* Téléphone : empilement simple, dans l'ordre du DOM. */
@@ -598,25 +607,25 @@ async function devalider(l) {
   .card-title { font-size: 12px; }
 }
 .vd-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
-.vd-head h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
+.vd-head h1 { margin: 0; font-size: 19px; letter-spacing: -0.01em; }
 .sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
 .annee-sel { display: flex; flex-direction: column; font-size: 11px; font-weight: 600; color: #64748b; gap: 4px; text-transform: uppercase; letter-spacing: .03em; }
-.annee-sel select { font-size: 14px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 600; color: #1b2733; min-width: 110px; }
+.annee-sel select { font-size: 13px; padding: 5px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 600; color: #1b2733; min-width: 110px; }
 
-.alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
+.alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 6px 10px; border-radius: 8px; font-size: 12.5px; margin: 0 0 8px; }
 
 .kpi-grid { display: grid; gap: 14px; margin-bottom: 22px; }
 .kpi-grid.k3 { grid-template-columns: repeat(3, 1fr); }
-.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
-.kpi-val { font-size: 23px; font-weight: 700; letter-spacing: -0.02em; }
+.kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 9px 11px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.kpi-val { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
 .kpi-val.accent { color: #0f766e; }
 .kpi-val.warn { color: #b45309; }
-.kpi-lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
+.kpi-lbl { font-size: 10.5px; color: #64748b; margin-top: 2px; }
 
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
-.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 10px 12px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card.span2 { grid-column: 1 / -1; }
-.card-title { margin: 0 0 14px; font-size: 16px; }
+.card-title { margin: 0 0 7px; font-size: 13px; }
 
 .prog-row { margin-bottom: 13px; }
 .prog-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 5px; }
@@ -640,7 +649,7 @@ table.mini td { padding: 4px 5px; border-bottom: 1px solid #eef2f6; }
 .nowrap { white-space: nowrap; }
 .empty { color: #94a3b8; font-style: italic; font-size: 13px; }
 
-.btn { display: inline-block; background: #0f766e; color: #fff; border: 0; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.btn { display: inline-block; background: #0f766e; color: #fff; border: 0; padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .btn:hover { background: #0c5f59; }
 .btn.sm { padding: 7px 14px; font-size: 13px; }
 .link { background: none; border: 0; color: #0f766e; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 6px; }
@@ -648,7 +657,7 @@ table.mini td { padding: 4px 5px; border-bottom: 1px solid #eef2f6; }
 .link.danger { color: #b91c1c; }
 
 .verif-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
-.verif-form input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
+.verif-form input { font-size: 13px; padding: 5px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
 .verif-form input[list] { min-width: 230px; }
 
 @media (max-width: 900px) {
@@ -656,16 +665,16 @@ table.mini td { padding: 4px 5px; border-bottom: 1px solid #eef2f6; }
   .cols { grid-template-columns: 1fr; }
   .card.span2 { grid-column: auto; }
 }
-.verif-form select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 230px; }
+.verif-form select { font-size: 13px; padding: 5px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 230px; }
 .hist-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .hist-head .card-title { margin: 0; }
 .hist-count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
 .hist-tools { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.hist-search { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 220px; }
+.hist-search { font-size: 12px; padding: 5px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 220px; }
 .hist-search:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .dlab { font-size: 12px; color: #64748b; display: inline-flex; align-items: center; gap: 5px; }
 .dlab input { font-size: 13px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
-.hist-exp { font-size: 13px; padding: 7px 12px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.hist-exp { font-size: 12px; padding: 5px 10px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .hist-exp:hover { background: #ecfdf5; }
 .hist-exp:disabled { opacity: .45; cursor: not-allowed; }
 .sup-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
