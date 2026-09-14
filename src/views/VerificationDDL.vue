@@ -566,19 +566,20 @@ async function devalider(l) {
    Les cartes sont des enfants DIRECTS de .verif-3col, sans colonne intermédiaire.
    Le placement bureau passe par grid-template-areas, l'ordre du DOM étant celui
    voulu sur téléphone. Plus aucun order ni display:contents à maintenir. */
-.verif-3col { display: grid; gap: 10px; grid-template-columns: 0.85fr 1.7fr 0.7fr; align-items: start;
+.verif-3col { display: grid; gap: 8px; grid-template-columns: 0.85fr 1.7fr 0.7fr; align-items: start;
   grid-template-areas: "g1 att side" "g2 att side"; }
 .z-graph1 { grid-area: g1; }
 .z-graph2 { grid-area: g2; }
 .z-attente { grid-area: att; min-width: 0; }
 /* Objectif et Taux dans une même zone : Taux se place juste sous Objectif,
    sans subir la hauteur de la colonne des graphes. */
-.z-side { grid-area: side; display: flex; flex-direction: column; gap: 10px; min-width: 0; align-self: start; }
+.z-side { grid-area: side; display: flex; flex-direction: column; gap: 8px; min-width: 0; align-self: start; }
 .z-side > .card { margin: 0; min-width: 0; }
 .z-taux { min-height: 0; }
 .verif-3col > .card { margin: 0; min-width: 0; }
 /* La liste centrale défile seule ; les autres cartes suivent la page. */
-.z-attente { display: flex; flex-direction: column; max-height: calc(100vh - 168px); overflow: hidden; }
+/* max() : garde une liste utilisable sur un portable peu haut. */
+.z-attente { display: flex; flex-direction: column; max-height: max(280px, calc(100vh - 640px)); overflow: hidden; }
 .z-attente .card-title { flex: 0 0 auto; }
 .v3-mid-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
 .v3-mid-scroll::-webkit-scrollbar { width: 7px; }
@@ -596,11 +597,11 @@ async function devalider(l) {
    propre conteneur défilant. Aucune contrainte de hauteur sur la grille ni sur les cartes :
    une hauteur imposée au conteneur fait déborder le contenu et chevaucher la section suivante. */
 @media (min-width: 821px) {
-  .z-graph1 :deep(.ch), .z-graph2 :deep(.ch) { height: 108px; padding-top: 16px; }
-  .z-graph1 :deep(.line-ch), .z-graph2 :deep(.line-ch) { height: 108px; overflow: hidden; }
-  .z-graph1 :deep(.lch-svg), .z-graph2 :deep(.lch-svg) { height: 108px; }
+  .z-graph1 :deep(.ch), .z-graph2 :deep(.ch) { height: 84px; padding-top: 14px; }
+  .z-graph1 :deep(.line-ch), .z-graph2 :deep(.line-ch) { height: 84px; overflow: hidden; }
+  .z-graph1 :deep(.lch-svg), .z-graph2 :deep(.lch-svg) { height: 84px; }
   /* Le conteneur défile, la carte garde sa hauteur naturelle. */
-  .z-verifies-scroll { max-height: 260px; overflow-y: auto; }
+  .z-verifies-scroll { max-height: 200px; overflow-y: auto; }
   .z-verifies-scroll::-webkit-scrollbar { width: 7px; }
   .z-verifies-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 }
@@ -612,6 +613,12 @@ async function devalider(l) {
   .vd-page :deep(h1) { font-size: 19px !important; }
   .prog-nom, .prog-pct { font-size: 11.5px; }
   .hint { margin: -4px 0 8px; font-size: 11px; }
+  /* Le sélecteur de style occupe 30 px par graphe : on le resserre. */
+  .z-graph1 :deep(.ch-switch), .z-graph2 :deep(.ch-switch) { margin-bottom: 3px; }
+  .z-graph1 :deep(.ch-switch button), .z-graph2 :deep(.ch-switch button) { font-size: 10px; padding: 2px 8px; }
+  .z-graph1 :deep(.ch-switch-spacer), .z-graph2 :deep(.ch-switch-spacer) { height: 22px; margin-bottom: 3px; }
+  .att-rep { margin-bottom: 5px; }
+  .z-verifies .hist-head { margin-bottom: 5px; }
 }
 
 /* Téléphone : empilement simple, dans l'ordre du DOM. */
@@ -630,7 +637,7 @@ async function devalider(l) {
   .card-title { font-size: 12px; }
 }
 .vd-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
-.vd-head h1 { margin: 0; font-size: 19px; letter-spacing: -0.01em; }
+.vd-head h1 { margin: 0; font-size: 17px; letter-spacing: -0.01em; }
 .sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
 .annee-sel { display: flex; flex-direction: column; font-size: 11px; font-weight: 600; color: #64748b; gap: 4px; text-transform: uppercase; letter-spacing: .03em; }
 .annee-sel select { font-size: 13px; padding: 5px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 600; color: #1b2733; min-width: 110px; }
@@ -640,15 +647,15 @@ async function devalider(l) {
 .kpi-grid { display: grid; gap: 14px; margin-bottom: 22px; }
 .kpi-grid.k3 { grid-template-columns: repeat(3, 1fr); }
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 9px 11px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
-.kpi-val { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.kpi-val { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
 .kpi-val.accent { color: #0f766e; }
 .kpi-val.warn { color: #b45309; }
 .kpi-lbl { font-size: 10.5px; color: #64748b; margin-top: 2px; }
 
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
-.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 10px 12px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 7px 10px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card.span2 { grid-column: 1 / -1; }
-.card-title { margin: 0 0 7px; font-size: 13px; }
+.card-title { margin: 0 0 5px; font-size: 12px; }
 
 .prog-row { margin-bottom: 13px; }
 .prog-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 5px; }
