@@ -566,20 +566,26 @@ async function devalider(l) {
    Les cartes sont des enfants DIRECTS de .verif-3col, sans colonne intermédiaire.
    Le placement bureau passe par grid-template-areas, l'ordre du DOM étant celui
    voulu sur téléphone. Plus aucun order ni display:contents à maintenir. */
-.verif-3col { display: grid; gap: 8px; grid-template-columns: 0.85fr 1.7fr 0.7fr; align-items: start;
-  grid-template-areas: "g1 att side" "g2 att side"; }
-.z-graph1 { grid-area: g1; }
-.z-graph2 { grid-area: g2; }
-.z-attente { grid-area: att; min-width: 0; }
+/* Une seule rangée, trois colonnes de hauteur identique. Avec deux rangées, les cartes
+   de gauche et de droite se calaient sur des rangées dictées par la liste centrale,
+   ce qui creusait un vide entre les deux graphes. */
+.verif-3col { display: grid; gap: 8px; grid-template-columns: 0.85fr 1.7fr 0.7fr; align-items: stretch;
+  grid-template-areas: "left att side";
+  grid-auto-rows: max(300px, calc(100vh - 620px)); }
+.z-left { grid-area: left; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.z-left > .card { margin: 0; min-width: 0; }
+/* Les graphes se partagent la hauteur de la colonne. */
+.z-graph1, .z-graph2 { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.z-attente { grid-area: att; min-width: 0; min-height: 0; }
 /* Objectif et Taux dans une même zone : Taux se place juste sous Objectif,
    sans subir la hauteur de la colonne des graphes. */
-.z-side { grid-area: side; display: flex; flex-direction: column; gap: 8px; min-width: 0; align-self: start; }
+.z-side { grid-area: side; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
 .z-side > .card { margin: 0; min-width: 0; }
-.z-taux { min-height: 0; }
+/* Le tableau des vérificateurs occupe le reste de la colonne et défile chez lui. */
+.z-taux { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .verif-3col > .card { margin: 0; min-width: 0; }
 /* La liste centrale défile seule ; les autres cartes suivent la page. */
-/* max() : garde une liste utilisable sur un portable peu haut. */
-.z-attente { display: flex; flex-direction: column; max-height: max(280px, calc(100vh - 640px)); overflow: hidden; }
+.z-attente { display: flex; flex-direction: column; overflow: hidden; }
 .z-attente .card-title { flex: 0 0 auto; }
 .v3-mid-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
 .v3-mid-scroll::-webkit-scrollbar { width: 7px; }
@@ -588,7 +594,9 @@ async function devalider(l) {
 
 /* Tablette : deux colonnes, la liste passe pleine largeur. */
 @media (max-width: 1200px) {
-  .verif-3col { grid-template-columns: 1fr 1fr; grid-template-areas: "side side" "att att" "g1 g2"; }
+  .verif-3col { grid-template-columns: 1fr 1fr; grid-template-areas: "side side" "att att" "left left"; grid-auto-rows: auto; }
+  .z-left { flex-direction: row; }
+  .z-left > .card { flex: 1 1 0; }
   .z-side { flex-direction: row; align-items: start; }
   .z-side > .card { flex: 1 1 0; }
 }
@@ -597,11 +605,11 @@ async function devalider(l) {
    propre conteneur défilant. Aucune contrainte de hauteur sur la grille ni sur les cartes :
    une hauteur imposée au conteneur fait déborder le contenu et chevaucher la section suivante. */
 @media (min-width: 821px) {
-  .z-graph1 :deep(.ch), .z-graph2 :deep(.ch) { height: 84px; padding-top: 14px; }
-  .z-graph1 :deep(.line-ch), .z-graph2 :deep(.line-ch) { height: 84px; overflow: hidden; }
-  .z-graph1 :deep(.lch-svg), .z-graph2 :deep(.lch-svg) { height: 84px; }
+  .z-graph1 :deep(.ch), .z-graph2 :deep(.ch) { height: 76px; padding-top: 12px; }
+  .z-graph1 :deep(.line-ch), .z-graph2 :deep(.line-ch) { height: 76px; overflow: hidden; }
+  .z-graph1 :deep(.lch-svg), .z-graph2 :deep(.lch-svg) { height: 76px; }
   /* Le conteneur défile, la carte garde sa hauteur naturelle. */
-  .z-verifies-scroll { max-height: 200px; overflow-y: auto; }
+  .z-verifies-scroll { max-height: 165px; overflow-y: auto; }
   .z-verifies-scroll::-webkit-scrollbar { width: 7px; }
   .z-verifies-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 }
@@ -624,7 +632,9 @@ async function devalider(l) {
 /* Téléphone : empilement simple, dans l'ordre du DOM. */
 @media (max-width: 820px) {
   .verif-3col { display: block; }
-  .verif-3col > .card, .z-side > .card { width: 100%; margin: 0 0 10px; }
+  .verif-3col > .card, .z-side > .card, .z-left > .card { width: 100%; margin: 0 0 10px; }
+  .z-left { display: block; }
+  .z-taux { overflow: visible; }
   .z-side { display: block; }
   .z-attente { display: block; max-height: none; overflow-x: auto; }
   .v3-mid-scroll { overflow: visible; max-height: none; }
@@ -653,9 +663,12 @@ async function devalider(l) {
 .kpi-lbl { font-size: 10.5px; color: #64748b; margin-top: 2px; }
 
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
-.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 7px 10px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 6px 9px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card.span2 { grid-column: 1 / -1; }
-.card-title { margin: 0 0 5px; font-size: 12px; }
+/* Taille UNIQUE pour tous les titres de carte. Trois redéfinitions successives plus bas
+   ramenaient la valeur à 10 px, sauf pour la carte centrale forcée à 12 px en !important :
+   d'où des titres de tailles différentes d'une colonne à l'autre. */
+.card-title { margin: 0 0 5px; font-size: 12px; line-height: 1.25; }
 
 .prog-row { margin-bottom: 13px; }
 .prog-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 5px; }
@@ -743,7 +756,6 @@ table.mini td { padding: 4px 5px; border-bottom: 1px solid #eef2f6; }
 .kpi-val { font-size: 15px; }
 .kpi-lbl { font-size: 9.5px; margin-top: 2px; }
 .card { padding: 9px 11px; }
-.card-title { font-size: 12px; margin: 0 0 8px; }
 .prog-nom, .prog-pct { font-size: 11px; }
 .prog-row { margin-bottom: 8px; }
 .hint { font-size: 10px; margin: -4px 0 8px; }
@@ -766,7 +778,6 @@ table.mini td { padding: 3px 5px; }
 .pddl-bar-head { display: flex; justify-content: space-between; font-size: 10px; color: #64748b; margin-bottom: 3px; font-weight: 600; }
 /* Réduction pour tout visualiser */
 .card { padding: 7px 9px; }
-.card-title { font-size: 11px; margin: 0 0 6px; }
 .hint { font-size: 9px; margin: -3px 0 6px; }
 .pddl-val { font-size: 12px; }
 .pddl-lbl { font-size: 10px; }
@@ -787,7 +798,6 @@ table.mini td { padding: 2px 4px; }
 .v3-mid .card-title { position: sticky; top: 0; background: #fff; z-index: 2; padding-bottom: 4px; }
 /* Réduction forte pour visualiser toutes les cartes */
 .card { padding: 5px 7px; }
-.card-title { font-size: 10px; margin: 0 0 4px; }
 .hint { font-size: 8px; margin: -2px 0 4px; }
 table.mini td { padding: 1px 4px; font-size: 9px; }
 table.mini th { font-size: 8px; padding: 2px 4px; }
@@ -891,10 +901,10 @@ table.mini tbody tr:hover td { background: #faf9fe; }
 
 
 /* Titre de la carte centrale : visible en entier (non rogné par le scroll) */
-.v3-mid .card-title { position: sticky; top: 0; z-index: 3; background: #fff; margin: 0 0 6px !important; padding: 8px 6px 6px !important; font-size: 12px !important; line-height: 1.2 !important; border-bottom: 1px solid #eef0f4; }
+.v3-mid .card-title { position: sticky; top: 0; z-index: 3; background: #fff; margin: 0 0 6px !important; padding: 8px 6px 6px !important; line-height: 1.25 !important; border-bottom: 1px solid #eef0f4; }
 
 /* Empilement titre + en-tête tableau (pas de superposition) */
-.v3-mid .card-title { position: sticky !important; top: 0 !important; z-index: 6 !important; background: #fff !important; margin: 0 !important; padding: 8px 6px 6px !important; font-size: 12px !important; line-height: 1.2 !important; }
+.v3-mid .card-title { position: sticky !important; top: 0 !important; z-index: 6 !important; background: #fff !important; margin: 0 !important; padding: 5px 6px 4px !important; line-height: 1.25 !important; }
 .v3-mid table.mini { border-collapse: separate; border-spacing: 0; }
 .v3-mid table.mini thead th { position: sticky !important; top: 30px !important; z-index: 5 !important; background: #f6f7fb !important; }
 
