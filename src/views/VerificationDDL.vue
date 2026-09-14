@@ -351,8 +351,8 @@ async function devalider(l) {
 <template>
   <div class="vd-page">
     <PageHeader title="Vérification des dossiers de lot" tone="violet">
-      <label class="annee-sel">Année
-        <select v-model.number="anneeSel">
+      <label class="annee-sel" title="Année">
+        <select v-model.number="anneeSel" aria-label="Année">
           <option :value="0">Toutes</option>
           <option v-for="a in ANNEES" :key="a" :value="a">{{ a }}</option>
         </select>
@@ -654,7 +654,7 @@ async function devalider(l) {
 .vd-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
 .vd-head h1 { margin: 0; font-size: 17px; letter-spacing: -0.01em; }
 .sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
-.annee-sel { display: flex; flex-direction: column; font-size: 11px; font-weight: 600; color: #64748b; gap: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.annee-sel { display: flex; align-items: center; }
 .annee-sel select { font-size: 13px; padding: 5px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 600; color: #1b2733; min-width: 110px; }
 
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 6px 10px; border-radius: 8px; font-size: 12.5px; margin: 0 0 8px; }
