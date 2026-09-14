@@ -378,22 +378,19 @@ async function devalider(l) {
     </section>
 
     <div class="verif-3col">
-      <div class="v3-col">
-      <section class="card">
+      <section class="card z-graph1">
         <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
         <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
         <p v-if="!verifParMois.some(v => v)" class="empty">Aucun DDL vérifié<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
       </section>
-      <section class="card">
+      <section class="card z-graph2">
         <h3 class="card-title">Dossiers en attente de vérification par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
         <MiniChart :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :clickable="true" @pick="ouvrirMois" :series="[{ label: 'En attente', color: '#d97706', data: attenteParMois }]" />
         <p class="chart-hint-vd">Clique sur une barre pour voir les dossiers en attente ce mois-là.</p>
         <p v-if="!attenteParMois.some(v => v)" class="empty">Aucun DDL en attente<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
       </section>
-      </div>
 
-      <div class="v3-col v3-right">
-      <section class="card plan-ddl">
+      <section class="card plan-ddl z-objectif">
         <h3 class="card-title">Objectif du mois — {{ MOIS[moisCourant - 1] }}</h3>
         <p class="hint">DDL à vérifier ce mois (PDP)</p>
         <div class="pddl-grid">
@@ -405,7 +402,7 @@ async function devalider(l) {
           <div class="bar-track"><div class="bar-fill" :class="tauxMois >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxMois) + '%' }"></div></div>
         </div>
       </section>
-      <section class="card">
+      <section class="card z-taux">
         <div class="sup-head">
           <h3 class="card-title">Taux de vérification par vérificateur</h3>
           <div class="sup-filtre">
@@ -427,9 +424,8 @@ async function devalider(l) {
           <div class="bar-track"><div class="bar-fill" :class="s.taux >= 100 ? 'ok' : 'part'" :style="{ width: s.taux + '%' }"></div></div>
         </div>
       </section>
-      </div>
 
-      <section class="card v3-mid">
+      <section class="card v3-mid z-attente">
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
         <div class="att-rep">
           <button type="button" class="ar-chip ar-ok" :class="{ on: filtreAttente === 'propres' }" @click="basculerFiltreAttente('propres')" title="Ni triage en cours, ni déviation — cliquer pour filtrer">
@@ -483,7 +479,7 @@ async function devalider(l) {
       </section>
     </div>
 
-    <section class="card span2" style="margin-top: 22px">
+    <section class="card span2 z-verifies" style="margin-top: 22px">
       <div class="hist-head">
         <h3 class="card-title">DDL vérifiés</h3>
         <span class="hist-count">{{ verifiesFiltres.length }}</span>
@@ -561,6 +557,46 @@ async function devalider(l) {
 
 <style scoped>
 .vd-page { color: #1b2733; }
+
+/* ============ DISPOSITION ============
+   Les cartes sont des enfants DIRECTS de .verif-3col, sans colonne intermédiaire.
+   Le placement bureau passe par grid-template-areas, l'ordre du DOM étant celui
+   voulu sur téléphone. Plus aucun order ni display:contents à maintenir. */
+.verif-3col { display: grid; gap: 14px; grid-template-columns: 0.85fr 1.7fr 0.7fr; align-items: start;
+  grid-template-areas: "g1 att obj" "g2 att taux"; }
+.z-graph1 { grid-area: g1; }
+.z-graph2 { grid-area: g2; }
+.z-attente { grid-area: att; min-width: 0; }
+.z-objectif { grid-area: obj; }
+.z-taux { grid-area: taux; }
+.verif-3col > .card { margin: 0; min-width: 0; }
+/* La liste centrale défile seule ; les autres cartes suivent la page. */
+.z-attente { display: flex; flex-direction: column; max-height: calc(100vh - 210px); overflow: hidden; }
+.z-attente .card-title { flex: 0 0 auto; }
+.v3-mid-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+.v3-mid-scroll::-webkit-scrollbar { width: 7px; }
+.v3-mid-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.z-attente table.mini thead th { position: sticky; top: 0; z-index: 2; background: #f6f7fb; }
+
+/* Tablette : deux colonnes, la liste passe pleine largeur. */
+@media (max-width: 1200px) {
+  .verif-3col { grid-template-columns: 1fr 1fr; grid-template-areas: "obj taux" "att att" "g1 g2"; }
+}
+
+/* Téléphone : empilement simple, dans l'ordre du DOM. */
+@media (max-width: 820px) {
+  .verif-3col { display: block; }
+  .verif-3col > .card { width: 100%; margin: 0 0 10px; }
+  .z-attente { display: block; max-height: none; overflow-x: auto; }
+  .v3-mid-scroll { overflow: visible; max-height: none; }
+  .z-attente table.mini { min-width: 600px; }
+  .z-attente table.mini thead th { position: static; }
+  .cell-verif, .th-verif { position: static; box-shadow: none; }
+  .plan-ddl-top .pddl-top-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 6px; }
+  .plan-ddl-top .pddl-top-bar { grid-column: 1 / -1; min-width: 0; }
+  .verif-3col .card, .span2 { padding: 9px 10px; }
+  .card-title { font-size: 12px; }
+}
 .vd-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
 .vd-head h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
 .sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
@@ -659,12 +695,7 @@ table.mini td { padding: 4px 5px; border-bottom: 1px solid #eef2f6; }
 .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
 .charts-row > .card { margin: 0; }
 @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
-.verif-3col { display: grid; grid-template-columns: 0.8fr 1.7fr 0.65fr; gap: 14px; align-items: stretch; }
-.verif-3col > .v3-col { display: flex; flex-direction: column; gap: 14px; order: 1; align-self: stretch; margin-top: 0; }
-.verif-3col > .v3-mid { order: 2; margin: 0; align-self: stretch; margin-top: 0; }
-.verif-3col > .v3-right { order: 3; margin: 0; align-self: stretch; margin-top: 0; }
-.verif-3col > * > .card:first-child, .verif-3col > .v3-mid.card { margin-top: 0; }
-@media (max-width: 1100px) { .verif-3col { grid-template-columns: 1fr; } .verif-3col > * { order: 0 !important; } }
+
 /* Compact */
 .vd-head h1 { font-size: 15px; }
 .sub { display: none; }
@@ -707,8 +738,6 @@ table.mini td { padding: 3px 5px; }
 table.mini { font-size: 10px; }
 table.mini th { font-size: 8.5px; padding: 3px 4px; }
 table.mini td { padding: 2px 4px; }
-.verif-3col { gap: 10px; }
-.verif-3col > .v3-col { gap: 10px; }
 .bar-track { height: 6px; }
 .btn.sm { padding: 4px 9px; font-size: 10px; }
 .verif-form input, .verif-form select { font-size: 11px; padding: 4px 7px; }
@@ -716,11 +745,7 @@ table.mini td { padding: 2px 4px; }
 .chart-hint-vd { font-size: 9px; margin: 4px 0 0; }
 .card-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Colonnes bornées en hauteur + défilement interne pour tout voir */
-.v3-mid { max-height: calc(100vh - 120px); overflow-y: auto; }
 .v3-mid .card-title { position: sticky; top: 0; background: #fff; z-index: 2; padding-bottom: 4px; }
-.verif-3col > .v3-col { max-height: calc(100vh - 120px); overflow-y: auto; }
-.verif-3col > .v3-col::-webkit-scrollbar, .v3-mid::-webkit-scrollbar { width: 7px; }
-.verif-3col > .v3-col::-webkit-scrollbar-thumb, .v3-mid::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 /* Réduction forte pour visualiser toutes les cartes */
 .card { padding: 5px 7px; }
 .card-title { font-size: 10px; margin: 0 0 4px; }
@@ -732,18 +757,9 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .pddl-val { font-size: 11px; }
 .pddl-lbl { font-size: 9px; }
 .pddl-bar-head { font-size: 8px; }
-.verif-3col { gap: 8px; }
-.verif-3col > .v3-col { gap: 8px; }
 .chart-hint-vd { font-size: 8px; }
 /* Graphes compacts (aires + barres) */
-.v3-col :deep(.ch) { height: 95px !important; padding-top: 12px !important; }
-.v3-col :deep(.line-ch) { height: 95px !important; overflow: hidden; }
-.v3-col :deep(.lch-svg) { height: 95px !important; width: 100% !important; }
-.v3-col :deep(.ch-switch) { margin-bottom: 3px !important; }
-.v3-col :deep(.ch-switch button) { font-size: 9px !important; padding: 2px 7px !important; }
 /* Colonne gauche plus étroite + titres minimisés */
-.verif-3col { grid-template-columns: 0.72fr 1.3fr 1fr !important; }
-.v3-col .card-title, .v3-mid .card-title { font-size: 10px !important; margin-bottom: 4px !important; line-height: 1.2 !important; }
 /* Colonne centrale : tableau pleine largeur, sans défilement horizontal */
 .v3-mid table.mini { table-layout: fixed; width: 100%; }
 .v3-mid table.mini th, .v3-mid table.mini td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -755,7 +771,6 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .v3-mid .resv-sel { width: 100%; max-width: 100%; }
 .v3-mid .verif-form td { white-space: normal; overflow: visible; }
 /* Colonne droite plus étroite */
-.verif-3col { grid-template-columns: 0.72fr 1.45fr 0.83fr !important; }
 .plan-ddl-top { margin-bottom: 10px; }
 .plan-ddl-top .pddl-top-row { display: flex; align-items: flex-start; gap: 22px; flex-wrap: wrap; }
 .plan-ddl-top .pddl-top-item { display: flex; flex-direction: column; gap: 2px; }
@@ -763,14 +778,10 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .plan-ddl-top .pddl-top-bar { flex: 1; min-width: 220px; }
 .pddl-src { font-size: 9px; color: #94a3b8; font-weight: 500; }
 /* 3 colonnes alignées en bas (même hauteur) */
-.verif-3col { align-items: stretch !important; }
-.verif-3col > .v3-col, .verif-3col > .v3-mid { height: calc(100vh - 240px) !important; max-height: calc(100vh - 240px) !important; overflow-y: auto; }
 /* Colonne de droite : pas de barre de défilement propre, elle se déroule avec la page.
    Placé APRÈS la règle ci-dessus : même spécificité, c'est l'ordre qui tranche. */
-.verif-3col > .v3-right { height: auto !important; max-height: none !important; overflow-y: visible !important; align-self: start !important; }
 
 /* Colonnes de même hauteur : bas aligné */
-.verif-3col > .v3-col > .card:last-child { flex: 1 1 auto; }
 /* Répartition des DDL en attente */
 .att-rep { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 7px; margin: 0 0 7px; }
 .ar-chip { border: 1px solid #e2e8f0; background: #fff; border-radius: 999px; padding: 2px 9px; font: inherit; font-size: 10.5px; font-weight: 600; color: #475569; cursor: pointer; white-space: nowrap; }
@@ -836,19 +847,11 @@ table.mini tbody tr:hover td { background: #faf9fe; }
 
 
 /* Mise en page : centrale élargie, latérales équilibrées */
-.verif-3col { grid-template-columns: 0.72fr 1.95fr 0.72fr !important; gap: 12px !important; }
 
 /* Placement explicite des 3 colonnes (robuste, corrige la table centrale) */
-.verif-3col > .v3-col:first-child { grid-column: 1 !important; }
-.verif-3col > .v3-mid { grid-column: 2 !important; }
-.verif-3col > .v3-right { grid-column: 3 !important; }
-@media (max-width: 1100px) {
-  .verif-3col { grid-template-columns: 1fr !important; }
-  .verif-3col > * { grid-column: auto !important; order: 0 !important; height: auto !important; max-height: none !important; }
-}
+
 
 /* Titre de la carte centrale : visible en entier (non rogné par le scroll) */
-.v3-mid { padding-top: 0 !important; }
 .v3-mid .card-title { position: sticky; top: 0; z-index: 3; background: #fff; margin: 0 0 6px !important; padding: 8px 6px 6px !important; font-size: 12px !important; line-height: 1.2 !important; border-bottom: 1px solid #eef0f4; }
 
 /* Empilement titre + en-tête tableau (pas de superposition) */
@@ -857,7 +860,6 @@ table.mini tbody tr:hover td { background: #faf9fe; }
 .v3-mid table.mini thead th { position: sticky !important; top: 30px !important; z-index: 5 !important; background: #f6f7fb !important; }
 
 /* Titre fixe hors défilement + liste scrollable (robuste) */
-.v3-mid { display: flex !important; flex-direction: column !important; overflow: hidden !important; }
 .v3-mid .card-title { flex: 0 0 auto !important; position: static !important; margin: 0 0 6px !important; }
 .v3-mid-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
 .v3-mid-scroll::-webkit-scrollbar { width: 7px; }
@@ -876,65 +878,6 @@ table.mini tbody tr:hover td { background: #faf9fe; }
 tr.ddl-triage .cell-verif { background: #fffbeb; }
 .btn-verif { border: 1px solid #0f766e; background: #0f766e; color: #fff; font: inherit; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
 .btn-verif:hover { background: #0d5c55; }
-.vd-page { zoom: 0.82; }
 
-/* ===================== AFFICHAGE TÉLÉPHONE =====================
-   Placé en dernier : plusieurs règles plus haut portent !important, seul
-   l'ordre d'écriture permet de les neutraliser. */
-@media (max-width: 820px) {
-  /* Le zoom global fausse la hauteur de page sur mobile : d'où la grande zone vide. */
-  .vd-page { zoom: 1 !important; }
 
-  /* Colonne unique en flex : permet de réordonner les cartes une par une. */
-  .verif-3col { display: flex !important; flex-direction: column !important; grid-template-columns: none !important; gap: 10px !important; }
-  .verif-3col > * { width: 100% !important; grid-column: auto !important; height: auto !important; max-height: none !important; overflow: visible !important; margin: 0 !important; align-self: auto !important; }
-
-  /* Les colonnes disparaissent comme boîtes : leurs cartes deviennent des éléments
-     directs du flux, donc ordonnables individuellement. */
-  .verif-3col > .v3-col { display: contents !important; }
-  .verif-3col > .v3-col > .card { width: 100% !important; margin: 0 !important; height: auto !important; max-height: none !important; }
-
-  /* Ordre pensé pour le téléphone : les chiffres du mois, puis le travail à faire,
-     puis les suivis, et les graphiques en dernier. */
-  .v3-right > .plan-ddl { order: 1 !important; }
-  .verif-3col > .v3-mid { order: 2 !important; }
-  .v3-right > .card:nth-child(2) { order: 3 !important; }
-  .verif-3col > .card.span2 { order: 4 !important; }
-  .v3-col:not(.v3-right) > .card { order: 5 !important; }
-
-  /* Le tableau central défile horizontalement au lieu d'être comprimé. */
-  .verif-3col > .v3-mid { display: block !important; overflow-x: auto !important; }
-  .v3-mid-scroll { overflow: visible !important; max-height: none !important; min-height: 0 !important; }
-  .v3-mid table.mini { min-width: 620px; table-layout: auto !important; }
-  .v3-mid table.mini th, .v3-mid table.mini td { white-space: nowrap !important; overflow: visible !important; text-overflow: clip !important; }
-
-  /* Les en-têtes collants se superposent quand la page défile en entier. */
-  .v3-mid .card-title { position: static !important; }
-  .v3-mid table.mini thead th { position: static !important; }
-  .cell-verif, .th-verif { position: static !important; box-shadow: none !important; }
-
-  /* Cartes resserrées : sur 6 cm de large, chaque pixel de marge compte. */
-  .vd-page :deep(.card), .verif-3col .card { padding: 9px 10px !important; border-radius: 10px !important; }
-  .card-title { font-size: 12px !important; margin-bottom: 6px !important; }
-
-  /* Bandeau de chiffres : en flex, les six items partaient en escalier.
-     Une grille de trois colonnes les range proprement. */
-  .plan-ddl-top .pddl-top-row { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 8px 6px !important; }
-  .plan-ddl-top .pddl-top-item { gap: 0 !important; min-width: 0 !important; }
-  .plan-ddl-top .pddl-top-item .pddl-val { font-size: 15px !important; }
-  .plan-ddl-top .pddl-lbl { font-size: 9.5px !important; }
-  .plan-ddl-top .pddl-top-bar { grid-column: 1 / -1 !important; min-width: 0 !important; }
-
-  /* Répartition des DDL en attente : une pastille par ligne serait illisible,
-     on les laisse s'enrouler mais sans déborder. */
-  .att-rep { gap: 4px !important; }
-  .ar-chip { font-size: 10px !important; padding: 2px 8px !important; }
-
-  /* Liste des vérificateurs : nom et taux sur la même ligne, barre en dessous. */
-  .v3-right table, .v3-right .card { max-width: 100% !important; }
-
-  /* Graphiques : hauteur prévue pour une colonne étroite de bureau. */
-  .v3-col :deep(.ch), .v3-col :deep(.line-ch), .v3-col :deep(.lch-svg) { height: 130px !important; }
-  .charts-row { grid-template-columns: 1fr !important; }
-}
 </style>
