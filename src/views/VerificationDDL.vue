@@ -585,19 +585,18 @@ async function devalider(l) {
   .verif-3col { grid-template-columns: 1fr 1fr; grid-template-areas: "obj taux" "att att" "g1 g2"; }
 }
 
-/* Bureau : la page tient dans une hauteur d'écran. Chaque zone a une hauteur bornée
-   et défile chez elle, la page elle-même ne s'allonge plus. */
+/* Bureau : on raccourcit la page en bornant les DEUX LISTES longues, chacune dans son
+   propre conteneur défilant. Aucune contrainte de hauteur sur la grille ni sur les cartes :
+   une hauteur imposée au conteneur fait déborder le contenu et chevaucher la section suivante. */
 @media (min-width: 821px) {
-  .verif-3col { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); max-height: calc(100vh - 300px); }
-  .verif-3col > .card { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-  .z-graph1 :deep(.ch), .z-graph2 :deep(.ch) { height: 108px !important; padding-top: 16px !important; }
-  .z-graph1 :deep(.line-ch), .z-graph2 :deep(.line-ch) { height: 108px !important; overflow: hidden; }
-  .z-graph1 :deep(.lch-svg), .z-graph2 :deep(.lch-svg) { height: 108px !important; }
-  .z-taux { overflow-y: auto; }
-  .z-verifies { max-height: 220px; display: flex; flex-direction: column; }
-  .z-verifies .hist-head { flex: 0 0 auto; }
-  .z-verifies > div:last-child, .z-verifies table { min-height: 0; }
-  .z-verifies-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+  .z-graph1 :deep(.ch), .z-graph2 :deep(.ch) { height: 108px; padding-top: 16px; }
+  .z-graph1 :deep(.line-ch), .z-graph2 :deep(.line-ch) { height: 108px; overflow: hidden; }
+  .z-graph1 :deep(.lch-svg), .z-graph2 :deep(.lch-svg) { height: 108px; }
+  /* Le conteneur défile, la carte garde sa hauteur naturelle. */
+  .z-verifies-scroll { max-height: 260px; overflow-y: auto; }
+  .z-verifies-scroll::-webkit-scrollbar { width: 7px; }
+  .z-verifies-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+}
 }
 
 /* Bureau : compaction d'ensemble. Remplace l'ancien zoom global, qui faussait
