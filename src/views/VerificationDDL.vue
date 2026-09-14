@@ -837,14 +837,22 @@ tr.ddl-triage .cell-verif { background: #fffbeb; }
   /* Le zoom global fausse la hauteur de page sur mobile : d'où la grande zone vide. */
   .vd-page { zoom: 1 !important; }
 
-  /* Une seule colonne, sans grille : plus aucune piste ne peut écraser une carte. */
-  .verif-3col { display: block !important; grid-template-columns: none !important; }
-  .verif-3col > * {
-    width: 100% !important; grid-column: auto !important; order: 0 !important;
-    height: auto !important; max-height: none !important; overflow: visible !important;
-    margin: 0 0 10px !important; align-self: auto !important;
-  }
-  .verif-3col > .v3-col { display: flex !important; flex-direction: column !important; gap: 10px !important; }
+  /* Colonne unique en flex : permet de réordonner les cartes une par une. */
+  .verif-3col { display: flex !important; flex-direction: column !important; grid-template-columns: none !important; gap: 10px !important; }
+  .verif-3col > * { width: 100% !important; grid-column: auto !important; height: auto !important; max-height: none !important; overflow: visible !important; margin: 0 !important; align-self: auto !important; }
+
+  /* Les colonnes disparaissent comme boîtes : leurs cartes deviennent des éléments
+     directs du flux, donc ordonnables individuellement. */
+  .verif-3col > .v3-col { display: contents !important; }
+  .verif-3col > .v3-col > .card { width: 100% !important; margin: 0 !important; height: auto !important; max-height: none !important; }
+
+  /* Ordre pensé pour le téléphone : les chiffres du mois, puis le travail à faire,
+     puis les suivis, et les graphiques en dernier. */
+  .v3-right > .plan-ddl { order: 1 !important; }
+  .verif-3col > .v3-mid { order: 2 !important; }
+  .v3-right > .card:nth-child(2) { order: 3 !important; }
+  .verif-3col > .card.span2 { order: 4 !important; }
+  .v3-col:not(.v3-right) > .card { order: 5 !important; }
 
   /* Le tableau central défile horizontalement au lieu d'être comprimé. */
   .verif-3col > .v3-mid { display: block !important; overflow-x: auto !important; }
@@ -857,7 +865,7 @@ tr.ddl-triage .cell-verif { background: #fffbeb; }
   .v3-mid table.mini thead th { position: static !important; }
   .cell-verif, .th-verif { position: static !important; box-shadow: none !important; }
 
-  /* Graphiques : hauteur imposée par les règles bureau, illisible sur 6 cm de large. */
+  /* Graphiques : hauteur prévue pour une colonne étroite de bureau. */
   .v3-col :deep(.ch), .v3-col :deep(.line-ch), .v3-col :deep(.lch-svg) { height: 130px !important; }
   .charts-row { grid-template-columns: 1fr !important; }
 }
