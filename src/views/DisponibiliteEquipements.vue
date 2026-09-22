@@ -749,6 +749,56 @@ const triagesClos = computed(() => {
     }
   }).sort((a, b) => String(b.fin).localeCompare(String(a.fin)))
 })
+// ===== Synthèse du triage par produit =====
+// Population : les OF dont la fabrication s'est terminée dans l'année (hors Rejeté),
+// qu'ils aient été triés ou non. C'est le dénominateur qui donne un sens au taux.
+const vueSynthese = ref(false)
+const anneeSynth = ref(anneeCourante)
+const anneesTriage = computed(() => {
+  const set = new Set([anneeCourante])
+  for (const o of ofs.value) if (o.date_fin_fabrication) set.add(new Date(o.date_fin_fabrication).getFullYear())
+  return [...set].sort((a, b) => b - a)
+})
+const syntheseProduits = computed(() => {
+  const an = anneeSynth.value
+  const m = {}
+  for (const o of ofs.value) {
+    if (o.statut === 'Rejeté') continue
+    if (!o.date_fin_fabrication) continue
+    if (new Date(o.date_fin_fabrication).getFullYear() !== an) continue
+    const pr = o.produits || {}
+    const k = pr.code_pf || '—'
+    if (!m[k]) m[k] = { code: k, desig: pr.designation || '', lots: 0, boites: 0, lotsTri: 0, boitesTri: 0, kg: 0, durees: [] }
+    const e = m[k]
+    const b = Number(o.boites_fabriquees) || Number(o.quantite_theorique) || 0
+    e.lots++; e.boites += b
+    if (o.en_triage) {
+      e.lotsTri++; e.boitesTri += b
+      e.kg += Number(o.qte_triee) || 0
+      const d = joursEntre(o.triage_debut, o.triage_fin)
+      if (d != null) e.durees.push(d)
+    }
+  }
+  return Object.values(m).filter(e => e.lotsTri > 0).map(e => ({
+    ...e,
+    kg: Math.round(e.kg * 100) / 100,
+    tauxLots: e.lots ? Math.round(e.lotsTri / e.lots * 1000) / 10 : 0,
+    tauxBoites: e.boites ? Math.round(e.boitesTri / e.boites * 1000) / 10 : 0,
+    duree: e.durees.length ? Math.round(e.durees.reduce((a, b) => a + b, 0) / e.durees.length * 10) / 10 : null
+  })).sort((a, b) => b.lotsTri - a.lotsTri || b.tauxLots - a.tauxLots)
+})
+const syntheseTotaux = computed(() => {
+  const r = syntheseProduits.value
+  const t = r.reduce((a, e) => ({
+    lots: a.lots + e.lots, boites: a.boites + e.boites,
+    lotsTri: a.lotsTri + e.lotsTri, boitesTri: a.boitesTri + e.boitesTri, kg: a.kg + e.kg
+  }), { lots: 0, boites: 0, lotsTri: 0, boitesTri: 0, kg: 0 })
+  return {
+    ...t, kg: Math.round(t.kg * 100) / 100, produits: r.length,
+    tauxLots: t.lots ? Math.round(t.lotsTri / t.lots * 1000) / 10 : 0,
+    tauxBoites: t.boites ? Math.round(t.boitesTri / t.boites * 1000) / 10 : 0
+  }
+})
 const histoTotaux = computed(() => {
   const r = triagesClos.value
   const durees = r.map(x => x.duree).filter(d => d != null)
@@ -1228,9 +1278,41 @@ onMounted(async () => {
         <section v-if="triagesClos.length" class="histo-box">
           <div class="triage-head">
             <h3 class="histo-h">📜 Historique des triages ({{ histoTotaux.n }})</h3>
-            <span class="histo-res">{{ fmt(histoTotaux.kg) }} Kg triés<span v-if="histoTotaux.duree != null"> · {{ histoTotaux.duree }} j de durée moyenne</span></span>
+            <div class="histo-act">
+              <span class="histo-res">{{ fmt(histoTotaux.kg) }} Kg triés<span v-if="histoTotaux.duree != null"> · {{ histoTotaux.duree }} j de durée moyenne</span></span>
+              <select v-if="vueSynthese" v-model.number="anneeSynth" class="histo-an"><option v-for="a in anneesTriage" :key="a" :value="a">{{ a }}</option></select>
+              <button type="button" class="histo-bascule" @click="vueSynthese = !vueSynthese">{{ vueSynthese ? "Par lot" : "Par produit" }}</button>
+            </div>
           </div>
-          <table class="histo-tbl">
+          <table v-if="vueSynthese" class="histo-tbl synth-tbl">
+            <thead><tr><th>Produit</th><th class="tnum">Lots fabriqués</th><th class="tnum">Lots triés</th><th class="tnum">Taux (lots)</th><th class="tnum">Boîtes fabriquées</th><th class="tnum">Taux (boîtes)</th><th class="tnum">Kg triés</th><th class="tnum">Durée moy.</th></tr></thead>
+            <tbody>
+              <tr v-for="e in syntheseProduits" :key="e.code">
+                <td class="q-at">{{ e.code }}<span v-if="e.desig" class="hdesig"> — {{ e.desig }}</span></td>
+                <td class="tnum">{{ fmt(e.lots) }}</td>
+                <td class="tnum strong">{{ fmt(e.lotsTri) }}<span v-if="e.lotsTri > 1" class="synth-rec" title="Triage récurrent sur ce produit">↻</span></td>
+                <td class="tnum" :class="{ ko: e.tauxLots >= 25 }">{{ e.tauxLots }} %</td>
+                <td class="tnum">{{ fmt(e.boites) }}</td>
+                <td class="tnum" :class="{ ko: e.tauxBoites >= 25 }">{{ e.tauxBoites }} %</td>
+                <td class="tnum">{{ fmt(e.kg) }}</td>
+                <td class="tnum">{{ e.duree == null ? "—" : e.duree + " j" }}</td>
+              </tr>
+              <tr v-if="!syntheseProduits.length"><td colspan="8" class="hd-vide">Aucun lot trié sur {{ anneeSynth }}.</td></tr>
+            </tbody>
+            <tfoot v-if="syntheseProduits.length">
+              <tr class="q-tot">
+                <td class="q-at">{{ syntheseTotaux.produits }} produit(s)</td>
+                <td class="tnum">{{ fmt(syntheseTotaux.lots) }}</td>
+                <td class="tnum">{{ fmt(syntheseTotaux.lotsTri) }}</td>
+                <td class="tnum">{{ syntheseTotaux.tauxLots }} %</td>
+                <td class="tnum">{{ fmt(syntheseTotaux.boites) }}</td>
+                <td class="tnum">{{ syntheseTotaux.tauxBoites }} %</td>
+                <td class="tnum">{{ fmt(syntheseTotaux.kg) }}</td>
+                <td class="tnum">—</td>
+              </tr>
+            </tfoot>
+          </table>
+          <table v-else class="histo-tbl">
             <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th>Début</th><th>Fin</th><th class="tnum">Durée</th><th class="tnum">À trier</th><th class="tnum">Triée</th><th class="tnum">Sacs</th></tr></thead>
             <tbody>
               <template v-for="h in triagesClos" :key="h.id">
@@ -1664,6 +1746,13 @@ onMounted(async () => {
 .histo-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; margin: 14px 0 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .histo-h { margin: 0; font-size: 14px; font-weight: 800; color: #0f172a; }
 .histo-res { font-size: 11px; font-weight: 700; color: #64748b; white-space: nowrap; }
+.histo-act { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.histo-an { font-size: 11px; font-weight: 700; padding: 2px 6px; border: 1px solid #e2e8f0; border-radius: 7px; background: #fff; color: #334155; }
+.histo-bascule { border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca; border-radius: 999px; padding: 3px 12px; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.histo-bascule:hover { background: #e0e7ff; }
+.synth-tbl .strong { font-weight: 800; }
+.synth-tbl .ko { color: #b91c1c; font-weight: 800; }
+.synth-rec { margin-left: 4px; font-size: 11px; color: #b45309; }
 .histo-tbl { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
 .histo-tbl th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .02em; color: #94a3b8; font-weight: 800; padding: 4px 7px; border-bottom: 1px solid #e2e8f0; }
 .histo-tbl td { padding: 4px 7px; border-bottom: 1px solid #f1f5f9; color: #1e293b; white-space: nowrap; }
