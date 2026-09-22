@@ -29,7 +29,7 @@
           <div class="batch b2"></div>
         </div>
         <div class="stations">
-          <div v-for="(g, i) in flux" :key="g.label" class="station" :class="{ open: selected === i }" :style="{ '--c': g.c }">
+          <div v-for="(g, i) in fluxVisible" :key="g.label" class="station" :class="{ open: selected === i }" :style="{ '--c': g.c }">
             <button class="st-node" @click="toggle(i)" :title="g.label">
               <span class="st-badge">{{ i + 1 }}</span>
               <svg viewBox="0 0 24 24" v-html="g.icon"></svg>
@@ -59,7 +59,7 @@
     <div class="grid-wrap">
       <div class="hint">Chaîne de production &middot; {{ flux.length }} modules &middot; toutes les pages accessibles</div>
       <div class="grid">
-        <section v-for="(g, i) in flux" :key="g.label" class="mod" :style="{ '--c': g.c }">
+        <section v-for="(g, i) in fluxVisible" :key="g.label" class="mod" :style="{ '--c': g.c }">
           <div class="mod-top">
             <span class="mod-ic"><svg viewBox="0 0 24 24" v-html="g.icon"></svg></span>
             <div class="mod-titles">
@@ -90,7 +90,7 @@
     <div class="flow-wrap">
       <div class="hint">Flux de production &middot; de la configuration au pilotage</div>
       <ol class="flow">
-        <li v-for="(g, i) in flux" :key="g.label" class="step" :class="{ last: i === flux.length - 1 }" :style="{ '--c': g.c }">
+        <li v-for="(g, i) in fluxVisible" :key="g.label" class="step" :class="{ last: i === fluxVisible.length - 1 }" :style="{ '--c': g.c }">
           <div class="step-rail">
             <span class="step-num">{{ i + 1 }}</span>
           </div>
@@ -121,7 +121,7 @@
     <div class="bento-wrap">
       <div class="hint">Tableau de bord des modules &middot; {{ totalPages }} pages</div>
       <div class="bento">
-        <section v-for="(g, i) in flux" :key="g.label" class="tile" :class="'span-' + (g.links.length >= 7 ? 2 : 1)" :style="{ '--c': g.c }">
+        <section v-for="(g, i) in fluxVisible" :key="g.label" class="tile" :class="'span-' + (g.links.length >= 7 ? 2 : 1)" :style="{ '--c': g.c }">
           <div class="tile-head">
             <span class="tile-ic"><svg viewBox="0 0 24 24" v-html="g.icon"></svg></span>
             <div class="tile-tt">
@@ -142,7 +142,7 @@
       <div class="side-brand"><span class="ph-mark">▸</span>ProdTrack</div>
       <div class="side-sub">Chaîne de production</div>
       <nav class="side-nav">
-        <button v-for="(g, i) in flux" :key="g.label" class="side-item" :class="{ on: selected === i }" :style="{ '--c': g.c }" @click="selected = i">
+        <button v-for="(g, i) in fluxVisible" :key="g.label" class="side-item" :class="{ on: selected === i }" :style="{ '--c': g.c }" @click="selected = i">
           <span class="side-ic"><svg viewBox="0 0 24 24" v-html="g.icon"></svg></span>
           <span class="side-txt">{{ g.label }}</span>
           <span class="side-n">{{ g.links.length }}</span>
@@ -178,7 +178,7 @@
     </header>
 
     <div class="hero-wrap">
-      <section v-for="(g, i) in flux" :key="g.label" class="hero" :style="{ '--c': g.c }">
+      <section v-for="(g, i) in fluxVisible" :key="g.label" class="hero" :style="{ '--c': g.c }">
         <div class="hero-left">
           <span class="hero-num">{{ String(i + 1).padStart(2, '0') }}</span>
           <span class="hero-ic"><svg viewBox="0 0 24 24" v-html="g.icon"></svg></span>
@@ -202,7 +202,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject } from 'vue'
 import { supabase } from '../supabase'
 const authSession = ref(null)
 const authEmail = ref(''), authPassword = ref(''), authErreur = ref(''), authEnCours = ref(false)
@@ -231,8 +231,11 @@ onMounted(() => { maj(); timer = setInterval(maj, 1000) })
 onUnmounted(() => clearInterval(timer))
 
 const S = 'fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'
+// Le rôle vient de App.vue. Les catégories marquées admin ne sont pas listées pour les autres.
+const role = inject('role', null)
+const estAdminHub = computed(() => (role && role.value) === 'admin')
 const flux = [
-  { label: 'Configuration', c: '#64748b',
+  { label: 'Configuration', c: '#64748b', admin: true,
     icon: `<g ${S}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></g>`,
     links: [['/referentiels', 'Référentiels'], ['/cadences', 'Cadences'], ['/habilitations', 'Habilitations'], ['/effectifs', 'Effectifs']] },
   { label: 'Ordonnancement & OF', c: '#6366f1',
@@ -251,6 +254,7 @@ const flux = [
     icon: `<g ${S}><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></g>`,
     links: [['/tableau-de-bord', 'Tableau de bord'], ['/realisation-plan', 'Réalisation vs Plan'], ['/realisation-pdp', 'Réalisation PDP par phase'], ['/pdp-equipement', 'PDP par équipement'], ['/rendement', 'Rendement'], ['/ca', "Chiffre d'affaires"], ['/qse', 'Indicateurs QSE']] }
 ]
+const fluxVisible = computed(() => flux.filter(f => !f.admin || estAdminHub.value))
 const cur = computed(() => flux[selected.value] || flux[0])
 const totalPages = computed(() => flux.reduce((s, g) => s + g.links.length, 0))
 
