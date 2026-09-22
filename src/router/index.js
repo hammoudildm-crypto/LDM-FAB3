@@ -1,3 +1,4 @@
+import { supabase } from '../supabase'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Home from '../views/Home.vue'
 import TableauBord from '../views/TableauBord.vue'
@@ -49,7 +50,7 @@ const routes = [
   { path: '/tableau-de-bord-classique', name: 'tb-classique', component: Home },
   { path: '/accueil', redirect: '/' },
   { path: '/ordonnancement', name: 'ordonnancement', component: Ordonnancement },
-  { path: '/referentiels', name: 'referentiels', component: Referentiels },
+  { path: '/referentiels', name: 'referentiels', component: Referentiels , meta: { role: 'admin' } },
   { path: '/plan', name: 'plan', component: PlanDirecteur },
   { path: '/ordres', name: 'ordres', component: OrdresFabrication },
   { path: '/suivi', name: 'suivi', component: SaisieProduction },
@@ -61,7 +62,7 @@ const routes = [
   { path: '/ca', name: 'ca', component: ChiffreAffaires },
   { path: '/effectifs', name: 'effectifs', component: Effectifs },
   { path: '/audit', name: 'audit', component: JournalAudit },
-  { path: '/habilitations', name: 'habilitations', component: Habilitations },
+  { path: '/habilitations', name: 'habilitations', component: Habilitations , meta: { role: 'admin' } },
   { path: '/verification-ddl', name: 'verification-ddl', component: VerificationDDL },
   { path: '/verification-ddl-cond', name: 'verification-ddl-cond', component: VerificationDDLCond },
   { path: '/verification-ddl-aq', name: 'verification-ddl-aq', component: VerificationDDLAQ },
@@ -74,13 +75,37 @@ const routes = [
   { path: '/capacite', name: 'capacite', component: SuiviCapacite },
   { path: '/equipement', name: 'equipement', component: EquipementDetail },
   { path: '/qse', name: 'qse', component: IndicateursQSE },
-  { path: '/cadences', name: 'cadences', component: Cadences },
+  { path: '/cadences', name: 'cadences', component: Cadences , meta: { role: 'admin' } },
   { path: '/passation', name: 'passation', component: PassationConsigne },
   { path: '/compte', name: 'compte', component: MonCompte },
   { path: '/login', name: 'login', component: Login },
 ]
 
-export default createRouter({
+const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
   routes,
 })
+
+// Masquer un menu ne protège rien : les pages d'administration restent atteignables
+// en tapant l'URL. Ce garde vérifie le rôle avant d'y entrer.
+// Le contrôle qui fait autorité reste les politiques RLS côté Supabase.
+let roleCache = null
+async function roleCourant() {
+  if (roleCache !== null) return roleCache
+  try {
+    const s = await supabase.auth.getSession()
+    const u = s.data && s.data.session ? s.data.session.user : null
+    if (!u) return (roleCache = null)
+    const r = await supabase.from('profils').select('role').eq('user_id', u.id).maybeSingle()
+    roleCache = r.data ? r.data.role : null
+  } catch (e) { roleCache = null }
+  return roleCache
+}
+supabase.auth.onAuthStateChange(() => { roleCache = null })   // re-vérifier après connexion ou déconnexion
+
+router.beforeEach(async (to) => {
+  if (to.meta && to.meta.role === 'admin' && (await roleCourant()) !== 'admin') return { path: '/' }
+  return true
+})
+
+export default router
