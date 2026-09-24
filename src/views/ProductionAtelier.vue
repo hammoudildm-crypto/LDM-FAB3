@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
+import { telechargerXlsx } from '../exportXlsx'
 import PageHeader from '../components/PageHeader.vue'
 import MiniChart from '../components/MiniChart.vue'
 import { ICONS, TINTS } from '../icons.js'
@@ -218,6 +219,37 @@ function seriesAtelier(ph) {
 }
 function totalAtelierAnnee(ph, y) { return ((matriceMultiAn.value[ph] || {})[y] || []).reduce((s, x) => s + x, 0) }
 
+// --- COMPARAISON YTD (cumul à date) -------------------------------
+// Un total annuel complet ne se compare pas à une année en cours. Chaque année est
+// donc cumulée sur la MÊME fenêtre : janvier au mois en cours inclus.
+const moisYtd = moisCourant + 1
+function ytd(ph, y) {
+  const data = (matriceMultiAn.value[ph] || {})[y] || []
+  let t = 0
+  for (let m = 0; m < moisYtd; m++) t += Number(data[m]) || 0
+  return t
+}
+const ytdTable = computed(() => {
+  const lignes = PHASES.map(ph => {
+    const par = {}
+    for (const y of ANNEES_COMP) par[y] = ytd(ph, y)
+    const cur = par[anneeCourante] || 0, prec = par[anneeCourante - 1] || 0
+    return { ph, par, cur, prec, pct: prec > 0 ? Math.round((cur / prec - 1) * 1000) / 10 : null }
+  })
+  const tot = { ph: 'Total', par: {} }
+  for (const y of ANNEES_COMP) tot.par[y] = lignes.reduce((t, l) => t + l.par[y], 0)
+  tot.cur = tot.par[anneeCourante] || 0; tot.prec = tot.par[anneeCourante - 1] || 0
+  tot.pct = tot.prec > 0 ? Math.round((tot.cur / tot.prec - 1) * 1000) / 10 : null
+  // Moyenne des années passées : repère plus stable qu'une seule année de référence
+  const passees = ANNEES_COMP.filter(y => y < anneeCourante)
+  for (const l of [...lignes, tot]) {
+    const v = passees.map(y => l.par[y]).filter(x => x > 0)
+    l.moy = v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null
+    l.pctMoy = l.moy ? Math.round((l.cur / l.moy - 1) * 1000) / 10 : null
+  }
+  return { lignes, tot }
+})
+
 // --- PRÉVISIONNEL DE FIN D'ANNÉE ---------------------------------
 // Méthode : réalisé des mois clôturés, rapporté à l'année entière via le
 // profil saisonnier moyen des années passées. Repli linéaire si pas d'historique.
@@ -403,180 +435,6 @@ const sourceHistPA = computed(() => {
 
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
 
-// ===== Génération .xlsx intégrée (aucune dépendance, aucun fichier externe) =====
-// Écriture d'un vrai fichier .xlsx sans aucune dépendance.
-//
-// Un .xlsx est une archive ZIP contenant du XML. On construit ici l'archive à la main
-// avec des entrées NON compressées (méthode « stored ») : pas besoin de deflate, il suffit
-// d'un CRC32. Le fichier obtenu s'ouvre dans Excel, LibreOffice et Google Sheets sans
-// avertissement de format, contrairement à un CSV renommé ou à un HTML déguisé en .xls.
-
-const enc = new TextEncoder()
-
-const TABLE_CRC = (() => {
-  const t = new Uint32Array(256)
-  for (let n = 0; n < 256; n++) {
-    let c = n
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1
-    t[n] = c >>> 0
-  }
-  return t
-})()
-
-function crc32(octets) {
-  let c = 0xFFFFFFFF
-  for (let i = 0; i < octets.length; i++) c = TABLE_CRC[(c ^ octets[i]) & 0xFF] ^ (c >>> 8)
-  return (c ^ 0xFFFFFFFF) >>> 0
-}
-
-function echapper(v) {
-  return String(v)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    // Excel refuse les caractères de contrôle dans le XML.
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
-}
-
-/** Référence de cellule : (0, 0) -> A1, (0, 26) -> AA1 */
-function refCellule(ligne, col) {
-  let s = ''
-  let n = col
-  do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1 } while (n >= 0)
-  return s + (ligne + 1)
-}
-
-function estNombre(v) {
-  return typeof v === 'number' ? Number.isFinite(v)
-    : typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v.replace(',', '.')))
-}
-
-function feuilleXml(entetes, lignes) {
-  const toutes = [entetes, ...lignes]
-  const largeurs = entetes.map((h, c) => {
-    let max = String(h == null ? '' : h).length
-    for (const l of lignes) { const v = l[c]; const n = String(v == null ? '' : v).length; if (n > max) max = n }
-    return Math.min(46, Math.max(8, max + 2))
-  })
-  const cols = '<cols>' + largeurs.map((w, i) =>
-    `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('') + '</cols>'
-
-  const rows = toutes.map((ligne, r) => {
-    const cellules = ligne.map((v, c) => {
-      const ref = refCellule(r, c)
-      const style = r === 0 ? ' s="1"' : ''
-      if (v == null || v === '') return `<c r="${ref}"${style}/>`
-      if (r > 0 && estNombre(v)) {
-        const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.'))
-        return `<c r="${ref}"${style}><v>${n}</v></c>`
-      }
-      return `<c r="${ref}"${style} t="inlineStr"><is><t xml:space="preserve">${echapper(v)}</t></is></c>`
-    }).join('')
-    return `<row r="${r + 1}">${cellules}</row>`
-  }).join('')
-
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${cols}<sheetData>${rows}</sheetData></worksheet>`
-}
-
-const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>
-<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0F766E"/><bgColor indexed="64"/></patternFill></fill></fills>
-<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
-<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs>
-<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
-</styleSheet>`
-
-function fichiers(nomFeuille, entetes, lignes) {
-  const nf = echapper(String(nomFeuille || 'Feuille1').slice(0, 31).replace(/[\\/?*[\]:]/g, ' '))
-  return [
-    ['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`],
-    ['_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
-    ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${nf}" sheetId="1" r:id="rId1"/></sheets></workbook>`],
-    ['xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
-    ['xl/styles.xml', STYLES],
-    ['xl/worksheets/sheet1.xml', feuilleXml(entetes, lignes)],
-  ]
-}
-
-/** Assemble une archive ZIP à entrées non compressées. */
-function construireXlsx(nomFeuille, entetes, lignes) {
-  const parts = fichiers(nomFeuille, entetes, lignes)
-  const locaux = []
-  const centraux = []
-  let decalage = 0
-
-  for (const [nom, contenu] of parts) {
-    const nomOctets = enc.encode(nom)
-    const data = enc.encode(contenu)
-    const crc = crc32(data)
-
-    const entete = new DataView(new ArrayBuffer(30))
-    entete.setUint32(0, 0x04034b50, true)
-    entete.setUint16(4, 20, true)          // version requise
-    entete.setUint16(6, 0x0800, true)      // noms de fichiers en UTF-8
-    entete.setUint16(8, 0, true)           // méthode 0 = stored
-    entete.setUint16(10, 0, true); entete.setUint16(12, 0, true)   // heure / date
-    entete.setUint32(14, crc, true)
-    entete.setUint32(18, data.length, true)
-    entete.setUint32(22, data.length, true)
-    entete.setUint16(26, nomOctets.length, true)
-    entete.setUint16(28, 0, true)
-    locaux.push(new Uint8Array(entete.buffer), nomOctets, data)
-
-    const central = new DataView(new ArrayBuffer(46))
-    central.setUint32(0, 0x02014b50, true)
-    central.setUint16(4, 20, true); central.setUint16(6, 20, true)
-    central.setUint16(8, 0x0800, true)
-    central.setUint16(10, 0, true)
-    central.setUint16(12, 0, true); central.setUint16(14, 0, true)
-    central.setUint32(16, crc, true)
-    central.setUint32(20, data.length, true)
-    central.setUint32(24, data.length, true)
-    central.setUint16(28, nomOctets.length, true)
-    central.setUint16(30, 0, true); central.setUint16(32, 0, true)
-    central.setUint16(34, 0, true); central.setUint16(36, 0, true)
-    central.setUint32(38, 0, true)
-    central.setUint32(42, decalage, true)
-    centraux.push(new Uint8Array(central.buffer), nomOctets)
-
-    decalage += 30 + nomOctets.length + data.length
-  }
-
-  const tailleCentral = centraux.reduce((n, p) => n + p.length, 0)
-  const fin = new DataView(new ArrayBuffer(22))
-  fin.setUint32(0, 0x06054b50, true)
-  fin.setUint16(4, 0, true); fin.setUint16(6, 0, true)
-  fin.setUint16(8, parts.length, true); fin.setUint16(10, parts.length, true)
-  fin.setUint32(12, tailleCentral, true)
-  fin.setUint32(16, decalage, true)
-  fin.setUint16(20, 0, true)
-
-  const morceaux = [...locaux, ...centraux, new Uint8Array(fin.buffer)]
-  const total = morceaux.reduce((n, p) => n + p.length, 0)
-  const sortie = new Uint8Array(total)
-  let pos = 0
-  for (const p of morceaux) { sortie.set(p, pos); pos += p.length }
-  return sortie
-}
-
-/** Déclenche le téléchargement d'un .xlsx d'une seule feuille. */
-function telechargerXlsx(nomFichier, nomFeuille, entetes, lignes) {
-  const octets = construireXlsx(nomFeuille, entetes, lignes)
-  const blob = new Blob([octets], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = nomFichier.endsWith('.xlsx') ? nomFichier : nomFichier + '.xlsx'
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
 function exporterExcel() {
   const entetes = ['Atelier', ...MOIS, 'Total']
   const lignes = PHASES.map(ph => [ph, ...matrice.value[ph], totalLigne(ph)])
@@ -633,6 +491,34 @@ onMounted(charger)
       </section>
         </div>
       </div>
+
+      <section class="card ytd-card">
+        <div class="card-head">
+          <h2 class="card-title">Cumul à date — janvier à {{ MOIS_LONG[moisCourant].toLowerCase() }}</h2>
+          <span class="ytd-note">Chaque année cumulée sur les {{ moisYtd }} mêmes mois</span>
+        </div>
+        <div class="table-scroll">
+          <table class="ytd-tbl">
+            <thead><tr><th>Atelier</th><th v-for="y in ANNEES_COMP" :key="y" class="ta-r" :class="{ cur: y === anneeCourante }">{{ y }}</th><th class="ta-r">vs {{ anneeCourante - 1 }}</th><th class="ta-r">vs moy. passée</th></tr></thead>
+            <tbody>
+              <tr v-for="l in ytdTable.lignes" :key="l.ph">
+                <td class="ytd-at">{{ l.ph }}</td>
+                <td v-for="y in ANNEES_COMP" :key="y" class="ta-r" :class="{ cur: y === anneeCourante }">{{ fmt(l.par[y]) }}</td>
+                <td class="ta-r" :class="l.pct == null ? '' : (l.pct < 0 ? 'ytd-ko' : 'ytd-ok')">{{ l.pct == null ? "—" : (l.pct > 0 ? "+" : "") + l.pct + " %" }}</td>
+                <td class="ta-r" :class="l.pctMoy == null ? '' : (l.pctMoy < 0 ? 'ytd-ko' : 'ytd-ok')">{{ l.pctMoy == null ? "—" : (l.pctMoy > 0 ? "+" : "") + l.pctMoy + " %" }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="ytd-tot">
+                <td class="ytd-at">Total</td>
+                <td v-for="y in ANNEES_COMP" :key="y" class="ta-r" :class="{ cur: y === anneeCourante }">{{ fmt(ytdTable.tot.par[y]) }}</td>
+                <td class="ta-r" :class="ytdTable.tot.pct == null ? '' : (ytdTable.tot.pct < 0 ? 'ytd-ko' : 'ytd-ok')">{{ ytdTable.tot.pct == null ? "—" : (ytdTable.tot.pct > 0 ? "+" : "") + ytdTable.tot.pct + " %" }}</td>
+                <td class="ta-r" :class="ytdTable.tot.pctMoy == null ? '' : (ytdTable.tot.pctMoy < 0 ? 'ytd-ko' : 'ytd-ok')">{{ ytdTable.tot.pctMoy == null ? "—" : (ytdTable.tot.pctMoy > 0 ? "+" : "") + ytdTable.tot.pctMoy + " %" }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
 
       <div class="pa-row2">
       <section class="card">
@@ -924,4 +810,16 @@ tbody tr:first-child td.mois-actuel-col { box-shadow: inset 2px 0 0 #f59e0b, ins
 .proj-kpi-v { font-size: 19px; font-weight: 800; color: #1e293b; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 .proj-kpi-l { font-size: 10px; color: #64748b; font-weight: 600; margin-top: 2px; }
 .pk-up { color: #15803d; } .pk-warn { color: #b45309; } .pk-down { color: #dc2626; }
+/* Comparaison YTD */
+.ytd-card { margin-bottom: 14px; }
+.ytd-note { font-size: 11px; color: #94a3b8; font-weight: 600; }
+.ytd-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ytd-tbl th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; font-weight: 800; padding: 5px 8px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+.ytd-tbl td { padding: 4px 8px; border-bottom: 1px solid #eef2f6; color: #1e293b; white-space: nowrap; }
+.ytd-tbl .ta-r { text-align: right; }
+.ytd-tbl .ytd-at { font-weight: 600; }
+.ytd-tbl .cur { background: #f0fdfa; font-weight: 800; color: #0f766e; }
+.ytd-tbl .ytd-ok { color: #15803d; font-weight: 800; }
+.ytd-tbl .ytd-ko { color: #dc2626; font-weight: 800; }
+.ytd-tbl .ytd-tot td { border-top: 2px solid #e2e8f0; border-bottom: none; font-weight: 800; background: #f8fafc; }
 </style>
