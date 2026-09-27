@@ -14,7 +14,7 @@
       <button type="button" class="reinit-btn" @click="reinit">↺ Réinitialiser l'organisation</button>
     </div>
     <div class="portail-grid">
-      <article v-for="c in cartes" :key="c.key" class="pcard" :style="{ '--c': c.couleur, '--cd': c.fonce, '--cl': c.clair }">
+      <article v-for="c in cartesVisibles" :key="c.key" class="pcard" :style="{ '--c': c.couleur, '--cd': c.fonce, '--cl': c.clair }">
         <div class="pcard-kpi">
           <div class="kpi-left">
             <span class="kpi-ic" v-html="c.icon"></span>
@@ -38,7 +38,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, inject } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 
@@ -175,6 +175,10 @@ const cartes = computed(() => [
   }
 ])
 
+// La carte Administration ne doit pas être proposée aux non-admins.
+// Le rôle est fourni par App.vue ; le routeur bloque de toute façon l'accès direct.
+const roleAcc = inject('role', null)
+const cartesVisibles = computed(() => cartes.value.filter(c => c.key !== 'admin' || (roleAcc && roleAcc.value) === 'admin'))
 const router = useRouter()
 function aller(p) { router.push(p) }
 
