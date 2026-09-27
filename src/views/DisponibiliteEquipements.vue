@@ -1704,12 +1704,20 @@ onMounted(async () => {
 .searchbar input[type=text] { padding: 4px 8px; font-size: 10.5px; }
 /* Qualité — triage et déviations */
 /* ===== Disposition en 3 colonnes du panneau File ===== */
-.dispo-3col { display: grid; grid-template-columns: 296px minmax(0, 1fr) 430px; gap: 12px; align-items: start; }
+.dispo-3col { display: grid; grid-template-columns: 280px minmax(0, 1fr) 400px; gap: 10px; align-items: start; }
 .d3-left, .d3-right { min-width: 0; position: sticky; top: 8px; }
-.d3-mid { min-width: 0; }
+/* Le centre est borné : sans overflow, les files débordent de leur piste et
+   recouvrent la colonne de droite. */
+.d3-mid { min-width: 0; overflow: hidden; }
+.d3-mid .file-board { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 .d3-left .qual-box, .d3-right .qual-box { margin-bottom: 0; padding: 10px 12px; }
 /* Les tuiles passent sur 2 colonnes : 7 colonnes ne tiennent pas dans 296 px. */
-.d3-left .qual-kpis { grid-template-columns: 1fr 1fr; gap: 7px; }
+/* minmax(0, 1fr) : sans le 0, la piste ne peut pas descendre sous la largeur du
+   contenu et les tuiles débordent de la colonne. */
+.d3-left .qual-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.d3-left .qual-kpis .kpi { min-width: 0; overflow: hidden; }
+.d3-left .qual-kpis .kpi-lbl, .d3-left .qual-kpis .kpi-val { overflow-wrap: anywhere; }
+.d3-left .qual-kpis .kpi-top { min-width: 0; }
 .d3-left .qual-kpis .kpi { padding: 7px 9px; }
 .d3-left .qual-kpis .kpi-val { font-size: 16px; }
 .d3-left .qual-kpis .kpi-lbl { font-size: 9.5px; }
@@ -1719,11 +1727,11 @@ onMounted(async () => {
 .d3-right .qcharge-h { min-width: 130px; }
 /* Colonnes latérales hautes : on cesse de les coller pour ne pas tronquer. */
 @media (max-height: 900px) { .d3-left, .d3-right { position: static; } }
-@media (max-width: 1500px) {
+@media (max-width: 1280px) {
   .dispo-3col { grid-template-columns: 260px minmax(0, 1fr); }
   .d3-right { grid-column: 1 / -1; position: static; }
 }
-@media (max-width: 1080px) {
+@media (max-width: 960px) {
   .dispo-3col { display: block; }
   .d3-left, .d3-mid, .d3-right { position: static; margin-bottom: 12px; }
   .d3-left .qual-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
