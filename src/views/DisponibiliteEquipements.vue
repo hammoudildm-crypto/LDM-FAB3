@@ -1034,93 +1034,28 @@ onMounted(async () => {
 
       <!-- ===================== FILE D'ATTENTE ===================== -->
       <div v-show="ongletDispo === 'file'">
-        <section class="qual-box">
-          <h3 class="qual-h">Charge, triage et déviations par atelier</h3>
-          <p class="qual-sub">File de production</p>
-          <div class="kpi-grid qual-kpis">
-            <div class="kpi" v-for="(k, i) in kpisFile" :key="'f' + i">
-              <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
-              <div class="kpi-lbl">{{ k.l }}</div>
+      <div class="dispo-3col">
+        <aside class="d3-left">
+          <section class="qual-box">
+            <h3 class="qual-h">Charge, triage et déviations par atelier</h3>
+            <p class="qual-sub">File de production</p>
+            <div class="kpi-grid qual-kpis">
+              <div class="kpi" v-for="(k, i) in kpisFile" :key="'f' + i">
+                <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
+                <div class="kpi-lbl">{{ k.l }}</div>
+              </div>
             </div>
-          </div>
-          <p class="qual-sub">Qualité</p>
-          <div class="kpi-grid qual-kpis">
-            <div class="kpi" v-for="(k, i) in kpisQualite" :key="'q' + i">
-              <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
-              <div class="kpi-lbl">{{ k.l }}</div>
+            <p class="qual-sub">Qualité</p>
+            <div class="kpi-grid qual-kpis">
+              <div class="kpi" v-for="(k, i) in kpisQualite" :key="'q' + i">
+                <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
+                <div class="kpi-lbl">{{ k.l }}</div>
+              </div>
             </div>
-          </div>
-          <p class="qual-sub">Détail par atelier</p>
-          <table v-if="qualiteParAtelier.length" class="qual-tbl">
-            <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">Boîtes</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th></tr></thead>
-            <tbody>
-              <template v-for="r in qualiteParAtelier" :key="r.label">
-                <tr>
-                  <td class="q-at">{{ r.label }}</td>
-                  <td>
-                    <div class="q-charge">
-                      <div class="qc-bar"><div class="qc-fill" :style="{ width: r.pct + '%' }"></div></div>
-                      <span class="qc-val">{{ fmt(r.tot) }}<span v-if="r.att" class="qc-att"> · {{ r.att }} att.</span><span v-if="r.enc" class="qc-enc"> · {{ r.enc }} en cours</span></span>
-                    </div>
-                  </td>
-                  <td class="qnum q-bts" :title="fmt(r.btsAtt) + ' bts en attente · ' + fmt(r.btsEnc) + ' bts en cours'">{{ fmt(r.bts) }} <span class="unit">bts</span></td>
-                  <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
-                  <td class="qnum" :class="{ 'q-bad': r.dev > 0, 'q-clic': r.dev > 0 }" @click="toggleDev(r.label, r.dev)" :title="r.dev ? 'Voir les lots en déviation' : ''">
-                    {{ r.dev || '—' }}<span v-if="r.dev" class="q-caret">{{ devOuvert === r.label ? '▾' : '▸' }}</span>
-                  </td>
-                  <td class="qnum" :class="{ 'q-bad': r.pctDev >= 20 }">{{ r.pctDev }}%</td>
-                </tr>
-                <tr v-if="devOuvert === r.label" class="q-detail">
-                  <td colspan="6">
-                    <table class="qd-tbl">
-                      <thead><tr><th>N° lot</th><th>Produit</th><th>Déviation</th></tr></thead>
-                      <tbody>
-                        <tr v-for="l in r.devLots" :key="l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
-                          <td class="qd-lot">{{ l.lot }}</td>
-                          <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
-                          <td>
-                            <span v-if="l.deviation" class="qd-tag qd-fab">Fabrication</span>
-                            <span v-if="l.deviationCond" class="qd-tag qd-cond">Conditionnement</span>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-            <tfoot>
-              <tr class="q-tot">
-                <td class="q-at">Total</td>
-                <td class="qc-tot">{{ fmt(qualiteTotaux.tot) }}<span v-if="qualiteTotaux.att" class="qc-att"> · {{ qualiteTotaux.att }} att.</span><span v-if="qualiteTotaux.enc" class="qc-enc"> · {{ qualiteTotaux.enc }} en cours</span></td>
-                <td class="qnum q-bts">{{ fmt(qualiteTotaux.bts) }} <span class="unit">bts</span></td>
-                <td class="qnum">{{ qualiteTotaux.tri || '—' }}</td>
-                <td class="qnum" :class="{ 'q-clic': qualiteTotaux.dev > 0 }" @click="toggleDev('__tous__', qualiteTotaux.dev)" :title="qualiteTotaux.dev ? 'Voir tous les lots en déviation' : ''">
-                  {{ qualiteTotaux.dev || '—' }}<span v-if="qualiteTotaux.dev" class="q-caret">{{ devOuvert === '__tous__' ? '▾' : '▸' }}</span>
-                </td>
-                <td class="qnum">{{ qualiteTotaux.pctDev }}%</td>
-              </tr>
-              <tr v-if="devOuvert === '__tous__'" class="q-detail">
-                <td colspan="6">
-                  <table class="qd-tbl">
-                    <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier</th><th>Déviation</th></tr></thead>
-                    <tbody>
-                      <tr v-for="l in devLotsTous" :key="l.atelier + '-' + l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
-                        <td class="qd-lot">{{ l.lot }}</td>
-                        <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
-                        <td>{{ l.atelier }}</td>
-                        <td>
-                          <span v-if="l.deviation" class="qd-tag qd-fab">Fabrication</span>
-                          <span v-if="l.deviationCond" class="qd-tag qd-cond">Conditionnement</span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </section>
+          </section>
+        </aside>
+
+        <div class="d3-mid">
         <div class="searchbar">
           <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
           <label class="filtre-chk"><input type="checkbox" v-model="filtreUrgent" /> Urgents (&gt;{{ SEUIL_URGENT }} j)</label>
@@ -1410,6 +1345,83 @@ onMounted(async () => {
             </tbody>
           </table>
         </section>
+        </div>
+
+        <aside class="d3-right">
+          <section class="qual-box">
+            <p class="qual-sub">Détail par atelier</p>
+            <table v-if="qualiteParAtelier.length" class="qual-tbl">
+              <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">Boîtes</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th></tr></thead>
+              <tbody>
+                <template v-for="r in qualiteParAtelier" :key="r.label">
+                  <tr>
+                    <td class="q-at">{{ r.label }}</td>
+                    <td>
+                      <div class="q-charge">
+                        <div class="qc-bar"><div class="qc-fill" :style="{ width: r.pct + '%' }"></div></div>
+                        <span class="qc-val">{{ fmt(r.tot) }}<span v-if="r.att" class="qc-att"> · {{ r.att }} att.</span><span v-if="r.enc" class="qc-enc"> · {{ r.enc }} en cours</span></span>
+                      </div>
+                    </td>
+                    <td class="qnum q-bts" :title="fmt(r.btsAtt) + ' bts en attente · ' + fmt(r.btsEnc) + ' bts en cours'">{{ fmt(r.bts) }} <span class="unit">bts</span></td>
+                    <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
+                    <td class="qnum" :class="{ 'q-bad': r.dev > 0, 'q-clic': r.dev > 0 }" @click="toggleDev(r.label, r.dev)" :title="r.dev ? 'Voir les lots en déviation' : ''">
+                      {{ r.dev || '—' }}<span v-if="r.dev" class="q-caret">{{ devOuvert === r.label ? '▾' : '▸' }}</span>
+                    </td>
+                    <td class="qnum" :class="{ 'q-bad': r.pctDev >= 20 }">{{ r.pctDev }}%</td>
+                  </tr>
+                  <tr v-if="devOuvert === r.label" class="q-detail">
+                    <td colspan="6">
+                      <table class="qd-tbl">
+                        <thead><tr><th>N° lot</th><th>Produit</th><th>Déviation</th></tr></thead>
+                        <tbody>
+                          <tr v-for="l in r.devLots" :key="l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
+                            <td class="qd-lot">{{ l.lot }}</td>
+                            <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
+                            <td>
+                              <span v-if="l.deviation" class="qd-tag qd-fab">Fabrication</span>
+                              <span v-if="l.deviationCond" class="qd-tag qd-cond">Conditionnement</span>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+              <tfoot>
+                <tr class="q-tot">
+                  <td class="q-at">Total</td>
+                  <td class="qc-tot">{{ fmt(qualiteTotaux.tot) }}<span v-if="qualiteTotaux.att" class="qc-att"> · {{ qualiteTotaux.att }} att.</span><span v-if="qualiteTotaux.enc" class="qc-enc"> · {{ qualiteTotaux.enc }} en cours</span></td>
+                  <td class="qnum q-bts">{{ fmt(qualiteTotaux.bts) }} <span class="unit">bts</span></td>
+                  <td class="qnum">{{ qualiteTotaux.tri || '—' }}</td>
+                  <td class="qnum" :class="{ 'q-clic': qualiteTotaux.dev > 0 }" @click="toggleDev('__tous__', qualiteTotaux.dev)" :title="qualiteTotaux.dev ? 'Voir tous les lots en déviation' : ''">
+                    {{ qualiteTotaux.dev || '—' }}<span v-if="qualiteTotaux.dev" class="q-caret">{{ devOuvert === '__tous__' ? '▾' : '▸' }}</span>
+                  </td>
+                  <td class="qnum">{{ qualiteTotaux.pctDev }}%</td>
+                </tr>
+                <tr v-if="devOuvert === '__tous__'" class="q-detail">
+                  <td colspan="6">
+                    <table class="qd-tbl">
+                      <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier</th><th>Déviation</th></tr></thead>
+                      <tbody>
+                        <tr v-for="l in devLotsTous" :key="l.atelier + '-' + l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
+                          <td class="qd-lot">{{ l.lot }}</td>
+                          <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
+                          <td>{{ l.atelier }}</td>
+                          <td>
+                            <span v-if="l.deviation" class="qd-tag qd-fab">Fabrication</span>
+                            <span v-if="l.deviationCond" class="qd-tag qd-cond">Conditionnement</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </section>
+        </aside>
+      </div>
       </div>
 
       <!-- ===================== RÉTROSPECTIVE ===================== -->
@@ -1691,6 +1703,31 @@ onMounted(async () => {
 .at-plan { font-size: 9px; }
 .searchbar input[type=text] { padding: 4px 8px; font-size: 10.5px; }
 /* Qualité — triage et déviations */
+/* ===== Disposition en 3 colonnes du panneau File ===== */
+.dispo-3col { display: grid; grid-template-columns: 296px minmax(0, 1fr) 430px; gap: 12px; align-items: start; }
+.d3-left, .d3-right { min-width: 0; position: sticky; top: 8px; }
+.d3-mid { min-width: 0; }
+.d3-left .qual-box, .d3-right .qual-box { margin-bottom: 0; padding: 10px 12px; }
+/* Les tuiles passent sur 2 colonnes : 7 colonnes ne tiennent pas dans 296 px. */
+.d3-left .qual-kpis { grid-template-columns: 1fr 1fr; gap: 7px; }
+.d3-left .qual-kpis .kpi { padding: 7px 9px; }
+.d3-left .qual-kpis .kpi-val { font-size: 16px; }
+.d3-left .qual-kpis .kpi-lbl { font-size: 9.5px; }
+.d3-right .qual-tbl { font-size: 11.5px; }
+.d3-right .qual-tbl th { font-size: 9.5px; padding: 4px 5px; }
+.d3-right .qual-tbl td { padding: 3px 5px; }
+.d3-right .qcharge-h { min-width: 130px; }
+/* Colonnes latérales hautes : on cesse de les coller pour ne pas tronquer. */
+@media (max-height: 900px) { .d3-left, .d3-right { position: static; } }
+@media (max-width: 1500px) {
+  .dispo-3col { grid-template-columns: 260px minmax(0, 1fr); }
+  .d3-right { grid-column: 1 / -1; position: static; }
+}
+@media (max-width: 1080px) {
+  .dispo-3col { display: block; }
+  .d3-left, .d3-mid, .d3-right { position: static; margin-bottom: 12px; }
+  .d3-left .qual-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+}
 .qual-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .qual-h { margin: 0 0 12px; font-size: 15px; font-weight: 800; color: #0f172a; }
 /* 7 colonnes fixes : les deux bandeaux (File de production et Qualité) s'alignent colonne par
