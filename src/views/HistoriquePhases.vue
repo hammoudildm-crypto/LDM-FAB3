@@ -56,6 +56,19 @@
                 <th>Durée</th>
                 <th>Statut</th>
               </tr>
+              <tr class="ho-filtres">
+                <th class="ho-th-lot"><input v-model="fLot" class="hf-txt" placeholder="Lot…" /></th>
+                <th class="ho-th-prod"><input v-model="fProd" class="hf-txt" placeholder="Code ou désignation…" /></th>
+                <th v-for="ph in PHASES" :key="ph">
+                  <select v-model="fPhase[ph]" class="hf-sel"><option value="">Toutes</option><option value="faite">Faite</option><option value="vide">Non faite</option><option value="na">Hors gamme</option></select>
+                </th>
+                <th><select v-model="fProgMin" class="hf-sel"><option value="">Toutes</option><option value="100">100 %</option><option value="75">≥ 75 %</option><option value="50">≥ 50 %</option><option value="25">≥ 25 %</option></select></th>
+                <th><input v-model="fDureeMax" type="number" min="0" class="hf-num" placeholder="≤ j" /></th>
+                <th>
+                  <select v-model="fStatut" class="hf-sel"><option value="">Tous</option><option v-for="st in statutsDispo" :key="st" :value="st">{{ st }}</option></select>
+                  <button v-if="filtresActifs" type="button" class="hf-raz" @click="viderFiltres" title="Effacer tous les filtres de colonne">✕</button>
+                </th>
+              </tr>
             </thead>
             <tbody>
               <tr v-for="l in lignesFiltrees" :key="l.id" class="ho-row" :class="{ sel: sel === l.id }" @click="sel = (sel === l.id ? null : l.id)">
@@ -110,7 +123,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
@@ -213,6 +226,51 @@ function dansPlage(l) {
   for (const ph of PHASES) { const p = l.phases[ph]; if (!p) continue; for (const d of [p.debut, p.date]) { if (!d) continue; const x = new Date(d).getTime(); if ((from == null || x >= from) && (to == null || x <= to)) return true } }
   return false
 }
+// --- Filtres par colonne ---------------------------------------
+// Une phase se filtre sur trois états : faite, non faite (mais prévue), hors gamme.
+const fLot = ref('')
+const fProd = ref('')
+const fPhase = reactive({})
+for (const ph of PHASES) fPhase[ph] = ''
+const fProgMin = ref('')
+const fDureeMax = ref('')
+const fStatut = ref('')
+const statutsDispo = computed(() => [...new Set(lignes.value.map(l => l.statut).filter(Boolean))].sort())
+const filtresActifs = computed(() => !!(fLot.value || fProd.value || fProgMin.value || fDureeMax.value || fStatut.value || PHASES.some(ph => fPhase[ph])))
+function viderFiltres() {
+  fLot.value = ''; fProd.value = ''; fProgMin.value = ''; fDureeMax.value = ''; fStatut.value = ''
+  for (const ph of PHASES) fPhase[ph] = ''
+}
+function etatPhase(l, ph) {
+  if (!(l.gamme || PHASES).includes(ph)) return 'na'
+  const p = l.phases[ph]
+  return (p && (p.date || p.debut)) ? 'faite' : 'vide'
+}
+function dureeJours(l) {
+  const d = dureeLot(l)
+  const m = /(\d+(?:[.,]\d+)?)/.exec(String(d == null ? '' : d))
+  return m ? Number(m[1].replace(',', '.')) : null
+}
+function passeFiltres(l) {
+  if (fLot.value && !String(l.lot || '').toLowerCase().includes(fLot.value.trim().toLowerCase())) return false
+  if (fProd.value) {
+    const q = fProd.value.trim().toLowerCase()
+    if (!((l.code || '').toLowerCase().includes(q) || (l.desig || '').toLowerCase().includes(q))) return false
+  }
+  for (const ph of PHASES) { if (fPhase[ph] && etatPhase(l, ph) !== fPhase[ph]) return false }
+  if (fProgMin.value !== '') {
+    const tot = nbPhasesGamme(l)
+    const pct = tot ? nbPhasesFaites(l) / tot * 100 : 0
+    if (pct < Number(fProgMin.value)) return false
+  }
+  if (fDureeMax.value !== '') {
+    const d = dureeJours(l)
+    if (d == null || d > Number(fDureeMax.value)) return false
+  }
+  if (fStatut.value && (l.statut || '') !== fStatut.value) return false
+  return true
+}
+
 const lignesFiltrees = computed(() => {
   const q = recherche.value.trim().toLowerCase()
   const an = annee.value ? Number(annee.value) : null
@@ -220,6 +278,7 @@ const lignesFiltrees = computed(() => {
     if (q && !((l.lot || '').toLowerCase().includes(q) || (l.code || '').toLowerCase().includes(q) || (l.desig || '').toLowerCase().includes(q))) return false
     if (an && anneeLot(l) !== an) return false
     if (!dansPlage(l)) return false
+    if (!passeFiltres(l)) return false
     return true
   }).sort((a, b) => { const ka = lotKey(a.lot), kb = lotKey(b.lot); return (kb.an - ka.an) || (kb.seq - ka.seq) })
 })
@@ -371,4 +430,17 @@ function exporterPDF() { window.print() }
 .ho-rdt-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
 .ho-rdt-select { font: inherit; font-size: 12px; font-weight: 600; padding: 5px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #4f46e5; cursor: pointer; }
 .ho-rdt-select:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+/* Filtres de colonne */
+/* L'en-tête d'origine est sticky (top: 0) et mesure ~31 px : la rangée de filtres
+   se colle juste en dessous pour rester visible au défilement. */
+.ho-tbl thead tr.ho-filtres th { background: #f8fafc; padding: 3px 4px; border-bottom: 2px solid #e2e8f0; top: 31px; z-index: 2; }
+.ho-tbl thead tr.ho-filtres th.ho-th-lot { z-index: 4; }
+.ho-tbl thead tr.ho-filtres th.ho-th-prod { z-index: 4; }
+.hf-txt, .hf-num, .hf-sel { width: 100%; min-width: 0; box-sizing: border-box; font: inherit; font-size: 10px; font-weight: 600; padding: 2px 5px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; }
+.hf-num { text-align: right; }
+.hf-txt::placeholder, .hf-num::placeholder { color: #a8b3c2; font-weight: 500; }
+.hf-txt:focus, .hf-num:focus, .hf-sel:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,.15); }
+.ho-filtres th:last-child { display: flex; align-items: center; gap: 4px; }
+.hf-raz { flex: 0 0 auto; border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; border-radius: 6px; padding: 1px 6px; font-size: 10px; font-weight: 800; cursor: pointer; }
+.hf-raz:hover { background: #fee2e2; }
 </style>
