@@ -1034,93 +1034,50 @@ onMounted(async () => {
 
       <!-- ===================== FILE D'ATTENTE ===================== -->
       <div v-show="ongletDispo === 'file'">
-      <div class="dispo-3col">
-        <aside class="d3-left">
-          <section class="qual-box">
-            <h3 class="qual-h">Charge, triage et déviations par atelier</h3>
-            <p class="qual-sub">File de production</p>
-            <div class="kpi-grid qual-kpis">
-              <div class="kpi" v-for="(k, i) in kpisFile" :key="'f' + i">
-                <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
-                <div class="kpi-lbl">{{ k.l }}</div>
-              </div>
+        <section class="qual-box">
+          <h3 class="qual-h">Charge, triage et déviations par atelier</h3>
+          <p class="qual-sub">File de production</p>
+          <div class="kpi-grid qual-kpis">
+            <div class="kpi" v-for="(k, i) in kpisFile" :key="'f' + i">
+              <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
+              <div class="kpi-lbl">{{ k.l }}</div>
             </div>
-            <p class="qual-sub">Qualité</p>
-            <div class="kpi-grid qual-kpis">
-              <div class="kpi" v-for="(k, i) in kpisQualite" :key="'q' + i">
-                <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
-                <div class="kpi-lbl">{{ k.l }}</div>
-              </div>
+          </div>
+          <p class="qual-sub">Qualité</p>
+          <div class="kpi-grid qual-kpis">
+            <div class="kpi" v-for="(k, i) in kpisQualite" :key="'q' + i">
+              <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
+              <div class="kpi-lbl">{{ k.l }}</div>
             </div>
-          </section>
-        </aside>
-
-        <div class="d3-mid">
-        <div class="searchbar">
-          <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
-          <label class="filtre-chk"><input type="checkbox" v-model="filtreUrgent" /> Urgents (&gt;{{ SEUIL_URGENT }} j)</label>
-          <label class="filtre-chk"><input type="checkbox" v-model="filtrePerime" /> OF périmés</label>
-        </div>
-            <section class="qual-box">
-              <p class="qual-sub">Détail par atelier</p>
-              <table v-if="qualiteParAtelier.length" class="qual-tbl">
-                <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">Boîtes</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th></tr></thead>
-                <tbody>
-                  <template v-for="r in qualiteParAtelier" :key="r.label">
-                    <tr>
-                      <td class="q-at">{{ r.label }}</td>
-                      <td>
-                        <div class="q-charge">
-                          <div class="qc-bar"><div class="qc-fill" :style="{ width: r.pct + '%' }"></div></div>
-                          <span class="qc-val">{{ fmt(r.tot) }}<span v-if="r.att" class="qc-att"> · {{ r.att }} att.</span><span v-if="r.enc" class="qc-enc"> · {{ r.enc }} en cours</span></span>
-                        </div>
-                      </td>
-                      <td class="qnum q-bts" :title="fmt(r.btsAtt) + ' bts en attente · ' + fmt(r.btsEnc) + ' bts en cours'">{{ fmt(r.bts) }} <span class="unit">bts</span></td>
-                      <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
-                      <td class="qnum" :class="{ 'q-bad': r.dev > 0, 'q-clic': r.dev > 0 }" @click="toggleDev(r.label, r.dev)" :title="r.dev ? 'Voir les lots en déviation' : ''">
-                        {{ r.dev || '—' }}<span v-if="r.dev" class="q-caret">{{ devOuvert === r.label ? '▾' : '▸' }}</span>
-                      </td>
-                      <td class="qnum" :class="{ 'q-bad': r.pctDev >= 20 }">{{ r.pctDev }}%</td>
-                    </tr>
-                    <tr v-if="devOuvert === r.label" class="q-detail">
-                      <td colspan="6">
-                        <table class="qd-tbl">
-                          <thead><tr><th>N° lot</th><th>Produit</th><th>Déviation</th></tr></thead>
-                          <tbody>
-                            <tr v-for="l in r.devLots" :key="l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
-                              <td class="qd-lot">{{ l.lot }}</td>
-                              <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
-                              <td>
-                                <span v-if="l.deviation" class="qd-tag qd-fab">Fabrication</span>
-                                <span v-if="l.deviationCond" class="qd-tag qd-cond">Conditionnement</span>
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </td>
-                    </tr>
-                  </template>
-                </tbody>
-                <tfoot>
-                  <tr class="q-tot">
-                    <td class="q-at">Total</td>
-                    <td class="qc-tot">{{ fmt(qualiteTotaux.tot) }}<span v-if="qualiteTotaux.att" class="qc-att"> · {{ qualiteTotaux.att }} att.</span><span v-if="qualiteTotaux.enc" class="qc-enc"> · {{ qualiteTotaux.enc }} en cours</span></td>
-                    <td class="qnum q-bts">{{ fmt(qualiteTotaux.bts) }} <span class="unit">bts</span></td>
-                    <td class="qnum">{{ qualiteTotaux.tri || '—' }}</td>
-                    <td class="qnum" :class="{ 'q-clic': qualiteTotaux.dev > 0 }" @click="toggleDev('__tous__', qualiteTotaux.dev)" :title="qualiteTotaux.dev ? 'Voir tous les lots en déviation' : ''">
-                      {{ qualiteTotaux.dev || '—' }}<span v-if="qualiteTotaux.dev" class="q-caret">{{ devOuvert === '__tous__' ? '▾' : '▸' }}</span>
+          </div>
+            <p class="qual-sub">Détail par atelier</p>
+            <table v-if="qualiteParAtelier.length" class="qual-tbl">
+              <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">Boîtes</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th></tr></thead>
+              <tbody>
+                <template v-for="r in qualiteParAtelier" :key="r.label">
+                  <tr>
+                    <td class="q-at">{{ r.label }}</td>
+                    <td>
+                      <div class="q-charge">
+                        <div class="qc-bar"><div class="qc-fill" :style="{ width: r.pct + '%' }"></div></div>
+                        <span class="qc-val">{{ fmt(r.tot) }}<span v-if="r.att" class="qc-att"> · {{ r.att }} att.</span><span v-if="r.enc" class="qc-enc"> · {{ r.enc }} en cours</span></span>
+                      </div>
                     </td>
-                    <td class="qnum">{{ qualiteTotaux.pctDev }}%</td>
+                    <td class="qnum q-bts" :title="fmt(r.btsAtt) + ' bts en attente · ' + fmt(r.btsEnc) + ' bts en cours'">{{ fmt(r.bts) }} <span class="unit">bts</span></td>
+                    <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
+                    <td class="qnum" :class="{ 'q-bad': r.dev > 0, 'q-clic': r.dev > 0 }" @click="toggleDev(r.label, r.dev)" :title="r.dev ? 'Voir les lots en déviation' : ''">
+                      {{ r.dev || '—' }}<span v-if="r.dev" class="q-caret">{{ devOuvert === r.label ? '▾' : '▸' }}</span>
+                    </td>
+                    <td class="qnum" :class="{ 'q-bad': r.pctDev >= 20 }">{{ r.pctDev }}%</td>
                   </tr>
-                  <tr v-if="devOuvert === '__tous__'" class="q-detail">
+                  <tr v-if="devOuvert === r.label" class="q-detail">
                     <td colspan="6">
                       <table class="qd-tbl">
-                        <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier</th><th>Déviation</th></tr></thead>
+                        <thead><tr><th>N° lot</th><th>Produit</th><th>Déviation</th></tr></thead>
                         <tbody>
-                          <tr v-for="l in devLotsTous" :key="l.atelier + '-' + l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
+                          <tr v-for="l in r.devLots" :key="l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
                             <td class="qd-lot">{{ l.lot }}</td>
                             <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
-                            <td>{{ l.atelier }}</td>
                             <td>
                               <span v-if="l.deviation" class="qd-tag qd-fab">Fabrication</span>
                               <span v-if="l.deviationCond" class="qd-tag qd-cond">Conditionnement</span>
@@ -1130,9 +1087,45 @@ onMounted(async () => {
                       </table>
                     </td>
                   </tr>
-                </tfoot>
-              </table>
-            </section>
+                </template>
+              </tbody>
+              <tfoot>
+                <tr class="q-tot">
+                  <td class="q-at">Total</td>
+                  <td class="qc-tot">{{ fmt(qualiteTotaux.tot) }}<span v-if="qualiteTotaux.att" class="qc-att"> · {{ qualiteTotaux.att }} att.</span><span v-if="qualiteTotaux.enc" class="qc-enc"> · {{ qualiteTotaux.enc }} en cours</span></td>
+                  <td class="qnum q-bts">{{ fmt(qualiteTotaux.bts) }} <span class="unit">bts</span></td>
+                  <td class="qnum">{{ qualiteTotaux.tri || '—' }}</td>
+                  <td class="qnum" :class="{ 'q-clic': qualiteTotaux.dev > 0 }" @click="toggleDev('__tous__', qualiteTotaux.dev)" :title="qualiteTotaux.dev ? 'Voir tous les lots en déviation' : ''">
+                    {{ qualiteTotaux.dev || '—' }}<span v-if="qualiteTotaux.dev" class="q-caret">{{ devOuvert === '__tous__' ? '▾' : '▸' }}</span>
+                  </td>
+                  <td class="qnum">{{ qualiteTotaux.pctDev }}%</td>
+                </tr>
+                <tr v-if="devOuvert === '__tous__'" class="q-detail">
+                  <td colspan="6">
+                    <table class="qd-tbl">
+                      <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier</th><th>Déviation</th></tr></thead>
+                      <tbody>
+                        <tr v-for="l in devLotsTous" :key="l.atelier + '-' + l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
+                          <td class="qd-lot">{{ l.lot }}</td>
+                          <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
+                          <td>{{ l.atelier }}</td>
+                          <td>
+                            <span v-if="l.deviation" class="qd-tag qd-fab">Fabrication</span>
+                            <span v-if="l.deviationCond" class="qd-tag qd-cond">Conditionnement</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+        </section>
+        <div class="searchbar">
+          <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
+          <label class="filtre-chk"><input type="checkbox" v-model="filtreUrgent" /> Urgents (&gt;{{ SEUIL_URGENT }} j)</label>
+          <label class="filtre-chk"><input type="checkbox" v-model="filtrePerime" /> OF périmés</label>
+        </div>
         <h3 class="board-h">Fabrication — files par atelier</h3>
         <p class="note">
           Chaque lot apparaît dans l'atelier de son <strong>étape courante</strong> : « en cours » s'il y est démarré, « en attente » si l'étape précédente est terminée.
@@ -1151,8 +1144,6 @@ onMounted(async () => {
                 <div class="eq-ident">
                   <span class="eq-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.clipboard"></svg></span>
                   <div><div class="eq-code">En attente de réception</div><div class="eq-nom">OF planifiés, non reçus</div></div>
-                </div>
-              </div>
               <div class="q-block">
                 <div class="q-title attente">À recevoir — {{ attenteReceptionList.length }} OF</div>
                 <div v-if="attenteReceptionList.length" class="prod-scroll">
@@ -1701,34 +1692,6 @@ onMounted(async () => {
 .at-plan { font-size: 9px; }
 .searchbar input[type=text] { padding: 4px 8px; font-size: 10.5px; }
 /* Qualité — triage et déviations */
-/* ===== Disposition en 3 colonnes du panneau File ===== */
-/* Deux colonnes : les indicateurs à gauche, tout le reste au centre.
-   Le détail par atelier a rejoint la colonne centrale, au-dessus des files. */
-.dispo-3col { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 10px; align-items: start; }
-.d3-left { min-width: 0; position: sticky; top: 8px; }
-/* Le centre est borné : sans overflow, les files débordent de leur piste et
-   recouvrent la colonne de droite. */
-.d3-mid { min-width: 0; overflow: hidden; }
-.d3-mid .file-board { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
-.d3-left .qual-box { margin-bottom: 0; padding: 10px 12px; }
-/* Les tuiles passent sur 2 colonnes : 7 colonnes ne tiennent pas dans 296 px. */
-/* minmax(0, 1fr) : sans le 0, la piste ne peut pas descendre sous la largeur du
-   contenu et les tuiles débordent de la colonne. */
-.d3-left .qual-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
-.d3-left .qual-kpis .kpi { min-width: 0; overflow: hidden; }
-.d3-left .qual-kpis .kpi-lbl, .d3-left .qual-kpis .kpi-val { overflow-wrap: anywhere; }
-.d3-left .qual-kpis .kpi-top { min-width: 0; }
-.d3-left .qual-kpis .kpi { padding: 7px 9px; }
-.d3-left .qual-kpis .kpi-val { font-size: 16px; }
-.d3-left .qual-kpis .kpi-lbl { font-size: 9.5px; }
-/* Colonnes latérales hautes : on cesse de les coller pour ne pas tronquer. */
-@media (max-height: 900px) { .d3-left { position: static; } }
-@media (max-width: 1280px) { .dispo-3col { grid-template-columns: 240px minmax(0, 1fr); } }
-@media (max-width: 960px) {
-  .dispo-3col { display: block; }
-  .d3-left, .d3-mid { position: static; margin-bottom: 12px; }
-  .d3-left .qual-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-}
 .qual-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .qual-h { margin: 0 0 12px; font-size: 15px; font-weight: 800; color: #0f172a; }
 /* 7 colonnes fixes : les deux bandeaux (File de production et Qualité) s'alignent colonne par
