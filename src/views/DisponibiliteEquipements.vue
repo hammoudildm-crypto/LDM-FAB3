@@ -690,6 +690,59 @@ function kgSacs(l) {
   for (let n = 1; n <= tot; n++) if (sacCoche(l, n)) kg += (n === tot ? reste : ps)
   return Math.round(kg * 100) / 100
 }
+// --- Clôture automatique du triage quand tous les sacs sont conformes ---------
+// La date retenue est celle du DERNIER sac coché, pas la date du jour : si les sacs
+// ont été saisis après coup, la clôture doit refléter la fin réelle du triage.
+function dateDernierSac(l) {
+  const tot = nbSacs(l)
+  const liste = (Array.isArray(sacs.value) ? sacs.value : []).filter(x => x.ordre_id === l.id && x.numero_sac <= tot)
+  let d = null
+  for (const x of liste) if (x.coche_le && (!d || x.coche_le > d)) d = x.coche_le
+  const dt = d ? new Date(d) : new Date()
+  return isNaN(dt) ? new Date().toISOString().slice(0, 10) : dt.toISOString().slice(0, 10)
+}
+// Report sur l'OF, même règle que majDatesLot() : la date de fin ne remonte que si
+// TOUTES les phases en triage sont closes.
+async function reporterTriageSurOf(id, finSiAucunePhase) {
+  const r = await supabase.from('suivi_phases').select('en_triage, triage_debut, triage_fin').eq('ordre_id', id).eq('actif', true)
+  const rows = (r.error || !Array.isArray(r.data)) ? [] : r.data
+  const tri = rows.filter(p => !!p.en_triage)
+  const maj = {}
+  if (tri.length) {
+    const ouverts = tri.filter(p => !p.triage_fin)
+    let deb = null, fin = null
+    for (const p of tri) {
+      if (p.triage_debut && (!deb || p.triage_debut < deb)) deb = p.triage_debut
+      if (p.triage_fin && (!fin || p.triage_fin > fin)) fin = p.triage_fin
+    }
+    maj.en_triage = true; maj.triage_debut = deb
+    maj.triage_fin = ouverts.length ? null : fin
+  } else {
+    // Lot marqué en triage au niveau de l'OF seulement (antérieur à la saisie par étape)
+    maj.triage_fin = finSiAucunePhase
+  }
+  const u = await supabase.from('ordres_fabrication').update(maj).eq('id', id)
+  if (u.error) { majSac.value = 'Erreur : ' + u.error.message; return null }
+  const o = ofs.value.find(x => x.id === id)
+  if (o) Object.assign(o, maj)
+  return maj.triage_fin
+}
+async function majClotureTriage(l) {
+  const tot = nbSacs(l)
+  if (tot <= 0) return
+  const complet = nbSacsCoches(l) >= tot
+  const dateFin = complet ? dateDernierSac(l) : null
+  const rp = await supabase.from('suivi_phases').select('id').eq('ordre_id', l.id).eq('actif', true).eq('en_triage', true)
+  if (!rp.error && Array.isArray(rp.data) && rp.data.length) {
+    for (const ph of rp.data) {
+      const u = await supabase.from('suivi_phases').update({ triage_fin: dateFin }).eq('id', ph.id)
+      if (u.error) { majSac.value = 'Erreur : ' + u.error.message; return }
+    }
+  }
+  const fin = await reporterTriageSurOf(l.id, dateFin)
+  if (complet && fin) majSac.value = 'Triage du lot ' + l.lot + ' clôturé au ' + fin + ' (dernier sac conforme).'
+  else if (!complet) majSac.value = 'Sac décoché : le triage du lot ' + l.lot + ' est rouvert.'
+}
 async function syncKgTries(l) {
   if (!qteEdit[l.id]) return
   const kg = kgSacs(l)
@@ -698,6 +751,7 @@ async function syncKgTries(l) {
   if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
   const o = ofs.value.find(x => x.id === l.id)   // sinon la ligne resterait marquée « à enregistrer »
   if (o) o.qte_triee = kg
+  await majClotureTriage(l)   // clôture ou réouverture selon l'état des sacs
 }
 async function basculerSac(l, n, sync) {
   majSac.value = ''
