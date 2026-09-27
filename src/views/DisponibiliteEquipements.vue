@@ -1144,6 +1144,8 @@ onMounted(async () => {
                 <div class="eq-ident">
                   <span class="eq-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.clipboard"></svg></span>
                   <div><div class="eq-code">En attente de réception</div><div class="eq-nom">OF planifiés, non reçus</div></div>
+                </div>
+              </div>
               <div class="q-block">
                 <div class="q-title attente">À recevoir — {{ attenteReceptionList.length }} OF</div>
                 <div v-if="attenteReceptionList.length" class="prod-scroll">
@@ -1409,8 +1411,6 @@ onMounted(async () => {
             </tbody>
           </table>
         </section>
-        </div>
-      </div>
       </div>
 
       <!-- ===================== RÉTROSPECTIVE ===================== -->
