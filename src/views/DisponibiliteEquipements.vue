@@ -396,6 +396,14 @@ const vueFile = computed(() => {
 })
 
 // Planning CONDITIONNEMENT : lots regroupés par LIGNE RÉSERVÉE (equipement_id de l'ordre)
+// Ordre d'affichage des lignes de conditionnement, imposé par la production.
+// Une ligne absente de cette liste se place après les autres, jamais masquée.
+const ORDRE_COND = ['PR051', 'PR014', 'PR001', 'PR063', 'PR100', 'PR206', 'OTC002', 'PR281', 'PR249', 'PR302', 'PR384']
+function codeDeLigne(label) { return String(label || '').split('—')[0].trim().toUpperCase() }
+function rangCond(g) {
+  const i = ORDRE_COND.indexOf(g.code)
+  return i >= 0 ? i : ORDRE_COND.length
+}
 const vueCondLignes = computed(() => {
   const qc = queuePhase.value.conditionnement
   const rq = recherche.value.trim().toLowerCase()
@@ -406,13 +414,13 @@ const vueCondLignes = computed(() => {
   if (!rq) {
     for (const e of equipements.value) {
       if (phaseEquip(e) !== 'conditionnement') continue
-      groups[e.id] = { id: e.id, label: e.code + (e.nom ? ' — ' + e.nom : ''), reserve: true, attente: [], cours: [] }
+      groups[e.id] = { id: e.id, code: String(e.code || '').trim().toUpperCase(), label: e.code + (e.nom ? ' — ' + e.nom : ''), reserve: true, attente: [], cours: [] }
     }
   }
   const add = (l, type) => {
     if (!mL(l)) return
     const key = l.reserveId || '__none__'
-    if (!groups[key]) groups[key] = { id: key, label: l.reserveLabel || 'Non réservé', reserve: !!l.reserveId, attente: [], cours: [] }
+    if (!groups[key]) groups[key] = { id: key, code: codeDeLigne(l.reserveLabel), label: l.reserveLabel || 'Non réservé', reserve: !!l.reserveId, attente: [], cours: [] }
     groups[key][type].push(l)
   }
   for (const l of qc.cours) add(l, 'cours')
@@ -420,7 +428,12 @@ const vueCondLignes = computed(() => {
   return Object.values(groups).map(g => ({ ...g,
     volAttente: g.attente.reduce((s, l) => s + l.boites, 0), volCours: g.cours.reduce((s, l) => s + l.boites, 0),
     tot: g.attente.length + g.cours.length }))
-    .sort((a, b) => (a.reserve === b.reserve ? b.tot - a.tot : (a.reserve ? -1 : 1)))
+    .sort((a, b) => {
+      if (a.reserve !== b.reserve) return a.reserve ? -1 : 1   // « Non réservé » en dernier
+      const ra = rangCond(a), rb = rangCond(b)
+      if (ra !== rb) return ra - rb
+      return b.tot - a.tot                                      // hors liste : les plus chargées d'abord
+    })
 })
 
 const kpisFile = computed(() => {
