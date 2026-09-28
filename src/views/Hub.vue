@@ -57,7 +57,7 @@
     </header>
 
     <div class="grid-wrap">
-      <div class="hint">Chaîne de production &middot; {{ flux.length }} modules &middot; toutes les pages accessibles</div>
+      <div class="hint">Chaîne de production &middot; {{ fluxVisible.length }} modules &middot; toutes les pages accessibles</div>
       <div class="grid">
         <section v-for="(g, i) in fluxVisible" :key="g.label" class="mod" :style="{ '--c': g.c }">
           <div class="mod-top">
@@ -155,7 +155,7 @@
       <div class="main-head">
         <span class="main-ic"><svg viewBox="0 0 24 24" v-html="cur.icon"></svg></span>
         <div>
-          <span class="main-step">Étape {{ selected + 1 }} / {{ flux.length }}</span>
+          <span class="main-step">Étape {{ selected + 1 }} / {{ fluxVisible.length }}</span>
           <h1 class="main-title">{{ cur.label }}</h1>
         </div>
       </div>
@@ -202,7 +202,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, inject } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject, watch } from 'vue'
 import { supabase } from '../supabase'
 const authSession = ref(null)
 const authEmail = ref(''), authPassword = ref(''), authErreur = ref(''), authEnCours = ref(false)
@@ -222,6 +222,8 @@ const router = useRouter()
 function aller(p) { router.push(p) }
 
 const selected = ref(null)  // tous les menus fermés à l'ouverture
+// Le rôle arrive après le premier rendu : un index hérité peut sortir des bornes.
+watch(fluxVisible, (v) => { if (selected.value != null && selected.value >= v.length) selected.value = v.length ? 0 : null })
 function toggle(i) { selected.value = selected.value === i ? null : i }
 
 const heure = ref('')
@@ -255,7 +257,10 @@ const flux = [
     links: [['/tableau-de-bord', 'Tableau de bord'], ['/realisation-plan', 'Réalisation vs Plan'], ['/realisation-pdp', 'Réalisation PDP par phase'], ['/pdp-equipement', 'PDP par équipement'], ['/rendement', 'Rendement'], ['/ca', "Chiffre d'affaires"], ['/qse', 'Indicateurs QSE']] }
 ]
 const fluxVisible = computed(() => flux.filter(f => !f.admin || estAdminHub.value))
-const cur = computed(() => flux[selected.value] || flux[0])
+// selected est l'index dans fluxVisible, pas dans flux. Lire flux[selected] décalait
+// tout le contenu dès qu'une catégorie était masquée : un opérateur cliquant sur
+// « Ordonnancement & OF » voyait s'afficher « Configuration », première entrée de flux.
+const cur = computed(() => fluxVisible.value[selected.value] || fluxVisible.value[0])
 const totalPages = computed(() => flux.reduce((s, g) => s + g.links.length, 0))
 
 const styles = [
