@@ -222,8 +222,6 @@ const router = useRouter()
 function aller(p) { router.push(p) }
 
 const selected = ref(null)  // tous les menus fermés à l'ouverture
-// Le rôle arrive après le premier rendu : un index hérité peut sortir des bornes.
-watch(fluxVisible, (v) => { if (selected.value != null && selected.value >= v.length) selected.value = v.length ? 0 : null })
 function toggle(i) { selected.value = selected.value === i ? null : i }
 
 const heure = ref('')
@@ -257,6 +255,10 @@ const flux = [
     links: [['/tableau-de-bord', 'Tableau de bord'], ['/realisation-plan', 'Réalisation vs Plan'], ['/realisation-pdp', 'Réalisation PDP par phase'], ['/pdp-equipement', 'PDP par équipement'], ['/rendement', 'Rendement'], ['/ca', "Chiffre d'affaires"], ['/qse', 'Indicateurs QSE']] }
 ]
 const fluxVisible = computed(() => flux.filter(f => !f.admin || estAdminHub.value))
+// Le rôle arrive après le premier rendu : un index hérité peut sortir des bornes.
+// Placé APRÈS fluxVisible : un watch s'exécute dès le setup, le référencer avant sa
+// déclaration lève une erreur d'initialisation et la page reste blanche.
+watch(fluxVisible, (v) => { if (selected.value != null && selected.value >= v.length) selected.value = v.length ? 0 : null })
 // selected est l'index dans fluxVisible, pas dans flux. Lire flux[selected] décalait
 // tout le contenu dès qu'une catégorie était masquée : un opérateur cliquant sur
 // « Ordonnancement & OF » voyait s'afficher « Configuration », première entrée de flux.
