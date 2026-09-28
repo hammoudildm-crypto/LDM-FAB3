@@ -119,7 +119,15 @@ const produits = computed(() => lots.value.filter(l => {
   return d && (anneeSel.value === 0 || anYear(d) === anneeSel.value)
 }))
 const verifies = computed(() => produits.value.filter(l => l.ddl_verifie))
-const attente = computed(() => produits.value.filter(l => !l.ddl_verifie).sort((a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })))
+// Les DDL déjà réservés à un vérificateur passent devant : ce sont ceux qui sont
+// affectés et donc actionnables. Les non réservés suivent, toujours par n° de lot.
+const parLot = (a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })
+const attente = computed(() => produits.value.filter(l => !l.ddl_verifie).sort((a, b) => {
+  const ra = (a.ddl_verificateur || '').trim() ? 0 : 1
+  const rb = (b.ddl_verificateur || '').trim() ? 0 : 1
+  if (ra !== rb) return ra - rb
+  return parLot(a, b)
+}))
 const kpiQualite = computed(() => {
   const subj = produits.value
   const total = subj.length
