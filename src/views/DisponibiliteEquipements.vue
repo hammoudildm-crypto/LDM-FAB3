@@ -830,6 +830,8 @@ const triagesClos = computed(() => {
       id: o.id, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '',
       phase: etapeTriage.value[o.id] || '', debut: o.triage_debut || '', fin: o.triage_fin,
       duree: joursEntre(o.triage_debut, o.triage_fin), aTrier, triee, sacsTot, sacsOk,
+      // Quantité de référence : celle saisie, ou à défaut celle déduite des sacs
+      qte: aTrier > 0 ? aTrier : (sacsTot > 0 && ps > 0 ? Math.round(sacsTot * ps * 100) / 100 : 0),
       pct: sacsTot > 0 && sacsOk > 0
         ? Math.min(100, Math.round(sacsOk / sacsTot * 100))
         : (aTrier > 0 ? Math.min(100, Math.round(triee / aTrier * 100)) : 0)
@@ -886,6 +888,48 @@ const syntheseTotaux = computed(() => {
     tauxBoites: t.boites ? Math.round(t.boitesTri / t.boites * 1000) / 10 : 0
   }
 })
+// --- Estimation de la durée de triage ---------------------------------------
+// Cadence déduite des triages déjà clos : Kg triés par jour. On prend la MÉDIANE,
+// pas la moyenne : un seul triage anormalement long fausserait durablement le repère.
+function mediane(v) {
+  if (!v.length) return null
+  const a = [...v].sort((x, y) => x - y)
+  const m = Math.floor(a.length / 2)
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2
+}
+const cadenceTriage = computed(() => {
+  const glob = [], parProd = {}
+  for (const h of triagesClos.value) {
+    if (!h.duree || h.duree <= 0 || h.qte <= 0) continue   // un triage clos le jour même ne mesure rien
+    const kgj = h.qte / h.duree
+    glob.push(kgj)
+    if (!parProd[h.code]) parProd[h.code] = []
+    parProd[h.code].push(kgj)
+  }
+  const med = {}
+  for (const k in parProd) if (parProd[k].length >= 2) med[k] = mediane(parProd[k])
+  return { globale: mediane(glob), n: glob.length, parProduit: med }
+})
+// Estimation pour un lot : sa quantité divisée par la cadence de son produit
+// quand elle existe (au moins 2 mesures), sinon par la cadence globale.
+function estimerDuree(h) {
+  const c = cadenceTriage.value
+  const taux = c.parProduit[h.code] || c.globale
+  if (!taux || taux <= 0 || !h.qte) return null
+  return Math.max(1, Math.round(h.qte / taux))
+}
+// Comparaison réel / estimé : au-delà de 1,5 fois, le triage est anormalement long.
+function ecartEstim(h) {
+  const e = estimerDuree(h)
+  if (!e || h.duree == null) return ''
+  if (h.duree > e * 1.5) return 'est-long'
+  if (h.duree <= e) return 'est-court'
+  return ''
+}
+function sourceEstimation(h) {
+  return cadenceTriage.value.parProduit[h.code] ? 'cadence du produit ' + h.code : 'cadence globale'
+}
+
 // --- Édition d'une ligne d'historique ---------------------------------------
 // Sert notamment à réparer les triages clôturés avant l'enregistrement de la
 // quantité à trier, qui affichaient « À trier 0 » et un taux faussé.
@@ -1406,6 +1450,7 @@ onMounted(async () => {
             <span v-if="histMsg" class="he-msg">{{ histMsg }}</span>
             <div class="histo-act">
               <span class="histo-res">{{ fmt(histoTotaux.kg) }} Kg triés<span v-if="histoTotaux.duree != null"> · {{ histoTotaux.duree }} j de durée moyenne</span></span>
+              <span v-if="cadenceTriage.globale" class="est-base">Estimation : {{ fmt(Math.round(cadenceTriage.globale)) }} Kg/j sur {{ cadenceTriage.n }} triage(s) mesuré(s)</span>
               <select v-if="vueSynthese" v-model.number="anneeSynth" class="histo-an"><option v-for="a in anneesTriage" :key="a" :value="a">{{ a }}</option></select>
               <button type="button" class="histo-bascule" @click="vueSynthese = !vueSynthese">{{ vueSynthese ? "Par lot" : "Par produit" }}</button>
             </div>
@@ -1439,7 +1484,7 @@ onMounted(async () => {
             </tfoot>
           </table>
           <table v-else class="histo-tbl">
-            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th>Début</th><th>Fin</th><th class="tnum">Durée</th><th class="tnum">À trier</th><th class="tnum">Triée</th><th class="tnum">Sacs</th><th></th></tr></thead>
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th>Début</th><th>Fin</th><th class="tnum">Durée</th><th class="tnum" title="Durée attendue d'après les triages passés">Estimée</th><th class="tnum">À trier</th><th class="tnum">Triée</th><th class="tnum">Sacs</th><th></th></tr></thead>
             <tbody>
               <template v-for="h in triagesClos" :key="h.id">
                 <tr class="histo-row" :class="{ ouvert: histOuvert === h.id }" @click="toggleHist(h.id)">
@@ -1448,7 +1493,8 @@ onMounted(async () => {
                   <td>{{ h.phase || "—" }}</td>
                   <td><input v-if="histEdit && histEdit.id === h.id" v-model="histEdit.debut" type="date" class="he-in" @click.stop /><span v-else>{{ h.debut || "—" }}</span></td>
                   <td class="strong"><input v-if="histEdit && histEdit.id === h.id" v-model="histEdit.fin" type="date" class="he-in" title="Vider ce champ rouvre le triage" @click.stop /><span v-else>{{ h.fin }}</span></td>
-                  <td class="tnum">{{ h.duree != null ? h.duree + " j" : "—" }}</td>
+                  <td class="tnum" :class="ecartEstim(h)">{{ h.duree != null ? h.duree + " j" : "—" }}</td>
+                  <td class="tnum est-col" :title="estimerDuree(h) ? sourceEstimation(h) : 'Pas assez de triages mesurés'">{{ estimerDuree(h) ? estimerDuree(h) + " j" : "—" }}</td>
                   <td class="tnum"><input v-if="histEdit && histEdit.id === h.id" v-model.number="histEdit.aTrier" type="number" step="any" min="0" class="he-num" @click.stop /><span v-else>{{ fmt(h.aTrier) }}</span></td>
                   <td class="tnum"><input v-if="histEdit && histEdit.id === h.id" v-model.number="histEdit.triee" type="number" step="any" min="0" class="he-num" @click.stop /><template v-else>{{ fmt(h.triee) }} <span class="hpct" :class="{ plein: h.pct >= 100 }" :title="h.sacsOk ? h.sacsOk + ' / ' + h.sacsTot + ' sacs conformes' : 'Taux calculé sur les Kg (pas de sacs enregistrés)'">({{ h.pct }} %)</span></template></td>
                   <td class="tnum">{{ sacsDuLot(h.id).length || "—" }}<span v-if="sacsDuLot(h.id).length" class="sac-caret">{{ histOuvert === h.id ? "▾" : "▸" }}</span></td>
@@ -1461,7 +1507,7 @@ onMounted(async () => {
                   </td>
                 </tr>
                 <tr v-if="histOuvert === h.id" class="histo-detail">
-                  <td colspan="10">
+                  <td colspan="11">
                     <div v-if="sacsDuLot(h.id).length" class="hd-liste">
                       <div v-for="x in sacsDuLot(h.id)" :key="x.numero_sac" class="hd-sac">
                         <span class="hd-num">Sac {{ x.numero_sac }}</span>
@@ -1903,6 +1949,10 @@ onMounted(async () => {
 .he-ok { background: #0f766e; color: #fff; border: 0; border-radius: 6px; padding: 2px 9px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
 .he-no { background: #fff; color: #64748b; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 9px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; margin-left: 4px; }
 .he-msg { font-size: 11px; font-weight: 700; color: #0f766e; }
+.est-col { color: #6d28d9; font-weight: 700; }
+.est-long { color: #b91c1c; font-weight: 800; }
+.est-court { color: #15803d; font-weight: 800; }
+.est-base { font-size: 10.5px; font-weight: 700; color: #6d28d9; white-space: nowrap; }
 .histo-row { cursor: pointer; transition: background .12s; }
 .histo-row:hover, .histo-row.ouvert { background: #f8fafc; }
 .histo-detail > td { background: #f8fafc; padding: 8px 10px; }
