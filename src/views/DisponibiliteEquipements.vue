@@ -686,8 +686,11 @@ function kgSacs(l) {
   const tot = nbSacs(l)
   if (tot <= 0 || ps <= 0) return 0
   const reste = q - (tot - 1) * ps
-  let kg = 0
-  for (let n = 1; n <= tot; n++) if (sacCoche(l, n)) kg += (n === tot ? reste : ps)
+  let kg = 0, nb = 0
+  for (let n = 1; n <= tot; n++) if (sacCoche(l, n)) { kg += (n === tot ? reste : ps); nb++ }
+  // Tous les sacs conformes : on renvoie la quantité à trier telle quelle, pour que le
+  // taux tombe exactement sur 100 % sans dérive de virgule flottante.
+  if (nb >= tot) return q
   return Math.round(kg * 100) / 100
 }
 // --- Clôture automatique du triage quand tous les sacs sont conformes ---------
@@ -804,15 +807,25 @@ const etapeTriage = computed(() => {
   return m
 })
 const triagesClos = computed(() => {
+  const parLot = sacsParLot.value
   return ofs.value.filter(o => !!o.en_triage && !!o.triage_fin).map(o => {
     const prod = o.produits || {}
     const aTrier = Number(o.qte_a_trier) || 0
     const triee = Number(o.qte_triee) || 0
+    // Taux fondé sur les SACS dès qu'il y en a d'enregistrés : tous conformes = 100 %,
+    // quel que soit l'arrondi des kilos. Repli sur les Kg pour les triages antérieurs.
+    const ps = Number(poidsProd[o.produit_id] !== undefined ? poidsProd[o.produit_id] : prod.poids_sac_kg) || Number(poidsSac.value) || 0
+    const sacsTot = ps > 0 && aTrier > 0 ? Math.ceil(aTrier / ps) : 0
+    const ens = parLot[o.id]
+    let sacsOk = 0
+    if (ens) for (const v of ens) if (v <= sacsTot) sacsOk++
     return {
       id: o.id, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '',
       phase: etapeTriage.value[o.id] || '', debut: o.triage_debut || '', fin: o.triage_fin,
-      duree: joursEntre(o.triage_debut, o.triage_fin), aTrier, triee,
-      pct: aTrier > 0 ? Math.min(100, Math.round(triee / aTrier * 100)) : 0
+      duree: joursEntre(o.triage_debut, o.triage_fin), aTrier, triee, sacsTot, sacsOk,
+      pct: sacsTot > 0 && sacsOk > 0
+        ? Math.min(100, Math.round(sacsOk / sacsTot * 100))
+        : (aTrier > 0 ? Math.min(100, Math.round(triee / aTrier * 100)) : 0)
     }
   }).sort((a, b) => String(b.fin).localeCompare(String(a.fin)))
 })
@@ -1392,7 +1405,7 @@ onMounted(async () => {
                   <td class="strong">{{ h.fin }}</td>
                   <td class="tnum">{{ h.duree != null ? h.duree + " j" : "—" }}</td>
                   <td class="tnum">{{ fmt(h.aTrier) }}</td>
-                  <td class="tnum">{{ fmt(h.triee) }} <span class="hpct">({{ h.pct }} %)</span></td>
+                  <td class="tnum">{{ fmt(h.triee) }} <span class="hpct" :class="{ plein: h.pct >= 100 }" :title="h.sacsOk ? h.sacsOk + ' / ' + h.sacsTot + ' sacs conformes' : 'Taux calculé sur les Kg (pas de sacs enregistrés)'">({{ h.pct }} %)</span></td>
                   <td class="tnum">{{ sacsDuLot(h.id).length || "—" }}<span v-if="sacsDuLot(h.id).length" class="sac-caret">{{ histOuvert === h.id ? "▾" : "▸" }}</span></td>
                 </tr>
                 <tr v-if="histOuvert === h.id" class="histo-detail">
@@ -1828,6 +1841,7 @@ onMounted(async () => {
 .histo-tbl .strong { font-weight: 700; }
 .hdesig { color: #94a3b8; }
 .hpct { font-size: 10px; color: #94a3b8; font-weight: 600; }
+.hpct.plein { color: #15803d; font-weight: 800; }
 .histo-row { cursor: pointer; transition: background .12s; }
 .histo-row:hover, .histo-row.ouvert { background: #f8fafc; }
 .histo-detail > td { background: #f8fafc; padding: 8px 10px; }
