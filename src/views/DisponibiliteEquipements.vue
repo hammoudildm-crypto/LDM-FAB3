@@ -749,11 +749,14 @@ async function majClotureTriage(l) {
 async function syncKgTries(l) {
   if (!qteEdit[l.id]) return
   const kg = kgSacs(l)
+  const aTrier = Number(qteEdit[l.id].aTrier) || 0
   qteEdit[l.id].triee = kg
-  const r = await supabase.from('ordres_fabrication').update({ qte_triee: kg }).eq('id', l.id)
+  // La quantité à trier est enregistrée en même temps : les sacs en découlent, et sans elle
+  // l'historique affichait « Triée 102,99 » face à « À trier 0 », donc un taux de 0 %.
+  const r = await supabase.from('ordres_fabrication').update({ qte_a_trier: aTrier, qte_triee: kg }).eq('id', l.id)
   if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
   const o = ofs.value.find(x => x.id === l.id)   // sinon la ligne resterait marquée « à enregistrer »
-  if (o) o.qte_triee = kg
+  if (o) { o.qte_a_trier = aTrier; o.qte_triee = kg }
   await majClotureTriage(l)   // clôture ou réouverture selon l'état des sacs
 }
 async function basculerSac(l, n, sync) {
@@ -815,8 +818,12 @@ const triagesClos = computed(() => {
     // Taux fondé sur les SACS dès qu'il y en a d'enregistrés : tous conformes = 100 %,
     // quel que soit l'arrondi des kilos. Repli sur les Kg pour les triages antérieurs.
     const ps = Number(poidsProd[o.produit_id] !== undefined ? poidsProd[o.produit_id] : prod.poids_sac_kg) || Number(poidsSac.value) || 0
-    const sacsTot = ps > 0 && aTrier > 0 ? Math.ceil(aTrier / ps) : 0
     const ens = parLot[o.id]
+    // Quantité à trier absente (triage enregistré avant cette correction) : le plus grand
+    // numéro de sac enregistré sert de total, un sac n'existant que s'il a été coché.
+    let maxSac = 0
+    if (ens) for (const v of ens) if (v > maxSac) maxSac = v
+    const sacsTot = ps > 0 && aTrier > 0 ? Math.ceil(aTrier / ps) : maxSac
     let sacsOk = 0
     if (ens) for (const v of ens) if (v <= sacsTot) sacsOk++
     return {
@@ -879,6 +886,43 @@ const syntheseTotaux = computed(() => {
     tauxBoites: t.boites ? Math.round(t.boitesTri / t.boites * 1000) / 10 : 0
   }
 })
+// --- Édition d'une ligne d'historique ---------------------------------------
+// Sert notamment à réparer les triages clôturés avant l'enregistrement de la
+// quantité à trier, qui affichaient « À trier 0 » et un taux faussé.
+const histEdit = ref(null)
+const histMsg = ref('')
+function modifierHist(h) {
+  histMsg.value = ''
+  histEdit.value = { id: h.id, lot: h.lot, aTrier: h.aTrier, triee: h.triee, debut: h.debut || '', fin: h.fin || '' }
+}
+function annulerHist() { histEdit.value = null; histMsg.value = '' }
+async function enregistrerHist() {
+  const e = histEdit.value
+  if (!e) return
+  histMsg.value = ''
+  const aTrier = Number(e.aTrier) || 0
+  const triee = Number(e.triee) || 0
+  if (e.debut && e.fin && e.fin < e.debut) { histMsg.value = 'La date de fin précède la date de début.'; return }
+  const maj = {
+    qte_a_trier: aTrier, qte_triee: triee,
+    triage_debut: e.debut || null, triage_fin: e.fin || null
+  }
+  const r = await supabase.from('ordres_fabrication').update(maj).eq('id', e.id)
+  if (r.error) { histMsg.value = 'Erreur : ' + r.error.message; return }
+  // Les dates sont aussi portées sur l'étape : sinon majDatesLot(), dans Suivi des
+  // phases, les recalculerait depuis suivi_phases et écraserait la correction.
+  const rp = await supabase.from('suivi_phases').select('id').eq('ordre_id', e.id).eq('actif', true).eq('en_triage', true)
+  if (!rp.error && Array.isArray(rp.data)) {
+    for (const ph of rp.data) {
+      await supabase.from('suivi_phases').update({ triage_debut: e.debut || null, triage_fin: e.fin || null }).eq('id', ph.id)
+    }
+  }
+  const o = ofs.value.find(x => x.id === e.id)
+  if (o) Object.assign(o, maj)
+  if (qteEdit[e.id]) { qteEdit[e.id].aTrier = aTrier; qteEdit[e.id].triee = triee }
+  histMsg.value = e.fin ? 'Lot ' + e.lot + ' mis à jour.' : 'Lot ' + e.lot + ' rouvert : il revient dans les triages en cours.'
+  histEdit.value = null
+}
 const histoTotaux = computed(() => {
   const r = triagesClos.value
   const durees = r.map(x => x.duree).filter(d => d != null)
@@ -1359,6 +1403,7 @@ onMounted(async () => {
         <section v-if="triagesClos.length" class="histo-box">
           <div class="triage-head">
             <h3 class="histo-h">📜 Historique des triages ({{ histoTotaux.n }})</h3>
+            <span v-if="histMsg" class="he-msg">{{ histMsg }}</span>
             <div class="histo-act">
               <span class="histo-res">{{ fmt(histoTotaux.kg) }} Kg triés<span v-if="histoTotaux.duree != null"> · {{ histoTotaux.duree }} j de durée moyenne</span></span>
               <select v-if="vueSynthese" v-model.number="anneeSynth" class="histo-an"><option v-for="a in anneesTriage" :key="a" :value="a">{{ a }}</option></select>
@@ -1394,22 +1439,29 @@ onMounted(async () => {
             </tfoot>
           </table>
           <table v-else class="histo-tbl">
-            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th>Début</th><th>Fin</th><th class="tnum">Durée</th><th class="tnum">À trier</th><th class="tnum">Triée</th><th class="tnum">Sacs</th></tr></thead>
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th>Début</th><th>Fin</th><th class="tnum">Durée</th><th class="tnum">À trier</th><th class="tnum">Triée</th><th class="tnum">Sacs</th><th></th></tr></thead>
             <tbody>
               <template v-for="h in triagesClos" :key="h.id">
                 <tr class="histo-row" :class="{ ouvert: histOuvert === h.id }" @click="toggleHist(h.id)">
                   <td class="strong">{{ h.lot }}</td>
                   <td>{{ h.code }}<span v-if="h.desig" class="hdesig"> — {{ h.desig }}</span></td>
                   <td>{{ h.phase || "—" }}</td>
-                  <td>{{ h.debut || "—" }}</td>
-                  <td class="strong">{{ h.fin }}</td>
+                  <td><input v-if="histEdit && histEdit.id === h.id" v-model="histEdit.debut" type="date" class="he-in" @click.stop /><span v-else>{{ h.debut || "—" }}</span></td>
+                  <td class="strong"><input v-if="histEdit && histEdit.id === h.id" v-model="histEdit.fin" type="date" class="he-in" title="Vider ce champ rouvre le triage" @click.stop /><span v-else>{{ h.fin }}</span></td>
                   <td class="tnum">{{ h.duree != null ? h.duree + " j" : "—" }}</td>
-                  <td class="tnum">{{ fmt(h.aTrier) }}</td>
-                  <td class="tnum">{{ fmt(h.triee) }} <span class="hpct" :class="{ plein: h.pct >= 100 }" :title="h.sacsOk ? h.sacsOk + ' / ' + h.sacsTot + ' sacs conformes' : 'Taux calculé sur les Kg (pas de sacs enregistrés)'">({{ h.pct }} %)</span></td>
+                  <td class="tnum"><input v-if="histEdit && histEdit.id === h.id" v-model.number="histEdit.aTrier" type="number" step="any" min="0" class="he-num" @click.stop /><span v-else>{{ fmt(h.aTrier) }}</span></td>
+                  <td class="tnum"><input v-if="histEdit && histEdit.id === h.id" v-model.number="histEdit.triee" type="number" step="any" min="0" class="he-num" @click.stop /><template v-else>{{ fmt(h.triee) }} <span class="hpct" :class="{ plein: h.pct >= 100 }" :title="h.sacsOk ? h.sacsOk + ' / ' + h.sacsTot + ' sacs conformes' : 'Taux calculé sur les Kg (pas de sacs enregistrés)'">({{ h.pct }} %)</span></template></td>
                   <td class="tnum">{{ sacsDuLot(h.id).length || "—" }}<span v-if="sacsDuLot(h.id).length" class="sac-caret">{{ histOuvert === h.id ? "▾" : "▸" }}</span></td>
+                  <td class="he-act" @click.stop>
+                    <template v-if="histEdit && histEdit.id === h.id">
+                      <button type="button" class="he-ok" @click="enregistrerHist">Enregistrer</button>
+                      <button type="button" class="he-no" @click="annulerHist">Annuler</button>
+                    </template>
+                    <button v-else type="button" class="he-mod" @click="modifierHist(h)" title="Corriger les quantités ou les dates">✎</button>
+                  </td>
                 </tr>
                 <tr v-if="histOuvert === h.id" class="histo-detail">
-                  <td colspan="9">
+                  <td colspan="10">
                     <div v-if="sacsDuLot(h.id).length" class="hd-liste">
                       <div v-for="x in sacsDuLot(h.id)" :key="x.numero_sac" class="hd-sac">
                         <span class="hd-num">Sac {{ x.numero_sac }}</span>
@@ -1842,6 +1894,15 @@ onMounted(async () => {
 .hdesig { color: #94a3b8; }
 .hpct { font-size: 10px; color: #94a3b8; font-weight: 600; }
 .hpct.plein { color: #15803d; font-weight: 800; }
+.he-in, .he-num { font: inherit; font-size: 11px; padding: 2px 5px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; }
+.he-num { width: 78px; text-align: right; }
+.he-in { width: 122px; }
+.he-act { white-space: nowrap; text-align: right; }
+.he-mod { border: 0; background: none; cursor: pointer; font-size: 13px; opacity: .55; }
+.he-mod:hover { opacity: 1; }
+.he-ok { background: #0f766e; color: #fff; border: 0; border-radius: 6px; padding: 2px 9px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.he-no { background: #fff; color: #64748b; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 9px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; margin-left: 4px; }
+.he-msg { font-size: 11px; font-weight: 700; color: #0f766e; }
 .histo-row { cursor: pointer; transition: background .12s; }
 .histo-row:hover, .histo-row.ouvert { background: #f8fafc; }
 .histo-detail > td { background: #f8fafc; padding: 8px 10px; }
