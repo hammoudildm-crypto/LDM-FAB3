@@ -31,6 +31,7 @@
       <div v-else-if="!paramsPhase.length" class="empty-card">Aucun paramètre défini pour cette phase dans le référentiel.</div>
 
       <template v-else>
+        <p class="hint">Saisis une ou plusieurs valeurs séparées par un <b>espace</b> ou une <b>virgule</b> (ex. <code>45 47 46 48</code>). La moyenne et le RSD se calculent automatiquement. Verdict <b>indiv.</b> = toute valeur hors limites · <b>moy.</b> = moyenne hors limites.</p>
         <div class="pqr-sum">
           <span v-if="nbConf" class="chip ok">✓ {{ nbConf }} conforme(s)</span>
           <span v-if="nbHors" class="chip ko">⚠ {{ nbHors }} hors spec</span>
@@ -38,15 +39,23 @@
           <span class="chip prod">{{ ofCourant.numero_lot }} · {{ ofCourant.code }}</span>
         </div>
         <table class="pqr-tbl">
-          <thead><tr><th>Paramètre</th><th>Unité</th><th class="r">Limites</th><th class="r">Cible</th><th class="r">Valeur mesurée</th><th>Statut</th></tr></thead>
+          <thead><tr><th>Paramètre</th><th>Unité</th><th class="r">Limites</th><th>Relevés</th><th class="r">n</th><th class="r">Moyenne</th><th class="r">RSD</th><th>Statut</th></tr></thead>
           <tbody>
-            <tr v-for="p in paramsPhase" :key="p.id" :class="{ 'row-ko': horsSpec(p) }">
+            <tr v-for="p in paramsPhase" :key="p.id" :class="{ 'row-ko': st(p).ko }">
               <td class="nom">{{ p.nom }}</td>
               <td>{{ p.unite || '—' }}</td>
               <td class="r lim">{{ limTxt(p) }}</td>
-              <td class="r cible">{{ fmt(effCible(p)) }}</td>
-              <td class="r"><input class="val-in" :class="{ ko: horsSpec(p) }" v-model="mesuresEdit[p.id]" type="number" step="any" placeholder="—" :disabled="!peutEditer" /></td>
-              <td><span class="stat" :class="statutCls(p)">{{ statutTxt(p) }}</span></td>
+              <td><input class="val-in" :class="{ ko: st(p).ko }" v-model="mesuresEdit[p.id]" placeholder="ex. 45 47 46" :disabled="!peutEditer" /></td>
+              <td class="r">{{ st(p).n || '—' }}</td>
+              <td class="r moy">{{ st(p).n ? st(p).mean.toFixed(2) : '—' }}</td>
+              <td class="r">{{ st(p).n > 1 ? st(p).rsd.toFixed(1) + '%' : '—' }}</td>
+              <td class="statut">
+                <template v-if="st(p).n">
+                  <span class="v2" :class="st(p).indivKo ? 'ko' : 'ok'">indiv {{ st(p).indivKo ? '⚠' : '✓' }}</span>
+                  <span class="v2" :class="st(p).meanKo ? 'ko' : 'ok'">moy {{ st(p).meanKo ? '⚠' : '✓' }}</span>
+                </template>
+                <span v-else class="v2 neutre">—</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -96,16 +105,29 @@ const paramsPhase = computed(() => params.value.filter(p => p.phase === phaseSel
 const fmt = (v) => (v === null || v === undefined || v === '') ? '—' : v
 function effMin(p) { const s = specByParam.value[p.id]; return s && s.limite_min != null ? s.limite_min : p.limite_min }
 function effMax(p) { const s = specByParam.value[p.id]; return s && s.limite_max != null ? s.limite_max : p.limite_max }
-function effCible(p) { const s = specByParam.value[p.id]; return s && s.cible != null ? s.cible : p.cible }
 function limTxt(p) { const mn = effMin(p), mx = effMax(p); if (mn == null && mx == null) return '—'; return (mn != null ? mn : '…') + ' – ' + (mx != null ? mx : '…') }
-function valNum(p) { const v = mesuresEdit.value[p.id]; return (v === '' || v == null) ? null : Number(v) }
-function horsSpec(p) { const v = valNum(p); if (v == null || Number.isNaN(v)) return false; const mn = effMin(p), mx = effMax(p); return (mn != null && v < mn) || (mx != null && v > mx) }
-function statutCls(p) { const v = valNum(p); if (v == null) return 'neutre'; return horsSpec(p) ? 'ko' : 'ok' }
-function statutTxt(p) { const v = valNum(p); if (v == null) return '—'; return horsSpec(p) ? '⚠ Hors spec' : '✓ Conforme' }
+function horsSpecVal(v, mn, mx) { return (mn != null && v < mn) || (mx != null && v > mx) }
+function parseVals(str) { if (str == null) return []; return String(str).split(/[\s,;]+/).map(x => x.trim()).filter(x => x !== '').map(Number).filter(v => !Number.isNaN(v)) }
 
-const nbConf = computed(() => paramsPhase.value.filter(p => valNum(p) != null && !horsSpec(p)).length)
-const nbHors = computed(() => paramsPhase.value.filter(p => horsSpec(p)).length)
-const nbVide = computed(() => paramsPhase.value.filter(p => valNum(p) == null).length)
+const statsMap = computed(() => {
+  const m = {}
+  for (const p of paramsPhase.value) {
+    const vals = parseVals(mesuresEdit.value[p.id]); const n = vals.length
+    if (!n) { m[p.id] = { n: 0, ko: false, indivKo: false, meanKo: false }; continue }
+    const mean = vals.reduce((a, b) => a + b, 0) / n
+    const std = n > 1 ? Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : 0
+    const rsd = mean !== 0 ? std / Math.abs(mean) * 100 : 0
+    const mn = effMin(p), mx = effMax(p)
+    const indivKo = vals.some(v => horsSpecVal(v, mn, mx)); const meanKo = horsSpecVal(mean, mn, mx)
+    m[p.id] = { n, mean, std, rsd, min: Math.min(...vals), max: Math.max(...vals), vals, indivKo, meanKo, ko: indivKo || meanKo }
+  }
+  return m
+})
+function st(p) { return statsMap.value[p.id] || { n: 0, ko: false } }
+
+const nbConf = computed(() => paramsPhase.value.filter(p => st(p).n && !st(p).ko).length)
+const nbHors = computed(() => paramsPhase.value.filter(p => st(p).ko).length)
+const nbVide = computed(() => paramsPhase.value.filter(p => !st(p).n).length)
 
 watch(ofSel, async (id) => {
   message.value = ''; specByParam.value = {}; mesuresEdit.value = {}
@@ -116,7 +138,14 @@ watch(ofSel, async (id) => {
     if (!rs.error) { const by = {}; for (const s of (rs.data || [])) by[s.parametre_id] = s; specByParam.value = by }
   }
   const rm = await supabase.from('pqr_mesures').select('*').eq('of_id', o.id)
-  if (!rm.error) { const m = {}; for (const r of (rm.data || [])) m[r.parametre_id] = r.valeur; mesuresEdit.value = m }
+  if (!rm.error) {
+    const m = {}
+    for (const r of (rm.data || [])) {
+      const vals = Array.isArray(r.valeurs) && r.valeurs.length ? r.valeurs : (r.valeur != null ? [r.valeur] : [])
+      m[r.parametre_id] = vals.join(' ')
+    }
+    mesuresEdit.value = m
+  }
 })
 
 async function enregistrer() {
@@ -124,18 +153,12 @@ async function enregistrer() {
   const o = ofCourant.value; if (!o) return
   const up = [], delIds = []
   for (const p of paramsPhase.value) {
-    const v = valNum(p)
-    if (v == null || Number.isNaN(v)) delIds.push(p.id)
-    else up.push({ of_id: o.id, numero_lot: o.numero_lot, produit_id: o.produit_id, phase: p.phase, parametre_id: p.id, valeur: v, date_mesure: dateMesure.value })
+    const vals = parseVals(mesuresEdit.value[p.id])
+    if (!vals.length) delIds.push(p.id)
+    else { const mean = vals.reduce((a, b) => a + b, 0) / vals.length; up.push({ of_id: o.id, numero_lot: o.numero_lot, produit_id: o.produit_id, phase: p.phase, parametre_id: p.id, valeurs: vals, valeur: mean, date_mesure: dateMesure.value }) }
   }
-  if (up.length) {
-    const r = await supabase.from('pqr_mesures').upsert(up, { onConflict: 'of_id,parametre_id' })
-    if (r.error) { erreur.value = r.error.message; return }
-  }
-  if (delIds.length) {
-    const d = await supabase.from('pqr_mesures').delete().eq('of_id', o.id).in('parametre_id', delIds)
-    if (d.error) { erreur.value = d.error.message; return }
-  }
+  if (up.length) { const r = await supabase.from('pqr_mesures').upsert(up, { onConflict: 'of_id,parametre_id' }); if (r.error) { erreur.value = r.error.message; return } }
+  if (delIds.length) { const d = await supabase.from('pqr_mesures').delete().eq('of_id', o.id).in('parametre_id', delIds); if (d.error) { erreur.value = d.error.message; return } }
   message.value = 'Mesures enregistrées' + (nbHors.value ? ' — ⚠ ' + nbHors.value + ' paramètre(s) hors spec.' : '.')
 }
 </script>
@@ -147,10 +170,12 @@ async function enregistrer() {
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 22px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .empty-card { background: #fff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 24px; color: #475569; text-align: center; font-size: 14px; }
 .btn { background: #0f766e; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.hint { font-size: 12px; color: #64748b; margin: 0 0 12px; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 8px; padding: 8px 11px; }
+.hint code { background: #eef2ff; color: #4338ca; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
 
 .pqr-bar { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; align-items: flex-end; }
 .pqr-bar .f { display: flex; flex-direction: column; gap: 4px; }
-.pqr-bar .f.grow { flex: 1; min-width: 240px; }
+.pqr-bar .f.grow { flex: 1; min-width: 220px; }
 .pqr-bar label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; }
 .pqr-bar select, .pqr-bar input { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
 .pqr-bar .of-search { min-width: 180px; }
@@ -172,14 +197,15 @@ async function enregistrer() {
 .pqr-tbl td.r { text-align: right; font-variant-numeric: tabular-nums; }
 .pqr-tbl td.nom { font-weight: 700; color: #0f172a; }
 .pqr-tbl td.lim { color: #64748b; }
-.pqr-tbl td.cible { color: #a855f7; font-weight: 700; }
+.pqr-tbl td.moy { font-weight: 700; color: #0f172a; }
 .pqr-tbl tr.row-ko { background: #fef2f2; }
 .pqr-tbl tr.row-ko:hover { background: #fee2e2; }
-.val-in { width: 92px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; text-align: right; background: #fff; color: #0f172a; font-variant-numeric: tabular-nums; }
+.val-in { width: 140px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; background: #fff; color: #0f172a; font-variant-numeric: tabular-nums; }
 .val-in:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,85,247,.15); }
 .val-in.ko { border-color: #f87171; background: #fff1f2; color: #b91c1c; font-weight: 700; }
-.stat { font-size: 12px; font-weight: 700; white-space: nowrap; }
-.stat.ok { color: #16a34a; }
-.stat.ko { color: #dc2626; }
-.stat.neutre { color: #cbd5e1; }
+.statut { white-space: nowrap; }
+.v2 { display: inline-block; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 6px; margin-right: 4px; }
+.v2.ok { background: #dcfce7; color: #166534; }
+.v2.ko { background: #fee2e2; color: #b91c1c; }
+.v2.neutre { background: #f1f5f9; color: #cbd5e1; }
 </style>
