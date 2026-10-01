@@ -1,7 +1,6 @@
 <template>
   <li class="on-li">
-    <div v-if="node.__phantom" class="on-spacer"></div>
-    <div v-else class="on-card" :class="{ 'on-root': depth === 0 }" :style="{ '--c': couleur }" :title="node.note || ''">
+    <div class="on-card" :class="{ 'on-root': depth === 0 }" :style="{ '--c': couleur }" :title="node.note || ''">
       <div class="on-ava" :style="node.photo_url ? { backgroundImage: 'url(' + node.photo_url + ')' } : {}">
         <span v-if="!node.photo_url">{{ ini }}</span>
       </div>
@@ -53,24 +52,10 @@ function rangDe(n) {
   const i = RANGS.findIndex(r => norm(r) === f)
   return i >= 0 ? i : RANGS.length
 }
-const rangsUtilises = computed(() => { const set = new Set(); for (const n of props.all) set.add(rangDe(n)); return set })
-function wrap(child, parentRank) {
-  const cRank = rangDe(child)
-  const used = rangsUtilises.value
-  const pr = []
-  for (let r = parentRank + 1; r < cRank; r++) if (used.has(r)) pr.push(r)   // seulement les rangs occupés
-  if (!pr.length) return child
-  let node = child
-  for (let i = pr.length - 1; i >= 0; i--) node = { __phantom: true, __rank: pr[i], __wrapped: node, id: 'ph-' + child.id + '-' + pr[i] }
-  return node
-}
 const enfants = computed(() => {
-  if (props.node.__phantom) return [props.node.__wrapped]
-  const myRank = rangDe(props.node)
-  const directs = props.all
+  return props.all
     .filter(n => n.parent_id === props.node.id)
     .sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id)
-  return directs.map(c => wrap(c, myRank))
 })
 const couleur = computed(() => COULEURS[norm(props.node.fonction)] || '#0f766e')
 const ini = computed(() => (props.node.nom || '').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())
@@ -97,9 +82,6 @@ ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left:
 .on-fct { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--c); margin-top: 4px; }
 .on-meta { font-size: 10px; color: #94a3b8; font-weight: 600; margin-top: 4px; max-width: 152px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .on-tel { font-size: 10px; color: #94a3b8; margin-top: 2px; }
-
-.on-spacer { display: inline-block; width: 172px; height: 124px; vertical-align: top; position: relative; }
-.on-spacer::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; border-left: 2px dashed #d9e0e8; }
 
 .on-acts { position: absolute; top: 7px; right: 7px; display: flex; gap: 3px; opacity: 0; transition: opacity .12s; }
 .on-card:hover .on-acts { opacity: 1; }
