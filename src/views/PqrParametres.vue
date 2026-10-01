@@ -1,0 +1,161 @@
+<template>
+  <div class="pqr-page">
+    <PageHeader title="Référentiel PQR — Paramètres critiques" tone="#a855f7"
+      subtitle="Paramètres critiques suivis pour chaque phase de production, avec leurs limites par défaut." />
+
+    <p v-if="erreur" class="alert">{{ erreur }}</p>
+    <p v-if="message" class="ok">{{ message }}</p>
+
+    <section class="card">
+      <div class="card-head">
+        <h2 class="card-title">Paramètres par phase</h2>
+        <span class="count">{{ params.length }}</span>
+        <button v-if="peutEditer && !params.length" class="btn" style="margin-left:auto" @click="chargerStandard">Charger le référentiel standard</button>
+      </div>
+
+      <div v-if="peutEditer" class="pqr-form">
+        <select v-model="form.phase"><option value="">Phase —</option><option v-for="ph in PHASES_LISTE" :key="ph" :value="ph">{{ ph }}</option></select>
+        <input v-model="form.nom" placeholder="Paramètre *" />
+        <input v-model="form.unite" placeholder="Unité" class="u" />
+        <input v-model.number="form.limite_min" type="number" step="any" placeholder="Min" class="n" />
+        <input v-model.number="form.cible" type="number" step="any" placeholder="Cible" class="n" />
+        <input v-model.number="form.limite_max" type="number" step="any" placeholder="Max" class="n" />
+        <div class="pqr-actions">
+          <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Ajouter' }}</button>
+          <button v-if="form.id" class="btn ghost" @click="reset">Annuler</button>
+        </div>
+      </div>
+
+      <div v-if="!params.length" class="empty-card">Aucun paramètre. Clique « Charger le référentiel standard » ci-dessus, ou ajoute-les un par un.</div>
+
+      <div v-for="ph in phasesAvecParams" :key="ph" class="pqr-phase">
+        <h3 class="pqr-phase-titre">{{ ph }}</h3>
+        <table class="pqr-tbl">
+          <thead><tr><th>Paramètre</th><th>Unité</th><th class="r">Min</th><th class="r">Cible</th><th class="r">Max</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
+          <tbody>
+            <tr v-for="p in paramsDe(ph)" :key="p.id">
+              <td class="nom">{{ p.nom }}</td>
+              <td>{{ p.unite || '—' }}</td>
+              <td class="r">{{ fmt(p.limite_min) }}</td>
+              <td class="r cible">{{ fmt(p.cible) }}</td>
+              <td class="r">{{ fmt(p.limite_max) }}</td>
+              <td v-if="peutEditer" class="act">
+                <button @click="modifier(p)" title="Modifier">✎</button>
+                <button @click="supprimer(p)" title="Supprimer">🗑</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, computed, onMounted, inject } from 'vue'
+import { supabase } from '../supabase'
+import PageHeader from '../components/PageHeader.vue'
+
+const peutEditer = inject('peutEditer', ref(true))
+const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+const STANDARD = [
+  ['Pesée', 'Écart de pesée', '%'],
+  ['Granulation et Séchage', 'Température produit', '°C'],
+  ['Granulation et Séchage', 'Humidité résiduelle (LOD)', '%'],
+  ['Granulation et Séchage', 'Temps de granulation', 'min'],
+  ['Mélange', 'Temps de mélange', 'min'],
+  ['Mélange', 'Vitesse', 'tr/min'],
+  ['Mélange', 'Homogénéité (teneur)', '%'],
+  ['Compression', 'Dureté', 'N'],
+  ['Compression', 'Poids moyen', 'mg'],
+  ['Compression', 'Uniformité de masse (RSD)', '%'],
+  ['Compression', 'Épaisseur', 'mm'],
+  ['Compression', 'Friabilité', '%'],
+  ['Compression', 'Désagrégation', 'min'],
+  ['Remplissage Gélules', 'Poids moyen', 'mg'],
+  ['Remplissage Gélules', 'Uniformité de masse (RSD)', '%'],
+  ['Remplissage Gélules', 'Désagrégation', 'min'],
+  ['Pelliculage', 'Gain de masse', '%'],
+  ['Pelliculage', 'Température', '°C'],
+  ['Pelliculage', 'Aspect', '']
+]
+
+const params = ref([])
+const erreur = ref('')
+const message = ref('')
+const form = reactive({ id: null, phase: '', nom: '', unite: '', limite_min: null, cible: null, limite_max: null })
+function reset() { Object.assign(form, { id: null, phase: '', nom: '', unite: '', limite_min: null, cible: null, limite_max: null }) }
+
+async function charger() {
+  const r = await supabase.from('pqr_parametres').select('*').eq('actif', true).order('ordre')
+  if (r.error) { erreur.value = r.error.message; return }
+  params.value = r.data || []
+}
+onMounted(charger)
+
+const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
+const phasesAvecParams = computed(() => [...new Set(params.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
+function paramsDe(ph) { return params.value.filter(p => p.phase === ph).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
+const fmt = (v) => (v === null || v === undefined || v === '') ? '—' : v
+
+async function enregistrer() {
+  erreur.value = ''; message.value = ''
+  if (!form.phase) { erreur.value = 'Choisis une phase.'; return }
+  if (!form.nom.trim()) { erreur.value = 'Le nom du paramètre est requis.'; return }
+  const payload = { phase: form.phase, nom: form.nom.trim(), unite: form.unite || null, limite_min: form.limite_min, cible: form.cible, limite_max: form.limite_max }
+  let r
+  if (form.id) r = await supabase.from('pqr_parametres').update(payload).eq('id', form.id)
+  else r = await supabase.from('pqr_parametres').insert({ ...payload, ordre: params.value.length })
+  if (r.error) { erreur.value = r.error.message; return }
+  message.value = form.id ? 'Paramètre mis à jour.' : 'Paramètre ajouté.'
+  reset(); await charger()
+}
+function modifier(p) { Object.assign(form, { id: p.id, phase: p.phase, nom: p.nom, unite: p.unite || '', limite_min: p.limite_min, cible: p.cible, limite_max: p.limite_max }) }
+async function supprimer(p) {
+  if (!confirm('Supprimer le paramètre « ' + p.nom + ' » ?')) return
+  const r = await supabase.from('pqr_parametres').update({ actif: false }).eq('id', p.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  message.value = 'Paramètre supprimé.'; await charger()
+}
+async function chargerStandard() {
+  erreur.value = ''; message.value = ''
+  const rows = STANDARD.map((s, i) => ({ phase: s[0], nom: s[1], unite: s[2] || null, ordre: i }))
+  const r = await supabase.from('pqr_parametres').insert(rows)
+  if (r.error) { erreur.value = r.error.message; return }
+  message.value = 'Référentiel standard chargé (' + rows.length + ' paramètres).'; await charger()
+}
+</script>
+
+<style scoped>
+.pqr-page { color: #1b2733; }
+.alert { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; }
+.ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 22px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.card-title { margin: 0; font-size: 17px; }
+.count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+.btn { background: #0f766e; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.btn.ghost { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
+.empty-card { background: #fff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 24px; color: #475569; text-align: center; font-size: 14px; }
+
+.pqr-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; align-items: center; }
+.pqr-form select, .pqr-form input { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
+.pqr-form input:not(.u):not(.n) { flex: 1; min-width: 160px; }
+.pqr-form .u { width: 82px; }
+.pqr-form .n { width: 78px; }
+.pqr-actions { display: flex; gap: 8px; }
+
+.pqr-phase { margin-top: 16px; }
+.pqr-phase-titre { margin: 0 0 6px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #a855f7; border-left: 3px solid #a855f7; padding-left: 8px; }
+.pqr-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pqr-tbl th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; font-weight: 700; padding: 6px 10px; border-bottom: 2px solid #eef2f6; }
+.pqr-tbl th.r { text-align: right; }
+.pqr-tbl td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; }
+.pqr-tbl td.r { text-align: right; font-variant-numeric: tabular-nums; }
+.pqr-tbl td.nom { font-weight: 700; color: #0f172a; }
+.pqr-tbl td.cible { color: #a855f7; font-weight: 700; }
+.pqr-tbl td.act { text-align: right; white-space: nowrap; }
+.pqr-tbl td.act button { border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; padding: 3px 7px; cursor: pointer; font-size: 12px; margin-left: 4px; }
+.pqr-tbl td.act button:hover { background: #f8fafc; border-color: #cbd5e1; }
+.pqr-tbl tbody tr:hover { background: #faf5ff; }
+</style>
