@@ -11,6 +11,7 @@ const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 
 const anneeCourante = new Date().getFullYear()
 const ANNEES = [anneeCourante - 1, anneeCourante, anneeCourante + 1]
 const PERIMETRES = ['Fabrication forme sèche', 'Fabrication forme semi solide', 'Fabrication forme sèche hormonale', 'Partie premix', 'Partie vrac']
+const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
 
 const effectifs = ref([])
 const ateliers = ref([])
@@ -277,7 +278,7 @@ onMounted(chargerTout)
           <input v-model="orgForm.fonction" placeholder="Fonction" />
           <select v-model="orgForm.atelier_id"><option value="">Périmètre —</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
           <input v-model="orgForm.equipe" placeholder="Équipe" />
-          <select v-model="orgForm.equipement"><option value="">Atelier —</option><option v-for="at in ateliers" :key="at.id" :value="at.nom">{{ at.code }} — {{ at.nom }}</option></select>
+          <select v-model="orgForm.equipement"><option value="">Phase —</option><option v-for="ph in PHASES_LISTE" :key="ph" :value="ph">{{ ph }}</option></select>
           <input v-model="orgForm.matricule" placeholder="Matricule" />
           <input v-model="orgForm.telephone" placeholder="Téléphone" />
           <select v-model="orgForm.parent_id"><option value="">Responsable — (sommet)</option><option v-for="n in responsablesPossibles" :key="n.id" :value="n.id">{{ n.nom }} — {{ n.fonction }}</option></select>
