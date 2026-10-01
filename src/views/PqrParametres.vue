@@ -9,11 +9,11 @@
     <section class="card">
       <div class="card-head">
         <h2 class="card-title">Paramètres par phase</h2>
-        <span class="count">{{ paramsFiltres.length }}</span>
-        <input v-model="recherche" class="pqr-search" placeholder="🔍 Rechercher un paramètre…" style="margin-left:auto" />
+        <span class="count">{{ params.length }}</span>
+        <input v-model="recherche" class="pqr-search" placeholder="🔍 Rechercher un produit…" style="margin-left:auto" />
         <select v-model="produitSel" class="prod-sel">
           <option value="">Limites par défaut</option>
-          <option v-for="pr in produits" :key="pr.id" :value="String(pr.id)">{{ pr.code_pf }} — {{ pr.designation }}</option>
+          <option v-for="pr in produitsFiltres" :key="pr.id" :value="String(pr.id)">{{ pr.code_pf }} — {{ pr.designation }}</option>
         </select>
       </div>
 
@@ -37,7 +37,6 @@
         </div>
 
         <div v-if="!params.length" class="empty-card">Aucun paramètre. Clique « Charger le référentiel standard » ci-dessus, ou ajoute-les un par un.</div>
-        <div v-else-if="!paramsFiltres.length" class="empty-card">Aucun paramètre ne correspond à « {{ recherche }} ».</div>
 
         <div v-for="ph in phasesAvecParams" :key="ph" class="pqr-phase">
           <h3 class="pqr-phase-titre">{{ ph }}</h3>
@@ -65,7 +64,6 @@
         <p class="pqr-note">Specs pour <b>{{ produitNom }}</b>. Laisse une case <b>vide</b> pour hériter de la valeur par défaut (affichée en gris « déf. »).</p>
 
         <div v-if="!params.length" class="empty-card">Le référentiel est vide. Reviens en « Limites par défaut » pour le remplir d'abord.</div>
-        <div v-else-if="!paramsFiltres.length" class="empty-card">Aucun paramètre ne correspond à « {{ recherche }} ».</div>
 
         <div v-for="ph in phasesAvecParams" :key="ph" class="pqr-phase">
           <h3 class="pqr-phase-titre">{{ ph }}</h3>
@@ -141,10 +139,10 @@ async function charger() {
 onMounted(charger)
 
 const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-const paramsFiltres = computed(() => { const q = normR(recherche.value).trim(); if (!q) return params.value; return params.value.filter(p => normR(p.nom).includes(q) || normR(p.phase).includes(q)) })
+const produitsFiltres = computed(() => { const q = normR(recherche.value).trim(); if (!q) return produits.value; return produits.value.filter(pr => normR((pr.code_pf || '') + ' ' + (pr.designation || '')).includes(q)) })
 const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
-const phasesAvecParams = computed(() => [...new Set(paramsFiltres.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
-function paramsDe(ph) { return paramsFiltres.value.filter(p => p.phase === ph).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
+const phasesAvecParams = computed(() => [...new Set(params.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
+function paramsDe(ph) { return params.value.filter(p => p.phase === ph).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
 const fmt = (v) => (v === null || v === undefined || v === '') ? '—' : v
 const phDef = (v) => (v === null || v === undefined || v === '') ? '—' : ('déf. ' + v)
 const produitNom = computed(() => { const p = produits.value.find(x => String(x.id) === produitSel.value); return p ? (p.code_pf + ' — ' + p.designation) : '' })
