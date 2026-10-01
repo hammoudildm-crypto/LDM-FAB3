@@ -14,7 +14,6 @@ const PERIMETRES = ['Fabrication forme sèche', 'Fabrication forme semi solide',
 
 const effectifs = ref([])
 const ateliers = ref([])
-const equipementsListe = ref([])
 const filtreAnnee = ref('')
 const filtreAtelier = ref('')
 const erreur = ref('')
@@ -38,8 +37,6 @@ async function chargerTout() {
   const ra = await supabase.from('ateliers').select('id, code, nom').eq('actif', true).order('code')
   if (ra.error) { erreur.value = ra.error.message; return }
   ateliers.value = ra.data
-  const req = await supabase.from('equipements').select('id, nom').eq('actif', true).order('nom')
-  if (!req.error) equipementsListe.value = req.data || []
 
   const re = await supabase.from('effectifs').select('*').eq('actif', true)
     .order('annee', { ascending: false }).order('mois', { ascending: false }).order('id', { ascending: false })
@@ -63,7 +60,7 @@ const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equi
 function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', equipement: '' }) }
 function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
 const RANGS_ORG = ['Manager Fabrication', 'Responsable fabrication', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène"]
-const normOrg = (t) => (t || '').toLowerCase().replace(/\s+/g, ' ').trim()
+const normOrg = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\u2019\u02bc']/g, "'").replace(/\s+/g, ' ').trim()
 function rangOrg(f) { const i = RANGS_ORG.findIndex(r => normOrg(r) === normOrg(f)); return i >= 0 ? i : RANGS_ORG.length }
 const responsablesPossibles = computed(() => {
   const monRang = rangOrg(orgForm.fonction)
@@ -280,7 +277,7 @@ onMounted(chargerTout)
           <input v-model="orgForm.fonction" placeholder="Fonction" />
           <select v-model="orgForm.atelier_id"><option value="">Périmètre —</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
           <input v-model="orgForm.equipe" placeholder="Équipe" />
-          <select v-model="orgForm.equipement"><option value="">Équipement —</option><option v-for="eq in equipementsListe" :key="eq.id" :value="eq.nom">{{ eq.nom }}</option></select>
+          <select v-model="orgForm.equipement"><option value="">Atelier —</option><option v-for="at in ateliers" :key="at.id" :value="at.nom">{{ at.code }} — {{ at.nom }}</option></select>
           <input v-model="orgForm.matricule" placeholder="Matricule" />
           <input v-model="orgForm.telephone" placeholder="Téléphone" />
           <select v-model="orgForm.parent_id"><option value="">Responsable — (sommet)</option><option v-for="n in responsablesPossibles" :key="n.id" :value="n.id">{{ n.nom }} — {{ n.fonction }}</option></select>
