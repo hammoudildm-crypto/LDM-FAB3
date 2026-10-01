@@ -39,6 +39,7 @@ import IndicateursQSE from '../views/IndicateursQSE.vue'
 import Cadences from '../views/Cadences.vue'
 import PassationConsigne from '../views/PassationConsigne.vue'
 import HistoriquePhases from '../views/HistoriquePhases.vue'
+import PqrParametres from '../views/PqrParametres.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Hub },
@@ -59,6 +60,7 @@ const routes = [
   { path: '/encours', name: 'encours', component: EnCours },
   { path: '/dossier', name: 'dossier', component: DossierLot },
   { path: '/historique', name: 'historique', component: HistoriquePhases },
+  { path: '/pqr-parametres', name: 'pqr-parametres', component: PqrParametres },
   { path: '/ca', name: 'ca', component: ChiffreAffaires },
   { path: '/effectifs', name: 'effectifs', component: Effectifs },
   { path: '/audit', name: 'audit', component: JournalAudit },
