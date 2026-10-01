@@ -61,6 +61,7 @@ const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equi
 function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', equipement: '' }) }
 function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
 const RANGS_ORG = ['Manager', 'Responsable', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène"]
+const FONCTIONS_SUGG = ['Manager', 'Responsable', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène", 'Chargé blanchisserie', 'Agent blanchisserie', "Agent d'hygiène vestiaire"]
 const normOrg = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\u2019\u02bc']/g, "'").replace(/\s+/g, ' ').trim().replace(/ fabrication$/, '')
 function rangOrg(f) { const i = RANGS_ORG.findIndex(r => normOrg(r) === normOrg(f)); return i >= 0 ? i : RANGS_ORG.length }
 const responsablesPossibles = computed(() => {
@@ -275,7 +276,7 @@ onMounted(chargerTout)
         <div class="card-head"><h2 class="card-title">Organigramme</h2><span class="count">{{ orgFlat.length }}</span></div>
         <div v-if="peutEditer" class="org-form">
           <input v-model="orgForm.nom" placeholder="Nom *" />
-          <select v-model="orgForm.fonction"><option value="">Fonction —</option><option v-for="f in RANGS_ORG" :key="f" :value="f">{{ f }}</option></select>
+          <input v-model="orgForm.fonction" list="fonctionsListe" placeholder="Fonction" /><datalist id="fonctionsListe"><option v-for="f in FONCTIONS_SUGG" :key="f" :value="f" /></datalist>
           <select v-model="orgForm.atelier_id"><option value="">Périmètre —</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
           <input v-model="orgForm.equipe" placeholder="Équipe" />
           <select v-model="orgForm.equipement"><option value="">Phase —</option><option v-for="ph in PHASES_LISTE" :key="ph" :value="ph">{{ ph }}</option></select>
