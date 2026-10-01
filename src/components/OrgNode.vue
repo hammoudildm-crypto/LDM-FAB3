@@ -1,6 +1,7 @@
 <template>
   <li class="on-li">
-    <div class="on-card" :class="{ 'on-root': depth === 0 }">
+    <div v-if="node.__phantom" class="on-spacer"></div>
+    <div v-else class="on-card" :class="{ 'on-root': depth === 0 }" :title="node.note || ''">
       <div class="on-ava" :style="node.photo_url ? { backgroundImage: 'url(' + node.photo_url + ')' } : {}">
         <span v-if="!node.photo_url">{{ ini }}</span>
       </div>
@@ -12,7 +13,6 @@
         <span v-if="node.equipe"> · Éq.{{ node.equipe }}</span>
       </div>
       <div class="on-tel" v-if="node.telephone">☎ {{ node.telephone }}</div>
-      <div class="on-note" v-if="node.note">{{ node.note }}</div>
       <div class="on-acts" v-if="peutEditer">
         <button @click="$emit('edit', node)" title="Modifier">✎</button>
         <button @click="$emit('del', node)" title="Supprimer">🗑</button>
@@ -36,32 +36,50 @@ const props = defineProps({
   depth: { type: Number, default: 0 }
 })
 defineEmits(['edit', 'del'])
-const enfants = computed(() => props.all
-  .filter(n => n.parent_id === props.node.id)
-  .sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
+
+const RANGS = ['Manager Fabrication', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène"]
+const norm = (t) => (t || '').toLowerCase().replace(/\s+/g, ' ').trim()
+function rangDe(n) {
+  const f = norm(n.fonction)
+  const i = RANGS.findIndex(r => norm(r) === f)
+  return i >= 0 ? i : RANGS.length
+}
+function wrap(child, parentRank) {
+  const cRank = rangDe(child)
+  if (cRank <= parentRank + 1) return child
+  let node = child
+  for (let r = cRank - 1; r > parentRank; r--) node = { __phantom: true, __rank: r, __wrapped: node, id: 'ph-' + child.id + '-' + r }
+  return node
+}
+const enfants = computed(() => {
+  if (props.node.__phantom) return [props.node.__wrapped]
+  const myRank = rangDe(props.node)
+  const directs = props.all
+    .filter(n => n.parent_id === props.node.id)
+    .sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id)
+  return directs.map(c => wrap(c, myRank))
+})
 const ini = computed(() => (props.node.nom || '').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())
-function ac(id) { const a = props.ateliers.find(x => String(x.id) === String(id)); return a ? a.code : '' }
 </script>
 
 <style scoped>
 ul { padding-top: 22px; position: relative; display: flex; justify-content: center; list-style: none; margin: 0; }
 .on-li { list-style: none; text-align: center; position: relative; padding: 22px 10px 0; }
-/* lignes de liaison (organigramme classique) */
 .on-li::before, .on-li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #cbd5e1; width: 50%; height: 22px; }
 .on-li::after { right: auto; left: 50%; border-left: 2px solid #cbd5e1; }
 .on-li:only-child::before, .on-li:only-child::after { display: none; }
 .on-li:first-child::before, .on-li:last-child::after { border: 0 none; }
 .on-li:last-child::before { border-right: 2px solid #cbd5e1; }
 ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #cbd5e1; width: 0; height: 22px; }
-/* carte */
-.on-card { display: inline-flex; flex-direction: column; justify-content: center; position: relative; background: linear-gradient(158deg, #ffffff, #f8fafc); border: 1px solid #e2e8f0; border-top: 3px solid #0f766e; border-radius: 12px; padding: 10px 16px; box-shadow: 0 4px 12px rgba(16,24,40,.08); min-width: 160px; width: 160px; height: 104px; box-sizing: border-box; overflow: hidden; vertical-align: top; }
+.on-card { display: inline-flex; flex-direction: column; justify-content: center; position: relative; background: linear-gradient(158deg, #ffffff, #f8fafc); border: 1px solid #e2e8f0; border-top: 3px solid #0f766e; border-radius: 12px; padding: 10px 16px; box-shadow: 0 4px 12px rgba(16,24,40,.08); width: 160px; min-width: 160px; height: 104px; box-sizing: border-box; overflow: hidden; vertical-align: top; }
 .on-card.on-root { border-top-color: #4f46e5; }
+.on-spacer { display: inline-block; width: 160px; height: 104px; vertical-align: top; position: relative; }
+.on-spacer::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; border-left: 2px solid #cbd5e1; }
 .on-ava { width: 38px; height: 38px; border-radius: 50%; background: #e0e7ff; background-size: cover; background-position: center; margin: 0 auto 5px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: #4f46e5; }
 .on-nom { font-weight: 800; font-size: 14px; color: #0f172a; }
 .on-fct { font-size: 11.5px; color: #0f766e; font-weight: 700; margin-top: 1px; }
 .on-meta { font-size: 10.5px; color: #64748b; font-weight: 600; margin-top: 3px; }
 .on-tel { font-size: 10.5px; color: #94a3b8; margin-top: 2px; }
-.on-note { font-size: 10px; color: #b0b8c4; margin-top: 2px; font-style: italic; }
 .on-acts { position: absolute; top: 6px; right: 6px; display: flex; gap: 3px; opacity: 0; transition: opacity .12s; }
 .on-card:hover .on-acts { opacity: 1; }
 .on-acts button { border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; padding: 2px 5px; cursor: pointer; font-size: 11px; line-height: 1; }
