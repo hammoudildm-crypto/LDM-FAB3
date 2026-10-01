@@ -41,6 +41,7 @@ import PassationConsigne from '../views/PassationConsigne.vue'
 import HistoriquePhases from '../views/HistoriquePhases.vue'
 import PqrParametres from '../views/PqrParametres.vue'
 import PqrSaisie from '../views/PqrSaisie.vue'
+import PqrDashboard from '../views/PqrDashboard.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Hub },
@@ -63,6 +64,7 @@ const routes = [
   { path: '/historique', name: 'historique', component: HistoriquePhases },
   { path: '/pqr-parametres', name: 'pqr-parametres', component: PqrParametres },
   { path: '/pqr-saisie', name: 'pqr-saisie', component: PqrSaisie },
+  { path: '/pqr-tableau', name: 'pqr-tableau', component: PqrDashboard },
   { path: '/ca', name: 'ca', component: ChiffreAffaires },
   { path: '/effectifs', name: 'effectifs', component: Effectifs },
   { path: '/audit', name: 'audit', component: JournalAudit },
