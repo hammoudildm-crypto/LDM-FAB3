@@ -7,9 +7,13 @@
 
     <section class="card">
       <div class="pqr-bar">
+        <div class="f">
+          <label>Rechercher</label>
+          <input v-model="rechercheProd" class="prod-search" placeholder="🔍 Code ou produit" />
+        </div>
         <div class="f grow">
-          <label>Produit</label>
-          <select v-model="produitSel"><option value="">—</option><option v-for="pr in produits" :key="pr.id" :value="String(pr.id)">{{ pr.code_pf }} — {{ pr.designation }}</option></select>
+          <label>Produit <span v-if="rechercheProd" class="cnt">({{ produitsFiltres.length }})</span></label>
+          <select v-model="produitSel"><option value="">—</option><option v-for="pr in produitsFiltres" :key="pr.id" :value="String(pr.id)">{{ pr.code_pf }} — {{ pr.designation }}</option></select>
         </div>
         <div class="f"><label>Du</label><input type="date" v-model="dateDu" /></div>
         <div class="f"><label>Au</label><input type="date" v-model="dateAu" /></div>
@@ -137,6 +141,7 @@ import PageHeader from '../components/PageHeader.vue'
 const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
 const produits = ref([])
 const produitSel = ref('')
+const rechercheProd = ref('')
 const dateDu = ref('')
 const dateAu = ref('')
 const params = ref([])
@@ -145,6 +150,8 @@ const mesures = ref([])
 const paramSel = ref(null)
 const chartMode = ref('trend')
 const erreur = ref('')
+const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+const produitsFiltres = computed(() => { const q = normR(rechercheProd.value).trim(); if (!q) return produits.value; return produits.value.filter(pr => normR((pr.code_pf || '') + ' ' + (pr.designation || '')).includes(q)) })
 
 async function chargerBase() {
   const rp = await supabase.from('pqr_parametres').select('*').eq('actif', true).order('ordre')
@@ -332,6 +339,9 @@ tr.ph td{background:#f8fafc;font-weight:800;color:#a855f7;text-transform:upperca
 .pqr-bar .f.grow { flex: 1; min-width: 240px; }
 .pqr-bar label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; }
 .pqr-bar select, .pqr-bar input { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
+.pqr-bar .prod-search { min-width: 170px; }
+.pqr-bar .prod-search:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,85,247,.15); }
+.pqr-bar label .cnt { color: #a855f7; font-weight: 700; }
 .pqr-bar .f.grow select { width: 100%; }
 
 .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
