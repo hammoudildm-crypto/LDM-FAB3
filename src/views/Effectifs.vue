@@ -357,7 +357,7 @@ onMounted(chargerTout)
 .org-form .org-note { flex: 1; min-width: 150px; }
 .org-actions { display: flex; gap: 8px; }
 .org-tree { display: flex; flex-direction: column; gap: 6px; }
-.org-chart { overflow-x: auto; padding: 12px 0 4px; }
+.org-chart { overflow-x: auto; padding: 12px 0 4px; zoom: 0.72; }
 .org-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
 .org-filtre { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; font-weight: 600; }
 .org-legende { display: flex; flex-wrap: wrap; gap: 10px; }
