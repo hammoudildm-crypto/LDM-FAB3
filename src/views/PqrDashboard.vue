@@ -180,6 +180,14 @@ const mesuresFiltrees = computed(() => mesures.value.filter(m => {
   if ((dateDu.value || dateAu.value) && !d) return false
   return true
 }))
+const mesuresPlat = computed(() => {
+  const out = []
+  for (const m of mesuresFiltrees.value) {
+    const vals = Array.isArray(m.valeurs) && m.valeurs.length ? m.valeurs : (m.valeur != null ? [m.valeur] : [])
+    vals.forEach((v, k) => out.push({ parametre_id: m.parametre_id, valeur: v, numero_lot: m.numero_lot, of_id: m.of_id, date_mesure: m.date_mesure, rang: k }))
+  }
+  return out
+})
 
 function effMin(p) { const s = specByParam.value[p.id]; return s && s.limite_min != null ? s.limite_min : p.limite_min }
 function effMax(p) { const s = specByParam.value[p.id]; return s && s.limite_max != null ? s.limite_max : p.limite_max }
@@ -192,7 +200,7 @@ function cpkCalc(mean, std, lsl, usl) { if (std <= 0 || (lsl == null && usl == n
 const paramById = computed(() => { const m = {}; for (const p of params.value) m[p.id] = p; return m })
 const synthese = computed(() => {
   const byParam = {}
-  for (const m of mesuresFiltrees.value) { const v = Number(m.valeur); if (!Number.isNaN(v)) (byParam[m.parametre_id] = byParam[m.parametre_id] || []).push(v) }
+  for (const m of mesuresPlat.value) { const v = Number(m.valeur); if (!Number.isNaN(v)) (byParam[m.parametre_id] = byParam[m.parametre_id] || []).push(v) }
   const out = []
   for (const p of params.value) {
     const vals = byParam[p.id]; if (!vals || !vals.length) continue
@@ -207,16 +215,16 @@ const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 
 const phasesAvecMesures = computed(() => [...new Set(synthese.value.map(r => r.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
 function syntheseDe(ph) { return synthese.value.filter(r => r.phase === ph) }
 
-const nbLots = computed(() => new Set(mesuresFiltrees.value.map(m => m.of_id)).size)
-const nbHors = computed(() => mesuresFiltrees.value.filter(m => { const p = paramById.value[m.parametre_id]; if (!p) return false; return horsSpecVal(Number(m.valeur), effMin(p), effMax(p)) }).length)
-const tauxGlobal = computed(() => mesuresFiltrees.value.length ? (mesuresFiltrees.value.length - nbHors.value) / mesuresFiltrees.value.length * 100 : 0)
+const nbLots = computed(() => new Set(mesuresPlat.value.map(m => m.of_id)).size)
+const nbHors = computed(() => mesuresPlat.value.filter(m => { const p = paramById.value[m.parametre_id]; if (!p) return false; return horsSpecVal(Number(m.valeur), effMin(p), effMax(p)) }).length)
+const tauxGlobal = computed(() => mesuresPlat.value.length ? (mesuresPlat.value.length - nbHors.value) / mesuresPlat.value.length * 100 : 0)
 
 function verdictCls(cpk) { if (cpk == null) return 'v-na'; if (cpk >= 1.33) return 'v-ok'; if (cpk >= 1.0) return 'v-mid'; return 'v-ko' }
 function verdictTxt(cpk) { if (cpk == null) return '—'; if (cpk >= 1.33) return 'Capable'; if (cpk >= 1.0) return 'Acceptable'; return 'Insuffisant' }
 
 const paramSelObj = computed(() => paramById.value[paramSel.value] || null)
-const byDate = (a, b) => String(a.date_mesure || '').localeCompare(String(b.date_mesure || '')) || a.id - b.id
-function mesuresParam(p) { return mesuresFiltrees.value.filter(m => m.parametre_id === p.id && !Number.isNaN(Number(m.valeur))).slice().sort(byDate) }
+const byDate = (a, b) => String(a.date_mesure || '').localeCompare(String(b.date_mesure || '')) || ((a.of_id || 0) - (b.of_id || 0)) || ((a.rang || 0) - (b.rang || 0))
+function mesuresParam(p) { return mesuresPlat.value.filter(m => m.parametre_id === p.id && !Number.isNaN(Number(m.valeur))).slice().sort(byDate) }
 
 const chartData = computed(() => {
   const p = paramSelObj.value; if (!p) return null
@@ -271,7 +279,7 @@ const controlData = computed(() => {
 
 const horsSpecListe = computed(() => {
   const out = []
-  for (const m of mesuresFiltrees.value) {
+  for (const m of mesuresPlat.value) {
     const p = paramById.value[m.parametre_id]; if (!p) continue
     const v = Number(m.valeur); const lsl = effMin(p), usl = effMax(p)
     if (horsSpecVal(v, lsl, usl)) out.push({ lot: m.numero_lot || '—', phase: p.phase, nom: p.nom, unite: p.unite || '', valeur: m.valeur, lsl, usl, date: m.date_mesure })
@@ -309,8 +317,8 @@ tr.ph td{background:#f8fafc;font-weight:800;color:#a855f7;text-transform:upperca
 @media print{body{margin:14mm}}
 </style></head><body>
 <h1>Revue Produit Qualité — PQR</h1><p class="sub">${prNom}</p>
-<div class="meta"><span>Période : <b>${periode}</b></span><span>Mesures : <b>${mesuresFiltrees.value.length}</b></span><span>Lots : <b>${nbLots.value}</b></span><span>Édité le <b>${now}</b></span></div>
-<div class="kpis"><div class="k"><div class="v">${mesuresFiltrees.value.length}</div><div class="l">Mesures</div></div><div class="k"><div class="v">${nbLots.value}</div><div class="l">Lots</div></div><div class="k"><div class="v">${tauxGlobal.value.toFixed(1)}%</div><div class="l">Conformité</div></div><div class="k"><div class="v">${nbHors.value}</div><div class="l">Hors spec</div></div></div>
+<div class="meta"><span>Période : <b>${periode}</b></span><span>Mesures : <b>${mesuresPlat.value.length}</b></span><span>Lots : <b>${nbLots.value}</b></span><span>Édité le <b>${now}</b></span></div>
+<div class="kpis"><div class="k"><div class="v">${mesuresPlat.value.length}</div><div class="l">Mesures</div></div><div class="k"><div class="v">${nbLots.value}</div><div class="l">Lots</div></div><div class="k"><div class="v">${tauxGlobal.value.toFixed(1)}%</div><div class="l">Conformité</div></div><div class="k"><div class="v">${nbHors.value}</div><div class="l">Hors spec</div></div></div>
 <h2>Synthèse par paramètre</h2>
 <table><thead><tr><th>Paramètre</th><th class="r">n</th><th class="r">Moyenne</th><th class="r">σ</th><th class="r">Limites</th><th class="r">Conf.</th><th class="r">Cpk</th><th>Capabilité</th></tr></thead><tbody>${synthHtml}</tbody></table>
 <h2>Lots hors spec</h2>
