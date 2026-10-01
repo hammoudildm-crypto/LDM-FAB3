@@ -51,11 +51,15 @@ function rangDe(n) {
   const i = RANGS.findIndex(r => norm(r) === f)
   return i >= 0 ? i : RANGS.length
 }
+const rangsUtilises = computed(() => { const set = new Set(); for (const n of props.all) set.add(rangDe(n)); return set })
 function wrap(child, parentRank) {
   const cRank = rangDe(child)
-  if (cRank <= parentRank + 1) return child
+  const used = rangsUtilises.value
+  const pr = []
+  for (let r = parentRank + 1; r < cRank; r++) if (used.has(r)) pr.push(r)   // seulement les rangs occupés
+  if (!pr.length) return child
   let node = child
-  for (let r = cRank - 1; r > parentRank; r--) node = { __phantom: true, __rank: r, __wrapped: node, id: 'ph-' + child.id + '-' + r }
+  for (let i = pr.length - 1; i >= 0; i--) node = { __phantom: true, __rank: pr[i], __wrapped: node, id: 'ph-' + child.id + '-' + pr[i] }
   return node
 }
 const enfants = computed(() => {
