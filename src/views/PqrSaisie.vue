@@ -8,9 +8,13 @@
 
     <section class="card">
       <div class="pqr-bar">
+        <div class="f">
+          <label>Rechercher</label>
+          <input v-model="rechercheOf" class="of-search" placeholder="🔍 N° lot ou produit" />
+        </div>
         <div class="f grow">
-          <label>Lot / OF</label>
-          <select v-model="ofSel"><option value="">—</option><option v-for="o in ofs" :key="o.id" :value="String(o.id)">{{ o.numero_lot }} · {{ o.code }}{{ o.desig ? ' — ' + o.desig : '' }}</option></select>
+          <label>Lot / OF <span v-if="rechercheOf" class="cnt">({{ ofsFiltres.length }})</span></label>
+          <select v-model="ofSel"><option value="">—</option><option v-for="o in ofsFiltres" :key="o.id" :value="String(o.id)">{{ o.numero_lot }} · {{ o.code }}{{ o.desig ? ' — ' + o.desig : '' }}</option></select>
         </div>
         <div class="f">
           <label>Phase</label>
@@ -63,6 +67,7 @@ const peutEditer = inject('peutEditer', ref(true))
 const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
 
 const ofs = ref([])
+const rechercheOf = ref('')
 const ofSel = ref('')
 const phaseSel = ref('')
 const dateMesure = ref(new Date().toISOString().slice(0, 10))
@@ -83,6 +88,7 @@ async function charger() {
 onMounted(charger)
 
 const ofCourant = computed(() => ofs.value.find(o => String(o.id) === ofSel.value) || null)
+const ofsFiltres = computed(() => { const q = (rechercheOf.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); if (!q) return ofs.value; return ofs.value.filter(o => (((o.numero_lot || '') + ' ' + (o.code || '') + ' ' + (o.desig || '')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')).includes(q)) })
 const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
 const phasesAvecParams = computed(() => [...new Set(params.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
 const paramsPhase = computed(() => params.value.filter(p => p.phase === phaseSel.value).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
@@ -147,6 +153,9 @@ async function enregistrer() {
 .pqr-bar .f.grow { flex: 1; min-width: 240px; }
 .pqr-bar label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; }
 .pqr-bar select, .pqr-bar input { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
+.pqr-bar .of-search { min-width: 180px; }
+.pqr-bar .of-search:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,85,247,.15); }
+.pqr-bar label .cnt { color: #a855f7; font-weight: 700; }
 .pqr-bar .f.grow select { width: 100%; }
 
 .pqr-sum { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
