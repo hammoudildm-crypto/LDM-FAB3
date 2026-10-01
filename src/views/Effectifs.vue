@@ -14,6 +14,7 @@ const PERIMETRES = ['Fabrication forme sèche', 'Fabrication forme semi solide',
 
 const effectifs = ref([])
 const ateliers = ref([])
+const equipementsListe = ref([])
 const filtreAnnee = ref('')
 const filtreAtelier = ref('')
 const erreur = ref('')
@@ -37,6 +38,8 @@ async function chargerTout() {
   const ra = await supabase.from('ateliers').select('id, code, nom').eq('actif', true).order('code')
   if (ra.error) { erreur.value = ra.error.message; return }
   ateliers.value = ra.data
+  const req = await supabase.from('equipements').select('id, nom').eq('actif', true).order('nom')
+  if (!req.error) equipementsListe.value = req.data || []
 
   const re = await supabase.from('effectifs').select('*').eq('actif', true)
     .order('annee', { ascending: false }).order('mois', { ascending: false }).order('id', { ascending: false })
@@ -56,8 +59,8 @@ const totalEffectif = computed(() => effectifsFiltres.value.reduce((s, e) => s +
 
 // --- Organigramme ---
 const orgNodes = ref([])
-const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '' })
-function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '' }) }
+const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', equipement: '' })
+function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', equipement: '' }) }
 function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
 const RANGS_ORG = ['Manager Fabrication', 'Responsable fabrication', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène"]
 const normOrg = (t) => (t || '').toLowerCase().replace(/\s+/g, ' ').trim()
@@ -81,7 +84,7 @@ const orgRacines = computed(() => orgNodes.value.filter(n => !n.parent_id).sort(
 async function orgEnregistrer() {
   erreur.value = ''
   if (!orgForm.nom.trim()) { erreur.value = 'Le nom du poste est requis.'; return }
-  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null }
+  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, equipement: orgForm.equipement || null }
   let r
   if (orgForm.id) r = await supabase.from('organigramme').update(payload).eq('id', orgForm.id)
   else r = await supabase.from('organigramme').insert(payload)
@@ -89,7 +92,7 @@ async function orgEnregistrer() {
   message.value = orgForm.id ? 'Poste mis a jour.' : 'Poste ajoute.'
   orgReset(); await chargerTout()
 }
-function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '' }) }
+function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', equipement: n.equipement || '' }) }
 async function orgSupprimer(n) {
   if (!confirm('Supprimer le poste ' + n.nom + ' ? Ses subordonnes remonteront d un niveau.')) return
   await supabase.from('organigramme').update({ parent_id: n.parent_id || null }).eq('parent_id', n.id)
@@ -247,6 +250,7 @@ onMounted(chargerTout)
           <input v-model="orgForm.fonction" placeholder="Fonction" />
           <select v-model="orgForm.atelier_id"><option value="">Périmètre —</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
           <input v-model="orgForm.equipe" placeholder="Équipe" />
+          <select v-model="orgForm.equipement"><option value="">Équipement —</option><option v-for="eq in equipementsListe" :key="eq.id" :value="eq.nom">{{ eq.nom }}</option></select>
           <input v-model="orgForm.matricule" placeholder="Matricule" />
           <input v-model="orgForm.telephone" placeholder="Téléphone" />
           <select v-model="orgForm.parent_id"><option value="">Responsable — (sommet)</option><option v-for="n in responsablesPossibles" :key="n.id" :value="n.id">{{ n.nom }} — {{ n.fonction }}</option></select>
