@@ -8,7 +8,7 @@
       <div class="on-fct" v-if="node.fonction">{{ node.fonction }}</div>
       <div class="on-meta">
         <span v-if="node.matricule">#{{ node.matricule }}</span>
-        <span v-if="ac(node.atelier_id)"> · {{ ac(node.atelier_id) }}</span>
+        <span v-if="node.atelier_id"> · {{ node.atelier_id }}</span>
         <span v-if="node.equipe"> · Éq.{{ node.equipe }}</span>
       </div>
       <div class="on-tel" v-if="node.telephone">☎ {{ node.telephone }}</div>
