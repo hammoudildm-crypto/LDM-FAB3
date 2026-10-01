@@ -71,17 +71,17 @@ const ini = computed(() => (props.node.nom || '').trim().split(/\s+/).map(w => w
 </script>
 
 <style scoped>
-ul { padding-top: 26px; position: relative; display: flex; justify-content: center; list-style: none; margin: 0; }
-.on-li { list-style: none; text-align: center; position: relative; padding: 26px 12px 0; }
-.on-li::before, .on-li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #d9e0e8; width: 50%; height: 26px; }
+ul { padding-top: 14px; position: relative; display: flex; justify-content: center; list-style: none; margin: 0; }
+.on-li { list-style: none; text-align: center; position: relative; padding: 14px 10px 0; }
+.on-li::before, .on-li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #d9e0e8; width: 50%; height: 14px; }
 .on-li::after { right: auto; left: 50%; border-left: 2px solid #d9e0e8; }
 .on-li:only-child::before, .on-li:only-child::after { display: none; }
 .on-li:first-child::before, .on-li:last-child::after { border: 0 none; }
 .on-li:last-child::before { border-right: 2px solid #d9e0e8; border-radius: 0 7px 0 0; }
 .on-li:first-child::after { border-radius: 7px 0 0 0; }
-ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #d9e0e8; width: 0; height: 26px; }
+ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #d9e0e8; width: 0; height: 14px; }
 
-.on-card { display: inline-flex; flex-direction: column; align-items: center; justify-content: flex-start; position: relative; background: #fff; border: 1px solid #eef1f6; border-radius: 16px; padding: 16px 14px 12px; box-shadow: 0 8px 20px rgba(16,24,40,.08), 0 1px 3px rgba(16,24,40,.05); width: 172px; min-width: 172px; height: 124px; box-sizing: border-box; overflow: hidden; vertical-align: top; transition: transform .16s ease, box-shadow .16s ease; }
+.on-card { display: inline-flex; flex-direction: column; align-items: center; justify-content: flex-start; position: relative; background: #fff; border: 1px solid #eef1f6; border-radius: 16px; padding: 16px 14px 12px; box-shadow: 0 8px 20px rgba(16,24,40,.08), 0 1px 3px rgba(16,24,40,.05); width: 172px; min-width: 172px; height: 108px; box-sizing: border-box; overflow: hidden; vertical-align: top; transition: transform .16s ease, box-shadow .16s ease; }
 .on-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--c, #0f766e); }
 .on-card:hover { transform: translateY(-3px); box-shadow: 0 16px 34px rgba(16,24,40,.15), 0 2px 6px rgba(16,24,40,.06); }
 .on-card.on-root { box-shadow: 0 10px 26px rgba(99,102,241,.22), 0 2px 6px rgba(16,24,40,.06); }
@@ -92,7 +92,7 @@ ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left:
 .on-meta { font-size: 10px; color: #94a3b8; font-weight: 600; margin-top: 4px; max-width: 152px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .on-tel { font-size: 10px; color: #94a3b8; margin-top: 2px; }
 
-.on-spacer { display: inline-block; width: 172px; height: 124px; vertical-align: top; position: relative; }
+.on-spacer { display: inline-block; width: 172px; height: 108px; vertical-align: top; position: relative; }
 .on-spacer::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; border-left: 2px dashed #d9e0e8; }
 
 .on-acts { position: absolute; top: 7px; right: 7px; display: flex; gap: 3px; opacity: 0; transition: opacity .12s; }
