@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, inject } from 'vue'
 import { supabase } from '../supabase'
+import OrgNode from '../components/OrgNode.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { ICONS, TINTS } from '../icons.js'
 
@@ -54,8 +55,8 @@ const totalEffectif = computed(() => effectifsFiltres.value.reduce((s, e) => s +
 
 // --- Organigramme ---
 const orgNodes = ref([])
-const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '' })
-function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '' }) }
+const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '' })
+function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '' }) }
 function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
 const orgFlat = computed(() => {
   const byParent = {}
@@ -66,10 +67,11 @@ const orgFlat = computed(() => {
   walk('root', 0)
   return out
 })
+const orgRacines = computed(() => orgNodes.value.filter(n => !n.parent_id).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
 async function orgEnregistrer() {
   erreur.value = ''
   if (!orgForm.nom.trim()) { erreur.value = 'Le nom du poste est requis.'; return }
-  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null }
+  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null }
   let r
   if (orgForm.id) r = await supabase.from('organigramme').update(payload).eq('id', orgForm.id)
   else r = await supabase.from('organigramme').insert(payload)
@@ -77,7 +79,7 @@ async function orgEnregistrer() {
   message.value = orgForm.id ? 'Poste mis a jour.' : 'Poste ajoute.'
   orgReset(); await chargerTout()
 }
-function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '' }) }
+function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '' }) }
 async function orgSupprimer(n) {
   if (!confirm('Supprimer le poste ' + n.nom + ' ? Ses subordonnes remonteront d un niveau.')) return
   await supabase.from('organigramme').update({ parent_id: n.parent_id || null }).eq('parent_id', n.id)
@@ -235,27 +237,21 @@ onMounted(chargerTout)
           <input v-model="orgForm.fonction" placeholder="Fonction" />
           <select v-model="orgForm.atelier_id"><option value="">Atelier —</option><option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.code }} — {{ a.nom }}</option></select>
           <input v-model="orgForm.equipe" placeholder="Équipe" />
+          <input v-model="orgForm.matricule" placeholder="Matricule" />
+          <input v-model="orgForm.telephone" placeholder="Téléphone" />
           <select v-model="orgForm.parent_id"><option value="">Responsable — (sommet)</option><option v-for="n in orgNodes" :key="n.id" :value="n.id" :disabled="n.id === orgForm.id">{{ n.nom }}</option></select>
+          <input v-model="orgForm.photo_url" placeholder="URL photo (optionnel)" />
           <input v-model="orgForm.note" placeholder="Note" class="org-note" />
           <div class="org-actions">
             <button class="btn" @click="orgEnregistrer">{{ orgForm.id ? 'Mettre à jour' : 'Ajouter' }}</button>
             <button v-if="orgForm.id" class="btn ghost" @click="orgReset">Annuler</button>
           </div>
         </div>
-        <div v-if="!orgFlat.length" class="empty-card">Aucun poste. Ajoute le premier (ex. Manager Fabrication) ci-dessus.</div>
-        <div v-else class="org-tree">
-          <div v-for="n in orgFlat" :key="n.id" class="org-row" :style="{ marginLeft: (n.depth * 30) + 'px' }">
-            <span v-if="n.depth > 0" class="org-connect"></span>
-            <div class="org-box">
-              <div class="org-nom">{{ n.nom }}</div>
-              <div class="org-meta"><span v-if="n.fonction">{{ n.fonction }}</span><span v-if="atelierOrg(n.atelier_id)"> · {{ atelierOrg(n.atelier_id) }}</span><span v-if="n.equipe"> · Éq. {{ n.equipe }}</span></div>
-              <div v-if="n.note" class="org-note-txt">{{ n.note }}</div>
-            </div>
-            <div v-if="peutEditer" class="org-btns">
-              <button class="org-edit" @click="orgModifier(n)" title="Modifier">✎</button>
-              <button class="org-del" @click="orgSupprimer(n)" title="Supprimer">🗑</button>
-            </div>
-          </div>
+        <div v-if="!orgNodes.length" class="empty-card">Aucun poste. Ajoute le premier (ex. Manager Fabrication) ci-dessus.</div>
+        <div v-else class="org-chart">
+          <ul class="org-root">
+            <OrgNode v-for="n in orgRacines" :key="n.id" :node="n" :all="orgNodes" :ateliers="ateliers" :peutEditer="peutEditer" :depth="0" @edit="orgModifier" @del="orgSupprimer" />
+          </ul>
         </div>
       </section>
     </template>
@@ -305,6 +301,8 @@ onMounted(chargerTout)
 .org-form .org-note { flex: 1; min-width: 150px; }
 .org-actions { display: flex; gap: 8px; }
 .org-tree { display: flex; flex-direction: column; gap: 6px; }
+.org-chart { overflow-x: auto; padding: 12px 0 4px; }
+.org-root { display: flex; justify-content: center; list-style: none; padding: 0; margin: 0; min-width: min-content; }
 .org-row { display: flex; align-items: center; gap: 8px; }
 .org-connect { width: 18px; height: 2px; background: #cbd5e1; flex-shrink: 0; }
 .org-box { background: linear-gradient(158deg, #ffffff, #f8fafc); border: 1px solid #e2e8f0; border-left: 3px solid #0f766e; border-radius: 10px; padding: 7px 14px; box-shadow: 0 2px 6px rgba(16,24,40,.05); min-width: 170px; }
