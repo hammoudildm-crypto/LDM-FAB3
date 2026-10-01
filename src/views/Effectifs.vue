@@ -40,6 +40,8 @@ async function chargerTout() {
     .order('annee', { ascending: false }).order('mois', { ascending: false }).order('id', { ascending: false })
   if (re.error) { erreur.value = re.error.message; return }
   effectifs.value = re.data
+  const ro = await supabase.from('organigramme').select('*').eq('actif', true).order('ordre')
+  if (!ro.error) orgNodes.value = ro.data || []
 }
 
 const effectifsFiltres = computed(() => {
@@ -49,6 +51,40 @@ const effectifsFiltres = computed(() => {
   )
 })
 const totalEffectif = computed(() => effectifsFiltres.value.reduce((s, e) => s + Number(e.effectif || 0), 0))
+
+// --- Organigramme ---
+const orgNodes = ref([])
+const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '' })
+function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '' }) }
+function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
+const orgFlat = computed(() => {
+  const byParent = {}
+  for (const n of orgNodes.value) { const k = n.parent_id || 'root'; (byParent[k] = byParent[k] || []).push(n) }
+  for (const k in byParent) byParent[k].sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id)
+  const out = []
+  function walk(key, depth) { for (const n of (byParent[key] || [])) { out.push({ ...n, depth }); walk(n.id, depth + 1) } }
+  walk('root', 0)
+  return out
+})
+async function orgEnregistrer() {
+  erreur.value = ''
+  if (!orgForm.nom.trim()) { erreur.value = 'Le nom du poste est requis.'; return }
+  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null }
+  let r
+  if (orgForm.id) r = await supabase.from('organigramme').update(payload).eq('id', orgForm.id)
+  else r = await supabase.from('organigramme').insert(payload)
+  if (r.error) { erreur.value = r.error.message; return }
+  message.value = orgForm.id ? 'Poste mis a jour.' : 'Poste ajoute.'
+  orgReset(); await chargerTout()
+}
+function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '' }) }
+async function orgSupprimer(n) {
+  if (!confirm('Supprimer le poste ' + n.nom + ' ? Ses subordonnes remonteront d un niveau.')) return
+  await supabase.from('organigramme').update({ parent_id: n.parent_id || null }).eq('parent_id', n.id)
+  const r = await supabase.from('organigramme').update({ actif: false }).eq('id', n.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  await chargerTout()
+}
 
 async function enregistrer() {
   erreur.value = ''
@@ -192,6 +228,36 @@ onMounted(chargerTout)
           </table>
         </div>
       </section>
+      <section class="card">
+        <div class="card-head"><h2 class="card-title">Organigramme</h2><span class="count">{{ orgFlat.length }}</span></div>
+        <div v-if="peutEditer" class="org-form">
+          <input v-model="orgForm.nom" placeholder="Nom *" />
+          <input v-model="orgForm.fonction" placeholder="Fonction" />
+          <select v-model="orgForm.atelier_id"><option value="">Atelier —</option><option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.code }} — {{ a.nom }}</option></select>
+          <input v-model="orgForm.equipe" placeholder="Équipe" />
+          <select v-model="orgForm.parent_id"><option value="">Responsable — (sommet)</option><option v-for="n in orgNodes" :key="n.id" :value="n.id" :disabled="n.id === orgForm.id">{{ n.nom }}</option></select>
+          <input v-model="orgForm.note" placeholder="Note" class="org-note" />
+          <div class="org-actions">
+            <button class="btn" @click="orgEnregistrer">{{ orgForm.id ? 'Mettre à jour' : 'Ajouter' }}</button>
+            <button v-if="orgForm.id" class="btn ghost" @click="orgReset">Annuler</button>
+          </div>
+        </div>
+        <div v-if="!orgFlat.length" class="empty-card">Aucun poste. Ajoute le premier (ex. Manager Fabrication) ci-dessus.</div>
+        <div v-else class="org-tree">
+          <div v-for="n in orgFlat" :key="n.id" class="org-row" :style="{ marginLeft: (n.depth * 30) + 'px' }">
+            <span v-if="n.depth > 0" class="org-connect"></span>
+            <div class="org-box">
+              <div class="org-nom">{{ n.nom }}</div>
+              <div class="org-meta"><span v-if="n.fonction">{{ n.fonction }}</span><span v-if="atelierOrg(n.atelier_id)"> · {{ atelierOrg(n.atelier_id) }}</span><span v-if="n.equipe"> · Éq. {{ n.equipe }}</span></div>
+              <div v-if="n.note" class="org-note-txt">{{ n.note }}</div>
+            </div>
+            <div v-if="peutEditer" class="org-btns">
+              <button class="org-edit" @click="orgModifier(n)" title="Modifier">✎</button>
+              <button class="org-del" @click="orgSupprimer(n)" title="Supprimer">🗑</button>
+            </div>
+          </div>
+        </div>
+      </section>
     </template>
   </div>
 </template>
@@ -233,6 +299,22 @@ onMounted(chargerTout)
 .btn { background: #0f766e; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .btn:hover { background: #0c5f59; }
 .btn.ghost { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
+
+.org-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.org-form input, .org-form select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
+.org-form .org-note { flex: 1; min-width: 150px; }
+.org-actions { display: flex; gap: 8px; }
+.org-tree { display: flex; flex-direction: column; gap: 6px; }
+.org-row { display: flex; align-items: center; gap: 8px; }
+.org-connect { width: 18px; height: 2px; background: #cbd5e1; flex-shrink: 0; }
+.org-box { background: linear-gradient(158deg, #ffffff, #f8fafc); border: 1px solid #e2e8f0; border-left: 3px solid #0f766e; border-radius: 10px; padding: 7px 14px; box-shadow: 0 2px 6px rgba(16,24,40,.05); min-width: 170px; }
+.org-nom { font-weight: 800; font-size: 14px; color: #0f172a; }
+.org-meta { font-size: 11px; color: #64748b; font-weight: 600; margin-top: 1px; }
+.org-note-txt { font-size: 10px; color: #94a3b8; margin-top: 1px; }
+.org-btns { display: flex; gap: 4px; }
+.org-edit, .org-del { border: 1px solid #e2e8f0; background: #fff; border-radius: 7px; padding: 4px 8px; cursor: pointer; font-size: 12px; }
+.org-del:hover { background: #fee2e2; border-color: #fecaca; }
+.org-edit:hover { background: #f0fdfa; border-color: #99f6e4; }
 .btn.ghost:hover { background: #f8fafc; }
 
 .table-scroll { overflow-x: auto; }
