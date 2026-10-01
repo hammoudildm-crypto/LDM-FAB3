@@ -54,9 +54,9 @@ ul { padding-top: 22px; position: relative; display: flex; justify-content: cent
 .on-li:last-child::before { border-right: 2px solid #cbd5e1; }
 ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #cbd5e1; width: 0; height: 22px; }
 /* carte */
-.on-card { display: inline-block; position: relative; background: linear-gradient(158deg, #ffffff, #f8fafc); border: 1px solid #e2e8f0; border-top: 3px solid #0f766e; border-radius: 12px; padding: 12px 16px 10px; box-shadow: 0 4px 12px rgba(16,24,40,.08); min-width: 150px; }
+.on-card { display: inline-flex; flex-direction: column; justify-content: center; position: relative; background: linear-gradient(158deg, #ffffff, #f8fafc); border: 1px solid #e2e8f0; border-top: 3px solid #0f766e; border-radius: 12px; padding: 10px 16px; box-shadow: 0 4px 12px rgba(16,24,40,.08); min-width: 160px; width: 160px; height: 104px; box-sizing: border-box; overflow: hidden; vertical-align: top; }
 .on-card.on-root { border-top-color: #4f46e5; }
-.on-ava { width: 42px; height: 42px; border-radius: 50%; background: #e0e7ff; background-size: cover; background-position: center; margin: 0 auto 7px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: #4f46e5; }
+.on-ava { width: 38px; height: 38px; border-radius: 50%; background: #e0e7ff; background-size: cover; background-position: center; margin: 0 auto 5px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: #4f46e5; }
 .on-nom { font-weight: 800; font-size: 14px; color: #0f172a; }
 .on-fct { font-size: 11.5px; color: #0f766e; font-weight: 700; margin-top: 1px; }
 .on-meta { font-size: 10.5px; color: #64748b; font-weight: 600; margin-top: 3px; }
