@@ -45,14 +45,14 @@ const estPlie = computed(() => orgUI.collapsed.has(props.node.id))
 function basculer() { orgUI.toggle(props.node.id) }
 
 const COULEURS = {
-  'manager fabrication': '#6366f1',
-  'responsable fabrication': '#7c3aed',
+  'manager': '#6366f1',
+  'responsable': '#7c3aed',
   'superviseur': '#0d9488',
   'chef de ligne': '#0284c7',
   'operateur': '#475569',
   "agent d'hygiene": '#d97706'
 }
-const norm = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\u2019\u02bc']/g, "'").replace(/\s+/g, ' ').trim()
+const norm = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\u2019\u02bc']/g, "'").replace(/\s+/g, ' ').trim().replace(/ fabrication$/, '')
 const enfants = computed(() => props.all
   .filter(n => n.parent_id === props.node.id)
   .sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
