@@ -50,7 +50,10 @@ const COULEURS = {
   'superviseur': '#0d9488',
   'chef de ligne': '#0284c7',
   'operateur': '#475569',
-  "agent d'hygiene": '#d97706'
+  "agent d'hygiene": '#d97706',
+  'charge blanchisserie': '#0891b2',
+  'agent blanchisserie': '#06b6d4',
+  "agent d'hygiene vestiaire": '#ea580c'
 }
 const norm = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\u2019\u02bc']/g, "'").replace(/\s+/g, ' ').trim().replace(/ fabrication$/, '')
 const enfants = computed(() => props.all
