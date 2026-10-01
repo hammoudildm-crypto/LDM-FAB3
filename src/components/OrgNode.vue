@@ -1,6 +1,7 @@
 <template>
   <li class="on-li">
-    <div class="on-card" :class="{ 'on-root': depth === 0 }" :style="{ '--c': couleur }" :title="node.note || ''">
+    <div v-if="node.__phantom" class="on-spacer"></div>
+    <div v-else class="on-card" :class="{ 'on-root': depth === 0 }" :style="{ '--c': couleur }" :title="node.note || ''">
       <div class="on-ava" :style="node.photo_url ? { backgroundImage: 'url(' + node.photo_url + ')' } : {}">
         <span v-if="!node.photo_url">{{ ini }}</span>
       </div>
@@ -44,18 +45,39 @@ const orgUI = inject('orgUI', { collapsed: new Set(), toggle: () => {} })
 const estPlie = computed(() => orgUI.collapsed.has(props.node.id))
 function basculer() { orgUI.toggle(props.node.id) }
 
+const RANGS = ['Manager Fabrication', 'Responsable fabrication', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène"]
 const COULEURS = {
   'manager fabrication': '#6366f1',
   'responsable fabrication': '#7c3aed',
   'superviseur': '#0d9488',
   'chef de ligne': '#0284c7',
-  'opérateur': '#475569',
-  "agent d'hygiène": '#d97706'
+  'operateur': '#475569',
+  "agent d'hygiene": '#d97706'
 }
-const norm = (t) => (t || '').toLowerCase().replace(/\s+/g, ' ').trim()
-const enfants = computed(() => props.all
-  .filter(n => n.parent_id === props.node.id)
-  .sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
+const norm = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\u2019\u02bc']/g, "'").replace(/\s+/g, ' ').trim()
+function rangDe(n) {
+  const f = norm(n.fonction)
+  const i = RANGS.findIndex(r => norm(r) === f)
+  return i >= 0 ? i : RANGS.length
+}
+// Seuls les Agents d'hygiène « descendent » à leur rang (sous les Opérateurs),
+// tout en restant rattachés à leur vrai responsable. Le reste est compact.
+function wrap(child, parentRank) {
+  if (norm(child.fonction) !== "agent d'hygiene") return child
+  const n = rangDe(child) - (parentRank + 1)
+  if (n <= 0) return child
+  let node = child
+  for (let i = 0; i < n; i++) node = { __phantom: true, __wrapped: node, id: 'ph-' + child.id + '-' + i }
+  return node
+}
+const enfants = computed(() => {
+  if (props.node.__phantom) return [props.node.__wrapped]
+  const myRank = rangDe(props.node)
+  return props.all
+    .filter(n => n.parent_id === props.node.id)
+    .sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id)
+    .map(c => wrap(c, myRank))
+})
 function compterDesc(id) {
   let n = 0
   for (const k of props.all.filter(x => x.parent_id === id)) n += 1 + compterDesc(k.id)
@@ -92,6 +114,9 @@ ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left:
 .on-fold:hover { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
 .on-fold.plie { background: var(--c); border-color: var(--c); color: #fff; }
 .on-caret { font-size: 9px; line-height: 1; }
+
+.on-spacer { display: inline-block; width: 152px; height: 120px; vertical-align: top; position: relative; }
+.on-spacer::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; border-left: 2px dashed #cbd5e1; }
 
 .on-acts { position: absolute; top: 6px; right: 6px; display: flex; gap: 3px; opacity: 0; transition: opacity .12s; }
 .on-card:hover .on-acts { opacity: 1; }
