@@ -37,9 +37,10 @@ const props = defineProps({
 })
 defineEmits(['edit', 'del'])
 
-const RANGS = ['Manager Fabrication', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène"]
+const RANGS = ['Manager Fabrication', 'Responsable fabrication', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène"]
 const COULEURS = {
   'manager fabrication': '#6366f1',
+  'responsable fabrication': '#7c3aed',
   'superviseur': '#0d9488',
   'chef de ligne': '#0284c7',
   'opérateur': '#475569',
