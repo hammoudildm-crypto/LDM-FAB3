@@ -7,10 +7,11 @@
       </div>
       <div class="on-nom">{{ node.nom }}</div>
       <div class="on-fct" v-if="node.fonction">{{ node.fonction }}</div>
-      <div class="on-meta" v-if="node.matricule || node.atelier_id || node.equipe">
+      <div class="on-meta" v-if="node.matricule || node.atelier_id || node.equipe || node.equipement">
         <span v-if="node.matricule">#{{ node.matricule }}</span>
         <span v-if="node.atelier_id"> · {{ node.atelier_id }}</span>
         <span v-if="node.equipe"> · Éq.{{ node.equipe }}</span>
+        <span v-if="node.equipement"> · {{ node.equipement }}</span>
       </div>
       <div class="on-tel" v-if="node.telephone">☎ {{ node.telephone }}</div>
       <div class="on-acts" v-if="peutEditer">
