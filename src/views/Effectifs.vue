@@ -10,6 +10,7 @@ const peutEditer = inject('peutEditer', ref(true))
 const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const anneeCourante = new Date().getFullYear()
 const ANNEES = [anneeCourante - 1, anneeCourante, anneeCourante + 1]
+const PERIMETRES = ['Fabrication forme sèche', 'Fabrication forme semi solide', 'Fabrication forme sèche hormonale', 'Partie premix', 'Partie vrac']
 
 const effectifs = ref([])
 const ateliers = ref([])
@@ -235,7 +236,7 @@ onMounted(chargerTout)
         <div v-if="peutEditer" class="org-form">
           <input v-model="orgForm.nom" placeholder="Nom *" />
           <input v-model="orgForm.fonction" placeholder="Fonction" />
-          <select v-model="orgForm.atelier_id"><option value="">Atelier —</option><option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.code }} — {{ a.nom }}</option></select>
+          <select v-model="orgForm.atelier_id"><option value="">Périmètre —</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
           <input v-model="orgForm.equipe" placeholder="Équipe" />
           <input v-model="orgForm.matricule" placeholder="Matricule" />
           <input v-model="orgForm.telephone" placeholder="Téléphone" />
