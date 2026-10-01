@@ -59,6 +59,15 @@ const orgNodes = ref([])
 const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '' })
 function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '' }) }
 function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
+const RANGS_ORG = ['Manager Fabrication', 'Responsable fabrication', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène"]
+const normOrg = (t) => (t || '').toLowerCase().replace(/\s+/g, ' ').trim()
+function rangOrg(f) { const i = RANGS_ORG.findIndex(r => normOrg(r) === normOrg(f)); return i >= 0 ? i : RANGS_ORG.length }
+const responsablesPossibles = computed(() => {
+  const monRang = rangOrg(orgForm.fonction)
+  return orgNodes.value
+    .filter(n => n.id !== orgForm.id && rangOrg(n.fonction) < monRang)
+    .sort((a, b) => rangOrg(a.fonction) - rangOrg(b.fonction) || (a.nom || '').localeCompare(b.nom || ''))
+})
 const orgFlat = computed(() => {
   const byParent = {}
   for (const n of orgNodes.value) { const k = n.parent_id || 'root'; (byParent[k] = byParent[k] || []).push(n) }
@@ -240,7 +249,7 @@ onMounted(chargerTout)
           <input v-model="orgForm.equipe" placeholder="Équipe" />
           <input v-model="orgForm.matricule" placeholder="Matricule" />
           <input v-model="orgForm.telephone" placeholder="Téléphone" />
-          <select v-model="orgForm.parent_id"><option value="">Responsable — (sommet)</option><option v-for="n in orgNodes" :key="n.id" :value="n.id" :disabled="n.id === orgForm.id">{{ n.nom }}</option></select>
+          <select v-model="orgForm.parent_id"><option value="">Responsable — (sommet)</option><option v-for="n in responsablesPossibles" :key="n.id" :value="n.id">{{ n.nom }} — {{ n.fonction }}</option></select>
           <input v-model="orgForm.photo_url" placeholder="URL photo (optionnel)" />
           <input v-model="orgForm.note" placeholder="Note" class="org-note" />
           <div class="org-actions">
