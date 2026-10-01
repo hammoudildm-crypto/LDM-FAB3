@@ -9,8 +9,9 @@
     <section class="card">
       <div class="card-head">
         <h2 class="card-title">Paramètres par phase</h2>
-        <span class="count">{{ params.length }}</span>
-        <select v-model="produitSel" class="prod-sel" style="margin-left:auto">
+        <span class="count">{{ paramsFiltres.length }}</span>
+        <input v-model="recherche" class="pqr-search" placeholder="🔍 Rechercher un paramètre…" style="margin-left:auto" />
+        <select v-model="produitSel" class="prod-sel">
           <option value="">Limites par défaut</option>
           <option v-for="pr in produits" :key="pr.id" :value="String(pr.id)">{{ pr.code_pf }} — {{ pr.designation }}</option>
         </select>
@@ -36,6 +37,7 @@
         </div>
 
         <div v-if="!params.length" class="empty-card">Aucun paramètre. Clique « Charger le référentiel standard » ci-dessus, ou ajoute-les un par un.</div>
+        <div v-else-if="!paramsFiltres.length" class="empty-card">Aucun paramètre ne correspond à « {{ recherche }} ».</div>
 
         <div v-for="ph in phasesAvecParams" :key="ph" class="pqr-phase">
           <h3 class="pqr-phase-titre">{{ ph }}</h3>
@@ -63,6 +65,7 @@
         <p class="pqr-note">Specs pour <b>{{ produitNom }}</b>. Laisse une case <b>vide</b> pour hériter de la valeur par défaut (affichée en gris « déf. »).</p>
 
         <div v-if="!params.length" class="empty-card">Le référentiel est vide. Reviens en « Limites par défaut » pour le remplir d'abord.</div>
+        <div v-else-if="!paramsFiltres.length" class="empty-card">Aucun paramètre ne correspond à « {{ recherche }} ».</div>
 
         <div v-for="ph in phasesAvecParams" :key="ph" class="pqr-phase">
           <h3 class="pqr-phase-titre">{{ ph }}</h3>
@@ -124,6 +127,7 @@ const produitSel = ref('')
 const specsEdit = ref({})
 const erreur = ref('')
 const message = ref('')
+const recherche = ref('')
 const form = reactive({ id: null, phase: '', nom: '', unite: '', limite_min: null, cible: null, limite_max: null })
 function reset() { Object.assign(form, { id: null, phase: '', nom: '', unite: '', limite_min: null, cible: null, limite_max: null }) }
 
@@ -136,9 +140,11 @@ async function charger() {
 }
 onMounted(charger)
 
+const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+const paramsFiltres = computed(() => { const q = normR(recherche.value).trim(); if (!q) return params.value; return params.value.filter(p => normR(p.nom).includes(q) || normR(p.phase).includes(q)) })
 const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
-const phasesAvecParams = computed(() => [...new Set(params.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
-function paramsDe(ph) { return params.value.filter(p => p.phase === ph).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
+const phasesAvecParams = computed(() => [...new Set(paramsFiltres.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
+function paramsDe(ph) { return paramsFiltres.value.filter(p => p.phase === ph).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
 const fmt = (v) => (v === null || v === undefined || v === '') ? '—' : v
 const phDef = (v) => (v === null || v === undefined || v === '') ? '—' : ('déf. ' + v)
 const produitNom = computed(() => { const p = produits.value.find(x => String(x.id) === produitSel.value); return p ? (p.code_pf + ' — ' + p.designation) : '' })
@@ -224,6 +230,8 @@ async function enregistrerSpecs() {
 .card-title { margin: 0; font-size: 17px; }
 .count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
 .prod-sel { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; font-weight: 600; max-width: 340px; }
+.pqr-search { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; width: 220px; }
+.pqr-search:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,85,247,.15); }
 .btn { background: #0f766e; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .btn.ghost { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
 .empty-card { background: #fff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 24px; color: #475569; text-align: center; font-size: 14px; }
