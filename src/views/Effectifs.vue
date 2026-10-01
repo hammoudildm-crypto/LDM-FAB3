@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted, inject } from 'vue'
+import { ref, reactive, computed, onMounted, inject, provide, watch } from 'vue'
 import { supabase } from '../supabase'
 import OrgNode from '../components/OrgNode.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -81,6 +81,36 @@ const orgFlat = computed(() => {
   return out
 })
 const orgRacines = computed(() => orgNodes.value.filter(n => !n.parent_id).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
+// pliage + compteur (vue repliée par défaut au 1er chargement)
+const orgCollapsed = reactive(new Set())
+function orgToggle(id) { if (orgCollapsed.has(id)) orgCollapsed.delete(id); else orgCollapsed.add(id) }
+provide('orgUI', { collapsed: orgCollapsed, toggle: orgToggle })
+let orgInit = false
+watch(orgNodes, () => {
+  if (orgInit || !orgNodes.value.length) return
+  orgInit = true
+  for (const n of orgFlat.value) {
+    if (n.depth >= 2 && orgNodes.value.some(x => x.parent_id === n.id)) orgCollapsed.add(n.id)
+  }
+})
+// filtre par périmètre (garde les nœuds du périmètre + leurs ancêtres)
+const orgPerimFiltre = ref('')
+const orgNodesAffiches = computed(() => {
+  if (!orgPerimFiltre.value) return orgNodes.value
+  const byId = {}; for (const n of orgNodes.value) byId[n.id] = n
+  const keep = new Set()
+  for (const n of orgNodes.value) {
+    if (normOrg(n.atelier_id) === normOrg(orgPerimFiltre.value)) {
+      keep.add(n.id)
+      let pp = n.parent_id
+      while (pp && byId[pp]) { keep.add(pp); pp = byId[pp].parent_id }
+    }
+  }
+  return orgNodes.value.filter(n => keep.has(n.id))
+})
+const orgRacinesAffichees = computed(() => orgNodesAffiches.value
+  .filter(n => !n.parent_id || !orgNodesAffiches.value.some(x => x.id === n.parent_id))
+  .sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
 async function orgEnregistrer() {
   erreur.value = ''
   if (!orgForm.nom.trim()) { erreur.value = 'Le nom du poste est requis.'; return }
@@ -262,11 +292,25 @@ onMounted(chargerTout)
           </div>
         </div>
         <div v-if="!orgNodes.length" class="empty-card">Aucun poste. Ajoute le premier (ex. Manager Fabrication) ci-dessus.</div>
-        <div v-else class="org-chart">
-          <ul class="org-root">
-            <OrgNode v-for="n in orgRacines" :key="n.id" :node="n" :all="orgNodes" :ateliers="ateliers" :peutEditer="peutEditer" :depth="0" @edit="orgModifier" @del="orgSupprimer" />
-          </ul>
-        </div>
+        <template v-else>
+          <div class="org-toolbar">
+            <select v-model="orgPerimFiltre" class="org-filtre"><option value="">Tous les périmètres</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
+            <div class="org-legende">
+              <span class="lg-item"><i style="background:#6366f1"></i>Manager</span>
+              <span class="lg-item"><i style="background:#7c3aed"></i>Responsable</span>
+              <span class="lg-item"><i style="background:#0d9488"></i>Superviseur</span>
+              <span class="lg-item"><i style="background:#0284c7"></i>Chef de ligne</span>
+              <span class="lg-item"><i style="background:#475569"></i>Opérateur</span>
+              <span class="lg-item"><i style="background:#d97706"></i>Agent d'hygiène</span>
+            </div>
+          </div>
+          <div v-if="!orgRacinesAffichees.length" class="empty-card">Aucun poste dans ce périmètre.</div>
+          <div v-else class="org-chart">
+            <ul class="org-root">
+              <OrgNode v-for="n in orgRacinesAffichees" :key="n.id" :node="n" :all="orgNodesAffiches" :ateliers="ateliers" :peutEditer="peutEditer" :depth="0" @edit="orgModifier" @del="orgSupprimer" />
+            </ul>
+          </div>
+        </template>
       </section>
     </template>
   </div>
@@ -316,6 +360,11 @@ onMounted(chargerTout)
 .org-actions { display: flex; gap: 8px; }
 .org-tree { display: flex; flex-direction: column; gap: 6px; }
 .org-chart { overflow-x: auto; padding: 12px 0 4px; }
+.org-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.org-filtre { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; font-weight: 600; }
+.org-legende { display: flex; flex-wrap: wrap; gap: 10px; }
+.lg-item { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: #475569; }
+.lg-item i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
 .org-root { display: flex; justify-content: center; list-style: none; padding: 0; margin: 0; min-width: min-content; }
 .org-row { display: flex; align-items: center; gap: 8px; }
 .org-connect { width: 18px; height: 2px; background: #cbd5e1; flex-shrink: 0; }
