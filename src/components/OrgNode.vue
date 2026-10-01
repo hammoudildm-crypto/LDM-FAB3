@@ -1,5 +1,5 @@
 <template>
-  <li class="on-li">
+  <li class="on-li" :class="{ 'on-zone': estZone }" :style="estZone ? { backgroundColor: zoneCouleur } : {}">
     <div class="on-card" :class="{ 'on-root': depth === 0 }" :style="{ '--c': couleur }" :title="node.note || ''">
       <div class="on-ava" :style="node.photo_url ? { backgroundImage: 'url(' + node.photo_url + ')' } : {}">
         <span v-if="!node.photo_url">{{ ini }}</span>
@@ -44,6 +44,11 @@ const orgUI = inject('orgUI', { collapsed: new Set(), toggle: () => {} })
 const estPlie = computed(() => orgUI.collapsed.has(props.node.id))
 function basculer() { orgUI.toggle(props.node.id) }
 
+// Fond coloré par équipe : chaque responsable de 1er niveau + sa descendance
+const ZONE_TINTS = ['#eef2ff', '#ecfeff', '#f0fdf4', '#fff7ed', '#fdf2f8', '#f5f3ff', '#fef2f2', '#f0f9ff', '#faf5ff', '#f7fee7']
+const estZone = computed(() => props.depth === 1)
+const zoneCouleur = computed(() => ZONE_TINTS[Math.abs(Number(props.node.id) || 0) % ZONE_TINTS.length])
+
 const COULEURS = {
   'manager': '#6366f1',
   'responsable': '#7c3aed',
@@ -72,6 +77,7 @@ const ini = computed(() => (props.node.nom || '').trim().split(/\s+/).map(w => w
 <style scoped>
 ul { padding-top: 24px; position: relative; display: flex; justify-content: center; list-style: none; margin: 0; }
 .on-li { list-style: none; text-align: center; position: relative; padding: 24px 10px 0; }
+.on-zone { border-radius: 20px; padding: 22px 10px 14px; box-shadow: inset 0 0 0 1px rgba(15,23,42,.05); }
 .on-li::before, .on-li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #d9e0e8; width: 50%; height: 24px; }
 .on-li::after { right: auto; left: 50%; border-left: 2px solid #d9e0e8; }
 .on-li:only-child::before, .on-li:only-child::after { display: none; }
