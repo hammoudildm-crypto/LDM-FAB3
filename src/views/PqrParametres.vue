@@ -106,7 +106,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
-const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Contrôle Qualité']
 const UNITES = ['N', 'Kp', 'mg', 'g', 'kg', '°C', '%', 'min', 'mm', 'tr/min', 'bar']
 const STANDARD = [
   ['Pesée', 'Écart de pesée', '%'],
@@ -127,7 +127,8 @@ const STANDARD = [
   ['Remplissage Gélules', 'Désagrégation', 'min'],
   ['Pelliculage', 'Gain de masse', '%'],
   ['Pelliculage', 'Température', '°C'],
-  ['Pelliculage', 'Aspect', '']
+  ['Pelliculage', 'Aspect', ''],
+  ['Contrôle Qualité', 'CQ Dosage', '%']
 ]
 
 const params = ref([])
