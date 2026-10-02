@@ -8,6 +8,7 @@
 
     <section class="card">
       <datalist id="unitesListe"><option v-for="u in UNITES" :key="u" :value="u" /></datalist>
+      <datalist id="etapesListe"><option v-for="e in ETAPES" :key="e" :value="e" /></datalist>
       <div class="card-head">
         <h2 class="card-title">Paramètres par phase</h2>
         <span class="count">{{ params.length }}</span>
@@ -27,6 +28,7 @@
         <div v-if="peutEditer" class="pqr-form">
           <select v-model="form.phase"><option value="">Phase —</option><option v-for="ph in PHASES_LISTE" :key="ph" :value="ph">{{ ph }}</option></select>
           <input v-model="form.nom" placeholder="Paramètre *" />
+          <input v-model="form.etape" list="etapesListe" placeholder="Étape (opt.)" class="e" />
           <select v-model="form.type" class="t"><option value="num">Numérique</option><option value="bool">ON / OFF</option></select>
           <template v-if="form.type === 'num'">
           <input v-model="form.unite" list="unitesListe" placeholder="Unité" class="u" />
@@ -48,7 +50,9 @@
           <table class="pqr-tbl">
             <thead><tr><th>Paramètre</th><th>Unité</th><th class="r">Min</th><th class="r">Cible</th><th class="r">Max</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
             <tbody>
-              <tr v-for="p in paramsDe(ph)" :key="p.id">
+              <template v-for="et in etapesDe(ph)" :key="ph + '|' + et">
+              <tr v-if="et" class="etape-row"><td :colspan="peutEditer ? 6 : 5">{{ et }}</td></tr>
+              <tr v-for="p in paramsDeEtape(ph, et)" :key="p.id">
                 <td class="nom">{{ p.nom }} <span v-if="p.type === 'bool'" class="tag-bool">ON/OFF</span></td>
                 <td>{{ p.type === 'bool' ? '—' : (p.unite || '—') }}</td>
                 <td class="r">{{ p.type === 'bool' ? '—' : fmt(p.limite_min) }}</td>
@@ -59,6 +63,7 @@
                   <button @click="supprimer(p)" title="Supprimer">🗑</button>
                 </td>
               </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -75,7 +80,9 @@
           <table class="pqr-tbl">
             <thead><tr><th>Paramètre</th><th>Unité</th><th class="r">Min</th><th class="r">Cible</th><th class="r">Max</th></tr></thead>
             <tbody>
-              <tr v-for="p in paramsDe(ph)" :key="p.id">
+              <template v-for="et in etapesDe(ph)" :key="ph + '|' + et">
+              <tr v-if="et" class="etape-row"><td colspan="5">{{ et }}</td></tr>
+              <tr v-for="p in paramsDeEtape(ph, et)" :key="p.id">
                 <td class="nom">{{ p.nom }} <span v-if="p.type === 'bool'" class="tag-bool">ON/OFF</span></td>
                 <td><input v-if="p.type !== 'bool'" class="unite-in" v-model="specsEdit[p.id].unite" list="unitesListe" :placeholder="p.unite || '—'" :disabled="!peutEditer" /><span v-else>—</span></td>
                 <template v-if="p.type === 'bool'">
@@ -87,6 +94,7 @@
                   <td class="r"><input class="spec-in" v-model="specsEdit[p.id].max" type="number" step="any" :placeholder="phDef(p.limite_max)" :disabled="!peutEditer" /></td>
                 </template>
               </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -108,6 +116,7 @@ import PageHeader from '../components/PageHeader.vue'
 const peutEditer = inject('peutEditer', ref(true))
 const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Contrôle Qualité']
 const UNITES = ['N', 'Kp', 'mg', 'g', 'kg', '°C', '%', 'min', 'mm', 'tr/min', 'bar']
+const ETAPES = ['Mélange sec', 'Mouillage', 'Granulation', 'Séchage', 'Calibrage', 'Tamisage', 'Lubrification', 'Réglage', 'Démarrage', 'Milieu', 'Fin']
 const STANDARD = [
   ['Pesée', 'Écart de pesée', '%'],
   ['Granulation et Séchage', 'Température produit', '°C'],
@@ -141,8 +150,8 @@ const specsEdit = ref({})
 const erreur = ref('')
 const message = ref('')
 const recherche = ref('')
-const form = reactive({ id: null, phase: '', nom: '', unite: '', type: 'num', etat_attendu: '', limite_min: null, cible: null, limite_max: null })
-function reset() { Object.assign(form, { id: null, phase: '', nom: '', unite: '', type: 'num', etat_attendu: '', limite_min: null, cible: null, limite_max: null }) }
+const form = reactive({ id: null, phase: '', nom: '', unite: '', etape: '', type: 'num', etat_attendu: '', limite_min: null, cible: null, limite_max: null })
+function reset() { Object.assign(form, { id: null, phase: '', nom: '', unite: '', etape: '', type: 'num', etat_attendu: '', limite_min: null, cible: null, limite_max: null }) }
 
 async function charger() {
   const r = await supabase.from('pqr_parametres').select('*').eq('actif', true).order('ordre')
@@ -158,6 +167,8 @@ const produitsFiltres = computed(() => { const q = normR(recherche.value).trim()
 const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
 const phasesAvecParams = computed(() => [...new Set(params.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
 function paramsDe(ph) { return params.value.filter(p => p.phase === ph).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
+function etapesDe(ph) { const seen = []; for (const p of paramsDe(ph)) { const e = p.etape || ''; if (!seen.includes(e)) seen.push(e) } return seen.sort((a, b) => (a === '' ? -1 : b === '' ? 1 : 0)) }
+function paramsDeEtape(ph, et) { return paramsDe(ph).filter(p => (p.etape || '') === et) }
 const fmt = (v) => (v === null || v === undefined || v === '') ? '—' : v
 const phDef = (v) => (v === null || v === undefined || v === '') ? '—' : ('déf. ' + v)
 const produitNom = computed(() => { const p = produits.value.find(x => String(x.id) === produitSel.value); return p ? (p.code_pf + ' — ' + p.designation) : '' })
@@ -191,7 +202,7 @@ async function enregistrer() {
   if (!form.phase) { erreur.value = 'Choisis une phase.'; return }
   if (!form.nom.trim()) { erreur.value = 'Le nom du paramètre est requis.'; return }
   const bool = form.type === 'bool'
-  const payload = { phase: form.phase, nom: form.nom.trim(), unite: bool ? null : (form.unite || null), type: form.type, etat_attendu: bool ? (form.etat_attendu || null) : null, limite_min: bool ? null : form.limite_min, cible: bool ? null : form.cible, limite_max: bool ? null : form.limite_max }
+  const payload = { phase: form.phase, nom: form.nom.trim(), etape: form.etape || null, unite: bool ? null : (form.unite || null), type: form.type, etat_attendu: bool ? (form.etat_attendu || null) : null, limite_min: bool ? null : form.limite_min, cible: bool ? null : form.cible, limite_max: bool ? null : form.limite_max }
   let r
   if (form.id) r = await supabase.from('pqr_parametres').update(payload).eq('id', form.id)
   else r = await supabase.from('pqr_parametres').insert({ ...payload, ordre: params.value.length })
@@ -199,7 +210,7 @@ async function enregistrer() {
   message.value = form.id ? 'Paramètre mis à jour.' : 'Paramètre ajouté.'
   reset(); await charger()
 }
-function modifier(p) { Object.assign(form, { id: p.id, phase: p.phase, nom: p.nom, unite: p.unite || '', type: p.type || 'num', etat_attendu: p.etat_attendu || '', limite_min: p.limite_min, cible: p.cible, limite_max: p.limite_max }) }
+function modifier(p) { Object.assign(form, { id: p.id, phase: p.phase, nom: p.nom, unite: p.unite || '', etape: p.etape || '', type: p.type || 'num', etat_attendu: p.etat_attendu || '', limite_min: p.limite_min, cible: p.cible, limite_max: p.limite_max }) }
 async function supprimer(p) {
   if (!confirm('Supprimer le paramètre « ' + p.nom + ' » ?')) return
   const r = await supabase.from('pqr_parametres').update({ actif: false }).eq('id', p.id)
@@ -259,12 +270,14 @@ async function enregistrerSpecs() {
 .pqr-form input:not(.u):not(.n) { flex: 1; min-width: 160px; }
 .pqr-form .u { width: 82px; }
 .pqr-form .n { width: 78px; }
+.pqr-form .e { width: 130px; }
 .pqr-form .t { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
 .tag-bool { font-size: 9px; font-weight: 800; background: #ecfeff; color: #0891b2; padding: 1px 6px; border-radius: 999px; vertical-align: middle; }
 .bool-na { color: #94a3b8; font-style: italic; text-align: left !important; }
 .pqr-actions { display: flex; gap: 8px; }
 
 .pqr-phase { margin-top: 16px; }
+.etape-row td { background: #f1f5f9; font-weight: 800; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 5px 10px; }
 .pqr-phase-titre { margin: 0 0 6px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #a855f7; border-left: 3px solid #a855f7; padding-left: 8px; }
 .pqr-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .pqr-tbl th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; font-weight: 700; padding: 6px 10px; border-bottom: 2px solid #eef2f6; }
