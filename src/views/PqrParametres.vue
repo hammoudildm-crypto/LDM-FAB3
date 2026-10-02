@@ -178,7 +178,8 @@ const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 
 const phasesAvecParams = computed(() => [...new Set(params.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
 const phasesAffichees = computed(() => phaseFiltre.value ? phasesAvecParams.value.filter(ph => ph === phaseFiltre.value) : phasesAvecParams.value)
 function paramsDe(ph) { return params.value.filter(p => p.phase === ph).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
-function etapesDe(ph) { const seen = []; for (const p of paramsDe(ph)) { const e = p.etape || ''; if (!seen.includes(e)) seen.push(e) } return seen.sort((a, b) => (a === '' ? -1 : b === '' ? 1 : 0)) }
+const etapeIdx = (e) => { const i = ETAPES.indexOf(e); return i >= 0 ? i : 999 }
+function etapesDe(ph) { const seen = []; for (const p of paramsDe(ph)) { const e = p.etape || ''; if (!seen.includes(e)) seen.push(e) } return seen.sort((a, b) => (a === '' ? -1 : b === '' ? 1 : (etapeIdx(a) - etapeIdx(b)) || a.localeCompare(b))) }
 function paramsDeEtape(ph, et) { return paramsDe(ph).filter(p => (p.etape || '') === et) }
 const fmt = (v) => (v === null || v === undefined || v === '') ? '—' : v
 const phDef = (v) => (v === null || v === undefined || v === '') ? '—' : ('déf. ' + v)
