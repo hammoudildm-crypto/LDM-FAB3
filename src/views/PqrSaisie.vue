@@ -13,7 +13,7 @@
           <input v-model="rechercheOf" class="of-search" placeholder="🔍 N° lot ou produit" />
         </div>
         <div class="f grow">
-          <label>Lot / OF <span v-if="rechercheOf" class="cnt">({{ ofsFiltres.length }})</span></label>
+          <label>Lot / OF <span v-if="chargementOfs" class="cnt">chargement…</span><span v-else-if="rechercheOf" class="cnt">({{ ofsFiltres.length }})</span></label>
           <select v-model="ofSel"><option value="">—</option><option v-for="o in ofsFiltres" :key="o.id" :value="String(o.id)">{{ o.numero_lot }} · {{ o.code }}{{ o.desig ? ' — ' + o.desig : '' }}</option></select>
         </div>
         <div class="f">
@@ -88,6 +88,7 @@ const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compress
 
 const ofs = ref([])
 const rechercheOf = ref('')
+const chargementOfs = ref(false)
 const ofSel = ref('')
 const phaseSel = ref('')
 const dateMesure = ref(new Date().toISOString().slice(0, 10))
@@ -101,9 +102,18 @@ async function charger() {
   const rp = await supabase.from('pqr_parametres').select('*').eq('actif', true).order('ordre')
   if (rp.error) { erreur.value = rp.error.message; return }
   params.value = rp.data || []
-  const ro = await supabase.from('ordres_fabrication').select('id, numero_lot, produits(id, code_pf, designation)').order('id', { ascending: false })
-  if (ro.error) { erreur.value = ro.error.message; return }
-  ofs.value = (ro.data || []).map(o => ({ id: o.id, numero_lot: o.numero_lot || '—', produit_id: o.produits ? o.produits.id : null, code: o.produits ? (o.produits.code_pf || '') : '', desig: o.produits ? (o.produits.designation || '') : '' }))
+  chargementOfs.value = true
+  let all = [], from = 0; const size = 1000
+  while (true) {
+    const ro = await supabase.from('ordres_fabrication').select('id, numero_lot, produits(id, code_pf, designation)').order('id', { ascending: false }).range(from, from + size - 1)
+    if (ro.error) { erreur.value = ro.error.message; break }
+    const batch = ro.data || []
+    all = all.concat(batch)
+    if (batch.length < size) break
+    from += size
+  }
+  ofs.value = all.map(o => ({ id: o.id, numero_lot: o.numero_lot || '—', produit_id: o.produits ? o.produits.id : null, code: o.produits ? (o.produits.code_pf || '') : '', desig: o.produits ? (o.produits.designation || '') : '' }))
+  chargementOfs.value = false
 }
 onMounted(charger)
 
