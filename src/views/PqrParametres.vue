@@ -19,6 +19,13 @@
         </select>
       </div>
 
+      <div class="pqr-layout">
+        <aside class="pqr-side">
+          <button :class="{ on: !phaseFiltre }" @click="phaseFiltre = ''">Toutes</button>
+          <button v-for="ph in phasesAvecParams" :key="ph" :class="{ on: phaseFiltre === ph }" @click="phaseFiltre = ph">{{ ph }}</button>
+        </aside>
+        <div class="pqr-main">
+
       <!-- ===== MODE DÉFAUT : édition des paramètres + limites de référence ===== -->
       <template v-if="!produitSel">
         <div v-if="peutEditer && !params.length" style="margin-bottom:14px">
@@ -45,7 +52,7 @@
 
         <div v-if="!params.length" class="empty-card">Aucun paramètre. Clique « Charger le référentiel standard » ci-dessus, ou ajoute-les un par un.</div>
 
-        <div v-for="ph in phasesAvecParams" :key="ph" class="pqr-phase">
+        <div v-for="ph in phasesAffichees" :key="ph" class="pqr-phase">
           <h3 class="pqr-phase-titre">{{ ph }}</h3>
           <table class="pqr-tbl">
             <thead><tr><th>Paramètre</th><th>Unité</th><th class="r">Min</th><th class="r">Cible</th><th class="r">Max</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
@@ -75,7 +82,7 @@
 
         <div v-if="!params.length" class="empty-card">Le référentiel est vide. Reviens en « Limites par défaut » pour le remplir d'abord.</div>
 
-        <div v-for="ph in phasesAvecParams" :key="ph" class="pqr-phase">
+        <div v-for="ph in phasesAffichees" :key="ph" class="pqr-phase">
           <h3 class="pqr-phase-titre">{{ ph }}</h3>
           <table class="pqr-tbl">
             <thead><tr><th>Paramètre</th><th>Unité</th><th class="r">Min</th><th class="r">Cible</th><th class="r">Max</th></tr></thead>
@@ -104,6 +111,8 @@
           <button class="btn ghost" @click="produitSel = ''">Revenir au défaut</button>
         </div>
       </template>
+        </div>
+      </div>
     </section>
   </div>
 </template>
@@ -150,6 +159,7 @@ const specsEdit = ref({})
 const erreur = ref('')
 const message = ref('')
 const recherche = ref('')
+const phaseFiltre = ref('')
 const form = reactive({ id: null, phase: '', nom: '', unite: '', etape: '', type: 'num', etat_attendu: '', limite_min: null, cible: null, limite_max: null })
 function reset() { Object.assign(form, { id: null, phase: '', nom: '', unite: '', etape: '', type: 'num', etat_attendu: '', limite_min: null, cible: null, limite_max: null }) }
 
@@ -166,6 +176,7 @@ const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\
 const produitsFiltres = computed(() => { const q = normR(recherche.value).trim(); if (!q) return produits.value; return produits.value.filter(pr => normR((pr.code_pf || '') + ' ' + (pr.designation || '')).includes(q)) })
 const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
 const phasesAvecParams = computed(() => [...new Set(params.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
+const phasesAffichees = computed(() => phaseFiltre.value ? phasesAvecParams.value.filter(ph => ph === phaseFiltre.value) : phasesAvecParams.value)
 function paramsDe(ph) { return params.value.filter(p => p.phase === ph).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
 function etapesDe(ph) { const seen = []; for (const p of paramsDe(ph)) { const e = p.etape || ''; if (!seen.includes(e)) seen.push(e) } return seen.sort((a, b) => (a === '' ? -1 : b === '' ? 1 : 0)) }
 function paramsDeEtape(ph, et) { return paramsDe(ph).filter(p => (p.etape || '') === et) }
@@ -251,6 +262,13 @@ async function enregistrerSpecs() {
 
 <style scoped>
 .pqr-page { color: #1b2733; zoom: 0.85; }
+.pqr-layout { display: flex; gap: 16px; align-items: flex-start; }
+.pqr-side { flex: 0 0 180px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 12px; }
+.pqr-side button { text-align: left; border: 1px solid #e2e8f0; background: #fff; padding: 8px 12px; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 600; color: #475569; cursor: pointer; transition: background .12s, border-color .12s; }
+.pqr-side button:hover { background: #faf5ff; border-color: #e9d5ff; }
+.pqr-side button.on { background: #a855f7; border-color: #a855f7; color: #fff; }
+.pqr-main { flex: 1; min-width: 0; }
+@media (max-width: 720px) { .pqr-layout { flex-direction: column; } .pqr-side { flex: none; width: 100%; flex-direction: row; flex-wrap: wrap; position: static; } .pqr-side button { flex: 1 1 auto; } }
 .alert { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; }
 .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; }
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 22px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
