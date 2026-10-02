@@ -22,7 +22,7 @@
       <div class="pqr-layout">
         <aside class="pqr-side">
           <button :class="{ on: !phaseFiltre }" @click="phaseFiltre = ''">Toutes</button>
-          <button v-for="ph in phasesAvecParams" :key="ph" :class="{ on: phaseFiltre === ph }" @click="phaseFiltre = ph">{{ ph }}</button>
+          <button v-for="ph in phasesDisponibles" :key="ph" :class="{ on: phaseFiltre === ph }" @click="phaseFiltre = ph">{{ ph }}</button>
         </aside>
         <div class="pqr-main">
 
@@ -167,7 +167,7 @@ async function charger() {
   const r = await supabase.from('pqr_parametres').select('*').eq('actif', true).order('ordre')
   if (r.error) { erreur.value = r.error.message; return }
   params.value = r.data || []
-  const rp = await supabase.from('produits').select('id, code_pf, designation').order('code_pf')
+  const rp = await supabase.from('produits').select('id, code_pf, designation, gamme').order('code_pf')
   if (!rp.error) produits.value = rp.data || []
 }
 onMounted(charger)
@@ -176,7 +176,12 @@ const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\
 const produitsFiltres = computed(() => { const q = normR(recherche.value).trim(); if (!q) return produits.value; return produits.value.filter(pr => normR((pr.code_pf || '') + ' ' + (pr.designation || '')).includes(q)) })
 const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
 const phasesAvecParams = computed(() => [...new Set(params.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
-const phasesAffichees = computed(() => phaseFiltre.value ? phasesAvecParams.value.filter(ph => ph === phaseFiltre.value) : phasesAvecParams.value)
+const PHASES_PROD = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+function normPhaseG(ph) { return /^(granulation|s[ée]chage)$/i.test(String(ph).trim()) ? 'Granulation et Séchage' : ph }
+function normGammeFab(g) { if (!Array.isArray(g) || !g.length) return PHASES_PROD.slice(); const out = []; for (const ph of g) { const n = normPhaseG(ph); if (PHASES_PROD.includes(n) && !out.includes(n)) out.push(n) } return out.length ? out : PHASES_PROD.slice() }
+const gammeProduit = computed(() => { if (!produitSel.value) return null; const pr = produits.value.find(x => String(x.id) === produitSel.value); if (!pr) return null; const ph = normGammeFab(pr.gamme); ph.push('Contrôle Qualité'); return ph })
+const phasesDisponibles = computed(() => { if (!gammeProduit.value) return phasesAvecParams.value; return phasesAvecParams.value.filter(ph => gammeProduit.value.includes(ph)) })
+const phasesAffichees = computed(() => phaseFiltre.value ? phasesDisponibles.value.filter(ph => ph === phaseFiltre.value) : phasesDisponibles.value)
 function paramsDe(ph) { return params.value.filter(p => p.phase === ph).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
 const etapeIdx = (e) => { const i = ETAPES.indexOf(e); return i >= 0 ? i : 999 }
 function etapesDe(ph) { const seen = []; for (const p of paramsDe(ph)) { const e = p.etape || ''; if (!seen.includes(e)) seen.push(e) } return seen.sort((a, b) => (a === '' ? -1 : b === '' ? 1 : (etapeIdx(a) - etapeIdx(b)) || a.localeCompare(b))) }
@@ -187,7 +192,7 @@ const produitNom = computed(() => { const p = produits.value.find(x => String(x.
 
 // Charger les surcharges du produit sélectionné (init synchrone puis remplissage)
 watch(produitSel, async (pid) => {
-  message.value = ''
+  message.value = ''; phaseFiltre.value = ''
   if (!pid) { reset(); return }
   const base = {}
   for (const p of params.value) base[p.id] = { min: '', cible: '', max: '', unite: '' }
