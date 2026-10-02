@@ -128,7 +128,10 @@ const STANDARD = [
   ['Pelliculage', 'Gain de masse', '%'],
   ['Pelliculage', 'Température', '°C'],
   ['Pelliculage', 'Aspect', ''],
-  ['Contrôle Qualité', 'CQ Dosage', '%']
+  ['Contrôle Qualité', 'CQ Dosage', '%'],
+  ['Contrôle Qualité', 'CQ Dissolution', '%'],
+  ['Contrôle Qualité', 'CQ Uniformité de teneur', '%'],
+  ['Contrôle Qualité', 'CQ Humidité', '%']
 ]
 
 const params = ref([])
