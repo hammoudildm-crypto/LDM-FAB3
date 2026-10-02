@@ -41,7 +41,9 @@
         <table class="pqr-tbl">
           <thead><tr><th>Paramètre</th><th>Unité</th><th class="r">Limites</th><th>Relevés</th><th class="r">n</th><th class="r">Moyenne</th><th class="r">RSD</th><th>Statut</th></tr></thead>
           <tbody>
-            <tr v-for="p in paramsPhase" :key="p.id" :class="{ 'row-ko': st(p).ko }">
+            <template v-for="et in etapesPhase" :key="et">
+            <tr v-if="et" class="etape-row"><td colspan="8">{{ et }}</td></tr>
+            <tr v-for="p in paramsPhaseEtape(et)" :key="p.id" :class="{ 'row-ko': st(p).ko }">
               <td class="nom">{{ p.nom }} <span v-if="p.type === 'bool'" class="tag-bool">ON/OFF</span></td>
               <td>{{ p.type === 'bool' ? '—' : (uniteEff(p) || '—') }}</td>
               <td class="r lim">{{ p.type === 'bool' ? (p.etat_attendu ? 'Attendu ' + p.etat_attendu : 'ON/OFF') : limTxt(p) }}</td>
@@ -68,6 +70,7 @@
                 <span v-else class="v2 neutre">—</span>
               </td>
             </tr>
+            </template>
           </tbody>
         </table>
         <div v-if="peutEditer" style="margin-top:16px">
@@ -122,6 +125,8 @@ const ofsFiltres = computed(() => { const q = (rechercheOf.value || '').toLowerC
 const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
 const phasesAvecParams = computed(() => [...new Set(params.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
 const paramsPhase = computed(() => params.value.filter(p => p.phase === phaseSel.value).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
+const etapesPhase = computed(() => { const seen = []; for (const p of paramsPhase.value) { const e = p.etape || ''; if (!seen.includes(e)) seen.push(e) } return seen.sort((a, b) => (a === '' ? -1 : b === '' ? 1 : 0)) })
+function paramsPhaseEtape(et) { return paramsPhase.value.filter(p => (p.etape || '') === et) }
 
 const fmt = (v) => (v === null || v === undefined || v === '') ? '—' : v
 const fmtNum = (v) => (v == null || v === '' || Number.isNaN(Number(v))) ? '—' : parseFloat(Number(v).toFixed(6)).toString()
@@ -229,6 +234,7 @@ async function enregistrer() {
 .pqr-tbl td.nom { font-weight: 700; color: #0f172a; }
 .pqr-tbl td.lim { color: #64748b; }
 .pqr-tbl td.moy { font-weight: 700; color: #0f172a; }
+.pqr-tbl .etape-row td { background: #f1f5f9; font-weight: 800; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 5px 10px; }
 .pqr-tbl tr.row-ko { background: #fef2f2; }
 .pqr-tbl tr.row-ko:hover { background: #fee2e2; }
 .val-in { width: 140px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; background: #fff; color: #0f172a; font-variant-numeric: tabular-nums; }
