@@ -35,7 +35,13 @@
 
         <h3 class="sec-titre">Synthèse par paramètre</h3>
         <p class="hint">Clique une ligne pour voir ses graphiques. Cpk ≥ 1,33 : capable · 1,00–1,33 : acceptable · &lt; 1,00 : insuffisant.</p>
-        <div v-for="ph in phasesAvecMesures" :key="ph" class="pqr-phase">
+        <div class="syn-layout">
+          <aside class="syn-side">
+            <button :class="{ on: !phaseSyn }" @click="phaseSyn = ''">Toutes</button>
+            <button v-for="ph in phasesAvecMesures" :key="ph" :class="{ on: phaseSyn === ph }" @click="phaseSyn = ph">{{ ph }}</button>
+          </aside>
+          <div class="syn-main">
+        <div v-for="ph in phasesSynAffichees" :key="ph" class="pqr-phase">
           <h4 class="pqr-phase-titre">{{ ph }}</h4>
           <table class="pqr-tbl">
             <thead><tr><th>Paramètre</th><th class="r">n</th><th class="r">Moyenne</th><th class="r">σ</th><th class="r">Limites</th><th class="r">Conf.</th><th class="r">Cp</th><th class="r">Cpk</th><th>Capabilité</th></tr></thead>
@@ -56,6 +62,8 @@
               </template>
             </tbody>
           </table>
+        </div>
+          </div>
         </div>
 
         <div class="chart-head">
@@ -230,6 +238,8 @@ const synthese = computed(() => {
 })
 const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
 const phasesAvecMesures = computed(() => [...new Set(synthese.value.map(r => r.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
+const phaseSyn = ref('')
+const phasesSynAffichees = computed(() => phaseSyn.value ? phasesAvecMesures.value.filter(ph => ph === phaseSyn.value) : phasesAvecMesures.value)
 function syntheseDe(ph) { return synthese.value.filter(r => r.phase === ph) }
 function etapesDeSyn(ph) { const seen = []; for (const r of syntheseDe(ph)) { const e = r.etape || ''; if (!seen.includes(e)) seen.push(e) } return seen.sort((a, b) => (a === '' ? -1 : b === '' ? 1 : (etapeIdx(a) - etapeIdx(b)) || a.localeCompare(b))) }
 function syntheseDeEtape(ph, et) { return syntheseDe(ph).filter(r => (r.etape || '') === et) }
@@ -356,6 +366,13 @@ tr.ph td{background:#f8fafc;font-weight:800;color:#a855f7;text-transform:upperca
 
 <style scoped>
 .pqr-page { color: #1b2733; zoom: 0.85; }
+.syn-layout { display: flex; gap: 16px; align-items: flex-start; }
+.syn-side { flex: 0 0 180px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 12px; }
+.syn-side button { text-align: left; border: 1px solid #e2e8f0; background: #fff; padding: 8px 12px; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 600; color: #475569; cursor: pointer; transition: background .12s, border-color .12s; }
+.syn-side button:hover { background: #faf5ff; border-color: #e9d5ff; }
+.syn-side button.on { background: #a855f7; border-color: #a855f7; color: #fff; }
+.syn-main { flex: 1; min-width: 0; }
+@media (max-width: 720px) { .syn-layout { flex-direction: column; } .syn-side { flex: none; width: 100%; flex-direction: row; flex-wrap: wrap; position: static; } .syn-side button { flex: 1 1 auto; } }
 .alert { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; }
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 22px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .empty-card { background: #fff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 24px; color: #475569; text-align: center; font-size: 14px; }
