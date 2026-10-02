@@ -7,6 +7,7 @@
     <p v-if="message" class="ok">{{ message }}</p>
 
     <section class="card">
+      <datalist id="unitesListe"><option v-for="u in UNITES" :key="u" :value="u" /></datalist>
       <div class="card-head">
         <h2 class="card-title">Paramètres par phase</h2>
         <span class="count">{{ params.length }}</span>
@@ -28,7 +29,7 @@
           <input v-model="form.nom" placeholder="Paramètre *" />
           <select v-model="form.type" class="t"><option value="num">Numérique</option><option value="bool">ON / OFF</option></select>
           <template v-if="form.type === 'num'">
-          <input v-model="form.unite" list="unitesListe" placeholder="Unité" class="u" /><datalist id="unitesListe"><option v-for="u in UNITES" :key="u" :value="u" /></datalist>
+          <input v-model="form.unite" list="unitesListe" placeholder="Unité" class="u" />
           <input v-model.number="form.limite_min" type="number" step="any" placeholder="Min" class="n" />
           <input v-model.number="form.cible" type="number" step="any" placeholder="Cible" class="n" />
           <input v-model.number="form.limite_max" type="number" step="any" placeholder="Max" class="n" />
@@ -76,7 +77,7 @@
             <tbody>
               <tr v-for="p in paramsDe(ph)" :key="p.id">
                 <td class="nom">{{ p.nom }} <span v-if="p.type === 'bool'" class="tag-bool">ON/OFF</span></td>
-                <td>{{ p.type === 'bool' ? '—' : (p.unite || '—') }}</td>
+                <td><input v-if="p.type !== 'bool'" class="unite-in" v-model="specsEdit[p.id].unite" list="unitesListe" :placeholder="p.unite || '—'" :disabled="!peutEditer" /><span v-else>—</span></td>
                 <template v-if="p.type === 'bool'">
                   <td class="r bool-na" colspan="3">Pas de spec par produit (défini au référentiel)</td>
                 </template>
@@ -162,7 +163,7 @@ watch(produitSel, async (pid) => {
   message.value = ''
   if (!pid) { reset(); return }
   const base = {}
-  for (const p of params.value) base[p.id] = { min: '', cible: '', max: '' }
+  for (const p of params.value) base[p.id] = { min: '', cible: '', max: '', unite: '' }
   specsEdit.value = base
   const r = await supabase.from('pqr_specs_produit').select('*').eq('produit_id', Number(pid))
   if (r.error) { erreur.value = r.error.message; return }
@@ -174,7 +175,8 @@ watch(produitSel, async (pid) => {
     obj[p.id] = {
       min: sp && sp.limite_min != null ? sp.limite_min : '',
       cible: sp && sp.cible != null ? sp.cible : '',
-      max: sp && sp.limite_max != null ? sp.limite_max : ''
+      max: sp && sp.limite_max != null ? sp.limite_max : '',
+      unite: sp && sp.unite ? sp.unite : ''
     }
   }
   specsEdit.value = obj
@@ -216,8 +218,9 @@ async function enregistrerSpecs() {
     if (p.type === 'bool') continue
     const e = specsEdit.value[p.id] || {}
     const mn = num(e.min), cb = num(e.cible), mx = num(e.max)
-    if (mn == null && cb == null && mx == null) delIds.push(p.id)
-    else up.push({ parametre_id: p.id, produit_id: pid, limite_min: mn, cible: cb, limite_max: mx })
+    const un = (e.unite || '').trim() || null
+    if (mn == null && cb == null && mx == null && !un) delIds.push(p.id)
+    else up.push({ parametre_id: p.id, produit_id: pid, limite_min: mn, cible: cb, limite_max: mx, unite: un })
   }
   if (up.length) {
     const r = await supabase.from('pqr_specs_produit').upsert(up, { onConflict: 'parametre_id,produit_id' })
@@ -271,6 +274,8 @@ async function enregistrerSpecs() {
 .pqr-tbl td.act button:hover { background: #f8fafc; border-color: #cbd5e1; }
 .pqr-tbl tbody tr:hover { background: #faf5ff; }
 .spec-in { width: 72px; padding: 5px 7px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; text-align: right; background: #fff; color: #0f172a; font-variant-numeric: tabular-nums; }
+.unite-in { width: 70px; padding: 5px 7px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; background: #fff; color: #0f172a; }
+.unite-in:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,85,247,.15); }
 .spec-in:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,85,247,.15); }
 .spec-in::placeholder { color: #cbd5e1; font-style: italic; }
 </style>
