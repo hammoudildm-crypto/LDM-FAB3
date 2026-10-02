@@ -41,15 +41,15 @@
             <thead><tr><th>Paramètre</th><th class="r">n</th><th class="r">Moyenne</th><th class="r">σ</th><th class="r">Limites</th><th class="r">Conf.</th><th class="r">Cp</th><th class="r">Cpk</th><th>Capabilité</th></tr></thead>
             <tbody>
               <tr v-for="r in syntheseDe(ph)" :key="r.id" :class="{ sel: r.id === paramSel }" @click="paramSel = r.id">
-                <td class="nom">{{ r.nom }} <span class="u">{{ r.unite ? '(' + r.unite + ')' : '' }}</span></td>
+                <td class="nom">{{ r.nom }} <span v-if="r.bool" class="tag-bool">ON/OFF</span><span v-else class="u">{{ r.unite ? '(' + r.unite + ')' : '' }}</span></td>
                 <td class="r">{{ r.n }}</td>
-                <td class="r">{{ r.mean.toFixed(2) }}</td>
-                <td class="r">{{ r.std.toFixed(3) }}</td>
-                <td class="r lim">{{ limTxt(r.lsl, r.usl) }}</td>
+                <td class="r">{{ r.bool ? (r.nOn + ' ON / ' + (r.n - r.nOn) + ' OFF') : r.mean.toFixed(2) }}</td>
+                <td class="r">{{ r.bool ? '—' : r.std.toFixed(3) }}</td>
+                <td class="r lim">{{ r.bool ? (r.attendu ? 'Att. ' + r.attendu : 'ON/OFF') : limTxt(r.lsl, r.usl) }}</td>
                 <td class="r"><span :class="r.conf >= 100 ? 'c-ok' : 'c-ko'">{{ r.conf.toFixed(0) }}%</span></td>
-                <td class="r">{{ r.cp != null ? r.cp.toFixed(2) : '—' }}</td>
-                <td class="r cpk">{{ r.cpk != null ? r.cpk.toFixed(2) : '—' }}</td>
-                <td><span class="verdict" :class="verdictCls(r.cpk)">{{ verdictTxt(r.cpk) }}</span></td>
+                <td class="r">{{ r.bool ? '—' : (r.cp != null ? r.cp.toFixed(2) : '—') }}</td>
+                <td class="r cpk">{{ r.bool ? '—' : (r.cpk != null ? r.cpk.toFixed(2) : '—') }}</td>
+                <td><span class="verdict" :class="r.bool ? 'v-na' : verdictCls(r.cpk)">{{ r.bool ? 'ON/OFF' : verdictTxt(r.cpk) }}</span></td>
               </tr>
             </tbody>
           </table>
@@ -79,6 +79,7 @@
             </svg>
             <div class="leg"><span class="lg"><i class="d-ok"></i>Conforme</span><span class="lg"><i class="d-ko"></i>Hors spec</span><span class="lg"><i class="l-c"></i>Cible</span><span class="lg"><i class="l-s"></i>Limites spec</span></div>
           </div>
+          <div v-else-if="paramBool" class="empty-sm">Paramètre ON/OFF — pas de courbe applicable (conformité dans la synthèse).</div>
           <div v-else class="empty-sm">Sélectionne un paramètre ci-dessus.</div>
         </div>
 
@@ -114,6 +115,7 @@
             <div v-else class="viol-ok">✓ Procédé sous contrôle — aucune règle Nelson/Westgard déclenchée.</div>
             <p class="hint rules">Règles : <b>1-3s</b> 1 pt &gt; 3σ · <b>2-2s</b> 2 pts &gt; 2σ même côté · <b>4-1s</b> 4 pts &gt; 1σ même côté · <b>9-x</b> 9 pts du même côté · <b>tendance</b> 6 pts croissants/décroissants.</p>
           </div>
+          <div v-else-if="paramBool" class="empty-sm">Carte de contrôle non applicable à un paramètre ON/OFF.</div>
           <div v-else class="empty-sm">Au moins 2 mesures sont nécessaires pour construire la carte de contrôle.</div>
         </div>
 
@@ -124,7 +126,7 @@
           <tbody>
             <tr v-for="(h, i) in horsSpecListe" :key="i" class="row-ko">
               <td class="nom">{{ h.lot }}</td><td>{{ h.phase }}</td><td>{{ h.nom }}</td>
-              <td class="r val-ko">{{ h.valeur }} {{ h.unite }}</td><td class="r lim">{{ limTxt(h.lsl, h.usl) }}</td><td>{{ h.date || '—' }}</td>
+              <td class="r val-ko">{{ h.valeur }} {{ h.unite }}</td><td class="r lim">{{ h.bool ? ('Attendu ' + h.attendu) : limTxt(h.lsl, h.usl) }}</td><td>{{ h.date || '—' }}</td>
             </tr>
           </tbody>
         </table>
@@ -204,6 +206,12 @@ const synthese = computed(() => {
   const out = []
   for (const p of params.value) {
     const vals = byParam[p.id]; if (!vals || !vals.length) continue
+    if (p.type === 'bool') {
+      const nOn = vals.filter(v => v > 0).length; const attendu = p.etat_attendu || null
+      const conf = attendu ? (vals.filter(v => ((attendu === 'ON') === (v > 0))).length / vals.length * 100) : 100
+      out.push({ id: p.id, phase: p.phase, nom: p.nom, unite: p.unite, bool: true, n: vals.length, nOn, attendu, conf, mean: null, std: null, cp: null, cpk: null, lsl: null, usl: null })
+      continue
+    }
     const st = stats(vals); const lsl = effMin(p), usl = effMax(p)
     const conf = vals.filter(v => !horsSpecVal(v, lsl, usl)).length / vals.length * 100
     const c = cpkCalc(st.mean, st.std, lsl, usl)
@@ -216,18 +224,20 @@ const phasesAvecMesures = computed(() => [...new Set(synthese.value.map(r => r.p
 function syntheseDe(ph) { return synthese.value.filter(r => r.phase === ph) }
 
 const nbLots = computed(() => new Set(mesuresPlat.value.map(m => m.of_id)).size)
-const nbHors = computed(() => mesuresPlat.value.filter(m => { const p = paramById.value[m.parametre_id]; if (!p) return false; return horsSpecVal(Number(m.valeur), effMin(p), effMax(p)) }).length)
+function estHors(m) { const p = paramById.value[m.parametre_id]; if (!p) return false; if (p.type === 'bool') { const att = p.etat_attendu; if (!att) return false; return (att === 'ON') !== (Number(m.valeur) > 0) } return horsSpecVal(Number(m.valeur), effMin(p), effMax(p)) }
+const nbHors = computed(() => mesuresPlat.value.filter(estHors).length)
 const tauxGlobal = computed(() => mesuresPlat.value.length ? (mesuresPlat.value.length - nbHors.value) / mesuresPlat.value.length * 100 : 0)
 
 function verdictCls(cpk) { if (cpk == null) return 'v-na'; if (cpk >= 1.33) return 'v-ok'; if (cpk >= 1.0) return 'v-mid'; return 'v-ko' }
 function verdictTxt(cpk) { if (cpk == null) return '—'; if (cpk >= 1.33) return 'Capable'; if (cpk >= 1.0) return 'Acceptable'; return 'Insuffisant' }
 
 const paramSelObj = computed(() => paramById.value[paramSel.value] || null)
+const paramBool = computed(() => { const p = paramSelObj.value; return !!(p && p.type === 'bool') })
 const byDate = (a, b) => String(a.date_mesure || '').localeCompare(String(b.date_mesure || '')) || ((a.of_id || 0) - (b.of_id || 0)) || ((a.rang || 0) - (b.rang || 0))
 function mesuresParam(p) { return mesuresPlat.value.filter(m => m.parametre_id === p.id && !Number.isNaN(Number(m.valeur))).slice().sort(byDate) }
 
 const chartData = computed(() => {
-  const p = paramSelObj.value; if (!p) return null
+  const p = paramSelObj.value; if (!p || p.type === 'bool') return null
   const ms = mesuresParam(p); if (!ms.length) return null
   const vals = ms.map(m => Number(m.valeur)); const lsl = effMin(p), usl = effMax(p), cible = effCible(p)
   const allY = [...vals]; if (lsl != null) allY.push(lsl); if (usl != null) allY.push(usl); if (cible != null) allY.push(cible)
@@ -259,7 +269,7 @@ function detectViolations(vals, mean, std) {
 }
 
 const controlData = computed(() => {
-  const p = paramSelObj.value; if (!p) return null
+  const p = paramSelObj.value; if (!p || p.type === 'bool') return null
   const ms = mesuresParam(p); if (ms.length < 2) return null
   const vals = ms.map(m => Number(m.valeur)); const st = stats(vals); const mean = st.mean, std = st.std
   const ucl = mean + 3 * std, lcl = mean - 3 * std
@@ -281,8 +291,9 @@ const horsSpecListe = computed(() => {
   const out = []
   for (const m of mesuresPlat.value) {
     const p = paramById.value[m.parametre_id]; if (!p) continue
-    const v = Number(m.valeur); const lsl = effMin(p), usl = effMax(p)
-    if (horsSpecVal(v, lsl, usl)) out.push({ lot: m.numero_lot || '—', phase: p.phase, nom: p.nom, unite: p.unite || '', valeur: m.valeur, lsl, usl, date: m.date_mesure })
+    if (!estHors(m)) continue
+    const bool = p.type === 'bool'
+    out.push({ lot: m.numero_lot || '—', phase: p.phase, nom: p.nom, unite: bool ? '' : (p.unite || ''), valeur: bool ? (Number(m.valeur) > 0 ? 'ON' : 'OFF') : m.valeur, lsl: effMin(p), usl: effMax(p), bool, attendu: p.etat_attendu, date: m.date_mesure })
   }
   return out.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
 })
@@ -371,6 +382,7 @@ tr.ph td{background:#f8fafc;font-weight:800;color:#a855f7;text-transform:upperca
 .pqr-tbl td.r { text-align: right; font-variant-numeric: tabular-nums; }
 .pqr-tbl td.nom { font-weight: 700; color: #0f172a; }
 .pqr-tbl td.nom .u { font-weight: 500; color: #94a3b8; font-size: 11px; }
+.tag-bool { font-size: 9px; font-weight: 800; background: #ecfeff; color: #0891b2; padding: 1px 6px; border-radius: 999px; }
 .pqr-tbl td.lim { color: #64748b; }
 .pqr-tbl td.cpk { font-weight: 800; color: #0f172a; }
 .pqr-tbl tbody tr { cursor: pointer; }
