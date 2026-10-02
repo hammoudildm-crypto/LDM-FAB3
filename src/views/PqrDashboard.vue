@@ -56,7 +56,7 @@
         </div>
 
         <div class="chart-head">
-          <h3 class="sec-titre">{{ paramSelObj ? paramSelObj.nom : '—' }}<span v-if="paramSelObj && paramSelObj.unite" class="u"> ({{ paramSelObj.unite }})</span></h3>
+          <h3 class="sec-titre">{{ paramSelObj ? paramSelObj.nom : '—' }}<span v-if="paramSelObj && uniteEff(paramSelObj)" class="u"> ({{ uniteEff(paramSelObj) }})</span></h3>
           <div class="tabs">
             <button :class="{ on: chartMode === 'trend' }" @click="chartMode = 'trend'">Tendance vs specs</button>
             <button :class="{ on: chartMode === 'control' }" @click="chartMode = 'control'">Carte de contrôle</button>
@@ -192,6 +192,7 @@ const mesuresPlat = computed(() => {
 })
 
 function effMin(p) { const s = specByParam.value[p.id]; return s && s.limite_min != null ? s.limite_min : p.limite_min }
+function uniteEff(p) { const s = specByParam.value[p.id]; return (s && s.unite) ? s.unite : (p.unite || '') }
 function effMax(p) { const s = specByParam.value[p.id]; return s && s.limite_max != null ? s.limite_max : p.limite_max }
 function effCible(p) { const s = specByParam.value[p.id]; return s && s.cible != null ? s.cible : p.cible }
 function horsSpecVal(v, mn, mx) { return (mn != null && v < mn) || (mx != null && v > mx) }
@@ -210,13 +211,13 @@ const synthese = computed(() => {
     if (p.type === 'bool') {
       const nOn = vals.filter(v => v > 0).length; const attendu = p.etat_attendu || null
       const conf = attendu ? (vals.filter(v => ((attendu === 'ON') === (v > 0))).length / vals.length * 100) : 100
-      out.push({ id: p.id, phase: p.phase, nom: p.nom, unite: p.unite, bool: true, n: vals.length, nOn, attendu, conf, mean: null, std: null, cp: null, cpk: null, lsl: null, usl: null })
+      out.push({ id: p.id, phase: p.phase, nom: p.nom, unite: uniteEff(p), bool: true, n: vals.length, nOn, attendu, conf, mean: null, std: null, cp: null, cpk: null, lsl: null, usl: null })
       continue
     }
     const st = stats(vals); const lsl = effMin(p), usl = effMax(p)
     const conf = vals.filter(v => !horsSpecVal(v, lsl, usl)).length / vals.length * 100
     const c = cpkCalc(st.mean, st.std, lsl, usl)
-    out.push({ id: p.id, phase: p.phase, nom: p.nom, unite: p.unite, n: st.n, mean: st.mean, std: st.std, min: st.min, max: st.max, lsl, usl, conf, cp: c.cp, cpk: c.cpk })
+    out.push({ id: p.id, phase: p.phase, nom: p.nom, unite: uniteEff(p), n: st.n, mean: st.mean, std: st.std, min: st.min, max: st.max, lsl, usl, conf, cp: c.cp, cpk: c.cpk })
   }
   return out
 })
@@ -294,7 +295,7 @@ const horsSpecListe = computed(() => {
     const p = paramById.value[m.parametre_id]; if (!p) continue
     if (!estHors(m)) continue
     const bool = p.type === 'bool'
-    out.push({ lot: m.numero_lot || '—', phase: p.phase, nom: p.nom, unite: bool ? '' : (p.unite || ''), valeur: bool ? (Number(m.valeur) > 0 ? 'ON' : 'OFF') : m.valeur, lsl: effMin(p), usl: effMax(p), bool, attendu: p.etat_attendu, date: m.date_mesure })
+    out.push({ lot: m.numero_lot || '—', phase: p.phase, nom: p.nom, unite: bool ? '' : uniteEff(p), valeur: bool ? (Number(m.valeur) > 0 ? 'ON' : 'OFF') : m.valeur, lsl: effMin(p), usl: effMax(p), bool, attendu: p.etat_attendu, date: m.date_mesure })
   }
   return out.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
 })
