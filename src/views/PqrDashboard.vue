@@ -40,7 +40,9 @@
           <table class="pqr-tbl">
             <thead><tr><th>Paramètre</th><th class="r">n</th><th class="r">Moyenne</th><th class="r">σ</th><th class="r">Limites</th><th class="r">Conf.</th><th class="r">Cp</th><th class="r">Cpk</th><th>Capabilité</th></tr></thead>
             <tbody>
-              <tr v-for="r in syntheseDe(ph)" :key="r.id" :class="{ sel: r.id === paramSel }" @click="paramSel = r.id">
+              <template v-for="et in etapesDeSyn(ph)" :key="ph + '|' + et">
+              <tr v-if="et" class="etape-row"><td colspan="9">{{ et }}</td></tr>
+              <tr v-for="r in syntheseDeEtape(ph, et)" :key="r.id" :class="{ sel: r.id === paramSel }" @click="paramSel = r.id">
                 <td class="nom">{{ r.nom }} <span v-if="r.bool" class="tag-bool">ON/OFF</span><span v-else class="u">{{ r.unite ? '(' + r.unite + ')' : '' }}</span></td>
                 <td class="r">{{ r.n }}</td>
                 <td class="r">{{ r.bool ? (r.nOn + ' ON / ' + (r.n - r.nOn) + ' OFF') : fmtNum(r.mean) }}</td>
@@ -51,6 +53,7 @@
                 <td class="r cpk">{{ r.bool ? '—' : (r.cpk != null ? r.cpk.toFixed(2) : '—') }}</td>
                 <td><span class="verdict" :class="r.bool ? 'v-na' : verdictCls(r.cpk)">{{ r.bool ? 'ON/OFF' : verdictTxt(r.cpk) }}</span></td>
               </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -213,19 +216,21 @@ const synthese = computed(() => {
     if (p.type === 'bool') {
       const nOn = vals.filter(v => v > 0).length; const attendu = p.etat_attendu || null
       const conf = attendu ? (vals.filter(v => ((attendu === 'ON') === (v > 0))).length / vals.length * 100) : 100
-      out.push({ id: p.id, phase: p.phase, nom: p.nom, unite: uniteEff(p), bool: true, n: vals.length, nOn, attendu, conf, mean: null, std: null, cp: null, cpk: null, lsl: null, usl: null })
+      out.push({ id: p.id, phase: p.phase, etape: p.etape || '', nom: p.nom, unite: uniteEff(p), bool: true, n: vals.length, nOn, attendu, conf, mean: null, std: null, cp: null, cpk: null, lsl: null, usl: null })
       continue
     }
     const st = stats(vals); const lsl = effMin(p), usl = effMax(p)
     const conf = vals.filter(v => !horsSpecVal(v, lsl, usl)).length / vals.length * 100
     const c = cpkCalc(st.mean, st.std, lsl, usl)
-    out.push({ id: p.id, phase: p.phase, nom: p.nom, unite: uniteEff(p), n: st.n, mean: st.mean, std: st.std, min: st.min, max: st.max, lsl, usl, conf, cp: c.cp, cpk: c.cpk })
+    out.push({ id: p.id, phase: p.phase, etape: p.etape || '', nom: p.nom, unite: uniteEff(p), n: st.n, mean: st.mean, std: st.std, min: st.min, max: st.max, lsl, usl, conf, cp: c.cp, cpk: c.cpk })
   }
   return out
 })
 const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
 const phasesAvecMesures = computed(() => [...new Set(synthese.value.map(r => r.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
 function syntheseDe(ph) { return synthese.value.filter(r => r.phase === ph) }
+function etapesDeSyn(ph) { const seen = []; for (const r of syntheseDe(ph)) { const e = r.etape || ''; if (!seen.includes(e)) seen.push(e) } return seen.sort((a, b) => (a === '' ? -1 : b === '' ? 1 : 0)) }
+function syntheseDeEtape(ph, et) { return syntheseDe(ph).filter(r => (r.etape || '') === et) }
 
 const nbLots = computed(() => new Set(mesuresPlat.value.map(m => m.of_id)).size)
 function estHors(m) { const p = paramById.value[m.parametre_id]; if (!p) return false; if (p.type === 'bool') { const att = p.etat_attendu; if (!att) return false; return (att === 'ON') !== (Number(m.valeur) > 0) } return horsSpecVal(Number(m.valeur), effMin(p), effMax(p)) }
@@ -392,6 +397,7 @@ tr.ph td{background:#f8fafc;font-weight:800;color:#a855f7;text-transform:upperca
 .pqr-tbl tbody tr { cursor: pointer; }
 .pqr-tbl tbody tr:hover { background: #faf5ff; }
 .pqr-tbl tbody tr.sel { background: #f3e8ff; }
+.pqr-tbl .etape-row td { background: #f1f5f9; font-weight: 800; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 5px 10px; cursor: default; }
 .pqr-tbl tr.row-ko { background: #fef2f2; cursor: default; }
 .pqr-tbl td.val-ko { color: #b91c1c; font-weight: 800; }
 .c-ok { color: #16a34a; font-weight: 700; } .c-ko { color: #dc2626; font-weight: 700; }
