@@ -74,6 +74,7 @@
               <line v-if="chartData.yCible != null" :x1="chartData.mL" :y1="chartData.yCible" :x2="chartData.W - chartData.mR" :y2="chartData.yCible" class="l-cible" />
               <path :d="chartData.path" class="l-data" />
               <circle v-for="(pt, i) in chartData.pts" :key="i" :cx="pt.x" :cy="pt.y" r="4.5" :class="pt.ko ? 'pt-ko' : 'pt-ok'"><title>{{ pt.lot }} : {{ pt.v }}</title></circle>
+              <g v-for="(pt, i) in chartData.pts" :key="'ll' + i"><text v-if="i % chartData.step === 0" :x="pt.x" :y="chartData.H - chartData.mB + 11" class="lot-lbl" :transform="'rotate(-45 ' + pt.x + ' ' + (chartData.H - chartData.mB + 11) + ')'">{{ pt.lot }}</text></g>
               <text :x="chartData.mL - 6" :y="chartData.mT + 5" class="ax">{{ chartData.ymax.toFixed(1) }}</text>
               <text :x="chartData.mL - 6" :y="chartData.H - chartData.mB + 4" class="ax">{{ chartData.ymin.toFixed(1) }}</text>
             </svg>
@@ -104,6 +105,7 @@
                 <circle v-if="pt.viol.length" :cx="pt.x" :cy="pt.y" r="7.5" class="pt-ring" />
                 <circle :cx="pt.x" :cy="pt.y" r="4.5" :class="pt.viol.length ? 'pt-ko' : 'pt-ok'"><title>{{ pt.lot }} : {{ pt.v }}{{ pt.viol.length ? ' — ' + pt.viol.join(', ') : '' }}</title></circle>
               </g>
+              <g v-for="(pt, i) in controlData.pts" :key="'cll' + i"><text v-if="i % controlData.step === 0" :x="pt.x" :y="controlData.H - controlData.mB + 11" class="lot-lbl" :transform="'rotate(-45 ' + pt.x + ' ' + (controlData.H - controlData.mB + 11) + ')'">{{ pt.lot }}</text></g>
               <text :x="controlData.mL - 6" :y="controlData.mT + 5" class="ax">{{ controlData.ymax.toFixed(1) }}</text>
               <text :x="controlData.mL - 6" :y="controlData.H - controlData.mB + 4" class="ax">{{ controlData.ymin.toFixed(1) }}</text>
             </svg>
@@ -245,12 +247,12 @@ const chartData = computed(() => {
   const allY = [...vals]; if (lsl != null) allY.push(lsl); if (usl != null) allY.push(usl); if (cible != null) allY.push(cible)
   let ymin = Math.min(...allY), ymax = Math.max(...allY); if (ymin === ymax) { ymin -= 1; ymax += 1 }
   const pd = (ymax - ymin) * 0.12; ymin -= pd; ymax += pd
-  const W = 760, H = 280, mL = 52, mR = 54, mT = 16, mB = 40
+  const W = 760, H = 280, mL = 52, mR = 54, mT = 16, mB = 62; const step = Math.max(1, Math.ceil(ms.length / 22))
   const xx = (i) => mL + (ms.length === 1 ? (W - mL - mR) / 2 : i * (W - mL - mR) / (ms.length - 1))
   const yy = (v) => mT + (ymax - v) / (ymax - ymin) * (H - mT - mB)
   const pts = ms.map((m, i) => ({ x: xx(i), y: yy(Number(m.valeur)), v: Number(m.valeur), lot: m.numero_lot || '', ko: horsSpecVal(Number(m.valeur), lsl, usl) }))
   const path = pts.map((pt, i) => (i ? 'L' : 'M') + pt.x.toFixed(1) + ' ' + pt.y.toFixed(1)).join(' ')
-  return { W, H, mL, mR, mT, mB, pts, path, lsl, usl, cible, ymin, ymax, yLsl: lsl != null ? yy(lsl) : null, yUsl: usl != null ? yy(usl) : null, yCible: cible != null ? yy(cible) : null }
+  return { W, H, mL, mR, mT, mB, step, pts, path, lsl, usl, cible, ymin, ymax, yLsl: lsl != null ? yy(lsl) : null, yUsl: usl != null ? yy(usl) : null, yCible: cible != null ? yy(cible) : null }
 })
 
 function detectViolations(vals, mean, std) {
@@ -278,14 +280,14 @@ const controlData = computed(() => {
   const viol = detectViolations(vals, mean, std)
   const allY = [...vals, ucl, lcl]; let ymin = Math.min(...allY), ymax = Math.max(...allY); if (ymin === ymax) { ymin -= 1; ymax += 1 }
   const pd = (ymax - ymin) * 0.1; ymin -= pd; ymax += pd
-  const W = 760, H = 280, mL = 52, mR = 54, mT = 16, mB = 40
+  const W = 760, H = 280, mL = 52, mR = 54, mT = 16, mB = 62; const step = Math.max(1, Math.ceil(ms.length / 22))
   const xx = (i) => mL + (ms.length === 1 ? (W - mL - mR) / 2 : i * (W - mL - mR) / (ms.length - 1))
   const yy = (v) => mT + (ymax - v) / (ymax - ymin) * (H - mT - mB)
   const pts = ms.map((m, i) => ({ x: xx(i), y: yy(Number(m.valeur)), v: Number(m.valeur), lot: m.numero_lot || '', viol: viol[i] }))
   const path = pts.map((pt, i) => (i ? 'L' : 'M') + pt.x.toFixed(1) + ' ' + pt.y.toFixed(1)).join(' ')
   const alertes = []
   pts.forEach(pt => { if (pt.viol.length) alertes.push({ lot: pt.lot || '(lot ?)', v: pt.v, rules: pt.viol }) })
-  return { W, H, mL, mR, mT, mB, pts, path, mean, std, ymin, ymax, alertes,
+  return { W, H, mL, mR, mT, mB, step, pts, path, mean, std, ymin, ymax, alertes,
     yCl: yy(mean), yUcl: yy(ucl), yLcl: yy(lcl), y2u: yy(mean + 2 * std), y2l: yy(mean - 2 * std), y1u: yy(mean + std), y1l: yy(mean - std) }
 })
 
@@ -416,6 +418,7 @@ tr.ph td{background:#f8fafc;font-weight:800;color:#a855f7;text-transform:upperca
 .trend .pt-ko { fill: #dc2626; stroke: #fff; stroke-width: 1.5; }
 .trend .pt-ring { fill: none; stroke: #dc2626; stroke-width: 1.5; opacity: .5; }
 .trend .ax { fill: #94a3b8; font-size: 11px; text-anchor: end; font-weight: 600; }
+.trend .lot-lbl { fill: #94a3b8; font-size: 9px; text-anchor: end; font-weight: 600; }
 .trend .lbl-spec { fill: #ef4444; font-size: 10px; text-anchor: end; font-weight: 700; }
 .trend .lbl-ucl { fill: #ef4444; font-size: 10px; text-anchor: end; font-weight: 700; }
 .trend .lbl-cl { fill: #16a34a; font-size: 10px; text-anchor: end; font-weight: 700; }
