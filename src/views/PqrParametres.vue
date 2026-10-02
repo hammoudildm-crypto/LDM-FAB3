@@ -28,7 +28,7 @@
           <input v-model="form.nom" placeholder="Paramètre *" />
           <select v-model="form.type" class="t"><option value="num">Numérique</option><option value="bool">ON / OFF</option></select>
           <template v-if="form.type === 'num'">
-          <input v-model="form.unite" placeholder="Unité" class="u" />
+          <input v-model="form.unite" list="unitesListe" placeholder="Unité" class="u" /><datalist id="unitesListe"><option v-for="u in UNITES" :key="u" :value="u" /></datalist>
           <input v-model.number="form.limite_min" type="number" step="any" placeholder="Min" class="n" />
           <input v-model.number="form.cible" type="number" step="any" placeholder="Cible" class="n" />
           <input v-model.number="form.limite_max" type="number" step="any" placeholder="Max" class="n" />
@@ -106,6 +106,7 @@ import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
 const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+const UNITES = ['N', 'Kp', 'mg', 'g', 'kg', '°C', '%', 'min', 'mm', 'tr/min', 'bar']
 const STANDARD = [
   ['Pesée', 'Écart de pesée', '%'],
   ['Granulation et Séchage', 'Température produit', '°C'],
