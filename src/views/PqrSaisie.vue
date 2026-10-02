@@ -42,15 +42,26 @@
           <thead><tr><th>Paramètre</th><th>Unité</th><th class="r">Limites</th><th>Relevés</th><th class="r">n</th><th class="r">Moyenne</th><th class="r">RSD</th><th>Statut</th></tr></thead>
           <tbody>
             <tr v-for="p in paramsPhase" :key="p.id" :class="{ 'row-ko': st(p).ko }">
-              <td class="nom">{{ p.nom }}</td>
-              <td>{{ p.unite || '—' }}</td>
-              <td class="r lim">{{ limTxt(p) }}</td>
-              <td><input class="val-in" :class="{ ko: st(p).ko }" v-model="mesuresEdit[p.id]" placeholder="ex. 45 47 46" :disabled="!peutEditer" /></td>
-              <td class="r">{{ st(p).n || '—' }}</td>
-              <td class="r moy">{{ st(p).n ? st(p).mean.toFixed(2) : '—' }}</td>
-              <td class="r">{{ st(p).n > 1 ? st(p).rsd.toFixed(1) + '%' : '—' }}</td>
+              <td class="nom">{{ p.nom }} <span v-if="p.type === 'bool'" class="tag-bool">ON/OFF</span></td>
+              <td>{{ p.type === 'bool' ? '—' : (p.unite || '—') }}</td>
+              <td class="r lim">{{ p.type === 'bool' ? (p.etat_attendu ? 'Attendu ' + p.etat_attendu : 'ON/OFF') : limTxt(p) }}</td>
+              <td>
+                <div v-if="p.type === 'bool'" class="onoff">
+                  <button type="button" :class="{ on: st(p).etat === 'ON' }" @click="setEtat(p, 'ON')" :disabled="!peutEditer">ON</button>
+                  <button type="button" :class="{ off: st(p).etat === 'OFF' }" @click="setEtat(p, 'OFF')" :disabled="!peutEditer">OFF</button>
+                </div>
+                <input v-else class="val-in" :class="{ ko: st(p).ko }" v-model="mesuresEdit[p.id]" placeholder="ex. 45 47 46" :disabled="!peutEditer" />
+              </td>
+              <td class="r">{{ st(p).bool ? '—' : (st(p).n || '—') }}</td>
+              <td class="r moy">{{ st(p).bool ? '—' : (st(p).n ? st(p).mean.toFixed(2) : '—') }}</td>
+              <td class="r">{{ st(p).bool ? '—' : (st(p).n > 1 ? st(p).rsd.toFixed(1) + '%' : '—') }}</td>
               <td class="statut">
-                <template v-if="st(p).n">
+                <template v-if="st(p).bool">
+                  <span v-if="!st(p).n" class="v2 neutre">—</span>
+                  <span v-else-if="!st(p).attendu" class="v2 ok">{{ st(p).etat }}</span>
+                  <span v-else class="v2" :class="st(p).ko ? 'ko' : 'ok'">{{ (st(p).ko ? '⚠ ' : '✓ ') + st(p).etat }}</span>
+                </template>
+                <template v-else-if="st(p).n">
                   <span class="v2" :class="st(p).indivKo ? 'ko' : 'ok'">indiv {{ st(p).indivKo ? '⚠' : '✓' }}</span>
                   <span class="v2" :class="st(p).meanKo ? 'ko' : 'ok'">moy {{ st(p).meanKo ? '⚠' : '✓' }}</span>
                 </template>
@@ -112,6 +123,13 @@ function parseVals(str) { if (str == null) return []; return String(str).split(/
 const statsMap = computed(() => {
   const m = {}
   for (const p of paramsPhase.value) {
+    if (p.type === 'bool') {
+      const bv = parseVals(mesuresEdit.value[p.id])
+      if (!bv.length) { m[p.id] = { n: 0, bool: true, ko: false, etat: null, attendu: p.etat_attendu || null }; continue }
+      const on = bv[0] > 0; const attendu = p.etat_attendu || null
+      m[p.id] = { n: 1, bool: true, etat: on ? 'ON' : 'OFF', attendu, ko: attendu ? ((attendu === 'ON') !== on) : false }
+      continue
+    }
     const vals = parseVals(mesuresEdit.value[p.id]); const n = vals.length
     if (!n) { m[p.id] = { n: 0, ko: false, indivKo: false, meanKo: false }; continue }
     const mean = vals.reduce((a, b) => a + b, 0) / n
@@ -124,6 +142,7 @@ const statsMap = computed(() => {
   return m
 })
 function st(p) { return statsMap.value[p.id] || { n: 0, ko: false } }
+function setEtat(p, etat) { const cur = st(p).etat; mesuresEdit.value[p.id] = (cur === etat) ? '' : (etat === 'ON' ? '1' : '0') }
 
 const nbConf = computed(() => paramsPhase.value.filter(p => st(p).n && !st(p).ko).length)
 const nbHors = computed(() => paramsPhase.value.filter(p => st(p).ko).length)
@@ -203,6 +222,12 @@ async function enregistrer() {
 .val-in { width: 140px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; background: #fff; color: #0f172a; font-variant-numeric: tabular-nums; }
 .val-in:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,85,247,.15); }
 .val-in.ko { border-color: #f87171; background: #fff1f2; color: #b91c1c; font-weight: 700; }
+.onoff { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+.onoff button { border: 0; background: #fff; padding: 6px 14px; font: inherit; font-size: 12px; font-weight: 800; color: #94a3b8; cursor: pointer; }
+.onoff button + button { border-left: 1px solid #e2e8f0; }
+.onoff button.on { background: #16a34a; color: #fff; }
+.onoff button.off { background: #64748b; color: #fff; }
+.tag-bool { font-size: 9px; font-weight: 800; background: #ecfeff; color: #0891b2; padding: 1px 6px; border-radius: 999px; vertical-align: middle; }
 .statut { white-space: nowrap; }
 .v2 { display: inline-block; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 6px; margin-right: 4px; }
 .v2.ok { background: #dcfce7; color: #166534; }
