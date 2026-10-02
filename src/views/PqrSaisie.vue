@@ -164,7 +164,7 @@ async function enregistrer() {
 </script>
 
 <style scoped>
-.pqr-page { color: #1b2733; }
+.pqr-page { color: #1b2733; zoom: 0.85; }
 .alert { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; }
 .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; }
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 22px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
