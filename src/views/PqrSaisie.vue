@@ -31,7 +31,7 @@
       <div v-else-if="!paramsPhase.length" class="empty-card">Aucun paramètre défini pour cette phase dans le référentiel.</div>
 
       <template v-else>
-        <p class="hint">Saisis une ou plusieurs valeurs séparées par un <b>espace</b> ou une <b>virgule</b> (ex. <code>45 47 46 48</code>). La moyenne et le RSD se calculent automatiquement. Verdict <b>indiv.</b> = toute valeur hors limites · <b>moy.</b> = moyenne hors limites.</p>
+        <p class="hint">Saisis une ou plusieurs valeurs séparées par un <b>espace</b> (ex. <code>45,5 47 46,2</code>). La <b>virgule</b> est acceptée pour les décimales, et <b>aucune valeur n'est arrondie</b>. Moyenne et RSD calculés automatiquement. Verdict <b>indiv.</b> = toute valeur hors limites · <b>moy.</b> = moyenne hors limites.</p>
         <div class="pqr-sum">
           <span v-if="nbConf" class="chip ok">✓ {{ nbConf }} conforme(s)</span>
           <span v-if="nbHors" class="chip ko">⚠ {{ nbHors }} hors spec</span>
@@ -53,7 +53,7 @@
                 <input v-else class="val-in" :class="{ ko: st(p).ko }" v-model="mesuresEdit[p.id]" placeholder="ex. 45 47 46" :disabled="!peutEditer" />
               </td>
               <td class="r">{{ st(p).bool ? '—' : (st(p).n || '—') }}</td>
-              <td class="r moy">{{ st(p).bool ? '—' : (st(p).n ? st(p).mean.toFixed(2) : '—') }}</td>
+              <td class="r moy">{{ st(p).bool ? '—' : (st(p).n ? fmtNum(st(p).mean) : '—') }}</td>
               <td class="r">{{ st(p).bool ? '—' : (st(p).n > 1 ? st(p).rsd.toFixed(1) + '%' : '—') }}</td>
               <td class="statut">
                 <template v-if="st(p).bool">
@@ -114,11 +114,12 @@ const phasesAvecParams = computed(() => [...new Set(params.value.map(p => p.phas
 const paramsPhase = computed(() => params.value.filter(p => p.phase === phaseSel.value).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
 
 const fmt = (v) => (v === null || v === undefined || v === '') ? '—' : v
+const fmtNum = (v) => (v == null || v === '' || Number.isNaN(Number(v))) ? '—' : parseFloat(Number(v).toFixed(6)).toString()
 function effMin(p) { const s = specByParam.value[p.id]; return s && s.limite_min != null ? s.limite_min : p.limite_min }
 function effMax(p) { const s = specByParam.value[p.id]; return s && s.limite_max != null ? s.limite_max : p.limite_max }
 function limTxt(p) { const mn = effMin(p), mx = effMax(p); if (mn == null && mx == null) return '—'; return (mn != null ? mn : '…') + ' – ' + (mx != null ? mx : '…') }
 function horsSpecVal(v, mn, mx) { return (mn != null && v < mn) || (mx != null && v > mx) }
-function parseVals(str) { if (str == null) return []; return String(str).split(/[\s,;]+/).map(x => x.trim()).filter(x => x !== '').map(Number).filter(v => !Number.isNaN(v)) }
+function parseVals(str) { if (str == null) return []; return String(str).split(/[\s;]+/).map(x => x.trim().replace(',', '.')).filter(x => x !== '').map(Number).filter(v => !Number.isNaN(v)) }
 
 const statsMap = computed(() => {
   const m = {}
