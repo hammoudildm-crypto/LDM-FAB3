@@ -84,7 +84,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
-const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Contrôle Qualité']
 
 const ofs = ref([])
 const rechercheOf = ref('')
