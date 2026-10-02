@@ -146,6 +146,8 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Contrôle Qualité']
+const ETAPES_ORDRE = ['Mélange sec', 'Mouillage', 'Granulation', 'Séchage', 'Calibrage', 'Tamisage', 'Lubrification', 'Réglage', 'Démarrage', 'Milieu', 'Fin']
+const etapeIdx = (e) => { const i = ETAPES_ORDRE.indexOf(e); return i >= 0 ? i : 999 }
 const produits = ref([])
 const produitSel = ref('')
 const rechercheProd = ref('')
@@ -229,7 +231,7 @@ const synthese = computed(() => {
 const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
 const phasesAvecMesures = computed(() => [...new Set(synthese.value.map(r => r.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
 function syntheseDe(ph) { return synthese.value.filter(r => r.phase === ph) }
-function etapesDeSyn(ph) { const seen = []; for (const r of syntheseDe(ph)) { const e = r.etape || ''; if (!seen.includes(e)) seen.push(e) } return seen.sort((a, b) => (a === '' ? -1 : b === '' ? 1 : 0)) }
+function etapesDeSyn(ph) { const seen = []; for (const r of syntheseDe(ph)) { const e = r.etape || ''; if (!seen.includes(e)) seen.push(e) } return seen.sort((a, b) => (a === '' ? -1 : b === '' ? 1 : (etapeIdx(a) - etapeIdx(b)) || a.localeCompare(b))) }
 function syntheseDeEtape(ph, et) { return syntheseDe(ph).filter(r => (r.etape || '') === et) }
 
 const nbLots = computed(() => new Set(mesuresPlat.value.map(m => m.of_id)).size)
