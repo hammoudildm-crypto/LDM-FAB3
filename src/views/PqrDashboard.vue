@@ -43,7 +43,7 @@
               <tr v-for="r in syntheseDe(ph)" :key="r.id" :class="{ sel: r.id === paramSel }" @click="paramSel = r.id">
                 <td class="nom">{{ r.nom }} <span v-if="r.bool" class="tag-bool">ON/OFF</span><span v-else class="u">{{ r.unite ? '(' + r.unite + ')' : '' }}</span></td>
                 <td class="r">{{ r.n }}</td>
-                <td class="r">{{ r.bool ? (r.nOn + ' ON / ' + (r.n - r.nOn) + ' OFF') : r.mean.toFixed(2) }}</td>
+                <td class="r">{{ r.bool ? (r.nOn + ' ON / ' + (r.n - r.nOn) + ' OFF') : fmtNum(r.mean) }}</td>
                 <td class="r">{{ r.bool ? '—' : r.std.toFixed(3) }}</td>
                 <td class="r lim">{{ r.bool ? (r.attendu ? 'Att. ' + r.attendu : 'ON/OFF') : limTxt(r.lsl, r.usl) }}</td>
                 <td class="r"><span :class="r.conf >= 100 ? 'c-ok' : 'c-ko'">{{ r.conf.toFixed(0) }}%</span></td>
@@ -98,7 +98,7 @@
               <line :x1="controlData.mL" :y1="controlData.yCl" :x2="controlData.W - controlData.mR" :y2="controlData.yCl" class="l-cl" />
               <text :x="controlData.W - controlData.mR" :y="controlData.yUcl - 4" class="lbl-ucl">+3σ</text>
               <text :x="controlData.W - controlData.mR" :y="controlData.yLcl + 12" class="lbl-ucl">−3σ</text>
-              <text :x="controlData.W - controlData.mR" :y="controlData.yCl - 4" class="lbl-cl">x̄ {{ controlData.mean.toFixed(2) }}</text>
+              <text :x="controlData.W - controlData.mR" :y="controlData.yCl - 4" class="lbl-cl">x̄ {{ fmtNum(controlData.mean) }}</text>
               <path :d="controlData.path" class="l-data" />
               <g v-for="(pt, i) in controlData.pts" :key="i">
                 <circle v-if="pt.viol.length" :cx="pt.x" :cy="pt.y" r="7.5" class="pt-ring" />
@@ -196,6 +196,7 @@ function effMax(p) { const s = specByParam.value[p.id]; return s && s.limite_max
 function effCible(p) { const s = specByParam.value[p.id]; return s && s.cible != null ? s.cible : p.cible }
 function horsSpecVal(v, mn, mx) { return (mn != null && v < mn) || (mx != null && v > mx) }
 function limTxt(mn, mx) { if (mn == null && mx == null) return '—'; return (mn != null ? mn : '…') + ' – ' + (mx != null ? mx : '…') }
+const fmtNum = (v) => (v == null || v === '' || Number.isNaN(Number(v))) ? '—' : parseFloat(Number(v).toFixed(6)).toString()
 function stats(vals) { const n = vals.length; const mean = vals.reduce((a, b) => a + b, 0) / n; const variance = n > 1 ? vals.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1) : 0; return { n, mean, std: Math.sqrt(variance), min: Math.min(...vals), max: Math.max(...vals) } }
 function cpkCalc(mean, std, lsl, usl) { if (std <= 0 || (lsl == null && usl == null)) return { cp: null, cpk: null }; const cp = (lsl != null && usl != null) ? (usl - lsl) / (6 * std) : null; const cpu = usl != null ? (usl - mean) / (3 * std) : Infinity; const cpl = lsl != null ? (mean - lsl) / (3 * std) : Infinity; const cpk = Math.min(cpu, cpl); return { cp, cpk: cpk === Infinity ? null : cpk } }
 
