@@ -130,6 +130,13 @@ onMounted(charger)
 
 const ofCourant = computed(() => ofs.value.find(o => String(o.id) === ofSel.value) || null)
 const ofsFiltres = computed(() => { const q = (rechercheOf.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); if (!q) return ofs.value; return ofs.value.filter(o => (((o.numero_lot || '') + ' ' + (o.code || '') + ' ' + (o.desig || '')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')).includes(q)) })
+watch(rechercheOf, (q) => {
+  const qn = (q || '').trim().toLowerCase()
+  if (!qn) return
+  const exact = ofs.value.find(o => (o.numero_lot || '').trim().toLowerCase() === qn)
+  if (exact) { ofSel.value = String(exact.id); return }
+  if (ofsFiltres.value.length === 1) ofSel.value = String(ofsFiltres.value[0].id)
+})
 const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
 const phasesAvecParams = computed(() => [...new Set(params.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
 const PHASES_PROD = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
