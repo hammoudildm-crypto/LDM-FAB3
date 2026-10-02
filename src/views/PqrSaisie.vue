@@ -88,6 +88,8 @@ import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
 const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Contrôle Qualité']
+const ETAPES_ORDRE = ['Mélange sec', 'Mouillage', 'Granulation', 'Séchage', 'Calibrage', 'Tamisage', 'Lubrification', 'Réglage', 'Démarrage', 'Milieu', 'Fin']
+const etapeIdx = (e) => { const i = ETAPES_ORDRE.indexOf(e); return i >= 0 ? i : 999 }
 
 const ofs = ref([])
 const rechercheOf = ref('')
@@ -125,7 +127,7 @@ const ofsFiltres = computed(() => { const q = (rechercheOf.value || '').toLowerC
 const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
 const phasesAvecParams = computed(() => [...new Set(params.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
 const paramsPhase = computed(() => params.value.filter(p => p.phase === phaseSel.value).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
-const etapesPhase = computed(() => { const seen = []; for (const p of paramsPhase.value) { const e = p.etape || ''; if (!seen.includes(e)) seen.push(e) } return seen.sort((a, b) => (a === '' ? -1 : b === '' ? 1 : 0)) })
+const etapesPhase = computed(() => { const seen = []; for (const p of paramsPhase.value) { const e = p.etape || ''; if (!seen.includes(e)) seen.push(e) } return seen.sort((a, b) => (a === '' ? -1 : b === '' ? 1 : (etapeIdx(a) - etapeIdx(b)) || a.localeCompare(b))) })
 function paramsPhaseEtape(et) { return paramsPhase.value.filter(p => (p.etape || '') === et) }
 
 const fmt = (v) => (v === null || v === undefined || v === '') ? '—' : v
