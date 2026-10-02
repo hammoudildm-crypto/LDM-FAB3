@@ -142,7 +142,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
-const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Contrôle Qualité']
 const produits = ref([])
 const produitSel = ref('')
 const rechercheProd = ref('')
