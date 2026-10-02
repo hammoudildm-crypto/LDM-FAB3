@@ -43,7 +43,7 @@
           <tbody>
             <tr v-for="p in paramsPhase" :key="p.id" :class="{ 'row-ko': st(p).ko }">
               <td class="nom">{{ p.nom }} <span v-if="p.type === 'bool'" class="tag-bool">ON/OFF</span></td>
-              <td>{{ p.type === 'bool' ? '—' : (p.unite || '—') }}</td>
+              <td>{{ p.type === 'bool' ? '—' : (uniteEff(p) || '—') }}</td>
               <td class="r lim">{{ p.type === 'bool' ? (p.etat_attendu ? 'Attendu ' + p.etat_attendu : 'ON/OFF') : limTxt(p) }}</td>
               <td>
                 <div v-if="p.type === 'bool'" class="onoff">
@@ -126,6 +126,7 @@ const paramsPhase = computed(() => params.value.filter(p => p.phase === phaseSel
 const fmt = (v) => (v === null || v === undefined || v === '') ? '—' : v
 const fmtNum = (v) => (v == null || v === '' || Number.isNaN(Number(v))) ? '—' : parseFloat(Number(v).toFixed(6)).toString()
 function effMin(p) { const s = specByParam.value[p.id]; return s && s.limite_min != null ? s.limite_min : p.limite_min }
+function uniteEff(p) { const s = specByParam.value[p.id]; return (s && s.unite) ? s.unite : (p.unite || '') }
 function effMax(p) { const s = specByParam.value[p.id]; return s && s.limite_max != null ? s.limite_max : p.limite_max }
 function limTxt(p) { const mn = effMin(p), mx = effMax(p); if (mn == null && mx == null) return '—'; return (mn != null ? mn : '…') + ' – ' + (mx != null ? mx : '…') }
 function horsSpecVal(v, mn, mx) { return (mn != null && v < mn) || (mx != null && v > mx) }
