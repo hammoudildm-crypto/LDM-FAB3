@@ -26,10 +26,14 @@
         <div v-if="peutEditer" class="pqr-form">
           <select v-model="form.phase"><option value="">Phase —</option><option v-for="ph in PHASES_LISTE" :key="ph" :value="ph">{{ ph }}</option></select>
           <input v-model="form.nom" placeholder="Paramètre *" />
+          <select v-model="form.type" class="t"><option value="num">Numérique</option><option value="bool">ON / OFF</option></select>
+          <template v-if="form.type === 'num'">
           <input v-model="form.unite" placeholder="Unité" class="u" />
           <input v-model.number="form.limite_min" type="number" step="any" placeholder="Min" class="n" />
           <input v-model.number="form.cible" type="number" step="any" placeholder="Cible" class="n" />
           <input v-model.number="form.limite_max" type="number" step="any" placeholder="Max" class="n" />
+          </template>
+          <select v-else v-model="form.etat_attendu" class="t"><option value="">État attendu —</option><option value="ON">Doit être ON</option><option value="OFF">Doit être OFF</option></select>
           <div class="pqr-actions">
             <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Ajouter' }}</button>
             <button v-if="form.id" class="btn ghost" @click="reset">Annuler</button>
@@ -44,11 +48,11 @@
             <thead><tr><th>Paramètre</th><th>Unité</th><th class="r">Min</th><th class="r">Cible</th><th class="r">Max</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
             <tbody>
               <tr v-for="p in paramsDe(ph)" :key="p.id">
-                <td class="nom">{{ p.nom }}</td>
-                <td>{{ p.unite || '—' }}</td>
-                <td class="r">{{ fmt(p.limite_min) }}</td>
-                <td class="r cible">{{ fmt(p.cible) }}</td>
-                <td class="r">{{ fmt(p.limite_max) }}</td>
+                <td class="nom">{{ p.nom }} <span v-if="p.type === 'bool'" class="tag-bool">ON/OFF</span></td>
+                <td>{{ p.type === 'bool' ? '—' : (p.unite || '—') }}</td>
+                <td class="r">{{ p.type === 'bool' ? '—' : fmt(p.limite_min) }}</td>
+                <td class="r cible">{{ p.type === 'bool' ? (p.etat_attendu ? 'Attendu : ' + p.etat_attendu : 'ON/OFF') : fmt(p.cible) }}</td>
+                <td class="r">{{ p.type === 'bool' ? '—' : fmt(p.limite_max) }}</td>
                 <td v-if="peutEditer" class="act">
                   <button @click="modifier(p)" title="Modifier">✎</button>
                   <button @click="supprimer(p)" title="Supprimer">🗑</button>
@@ -71,11 +75,16 @@
             <thead><tr><th>Paramètre</th><th>Unité</th><th class="r">Min</th><th class="r">Cible</th><th class="r">Max</th></tr></thead>
             <tbody>
               <tr v-for="p in paramsDe(ph)" :key="p.id">
-                <td class="nom">{{ p.nom }}</td>
-                <td>{{ p.unite || '—' }}</td>
-                <td class="r"><input class="spec-in" v-model="specsEdit[p.id].min" type="number" step="any" :placeholder="phDef(p.limite_min)" :disabled="!peutEditer" /></td>
-                <td class="r"><input class="spec-in" v-model="specsEdit[p.id].cible" type="number" step="any" :placeholder="phDef(p.cible)" :disabled="!peutEditer" /></td>
-                <td class="r"><input class="spec-in" v-model="specsEdit[p.id].max" type="number" step="any" :placeholder="phDef(p.limite_max)" :disabled="!peutEditer" /></td>
+                <td class="nom">{{ p.nom }} <span v-if="p.type === 'bool'" class="tag-bool">ON/OFF</span></td>
+                <td>{{ p.type === 'bool' ? '—' : (p.unite || '—') }}</td>
+                <template v-if="p.type === 'bool'">
+                  <td class="r bool-na" colspan="3">Pas de spec par produit (défini au référentiel)</td>
+                </template>
+                <template v-else>
+                  <td class="r"><input class="spec-in" v-model="specsEdit[p.id].min" type="number" step="any" :placeholder="phDef(p.limite_min)" :disabled="!peutEditer" /></td>
+                  <td class="r"><input class="spec-in" v-model="specsEdit[p.id].cible" type="number" step="any" :placeholder="phDef(p.cible)" :disabled="!peutEditer" /></td>
+                  <td class="r"><input class="spec-in" v-model="specsEdit[p.id].max" type="number" step="any" :placeholder="phDef(p.limite_max)" :disabled="!peutEditer" /></td>
+                </template>
               </tr>
             </tbody>
           </table>
@@ -126,8 +135,8 @@ const specsEdit = ref({})
 const erreur = ref('')
 const message = ref('')
 const recherche = ref('')
-const form = reactive({ id: null, phase: '', nom: '', unite: '', limite_min: null, cible: null, limite_max: null })
-function reset() { Object.assign(form, { id: null, phase: '', nom: '', unite: '', limite_min: null, cible: null, limite_max: null }) }
+const form = reactive({ id: null, phase: '', nom: '', unite: '', type: 'num', etat_attendu: '', limite_min: null, cible: null, limite_max: null })
+function reset() { Object.assign(form, { id: null, phase: '', nom: '', unite: '', type: 'num', etat_attendu: '', limite_min: null, cible: null, limite_max: null }) }
 
 async function charger() {
   const r = await supabase.from('pqr_parametres').select('*').eq('actif', true).order('ordre')
@@ -174,7 +183,8 @@ async function enregistrer() {
   erreur.value = ''; message.value = ''
   if (!form.phase) { erreur.value = 'Choisis une phase.'; return }
   if (!form.nom.trim()) { erreur.value = 'Le nom du paramètre est requis.'; return }
-  const payload = { phase: form.phase, nom: form.nom.trim(), unite: form.unite || null, limite_min: form.limite_min, cible: form.cible, limite_max: form.limite_max }
+  const bool = form.type === 'bool'
+  const payload = { phase: form.phase, nom: form.nom.trim(), unite: bool ? null : (form.unite || null), type: form.type, etat_attendu: bool ? (form.etat_attendu || null) : null, limite_min: bool ? null : form.limite_min, cible: bool ? null : form.cible, limite_max: bool ? null : form.limite_max }
   let r
   if (form.id) r = await supabase.from('pqr_parametres').update(payload).eq('id', form.id)
   else r = await supabase.from('pqr_parametres').insert({ ...payload, ordre: params.value.length })
@@ -182,7 +192,7 @@ async function enregistrer() {
   message.value = form.id ? 'Paramètre mis à jour.' : 'Paramètre ajouté.'
   reset(); await charger()
 }
-function modifier(p) { Object.assign(form, { id: p.id, phase: p.phase, nom: p.nom, unite: p.unite || '', limite_min: p.limite_min, cible: p.cible, limite_max: p.limite_max }) }
+function modifier(p) { Object.assign(form, { id: p.id, phase: p.phase, nom: p.nom, unite: p.unite || '', type: p.type || 'num', etat_attendu: p.etat_attendu || '', limite_min: p.limite_min, cible: p.cible, limite_max: p.limite_max }) }
 async function supprimer(p) {
   if (!confirm('Supprimer le paramètre « ' + p.nom + ' » ?')) return
   const r = await supabase.from('pqr_parametres').update({ actif: false }).eq('id', p.id)
@@ -202,6 +212,7 @@ async function enregistrerSpecs() {
   const up = [], delIds = []
   const num = (v) => (v === '' || v === null || v === undefined) ? null : Number(v)
   for (const p of params.value) {
+    if (p.type === 'bool') continue
     const e = specsEdit.value[p.id] || {}
     const mn = num(e.min), cb = num(e.cible), mx = num(e.max)
     if (mn == null && cb == null && mx == null) delIds.push(p.id)
@@ -240,6 +251,9 @@ async function enregistrerSpecs() {
 .pqr-form input:not(.u):not(.n) { flex: 1; min-width: 160px; }
 .pqr-form .u { width: 82px; }
 .pqr-form .n { width: 78px; }
+.pqr-form .t { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
+.tag-bool { font-size: 9px; font-weight: 800; background: #ecfeff; color: #0891b2; padding: 1px 6px; border-radius: 999px; vertical-align: middle; }
+.bool-na { color: #94a3b8; font-style: italic; text-align: left !important; }
 .pqr-actions { display: flex; gap: 8px; }
 
 .pqr-phase { margin-top: 16px; }
