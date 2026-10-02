@@ -26,6 +26,12 @@
         </div>
       </div>
 
+      <div v-if="ofCourant" class="prod-banner">
+        <span class="pb-lb">Produit</span>
+        <span class="pb-prod">{{ ofCourant.code || '—' }}{{ ofCourant.desig ? ' — ' + ofCourant.desig : '' }}</span>
+        <span class="pb-lot">Lot {{ ofCourant.numero_lot }}</span>
+      </div>
+
       <div v-if="!ofSel" class="empty-card">Choisis un lot / OF pour saisir ses mesures.</div>
       <div v-else-if="!phaseSel" class="empty-card">Choisis une phase.</div>
       <div v-else-if="!paramsPhase.length" class="empty-card">Aucun paramètre défini pour cette phase dans le référentiel.</div>
@@ -223,6 +229,10 @@ async function enregistrer() {
 .pqr-bar .of-search { min-width: 180px; }
 .pqr-bar .of-search:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,85,247,.15); }
 .pqr-bar label .cnt { color: #a855f7; font-weight: 700; }
+.prod-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+.prod-banner .pb-lb { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #a855f7; }
+.prod-banner .pb-prod { font-size: 15px; font-weight: 800; color: #0f172a; }
+.prod-banner .pb-lot { margin-left: auto; font-size: 12px; font-weight: 700; color: #7c3aed; background: #fff; border: 1px solid #e9d5ff; border-radius: 999px; padding: 3px 11px; }
 .pqr-bar .f.grow select { width: 100%; }
 
 .pqr-sum { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
