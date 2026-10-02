@@ -18,7 +18,7 @@
         </div>
         <div class="f">
           <label>Phase</label>
-          <select v-model="phaseSel" :disabled="!ofSel"><option value="">—</option><option v-for="ph in phasesAvecParams" :key="ph" :value="ph">{{ ph }}</option></select>
+          <select v-model="phaseSel" :disabled="!ofSel"><option value="">—</option><option v-for="ph in phasesDispo" :key="ph" :value="ph">{{ ph }}</option></select>
         </div>
         <div class="f">
           <label>Date</label>
@@ -110,14 +110,14 @@ async function charger() {
   chargementOfs.value = true
   let all = [], from = 0; const size = 1000
   while (true) {
-    const ro = await supabase.from('ordres_fabrication').select('id, numero_lot, produits(id, code_pf, designation)').order('id', { ascending: false }).range(from, from + size - 1)
+    const ro = await supabase.from('ordres_fabrication').select('id, numero_lot, produits(id, code_pf, designation, gamme)').order('id', { ascending: false }).range(from, from + size - 1)
     if (ro.error) { erreur.value = ro.error.message; break }
     const batch = ro.data || []
     all = all.concat(batch)
     if (batch.length < size) break
     from += size
   }
-  ofs.value = all.map(o => ({ id: o.id, numero_lot: o.numero_lot || '—', produit_id: o.produits ? o.produits.id : null, code: o.produits ? (o.produits.code_pf || '') : '', desig: o.produits ? (o.produits.designation || '') : '' }))
+  ofs.value = all.map(o => ({ id: o.id, numero_lot: o.numero_lot || '—', produit_id: o.produits ? o.produits.id : null, code: o.produits ? (o.produits.code_pf || '') : '', desig: o.produits ? (o.produits.designation || '') : '', gamme: o.produits ? o.produits.gamme : null }))
   chargementOfs.value = false
 }
 onMounted(charger)
@@ -126,6 +126,10 @@ const ofCourant = computed(() => ofs.value.find(o => String(o.id) === ofSel.valu
 const ofsFiltres = computed(() => { const q = (rechercheOf.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); if (!q) return ofs.value; return ofs.value.filter(o => (((o.numero_lot || '') + ' ' + (o.code || '') + ' ' + (o.desig || '')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')).includes(q)) })
 const phaseIndex = (ph) => { const i = PHASES_LISTE.indexOf(ph); return i < 0 ? 999 : i }
 const phasesAvecParams = computed(() => [...new Set(params.value.map(p => p.phase))].sort((a, b) => phaseIndex(a) - phaseIndex(b)))
+const PHASES_PROD = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+function normPhaseG(ph) { return /^(granulation|s[ée]chage)$/i.test(String(ph).trim()) ? 'Granulation et Séchage' : ph }
+function normGammeFab(g) { if (!Array.isArray(g) || !g.length) return PHASES_PROD.slice(); const out = []; for (const ph of g) { const n = normPhaseG(ph); if (PHASES_PROD.includes(n) && !out.includes(n)) out.push(n) } return out.length ? out : PHASES_PROD.slice() }
+const phasesDispo = computed(() => { const o = ofCourant.value; if (!o || !o.gamme) return phasesAvecParams.value; const g = normGammeFab(o.gamme); g.push('Contrôle Qualité'); return phasesAvecParams.value.filter(ph => g.includes(ph)) })
 const paramsPhase = computed(() => params.value.filter(p => p.phase === phaseSel.value).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
 const etapesPhase = computed(() => { const seen = []; for (const p of paramsPhase.value) { const e = p.etape || ''; if (!seen.includes(e)) seen.push(e) } return seen.sort((a, b) => (a === '' ? -1 : b === '' ? 1 : (etapeIdx(a) - etapeIdx(b)) || a.localeCompare(b))) })
 function paramsPhaseEtape(et) { return paramsPhase.value.filter(p => (p.etape || '') === et) }
@@ -168,7 +172,7 @@ const nbHors = computed(() => paramsPhase.value.filter(p => st(p).ko).length)
 const nbVide = computed(() => paramsPhase.value.filter(p => !st(p).n).length)
 
 watch(ofSel, async (id) => {
-  message.value = ''; specByParam.value = {}; mesuresEdit.value = {}
+  message.value = ''; phaseSel.value = ''; specByParam.value = {}; mesuresEdit.value = {}
   const o = ofs.value.find(x => String(x.id) === id)
   if (!o) return
   if (o.produit_id != null) {
