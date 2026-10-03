@@ -60,8 +60,8 @@ const totalEffectif = computed(() => effectifsFiltres.value.reduce((s, e) => s +
 // --- Organigramme ---
 const orgNodes = ref([])
 const equipementsListe = ref([])
-const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', phases: [], machines: [] })
-function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', phases: [], machines: [] }) }
+const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', date_sortie: '', motif_sortie: '', phases: [], machines: [] })
+function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', date_sortie: '', motif_sortie: '', phases: [], machines: [] }) }
 function orgAddPhase(e) { const v = e.target.value; if (v && !orgForm.phases.includes(v)) orgForm.phases.push(v); e.target.value = '' }
 function orgAddMachine(e) { const v = e.target.value; if (v && !orgForm.machines.includes(v)) orgForm.machines.push(v); e.target.value = '' }
 function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
@@ -99,7 +99,8 @@ watch(orgNodes, () => {
 })
 // filtre par périmètre (garde les nœuds du périmètre + leurs ancêtres)
 const orgPerimFiltre = ref('')
-const orgNodesAffiches = computed(() => {
+const estParti = (n) => { if (!n.date_sortie) return false; const dt = new Date(n.date_sortie); return !isNaN(dt) && dt <= new Date() }
+const orgPerimRaw = computed(() => {
   if (!orgPerimFiltre.value) return orgNodes.value
   const byId = {}; for (const n of orgNodes.value) byId[n.id] = n
   const keep = new Set()
@@ -112,6 +113,8 @@ const orgNodesAffiches = computed(() => {
   }
   return orgNodes.value.filter(n => keep.has(n.id))
 })
+const orgNodesAffiches = computed(() => orgPerimRaw.value.filter(n => !estParti(n)))
+const partis = computed(() => orgPerimRaw.value.filter(n => estParti(n)).slice().sort((a, b) => new Date(b.date_sortie) - new Date(a.date_sortie)))
 const orgRacinesAffichees = computed(() => orgNodesAffiches.value
   .filter(n => !n.parent_id || !orgNodesAffiches.value.some(x => x.id === n.parent_id))
   .sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
@@ -174,10 +177,41 @@ const retraites = computed(() => {
   }).filter(n => n && n.reste <= horizonRetraite).sort((a, b) => a.reste - b.reste)
 })
 
+const MOIS_COURT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
+const mouvAnnee = ref(new Date().getFullYear())
+const anneesMouv = computed(() => { const c = new Date().getFullYear(); return [c - 2, c - 1, c] })
+const effectifA = (date, list) => list.filter(n => {
+  if (!n.date_recrutement) return false
+  const r = new Date(n.date_recrutement); if (isNaN(r) || r > date) return false
+  if (n.date_sortie) { const sd = new Date(n.date_sortie); if (!isNaN(sd) && sd <= date) return false }
+  return true
+}).length
+const mouvStats = computed(() => {
+  const list = orgPerimRaw.value, y = mouvAnnee.value
+  const jan1 = new Date(y, 0, 1), dec31 = new Date(y, 11, 31, 23, 59, 59)
+  const finRef = (y === new Date().getFullYear()) ? new Date() : dec31
+  let entrees = 0, sorties = 0
+  for (const n of list) {
+    if (n.date_recrutement) { const r = new Date(n.date_recrutement); if (!isNaN(r) && r.getFullYear() === y) entrees++ }
+    if (n.date_sortie) { const sd = new Date(n.date_sortie); if (!isNaN(sd) && sd.getFullYear() === y) sorties++ }
+  }
+  const eDebut = effectifA(jan1, list), eFin = effectifA(finRef, list)
+  const eMoy = (eDebut + eFin) / 2
+  return { entrees, sorties, eDebut, eFin, turnover: eMoy > 0 ? (sorties / eMoy * 100) : null }
+})
+const fmtTurnover = computed(() => mouvStats.value.turnover == null ? '—' : (mouvStats.value.turnover.toFixed(1).replace('.', ',') + '%'))
+const evoEffectif = computed(() => {
+  const list = orgPerimRaw.value, y = mouvAnnee.value, now = new Date()
+  const pts = []
+  for (let m = 0; m < 12; m++) { const fin = new Date(y, m + 1, 0); if (fin > now) break; pts.push({ mois: m, n: effectifA(fin, list) }) }
+  return pts
+})
+const evoMax = computed(() => Math.max(1, ...evoEffectif.value.map(p => p.n)))
+
 async function orgEnregistrer() {
   erreur.value = ''
   if (!orgForm.nom.trim()) { erreur.value = 'Le nom du poste est requis.'; return }
-  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_naissance: orgForm.date_naissance || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, contrat: orgForm.contrat || null, fin_cdd: orgForm.fin_cdd || null, fin_essai: orgForm.fin_essai || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
+  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_naissance: orgForm.date_naissance || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, contrat: orgForm.contrat || null, fin_cdd: orgForm.fin_cdd || null, fin_essai: orgForm.fin_essai || null, date_sortie: orgForm.date_sortie || null, motif_sortie: orgForm.motif_sortie || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
   let r
   if (orgForm.id) r = await supabase.from('organigramme').update(payload).eq('id', orgForm.id)
   else r = await supabase.from('organigramme').insert(payload)
@@ -185,7 +219,7 @@ async function orgEnregistrer() {
   message.value = orgForm.id ? 'Poste mis a jour.' : 'Poste ajoute.'
   orgReset(); await chargerTout()
 }
-function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', date_naissance: n.date_naissance || '', date_recrutement: n.date_recrutement || '', genre: n.genre || '', contrat: n.contrat || '', fin_cdd: n.fin_cdd || '', fin_essai: n.fin_essai || '', phases: (n.equipement || '').split(',').map(x => x.trim()).filter(Boolean), machines: (n.machine || '').split(',').map(x => x.trim()).filter(Boolean) }) }
+function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', date_naissance: n.date_naissance || '', date_recrutement: n.date_recrutement || '', genre: n.genre || '', contrat: n.contrat || '', fin_cdd: n.fin_cdd || '', fin_essai: n.fin_essai || '', date_sortie: n.date_sortie || '', motif_sortie: n.motif_sortie || '', phases: (n.equipement || '').split(',').map(x => x.trim()).filter(Boolean), machines: (n.machine || '').split(',').map(x => x.trim()).filter(Boolean) }) }
 async function orgSupprimer(n) {
   if (!confirm('Supprimer le poste ' + n.nom + ' ? Ses subordonnes remonteront d un niveau.')) return
   await supabase.from('organigramme').update({ parent_id: n.parent_id || null }).eq('parent_id', n.id)
@@ -324,6 +358,41 @@ onMounted(chargerTout)
       </section>
 
       <section class="card">
+        <div class="card-head"><h2 class="card-title">Mouvements du personnel</h2><label class="ret-age">Année<select v-model.number="mouvAnnee"><option v-for="a in anneesMouv" :key="a" :value="a">{{ a }}</option></select></label></div>
+        <div class="mouv-kpis">
+          <div class="mk mk-in"><div class="mk-v">{{ mouvStats.entrees }}</div><div class="mk-l">Entrées {{ mouvAnnee }}</div></div>
+          <div class="mk mk-out"><div class="mk-v">{{ mouvStats.sorties }}</div><div class="mk-l">Sorties {{ mouvAnnee }}</div></div>
+          <div class="mk"><div class="mk-v">{{ fmtTurnover }}</div><div class="mk-l">Taux de turnover</div></div>
+          <div class="mk"><div class="mk-v">{{ mouvStats.eDebut }} → {{ mouvStats.eFin }}</div><div class="mk-l">Effectif (début → fin)</div></div>
+        </div>
+        <div v-if="evoEffectif.length > 1" class="evo-wrap">
+          <div class="evo-title">Évolution de l'effectif · {{ mouvAnnee }}</div>
+          <div class="evo-bars">
+            <div v-for="p in evoEffectif" :key="p.mois" class="evo-b">
+              <div class="evo-b-val">{{ p.n }}</div>
+              <div class="evo-b-bar" :style="{ height: Math.max(3, p.n / evoMax * 72) + 'px' }"></div>
+              <div class="evo-b-lbl">{{ MOIS_COURT[p.mois] }}</div>
+            </div>
+          </div>
+        </div>
+        <div v-if="partis.length" class="partis-wrap">
+          <div class="evo-title">Sorties enregistrées <span class="count">{{ partis.length }}</span></div>
+          <div class="ret-list">
+            <div v-for="n in partis" :key="n.id" class="parti-row">
+              <span class="rr-nom">{{ n.nom }}</span>
+              <span class="rr-fct" v-if="n.fonction">· {{ n.fonction }}</span>
+              <span class="parti-right">
+                <span class="rr-motif" v-if="n.motif_sortie">{{ n.motif_sortie }}</span>
+                <span class="parti-date">{{ fmtD(n.date_sortie) }}</span>
+                <button v-if="peutEditer" class="lien-edit" @click="orgModifier(n)">Modifier</button>
+              </span>
+            </div>
+          </div>
+        </div>
+        <div v-if="!evoEffectif.length && !partis.length && !mouvStats.entrees" class="empty-sm">Renseigne les dates de recrutement et de sortie pour suivre les mouvements et le turnover.</div>
+      </section>
+
+      <section class="card">
         <div class="card-head"><h2 class="card-title">Organigramme</h2><span class="count">{{ orgFlat.length }}</span></div>
         <div v-if="peutEditer" class="org-form">
           <input v-model="orgForm.nom" placeholder="Nom *" />
@@ -346,6 +415,8 @@ onMounted(chargerTout)
           <select v-model="orgForm.contrat"><option value="">Contrat —</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select>
           <label v-if="orgForm.contrat === 'CDD'" class="org-datef">Fin CDD<input v-model="orgForm.fin_cdd" type="date" /></label>
           <label class="org-datef">Fin essai<input v-model="orgForm.fin_essai" type="date" /></label>
+          <label class="org-datef">Date sortie<input v-model="orgForm.date_sortie" type="date" /></label>
+          <select v-if="orgForm.date_sortie" v-model="orgForm.motif_sortie"><option value="">Motif sortie —</option><option>Démission</option><option>Fin de contrat</option><option>Licenciement</option><option>Retraite</option><option>Mutation</option><option>Décès</option><option>Autre</option></select>
           <select v-model="orgForm.parent_id"><option value="">Responsable — (sommet)</option><option v-for="n in responsablesPossibles" :key="n.id" :value="n.id">{{ n.nom }} — {{ n.fonction }}</option></select>
           <input v-model="orgForm.photo_url" placeholder="URL photo (optionnel)" />
           <input v-model="orgForm.note" placeholder="Note" class="org-note" />
@@ -456,6 +527,25 @@ onMounted(chargerTout)
 .rr-badge { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .rr-badge.u-rouge { background: #fee2e2; color: #dc2626; }
 .rr-badge.u-ambre { background: #fef3c7; color: #b45309; }
+.mouv-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 12px; }
+.mk { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; }
+.mk-v { font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -.02em; }
+.mk-l { font-size: 11px; color: #64748b; margin-top: 3px; font-weight: 600; }
+.mk-in .mk-v { color: #16a34a; }
+.mk-out .mk-v { color: #dc2626; }
+.evo-wrap, .partis-wrap { margin-top: 20px; }
+.evo-title { font-size: 12px; font-weight: 800; color: #475569; margin-bottom: 12px; }
+.evo-bars { display: flex; align-items: flex-end; gap: 6px; height: 104px; }
+.evo-b { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; }
+.evo-b-val { font-size: 10px; font-weight: 800; color: #475569; }
+.evo-b-bar { width: 100%; max-width: 34px; background: linear-gradient(180deg, #14b8a6, #0d9488); border-radius: 4px 4px 0 0; transition: height .3s ease; }
+.evo-b-lbl { font-size: 9.5px; color: #94a3b8; font-weight: 700; }
+.parti-row { display: flex; align-items: center; gap: 6px; padding: 7px 2px; border-top: 1px solid #f1f5f9; font-size: 13px; }
+.parti-right { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.parti-date { color: #64748b; font-size: 11.5px; }
+.rr-motif { color: #7c3aed; font-size: 10.5px; font-weight: 700; background: #f5f3ff; padding: 1px 8px; border-radius: 999px; }
+.lien-edit { border: 1px solid #e2e8f0; background: #fff; border-radius: 7px; padding: 3px 10px; font: inherit; font-size: 12px; font-weight: 600; color: #475569; cursor: pointer; }
+.lien-edit:hover { background: #f8fafc; border-color: #cbd5e1; }
 .org-actions { display: flex; gap: 8px; }
 .org-tree { display: flex; flex-direction: column; gap: 6px; }
 .org-chart { overflow-x: auto; padding: 12px 0 4px; zoom: 0.72; }
