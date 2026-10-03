@@ -6,11 +6,12 @@
       </div>
       <div class="on-nom">{{ node.nom }}</div>
       <div class="on-fct" v-if="node.fonction">{{ node.fonction }}</div>
-      <div class="on-meta" v-if="node.matricule || node.atelier_id || node.equipe || node.equipement">
+      <div class="on-meta" v-if="node.matricule || node.atelier_id || node.equipe || node.equipement || node.machine">
         <span v-if="node.matricule">#{{ node.matricule }}</span>
         <span v-if="node.atelier_id"> · {{ node.atelier_id }}</span>
         <span v-if="node.equipe"> · Éq.{{ node.equipe }}</span>
         <span v-if="node.equipement"> · {{ node.equipement }}</span>
+        <span v-if="node.machine"> · 🔧{{ node.machine }}</span>
       </div>
       <div class="on-tel" v-if="node.telephone">☎ {{ node.telephone }}</div>
       <button v-if="enfants.length" class="on-fold" :class="{ plie: estPlie }" @click.stop="basculer" :title="estPlie ? 'Déplier' : 'Replier'">
