@@ -237,7 +237,7 @@ const estAdminHub = computed(() => (role && role.value) === 'admin')
 const flux = [
   { label: 'Configuration', c: '#64748b', admin: true,
     icon: `<g ${S}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></g>`,
-    links: [['/referentiels', 'Référentiels'], ['/cadences', 'Cadences'], ['/habilitations', 'Habilitations'], ['/effectifs', 'Effectifs']] },
+    links: [['/referentiels', 'Référentiels'], ['/cadences', 'Cadences'], ['/habilitations', 'Habilitations']] },
   { label: 'Ordonnancement & OF', c: '#6366f1',
     icon: `<g ${S}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></g>`,
     links: [['/ordonnancement', 'Ordonnancement'], ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication'], ['/planning-equipements', 'Planning équipements']] },
@@ -252,7 +252,7 @@ const flux = [
     links: [['/verification-ddl', 'DDL Fab — Production'], ['/verification-ddl-aq', 'DDL Fab — AQ'], ['/verification-ddl-cond', 'DDL Conditionnement'], ['/audit', "Journal d'audit"]] },
   { label: 'Formation & Qualification', c: '#0d9488',
     icon: `<g ${S}><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/></g>`,
-    links: [['/formations', 'Référentiel des formations'], ['/formations-enreg', 'Enregistrements'], ['/formations-matrice', 'Matrice & tableau de bord']] },
+    links: [['/effectifs', 'Effectifs'], ['/formations', 'Référentiel des formations'], ['/formations-enreg', 'Enregistrements'], ['/formations-matrice', 'Matrice & tableau de bord']] },
   { label: 'Revue qualité (PQR)', c: '#a855f7',
     icon: `<g ${S}><path d="M9 3h6"/><path d="M10 3v5.5L4.5 17a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 8.5V3"/><line x1="8.5" y1="14" x2="15.5" y2="14"/></g>`,
     links: [['/pqr-parametres', 'Paramètres critiques'], ['/pqr-saisie', 'Saisie des mesures'], ['/pqr-tableau', 'Tableau de bord PQR']] },
