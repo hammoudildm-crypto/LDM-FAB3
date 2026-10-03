@@ -60,8 +60,8 @@ const totalEffectif = computed(() => effectifsFiltres.value.reduce((s, e) => s +
 // --- Organigramme ---
 const orgNodes = ref([])
 const equipementsListe = ref([])
-const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_recrutement: '', genre: '', contrat: '', phases: [], machines: [] })
-function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_recrutement: '', genre: '', contrat: '', phases: [], machines: [] }) }
+const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', phases: [], machines: [] })
+function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', phases: [], machines: [] }) }
 function orgAddPhase(e) { const v = e.target.value; if (v && !orgForm.phases.includes(v)) orgForm.phases.push(v); e.target.value = '' }
 function orgAddMachine(e) { const v = e.target.value; if (v && !orgForm.machines.includes(v)) orgForm.machines.push(v); e.target.value = '' }
 function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
@@ -134,11 +134,25 @@ const kpiOrg = computed(() => {
 })
 const pct = (n) => kpiOrg.value.total ? Math.round(n / kpiOrg.value.total * 100) + '%' : '—'
 const ancMoyTxt = computed(() => { const m = kpiOrg.value.ancMoyMois; return m == null ? '—' : ((m / 12).toFixed(1).replace('.0', '').replace('.', ',') + ' ans') })
+const joursAvant = (d) => { if (!d) return null; const dt = new Date(d); if (isNaN(dt)) return null; const now = new Date(); now.setHours(0, 0, 0, 0); dt.setHours(0, 0, 0, 0); return Math.round((dt - now) / 86400000) }
+const fmtD = (d) => { if (!d) return ''; const dt = new Date(d); return isNaN(dt) ? d : dt.toLocaleDateString('fr-FR') }
+const jLabel = (j) => j < 0 ? ('dépassé de ' + (-j) + ' j') : (j === 0 ? "aujourd'hui" : ('dans ' + j + ' j'))
+const jClass = (j) => (j < 0 || j <= 15) ? 'u-rouge' : 'u-ambre'
+const alertesCdd = computed(() => orgNodesAffiches.value
+  .filter(n => { const c = (n.contrat || '').toUpperCase(); return c.indexOf('CDD') >= 0 && n.fin_cdd })
+  .map(n => ({ id: n.id, nom: n.nom, fonction: n.fonction, fin: n.fin_cdd, j: joursAvant(n.fin_cdd) }))
+  .filter(n => n.j != null && n.j <= 60)
+  .sort((a, b) => a.j - b.j))
+const alertesEssai = computed(() => orgNodesAffiches.value
+  .filter(n => n.fin_essai)
+  .map(n => ({ id: n.id, nom: n.nom, fonction: n.fonction, fin: n.fin_essai, j: joursAvant(n.fin_essai) }))
+  .filter(n => n.j != null && n.j <= 30)
+  .sort((a, b) => a.j - b.j))
 
 async function orgEnregistrer() {
   erreur.value = ''
   if (!orgForm.nom.trim()) { erreur.value = 'Le nom du poste est requis.'; return }
-  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, contrat: orgForm.contrat || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
+  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, contrat: orgForm.contrat || null, fin_cdd: orgForm.fin_cdd || null, fin_essai: orgForm.fin_essai || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
   let r
   if (orgForm.id) r = await supabase.from('organigramme').update(payload).eq('id', orgForm.id)
   else r = await supabase.from('organigramme').insert(payload)
@@ -146,7 +160,7 @@ async function orgEnregistrer() {
   message.value = orgForm.id ? 'Poste mis a jour.' : 'Poste ajoute.'
   orgReset(); await chargerTout()
 }
-function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', date_recrutement: n.date_recrutement || '', genre: n.genre || '', contrat: n.contrat || '', phases: (n.equipement || '').split(',').map(x => x.trim()).filter(Boolean), machines: (n.machine || '').split(',').map(x => x.trim()).filter(Boolean) }) }
+function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', date_recrutement: n.date_recrutement || '', genre: n.genre || '', contrat: n.contrat || '', fin_cdd: n.fin_cdd || '', fin_essai: n.fin_essai || '', phases: (n.equipement || '').split(',').map(x => x.trim()).filter(Boolean), machines: (n.machine || '').split(',').map(x => x.trim()).filter(Boolean) }) }
 async function orgSupprimer(n) {
   if (!confirm('Supprimer le poste ' + n.nom + ' ? Ses subordonnes remonteront d un niveau.')) return
   await supabase.from('organigramme').update({ parent_id: n.parent_id || null }).eq('parent_id', n.id)
@@ -234,6 +248,30 @@ onMounted(chargerTout)
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span><div class="kpi-val">{{ ancMoyTxt }}</div></div><div class="kpi-lbl">Ancienneté moyenne</div></div>
       </div>
 
+      <section class="card alert-contrats" v-if="alertesCdd.length || alertesEssai.length">
+        <h2 class="card-title">⚠ Alertes contrats</h2>
+        <div class="alert-cols">
+          <div v-if="alertesCdd.length" class="alert-col">
+            <div class="alert-h">CDD à échéance · {{ alertesCdd.length }}</div>
+            <div v-for="n in alertesCdd" :key="n.id" class="alert-row">
+              <span class="ar-nom">{{ n.nom }}</span>
+              <span class="ar-fct" v-if="n.fonction">· {{ n.fonction }}</span>
+              <span class="ar-date">{{ fmtD(n.fin) }}</span>
+              <span class="ar-badge" :class="jClass(n.j)">{{ jLabel(n.j) }}</span>
+            </div>
+          </div>
+          <div v-if="alertesEssai.length" class="alert-col">
+            <div class="alert-h">Périodes d'essai à confirmer · {{ alertesEssai.length }}</div>
+            <div v-for="n in alertesEssai" :key="n.id" class="alert-row">
+              <span class="ar-nom">{{ n.nom }}</span>
+              <span class="ar-fct" v-if="n.fonction">· {{ n.fonction }}</span>
+              <span class="ar-date">{{ fmtD(n.fin) }}</span>
+              <span class="ar-badge" :class="jClass(n.j)">{{ jLabel(n.j) }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="card">
         <div class="card-head"><h2 class="card-title">Organigramme</h2><span class="count">{{ orgFlat.length }}</span></div>
         <div v-if="peutEditer" class="org-form">
@@ -251,9 +289,11 @@ onMounted(chargerTout)
           </div>
           <input v-model="orgForm.matricule" placeholder="Matricule" />
           <input v-model="orgForm.telephone" placeholder="Téléphone" />
-          <input v-model="orgForm.date_recrutement" type="date" title="Date de recrutement" />
+          <label class="org-datef">Recrutement<input v-model="orgForm.date_recrutement" type="date" /></label>
           <select v-model="orgForm.genre"><option value="">Genre —</option><option value="Homme">Homme</option><option value="Femme">Femme</option></select>
           <select v-model="orgForm.contrat"><option value="">Contrat —</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select>
+          <label v-if="orgForm.contrat === 'CDD'" class="org-datef">Fin CDD<input v-model="orgForm.fin_cdd" type="date" /></label>
+          <label class="org-datef">Fin essai<input v-model="orgForm.fin_essai" type="date" /></label>
           <select v-model="orgForm.parent_id"><option value="">Responsable — (sommet)</option><option v-for="n in responsablesPossibles" :key="n.id" :value="n.id">{{ n.nom }} — {{ n.fonction }}</option></select>
           <input v-model="orgForm.photo_url" placeholder="URL photo (optionnel)" />
           <input v-model="orgForm.note" placeholder="Note" class="org-note" />
@@ -328,6 +368,17 @@ onMounted(chargerTout)
 .org-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .org-form input, .org-form select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
 .org-form .org-note { flex: 1; min-width: 150px; }
+.org-datef { display: inline-flex; flex-direction: column; gap: 2px; font-size: 9.5px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: .03em; }
+.alert-contrats { border-left: 4px solid #f59e0b; }
+.alert-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px; margin-top: 12px; }
+.alert-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #92400e; margin-bottom: 7px; }
+.alert-row { display: flex; align-items: center; gap: 6px; padding: 6px 2px; border-top: 1px solid #f1f5f9; font-size: 13px; }
+.ar-nom { font-weight: 700; color: #0f172a; }
+.ar-fct { color: #94a3b8; font-size: 11.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-date { margin-left: auto; color: #64748b; font-size: 11.5px; white-space: nowrap; }
+.ar-badge { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.ar-badge.u-rouge { background: #fee2e2; color: #dc2626; }
+.ar-badge.u-ambre { background: #fef3c7; color: #b45309; }
 .org-actions { display: flex; gap: 8px; }
 .org-tree { display: flex; flex-direction: column; gap: 6px; }
 .org-chart { overflow-x: auto; padding: 12px 0 4px; zoom: 0.72; }
