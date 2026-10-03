@@ -22,6 +22,8 @@
       </div>
 
       <div class="kpis">
+        <div class="kpi" :class="tauxFormationGlobal != null && tauxFormationGlobal >= 90 ? 'good' : (tauxFormationGlobal != null && tauxFormationGlobal < 60 ? 'bad' : 'warn')"><div class="kv">{{ tauxFormationGlobal != null ? tauxFormationGlobal.toFixed(0) + '%' : '—' }}</div><div class="kl">Taux de formation</div></div>
+        <div class="kpi good"><div class="kv">{{ nbQualifies }}/{{ personnesFiltrees.length }}</div><div class="kl">Personnel qualifié</div></div>
         <div class="kpi"><div class="kv">{{ personnesFiltrees.length }}</div><div class="kl">Personnes</div></div>
         <div class="kpi good"><div class="kv">{{ nbValides }}</div><div class="kl">Qualifications valides</div></div>
         <div class="kpi warn"><div class="kv">{{ nbBientot }}</div><div class="kl">À recycler (&lt; 60 j)</div></div>
@@ -38,6 +40,21 @@
             <td class="nom">{{ e.personneNom }}</td><td>{{ e.formationNom }}</td><td>{{ e.date_formation }}</td><td>{{ e.expiration || '—' }}</td>
             <td><span class="etat" :class="'e-' + e.cell">{{ etatTxt(e.cell) }}</span></td>
             <td class="r"><button class="btn-plan" @click="planifier(e.formation_id)" title="Planifier une session pour cette formation (toutes les personnes concernées)">📅 Planifier</button></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 class="sec-titre">Taux de formation par personne</h3>
+      <p class="hint">Basé sur les formations <b>requises</b> de chaque fonction (définies dans « Exigences par fonction »). Trié des plus à risque en premier.</p>
+      <div v-if="!tauxParPersonne.length" class="empty-sm">Aucune personne pour ce filtre.</div>
+      <table v-else class="form-tbl">
+        <thead><tr><th>Personne</th><th>Fonction</th><th class="r">Validées / Requises</th><th class="tx">Taux</th></tr></thead>
+        <tbody>
+          <tr v-for="t in tauxParPersonne" :key="t.id">
+            <td class="nom">{{ t.nom }}</td>
+            <td>{{ t.fonction || '—' }}</td>
+            <td class="r">{{ t.requises ? t.valides + ' / ' + t.requises : '—' }}</td>
+            <td class="tx"><div v-if="t.taux != null" class="bar"><div class="bar-fill" :class="barCls(t.taux)" :style="{ width: t.taux + '%' }"></div><span class="bar-txt">{{ t.taux.toFixed(0) }}%</span></div><span v-else class="no-req">pas d'exigence</span></td>
           </tr>
         </tbody>
       </table>
@@ -171,6 +188,16 @@ const aPlanifier = computed(() => {
   return [...manquants.value, ...rec].sort((a, b) => (ord[a.cell] - ord[b.cell]) || String(a.expiration || '').localeCompare(String(b.expiration || '')))
 })
 
+const tauxParPersonne = computed(() => personnesFiltrees.value.map(p => {
+  const req = requisParFonction.value[p.fonction]
+  if (!req || !req.size) return { id: p.id, nom: p.nom, fonction: p.fonction, requises: 0, valides: 0, taux: null }
+  let valides = 0
+  for (const fid of req) { if (cellStatut(p.id, fid) === 'valide') valides++ }
+  return { id: p.id, nom: p.nom, fonction: p.fonction, requises: req.size, valides, taux: valides / req.size * 100 }
+}).sort((a, b) => (a.taux == null ? 1000 : a.taux) - (b.taux == null ? 1000 : b.taux) || (a.nom || '').localeCompare(b.nom || '')))
+const tauxFormationGlobal = computed(() => { let req = 0, val = 0; for (const t of tauxParPersonne.value) { req += t.requises; val += t.valides } return req ? val / req * 100 : null })
+const nbQualifies = computed(() => tauxParPersonne.value.filter(t => t.requises > 0 && t.valides === t.requises).length)
+function barCls(t) { return t >= 100 ? 'ok' : t >= 50 ? 'mid' : 'low' }
 function abrev(nom) { const m = String(nom).match(/\(([^)]+)\)/); if (m) return m[1]; return String(nom).split(/\s+/)[0] }
 function planifier(fid) { const ids = [...new Set(aPlanifier.value.filter(e => e.formation_id === fid).map(e => e.personne_id))]; router.push({ path: '/formations-planning', query: { formation: String(fid), personnes: ids.join(',') } }) }
 
@@ -231,7 +258,7 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .mat-bar label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; }
 .mat-bar select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; font-weight: 600; min-width: 160px; }
 
-.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px; }
 .kpi { background: #f8fafc; border: 1px solid #eef2f6; border-radius: 12px; padding: 14px; text-align: center; }
 .kpi .kv { font-size: 24px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
 .kpi .kl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; font-weight: 700; margin-top: 2px; }
@@ -244,6 +271,12 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .form-tbl td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; }
 .form-tbl td.nom { font-weight: 700; color: #0f172a; }
 .form-tbl tr.row-ko { background: #fef2f2; }
+.form-tbl td.tx, .form-tbl th.tx { min-width: 160px; }
+.bar { position: relative; height: 18px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.bar-fill { position: absolute; top: 0; left: 0; bottom: 0; border-radius: 999px; }
+.bar-fill.ok { background: #16a34a; } .bar-fill.mid { background: #d97706; } .bar-fill.low { background: #dc2626; }
+.bar-txt { position: absolute; top: 0; right: 7px; line-height: 18px; font-size: 11px; font-weight: 800; color: #0f172a; }
+.no-req { font-size: 11px; color: #94a3b8; font-style: italic; }
 .form-tbl td.r, .form-tbl th.r { text-align: right; }
 .btn-plan { border: 1px solid #99f6e4; background: #f0fdfa; color: #0d9488; border-radius: 7px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .btn-plan:hover { background: #ccfbf1; border-color: #5eead4; }
