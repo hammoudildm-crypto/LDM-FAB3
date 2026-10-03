@@ -68,10 +68,12 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, inject } from 'vue'
+import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
+const route = useRoute()
 const formations = ref([])
 const personnes = ref([])
 const sessions = ref([])
@@ -91,7 +93,16 @@ async function charger() {
   if (rs.error) { erreur.value = rs.error.message; return }
   sessions.value = rs.data || []
 }
-onMounted(charger)
+onMounted(async () => {
+  await charger()
+  if (route.query.formation) {
+    form.formation_id = String(route.query.formation)
+    const ids = String(route.query.personnes || '').split(',').map(Number).filter(Boolean)
+    form.personnes = ids.filter(id => personnes.value.some(p => p.id === id))
+    message.value = 'Session pré-remplie depuis la matrice — vérifie la date et le formateur, puis planifie.'
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+})
 
 const formationById = computed(() => { const m = {}; for (const f of formations.value) m[f.id] = f; return m })
 const personneById = computed(() => { const m = {}; for (const p of personnes.value) m[p.id] = p; return m })
