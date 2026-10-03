@@ -23,6 +23,7 @@
         <div class="kpi good"><div class="kv">{{ nbValides }}</div><div class="kl">Qualifications valides</div></div>
         <div class="kpi warn"><div class="kv">{{ nbBientot }}</div><div class="kl">À recycler (&lt; 60 j)</div></div>
         <div class="kpi bad"><div class="kv">{{ nbExpire }}</div><div class="kl">Expirées / non acquis</div></div>
+        <div class="kpi bad"><div class="kv">{{ nbEcarts }}</div><div class="kl">Écarts critiques</div></div>
       </div>
 
       <h3 class="sec-titre">À planifier — expiré ou bientôt</h3>
@@ -57,7 +58,8 @@
           <span class="lg"><span class="pt e-valide">✓</span>Valide</span>
           <span class="lg"><span class="pt e-bientot">⚠</span>Expire bientôt</span>
           <span class="lg"><span class="pt e-expire">✗</span>Expiré / non acquis</span>
-          <span class="lg"><span class="pt e-absent">—</span>Non formé</span>
+          <span class="lg"><span class="pt e-manquant">!</span>Manquant (requis)</span>
+          <span class="lg"><span class="pt e-absent">—</span>Non requis</span>
         </div>
       </template>
     </section>
@@ -72,6 +74,7 @@ import PageHeader from '../components/PageHeader.vue'
 const personnes = ref([])
 const formations = ref([])
 const enregistrements = ref([])
+const requises = ref([])
 const filtreAtelier = ref('')
 const filtreEquipe = ref('')
 const erreur = ref('')
@@ -84,6 +87,8 @@ async function charger() {
   const re = await supabase.from('formation_enregistrements').select('*')
   if (re.error) { erreur.value = re.error.message; return }
   enregistrements.value = re.data || []
+  const rq = await supabase.from('formation_requise').select('*')
+  if (!rq.error) requises.value = rq.data || []
 }
 onMounted(charger)
 
@@ -98,6 +103,7 @@ const persIds = computed(() => new Set(personnesFiltrees.value.map(p => p.id)))
 
 const formationById = computed(() => { const m = {}; for (const f of formations.value) m[f.id] = f; return m })
 const personneById = computed(() => { const m = {}; for (const p of personnes.value) m[p.id] = p; return m })
+const requisParFonction = computed(() => { const m = {}; for (const r of requises.value) { (m[r.fonction] = m[r.fonction] || new Set()).add(r.formation_id) } return m })
 function addMonths(dateStr, m) { const d = new Date(dateStr + 'T00:00:00'); d.setMonth(d.getMonth() + m); return d.toISOString().slice(0, 10) }
 const today = new Date().toISOString().slice(0, 10)
 const dans60 = (() => { const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() + 60); return d.toISOString().slice(0, 10) })()
@@ -118,9 +124,9 @@ const latestByKey = computed(() => {
   }
   return m
 })
-function cellStatut(pid, fid) { const e = latestByKey.value[pid + '|' + fid]; return e ? e.cell : 'absent' }
-function cellIcon(st) { return st === 'valide' ? '✓' : st === 'bientot' ? '⚠' : st === 'expire' ? '✗' : '—' }
-function etatTxt(st) { return st === 'valide' ? '✓ Valide' : st === 'bientot' ? '⚠ Expire bientôt' : st === 'expire' ? '✗ Expiré' : 'Non formé' }
+function cellStatut(pid, fid) { const e = latestByKey.value[pid + '|' + fid]; if (e) return e.cell; const p = personneById.value[pid]; const req = p && requisParFonction.value[p.fonction]; return (req && req.has(fid)) ? 'manquant' : 'absent' }
+function cellIcon(st) { return st === 'valide' ? '✓' : st === 'bientot' ? '⚠' : st === 'expire' ? '✗' : st === 'manquant' ? '!' : '—' }
+function etatTxt(st) { return st === 'valide' ? '✓ Valide' : st === 'bientot' ? '⚠ Expire bientôt' : st === 'expire' ? '✗ Expiré' : st === 'manquant' ? '! Manquant (requis)' : 'Non formé' }
 function cellTitre(p, f) {
   const e = latestByKey.value[p.id + '|' + f.id]
   if (!e) return p.nom + ' — ' + f.nom + ' : non formé'
@@ -131,17 +137,31 @@ const cellsListe = computed(() => Object.values(latestByKey.value).filter(e => p
 const nbValides = computed(() => cellsListe.value.filter(e => e.cell === 'valide').length)
 const nbBientot = computed(() => cellsListe.value.filter(e => e.cell === 'bientot').length)
 const nbExpire = computed(() => cellsListe.value.filter(e => e.cell === 'expire').length)
-const aPlanifier = computed(() => cellsListe.value
-  .filter(e => e.cell === 'expire' || e.cell === 'bientot')
-  .map(e => ({ ...e, personneNom: (personneById.value[e.personne_id] || {}).nom || '(supprimé)', formationNom: (formationById.value[e.formation_id] || {}).nom || '(supprimée)' }))
-  .sort((a, b) => (a.cell === 'expire' ? 0 : 1) - (b.cell === 'expire' ? 0 : 1) || String(a.expiration || '').localeCompare(String(b.expiration || ''))))
+const manquants = computed(() => {
+  const out = []
+  for (const p of personnesFiltrees.value) {
+    const req = requisParFonction.value[p.fonction]; if (!req) continue
+    for (const fid of req) { if (cellStatut(p.id, fid) === 'manquant') out.push({ id: 'm' + p.id + '_' + fid, personneNom: p.nom, formationNom: (formationById.value[fid] || {}).nom || '', date_formation: '—', expiration: null, cell: 'manquant' }) }
+  }
+  return out
+})
+const nbEcarts = computed(() => {
+  let n = 0
+  for (const p of personnesFiltrees.value) { const req = requisParFonction.value[p.fonction]; if (!req) continue; for (const fid of req) { const st = cellStatut(p.id, fid); if (st === 'manquant' || st === 'expire') n++ } }
+  return n
+})
+const aPlanifier = computed(() => {
+  const rec = cellsListe.value.filter(e => e.cell === 'expire' || e.cell === 'bientot').map(e => ({ ...e, personneNom: (personneById.value[e.personne_id] || {}).nom || '(supprimé)', formationNom: (formationById.value[e.formation_id] || {}).nom || '(supprimée)' }))
+  const ord = { manquant: 0, expire: 1, bientot: 2 }
+  return [...manquants.value, ...rec].sort((a, b) => (ord[a.cell] - ord[b.cell]) || String(a.expiration || '').localeCompare(String(b.expiration || '')))
+})
 
 function abrev(nom) { const m = String(nom).match(/\(([^)]+)\)/); if (m) return m[1]; return String(nom).split(/\s+/)[0] }
 
 function exporterPDF() {
   const now = new Date().toLocaleString('fr-FR')
   const filt = [filtreAtelier.value, filtreEquipe.value].filter(Boolean).join(' · ') || 'Tout le personnel'
-  const ic = (st) => st === 'valide' ? '✓' : st === 'bientot' ? '⚠' : st === 'expire' ? '✗' : '—'
+  const ic = (st) => st === 'valide' ? '✓' : st === 'bientot' ? '⚠' : st === 'expire' ? '✗' : st === 'manquant' ? '!' : '—'
   const head = '<th class="nm">Personne</th>' + formations.value.map(f => `<th>${abrev(f.nom)}</th>`).join('')
   const rows = personnesFiltrees.value.map(p => {
     const cells = formations.value.map(f => { const st = cellStatut(p.id, f.id); return `<td class="c c-${st}">${ic(st)}</td>` }).join('')
@@ -160,7 +180,7 @@ h2{font-size:13px;margin:16px 0 6px;border-left:4px solid #0d9488;padding-left:8
 table{border-collapse:collapse;font-size:10px;margin-bottom:10px} table.plan{width:100%}
 th{background:#f0fdfa;color:#0f766e;padding:5px 6px;border:1px solid #e2e8f0;font-size:9px;text-transform:uppercase}
 td{padding:4px 6px;border:1px solid #f1f5f9} td.nm,th.nm{text-align:left;font-weight:700;color:#0f172a}
-td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#166534} .c-bientot{background:#fef3c7;color:#92400e} .c-expire{background:#fee2e2;color:#b91c1c} .c-absent{background:#f8fafc;color:#cbd5e1}
+td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#166534} .c-bientot{background:#fef3c7;color:#92400e} .c-expire{background:#fee2e2;color:#b91c1c} .c-manquant{background:#fecaca;color:#991b1b} .c-absent{background:#f8fafc;color:#cbd5e1}
 .foot{margin-top:18px;font-size:9px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px}
 @media print{body{margin:10mm}}
 </style></head><body>
@@ -195,7 +215,7 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .mat-bar label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; }
 .mat-bar select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; font-weight: 600; min-width: 160px; }
 
-.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
 .kpi { background: #f8fafc; border: 1px solid #eef2f6; border-radius: 12px; padding: 14px; text-align: center; }
 .kpi .kv { font-size: 24px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
 .kpi .kl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; font-weight: 700; margin-top: 2px; }
@@ -222,12 +242,14 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .pt.e-valide { background: #dcfce7; color: #166534; }
 .pt.e-bientot { background: #fef3c7; color: #92400e; }
 .pt.e-expire { background: #fee2e2; color: #b91c1c; }
+.pt.e-manquant { background: #fee2e2; color: #b91c1c; box-shadow: inset 0 0 0 1.5px #f87171; }
 .pt.e-absent { background: #f1f5f9; color: #cbd5e1; }
 
 .etat { font-size: 11px; font-weight: 800; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
 .etat.e-valide { background: #dcfce7; color: #166534; }
 .etat.e-bientot { background: #fef3c7; color: #92400e; }
 .etat.e-expire { background: #fee2e2; color: #b91c1c; }
+.etat.e-manquant { background: #fecaca; color: #991b1b; }
 .leg { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; padding-left: 2px; }
 .leg .lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; font-weight: 600; }
 </style>
