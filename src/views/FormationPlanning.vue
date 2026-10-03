@@ -16,7 +16,10 @@
         </div>
         <div class="multi">
           <div v-if="form.personnes.length" class="chips"><span v-for="(pid, i) in form.personnes" :key="pid" class="chip">{{ personneNom(pid) }}<button type="button" @click="form.personnes.splice(i, 1)">×</button></span></div>
-          <select @change="ajouterPersonne" class="add-sel"><option value="">+ Ajouter une personne</option><option v-for="p in personnes" :key="p.id" :value="String(p.id)" :disabled="form.personnes.includes(p.id)">{{ p.nom }}{{ p.fonction ? ' — ' + p.fonction : '' }}</option></select>
+          <div class="add-row">
+            <input v-model="rechercheP" class="p-search" placeholder="🔍 Rechercher une personne" />
+            <select @change="ajouterPersonne" class="add-sel"><option value="">+ Ajouter{{ rechercheP ? ' (' + personnesFiltrees.length + ')' : ' une personne' }}</option><option v-for="p in personnesFiltrees" :key="p.id" :value="String(p.id)" :disabled="form.personnes.includes(p.id)">{{ p.nom }}{{ p.fonction ? ' — ' + p.fonction : '' }}</option></select>
+          </div>
         </div>
         <div class="acts">
           <button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Planifier' }}</button>
@@ -78,6 +81,7 @@ const formations = ref([])
 const personnes = ref([])
 const sessions = ref([])
 const filtreEtat = ref('')
+const rechercheP = ref('')
 const erreur = ref('')
 const message = ref('')
 const today = new Date().toISOString().slice(0, 10)
@@ -106,6 +110,7 @@ onMounted(async () => {
 
 const formationById = computed(() => { const m = {}; for (const f of formations.value) m[f.id] = f; return m })
 const personneById = computed(() => { const m = {}; for (const p of personnes.value) m[p.id] = p; return m })
+const personnesFiltrees = computed(() => { const q = (rechercheP.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); if (!q) return personnes.value; return personnes.value.filter(p => ((p.nom || '') + ' ' + (p.fonction || '')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q)) })
 function personneNom(pid) { const p = personneById.value[pid]; return p ? p.nom : '(supprimé)' }
 
 const sessionsEnr = computed(() => sessions.value.map(s => {
@@ -179,7 +184,10 @@ async function toggleFait(s, pid) {
 .multi .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .multi .chip { display: inline-flex; align-items: center; gap: 4px; background: #eef2ff; color: #4338ca; border-radius: 999px; padding: 3px 5px 3px 10px; font-size: 12px; font-weight: 700; }
 .multi .chip button { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; }
-.multi .add-sel { align-self: flex-start; padding: 8px 10px; border: 1px dashed #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #64748b; min-width: 240px; }
+.multi .add-sel { padding: 8px 10px; border: 1px dashed #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #64748b; min-width: 240px; }
+.multi .add-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.multi .p-search { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; min-width: 200px; }
+.multi .p-search:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
 
 .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
 .kpi { background: #f8fafc; border: 1px solid #eef2f6; border-radius: 12px; padding: 14px; text-align: center; }
