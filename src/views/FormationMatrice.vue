@@ -59,6 +59,49 @@
         </tbody>
       </table>
 
+      <h3 class="sec-titre">Répartition des qualifications requises</h3>
+      <div v-if="!repTotal" class="empty-sm">Aucune formation requise (définis les exigences par fonction).</div>
+      <div v-else class="repart">
+        <div class="rp-bar">
+          <div v-if="repartition.valide" class="rp-seg v" :style="{ width: (repartition.valide / repTotal * 100) + '%' }" :title="'Valides : ' + repartition.valide"></div>
+          <div v-if="repartition.bientot" class="rp-seg b" :style="{ width: (repartition.bientot / repTotal * 100) + '%' }" :title="'À recycler : ' + repartition.bientot"></div>
+          <div v-if="repartition.expire" class="rp-seg e" :style="{ width: (repartition.expire / repTotal * 100) + '%' }" :title="'Expirées : ' + repartition.expire"></div>
+          <div v-if="repartition.manquant" class="rp-seg m" :style="{ width: (repartition.manquant / repTotal * 100) + '%' }" :title="'Manquantes : ' + repartition.manquant"></div>
+        </div>
+        <div class="rp-leg">
+          <span class="lg"><i class="v"></i>Valides <b>{{ repartition.valide }}</b></span>
+          <span class="lg"><i class="b"></i>À recycler <b>{{ repartition.bientot }}</b></span>
+          <span class="lg"><i class="e"></i>Expirées <b>{{ repartition.expire }}</b></span>
+          <span class="lg"><i class="m"></i>Manquantes <b>{{ repartition.manquant }}</b></span>
+        </div>
+      </div>
+
+      <h3 class="sec-titre">Taux par formation</h3>
+      <div v-if="!tauxParFormation.length" class="empty-sm">Aucune formation requise.</div>
+      <table v-else class="form-tbl">
+        <thead><tr><th>Formation</th><th class="r">Validées / Requises</th><th class="tx">Taux</th></tr></thead>
+        <tbody>
+          <tr v-for="f in tauxParFormation" :key="f.id">
+            <td class="nom">{{ f.nom }}</td>
+            <td class="r">{{ f.val }} / {{ f.req }}</td>
+            <td class="tx"><div class="bar"><div class="bar-fill" :class="barCls(f.taux)" :style="{ width: f.taux + '%' }"></div><span class="bar-txt">{{ f.taux.toFixed(0) }}%</span></div></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 class="sec-titre">Taux par périmètre</h3>
+      <div v-if="!tauxParPerimetre.length" class="empty-sm">Aucune donnée.</div>
+      <table v-else class="form-tbl">
+        <thead><tr><th>Périmètre</th><th class="r">Validées / Requises</th><th class="tx">Taux</th></tr></thead>
+        <tbody>
+          <tr v-for="g in tauxParPerimetre" :key="g.nom">
+            <td class="nom">{{ g.nom }}</td>
+            <td class="r">{{ g.val }} / {{ g.req }}</td>
+            <td class="tx"><div v-if="g.taux != null" class="bar"><div class="bar-fill" :class="barCls(g.taux)" :style="{ width: g.taux + '%' }"></div><span class="bar-txt">{{ g.taux.toFixed(0) }}%</span></div><span v-else>—</span></td>
+          </tr>
+        </tbody>
+      </table>
+
       <h3 class="sec-titre">Matrice de qualification</h3>
       <div v-if="!personnesFiltrees.length || !formations.length" class="empty-sm">Aucune personne (pour ce filtre) ou aucune formation.</div>
       <template v-else>
@@ -198,6 +241,28 @@ const tauxParPersonne = computed(() => personnesFiltrees.value.map(p => {
 const tauxFormationGlobal = computed(() => { let req = 0, val = 0; for (const t of tauxParPersonne.value) { req += t.requises; val += t.valides } return req ? val / req * 100 : null })
 const nbQualifies = computed(() => tauxParPersonne.value.filter(t => t.requises > 0 && t.valides === t.requises).length)
 function barCls(t) { return t >= 100 ? 'ok' : t >= 50 ? 'mid' : 'low' }
+const repartition = computed(() => {
+  const r = { valide: 0, bientot: 0, expire: 0, manquant: 0 }
+  for (const p of personnesFiltrees.value) { const req = requisParFonction.value[p.fonction]; if (!req) continue; for (const fid of req) { const st = cellStatut(p.id, fid); if (r[st] != null) r[st]++ } }
+  return r
+})
+const repTotal = computed(() => { const r = repartition.value; return r.valide + r.bientot + r.expire + r.manquant })
+const tauxParFormation = computed(() => formations.value.map(f => {
+  let req = 0, val = 0
+  for (const p of personnesFiltrees.value) { const r = requisParFonction.value[p.fonction]; if (r && r.has(f.id)) { req++; if (cellStatut(p.id, f.id) === 'valide') val++ } }
+  return { id: f.id, nom: f.nom, req, val, taux: req ? val / req * 100 : null }
+}).filter(f => f.req > 0).sort((a, b) => a.taux - b.taux))
+const tauxParPerimetre = computed(() => {
+  const g = {}
+  for (const p of personnesFiltrees.value) {
+    const req = requisParFonction.value[p.fonction]; if (!req) continue
+    const per = p.atelier_id || '(sans périmètre)'
+    let val = 0; for (const fid of req) if (cellStatut(p.id, fid) === 'valide') val++
+    if (!g[per]) g[per] = { nom: per, req: 0, val: 0 }
+    g[per].req += req.size; g[per].val += val
+  }
+  return Object.values(g).map(x => ({ ...x, taux: x.req ? x.val / x.req * 100 : null })).sort((a, b) => (a.taux || 0) - (b.taux || 0))
+})
 function abrev(nom) { const m = String(nom).match(/\(([^)]+)\)/); if (m) return m[1]; return String(nom).split(/\s+/)[0] }
 function planifier(fid) { const ids = [...new Set(aPlanifier.value.filter(e => e.formation_id === fid).map(e => e.personne_id))]; router.push({ path: '/formations-planning', query: { formation: String(fid), personnes: ids.join(',') } }) }
 
@@ -277,6 +342,14 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .bar-fill.ok { background: #16a34a; } .bar-fill.mid { background: #d97706; } .bar-fill.low { background: #dc2626; }
 .bar-txt { position: absolute; top: 0; right: 7px; line-height: 18px; font-size: 11px; font-weight: 800; color: #0f172a; }
 .no-req { font-size: 11px; color: #94a3b8; font-style: italic; }
+.repart { margin-bottom: 4px; }
+.rp-bar { display: flex; height: 26px; border-radius: 8px; overflow: hidden; background: #f1f5f9; }
+.rp-seg { height: 100%; }
+.rp-seg.v { background: #16a34a; } .rp-seg.b { background: #d97706; } .rp-seg.e { background: #dc2626; } .rp-seg.m { background: #991b1b; }
+.rp-leg { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; }
+.rp-leg .lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; font-weight: 600; }
+.rp-leg .lg i { width: 11px; height: 11px; border-radius: 3px; }
+.rp-leg .lg i.v { background: #16a34a; } .rp-leg .lg i.b { background: #d97706; } .rp-leg .lg i.e { background: #dc2626; } .rp-leg .lg i.m { background: #991b1b; }
 .form-tbl td.r, .form-tbl th.r { text-align: right; }
 .btn-plan { border: 1px solid #99f6e4; background: #f0fdfa; color: #0d9488; border-radius: 7px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .btn-plan:hover { background: #ccfbf1; border-color: #5eead4; }
