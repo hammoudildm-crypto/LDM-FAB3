@@ -44,6 +44,7 @@ import PqrSaisie from '../views/PqrSaisie.vue'
 import PqrDashboard from '../views/PqrDashboard.vue'
 import FormationReferentiel from '../views/FormationReferentiel.vue'
 import FormationEnregistrements from '../views/FormationEnregistrements.vue'
+import FormationMatrice from '../views/FormationMatrice.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Hub },
@@ -69,6 +70,7 @@ const routes = [
   { path: '/pqr-tableau', name: 'pqr-tableau', component: PqrDashboard },
   { path: '/formations', name: 'formations', component: FormationReferentiel },
   { path: '/formations-enreg', name: 'formations-enreg', component: FormationEnregistrements },
+  { path: '/formations-matrice', name: 'formations-matrice', component: FormationMatrice },
   { path: '/ca', name: 'ca', component: ChiffreAffaires },
   { path: '/effectifs', name: 'effectifs', component: Effectifs },
   { path: '/audit', name: 'audit', component: JournalAudit },
