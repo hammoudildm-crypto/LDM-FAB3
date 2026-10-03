@@ -99,6 +99,7 @@ watch(orgNodes, () => {
 })
 // filtre par périmètre (garde les nœuds du périmètre + leurs ancêtres)
 const orgPerimFiltre = ref('')
+const tab = ref('dash')
 const estParti = (n) => { if (!n.date_sortie) return false; const dt = new Date(n.date_sortie); return !isNaN(dt) && dt <= new Date() }
 const orgPerimRaw = computed(() => {
   if (!orgPerimFiltre.value) return orgNodes.value
@@ -208,6 +209,50 @@ const evoEffectif = computed(() => {
 })
 const evoMax = computed(() => Math.max(1, ...evoEffectif.value.map(p => p.n)))
 
+function exportPDF() {
+  const now = new Date().toLocaleString('fr-FR')
+  const filt = orgPerimFiltre.value || 'Tout le personnel'
+  const pyrRows = pyramide.value.filter(b => b.h || b.f).map(b => `<tr><td>${b.label}</td><td style="text-align:right">${b.h}</td><td style="text-align:right">${b.f}</td><td style="text-align:right">${b.h + b.f}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:#94a3b8">—</td></tr>'
+  const alCdd = alertesCdd.value.map(n => `<tr><td>${n.nom}</td><td>${n.fonction || ''}</td><td>${fmtD(n.fin)}</td><td>${jLabel(n.j)}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:#16a34a">Aucun</td></tr>'
+  const alEss = alertesEssai.value.map(n => `<tr><td>${n.nom}</td><td>${n.fonction || ''}</td><td>${fmtD(n.fin)}</td><td>${jLabel(n.j)}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:#16a34a">Aucun</td></tr>'
+  const ret = retraites.value.map(n => `<tr><td>${n.nom}</td><td>${n.fonction || ''}</td><td style="text-align:right">${n.age}</td><td style="text-align:right">${n.annee}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:#94a3b8">Aucun</td></tr>'
+  const sor = partis.value.map(n => `<tr><td>${n.nom}</td><td>${n.fonction || ''}</td><td>${n.motif_sortie || ''}</td><td>${fmtD(n.date_sortie)}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:#94a3b8">Aucune</td></tr>'
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Tableau de bord RH</title>
+<style>
+*{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:24px;font-size:11px}
+h1{font-size:19px;margin:0 0 2px;color:#0d9488} .sub{color:#64748b;font-size:12px;margin:0 0 14px}
+.meta{display:flex;gap:20px;flex-wrap:wrap;font-size:11px;color:#475569;border-top:2px solid #0d9488;border-bottom:1px solid #e2e8f0;padding:8px 0;margin-bottom:16px} .meta b{color:#0f172a}
+.kp{display:flex;gap:10px;margin:0 0 14px;flex-wrap:wrap} .k{flex:1;min-width:88px;border:1px solid #e2e8f0;border-radius:8px;padding:8px;text-align:center} .k .v{font-size:16px;font-weight:800} .k .l{font-size:9px;text-transform:uppercase;color:#94a3b8;font-weight:700}
+h2{font-size:13px;margin:16px 0 6px;border-left:4px solid #0d9488;padding-left:8px}
+table{border-collapse:collapse;font-size:10px;margin-bottom:10px;width:100%}
+th{background:#f0fdfa;color:#0f766e;padding:5px 6px;border:1px solid #e2e8f0;font-size:9px;text-transform:uppercase;text-align:left}
+td{padding:4px 6px;border:1px solid #f1f5f9}
+.foot{margin-top:18px;font-size:9px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px}
+@media print{body{margin:10mm}}
+</style></head><body>
+<h1>Tableau de bord RH</h1><p class="sub">Périmètre : ${filt}</p>
+<div class="meta"><span>Effectif : <b>${kpiOrg.value.total}</b></span><span>Hommes : <b>${kpiOrg.value.h}</b></span><span>Femmes : <b>${kpiOrg.value.f}</b></span><span>CDI : <b>${kpiOrg.value.cdi}</b></span><span>CDD : <b>${kpiOrg.value.cdd}</b></span><span>Édité le <b>${now}</b></span></div>
+<div class="kp"><div class="k"><div class="v">${kpiOrg.value.total}</div><div class="l">Effectif</div></div><div class="k"><div class="v">${pct(kpiOrg.value.h)}</div><div class="l">Hommes</div></div><div class="k"><div class="v">${pct(kpiOrg.value.f)}</div><div class="l">Femmes</div></div><div class="k"><div class="v">${pct(kpiOrg.value.cdi)}</div><div class="l">CDI</div></div><div class="k"><div class="v">${ageMoyTxt.value}</div><div class="l">Âge moyen</div></div><div class="k"><div class="v">${fmtTurnover.value}</div><div class="l">Turnover ${mouvAnnee.value}</div></div></div>
+<h2>Mouvements ${mouvAnnee.value}</h2>
+<div class="kp"><div class="k"><div class="v">${mouvStats.value.entrees}</div><div class="l">Entrées</div></div><div class="k"><div class="v">${mouvStats.value.sorties}</div><div class="l">Sorties</div></div><div class="k"><div class="v">${mouvStats.value.eDebut} &rarr; ${mouvStats.value.eFin}</div><div class="l">Effectif début &rarr; fin</div></div></div>
+<h2>Pyramide des âges</h2>
+<table><thead><tr><th>Tranche</th><th style="text-align:right">Hommes</th><th style="text-align:right">Femmes</th><th style="text-align:right">Total</th></tr></thead><tbody>${pyrRows}</tbody></table>
+<h2>CDD à échéance (&lt; 60 j)</h2>
+<table><thead><tr><th>Nom</th><th>Fonction</th><th>Fin</th><th>Échéance</th></tr></thead><tbody>${alCdd}</tbody></table>
+<h2>Périodes d'essai à confirmer (&lt; 30 j)</h2>
+<table><thead><tr><th>Nom</th><th>Fonction</th><th>Fin</th><th>Échéance</th></tr></thead><tbody>${alEss}</tbody></table>
+<h2>Départs en retraite prévisibles (&lt; 5 ans)</h2>
+<table><thead><tr><th>Nom</th><th>Fonction</th><th style="text-align:right">Âge</th><th style="text-align:right">Année</th></tr></thead><tbody>${ret}</tbody></table>
+<h2>Sorties enregistrées</h2>
+<table><thead><tr><th>Nom</th><th>Fonction</th><th>Motif</th><th>Date</th></tr></thead><tbody>${sor}</tbody></table>
+<div class="foot">Document généré par ProdTrack — Tableau de bord RH. Le taux de formation est disponible dans le module Formation & Qualification.</div>
+</body></html>`
+  const w = window.open('', '_blank')
+  if (!w) { erreur.value = 'Autorise les pop-ups pour exporter en PDF.'; return }
+  w.document.write(html); w.document.close(); w.focus()
+  setTimeout(() => { try { w.print() } catch (e) {} }, 350)
+}
+
 async function orgEnregistrer() {
   erreur.value = ''
   if (!orgForm.nom.trim()) { erreur.value = 'Le nom du poste est requis.'; return }
@@ -298,6 +343,15 @@ onMounted(chargerTout)
     </div>
 
     <template v-else>
+      <div class="rh-tabs">
+        <button :class="{ on: tab === 'dash' }" @click="tab = 'dash'">Tableau de bord</button>
+        <button :class="{ on: tab === 'org' }" @click="tab = 'org'">Organigramme</button>
+        <button :class="{ on: tab === 'contrats' }" @click="tab = 'contrats'">Contrats<span v-if="alertesCdd.length + alertesEssai.length" class="tb">{{ alertesCdd.length + alertesEssai.length }}</span></button>
+        <button :class="{ on: tab === 'demo' }" @click="tab = 'demo'">Démographie</button>
+        <button :class="{ on: tab === 'mouv' }" @click="tab = 'mouv'">Mouvements</button>
+      </div>
+
+      <div v-if="tab === 'dash'">
       <div class="kpi-grid">
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.users"></svg></span><div class="kpi-val accent">{{ kpiOrg.total }}</div></div><div class="kpi-lbl">Effectif total</div></div>
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="{ ...TINTS.blue, fontSize: '16px', fontWeight: '900' }">♂</span><div class="kpi-val">{{ kpiOrg.h }}</div></div><div class="kpi-lbl">Hommes · {{ pct(kpiOrg.h) }}</div></div>
@@ -307,6 +361,40 @@ onMounted(chargerTout)
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span><div class="kpi-val">{{ ancMoyTxt }}</div></div><div class="kpi-lbl">Ancienneté moyenne</div></div>
       </div>
 
+      <div class="dash-head">
+        <h2 class="card-title">Synthèse RH</h2>
+        <button class="btn-pdf" @click="exportPDF">⬇ Export PDF</button>
+      </div>
+      <div class="dash-grid">
+        <div class="dash-card" @click="tab = 'demo'">
+          <div class="dc-t">Mixité</div>
+          <div class="dc-bar"><div class="dc-seg h" :style="{ width: (kpiOrg.total ? kpiOrg.h / kpiOrg.total * 100 : 0) + '%' }"></div><div class="dc-seg f" :style="{ width: (kpiOrg.total ? kpiOrg.f / kpiOrg.total * 100 : 0) + '%' }"></div></div>
+          <div class="dc-sub">{{ kpiOrg.h }} H · {{ kpiOrg.f }} F</div>
+        </div>
+        <div class="dash-card" @click="tab = 'contrats'">
+          <div class="dc-t">Contrats</div>
+          <div class="dc-big">{{ pct(kpiOrg.cdi) }} CDI</div>
+          <div class="dc-sub"><span v-if="alertesCdd.length" class="dc-warn">⚠ {{ alertesCdd.length }} CDD à échéance</span><span v-else>{{ kpiOrg.cdd }} CDD · aucune alerte</span></div>
+        </div>
+        <div class="dash-card" @click="tab = 'demo'">
+          <div class="dc-t">Âge</div>
+          <div class="dc-big">{{ ageMoyTxt }}</div>
+          <div class="dc-sub">{{ retraites.length }} départ(s) retraite &lt; 5 ans</div>
+        </div>
+        <div class="dash-card" @click="tab = 'mouv'">
+          <div class="dc-t">Turnover {{ mouvAnnee }}</div>
+          <div class="dc-big">{{ fmtTurnover }}</div>
+          <div class="dc-sub">{{ mouvStats.entrees }} entrées · {{ mouvStats.sorties }} sorties</div>
+        </div>
+        <a class="dash-card dc-link" href="#/formations-matrice">
+          <div class="dc-t">Formation</div>
+          <div class="dc-big">Matrice →</div>
+          <div class="dc-sub">Voir le taux de formation</div>
+        </a>
+      </div>
+      </div>
+
+      <div v-if="tab === 'contrats'">
       <section class="card alert-contrats" v-if="alertesCdd.length || alertesEssai.length">
         <h2 class="card-title">⚠ Alertes contrats</h2>
         <div class="alert-cols">
@@ -330,7 +418,10 @@ onMounted(chargerTout)
           </div>
         </div>
       </section>
+      <div v-if="!alertesCdd.length && !alertesEssai.length" class="empty-sm">Aucune alerte contrat pour l'instant 🎉 — les CDD à échéance (&lt; 60 j) et les périodes d'essai à confirmer (&lt; 30 j) s'afficheront ici.</div>
+      </div>
 
+      <div v-if="tab === 'demo'">
       <section class="card" v-if="nbAvecAge">
         <div class="card-head"><h2 class="card-title">Pyramide des âges</h2><span class="count">Âge moyen · {{ ageMoyTxt }}</span></div>
         <div class="pyr">
@@ -356,7 +447,10 @@ onMounted(chargerTout)
           </div>
         </div>
       </section>
+      <div v-if="!nbAvecAge" class="empty-sm">Renseigne les dates de naissance pour afficher la pyramide des âges et les départs en retraite.</div>
+      </div>
 
+      <div v-if="tab === 'mouv'">
       <section class="card">
         <div class="card-head"><h2 class="card-title">Mouvements du personnel</h2><label class="ret-age">Année<select v-model.number="mouvAnnee"><option v-for="a in anneesMouv" :key="a" :value="a">{{ a }}</option></select></label></div>
         <div class="mouv-kpis">
@@ -391,7 +485,9 @@ onMounted(chargerTout)
         </div>
         <div v-if="!evoEffectif.length && !partis.length && !mouvStats.entrees" class="empty-sm">Renseigne les dates de recrutement et de sortie pour suivre les mouvements et le turnover.</div>
       </section>
+      </div>
 
+      <div v-if="tab === 'org'">
       <section class="card">
         <div class="card-head"><h2 class="card-title">Organigramme</h2><span class="count">{{ orgFlat.length }}</span></div>
         <div v-if="peutEditer" class="org-form">
@@ -446,6 +542,7 @@ onMounted(chargerTout)
           </div>
         </template>
       </section>
+      </div>
     </template>
   </div>
 </template>
@@ -492,6 +589,26 @@ onMounted(chargerTout)
 .org-form input, .org-form select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
 .org-form .org-note { flex: 1; min-width: 150px; }
 .org-datef { display: inline-flex; flex-direction: column; gap: 2px; font-size: 9.5px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: .03em; }
+.rh-tabs { display: flex; flex-wrap: wrap; gap: 4px; background: #f1f5f9; border-radius: 10px; padding: 4px; margin-bottom: 20px; }
+.rh-tabs button { border: 0; background: transparent; padding: 8px 16px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 700; color: #64748b; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.rh-tabs button.on { background: #fff; color: #0d9488; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
+.rh-tabs .tb { background: #dc2626; color: #fff; border-radius: 999px; font-size: 10px; padding: 1px 6px; font-weight: 800; }
+.dash-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 14px; }
+.dash-head .card-title { margin: 0; }
+.btn-pdf { background: #0d9488; color: #fff; border: 0; padding: 8px 15px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.btn-pdf:hover { background: #0f766e; }
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.dash-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); cursor: pointer; text-decoration: none; color: inherit; transition: border-color .15s, box-shadow .15s, transform .15s; }
+.dash-card:hover { border-color: #cbd5e1; box-shadow: 0 6px 16px rgba(16,24,40,.08); transform: translateY(-2px); }
+.dc-t { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; margin-bottom: 8px; }
+.dc-big { font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -.02em; }
+.dc-sub { font-size: 11.5px; color: #64748b; margin-top: 6px; font-weight: 600; }
+.dc-warn { color: #dc2626; font-weight: 800; }
+.dc-bar { display: flex; height: 18px; border-radius: 6px; overflow: hidden; background: #f1f5f9; margin-bottom: 6px; }
+.dc-seg { height: 100%; }
+.dc-seg.h { background: #3b82f6; }
+.dc-seg.f { background: #ec4899; }
+.dc-link .dc-big { color: #0d9488; }
 .alert-contrats { border-left: 4px solid #f59e0b; }
 .alert-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px; margin-top: 12px; }
 .alert-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #92400e; margin-bottom: 7px; }
