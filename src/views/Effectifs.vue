@@ -60,8 +60,8 @@ const totalEffectif = computed(() => effectifsFiltres.value.reduce((s, e) => s +
 // --- Organigramme ---
 const orgNodes = ref([])
 const equipementsListe = ref([])
-const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', phases: [], machines: [] })
-function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', phases: [], machines: [] }) }
+const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', phases: [], machines: [] })
+function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', phases: [], machines: [] }) }
 function orgAddPhase(e) { const v = e.target.value; if (v && !orgForm.phases.includes(v)) orgForm.phases.push(v); e.target.value = '' }
 function orgAddMachine(e) { const v = e.target.value; if (v && !orgForm.machines.includes(v)) orgForm.machines.push(v); e.target.value = '' }
 function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
@@ -149,10 +149,35 @@ const alertesEssai = computed(() => orgNodesAffiches.value
   .filter(n => n.j != null && n.j <= 30)
   .sort((a, b) => a.j - b.j))
 
+const AGE_BRACKETS = [[60, 200, '60 +'], [55, 59, '55-59'], [50, 54, '50-54'], [45, 49, '45-49'], [40, 44, '40-44'], [35, 39, '35-39'], [30, 34, '30-34'], [25, 29, '25-29'], [0, 24, '< 25']]
+const ageDe = (d) => { if (!d) return null; const dt = new Date(d); if (isNaN(dt)) return null; const now = new Date(); let a = now.getFullYear() - dt.getFullYear(); const m = now.getMonth() - dt.getMonth(); if (m < 0 || (m === 0 && now.getDate() < dt.getDate())) a--; return (a < 0 || a > 120) ? null : a }
+const nbAvecAge = computed(() => orgNodesAffiches.value.filter(n => ageDe(n.date_naissance) != null).length)
+const pyramide = computed(() => AGE_BRACKETS.map(([lo, hi, label]) => {
+  let h = 0, f = 0
+  for (const n of orgNodesAffiches.value) {
+    const a = ageDe(n.date_naissance); if (a == null || a < lo || a > hi) continue
+    const g = (n.genre || '').toLowerCase()
+    if (g[0] === 'f') f++; else if (g[0] === 'h' || g[0] === 'm') h++
+  }
+  return { label, h, f }
+}))
+const pyrMax = computed(() => Math.max(1, ...pyramide.value.map(b => Math.max(b.h, b.f))))
+const ageMoyTxt = computed(() => { let s = 0, n = 0; for (const x of orgNodesAffiches.value) { const a = ageDe(x.date_naissance); if (a != null) { s += a; n++ } } return n ? (Math.round(s / n) + ' ans') : '—' })
+const ageRetraite = ref(60)
+const horizonRetraite = 5
+const retraites = computed(() => {
+  const now = new Date()
+  return orgNodesAffiches.value.map(n => {
+    const a = ageDe(n.date_naissance); if (a == null) return null
+    const reste = ageRetraite.value - a
+    return { id: n.id, nom: n.nom, fonction: n.fonction, age: a, reste, annee: now.getFullYear() + reste }
+  }).filter(n => n && n.reste <= horizonRetraite).sort((a, b) => a.reste - b.reste)
+})
+
 async function orgEnregistrer() {
   erreur.value = ''
   if (!orgForm.nom.trim()) { erreur.value = 'Le nom du poste est requis.'; return }
-  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, contrat: orgForm.contrat || null, fin_cdd: orgForm.fin_cdd || null, fin_essai: orgForm.fin_essai || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
+  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_naissance: orgForm.date_naissance || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, contrat: orgForm.contrat || null, fin_cdd: orgForm.fin_cdd || null, fin_essai: orgForm.fin_essai || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
   let r
   if (orgForm.id) r = await supabase.from('organigramme').update(payload).eq('id', orgForm.id)
   else r = await supabase.from('organigramme').insert(payload)
@@ -160,7 +185,7 @@ async function orgEnregistrer() {
   message.value = orgForm.id ? 'Poste mis a jour.' : 'Poste ajoute.'
   orgReset(); await chargerTout()
 }
-function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', date_recrutement: n.date_recrutement || '', genre: n.genre || '', contrat: n.contrat || '', fin_cdd: n.fin_cdd || '', fin_essai: n.fin_essai || '', phases: (n.equipement || '').split(',').map(x => x.trim()).filter(Boolean), machines: (n.machine || '').split(',').map(x => x.trim()).filter(Boolean) }) }
+function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', date_naissance: n.date_naissance || '', date_recrutement: n.date_recrutement || '', genre: n.genre || '', contrat: n.contrat || '', fin_cdd: n.fin_cdd || '', fin_essai: n.fin_essai || '', phases: (n.equipement || '').split(',').map(x => x.trim()).filter(Boolean), machines: (n.machine || '').split(',').map(x => x.trim()).filter(Boolean) }) }
 async function orgSupprimer(n) {
   if (!confirm('Supprimer le poste ' + n.nom + ' ? Ses subordonnes remonteront d un niveau.')) return
   await supabase.from('organigramme').update({ parent_id: n.parent_id || null }).eq('parent_id', n.id)
@@ -272,6 +297,32 @@ onMounted(chargerTout)
         </div>
       </section>
 
+      <section class="card" v-if="nbAvecAge">
+        <div class="card-head"><h2 class="card-title">Pyramide des âges</h2><span class="count">Âge moyen · {{ ageMoyTxt }}</span></div>
+        <div class="pyr">
+          <div v-for="b in pyramide" :key="b.label" class="pyr-row">
+            <div class="pyr-h"><span class="pyr-n">{{ b.h || '' }}</span><div class="pyr-bar hb" :style="{ width: (b.h / pyrMax * 100) + '%' }"></div></div>
+            <div class="pyr-lbl">{{ b.label }}</div>
+            <div class="pyr-f"><div class="pyr-bar fb" :style="{ width: (b.f / pyrMax * 100) + '%' }"></div><span class="pyr-n">{{ b.f || '' }}</span></div>
+          </div>
+        </div>
+        <div class="pyr-leg"><span class="pl-h">♂ Hommes</span><span class="pl-f">♀ Femmes</span></div>
+      </section>
+
+      <section class="card" v-if="nbAvecAge">
+        <div class="card-head"><h2 class="card-title">Départs en retraite prévisibles</h2><span class="count">{{ retraites.length }}</span><label class="ret-age">Âge de départ<input v-model.number="ageRetraite" type="number" min="50" max="70" /></label></div>
+        <div v-if="!retraites.length" class="empty-sm">Aucun départ prévu dans les {{ horizonRetraite }} ans.</div>
+        <div v-else class="ret-list">
+          <div v-for="n in retraites" :key="n.id" class="ret-row">
+            <span class="rr-nom">{{ n.nom }}</span>
+            <span class="rr-fct" v-if="n.fonction">· {{ n.fonction }}</span>
+            <span class="rr-age">{{ n.age }} ans</span>
+            <span class="rr-an">→ {{ n.annee }}</span>
+            <span class="rr-badge" :class="n.reste <= 1 ? 'u-rouge' : 'u-ambre'">{{ n.reste <= 0 ? 'éligible' : ('dans ' + n.reste + ' an' + (n.reste > 1 ? 's' : '')) }}</span>
+          </div>
+        </div>
+      </section>
+
       <section class="card">
         <div class="card-head"><h2 class="card-title">Organigramme</h2><span class="count">{{ orgFlat.length }}</span></div>
         <div v-if="peutEditer" class="org-form">
@@ -289,6 +340,7 @@ onMounted(chargerTout)
           </div>
           <input v-model="orgForm.matricule" placeholder="Matricule" />
           <input v-model="orgForm.telephone" placeholder="Téléphone" />
+          <label class="org-datef">Naissance<input v-model="orgForm.date_naissance" type="date" /></label>
           <label class="org-datef">Recrutement<input v-model="orgForm.date_recrutement" type="date" /></label>
           <select v-model="orgForm.genre"><option value="">Genre —</option><option value="Homme">Homme</option><option value="Femme">Femme</option></select>
           <select v-model="orgForm.contrat"><option value="">Contrat —</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select>
@@ -379,6 +431,31 @@ onMounted(chargerTout)
 .ar-badge { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .ar-badge.u-rouge { background: #fee2e2; color: #dc2626; }
 .ar-badge.u-ambre { background: #fef3c7; color: #b45309; }
+.empty-sm { color: #94a3b8; font-size: 13px; padding: 10px 2px; }
+.pyr { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.pyr-row { display: grid; grid-template-columns: 1fr 58px 1fr; align-items: center; gap: 6px; }
+.pyr-h { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.pyr-f { display: flex; align-items: center; justify-content: flex-start; gap: 6px; }
+.pyr-bar { height: 16px; border-radius: 4px; min-width: 0; transition: width .3s ease; }
+.pyr-bar.hb { background: #3b82f6; }
+.pyr-bar.fb { background: #ec4899; }
+.pyr-n { font-size: 11px; font-weight: 800; color: #475569; min-width: 14px; }
+.pyr-h .pyr-n { text-align: right; }
+.pyr-lbl { text-align: center; font-size: 11px; font-weight: 800; color: #64748b; }
+.pyr-leg { display: flex; justify-content: center; gap: 22px; margin-top: 12px; font-size: 11.5px; font-weight: 700; }
+.pl-h { color: #3b82f6; }
+.pl-f { color: #ec4899; }
+.ret-age { margin-left: auto; font-size: 11px; font-weight: 700; color: #64748b; display: inline-flex; align-items: center; gap: 6px; }
+.ret-age input { width: 56px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; }
+.ret-list { display: flex; flex-direction: column; margin-top: 6px; }
+.ret-row { display: flex; align-items: center; gap: 6px; padding: 7px 2px; border-top: 1px solid #f1f5f9; font-size: 13px; }
+.rr-nom { font-weight: 700; color: #0f172a; }
+.rr-fct { color: #94a3b8; font-size: 11.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-age { margin-left: auto; color: #475569; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.rr-an { color: #94a3b8; font-size: 11px; white-space: nowrap; }
+.rr-badge { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.rr-badge.u-rouge { background: #fee2e2; color: #dc2626; }
+.rr-badge.u-ambre { background: #fef3c7; color: #b45309; }
 .org-actions { display: flex; gap: 8px; }
 .org-tree { display: flex; flex-direction: column; gap: 6px; }
 .org-chart { overflow-x: auto; padding: 12px 0 4px; zoom: 0.72; }
