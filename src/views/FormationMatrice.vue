@@ -15,6 +15,7 @@
       <div class="mat-bar">
         <div class="f"><label>Périmètre</label><select v-model="filtreAtelier"><option value="">Tous</option><option v-for="a in ateliersListe" :key="a" :value="a">{{ a }}</option></select></div>
         <div class="f"><label>Équipe</label><select v-model="filtreEquipe"><option value="">Toutes</option><option v-for="e in equipesListe" :key="e" :value="e">{{ e }}</option></select></div>
+        <div class="f"><label>Fonction</label><select v-model="filtreFonction"><option value="">Toutes</option><option v-for="fn in fonctionsListe" :key="fn" :value="fn">{{ fn }}</option></select></div>
         <button v-if="personnesFiltrees.length && formations.length" class="btn" style="margin-left:auto" @click="exporterPDF">📄 Exporter la matrice (PDF)</button>
       </div>
 
@@ -77,6 +78,7 @@ const enregistrements = ref([])
 const requises = ref([])
 const filtreAtelier = ref('')
 const filtreEquipe = ref('')
+const filtreFonction = ref('')
 const erreur = ref('')
 
 async function charger() {
@@ -94,9 +96,11 @@ onMounted(charger)
 
 const ateliersListe = computed(() => [...new Set(personnes.value.map(p => p.atelier_id).filter(Boolean))].sort())
 const equipesListe = computed(() => [...new Set(personnes.value.map(p => p.equipe).filter(Boolean))].sort())
+const fonctionsListe = computed(() => [...new Set(personnes.value.map(p => p.fonction).filter(Boolean))].sort())
 const personnesFiltrees = computed(() => personnes.value.filter(p => {
   if (filtreAtelier.value && (p.atelier_id || '') !== filtreAtelier.value) return false
   if (filtreEquipe.value && (p.equipe || '') !== filtreEquipe.value) return false
+  if (filtreFonction.value && (p.fonction || '') !== filtreFonction.value) return false
   return true
 }))
 const persIds = computed(() => new Set(personnesFiltrees.value.map(p => p.id)))
