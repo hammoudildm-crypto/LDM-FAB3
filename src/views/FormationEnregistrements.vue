@@ -9,8 +9,10 @@
     <section class="card">
       <div class="card-head"><h2 class="card-title">{{ form.id ? 'Modifier l\'enregistrement' : 'Nouvel enregistrement' }}</h2></div>
       <div v-if="peutEditer" class="form-row">
-        <select v-model="form.personne_id" class="grow"><option value="">Personne —</option><option v-for="p in personnes" :key="p.id" :value="String(p.id)">{{ p.nom }}{{ p.matricule ? ' · #' + p.matricule : '' }}{{ p.fonction ? ' — ' + p.fonction : '' }}</option></select>
-        <select v-model="form.formation_id" class="grow"><option value="">Formation —</option><option v-for="f in formations" :key="f.id" :value="String(f.id)">{{ f.nom }}</option></select>
+        <input v-model="rechercheP" class="s-in" placeholder="🔍 Personne" />
+        <select v-model="form.personne_id" class="grow"><option value="">Personne —</option><option v-for="p in personnesFiltrees" :key="p.id" :value="String(p.id)">{{ p.nom }}{{ p.matricule ? ' · #' + p.matricule : '' }}{{ p.fonction ? ' — ' + p.fonction : '' }}</option></select>
+        <input v-model="rechercheF" class="s-in" placeholder="🔍 Formation" />
+        <select v-model="form.formation_id" class="grow"><option value="">Formation —</option><option v-for="f in formationsFiltrees" :key="f.id" :value="String(f.id)">{{ f.nom }}</option></select>
         <input type="date" v-model="form.date_formation" />
         <input v-model="form.formateur" placeholder="Formateur" class="c" />
         <select v-model="form.resultat" class="res"><option value="acquis">Acquis</option><option value="non acquis">Non acquis</option></select>
@@ -54,6 +56,8 @@ const personnes = ref([])
 const formations = ref([])
 const enregistrements = ref([])
 const filtrePersonne = ref('')
+const rechercheP = ref('')
+const rechercheF = ref('')
 const erreur = ref('')
 const message = ref('')
 const form = reactive({ id: null, personne_id: '', formation_id: '', date_formation: new Date().toISOString().slice(0, 10), formateur: '', resultat: 'acquis' })
@@ -71,6 +75,9 @@ async function charger() {
 onMounted(charger)
 
 const personneById = computed(() => { const m = {}; for (const p of personnes.value) m[p.id] = p; return m })
+const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+const personnesFiltrees = computed(() => { const q = normR(rechercheP.value).trim(); if (!q) return personnes.value; return personnes.value.filter(p => normR((p.nom || '') + ' ' + (p.fonction || '') + ' ' + (p.matricule || '')).includes(q)) })
+const formationsFiltrees = computed(() => { const q = normR(rechercheF.value).trim(); if (!q) return formations.value; return formations.value.filter(f => normR(f.nom).includes(q)) })
 const formationById = computed(() => { const m = {}; for (const f of formations.value) m[f.id] = f; return m })
 
 function addMonths(dateStr, m) { const d = new Date(dateStr + 'T00:00:00'); d.setMonth(d.getMonth() + m); return d.toISOString().slice(0, 10) }
@@ -127,6 +134,8 @@ async function supprimer(e) {
 .form-row select, .form-row input { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
 .form-row .grow { flex: 1; min-width: 180px; }
 .form-row .c { width: 150px; }
+.form-row .s-in { width: 130px; }
+.form-row .s-in:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
 .form-row .res { width: 120px; }
 .form-row select:focus, .form-row input:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
 .form-row .acts { display: flex; gap: 8px; }
