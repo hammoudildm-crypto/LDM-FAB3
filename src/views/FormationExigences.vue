@@ -11,7 +11,7 @@
         <h2 class="card-title">Exigences</h2>
         <select v-model="fonctionSel" class="fct-sel" style="margin-left:auto">
           <option value="">Choisir une fonction —</option>
-          <option v-for="f in fonctions" :key="f" :value="f">{{ f }}<span v-if="compteRequis[f]"> ({{ compteRequis[f] }})</span></option>
+          <option v-for="f in fonctions" :key="f" :value="f">{{ f }}{{ compteRequis[f] ? ' (' + compteRequis[f] + ')' : '' }}</option>
         </select>
       </div>
 
