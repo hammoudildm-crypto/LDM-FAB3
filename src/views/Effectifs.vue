@@ -99,7 +99,7 @@ watch(orgNodes, () => {
 })
 // filtre par périmètre (garde les nœuds du périmètre + leurs ancêtres)
 const orgPerimFiltre = ref('')
-const tab = ref('dash')
+const tab = ref('org')
 const estParti = (n) => { if (!n.date_sortie) return false; const dt = new Date(n.date_sortie); return !isNaN(dt) && dt <= new Date() }
 const orgPerimRaw = computed(() => {
   if (!orgPerimFiltre.value) return orgNodes.value
@@ -344,11 +344,11 @@ onMounted(chargerTout)
 
     <template v-else>
       <div class="rh-tabs">
-        <button :class="{ on: tab === 'dash' }" @click="tab = 'dash'">Tableau de bord</button>
         <button :class="{ on: tab === 'org' }" @click="tab = 'org'">Organigramme</button>
-        <button :class="{ on: tab === 'contrats' }" @click="tab = 'contrats'">Contrats<span v-if="alertesCdd.length + alertesEssai.length" class="tb">{{ alertesCdd.length + alertesEssai.length }}</span></button>
         <button :class="{ on: tab === 'demo' }" @click="tab = 'demo'">Démographie</button>
+        <button :class="{ on: tab === 'contrats' }" @click="tab = 'contrats'">Contrats<span v-if="alertesCdd.length + alertesEssai.length" class="tb">{{ alertesCdd.length + alertesEssai.length }}</span></button>
         <button :class="{ on: tab === 'mouv' }" @click="tab = 'mouv'">Mouvements</button>
+        <button :class="{ on: tab === 'dash' }" @click="tab = 'dash'">Tableau de bord RH</button>
       </div>
 
       <div v-if="tab === 'dash'">
