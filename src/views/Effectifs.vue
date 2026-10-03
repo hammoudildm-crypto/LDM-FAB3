@@ -60,8 +60,10 @@ const totalEffectif = computed(() => effectifsFiltres.value.reduce((s, e) => s +
 // --- Organigramme ---
 const orgNodes = ref([])
 const equipementsListe = ref([])
-const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', equipement: '', machine: '' })
-function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', equipement: '', machine: '' }) }
+const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', phases: [], machines: [] })
+function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', phases: [], machines: [] }) }
+function orgAddPhase(e) { const v = e.target.value; if (v && !orgForm.phases.includes(v)) orgForm.phases.push(v); e.target.value = '' }
+function orgAddMachine(e) { const v = e.target.value; if (v && !orgForm.machines.includes(v)) orgForm.machines.push(v); e.target.value = '' }
 function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
 const RANGS_ORG = ['Manager', 'Responsable', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène"]
 const FONCTIONS_SUGG = ['Manager', 'Responsable', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène", 'Chargé blanchisserie', 'Agent blanchisserie', "Agent d'hygiène vestiaire"]
@@ -116,7 +118,7 @@ const orgRacinesAffichees = computed(() => orgNodesAffiches.value
 async function orgEnregistrer() {
   erreur.value = ''
   if (!orgForm.nom.trim()) { erreur.value = 'Le nom du poste est requis.'; return }
-  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, equipement: orgForm.equipement || null, machine: orgForm.machine || null }
+  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
   let r
   if (orgForm.id) r = await supabase.from('organigramme').update(payload).eq('id', orgForm.id)
   else r = await supabase.from('organigramme').insert(payload)
@@ -124,7 +126,7 @@ async function orgEnregistrer() {
   message.value = orgForm.id ? 'Poste mis a jour.' : 'Poste ajoute.'
   orgReset(); await chargerTout()
 }
-function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', equipement: n.equipement || '', machine: n.machine || '' }) }
+function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', phases: (n.equipement || '').split(',').map(x => x.trim()).filter(Boolean), machines: (n.machine || '').split(',').map(x => x.trim()).filter(Boolean) }) }
 async function orgSupprimer(n) {
   if (!confirm('Supprimer le poste ' + n.nom + ' ? Ses subordonnes remonteront d un niveau.')) return
   await supabase.from('organigramme').update({ parent_id: n.parent_id || null }).eq('parent_id', n.id)
@@ -282,8 +284,14 @@ onMounted(chargerTout)
           <input v-model="orgForm.fonction" list="fonctionsListe" placeholder="Fonction" /><datalist id="fonctionsListe"><option v-for="f in FONCTIONS_SUGG" :key="f" :value="f" /></datalist>
           <select v-model="orgForm.atelier_id"><option value="">Périmètre —</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
           <input v-model="orgForm.equipe" placeholder="Équipe" />
-          <select v-model="orgForm.equipement"><option value="">Phase —</option><option v-for="ph in PHASES_LISTE" :key="ph" :value="ph">{{ ph }}</option></select>
-          <select v-model="orgForm.machine"><option value="">Équipement —</option><option v-for="eq in equipementsListe" :key="eq.id" :value="eq.nom">{{ eq.nom }}</option></select>
+          <div class="multi">
+            <div v-if="orgForm.phases.length" class="chips"><span v-for="(ph, i) in orgForm.phases" :key="i" class="chip">{{ ph }}<button type="button" @click="orgForm.phases.splice(i, 1)">×</button></span></div>
+            <select @change="orgAddPhase" class="add-sel"><option value="">+ Phase</option><option v-for="ph in PHASES_LISTE" :key="ph" :value="ph" :disabled="orgForm.phases.includes(ph)">{{ ph }}</option></select>
+          </div>
+          <div class="multi">
+            <div v-if="orgForm.machines.length" class="chips"><span v-for="(m, i) in orgForm.machines" :key="i" class="chip mach">{{ m }}<button type="button" @click="orgForm.machines.splice(i, 1)">×</button></span></div>
+            <select @change="orgAddMachine" class="add-sel"><option value="">+ Équipement</option><option v-for="eq in equipementsListe" :key="eq.id" :value="eq.nom" :disabled="orgForm.machines.includes(eq.nom)">{{ eq.nom }}</option></select>
+          </div>
           <input v-model="orgForm.matricule" placeholder="Matricule" />
           <input v-model="orgForm.telephone" placeholder="Téléphone" />
           <select v-model="orgForm.parent_id"><option value="">Responsable — (sommet)</option><option v-for="n in responsablesPossibles" :key="n.id" :value="n.id">{{ n.nom }} — {{ n.fonction }}</option></select>
@@ -368,6 +376,12 @@ onMounted(chargerTout)
 .org-legende { display: flex; flex-wrap: wrap; gap: 10px; }
 .lg-item { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: #475569; }
 .lg-item i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.multi { display: inline-flex; flex-direction: column; gap: 4px; vertical-align: top; }
+.multi .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.multi .chip { display: inline-flex; align-items: center; gap: 3px; background: #eef2ff; color: #4338ca; border-radius: 999px; padding: 2px 4px 2px 9px; font-size: 11px; font-weight: 700; }
+.multi .chip.mach { background: #ecfeff; color: #0891b2; }
+.multi .chip button { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+.multi .add-sel { padding: 7px 9px; border: 1px dashed #cbd5e1; border-radius: 8px; font: inherit; font-size: 12px; background: #fff; color: #64748b; }
 .org-root { display: flex; justify-content: center; list-style: none; padding: 0; margin: 0; min-width: min-content; }
 .org-row { display: flex; align-items: center; gap: 8px; }
 .org-connect { width: 18px; height: 2px; background: #cbd5e1; flex-shrink: 0; }
