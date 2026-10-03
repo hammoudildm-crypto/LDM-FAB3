@@ -31,6 +31,14 @@
         <div class="kpi bad"><div class="kv">{{ nbEcarts }}</div><div class="kl">Écarts critiques</div></div>
       </div>
 
+      <div class="tabs2">
+        <button :class="{ on: vue === 'matrice' }" @click="vue = 'matrice'">Matrice</button>
+        <button :class="{ on: vue === 'planifier' }" @click="vue = 'planifier'">À planifier<span v-if="aPlanifier.length" class="tb">{{ aPlanifier.length }}</span></button>
+        <button :class="{ on: vue === 'personne' }" @click="vue = 'personne'">Par personne</button>
+        <button :class="{ on: vue === 'stats' }" @click="vue = 'stats'">Statistiques</button>
+      </div>
+
+      <div v-if="vue === 'planifier'">
       <h3 class="sec-titre">À planifier — expiré ou bientôt</h3>
       <div v-if="!aPlanifier.length" class="empty-sm">Aucune formation à recycler 🎉</div>
       <table v-else class="form-tbl">
@@ -44,6 +52,9 @@
         </tbody>
       </table>
 
+      </div>
+
+      <div v-if="vue === 'personne'">
       <h3 class="sec-titre">Taux de formation par personne</h3>
       <p class="hint">Basé sur les formations <b>requises</b> de chaque fonction (définies dans « Exigences par fonction »). Trié des plus à risque en premier.</p>
       <div v-if="!tauxParPersonne.length" class="empty-sm">Aucune personne pour ce filtre.</div>
@@ -59,6 +70,9 @@
         </tbody>
       </table>
 
+      </div>
+
+      <div v-if="vue === 'stats'">
       <h3 class="sec-titre">Répartition des qualifications requises</h3>
       <div v-if="!repTotal" class="empty-sm">Aucune formation requise (définis les exigences par fonction).</div>
       <div v-else class="repart">
@@ -120,6 +134,9 @@
         </svg>
       </div>
 
+      </div>
+
+      <div v-if="vue === 'matrice'">
       <h3 class="sec-titre">Matrice de qualification</h3>
       <div v-if="!personnesFiltrees.length || !formations.length" class="empty-sm">Aucune personne (pour ce filtre) ou aucune formation.</div>
       <template v-else>
@@ -144,6 +161,7 @@
           <span class="lg"><span class="pt e-absent">—</span>Non requis</span>
         </div>
       </template>
+      </div>
     </section>
   </div>
 </template>
@@ -163,6 +181,7 @@ const filtreEquipe = ref('')
 const filtreFonction = ref('')
 const filtrePhase = ref('')
 const filtreMachine = ref('')
+const vue = ref('matrice')
 const erreur = ref('')
 const router = useRouter()
 
@@ -410,6 +429,10 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .evo .xl { fill: #94a3b8; font-size: 9px; text-anchor: middle; font-weight: 600; }
 .evo .evo-line { fill: none; stroke: #0d9488; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
 .evo .evo-pt { fill: #0d9488; stroke: #fff; stroke-width: 1.5; }
+.tabs2 { display: inline-flex; flex-wrap: wrap; gap: 4px; background: #f1f5f9; border-radius: 10px; padding: 4px; margin-bottom: 18px; }
+.tabs2 button { border: 0; background: transparent; padding: 7px 14px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 700; color: #64748b; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.tabs2 button.on { background: #fff; color: #0d9488; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
+.tabs2 .tb { background: #dc2626; color: #fff; border-radius: 999px; font-size: 10px; padding: 1px 6px; font-weight: 800; }
 .form-tbl td.r, .form-tbl th.r { text-align: right; }
 .btn-plan { border: 1px solid #99f6e4; background: #f0fdfa; color: #0d9488; border-radius: 7px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .btn-plan:hover { background: #ccfbf1; border-color: #5eead4; }
