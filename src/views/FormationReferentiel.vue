@@ -10,6 +10,7 @@
       <div class="card-head">
         <h2 class="card-title">Formations</h2>
         <span class="count">{{ formations.length }}</span>
+        <input v-model="recherche" class="ref-search" placeholder="🔍 Rechercher une formation" style="margin-left:auto" />
         <button v-if="peutEditer && !formations.length" class="btn" style="margin-left:auto" @click="chargerStandard">Charger le référentiel standard</button>
       </div>
 
@@ -71,6 +72,7 @@ const STANDARD = [
 const formations = ref([])
 const erreur = ref('')
 const message = ref('')
+const recherche = ref('')
 const form = reactive({ id: null, nom: '', categorie: '', validite_mois: null })
 function reset() { Object.assign(form, { id: null, nom: '', categorie: '', validite_mois: null }) }
 
@@ -82,8 +84,10 @@ async function charger() {
 onMounted(charger)
 
 const catIndex = (c) => { const i = CATS.indexOf(c); return i >= 0 ? i : 999 }
-const categories = computed(() => [...new Set(formations.value.map(f => f.categorie || ''))].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : (catIndex(a) - catIndex(b)) || a.localeCompare(b))))
-function formationsDe(cat) { return formations.value.filter(f => (f.categorie || '') === cat).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
+const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+const formationsVues = computed(() => { const q = normR(recherche.value).trim(); if (!q) return formations.value; return formations.value.filter(f => normR(f.nom).includes(q) || normR(f.categorie).includes(q)) })
+const categories = computed(() => [...new Set(formationsVues.value.map(f => f.categorie || ''))].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : (catIndex(a) - catIndex(b)) || a.localeCompare(b))))
+function formationsDe(cat) { return formationsVues.value.filter(f => (f.categorie || '') === cat).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
 
 async function enregistrer() {
   erreur.value = ''; message.value = ''
@@ -120,6 +124,8 @@ async function chargerStandard() {
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
 .card-title { margin: 0; font-size: 17px; }
 .count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+.ref-search { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; min-width: 230px; }
+.ref-search:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
 .btn { background: #0d9488; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .btn.ghost { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
 .empty-card { background: #fff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 24px; color: #475569; text-align: center; font-size: 14px; }
