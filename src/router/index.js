@@ -46,6 +46,7 @@ import FormationReferentiel from '../views/FormationReferentiel.vue'
 import FormationEnregistrements from '../views/FormationEnregistrements.vue'
 import FormationMatrice from '../views/FormationMatrice.vue'
 import FormationExigences from '../views/FormationExigences.vue'
+import FormationPlanning from '../views/FormationPlanning.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Hub },
@@ -73,6 +74,7 @@ const routes = [
   { path: '/formations-enreg', name: 'formations-enreg', component: FormationEnregistrements },
   { path: '/formations-matrice', name: 'formations-matrice', component: FormationMatrice },
   { path: '/formations-exigences', name: 'formations-exigences', component: FormationExigences },
+  { path: '/formations-planning', name: 'formations-planning', component: FormationPlanning },
   { path: '/ca', name: 'ca', component: ChiffreAffaires },
   { path: '/effectifs', name: 'effectifs', component: Effectifs },
   { path: '/audit', name: 'audit', component: JournalAudit },
@@ -93,6 +95,7 @@ const routes = [
   { path: '/passation', name: 'passation', component: PassationConsigne },
   { path: '/compte', name: 'compte', component: MonCompte },
   { path: '/login', name: 'login', component: Login },
+  { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
 const router = createRouter({
