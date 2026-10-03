@@ -548,7 +548,7 @@ onMounted(chargerTout)
 </template>
 
 <style scoped>
-.ef-page { color: #1b2733; }
+.ef-page { color: #1b2733; zoom: 0.7; }
 .ef-head { margin: 4px 0 18px; }
 .ef-head h1 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
 .ef-head .sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
@@ -665,7 +665,7 @@ onMounted(chargerTout)
 .lien-edit:hover { background: #f8fafc; border-color: #cbd5e1; }
 .org-actions { display: flex; gap: 8px; }
 .org-tree { display: flex; flex-direction: column; gap: 6px; }
-.org-chart { overflow-x: auto; padding: 12px 0 4px; zoom: 0.72; }
+.org-chart { overflow-x: auto; padding: 12px 0 4px; zoom: 1; }
 .org-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
 .org-filtre { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; font-weight: 600; }
 .org-legende { display: flex; flex-wrap: wrap; gap: 10px; }
