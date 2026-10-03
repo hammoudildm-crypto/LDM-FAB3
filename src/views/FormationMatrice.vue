@@ -102,6 +102,24 @@
         </tbody>
       </table>
 
+      <h3 class="sec-titre">Évolution du taux de formation (12 mois)</h3>
+      <div v-if="!evoChart" class="empty-sm">Pas assez d'historique pour tracer l'évolution.</div>
+      <div v-else class="chart-wrap">
+        <svg :viewBox="'0 0 ' + evoChart.W + ' ' + evoChart.H" class="evo" preserveAspectRatio="xMidYMid meet">
+          <line :x1="evoChart.mL" :y1="evoChart.y0" :x2="evoChart.W - evoChart.mR" :y2="evoChart.y0" class="grid" />
+          <line :x1="evoChart.mL" :y1="evoChart.y50" :x2="evoChart.W - evoChart.mR" :y2="evoChart.y50" class="grid" />
+          <line :x1="evoChart.mL" :y1="evoChart.y100" :x2="evoChart.W - evoChart.mR" :y2="evoChart.y100" class="grid" />
+          <text :x="evoChart.mL - 5" :y="evoChart.y0 + 3" class="ax">0</text>
+          <text :x="evoChart.mL - 5" :y="evoChart.y50 + 3" class="ax">50</text>
+          <text :x="evoChart.mL - 5" :y="evoChart.y100 + 3" class="ax">100</text>
+          <path :d="evoChart.path" class="evo-line" />
+          <g v-for="(g, i) in evoChart.geom" :key="i">
+            <circle v-if="g.y != null" :cx="g.x" :cy="g.y" r="3.5" class="evo-pt"><title>{{ g.label }} : {{ g.taux.toFixed(0) }}%</title></circle>
+            <text :x="g.x" :y="evoChart.H - evoChart.mB + 14" class="xl">{{ g.label }}</text>
+          </g>
+        </svg>
+      </div>
+
       <h3 class="sec-titre">Matrice de qualification</h3>
       <div v-if="!personnesFiltrees.length || !formations.length" class="empty-sm">Aucune personne (pour ce filtre) ou aucune formation.</div>
       <template v-else>
@@ -263,6 +281,41 @@ const tauxParPerimetre = computed(() => {
   }
   return Object.values(g).map(x => ({ ...x, taux: x.req ? x.val / x.req * 100 : null })).sort((a, b) => (a.taux || 0) - (b.taux || 0))
 })
+function moisLabel(d) { return d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) }
+function estValideA(pid, fid, dateStr) {
+  const recs = enregistrements.value.filter(e => e.personne_id === pid && e.formation_id === fid && e.resultat !== 'non acquis' && String(e.date_formation) <= dateStr)
+  if (!recs.length) return false
+  const latest = recs.reduce((a, b) => String(a.date_formation) > String(b.date_formation) ? a : b)
+  const f = formationById.value[fid]
+  if (!f || !f.validite_mois) return true
+  return addMonths(latest.date_formation, f.validite_mois) >= dateStr
+}
+const evolution = computed(() => {
+  const pts = []
+  const now = new Date()
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i + 1, 0)
+    const ds = d.toISOString().slice(0, 10)
+    let req = 0, val = 0
+    for (const p of personnesFiltrees.value) {
+      const reqSet = requisParFonction.value[p.fonction]; if (!reqSet) continue
+      for (const fid of reqSet) { req++; if (estValideA(p.id, fid, ds)) val++ }
+    }
+    pts.push({ label: moisLabel(d), taux: req ? val / req * 100 : null })
+  }
+  return pts
+})
+const evoChart = computed(() => {
+  const n = evolution.value.length
+  if (evolution.value.filter(p => p.taux != null).length < 2) return null
+  const W = 760, H = 220, mL = 38, mR = 14, mT = 14, mB = 38
+  const xx = (i) => mL + i * (W - mL - mR) / (n - 1)
+  const yy = (v) => mT + (100 - v) / 100 * (H - mT - mB)
+  const geom = evolution.value.map((p, i) => ({ x: xx(i), y: p.taux != null ? yy(p.taux) : null, taux: p.taux, label: p.label }))
+  const valid = geom.filter(g => g.y != null)
+  const path = valid.map((g, i) => (i ? 'L' : 'M') + g.x.toFixed(1) + ' ' + g.y.toFixed(1)).join(' ')
+  return { W, H, mL, mR, mT, mB, geom, path, y0: yy(0), y50: yy(50), y100: yy(100) }
+})
 function abrev(nom) { const m = String(nom).match(/\(([^)]+)\)/); if (m) return m[1]; return String(nom).split(/\s+/)[0] }
 function planifier(fid) { const ids = [...new Set(aPlanifier.value.filter(e => e.formation_id === fid).map(e => e.personne_id))]; router.push({ path: '/formations-planning', query: { formation: String(fid), personnes: ids.join(',') } }) }
 
@@ -350,6 +403,13 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .rp-leg .lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; font-weight: 600; }
 .rp-leg .lg i { width: 11px; height: 11px; border-radius: 3px; }
 .rp-leg .lg i.v { background: #16a34a; } .rp-leg .lg i.b { background: #d97706; } .rp-leg .lg i.e { background: #dc2626; } .rp-leg .lg i.m { background: #991b1b; }
+.chart-wrap { margin-top: 4px; }
+.evo { width: 100%; height: auto; background: #fcfcfd; border: 1px solid #eef2f6; border-radius: 12px; }
+.evo .grid { stroke: #e2e8f0; stroke-width: 1; stroke-dasharray: 3 4; }
+.evo .ax { fill: #94a3b8; font-size: 10px; text-anchor: end; font-weight: 600; }
+.evo .xl { fill: #94a3b8; font-size: 9px; text-anchor: middle; font-weight: 600; }
+.evo .evo-line { fill: none; stroke: #0d9488; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.evo .evo-pt { fill: #0d9488; stroke: #fff; stroke-width: 1.5; }
 .form-tbl td.r, .form-tbl th.r { text-align: right; }
 .btn-plan { border: 1px solid #99f6e4; background: #f0fdfa; color: #0d9488; border-radius: 7px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .btn-plan:hover { background: #ccfbf1; border-color: #5eead4; }
