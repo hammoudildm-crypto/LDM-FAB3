@@ -9,7 +9,7 @@
       <div class="on-fct" v-if="node.fonction">{{ node.fonction }}</div>
       <div class="on-tags" v-if="anciente || node.contrat">
         <span v-if="anciente" class="on-anc" :class="ancClass" :title="node.date_recrutement ? ('Recruté le ' + fmtDate(node.date_recrutement)) : ''">⏳ {{ anciente }}</span>
-        <span v-if="node.contrat" class="on-ct" :class="'ct-' + contratKey">{{ node.contrat }}</span>
+        <span v-if="node.contrat" class="on-ct" :class="'ct-' + contratKey" :title="node.fin_cdd ? ('Fin CDD : ' + fmtDate(node.fin_cdd)) : ''">{{ node.contrat }}</span>
       </div>
       <div class="on-meta" v-if="node.matricule || node.atelier_id || node.equipe || node.equipement || node.machine">
         <span v-if="node.matricule">#{{ node.matricule }}</span>
@@ -84,7 +84,7 @@ const genreSym = computed(() => genreKey.value === 'f' ? '\u2640' : (genreKey.va
 const ancMois = computed(() => { const d = props.node.date_recrutement; if (!d) return null; const dt = new Date(d); if (isNaN(dt)) return null; const now = new Date(); let m = (now.getFullYear() - dt.getFullYear()) * 12 + (now.getMonth() - dt.getMonth()); if (now.getDate() < dt.getDate()) m -= 1; return m < 0 ? null : m })
 const anciente = computed(() => { const m = ancMois.value; if (m == null) return ''; const a = Math.floor(m / 12); return a >= 1 ? (a + ' an' + (a > 1 ? 's' : '')) : (m + ' mois') })
 const ancClass = computed(() => { const m = ancMois.value; if (m == null) return ''; const a = m / 12; return a >= 10 ? 'anc-or' : (a >= 5 ? 'anc-teal' : 'anc-gris') })
-const contratKey = computed(() => { const c = (props.node.contrat || '').toUpperCase(); return c.indexOf('CDI') >= 0 ? 'cdi' : (c.indexOf('CDD') >= 0 ? 'cdd' : 'autre') })
+const contratKey = computed(() => { const c = (props.node.contrat || '').toUpperCase(); if (c.indexOf('CDI') >= 0) return 'cdi'; if (c.indexOf('CDD') >= 0) { const d = props.node.fin_cdd; if (d) { const dt = new Date(d); if (!isNaN(dt) && Math.round((dt - new Date()) / 86400000) <= 60) return 'cdd-u' } return 'cdd' } return 'autre' })
 </script>
 
 <style scoped>
@@ -117,6 +117,7 @@ ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left:
 .on-ct { display: inline-block; font-size: 8.5px; font-weight: 900; padding: 1px 6px; border-radius: 999px; letter-spacing: .03em; }
 .on-ct.ct-cdi { background: #dcfce7; color: #16a34a; }
 .on-ct.ct-cdd { background: #ffedd5; color: #ea580c; }
+.on-ct.ct-cdd-u { background: #fee2e2; color: #dc2626; }
 .on-ct.ct-autre { background: #f1f5f9; color: #64748b; }
 .on-anc.anc-or { background: #fef3c7; color: #b45309; }
 .on-anc.anc-teal { background: #ccfbf1; color: #0f766e; }
