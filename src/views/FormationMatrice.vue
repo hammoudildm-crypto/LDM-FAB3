@@ -32,11 +32,12 @@
       <h3 class="sec-titre">À planifier — expiré ou bientôt</h3>
       <div v-if="!aPlanifier.length" class="empty-sm">Aucune formation à recycler 🎉</div>
       <table v-else class="form-tbl">
-        <thead><tr><th>Personne</th><th>Formation</th><th>Date</th><th>Expiration</th><th>État</th></tr></thead>
+        <thead><tr><th>Personne</th><th>Formation</th><th>Date</th><th>Expiration</th><th>État</th><th class="r">Action</th></tr></thead>
         <tbody>
           <tr v-for="e in aPlanifier" :key="e.id" class="row-ko">
             <td class="nom">{{ e.personneNom }}</td><td>{{ e.formationNom }}</td><td>{{ e.date_formation }}</td><td>{{ e.expiration || '—' }}</td>
             <td><span class="etat" :class="'e-' + e.cell">{{ etatTxt(e.cell) }}</span></td>
+            <td class="r"><button class="btn-plan" @click="planifier(e.formation_id)" title="Planifier une session pour cette formation (toutes les personnes concernées)">📅 Planifier</button></td>
           </tr>
         </tbody>
       </table>
@@ -71,6 +72,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
@@ -84,6 +86,7 @@ const filtreFonction = ref('')
 const filtrePhase = ref('')
 const filtreMachine = ref('')
 const erreur = ref('')
+const router = useRouter()
 
 async function charger() {
   const rp = await supabase.from('organigramme').select('id, nom, matricule, fonction, atelier_id, equipe, equipement, machine').eq('actif', true).order('nom')
@@ -153,7 +156,7 @@ const manquants = computed(() => {
   const out = []
   for (const p of personnesFiltrees.value) {
     const req = requisParFonction.value[p.fonction]; if (!req) continue
-    for (const fid of req) { if (cellStatut(p.id, fid) === 'manquant') out.push({ id: 'm' + p.id + '_' + fid, personneNom: p.nom, formationNom: (formationById.value[fid] || {}).nom || '', date_formation: '—', expiration: null, cell: 'manquant' }) }
+    for (const fid of req) { if (cellStatut(p.id, fid) === 'manquant') out.push({ id: 'm' + p.id + '_' + fid, personne_id: p.id, formation_id: fid, personneNom: p.nom, formationNom: (formationById.value[fid] || {}).nom || '', date_formation: '—', expiration: null, cell: 'manquant' }) }
   }
   return out
 })
@@ -169,6 +172,7 @@ const aPlanifier = computed(() => {
 })
 
 function abrev(nom) { const m = String(nom).match(/\(([^)]+)\)/); if (m) return m[1]; return String(nom).split(/\s+/)[0] }
+function planifier(fid) { const ids = [...new Set(aPlanifier.value.filter(e => e.formation_id === fid).map(e => e.personne_id))]; router.push({ path: '/formations-planning', query: { formation: String(fid), personnes: ids.join(',') } }) }
 
 function exporterPDF() {
   const now = new Date().toLocaleString('fr-FR')
@@ -240,6 +244,9 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .form-tbl td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; }
 .form-tbl td.nom { font-weight: 700; color: #0f172a; }
 .form-tbl tr.row-ko { background: #fef2f2; }
+.form-tbl td.r, .form-tbl th.r { text-align: right; }
+.btn-plan { border: 1px solid #99f6e4; background: #f0fdfa; color: #0d9488; border-radius: 7px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.btn-plan:hover { background: #ccfbf1; border-color: #5eead4; }
 
 .mat-wrap { overflow-x: auto; border: 1px solid #eef2f6; border-radius: 10px; }
 .mat-tbl { border-collapse: collapse; font-size: 12px; white-space: nowrap; }
