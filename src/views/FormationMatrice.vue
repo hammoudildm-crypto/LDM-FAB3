@@ -17,6 +17,7 @@
         <div class="f"><label>Équipe</label><select v-model="filtreEquipe"><option value="">Toutes</option><option v-for="e in equipesListe" :key="e" :value="e">{{ e }}</option></select></div>
         <div class="f"><label>Fonction</label><select v-model="filtreFonction"><option value="">Toutes</option><option v-for="fn in fonctionsListe" :key="fn" :value="fn">{{ fn }}</option></select></div>
         <div class="f"><label>Phase</label><select v-model="filtrePhase"><option value="">Toutes</option><option v-for="ph in phasesListe" :key="ph" :value="ph">{{ ph }}</option></select></div>
+        <div class="f"><label>Équipement</label><select v-model="filtreMachine"><option value="">Tous</option><option v-for="m in machinesListe" :key="m" :value="m">{{ m }}</option></select></div>
         <button v-if="personnesFiltrees.length && formations.length" class="btn" style="margin-left:auto" @click="exporterPDF">📄 Exporter la matrice (PDF)</button>
       </div>
 
@@ -81,10 +82,11 @@ const filtreAtelier = ref('')
 const filtreEquipe = ref('')
 const filtreFonction = ref('')
 const filtrePhase = ref('')
+const filtreMachine = ref('')
 const erreur = ref('')
 
 async function charger() {
-  const rp = await supabase.from('organigramme').select('id, nom, matricule, fonction, atelier_id, equipe, equipement').eq('actif', true).order('nom')
+  const rp = await supabase.from('organigramme').select('id, nom, matricule, fonction, atelier_id, equipe, equipement, machine').eq('actif', true).order('nom')
   if (!rp.error) personnes.value = rp.data || []
   const rf = await supabase.from('formations').select('id, nom, validite_mois').eq('actif', true).order('ordre')
   if (!rf.error) formations.value = rf.data || []
@@ -100,11 +102,13 @@ const ateliersListe = computed(() => [...new Set(personnes.value.map(p => p.atel
 const equipesListe = computed(() => [...new Set(personnes.value.map(p => p.equipe).filter(Boolean))].sort())
 const fonctionsListe = computed(() => [...new Set(personnes.value.map(p => p.fonction).filter(Boolean))].sort())
 const phasesListe = computed(() => [...new Set(personnes.value.map(p => p.equipement).filter(Boolean))].sort())
+const machinesListe = computed(() => [...new Set(personnes.value.map(p => p.machine).filter(Boolean))].sort())
 const personnesFiltrees = computed(() => personnes.value.filter(p => {
   if (filtreAtelier.value && (p.atelier_id || '') !== filtreAtelier.value) return false
   if (filtreEquipe.value && (p.equipe || '') !== filtreEquipe.value) return false
   if (filtreFonction.value && (p.fonction || '') !== filtreFonction.value) return false
   if (filtrePhase.value && (p.equipement || '') !== filtrePhase.value) return false
+  if (filtreMachine.value && (p.machine || '') !== filtreMachine.value) return false
   return true
 }))
 const persIds = computed(() => new Set(personnesFiltrees.value.map(p => p.id)))
