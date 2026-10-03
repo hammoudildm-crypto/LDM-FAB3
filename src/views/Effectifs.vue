@@ -60,8 +60,8 @@ const totalEffectif = computed(() => effectifsFiltres.value.reduce((s, e) => s +
 // --- Organigramme ---
 const orgNodes = ref([])
 const equipementsListe = ref([])
-const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_recrutement: '', genre: '', phases: [], machines: [] })
-function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_recrutement: '', genre: '', phases: [], machines: [] }) }
+const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_recrutement: '', genre: '', contrat: '', phases: [], machines: [] })
+function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_recrutement: '', genre: '', contrat: '', phases: [], machines: [] }) }
 function orgAddPhase(e) { const v = e.target.value; if (v && !orgForm.phases.includes(v)) orgForm.phases.push(v); e.target.value = '' }
 function orgAddMachine(e) { const v = e.target.value; if (v && !orgForm.machines.includes(v)) orgForm.machines.push(v); e.target.value = '' }
 function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
@@ -115,10 +115,30 @@ const orgNodesAffiches = computed(() => {
 const orgRacinesAffichees = computed(() => orgNodesAffiches.value
   .filter(n => !n.parent_id || !orgNodesAffiches.value.some(x => x.id === n.parent_id))
   .sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
+
+const kpiOrg = computed(() => {
+  const list = orgNodesAffiches.value
+  let h = 0, f = 0, cdi = 0, cdd = 0, ancSum = 0, ancN = 0
+  const now = new Date()
+  for (const n of list) {
+    const g = (n.genre || '').toLowerCase()
+    if (g[0] === 'f') f++; else if (g[0] === 'h' || g[0] === 'm') h++
+    const c = (n.contrat || '').toUpperCase()
+    if (c.indexOf('CDI') >= 0) cdi++; else if (c.indexOf('CDD') >= 0) cdd++
+    if (n.date_recrutement) {
+      const dt = new Date(n.date_recrutement)
+      if (!isNaN(dt)) { let m = (now.getFullYear() - dt.getFullYear()) * 12 + (now.getMonth() - dt.getMonth()); if (now.getDate() < dt.getDate()) m--; if (m >= 0) { ancSum += m; ancN++ } }
+    }
+  }
+  return { total: list.length, h, f, cdi, cdd, ancMoyMois: ancN ? ancSum / ancN : null }
+})
+const pct = (n) => kpiOrg.value.total ? Math.round(n / kpiOrg.value.total * 100) + '%' : '—'
+const ancMoyTxt = computed(() => { const m = kpiOrg.value.ancMoyMois; return m == null ? '—' : ((m / 12).toFixed(1).replace('.0', '').replace('.', ',') + ' ans') })
+
 async function orgEnregistrer() {
   erreur.value = ''
   if (!orgForm.nom.trim()) { erreur.value = 'Le nom du poste est requis.'; return }
-  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
+  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, contrat: orgForm.contrat || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
   let r
   if (orgForm.id) r = await supabase.from('organigramme').update(payload).eq('id', orgForm.id)
   else r = await supabase.from('organigramme').insert(payload)
@@ -126,7 +146,7 @@ async function orgEnregistrer() {
   message.value = orgForm.id ? 'Poste mis a jour.' : 'Poste ajoute.'
   orgReset(); await chargerTout()
 }
-function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', date_recrutement: n.date_recrutement || '', genre: n.genre || '', phases: (n.equipement || '').split(',').map(x => x.trim()).filter(Boolean), machines: (n.machine || '').split(',').map(x => x.trim()).filter(Boolean) }) }
+function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', date_recrutement: n.date_recrutement || '', genre: n.genre || '', contrat: n.contrat || '', phases: (n.equipement || '').split(',').map(x => x.trim()).filter(Boolean), machines: (n.machine || '').split(',').map(x => x.trim()).filter(Boolean) }) }
 async function orgSupprimer(n) {
   if (!confirm('Supprimer le poste ' + n.nom + ' ? Ses subordonnes remonteront d un niveau.')) return
   await supabase.from('organigramme').update({ parent_id: n.parent_id || null }).eq('parent_id', n.id)
@@ -206,8 +226,12 @@ onMounted(chargerTout)
 
     <template v-else>
       <div class="kpi-grid">
-        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.users"></svg></span><div class="kpi-val accent">{{ fmt(totalEffectif) }}</div></div><div class="kpi-lbl">Effectif total (filtré)</div></div>
-        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.slate"><svg viewBox="0 0 24 24" v-html="ICONS.hash"></svg></span><div class="kpi-val">{{ effectifsFiltres.length }}</div></div><div class="kpi-lbl">Lignes</div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.users"></svg></span><div class="kpi-val accent">{{ kpiOrg.total }}</div></div><div class="kpi-lbl">Effectif total</div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="{ ...TINTS.blue, fontSize: '16px', fontWeight: '900' }">♂</span><div class="kpi-val">{{ kpiOrg.h }}</div></div><div class="kpi-lbl">Hommes · {{ pct(kpiOrg.h) }}</div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="{ ...TINTS.rose, fontSize: '16px', fontWeight: '900' }">♀</span><div class="kpi-val">{{ kpiOrg.f }}</div></div><div class="kpi-lbl">Femmes · {{ pct(kpiOrg.f) }}</div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><div class="kpi-val">{{ kpiOrg.cdi }}</div></div><div class="kpi-lbl">CDI · {{ pct(kpiOrg.cdi) }}</div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><div class="kpi-val">{{ kpiOrg.cdd }}</div></div><div class="kpi-lbl">CDD · {{ pct(kpiOrg.cdd) }}</div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span><div class="kpi-val">{{ ancMoyTxt }}</div></div><div class="kpi-lbl">Ancienneté moyenne</div></div>
       </div>
 
       <section class="card">
@@ -229,6 +253,7 @@ onMounted(chargerTout)
           <input v-model="orgForm.telephone" placeholder="Téléphone" />
           <input v-model="orgForm.date_recrutement" type="date" title="Date de recrutement" />
           <select v-model="orgForm.genre"><option value="">Genre —</option><option value="Homme">Homme</option><option value="Femme">Femme</option></select>
+          <select v-model="orgForm.contrat"><option value="">Contrat —</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select>
           <select v-model="orgForm.parent_id"><option value="">Responsable — (sommet)</option><option v-for="n in responsablesPossibles" :key="n.id" :value="n.id">{{ n.nom }} — {{ n.fonction }}</option></select>
           <input v-model="orgForm.photo_url" placeholder="URL photo (optionnel)" />
           <input v-model="orgForm.note" placeholder="Note" class="org-note" />
@@ -272,7 +297,7 @@ onMounted(chargerTout)
 .ok { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .empty-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; color: #475569; text-align: center; font-size: 15px; }
 
-.kpi-grid { display: grid; grid-template-columns: repeat(2, 220px); gap: 14px; margin-bottom: 22px; }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 14px; margin-bottom: 22px; }
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .kpi-val { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
 .kpi-val.accent { color: #0f766e; }
