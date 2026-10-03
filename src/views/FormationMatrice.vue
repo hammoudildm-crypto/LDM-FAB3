@@ -381,7 +381,7 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 </script>
 
 <style scoped>
-.form-page { color: #1b2733; zoom: 0.9; }
+.form-page { color: #1b2733; zoom: 0.7; }
 .alert { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; }
 .alerte-ech { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 11px 15px; border-radius: 10px; margin: 0 0 16px; font-size: 13px; font-weight: 600; }
 .alerte-ech.crit { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
