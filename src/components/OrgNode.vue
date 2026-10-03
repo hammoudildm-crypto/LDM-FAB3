@@ -3,9 +3,11 @@
     <div class="on-card" :class="{ 'on-root': depth === 0 }" :style="{ '--c': couleur }" :title="node.note || ''">
       <div class="on-ava" :style="node.photo_url ? { backgroundImage: 'url(' + node.photo_url + ')' } : {}">
         <span v-if="!node.photo_url">{{ ini }}</span>
+        <span v-if="genreSym" class="on-genre" :class="'g-' + genreKey">{{ genreSym }}</span>
       </div>
       <div class="on-nom">{{ node.nom }}</div>
       <div class="on-fct" v-if="node.fonction">{{ node.fonction }}</div>
+      <div v-if="anciente" class="on-anc" :class="ancClass" :title="node.date_recrutement ? ('Recruté le ' + fmtDate(node.date_recrutement)) : ''">⏳ {{ anciente }}</div>
       <div class="on-meta" v-if="node.matricule || node.atelier_id || node.equipe || node.equipement || node.machine">
         <span v-if="node.matricule">#{{ node.matricule }}</span>
         <span v-if="node.atelier_id"> · {{ node.atelier_id }}</span>
@@ -73,6 +75,12 @@ function compterDesc(id) {
 const nbDesc = computed(() => compterDesc(props.node.id))
 const couleur = computed(() => COULEURS[norm(props.node.fonction)] || '#0f766e')
 const ini = computed(() => (props.node.nom || '').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())
+const fmtDate = (d) => { if (!d) return ''; const dt = new Date(d); return isNaN(dt) ? d : dt.toLocaleDateString('fr-FR') }
+const genreKey = computed(() => { const g = norm(props.node.genre); return g ? (g[0] === 'f' ? 'f' : 'h') : '' })
+const genreSym = computed(() => genreKey.value === 'f' ? '\u2640' : (genreKey.value === 'h' ? '\u2642' : ''))
+const ancMois = computed(() => { const d = props.node.date_recrutement; if (!d) return null; const dt = new Date(d); if (isNaN(dt)) return null; const now = new Date(); let m = (now.getFullYear() - dt.getFullYear()) * 12 + (now.getMonth() - dt.getMonth()); if (now.getDate() < dt.getDate()) m -= 1; return m < 0 ? null : m })
+const anciente = computed(() => { const m = ancMois.value; if (m == null) return ''; const a = Math.floor(m / 12); return a >= 1 ? (a + ' an' + (a > 1 ? 's' : '')) : (m + ' mois') })
+const ancClass = computed(() => { const m = ancMois.value; if (m == null) return ''; const a = m / 12; return a >= 10 ? 'anc-or' : (a >= 5 ? 'anc-teal' : 'anc-gris') })
 </script>
 
 <style scoped>
@@ -87,16 +95,23 @@ ul { padding-top: 24px; position: relative; display: flex; justify-content: cent
 .on-li:first-child::after { border-radius: 7px 0 0 0; }
 ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #d9e0e8; width: 0; height: 24px; }
 
-.on-card { display: inline-flex; flex-direction: column; align-items: center; justify-content: flex-start; position: relative; background: #fff; border: 1px solid #eef1f6; border-radius: 14px; padding: 10px 12px 22px; box-shadow: 0 6px 16px rgba(16,24,40,.08), 0 1px 3px rgba(16,24,40,.05); width: 152px; min-width: 152px; height: 120px; box-sizing: border-box; overflow: hidden; vertical-align: top; transition: transform .16s ease, box-shadow .16s ease; }
+.on-card { display: inline-flex; flex-direction: column; align-items: center; justify-content: flex-start; position: relative; background: #fff; border: 1px solid #eef1f6; border-radius: 14px; padding: 10px 12px 22px; box-shadow: 0 6px 16px rgba(16,24,40,.08), 0 1px 3px rgba(16,24,40,.05); width: 152px; min-width: 152px; height: 138px; box-sizing: border-box; overflow: hidden; vertical-align: top; transition: transform .16s ease, box-shadow .16s ease; }
 .on-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--c, #0f766e); }
 .on-card:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(16,24,40,.15), 0 2px 6px rgba(16,24,40,.06); }
 .on-card.on-root { box-shadow: 0 10px 26px rgba(99,102,241,.22), 0 2px 6px rgba(16,24,40,.06); }
 
-.on-ava { width: 38px; height: 38px; border-radius: 50%; background: #f1f5f9; background-size: cover; background-position: center; margin: 2px auto 5px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: var(--c); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--c); }
+.on-ava { width: 38px; height: 38px; border-radius: 50%; background: #f1f5f9; background-size: cover; background-position: center; margin: 2px auto 5px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: var(--c); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--c); position: relative; }
 .on-nom { font-weight: 800; font-size: 12.5px; color: #0f172a; line-height: 1.12; max-width: 134px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .on-fct { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--c); margin-top: 3px; }
 .on-meta { font-size: 9.5px; color: #94a3b8; font-weight: 600; margin-top: 3px; max-width: 136px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .on-tel { font-size: 9.5px; color: #94a3b8; margin-top: 2px; }
+.on-genre { position: absolute; bottom: -2px; right: -2px; width: 15px; height: 15px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 900; color: #fff; box-shadow: 0 0 0 1.5px #fff; }
+.on-genre.g-f { background: #db2777; }
+.on-genre.g-h { background: #0284c7; }
+.on-anc { display: inline-block; font-size: 8.5px; font-weight: 800; padding: 1px 6px; border-radius: 999px; margin-top: 3px; }
+.on-anc.anc-or { background: #fef3c7; color: #b45309; }
+.on-anc.anc-teal { background: #ccfbf1; color: #0f766e; }
+.on-anc.anc-gris { background: #f1f5f9; color: #64748b; }
 
 .on-fold { position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); border: 1px solid #e2e8f0; background: #f8fafc; color: #475569; border-radius: 999px; padding: 1px 9px; font-size: 10px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; transition: background .12s, border-color .12s, color .12s; }
 .on-fold:hover { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
