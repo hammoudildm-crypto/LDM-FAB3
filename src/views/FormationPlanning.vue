@@ -10,7 +10,8 @@
       <div class="card-head"><h2 class="card-title">{{ form.id ? 'Modifier la session' : 'Planifier une session' }}</h2></div>
       <div v-if="peutEditer" class="pl-form">
         <div class="row1">
-          <select v-model="form.formation_id" class="grow"><option value="">Formation —</option><option v-for="f in formations" :key="f.id" :value="String(f.id)">{{ f.nom }}</option></select>
+          <input v-model="rechercheF" class="f-search" placeholder="🔍 Formation" />
+          <select v-model="form.formation_id" class="grow"><option value="">Formation —</option><option v-for="f in formationsFiltrees" :key="f.id" :value="String(f.id)">{{ f.nom }}</option></select>
           <input type="date" v-model="form.date_prevue" />
           <input v-model="form.formateur" placeholder="Formateur" class="c" />
         </div>
@@ -82,6 +83,7 @@ const personnes = ref([])
 const sessions = ref([])
 const filtreEtat = ref('')
 const rechercheP = ref('')
+const rechercheF = ref('')
 const erreur = ref('')
 const message = ref('')
 const today = new Date().toISOString().slice(0, 10)
@@ -109,6 +111,7 @@ onMounted(async () => {
 })
 
 const formationById = computed(() => { const m = {}; for (const f of formations.value) m[f.id] = f; return m })
+const formationsFiltrees = computed(() => { const q = (rechercheF.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); if (!q) return formations.value; return formations.value.filter(f => (f.nom || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q)) })
 const personneById = computed(() => { const m = {}; for (const p of personnes.value) m[p.id] = p; return m })
 const personnesFiltrees = computed(() => { const q = (rechercheP.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); if (!q) return personnes.value; return personnes.value.filter(p => ((p.nom || '') + ' ' + (p.fonction || '')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q)) })
 function personneNom(pid) { const p = personneById.value[pid]; return p ? p.nom : '(supprimé)' }
@@ -178,6 +181,8 @@ async function toggleFait(s, pid) {
 .pl-form select, .pl-form input { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
 .pl-form .grow { flex: 1; min-width: 200px; }
 .pl-form .c { width: 160px; }
+.pl-form .f-search { width: 160px; }
+.pl-form .f-search:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
 .pl-form select:focus, .pl-form input:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
 .pl-form .acts { display: flex; gap: 8px; }
 .multi { display: flex; flex-direction: column; gap: 6px; }
