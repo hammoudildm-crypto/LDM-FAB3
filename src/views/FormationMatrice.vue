@@ -101,14 +101,14 @@ onMounted(charger)
 const ateliersListe = computed(() => [...new Set(personnes.value.map(p => p.atelier_id).filter(Boolean))].sort())
 const equipesListe = computed(() => [...new Set(personnes.value.map(p => p.equipe).filter(Boolean))].sort())
 const fonctionsListe = computed(() => [...new Set(personnes.value.map(p => p.fonction).filter(Boolean))].sort())
-const phasesListe = computed(() => [...new Set(personnes.value.map(p => p.equipement).filter(Boolean))].sort())
-const machinesListe = computed(() => [...new Set(personnes.value.map(p => p.machine).filter(Boolean))].sort())
+const phasesListe = computed(() => [...new Set(personnes.value.flatMap(p => (p.equipement || '').split(',').map(x => x.trim()).filter(Boolean)))].sort())
+const machinesListe = computed(() => [...new Set(personnes.value.flatMap(p => (p.machine || '').split(',').map(x => x.trim()).filter(Boolean)))].sort())
 const personnesFiltrees = computed(() => personnes.value.filter(p => {
   if (filtreAtelier.value && (p.atelier_id || '') !== filtreAtelier.value) return false
   if (filtreEquipe.value && (p.equipe || '') !== filtreEquipe.value) return false
   if (filtreFonction.value && (p.fonction || '') !== filtreFonction.value) return false
-  if (filtrePhase.value && (p.equipement || '') !== filtrePhase.value) return false
-  if (filtreMachine.value && (p.machine || '') !== filtreMachine.value) return false
+  if (filtrePhase.value && !(p.equipement || '').split(',').map(x => x.trim()).includes(filtrePhase.value)) return false
+  if (filtreMachine.value && !(p.machine || '').split(',').map(x => x.trim()).includes(filtreMachine.value)) return false
   return true
 }))
 const persIds = computed(() => new Set(personnesFiltrees.value.map(p => p.id)))
