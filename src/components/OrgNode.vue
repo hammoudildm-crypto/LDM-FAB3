@@ -99,7 +99,7 @@ ul { padding-top: 24px; position: relative; display: flex; justify-content: cent
 .on-li:first-child::after { border-radius: 7px 0 0 0; }
 ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #d9e0e8; width: 0; height: 24px; }
 
-.on-card { display: inline-flex; flex-direction: column; align-items: center; justify-content: flex-start; position: relative; background: #fff; border: 1px solid #eef1f6; border-radius: 14px; padding: 10px 12px 22px; box-shadow: 0 6px 16px rgba(16,24,40,.08), 0 1px 3px rgba(16,24,40,.05); width: 152px; min-width: 152px; height: 138px; box-sizing: border-box; overflow: hidden; vertical-align: top; transition: transform .16s ease, box-shadow .16s ease; }
+.on-card { display: inline-flex; flex-direction: column; align-items: center; justify-content: flex-start; position: relative; background: #fff; border: 1px solid #eef1f6; border-radius: 14px; padding: 8px 12px 22px; box-shadow: 0 6px 16px rgba(16,24,40,.08), 0 1px 3px rgba(16,24,40,.05); width: 152px; min-width: 152px; height: 122px; box-sizing: border-box; overflow: hidden; vertical-align: top; transition: transform .16s ease, box-shadow .16s ease; }
 .on-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--c, #0f766e); }
 .on-card:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(16,24,40,.15), 0 2px 6px rgba(16,24,40,.06); }
 .on-card.on-root { box-shadow: 0 10px 26px rgba(99,102,241,.22), 0 2px 6px rgba(16,24,40,.06); }
