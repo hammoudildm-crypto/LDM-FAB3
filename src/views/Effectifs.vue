@@ -707,28 +707,25 @@ onMounted(chargerTout)
             <label class="of-col"><span class="of-lbl">Contrat</span><select v-model="orgForm.contrat"><option value="">—</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select></label>
             <label class="of-col"><span class="of-lbl">Recrutement</span><input v-model="orgForm.date_recrutement" type="date" /></label>
             <label class="of-col"><span class="of-lbl">Naissance</span><input v-model="orgForm.date_naissance" type="date" /></label>
-          </div>
-          <button type="button" class="of-plus" @click="plusChamps = !plusChamps">{{ plusChamps ? '− Moins de champs' : '+ Plus de champs (périmètre, matricule, téléphone, sortie…)' }}</button>
-          <div v-if="plusChamps" class="of-extra">
-            <select v-model="orgForm.atelier_id"><option value="">Périmètre —</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
-            <input v-model="orgForm.equipe" placeholder="Équipe" />
-            <div class="multi">
+            <label class="of-col"><span class="of-lbl">Périmètre</span><select v-model="orgForm.atelier_id"><option value="">—</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select></label>
+            <label class="of-col"><span class="of-lbl">Équipe</span><input v-model="orgForm.equipe" placeholder="Équipe" /></label>
+            <label class="of-col"><span class="of-lbl">Matricule</span><input v-model="orgForm.matricule" placeholder="Matricule" /></label>
+            <label class="of-col"><span class="of-lbl">Téléphone</span><input v-model="orgForm.telephone" placeholder="Téléphone" /></label>
+            <label class="of-col"><span class="of-lbl">Genre</span><select v-model="orgForm.genre"><option value="">—</option><option value="Homme">Homme</option><option value="Femme">Femme</option></select></label>
+            <label v-if="orgForm.contrat === 'CDD'" class="of-col"><span class="of-lbl">Fin CDD</span><input v-model="orgForm.fin_cdd" type="date" /></label>
+            <label class="of-col"><span class="of-lbl">Fin essai</span><input v-model="orgForm.fin_essai" type="date" /></label>
+            <label class="of-col"><span class="of-lbl">Date sortie</span><input v-model="orgForm.date_sortie" type="date" /></label>
+            <label v-if="orgForm.date_sortie" class="of-col"><span class="of-lbl">Motif sortie</span><select v-model="orgForm.motif_sortie"><option value="">—</option><option>Démission</option><option>Fin de contrat</option><option>Licenciement</option><option>Retraite</option><option>Mutation</option><option>Décès</option><option>Autre</option></select></label>
+            <div class="of-col"><span class="of-lbl">Phase</span><div class="multi">
               <div v-if="orgForm.phases.length" class="chips"><span v-for="(ph, i) in orgForm.phases" :key="i" class="chip">{{ ph }}<button type="button" @click="orgForm.phases.splice(i, 1)">×</button></span></div>
               <select @change="orgAddPhase" class="add-sel"><option value="">+ Phase</option><option v-for="ph in PHASES_LISTE" :key="ph" :value="ph" :disabled="orgForm.phases.includes(ph)">{{ ph }}</option></select>
-            </div>
-            <div class="multi">
+            </div></div>
+            <div class="of-col"><span class="of-lbl">Équipement</span><div class="multi">
               <div v-if="orgForm.machines.length" class="chips"><span v-for="(m, i) in orgForm.machines" :key="i" class="chip mach">{{ m }}<button type="button" @click="orgForm.machines.splice(i, 1)">×</button></span></div>
               <select @change="orgAddMachine" class="add-sel"><option value="">+ Équipement</option><option v-for="eq in equipementsListe" :key="eq.id" :value="eq.nom" :disabled="orgForm.machines.includes(eq.nom)">{{ eq.nom }}</option></select>
-            </div>
-            <input v-model="orgForm.matricule" placeholder="Matricule" />
-            <input v-model="orgForm.telephone" placeholder="Téléphone" />
-            <select v-model="orgForm.genre"><option value="">Genre —</option><option value="Homme">Homme</option><option value="Femme">Femme</option></select>
-            <label v-if="orgForm.contrat === 'CDD'" class="org-datef">Fin CDD<input v-model="orgForm.fin_cdd" type="date" /></label>
-            <label class="org-datef">Fin essai<input v-model="orgForm.fin_essai" type="date" /></label>
-            <label class="org-datef">Date sortie<input v-model="orgForm.date_sortie" type="date" /></label>
-            <select v-if="orgForm.date_sortie" v-model="orgForm.motif_sortie"><option value="">Motif sortie —</option><option>Démission</option><option>Fin de contrat</option><option>Licenciement</option><option>Retraite</option><option>Mutation</option><option>Décès</option><option>Autre</option></select>
-            <input v-model="orgForm.photo_url" placeholder="URL photo (optionnel)" />
-            <input v-model="orgForm.note" placeholder="Note" class="org-note" />
+            </div></div>
+            <label class="of-col"><span class="of-lbl">Photo (URL)</span><input v-model="orgForm.photo_url" placeholder="URL photo" /></label>
+            <label class="of-col"><span class="of-lbl">Note</span><input v-model="orgForm.note" placeholder="Note" /></label>
           </div>
           <div class="org-actions">
             <button class="btn" @click="orgEnregistrer">{{ orgForm.id ? 'Mettre à jour' : 'Ajouter' }}</button>
@@ -933,7 +930,8 @@ onMounted(chargerTout)
 .pt-act button { border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; padding: 3px 7px; cursor: pointer; font-size: 12px; margin-left: 4px; }
 .pt-act button:hover { background: #f1f5f9; }
 .org-form2 { margin-bottom: 18px; }
-.of-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 10px; }
+.of-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 12px; align-items: start; }
+.of-col .multi { width: 100%; } .of-col .add-sel { width: 100%; }
 .of-col { display: flex; flex-direction: column; gap: 4px; }
 .of-lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; }
 .of-col input, .of-col select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; width: 100%; box-sizing: border-box; }
