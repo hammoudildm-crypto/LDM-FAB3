@@ -61,6 +61,7 @@ const totalEffectif = computed(() => effectifsFiltres.value.reduce((s, e) => s +
 const orgNodes = ref([])
 const equipementsListe = ref([])
 const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', date_sortie: '', motif_sortie: '', phases: [], machines: [] })
+const plusChamps = ref(false)
 function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', date_sortie: '', motif_sortie: '', phases: [], machines: [] }) }
 function orgAddPhase(e) { const v = e.target.value; if (v && !orgForm.phases.includes(v)) orgForm.phases.push(v); e.target.value = '' }
 function orgAddMachine(e) { const v = e.target.value; if (v && !orgForm.machines.includes(v)) orgForm.machines.push(v); e.target.value = '' }
@@ -698,32 +699,37 @@ onMounted(chargerTout)
             </div>
           </div>
         </div>
-        <div v-if="peutEditer" class="org-form">
-          <input v-model="orgForm.nom" placeholder="Nom *" />
-          <input v-model="orgForm.fonction" list="fonctionsListe" placeholder="Fonction" /><datalist id="fonctionsListe"><option v-for="f in FONCTIONS_SUGG" :key="f" :value="f" /></datalist>
-          <select v-model="orgForm.atelier_id"><option value="">Périmètre —</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
-          <input v-model="orgForm.equipe" placeholder="Équipe" />
-          <div class="multi">
-            <div v-if="orgForm.phases.length" class="chips"><span v-for="(ph, i) in orgForm.phases" :key="i" class="chip">{{ ph }}<button type="button" @click="orgForm.phases.splice(i, 1)">×</button></span></div>
-            <select @change="orgAddPhase" class="add-sel"><option value="">+ Phase</option><option v-for="ph in PHASES_LISTE" :key="ph" :value="ph" :disabled="orgForm.phases.includes(ph)">{{ ph }}</option></select>
+        <div v-if="peutEditer" class="org-form2">
+          <div class="of-grid">
+            <label class="of-col"><span class="of-lbl">Nom *</span><input v-model="orgForm.nom" placeholder="Nom & prénom" /></label>
+            <label class="of-col"><span class="of-lbl">Fonction</span><input v-model="orgForm.fonction" list="fonctionsListe" placeholder="Fonction" /><datalist id="fonctionsListe"><option v-for="f in FONCTIONS_SUGG" :key="f" :value="f" /></datalist></label>
+            <label class="of-col"><span class="of-lbl">Supérieur</span><select v-model="orgForm.parent_id"><option value="">— (sommet)</option><option v-for="n in responsablesPossibles" :key="n.id" :value="n.id">{{ n.nom }}</option></select></label>
+            <label class="of-col"><span class="of-lbl">Contrat</span><select v-model="orgForm.contrat"><option value="">—</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select></label>
+            <label class="of-col"><span class="of-lbl">Recrutement</span><input v-model="orgForm.date_recrutement" type="date" /></label>
+            <label class="of-col"><span class="of-lbl">Naissance</span><input v-model="orgForm.date_naissance" type="date" /></label>
           </div>
-          <div class="multi">
-            <div v-if="orgForm.machines.length" class="chips"><span v-for="(m, i) in orgForm.machines" :key="i" class="chip mach">{{ m }}<button type="button" @click="orgForm.machines.splice(i, 1)">×</button></span></div>
-            <select @change="orgAddMachine" class="add-sel"><option value="">+ Équipement</option><option v-for="eq in equipementsListe" :key="eq.id" :value="eq.nom" :disabled="orgForm.machines.includes(eq.nom)">{{ eq.nom }}</option></select>
+          <button type="button" class="of-plus" @click="plusChamps = !plusChamps">{{ plusChamps ? '− Moins de champs' : '+ Plus de champs (périmètre, matricule, téléphone, sortie…)' }}</button>
+          <div v-if="plusChamps" class="of-extra">
+            <select v-model="orgForm.atelier_id"><option value="">Périmètre —</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
+            <input v-model="orgForm.equipe" placeholder="Équipe" />
+            <div class="multi">
+              <div v-if="orgForm.phases.length" class="chips"><span v-for="(ph, i) in orgForm.phases" :key="i" class="chip">{{ ph }}<button type="button" @click="orgForm.phases.splice(i, 1)">×</button></span></div>
+              <select @change="orgAddPhase" class="add-sel"><option value="">+ Phase</option><option v-for="ph in PHASES_LISTE" :key="ph" :value="ph" :disabled="orgForm.phases.includes(ph)">{{ ph }}</option></select>
+            </div>
+            <div class="multi">
+              <div v-if="orgForm.machines.length" class="chips"><span v-for="(m, i) in orgForm.machines" :key="i" class="chip mach">{{ m }}<button type="button" @click="orgForm.machines.splice(i, 1)">×</button></span></div>
+              <select @change="orgAddMachine" class="add-sel"><option value="">+ Équipement</option><option v-for="eq in equipementsListe" :key="eq.id" :value="eq.nom" :disabled="orgForm.machines.includes(eq.nom)">{{ eq.nom }}</option></select>
+            </div>
+            <input v-model="orgForm.matricule" placeholder="Matricule" />
+            <input v-model="orgForm.telephone" placeholder="Téléphone" />
+            <select v-model="orgForm.genre"><option value="">Genre —</option><option value="Homme">Homme</option><option value="Femme">Femme</option></select>
+            <label v-if="orgForm.contrat === 'CDD'" class="org-datef">Fin CDD<input v-model="orgForm.fin_cdd" type="date" /></label>
+            <label class="org-datef">Fin essai<input v-model="orgForm.fin_essai" type="date" /></label>
+            <label class="org-datef">Date sortie<input v-model="orgForm.date_sortie" type="date" /></label>
+            <select v-if="orgForm.date_sortie" v-model="orgForm.motif_sortie"><option value="">Motif sortie —</option><option>Démission</option><option>Fin de contrat</option><option>Licenciement</option><option>Retraite</option><option>Mutation</option><option>Décès</option><option>Autre</option></select>
+            <input v-model="orgForm.photo_url" placeholder="URL photo (optionnel)" />
+            <input v-model="orgForm.note" placeholder="Note" class="org-note" />
           </div>
-          <input v-model="orgForm.matricule" placeholder="Matricule" />
-          <input v-model="orgForm.telephone" placeholder="Téléphone" />
-          <label class="org-datef">Naissance<input v-model="orgForm.date_naissance" type="date" /></label>
-          <label class="org-datef">Recrutement<input v-model="orgForm.date_recrutement" type="date" /></label>
-          <select v-model="orgForm.genre"><option value="">Genre —</option><option value="Homme">Homme</option><option value="Femme">Femme</option></select>
-          <select v-model="orgForm.contrat"><option value="">Contrat —</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select>
-          <label v-if="orgForm.contrat === 'CDD'" class="org-datef">Fin CDD<input v-model="orgForm.fin_cdd" type="date" /></label>
-          <label class="org-datef">Fin essai<input v-model="orgForm.fin_essai" type="date" /></label>
-          <label class="org-datef">Date sortie<input v-model="orgForm.date_sortie" type="date" /></label>
-          <select v-if="orgForm.date_sortie" v-model="orgForm.motif_sortie"><option value="">Motif sortie —</option><option>Démission</option><option>Fin de contrat</option><option>Licenciement</option><option>Retraite</option><option>Mutation</option><option>Décès</option><option>Autre</option></select>
-          <select v-model="orgForm.parent_id"><option value="">Responsable — (sommet)</option><option v-for="n in responsablesPossibles" :key="n.id" :value="n.id">{{ n.nom }} — {{ n.fonction }}</option></select>
-          <input v-model="orgForm.photo_url" placeholder="URL photo (optionnel)" />
-          <input v-model="orgForm.note" placeholder="Note" class="org-note" />
           <div class="org-actions">
             <button class="btn" @click="orgEnregistrer">{{ orgForm.id ? 'Mettre à jour' : 'Ajouter' }}</button>
             <button v-if="orgForm.id" class="btn ghost" @click="orgReset">Annuler</button>
@@ -926,6 +932,15 @@ onMounted(chargerTout)
 .pt-act { text-align: right; }
 .pt-act button { border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; padding: 3px 7px; cursor: pointer; font-size: 12px; margin-left: 4px; }
 .pt-act button:hover { background: #f1f5f9; }
+.org-form2 { margin-bottom: 18px; }
+.of-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 10px; }
+.of-col { display: flex; flex-direction: column; gap: 4px; }
+.of-lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; }
+.of-col input, .of-col select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; width: 100%; box-sizing: border-box; }
+.of-plus { margin-top: 12px; border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 8px; padding: 7px 14px; font: inherit; font-size: 12.5px; font-weight: 700; color: #64748b; cursor: pointer; }
+.of-plus:hover { background: #f1f5f9; }
+.of-extra { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f1f5f9; }
+.of-extra input, .of-extra select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
 .org-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
 .org-filtre { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; font-weight: 600; }
 .org-legende { display: flex; flex-wrap: wrap; gap: 10px; }
