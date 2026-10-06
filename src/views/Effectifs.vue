@@ -99,20 +99,24 @@ watch(orgNodes, () => {
 })
 // filtre par périmètre (garde les nœuds du périmètre + leurs ancêtres)
 const orgPerimFiltre = ref('')
+const sourceActive = ref('manuel')
 const tab = ref('org')
+const orgNodesSource = computed(() => orgNodes.value.filter(n => (n.source || 'manuel') === sourceActive.value))
+function orgCountSource(src) { return orgNodes.value.filter(n => (n.source || 'manuel') === src).length }
 const estParti = (n) => { if (!n.date_sortie) return false; const dt = new Date(n.date_sortie); return !isNaN(dt) && dt <= new Date() }
 const orgPerimRaw = computed(() => {
-  if (!orgPerimFiltre.value) return orgNodes.value
-  const byId = {}; for (const n of orgNodes.value) byId[n.id] = n
+  const base = orgNodesSource.value
+  if (!orgPerimFiltre.value) return base
+  const byId = {}; for (const n of base) byId[n.id] = n
   const keep = new Set()
-  for (const n of orgNodes.value) {
+  for (const n of base) {
     if (normOrg(n.atelier_id) === normOrg(orgPerimFiltre.value)) {
       keep.add(n.id)
       let pp = n.parent_id
       while (pp && byId[pp]) { keep.add(pp); pp = byId[pp].parent_id }
     }
   }
-  return orgNodes.value.filter(n => keep.has(n.id))
+  return base.filter(n => keep.has(n.id))
 })
 const orgNodesAffiches = computed(() => orgPerimRaw.value.filter(n => !estParti(n)))
 const partis = computed(() => orgPerimRaw.value.filter(n => estParti(n)).slice().sort((a, b) => new Date(b.date_sortie) - new Date(a.date_sortie)))
@@ -256,7 +260,7 @@ td{padding:4px 6px;border:1px solid #f1f5f9}
 async function orgEnregistrer() {
   erreur.value = ''
   if (!orgForm.nom.trim()) { erreur.value = 'Le nom du poste est requis.'; return }
-  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_naissance: orgForm.date_naissance || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, contrat: orgForm.contrat || null, fin_cdd: orgForm.fin_cdd || null, fin_essai: orgForm.fin_essai || null, date_sortie: orgForm.date_sortie || null, motif_sortie: orgForm.motif_sortie || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
+  const payload = { nom: orgForm.nom.trim(), source: sourceActive.value, fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_naissance: orgForm.date_naissance || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, contrat: orgForm.contrat || null, fin_cdd: orgForm.fin_cdd || null, fin_essai: orgForm.fin_essai || null, date_sortie: orgForm.date_sortie || null, motif_sortie: orgForm.motif_sortie || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
   let r
   if (orgForm.id) r = await supabase.from('organigramme').update(payload).eq('id', orgForm.id)
   else r = await supabase.from('organigramme').insert(payload)
@@ -264,6 +268,175 @@ async function orgEnregistrer() {
   message.value = orgForm.id ? 'Poste mis a jour.' : 'Poste ajoute.'
   orgReset(); await chargerTout()
 }
+
+// --- Import liste -> organigramme ---
+const impTexte = ref('')
+const impRemplacer = ref(false)
+const impActifsSeuls = ref(true)
+const impOuvert = ref(false)
+const impBusy = ref(false)
+const impApercu = ref(null)
+function impDate(v) {
+  if (v == null || v === '') return ''
+  const s = String(v).trim(); if (!s) return ''
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+  let m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/)
+  if (m) { let y = m[3]; if (y.length === 2) y = '20' + y; return y + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0') }
+  if (/^\d{4,6}$/.test(s)) { const n = parseInt(s, 10); const dt = new Date(Date.UTC(1899, 11, 30) + n * 86400000); if (!isNaN(dt)) return dt.toISOString().slice(0, 10) }
+  const dt = new Date(s); if (!isNaN(dt)) return dt.toISOString().slice(0, 10)
+  return ''
+}
+function impColonne(h) { for (let a = 1; a < arguments.length; a++) { const i = h.indexOf(normOrg(arguments[a])); if (i >= 0) return i } return -1 }
+function impParse() {
+  const lignes = [], erreurs = []
+  const raw = impTexte.value.split(/\r?\n/).filter(l => l.trim())
+  if (!raw.length) return { lignes, racines: 0, orphelins: 0, ignores: 0, erreurs: ['Liste vide.'], mode: '' }
+  const sep = raw[0].indexOf('\t') >= 0 ? '\t' : (raw[0].indexOf(';') >= 0 ? ';' : ',')
+  const rows = raw.map(l => l.split(sep).map(c => c.trim()))
+  const h = rows[0].map(c => normOrg(c))
+  const ci = {
+    nom: impColonne(h, 'nom prenom', 'nom et prenom', 'nom', 'name'),
+    superieur: impColonne(h, 'responsable 1', 'responsable', 'superieur', 'manager', 'n+1', 'responsable hierarchique'),
+    fonction: impColonne(h, 'fonction', 'poste', 'intitule poste', 'emploi'),
+    perimetre: impColonne(h, 'departement', 'pole', 'perimetre', 'atelier', 'service', 'unite'),
+    equipe: impColonne(h, 'equipe', 'shift'),
+    matricule: impColonne(h, 'matricule', 'mle', 'num matricule'),
+    contrat: impColonne(h, 'type contrat', 'contrat', 'type de contrat'),
+    genre: impColonne(h, 'sexe', 'genre'),
+    telephone: impColonne(h, 'telephone', 'tel', 'tel pro', 'mobile'),
+    recrutement: impColonne(h, 'date debut', 'date recrutement', 'date embauche', 'date d embauche'),
+    naissance: impColonne(h, 'date naissance', 'naissance', 'date de naissance'),
+    motif: impColonne(h, 'raison de depart', 'raison depart', 'motif', 'motif depart', 'motif de depart'),
+    sortie: impColonne(h, 'date fin', 'date sortie', 'date depart', 'date de depart'),
+    essai: impColonne(h, 'date fin periode essai', 'fin periode essai', 'fin essai', 'fin periode d essai'),
+    actif: impColonne(h, 'actif', 'statut', 'etat')
+  }
+  const parEntete = ci.nom >= 0
+  let data, mode
+  if (parEntete) { data = rows.slice(1); mode = 'entete' }
+  else {
+    mode = 'position'
+    const h0 = h[0]
+    data = (h0 === 'nom' || h0 === 'name' || h.indexOf('fonction') >= 0 || h.indexOf('superieur') >= 0) ? rows.slice(1) : rows
+    ci.nom = 0; ci.fonction = 1; ci.superieur = 2; ci.perimetre = 3; ci.equipe = 4
+    ci.matricule = ci.contrat = ci.genre = ci.telephone = ci.recrutement = ci.naissance = ci.motif = ci.sortie = ci.essai = ci.actif = -1
+  }
+  const val = (r, i) => (i >= 0 && i < r.length) ? (r[i] || '').trim() : ''
+  const estFaux = (s) => { const n = normOrg(s); return n === 'false' || n === 'faux' || n === 'non' || n === '0' || n === 'inactif' }
+  let ignores = 0
+  for (const r of data) {
+    const nom = val(r, ci.nom); if (!nom) continue
+    const sortieRaw = impDate(val(r, ci.sortie))
+    const actifTxt = val(r, ci.actif)
+    const inactif = (ci.actif >= 0 && actifTxt && estFaux(actifTxt)) || (!!sortieRaw && new Date(sortieRaw) <= new Date())
+    if (impActifsSeuls.value && inactif) { ignores++; continue }
+    let genre = ''; const g = normOrg(val(r, ci.genre))
+    if (g === 'm' || g === 'masculin' || g === 'homme' || g === 'h') genre = 'Homme'
+    else if (g === 'f' || g === 'feminin' || g === 'femme') genre = 'Femme'
+    const ctRaw = val(r, ci.contrat).toUpperCase()
+    const contrat = ctRaw.indexOf('CDI') >= 0 ? 'CDI' : (ctRaw.indexOf('CDD') >= 0 ? 'CDD' : '')
+    lignes.push({
+      nom, fonction: val(r, ci.fonction), superieur: val(r, ci.superieur),
+      perimetre: val(r, ci.perimetre), equipe: val(r, ci.equipe),
+      matricule: val(r, ci.matricule), contrat, genre, telephone: val(r, ci.telephone),
+      date_recrutement: impDate(val(r, ci.recrutement)), date_naissance: impDate(val(r, ci.naissance)),
+      motif_sortie: val(r, ci.motif), date_sortie: sortieRaw, fin_essai: impDate(val(r, ci.essai)),
+      inactif, supIntrouvable: false
+    })
+  }
+  const noms = new Set()
+  if (!impRemplacer.value) for (const n of orgNodesSource.value) noms.add(normOrg(n.nom))
+  for (const l of lignes) noms.add(normOrg(l.nom))
+  let racines = 0, orphelins = 0
+  for (const l of lignes) {
+    if (!l.superieur) { racines++; continue }
+    if (!noms.has(normOrg(l.superieur))) { l.supIntrouvable = true; orphelins++; racines++ }
+  }
+  const vus = new Set(), dups = new Set()
+  for (const l of lignes) { const k = normOrg(l.nom); if (vus.has(k)) dups.add(l.nom); vus.add(k) }
+  if (dups.size) erreurs.push(dups.size + ' doublon(s) : ' + [...dups].slice(0, 3).join(', '))
+  return { lignes, racines, orphelins, ignores, erreurs, mode }
+}
+function impPreview() { impApercu.value = impParse() }
+async function impImporter() {
+  erreur.value = ''; message.value = ''
+  const ap = impParse()
+  if (!ap.lignes.length) { erreur.value = (ap.erreurs[0] || 'Rien a importer.'); return }
+  if (impRemplacer.value && !confirm('Remplacer l\'organigramme actif (' + orgNodesSource.value.length + ' postes) par cette liste ?')) return
+  impBusy.value = true
+  try {
+    if (impRemplacer.value) {
+      const rd = await supabase.from('organigramme').update({ actif: false }).eq('actif', true).eq('source', sourceActive.value)
+      if (rd.error) { erreur.value = rd.error.message; impBusy.value = false; return }
+    }
+    const payloads = ap.lignes.map((l, i) => ({
+      nom: l.nom, source: sourceActive.value, fonction: l.fonction || null,
+      atelier_id: (PERIMETRES.find(pe => normOrg(pe) === normOrg(l.perimetre)) || l.perimetre) || null,
+      equipe: l.equipe || null, matricule: l.matricule || null, telephone: l.telephone || null,
+      contrat: l.contrat || null, genre: l.genre || null,
+      date_recrutement: l.date_recrutement || null, date_naissance: l.date_naissance || null,
+      fin_essai: l.fin_essai || null, date_sortie: l.date_sortie || null, motif_sortie: l.motif_sortie || null,
+      ordre: i
+    }))
+    const ins = await supabase.from('organigramme').insert(payloads).select('id, nom')
+    if (ins.error) { erreur.value = ins.error.message; impBusy.value = false; return }
+    const inseres = (ins.data || []).slice().sort((a, b) => a.id - b.id)
+    const nomId = new Map()
+    if (!impRemplacer.value) for (const n of orgNodesSource.value) { const k = normOrg(n.nom); if (!nomId.has(k)) nomId.set(k, n.id) }
+    for (const n of inseres) { const k = normOrg(n.nom); if (!nomId.has(k)) nomId.set(k, n.id) }
+    const maj = []
+    ap.lignes.forEach((l, i) => {
+      const self = inseres[i]; if (!self || !l.superieur) return
+      const pid = nomId.get(normOrg(l.superieur))
+      if (pid && pid !== self.id) maj.push(supabase.from('organigramme').update({ parent_id: pid }).eq('id', self.id))
+    })
+    if (maj.length) { const res = await Promise.all(maj); const er = res.find(r => r.error); if (er) { erreur.value = er.error.message; impBusy.value = false; return } }
+    message.value = inseres.length + ' poste(s) importe(s)' + (ap.ignores ? (' - ' + ap.ignores + ' inactif(s) ignore(s)') : '') + '.'
+    impTexte.value = ''; impApercu.value = null; impOuvert.value = false
+    await chargerTout()
+  } catch (e) { erreur.value = 'Erreur import : ' + (e.message || e) }
+  impBusy.value = false
+}
+let xlsxPromise = null
+function chargerXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX)
+  if (xlsxPromise) return xlsxPromise
+  xlsxPromise = new Promise((resolve, reject) => {
+    const sc = document.createElement('script')
+    sc.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'
+    sc.onload = () => resolve(window.XLSX)
+    sc.onerror = () => reject(new Error('Echec du chargement du lecteur Excel. Enregistre le fichier en CSV et reessaie.'))
+    document.head.appendChild(sc)
+  })
+  return xlsxPromise
+}
+async function impFichier(e) {
+  const f = e.target.files && e.target.files[0]
+  if (!f) return
+  erreur.value = ''; message.value = ''
+  const nom = f.name.toLowerCase()
+  try {
+    if (nom.endsWith('.csv') || nom.endsWith('.txt') || nom.endsWith('.tsv')) {
+      impTexte.value = await f.text()
+    } else if (nom.endsWith('.xlsx') || nom.endsWith('.xls')) {
+      const XLSX = await chargerXLSX()
+      const buf = await f.arrayBuffer()
+      const wb = XLSX.read(buf, { type: 'array', cellDates: true })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, defval: '', raw: true })
+      impTexte.value = rows.map(r => r.map(c => (c instanceof Date) ? c.toISOString().slice(0, 10) : String(c == null ? '' : c)).join('\t')).join('\n')
+    } else {
+      erreur.value = 'Format non reconnu. Utilise .xlsx, .xls ou .csv.'; e.target.value = ''; return
+    }
+    impOuvert.value = true
+    impApercu.value = impParse()
+    message.value = 'Fichier charge : ' + f.name + '. Verifie l\'apercu puis clique Importer.'
+  } catch (err) {
+    erreur.value = err.message || ('Erreur lecture fichier : ' + err)
+  }
+  e.target.value = ''
+}
+
 function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', date_naissance: n.date_naissance || '', date_recrutement: n.date_recrutement || '', genre: n.genre || '', contrat: n.contrat || '', fin_cdd: n.fin_cdd || '', fin_essai: n.fin_essai || '', date_sortie: n.date_sortie || '', motif_sortie: n.motif_sortie || '', phases: (n.equipement || '').split(',').map(x => x.trim()).filter(Boolean), machines: (n.machine || '').split(',').map(x => x.trim()).filter(Boolean) }) }
 async function orgSupprimer(n) {
   if (!confirm('Supprimer le poste ' + n.nom + ' ? Ses subordonnes remonteront d un niveau.')) return
@@ -343,6 +516,10 @@ onMounted(chargerTout)
     </div>
 
     <template v-else>
+      <div class="src-switch">
+        <button :class="{ on: sourceActive === 'manuel' }" @click="sourceActive = 'manuel'">✍️ Organigramme manuel <span class="src-n">{{ orgCountSource('manuel') }}</span></button>
+        <button :class="{ on: sourceActive === 'mirilla' }" @click="sourceActive = 'mirilla'">📥 Import Mirilla <span class="src-n">{{ orgCountSource('mirilla') }}</span></button>
+      </div>
       <div class="rh-tabs">
         <button :class="{ on: tab === 'org' }" @click="tab = 'org'">Organigramme</button>
         <button :class="{ on: tab === 'demo' }" @click="tab = 'demo'">Démographie</button>
@@ -490,6 +667,39 @@ onMounted(chargerTout)
       <div v-if="tab === 'org'">
       <section class="card">
         <div class="card-head"><h2 class="card-title">Organigramme</h2><span class="count">{{ orgFlat.length }}</span></div>
+        <div v-if="peutEditer" class="org-import">
+          <button class="imp-toggle" @click="impOuvert = !impOuvert">📋 Importer / coller une liste <span class="imp-ch">{{ impOuvert ? '▲' : '▼' }}</span></button>
+          <div v-if="impOuvert" class="imp-body">
+            <div class="imp-cible">Cible : <b>{{ sourceActive === 'mirilla' ? 'Import Mirilla' : 'Organigramme manuel' }}</b> — l'import n'affecte que cet organigramme.</div>
+            <p class="imp-hint">Charge l'export Excel de <b>Mirilla</b> — les colonnes (Nom, Responsable 1, Type contrat, Matricule, Téléphone, Date début, Date naissance, Date fin, Fin période essai…) sont <b>reconnues automatiquement</b> par leur nom. La hiérarchie est reconstruite via <b>Responsable 1</b>. Tu peux aussi coller une liste simple : <b>Nom · Fonction · Supérieur · Périmètre · Équipe</b>.</p>
+            <div class="imp-file">
+              <label class="imp-upload">📁 Charger un fichier Excel / CSV<input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" @change="impFichier" hidden /></label>
+              <span class="imp-ou">— ou colle les lignes ci-dessous —</span>
+            </div>
+            <textarea v-model="impTexte" class="imp-ta" rows="7" placeholder="Nom, Fonction, Supérieur, Périmètre, Équipe — une ligne par personne"></textarea>
+            <div class="imp-row">
+              <div class="imp-opts">
+                <label class="imp-rep"><input type="checkbox" v-model="impActifsSeuls" @change="impApercu && impPreview()" /> N'importer que les collaborateurs actifs</label>
+                <label class="imp-rep"><input type="checkbox" v-model="impRemplacer" @change="impApercu && impPreview()" /> Remplacer l'organigramme existant ({{ orgNodes.length }} postes)</label>
+              </div>
+              <div class="imp-actions">
+                <button class="btn-ghost" @click="impPreview">Prévisualiser</button>
+                <button class="btn" :disabled="impBusy" @click="impImporter">{{ impBusy ? 'Import…' : 'Importer' }}</button>
+              </div>
+            </div>
+            <div v-if="impApercu" class="imp-apercu">
+              <div class="imp-stat"><b>{{ impApercu.lignes.length }}</b> personne(s) · <b>{{ impApercu.racines }}</b> au sommet<span v-if="impApercu.ignores"> · {{ impApercu.ignores }} inactif(s) ignoré(s)</span><span v-if="impApercu.orphelins"> · <b class="imp-no">{{ impApercu.orphelins }}</b> supérieur(s) introuvable(s) → placé(s) au sommet</span><span v-if="impApercu.mode === 'entete'" class="imp-detect"> · colonnes Mirilla détectées ✓</span></div>
+              <div v-if="impApercu.erreurs.length" class="imp-err">⚠ {{ impApercu.erreurs.join(' · ') }}</div>
+              <div class="imp-tablewrap" v-if="impApercu.lignes.length">
+                <table class="imp-table">
+                  <thead><tr><th>Nom</th><th>Supérieur</th><th>Contrat</th><th>Recrut.</th><th>Naiss.</th><th>Matricule</th></tr></thead>
+                  <tbody><tr v-for="(l, i) in impApercu.lignes.slice(0, 40)" :key="i"><td>{{ l.nom }}</td><td :class="{ 'imp-no': l.supIntrouvable }">{{ l.superieur || '—' }}</td><td>{{ l.contrat || '—' }}</td><td>{{ l.date_recrutement || '—' }}</td><td>{{ l.date_naissance || '—' }}</td><td>{{ l.matricule || '—' }}</td></tr></tbody>
+                </table>
+              </div>
+              <div v-if="impApercu.lignes.length > 40" class="imp-more">… et {{ impApercu.lignes.length - 40 }} de plus</div>
+            </div>
+          </div>
+        </div>
         <div v-if="peutEditer" class="org-form">
           <input v-model="orgForm.nom" placeholder="Nom *" />
           <input v-model="orgForm.fonction" list="fonctionsListe" placeholder="Fonction" /><datalist id="fonctionsListe"><option v-for="f in FONCTIONS_SUGG" :key="f" :value="f" /></datalist>
@@ -589,6 +799,38 @@ onMounted(chargerTout)
 .org-form input, .org-form select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
 .org-form .org-note { flex: 1; min-width: 150px; }
 .org-datef { display: inline-flex; flex-direction: column; gap: 2px; font-size: 9.5px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: .03em; }
+.org-import { margin-bottom: 14px; }
+.src-switch { display: inline-flex; gap: 4px; background: #eef2ff; border-radius: 10px; padding: 4px; margin-bottom: 16px; }
+.src-switch button { border: 0; background: transparent; padding: 8px 16px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 700; color: #6366f1; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.src-switch button.on { background: #fff; color: #4338ca; box-shadow: 0 1px 3px rgba(99,102,241,.2); }
+.src-n { background: rgba(99,102,241,.15); color: #4338ca; border-radius: 999px; font-size: 10px; padding: 1px 7px; font-weight: 800; }
+.imp-cible { font-size: 12px; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px; padding: 7px 10px; margin-bottom: 10px; font-weight: 600; }
+.imp-toggle { background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; border-radius: 9px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.imp-toggle:hover { background: #e0e7ff; }
+.imp-ch { font-size: 10px; }
+.imp-body { margin-top: 12px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; background: #f8fafc; }
+.imp-hint { font-size: 12px; color: #64748b; line-height: 1.5; margin: 0 0 10px; }
+.imp-file { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.imp-upload { background: #0d9488; color: #fff; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; }
+.imp-upload:hover { background: #0f766e; }
+.imp-ou { font-size: 11.5px; color: #94a3b8; font-weight: 600; }
+.imp-ta { width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font-size: 12.5px; font-family: ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
+.imp-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.imp-rep { font-size: 12.5px; color: #475569; font-weight: 600; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.imp-actions { display: inline-flex; gap: 8px; }
+.btn-ghost { border: 1px solid #cbd5e1; background: #fff; border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; color: #475569; cursor: pointer; }
+.btn-ghost:hover { background: #f1f5f9; }
+.imp-apercu { margin-top: 14px; }
+.imp-stat { font-size: 12.5px; color: #475569; }
+.imp-opts { display: flex; flex-direction: column; gap: 6px; }
+.imp-detect { color: #16a34a; font-weight: 700; }
+.imp-err { font-size: 12px; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 6px 10px; margin-top: 8px; }
+.imp-tablewrap { max-height: 320px; overflow: auto; margin-top: 10px; border: 1px solid #e2e8f0; border-radius: 8px; }
+.imp-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.imp-table th { background: #f1f5f9; color: #475569; padding: 6px 8px; text-align: left; font-size: 11px; position: sticky; top: 0; }
+.imp-table td { padding: 5px 8px; border-top: 1px solid #f1f5f9; }
+.imp-no { color: #dc2626; font-weight: 700; }
+.imp-more { font-size: 11.5px; color: #94a3b8; margin-top: 6px; }
 .rh-tabs { display: flex; flex-wrap: wrap; gap: 4px; background: #f1f5f9; border-radius: 10px; padding: 4px; margin-bottom: 20px; }
 .rh-tabs button { border: 0; background: transparent; padding: 8px 16px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 700; color: #64748b; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .rh-tabs button.on { background: #fff; color: #0d9488; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
