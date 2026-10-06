@@ -99,13 +99,10 @@ watch(orgNodes, () => {
 })
 // filtre par périmètre (garde les nœuds du périmètre + leurs ancêtres)
 const orgPerimFiltre = ref('')
-const sourceActive = ref('manuel')
 const tab = ref('org')
-const orgNodesSource = computed(() => orgNodes.value.filter(n => (n.source || 'manuel') === sourceActive.value))
-function orgCountSource(src) { return orgNodes.value.filter(n => (n.source || 'manuel') === src).length }
 const estParti = (n) => { if (!n.date_sortie) return false; const dt = new Date(n.date_sortie); return !isNaN(dt) && dt <= new Date() }
 const orgPerimRaw = computed(() => {
-  const base = orgNodesSource.value
+  const base = orgNodes.value
   if (!orgPerimFiltre.value) return base
   const byId = {}; for (const n of base) byId[n.id] = n
   const keep = new Set()
@@ -123,6 +120,12 @@ const partis = computed(() => orgPerimRaw.value.filter(n => estParti(n)).slice()
 const orgRacinesAffichees = computed(() => orgNodesAffiches.value
   .filter(n => !n.parent_id || !orgNodesAffiches.value.some(x => x.id === n.parent_id))
   .sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
+const persRech = ref('')
+const persListe = computed(() => {
+  const q = normOrg(persRech.value)
+  return orgNodesAffiches.value.filter(n => !q || normOrg(n.nom).indexOf(q) >= 0 || normOrg(n.fonction).indexOf(q) >= 0).slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || ''))
+})
+function nomParent(n) { if (!n.parent_id) return ''; const pp = orgNodes.value.find(x => x.id === n.parent_id); return pp ? pp.nom : '' }
 
 const kpiOrg = computed(() => {
   const list = orgNodesAffiches.value
@@ -260,7 +263,7 @@ td{padding:4px 6px;border:1px solid #f1f5f9}
 async function orgEnregistrer() {
   erreur.value = ''
   if (!orgForm.nom.trim()) { erreur.value = 'Le nom du poste est requis.'; return }
-  const payload = { nom: orgForm.nom.trim(), source: sourceActive.value, fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_naissance: orgForm.date_naissance || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, contrat: orgForm.contrat || null, fin_cdd: orgForm.fin_cdd || null, fin_essai: orgForm.fin_essai || null, date_sortie: orgForm.date_sortie || null, motif_sortie: orgForm.motif_sortie || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
+  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_naissance: orgForm.date_naissance || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, contrat: orgForm.contrat || null, fin_cdd: orgForm.fin_cdd || null, fin_essai: orgForm.fin_essai || null, date_sortie: orgForm.date_sortie || null, motif_sortie: orgForm.motif_sortie || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
   let r
   if (orgForm.id) r = await supabase.from('organigramme').update(payload).eq('id', orgForm.id)
   else r = await supabase.from('organigramme').insert(payload)
@@ -345,7 +348,7 @@ function impParse() {
     })
   }
   const noms = new Set()
-  if (!impRemplacer.value) for (const n of orgNodesSource.value) noms.add(normOrg(n.nom))
+  if (!impRemplacer.value) for (const n of orgNodes.value) noms.add(normOrg(n.nom))
   for (const l of lignes) noms.add(normOrg(l.nom))
   let racines = 0, orphelins = 0
   for (const l of lignes) {
@@ -362,15 +365,15 @@ async function impImporter() {
   erreur.value = ''; message.value = ''
   const ap = impParse()
   if (!ap.lignes.length) { erreur.value = (ap.erreurs[0] || 'Rien a importer.'); return }
-  if (impRemplacer.value && !confirm('Remplacer l\'organigramme actif (' + orgNodesSource.value.length + ' postes) par cette liste ?')) return
+  if (impRemplacer.value && !confirm('Remplacer tout l\'organigramme (' + orgNodes.value.length + ' postes) par cette liste ?')) return
   impBusy.value = true
   try {
     if (impRemplacer.value) {
-      const rd = await supabase.from('organigramme').update({ actif: false }).eq('actif', true).eq('source', sourceActive.value)
+      const rd = await supabase.from('organigramme').update({ actif: false }).eq('actif', true)
       if (rd.error) { erreur.value = rd.error.message; impBusy.value = false; return }
     }
     const payloads = ap.lignes.map((l, i) => ({
-      nom: l.nom, source: sourceActive.value, fonction: l.fonction || null,
+      nom: l.nom, fonction: l.fonction || null,
       atelier_id: (PERIMETRES.find(pe => normOrg(pe) === normOrg(l.perimetre)) || l.perimetre) || null,
       equipe: l.equipe || null, matricule: l.matricule || null, telephone: l.telephone || null,
       contrat: l.contrat || null, genre: l.genre || null,
@@ -382,7 +385,7 @@ async function impImporter() {
     if (ins.error) { erreur.value = ins.error.message; impBusy.value = false; return }
     const inseres = (ins.data || []).slice().sort((a, b) => a.id - b.id)
     const nomId = new Map()
-    if (!impRemplacer.value) for (const n of orgNodesSource.value) { const k = normOrg(n.nom); if (!nomId.has(k)) nomId.set(k, n.id) }
+    if (!impRemplacer.value) for (const n of orgNodes.value) { const k = normOrg(n.nom); if (!nomId.has(k)) nomId.set(k, n.id) }
     for (const n of inseres) { const k = normOrg(n.nom); if (!nomId.has(k)) nomId.set(k, n.id) }
     const maj = []
     ap.lignes.forEach((l, i) => {
@@ -516,12 +519,8 @@ onMounted(chargerTout)
     </div>
 
     <template v-else>
-      <div class="src-switch">
-        <button :class="{ on: sourceActive === 'manuel' }" @click="sourceActive = 'manuel'">✍️ Organigramme manuel <span class="src-n">{{ orgCountSource('manuel') }}</span></button>
-        <button :class="{ on: sourceActive === 'mirilla' }" @click="sourceActive = 'mirilla'">📥 Import Mirilla <span class="src-n">{{ orgCountSource('mirilla') }}</span></button>
-      </div>
       <div class="rh-tabs">
-        <button :class="{ on: tab === 'org' }" @click="tab = 'org'">Organigramme</button>
+        <button :class="{ on: tab === 'org' }" @click="tab = 'org'">Personnel</button>
         <button :class="{ on: tab === 'demo' }" @click="tab = 'demo'">Démographie</button>
         <button :class="{ on: tab === 'contrats' }" @click="tab = 'contrats'">Contrats<span v-if="alertesCdd.length + alertesEssai.length" class="tb">{{ alertesCdd.length + alertesEssai.length }}</span></button>
         <button :class="{ on: tab === 'mouv' }" @click="tab = 'mouv'">Mouvements</button>
@@ -666,11 +665,10 @@ onMounted(chargerTout)
 
       <div v-if="tab === 'org'">
       <section class="card">
-        <div class="card-head"><h2 class="card-title">Organigramme</h2><span class="count">{{ orgFlat.length }}</span></div>
+        <div class="card-head"><h2 class="card-title">Personnel</h2><span class="count">{{ orgNodesAffiches.length }}</span></div>
         <div v-if="peutEditer" class="org-import">
           <button class="imp-toggle" @click="impOuvert = !impOuvert">📋 Importer / coller une liste <span class="imp-ch">{{ impOuvert ? '▲' : '▼' }}</span></button>
           <div v-if="impOuvert" class="imp-body">
-            <div class="imp-cible">Cible : <b>{{ sourceActive === 'mirilla' ? 'Import Mirilla' : 'Organigramme manuel' }}</b> — l'import n'affecte que cet organigramme.</div>
             <p class="imp-hint">Charge l'export Excel de <b>Mirilla</b> — les colonnes (Nom, Responsable 1, Type contrat, Matricule, Téléphone, Date début, Date naissance, Date fin, Fin période essai…) sont <b>reconnues automatiquement</b> par leur nom. La hiérarchie est reconstruite via <b>Responsable 1</b>. Tu peux aussi coller une liste simple : <b>Nom · Fonction · Supérieur · Périmètre · Équipe</b>.</p>
             <div class="imp-file">
               <label class="imp-upload">📁 Charger un fichier Excel / CSV<input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" @change="impFichier" hidden /></label>
@@ -733,22 +731,27 @@ onMounted(chargerTout)
         </div>
         <div v-if="!orgNodes.length" class="empty-card">Aucun poste. Ajoute le premier (ex. Manager Fabrication) ci-dessus.</div>
         <template v-else>
-          <div class="org-toolbar">
+          <div class="pers-bar">
+            <input v-model="persRech" class="pers-search" placeholder="Rechercher un nom, une fonction…" />
             <select v-model="orgPerimFiltre" class="org-filtre"><option value="">Tous les périmètres</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
-            <div class="org-legende">
-              <span class="lg-item"><i style="background:#6366f1"></i>Manager</span>
-              <span class="lg-item"><i style="background:#7c3aed"></i>Responsable</span>
-              <span class="lg-item"><i style="background:#0d9488"></i>Superviseur</span>
-              <span class="lg-item"><i style="background:#0284c7"></i>Chef de ligne</span>
-              <span class="lg-item"><i style="background:#475569"></i>Opérateur</span>
-              <span class="lg-item"><i style="background:#d97706"></i>Agent d'hygiène</span>
-            </div>
+            <span class="pers-count">{{ persListe.length }} personne(s)</span>
           </div>
-          <div v-if="!orgRacinesAffichees.length" class="empty-card">Aucun poste dans ce périmètre.</div>
-          <div v-else class="org-chart">
-            <ul class="org-root">
-              <OrgNode v-for="n in orgRacinesAffichees" :key="n.id" :node="n" :all="orgNodesAffiches" :ateliers="ateliers" :peutEditer="peutEditer" :depth="0" @edit="orgModifier" @del="orgSupprimer" />
-            </ul>
+          <div v-if="!persListe.length" class="empty-sm">Aucun collaborateur ne correspond.</div>
+          <div v-else class="pers-tablewrap">
+            <table class="pers-table">
+              <thead><tr><th>Nom</th><th>Fonction</th><th>Supérieur</th><th>Contrat</th><th>Recrutement</th><th>Naissance</th><th></th></tr></thead>
+              <tbody>
+                <tr v-for="n in persListe" :key="n.id">
+                  <td class="pt-nom">{{ n.nom }}</td>
+                  <td>{{ n.fonction || '—' }}</td>
+                  <td>{{ nomParent(n) || '—' }}</td>
+                  <td><span v-if="n.contrat" class="pt-ct" :class="'ct-' + (n.contrat === 'CDI' ? 'cdi' : 'cdd')">{{ n.contrat }}</span><span v-else class="pt-muted">—</span></td>
+                  <td>{{ fmtD(n.date_recrutement) || '—' }}</td>
+                  <td>{{ fmtD(n.date_naissance) || '—' }}</td>
+                  <td class="pt-act"><button v-if="peutEditer" @click="orgModifier(n)" title="Modifier">✎</button><button v-if="peutEditer" @click="orgSupprimer(n)" title="Supprimer">🗑</button></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </template>
       </section>
@@ -908,6 +911,21 @@ onMounted(chargerTout)
 .org-actions { display: flex; gap: 8px; }
 .org-tree { display: flex; flex-direction: column; gap: 6px; }
 .org-chart { overflow-x: auto; padding: 12px 0 4px; zoom: 1; }
+.pers-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.pers-search { flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
+.pers-count { font-size: 12px; color: #94a3b8; font-weight: 700; }
+.pers-tablewrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
+.pers-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pers-table th { background: #f8fafc; color: #475569; padding: 9px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+.pers-table td { padding: 9px 12px; border-top: 1px solid #f1f5f9; white-space: nowrap; }
+.pt-nom { font-weight: 700; color: #0f172a; }
+.pt-muted { color: #cbd5e1; }
+.pt-ct { font-size: 10.5px; font-weight: 900; padding: 2px 8px; border-radius: 999px; }
+.pt-ct.ct-cdi { background: #dcfce7; color: #16a34a; }
+.pt-ct.ct-cdd { background: #ffedd5; color: #ea580c; }
+.pt-act { text-align: right; }
+.pt-act button { border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; padding: 3px 7px; cursor: pointer; font-size: 12px; margin-left: 4px; }
+.pt-act button:hover { background: #f1f5f9; }
 .org-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
 .org-filtre { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; font-weight: 600; }
 .org-legende { display: flex; flex-wrap: wrap; gap: 10px; }
