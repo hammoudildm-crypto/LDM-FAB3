@@ -122,9 +122,15 @@ const orgRacinesAffichees = computed(() => orgNodesAffiches.value
   .filter(n => !n.parent_id || !orgNodesAffiches.value.some(x => x.id === n.parent_id))
   .sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id))
 const persRech = ref('')
+const statutFiltre = ref('tous')
 const persListe = computed(() => {
   const q = normOrg(persRech.value)
-  return orgNodesAffiches.value.filter(n => !q || normOrg(n.nom).indexOf(q) >= 0 || normOrg(n.fonction).indexOf(q) >= 0).slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || ''))
+  return orgPerimRaw.value.filter(n => {
+    const parti = !!n.date_sortie
+    if (statutFiltre.value === 'actif' && parti) return false
+    if (statutFiltre.value === 'parti' && !parti) return false
+    return !q || normOrg(n.nom).indexOf(q) >= 0 || normOrg(n.fonction).indexOf(q) >= 0
+  }).slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || ''))
 })
 function nomParent(n) { if (!n.parent_id) return ''; const pp = orgNodes.value.find(x => x.id === n.parent_id); return pp ? pp.nom : '' }
 
@@ -737,17 +743,19 @@ onMounted(chargerTout)
           <div class="pers-bar">
             <input v-model="persRech" class="pers-search" placeholder="Rechercher un nom, une fonction…" />
             <select v-model="orgPerimFiltre" class="org-filtre"><option value="">Tous les périmètres</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
+            <select v-model="statutFiltre" class="org-filtre"><option value="tous">Tous les statuts</option><option value="actif">Actifs</option><option value="parti">Non actifs</option></select>
             <span class="pers-count">{{ persListe.length }} personne(s)</span>
           </div>
           <div v-if="!persListe.length" class="empty-sm">Aucun collaborateur ne correspond.</div>
           <div v-else class="pers-tablewrap">
             <table class="pers-table">
               <thead><tr>
-                <th>Nom</th><th>Matricule</th><th>Fonction</th><th>Supérieur</th><th>Périmètre</th><th>Équipe</th><th>Phase</th><th>Équipement</th><th>Contrat</th><th>Recrutement</th><th>Fin essai</th><th>Naissance</th><th>Genre</th><th>Téléphone</th><th>Sortie</th><th>Motif</th><th></th>
+                <th>Nom</th><th>Statut</th><th>Matricule</th><th>Fonction</th><th>Supérieur</th><th>Périmètre</th><th>Équipe</th><th>Phase</th><th>Équipement</th><th>Contrat</th><th>Recrutement</th><th>Fin essai</th><th>Naissance</th><th>Genre</th><th>Téléphone</th><th>Sortie</th><th>Motif</th><th></th>
               </tr></thead>
               <tbody>
                 <tr v-for="n in persListe" :key="n.id">
                   <td class="pt-nom">{{ n.nom }}</td>
+                  <td><span class="pt-st" :class="n.date_sortie ? 'st-off' : 'st-on'" :title="n.date_sortie ? ('Parti le ' + fmtD(n.date_sortie) + (n.motif_sortie ? ' — ' + n.motif_sortie : '')) : ''">{{ n.date_sortie ? 'Non actif' : 'Actif' }}</span></td>
                   <td>{{ n.matricule || '—' }}</td>
                   <td>{{ n.fonction || '—' }}</td>
                   <td>{{ nomParent(n) || '—' }}</td>
@@ -941,6 +949,9 @@ onMounted(chargerTout)
 .pt-ct { font-size: 10.5px; font-weight: 900; padding: 2px 8px; border-radius: 999px; }
 .pt-ct.ct-cdi { background: #dcfce7; color: #16a34a; }
 .pt-ct.ct-cdd { background: #ffedd5; color: #ea580c; }
+.pt-st { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pt-st.st-on { background: #dcfce7; color: #16a34a; }
+.pt-st.st-off { background: #fee2e2; color: #dc2626; }
 .pt-act { text-align: right; }
 .pt-act button { border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; padding: 3px 7px; cursor: pointer; font-size: 12px; margin-left: 4px; }
 .pt-act button:hover { background: #f1f5f9; }
