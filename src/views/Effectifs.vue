@@ -130,7 +130,7 @@ const statutFiltre = ref('tous')
 const persListe = computed(() => {
   const q = normOrg(persRech.value)
   return orgPerimRaw.value.filter(n => {
-    const parti = !!n.date_sortie
+    const parti = estParti(n)
     if (statutFiltre.value === 'actif' && parti) return false
     if (statutFiltre.value === 'parti' && !parti) return false
     return !q || normOrg(n.nom).indexOf(q) >= 0 || normOrg(n.fonction).indexOf(q) >= 0
@@ -759,7 +759,7 @@ onMounted(chargerTout)
               <tbody>
                 <tr v-for="n in persListe" :key="n.id">
                   <td class="pt-nom">{{ n.nom }}</td>
-                  <td><span class="pt-st" :class="n.date_sortie ? 'st-off' : 'st-on'" :title="n.date_sortie ? ('Parti le ' + fmtD(n.date_sortie) + (n.motif_sortie ? ' — ' + n.motif_sortie : '')) : ''">{{ n.date_sortie ? 'Non actif' : 'Actif' }}</span></td>
+                  <td><span class="pt-st" :class="estParti(n) ? 'st-off' : 'st-on'" :title="n.date_sortie ? ((estParti(n) ? 'Parti le ' : 'Départ prévu le ') + fmtD(n.date_sortie) + (n.motif_sortie ? ' — ' + n.motif_sortie : '')) : ''">{{ estParti(n) ? 'Non actif' : 'Actif' }}</span></td>
                   <td>{{ n.matricule || '—' }}</td>
                   <td>{{ n.fonction || '—' }}</td>
                   <td>{{ nomParent(n) || '—' }}</td>
