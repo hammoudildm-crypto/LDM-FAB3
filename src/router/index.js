@@ -20,6 +20,7 @@ import SaisieProduction from '../views/SaisieProduction.vue'
 import DossierLot from '../views/DossierLot.vue'
 import ChiffreAffaires from '../views/ChiffreAffaires.vue'
 import Effectifs from '../views/Effectifs.vue'
+import Organigramme from '../views/Organigramme.vue'
 import EnCours from '../views/EnCours.vue'
 import JournalAudit from '../views/JournalAudit.vue'
 import Habilitations from '../views/Habilitations.vue'
@@ -77,6 +78,7 @@ const routes = [
   { path: '/formations-planning', name: 'formations-planning', component: FormationPlanning },
   { path: '/ca', name: 'ca', component: ChiffreAffaires },
   { path: '/effectifs', name: 'effectifs', component: Effectifs },
+  { path: '/organigramme', name: 'organigramme', component: Organigramme },
   { path: '/audit', name: 'audit', component: JournalAudit },
   { path: '/habilitations', name: 'habilitations', component: Habilitations , meta: { role: 'admin' } },
   { path: '/verification-ddl', name: 'verification-ddl', component: VerificationDDL },
