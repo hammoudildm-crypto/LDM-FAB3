@@ -47,6 +47,8 @@ async function chargerTout() {
   effectifs.value = re.data
   const ro = await supabase.from('organigramme').select('*').eq('actif', true).order('ordre')
   if (!ro.error) orgNodes.value = ro.data || []
+  const rpo = await supabase.from('postes').select('nom').order('nom')
+  if (!rpo.error) postes.value = rpo.data || []
 }
 
 const effectifsFiltres = computed(() => {
@@ -59,6 +61,7 @@ const totalEffectif = computed(() => effectifsFiltres.value.reduce((s, e) => s +
 
 // --- Organigramme ---
 const orgNodes = ref([])
+const postes = ref([])
 const equipementsListe = ref([])
 const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', date_sortie: '', motif_sortie: '', phases: [], machines: [] })
 const plusChamps = ref(false)
@@ -68,6 +71,7 @@ function orgAddMachine(e) { const v = e.target.value; if (v && !orgForm.machines
 function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
 const RANGS_ORG = ['Manager', 'Responsable', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène"]
 const FONCTIONS_SUGG = ['Manager', 'Responsable', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène", 'Chargé blanchisserie', 'Agent blanchisserie', "Agent d'hygiène vestiaire"]
+const postesNoms = computed(() => postes.value.map(x => x.nom).filter(Boolean))
 const normOrg = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\u2019\u02bc']/g, "'").replace(/\s+/g, ' ').trim().replace(/ fabrication$/, '')
 function rangOrg(f) { const i = RANGS_ORG.findIndex(r => normOrg(r) === normOrg(f)); return i >= 0 ? i : RANGS_ORG.length }
 const responsablesPossibles = computed(() => {
@@ -708,7 +712,7 @@ onMounted(chargerTout)
         <div v-if="peutEditer" class="org-form2">
           <div class="of-grid">
             <label class="of-col"><span class="of-lbl">Nom *</span><input v-model="orgForm.nom" placeholder="Nom & prénom" /></label>
-            <label class="of-col"><span class="of-lbl">Fonction</span><input v-model="orgForm.fonction" list="fonctionsListe" placeholder="Fonction" /><datalist id="fonctionsListe"><option v-for="f in FONCTIONS_SUGG" :key="f" :value="f" /></datalist></label>
+            <label class="of-col"><span class="of-lbl">Fonction</span><select v-model="orgForm.fonction"><option value="">—</option><option v-for="po in postesNoms" :key="po" :value="po">{{ po }}</option><option v-if="orgForm.fonction && !postesNoms.includes(orgForm.fonction)" :value="orgForm.fonction">{{ orgForm.fonction }} (hors référentiel)</option></select></label>
             <label class="of-col"><span class="of-lbl">Supérieur</span><select v-model="orgForm.parent_id"><option value="">— (sommet)</option><option v-for="n in responsablesPossibles" :key="n.id" :value="n.id">{{ n.nom }}</option></select></label>
             <label class="of-col"><span class="of-lbl">Contrat</span><select v-model="orgForm.contrat"><option value="">—</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select></label>
             <label class="of-col"><span class="of-lbl">Recrutement</span><input v-model="orgForm.date_recrutement" type="date" /></label>
