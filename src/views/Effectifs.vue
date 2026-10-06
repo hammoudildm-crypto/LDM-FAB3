@@ -742,15 +742,27 @@ onMounted(chargerTout)
           <div v-if="!persListe.length" class="empty-sm">Aucun collaborateur ne correspond.</div>
           <div v-else class="pers-tablewrap">
             <table class="pers-table">
-              <thead><tr><th>Nom</th><th>Fonction</th><th>Supérieur</th><th>Contrat</th><th>Recrutement</th><th>Naissance</th><th></th></tr></thead>
+              <thead><tr>
+                <th>Nom</th><th>Matricule</th><th>Fonction</th><th>Supérieur</th><th>Périmètre</th><th>Équipe</th><th>Phase</th><th>Équipement</th><th>Contrat</th><th>Recrutement</th><th>Fin essai</th><th>Naissance</th><th>Genre</th><th>Téléphone</th><th>Sortie</th><th>Motif</th><th></th>
+              </tr></thead>
               <tbody>
                 <tr v-for="n in persListe" :key="n.id">
                   <td class="pt-nom">{{ n.nom }}</td>
+                  <td>{{ n.matricule || '—' }}</td>
                   <td>{{ n.fonction || '—' }}</td>
                   <td>{{ nomParent(n) || '—' }}</td>
+                  <td>{{ n.atelier_id || '—' }}</td>
+                  <td>{{ n.equipe || '—' }}</td>
+                  <td>{{ n.equipement || '—' }}</td>
+                  <td>{{ n.machine || '—' }}</td>
                   <td><span v-if="n.contrat" class="pt-ct" :class="'ct-' + (n.contrat === 'CDI' ? 'cdi' : 'cdd')">{{ n.contrat }}</span><span v-else class="pt-muted">—</span></td>
                   <td>{{ fmtD(n.date_recrutement) || '—' }}</td>
+                  <td>{{ fmtD(n.fin_essai) || '—' }}</td>
                   <td>{{ fmtD(n.date_naissance) || '—' }}</td>
+                  <td>{{ n.genre || '—' }}</td>
+                  <td>{{ n.telephone || '—' }}</td>
+                  <td>{{ fmtD(n.date_sortie) || '—' }}</td>
+                  <td>{{ n.motif_sortie || '—' }}</td>
                   <td class="pt-act"><button v-if="peutEditer" @click="orgModifier(n)" title="Modifier">✎</button><button v-if="peutEditer" @click="orgSupprimer(n)" title="Supprimer">🗑</button></td>
                 </tr>
               </tbody>
@@ -922,6 +934,9 @@ onMounted(chargerTout)
 .pers-table th { background: #f8fafc; color: #475569; padding: 9px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
 .pers-table td { padding: 9px 12px; border-top: 1px solid #f1f5f9; white-space: nowrap; }
 .pt-nom { font-weight: 700; color: #0f172a; }
+.pers-table th:first-child, .pers-table td:first-child { position: sticky; left: 0; z-index: 1; }
+.pers-table thead th:first-child { background: #f8fafc; }
+.pers-table tbody td:first-child { background: #fff; box-shadow: 1px 0 0 #e2e8f0; }
 .pt-muted { color: #cbd5e1; }
 .pt-ct { font-size: 10.5px; font-weight: 900; padding: 2px 8px; border-radius: 999px; }
 .pt-ct.ct-cdi { background: #dcfce7; color: #16a34a; }
