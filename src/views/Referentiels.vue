@@ -18,6 +18,10 @@ const condList = ref([])
 const nouveauCond = ref('')
 const editCondId = ref(null)
 const editCondNom = ref('')
+const postesList = ref([])
+const nouveauPoste = ref('')
+const editPosteId = ref(null)
+const editPosteNom = ref('')
 const cadList = ref([])
 const cadEquip = ref('')
 const cadProduit = ref('')
@@ -106,7 +110,7 @@ function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
 
 // --- Équipement ---
 const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1 })
-const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, cadences: false })
+const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, cadences: false, postes: false })
 const sectionActive = ref(null)
 const SECTIONS = [
   { k: 'donneurs', lbl: "Donneurs d'ordre", ic: '🏢', n: () => donneurs.value.length },
@@ -115,9 +119,29 @@ const SECTIONS = [
   { k: 'produits', lbl: 'Produits', ic: '💊', n: () => produits.value.length },
   { k: 'superviseurs', lbl: 'Vérificateurs', ic: '👤', n: () => supList.value.length },
   { k: 'verifCond', lbl: 'Vérif. conditionnement', ic: '📦', n: () => condList.value.length },
-  { k: 'cadences', lbl: 'Cadences', ic: '⏱️', n: () => cadList.value.length }
+  { k: 'cadences', lbl: 'Cadences', ic: '⏱️', n: () => cadList.value.length },
+  { k: 'postes', lbl: 'Postes', ic: '💼', n: () => postesList.value.length }
 ]
 function ouvrirSection(k) { sectionActive.value = k; ouvert[k] = true }
+async function ajouterPoste() {
+  const nom = nouveauPoste.value.trim(); if (!nom) return
+  const r = await supabase.from('postes').insert({ nom })
+  if (r.error) { erreur.value = r.error.message; return }
+  nouveauPoste.value = ''; await chargerTout()
+}
+function ouvrirEditPoste(po) { editPosteId.value = po.id; editPosteNom.value = po.nom }
+async function renommerPoste(po) {
+  const nom = editPosteNom.value.trim(); if (!nom || nom === po.nom) { editPosteId.value = null; return }
+  const r = await supabase.from('postes').update({ nom }).eq('id', po.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  editPosteId.value = null; await chargerTout()
+}
+async function supprimerPoste(po) {
+  if (!confirm('Supprimer le poste « ' + po.nom + ' » ?')) return
+  const r = await supabase.from('postes').delete().eq('id', po.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  await chargerTout()
+}
 function resetE() { Object.assign(formE, { id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1 }) }
 
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
@@ -144,6 +168,8 @@ async function chargerTout() {
 
   const rS = await supabase.from('superviseurs').select('id, nom').order('nom')
   if (!rS.error) supList.value = rS.data
+  const rPo = await supabase.from('postes').select('id, nom').order('nom')
+  if (!rPo.error) postesList.value = rPo.data
   const rVC = await supabase.from('verificateurs_cond').select('id, nom').order('nom')
   if (!rVC.error) condList.value = rVC.data
   const rCad = await supabase.from('cadences_produit').select('id, cadence_nominale, unite_cadence, mode, equipement_id, produit_id, equipements(code), produits(code_pf, designation)').order('id', { ascending: false })
@@ -672,6 +698,35 @@ onMounted(async () => {
               <button class="link" @click="ouvrirEditSup(sv)">Renommer</button>
               <button class="link warn" @click="reinitialiserPin(sv)">Réinit. PIN</button>
               <button class="link danger" @click="supprimerSup(sv)">Supprimer</button>
+            </template>
+          </template>
+        </div>
+      </div>
+    </section>
+
+    <section v-if="sectionActive === 'postes'" class="card">
+      <div class="card-head clickable" @click="ouvert.postes = !ouvert.postes">
+        <h2>Postes</h2>
+        <span class="count">{{ postesList.length }}</span>
+        <span class="chevron">{{ ouvert.postes ? '▾' : '▸' }}</span>
+      </div>
+      <div v-show="ouvert.postes">
+        <div class="sv-add" v-if="peutEditer">
+          <input v-model="nouveauPoste" placeholder="Intitulé du poste (ex. Superviseur granulation)" @keyup.enter="ajouterPoste" />
+          <button class="btn" @click="ajouterPoste">Ajouter</button>
+        </div>
+        <div v-if="!postesList.length" class="empty">Aucun poste.</div>
+        <div v-for="po in postesList" :key="po.id" class="sv-row">
+          <template v-if="editPosteId === po.id">
+            <input v-model="editPosteNom" class="sv-edit" @keyup.enter="renommerPoste(po)" />
+            <button class="btn" @click="renommerPoste(po)">OK</button>
+            <button class="link" @click="editPosteId = null">Annuler</button>
+          </template>
+          <template v-else>
+            <span class="sv-nom">{{ po.nom }}</span>
+            <template v-if="peutEditer">
+              <button class="link" @click="ouvrirEditPoste(po)">Renommer</button>
+              <button class="link danger" @click="supprimerPoste(po)">Supprimer</button>
             </template>
           </template>
         </div>
