@@ -22,9 +22,7 @@ const anneeSel = ref(anneeCourante) // par défaut : année en cours (0 = toutes
 const verifEnCours = ref(null)
 const vForm = ref({ verificateur: '', date: new Date().toISOString().slice(0, 10), avec_reserve: false })
 const superviseurChoix = ref('')
-const poolVerif = ref([])
-try { poolVerif.value = JSON.parse(localStorage.getItem('ddl_pool_verif') || '[]') } catch (e) {}
-watch(poolVerif, (v) => { try { localStorage.setItem('ddl_pool_verif', JSON.stringify(v)) } catch (e) {} }, { deep: true })
+const supDispo = ref([])
 const CLE_SUP = 'prodtrack-vd-superviseurs'
 let supInit = []
 try { const raw = JSON.parse(localStorage.getItem(CLE_SUP) || '[]'); if (Array.isArray(raw)) supInit = raw } catch (e) {}
@@ -61,8 +59,8 @@ async function charger() {
   lots.value = r.data
   const rp = await fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
   if (!rp.error) phases.value = rp.data
-  const rs = await supabase.from('superviseurs').select('nom').order('nom')
-  if (!rs.error) supList.value = rs.data.map(s => s.nom)
+  const rs = await supabase.from('superviseurs').select('nom, disponible').order('nom')
+  if (!rs.error) { supList.value = rs.data.map(s => s.nom); supDispo.value = rs.data.filter(s => s.disponible !== false).map(s => s.nom) }
   const rpp = await fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(taille_lot)'))
   if (!rpp.error) planRaw.value = rpp.data
 }
@@ -331,8 +329,8 @@ function ouvrir(l) {
 
 async function repartir() {
   msg.value = ''
-  const pool = poolVerif.value.slice()
-  if (!pool.length) { msg.value = 'Coche au moins un vérificateur disponible.'; return }
+  const pool = supDispo.value.slice()
+  if (!pool.length) { msg.value = 'Aucun vérificateur disponible — active-les dans Référentiels → Vérificateurs.'; return }
   const aRepartir = attente.value.filter(l => !(l.ddl_verificateur || '').trim())
   if (!aRepartir.length) { msg.value = 'Aucun dossier en attente à répartir (tous déjà réservés).'; return }
   const charge = {}; for (const v of pool) charge[v] = 0
@@ -463,12 +461,12 @@ async function devalider(l) {
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
         <div class="pool-box" v-if="peutEditer">
           <div class="pool-head">
-            <span class="pool-title">Vérificateurs disponibles pour la répartition</span>
-            <button class="btn-repartir" :disabled="!poolVerif.length" @click="repartir">⚡ Répartir automatiquement les dossiers</button>
+            <span class="pool-title">Répartition automatique</span>
+            <button class="btn-repartir" :disabled="!supDispo.length" @click="repartir">⚡ Répartir les dossiers en attente</button>
           </div>
           <div class="pool-opts">
-            <label v-for="sup in superviseurs" :key="sup" class="pool-opt"><input type="checkbox" :value="sup" v-model="poolVerif" /> {{ sup }}</label>
-            <span v-if="!superviseurs.length" class="pool-vide">Aucun vérificateur au référentiel (Référentiels → Vérificateurs).</span>
+            <span v-if="supDispo.length" class="pool-dispo">Vérificateurs disponibles : <b v-for="nom in supDispo" :key="nom" class="pd-chip">{{ nom }}</b></span>
+            <span v-else class="pool-vide">Aucun vérificateur « disponible ». Active-les dans Référentiels → Vérificateurs.</span>
           </div>
         </div>
         <div class="att-rep">
@@ -977,12 +975,12 @@ tr.ddl-triage .cell-verif { background: #fffbeb; }
 
 
 .pool-box { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
-.pool-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.pool-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
 .pool-title { font-size: 12px; font-weight: 800; color: #6d28d9; text-transform: uppercase; letter-spacing: .03em; }
 .btn-repartir { background: #7c3aed; color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .btn-repartir:hover:not(:disabled) { background: #6d28d9; }
 .btn-repartir:disabled { opacity: .5; cursor: not-allowed; }
-.pool-opts { display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.pool-opt { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; font-weight: 600; cursor: pointer; }
+.pool-dispo { font-size: 12.5px; color: #475569; }
+.pd-chip { background: #ede9fe; color: #6d28d9; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-left: 5px; display: inline-block; }
 .pool-vide { font-size: 12px; color: #94a3b8; }
 </style>
