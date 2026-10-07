@@ -65,6 +65,12 @@ async function charger() {
   if (!rpp.error) planRaw.value = rpp.data
 }
 onMounted(charger)
+let autoRepartiFait = false
+watch([peutEditer, lots], () => {
+  if (autoRepartiFait || !peutEditer.value || !lots.value.length) return
+  autoRepartiFait = true
+  repartir(true)
+})
 
 const anYear = (d) => d ? new Date(d).getFullYear() : null
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
@@ -327,12 +333,12 @@ function ouvrir(l) {
   msg.value = ''
 }
 
-async function repartir() {
-  msg.value = ''
+async function repartir(auto = false) {
+  if (!auto) msg.value = ''
   const pool = supDispo.value.slice()
-  if (!pool.length) { msg.value = 'Aucun vérificateur disponible — active-les dans Référentiels → Vérificateurs.'; return }
+  if (!pool.length) { if (!auto) msg.value = 'Aucun vérificateur disponible — active-les dans Référentiels → Vérificateurs.'; return }
   const aRepartir = attente.value.filter(l => !(l.ddl_verificateur || '').trim())
-  if (!aRepartir.length) { msg.value = 'Aucun dossier en attente à répartir (tous déjà réservés).'; return }
+  if (!aRepartir.length) { if (!auto) msg.value = 'Aucun dossier en attente à répartir (tous déjà réservés).'; return }
   const charge = {}; for (const v of pool) charge[v] = 0
   for (const l of attente.value) { const v = (l.ddl_verificateur || '').trim(); if (v in charge) charge[v]++ }
   const updates = []
@@ -344,7 +350,7 @@ async function repartir() {
   const res = await Promise.all(updates)
   const err = res.find(r => r.error)
   if (err) { msg.value = err.error.message; return }
-  msg.value = aRepartir.length + ' dossier(s) réparti(s) sur ' + pool.length + ' vérificateur(s).'
+  msg.value = aRepartir.length + (auto ? ' nouveau(x) dossier(s) répartis automatiquement.' : ' dossier(s) réparti(s) sur ' + pool.length + ' vérificateur(s).')
 }
 async function reserverVerif(l, nom) {
   const r = await supabase.from('ordres_fabrication').update({ ddl_verificateur: nom || null }).eq('id', l.id)
@@ -461,8 +467,8 @@ async function devalider(l) {
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
         <div class="pool-box" v-if="peutEditer">
           <div class="pool-head">
-            <span class="pool-title">Répartition automatique</span>
-            <button class="btn-repartir" :disabled="!supDispo.length" @click="repartir">⚡ Répartir les dossiers en attente</button>
+            <span class="pool-title">Répartition automatique <span class="pool-auto">· à l'ouverture de la page</span></span>
+            <button class="btn-repartir" :disabled="!supDispo.length" @click="repartir(false)">⚡ Relancer</button>
           </div>
           <div class="pool-opts">
             <span v-if="supDispo.length" class="pool-dispo">Vérificateurs disponibles : <b v-for="nom in supDispo" :key="nom" class="pd-chip">{{ nom }}</b></span>
@@ -983,4 +989,5 @@ tr.ddl-triage .cell-verif { background: #fffbeb; }
 .pool-dispo { font-size: 12.5px; color: #475569; }
 .pd-chip { background: #ede9fe; color: #6d28d9; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-left: 5px; display: inline-block; }
 .pool-vide { font-size: 12px; color: #94a3b8; }
+.pool-auto { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: none; letter-spacing: 0; }
 </style>
