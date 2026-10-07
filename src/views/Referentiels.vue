@@ -166,7 +166,7 @@ async function chargerTout() {
   if (rE.error) { erreur.value = rE.error.message; return }
   equipements.value = rE.data
 
-  const rS = await supabase.from('superviseurs').select('id, nom').order('nom')
+  const rS = await supabase.from('superviseurs').select('id, nom, disponible').order('nom')
   if (!rS.error) supList.value = rS.data
   const rPo = await supabase.from('postes').select('id, nom').order('nom')
   if (!rPo.error) postesList.value = rPo.data
@@ -186,6 +186,11 @@ async function ajouterSup() {
   await chargerTout()
 }
 function ouvrirEditSup(sv) { editSupId.value = sv.id; editSupNom.value = sv.nom }
+async function toggleDispoSup(sv) {
+  const r = await supabase.from('superviseurs').update({ disponible: !(sv.disponible !== false) }).eq('id', sv.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  await chargerTout()
+}
 async function renommerSup(sv) {
   const nom = editSupNom.value.trim()
   if (!nom || nom === sv.nom) { editSupId.value = null; return }
@@ -694,6 +699,7 @@ onMounted(async () => {
           </template>
           <template v-else>
             <span class="sv-nom">{{ sv.nom }}</span>
+            <label v-if="peutEditer" class="sv-dispo" title="Disponible pour la répartition automatique des dossiers de lot"><input type="checkbox" :checked="sv.disponible !== false" @change="toggleDispoSup(sv)" /> Dispo répartition</label>
             <template v-if="peutEditer">
               <button class="link" @click="ouvrirEditSup(sv)">Renommer</button>
               <button class="link warn" @click="reinitialiserPin(sv)">Réinit. PIN</button>
@@ -937,4 +943,5 @@ button.link.danger { color: #b91c1c; }
 .ref-back { background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; margin-bottom: 14px; }
 .ref-back:hover { background: #e2e8f0; }
 .link.warn { color: #b45309; }
+.sv-dispo { font-size: 11.5px; color: #475569; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; margin-left: auto; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 7px; padding: 3px 9px; }
 </style>
