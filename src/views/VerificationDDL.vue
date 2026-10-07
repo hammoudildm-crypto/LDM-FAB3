@@ -22,6 +22,9 @@ const anneeSel = ref(anneeCourante) // par défaut : année en cours (0 = toutes
 const verifEnCours = ref(null)
 const vForm = ref({ verificateur: '', date: new Date().toISOString().slice(0, 10), avec_reserve: false })
 const superviseurChoix = ref('')
+const poolVerif = ref([])
+try { poolVerif.value = JSON.parse(localStorage.getItem('ddl_pool_verif') || '[]') } catch (e) {}
+watch(poolVerif, (v) => { try { localStorage.setItem('ddl_pool_verif', JSON.stringify(v)) } catch (e) {} }, { deep: true })
 const CLE_SUP = 'prodtrack-vd-superviseurs'
 let supInit = []
 try { const raw = JSON.parse(localStorage.getItem(CLE_SUP) || '[]'); if (Array.isArray(raw)) supInit = raw } catch (e) {}
@@ -326,6 +329,25 @@ function ouvrir(l) {
   msg.value = ''
 }
 
+async function repartir() {
+  msg.value = ''
+  const pool = poolVerif.value.slice()
+  if (!pool.length) { msg.value = 'Coche au moins un vérificateur disponible.'; return }
+  const aRepartir = attente.value.filter(l => !(l.ddl_verificateur || '').trim())
+  if (!aRepartir.length) { msg.value = 'Aucun dossier en attente à répartir (tous déjà réservés).'; return }
+  const charge = {}; for (const v of pool) charge[v] = 0
+  for (const l of attente.value) { const v = (l.ddl_verificateur || '').trim(); if (v in charge) charge[v]++ }
+  const updates = []
+  for (const l of aRepartir) {
+    let best = pool[0]; for (const v of pool) if (charge[v] < charge[best]) best = v
+    charge[best]++; l.ddl_verificateur = best
+    updates.push(supabase.from('ordres_fabrication').update({ ddl_verificateur: best }).eq('id', l.id))
+  }
+  const res = await Promise.all(updates)
+  const err = res.find(r => r.error)
+  if (err) { msg.value = err.error.message; return }
+  msg.value = aRepartir.length + ' dossier(s) réparti(s) sur ' + pool.length + ' vérificateur(s).'
+}
 async function reserverVerif(l, nom) {
   const r = await supabase.from('ordres_fabrication').update({ ddl_verificateur: nom || null }).eq('id', l.id)
   if (r.error) { msg.value = r.error.message; return }
@@ -439,6 +461,16 @@ async function devalider(l) {
 
       <section class="card v3-mid z-attente">
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
+        <div class="pool-box" v-if="peutEditer">
+          <div class="pool-head">
+            <span class="pool-title">Vérificateurs disponibles pour la répartition</span>
+            <button class="btn-repartir" :disabled="!poolVerif.length" @click="repartir">⚡ Répartir automatiquement les dossiers</button>
+          </div>
+          <div class="pool-opts">
+            <label v-for="sup in superviseurs" :key="sup" class="pool-opt"><input type="checkbox" :value="sup" v-model="poolVerif" /> {{ sup }}</label>
+            <span v-if="!superviseurs.length" class="pool-vide">Aucun vérificateur au référentiel (Référentiels → Vérificateurs).</span>
+          </div>
+        </div>
         <div class="att-rep">
           <button type="button" class="ar-chip ar-ok" :class="{ on: filtreAttente === 'propres' }" @click="basculerFiltreAttente('propres')" title="Ni triage en cours, ni déviation — cliquer pour filtrer">
             <b>{{ repartitionAttente.propres }}</b> sans triage ni déviation</button>
@@ -944,4 +976,13 @@ tr.ddl-triage .cell-verif { background: #fffbeb; }
 .btn-verif:hover { background: #0d5c55; }
 
 
+.pool-box { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+.pool-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.pool-title { font-size: 12px; font-weight: 800; color: #6d28d9; text-transform: uppercase; letter-spacing: .03em; }
+.btn-repartir { background: #7c3aed; color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.btn-repartir:hover:not(:disabled) { background: #6d28d9; }
+.btn-repartir:disabled { opacity: .5; cursor: not-allowed; }
+.pool-opts { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.pool-opt { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; font-weight: 600; cursor: pointer; }
+.pool-vide { font-size: 12px; color: #94a3b8; }
 </style>
