@@ -467,16 +467,6 @@ async function devalider(l) {
 
       <section class="card v3-mid z-attente">
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
-        <div class="pool-box" v-if="peutEditer">
-          <div class="pool-head">
-            <span class="pool-title">Répartition automatique <span class="pool-auto">· à l'ouverture de la page</span></span>
-            <button class="btn-repartir" :disabled="!supDispo.length" @click="repartir(false)">⚡ Relancer</button>
-          </div>
-          <div class="pool-opts">
-            <span v-if="supDispo.length" class="pool-dispo">Vérificateurs disponibles : <b v-for="nom in supDispo" :key="nom" class="pd-chip">{{ nom }}</b></span>
-            <span v-else class="pool-vide">Aucun vérificateur « disponible ». Active-les dans Référentiels → Vérificateurs.</span>
-          </div>
-        </div>
         <div class="att-rep">
           <button type="button" class="ar-chip ar-ok" :class="{ on: filtreAttente === 'propres' }" @click="basculerFiltreAttente('propres')" title="Ni triage en cours, ni déviation — cliquer pour filtrer">
             <b>{{ repartitionAttente.propres }}</b> sans triage ni déviation</button>
