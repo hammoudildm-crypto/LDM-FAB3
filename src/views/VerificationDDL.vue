@@ -63,14 +63,16 @@ async function charger() {
   if (!rs.error) { supList.value = rs.data.map(s => s.nom); supDispo.value = rs.data.filter(s => s.disponible !== false).map(s => s.nom) }
   const rpp = await fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(taille_lot)'))
   if (!rpp.error) planRaw.value = rpp.data
+  autoRepartir()
 }
 onMounted(charger)
 let autoRepartiFait = false
-watch([peutEditer, lots], () => {
+async function autoRepartir() {
   if (autoRepartiFait || !peutEditer.value || !lots.value.length) return
   autoRepartiFait = true
-  repartir(true)
-})
+  await repartir(true)
+}
+watch(peutEditer, autoRepartir)
 
 const anYear = (d) => d ? new Date(d).getFullYear() : null
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
