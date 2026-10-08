@@ -69,7 +69,7 @@ function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', 
 function orgAddPhase(e) { const v = e.target.value; if (v && !orgForm.phases.includes(v)) orgForm.phases.push(v); e.target.value = '' }
 function orgAddMachine(e) { const v = e.target.value; if (v && !orgForm.machines.includes(v)) orgForm.machines.push(v); e.target.value = '' }
 function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
-const RANGS_ORG = ['Manager', 'Responsable', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène"]
+const RANGS_ORG = ['Pharmacien de production', 'Manager', 'Responsable', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène"]
 const FONCTIONS_SUGG = ['Manager', 'Responsable', 'Superviseur', 'Chef de ligne', 'Opérateur', "Agent d'hygiène", 'Chargé blanchisserie', 'Agent blanchisserie', "Agent d'hygiène vestiaire"]
 const postesNoms = computed(() => postes.value.map(x => x.nom).filter(Boolean))
 const normOrg = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\u2019\u02bc']/g, "'").replace(/\s+/g, ' ').trim().replace(/ fabrication$/, '')
@@ -942,12 +942,12 @@ onMounted(chargerTout)
 .pers-search { flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
 .pers-count { font-size: 12px; color: #94a3b8; font-weight: 700; }
 .pers-tablewrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
-.pers-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pers-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 .pers-table th { background: #f8fafc; color: #475569; padding: 9px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
 .pers-table td { padding: 9px 12px; border-top: 1px solid #f1f5f9; white-space: nowrap; }
 .pt-nom { font-weight: 700; color: #0f172a; }
 .pers-table th:first-child, .pers-table td:first-child { position: sticky; left: 0; z-index: 1; }
-.pers-table thead th:first-child { background: #f8fafc; }
+.pers-table thead th:first-child { background: #f8fafc; z-index: 2; }
 .pers-table tbody td:first-child { background: #fff; box-shadow: 1px 0 0 #e2e8f0; }
 .pt-muted { color: #cbd5e1; }
 .pt-ct { font-size: 10.5px; font-weight: 900; padding: 2px 8px; border-radius: 999px; }
