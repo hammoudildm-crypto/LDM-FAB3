@@ -949,6 +949,8 @@ onMounted(chargerTout)
 .pers-table th:first-child, .pers-table td:first-child { position: sticky; left: 0; z-index: 1; }
 .pers-table thead th:first-child { background: #f8fafc; z-index: 2; }
 .pers-table tbody td:first-child { background: #fff; box-shadow: 1px 0 0 #e2e8f0; }
+.pers-table tbody tr:hover td { background: #eff6ff; }
+.pers-table tbody tr:hover td:first-child { background: #e0efff; }
 .pt-muted { color: #cbd5e1; }
 .pt-ct { font-size: 10.5px; font-weight: 900; padding: 2px 8px; border-radius: 999px; }
 .pt-ct.ct-cdi { background: #dcfce7; color: #16a34a; }
