@@ -12,6 +12,17 @@ const anneeCourante = new Date().getFullYear()
 const ANNEES = [anneeCourante - 1, anneeCourante, anneeCourante + 1]
 const PERIMETRES = ['Fabrication forme sèche', 'Fabrication forme semi solide', 'Fabrication forme sèche hormonale', 'Partie premix', 'Partie vrac']
 const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+function ordreGammeType(type) {
+  const t = (type || '').toLowerCase()
+  if (/pes[ée]|balance|bascule/.test(t)) return 1
+  if (/granul|s[ée]ch/.test(t)) return 2
+  if (/m[ée]lang/.test(t)) return 3
+  if (/compress|presse|compri/.test(t)) return 4
+  if (/g[ée]lule|remplis|encapsul|capsul/.test(t)) return 5
+  if (/pellicul|enrob|coat|drag/.test(t)) return 6
+  if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|[ée]tui|fardel|encart|mise en bo/.test(t)) return 7
+  return 99
+}
 
 const effectifs = ref([])
 const ateliers = ref([])
@@ -38,7 +49,7 @@ async function chargerTout() {
   const ra = await supabase.from('ateliers').select('id, code, nom').eq('actif', true).order('code')
   if (ra.error) { erreur.value = ra.error.message; return }
   ateliers.value = ra.data
-  const req = await supabase.from('equipements').select('id, nom').eq('actif', true).order('nom')
+  const req = await supabase.from('equipements').select('id, nom, type').eq('actif', true).order('nom')
   if (!req.error) equipementsListe.value = req.data || []
 
   const re = await supabase.from('effectifs').select('*').eq('actif', true)
@@ -63,6 +74,11 @@ const totalEffectif = computed(() => effectifsFiltres.value.reduce((s, e) => s +
 const orgNodes = ref([])
 const postes = ref([])
 const equipementsListe = ref([])
+const equipementsFiltres = computed(() => {
+  if (!orgForm.phases.length) return equipementsListe.value
+  const nums = new Set(orgForm.phases.map(ph => ordreGammeType(ph)))
+  return equipementsListe.value.filter(eq => nums.has(ordreGammeType(eq.type)))
+})
 const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', date_sortie: '', motif_sortie: '', phases: [], machines: [] })
 const plusChamps = ref(false)
 function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', date_sortie: '', motif_sortie: '', phases: [], machines: [] }) }
@@ -732,7 +748,7 @@ onMounted(chargerTout)
             </div></div>
             <div class="of-col"><span class="of-lbl">Équipement</span><div class="multi">
               <div v-if="orgForm.machines.length" class="chips"><span v-for="(m, i) in orgForm.machines" :key="i" class="chip mach">{{ m }}<button type="button" @click="orgForm.machines.splice(i, 1)">×</button></span></div>
-              <select @change="orgAddMachine" class="add-sel"><option value="">+ Équipement</option><option v-for="eq in equipementsListe" :key="eq.id" :value="eq.nom" :disabled="orgForm.machines.includes(eq.nom)">{{ eq.nom }}</option></select>
+              <select @change="orgAddMachine" class="add-sel"><option value="">+ Équipement</option><option v-for="eq in equipementsFiltres" :key="eq.id" :value="eq.nom" :disabled="orgForm.machines.includes(eq.nom)">{{ eq.nom }}</option></select>
             </div></div>
             <label class="of-col"><span class="of-lbl">Photo (URL)</span><input v-model="orgForm.photo_url" placeholder="URL photo" /></label>
             <label class="of-col"><span class="of-lbl">Note</span><input v-model="orgForm.note" placeholder="Note" /></label>
