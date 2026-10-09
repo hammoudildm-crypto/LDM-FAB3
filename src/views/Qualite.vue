@@ -11,7 +11,7 @@ const tab = ref('dev')
 const MOIS_COURT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
 const CRITICITES = ['Mineure', 'Majeure', 'Critique']
 const STATUTS_DEV = ['Ouverte', 'En cours', 'Clôturée']
-const ORIGINES_CAPA = ['Déviation', 'Audit', 'Réclamation', 'Autre']
+const ORIGINES_CAPA = ['Déviation', 'Changement', 'Audit', 'Réclamation', 'Autre']
 const TYPES_CAPA = ['Corrective', 'Préventive']
 const STATUTS_CAPA = ['Ouverte', 'En cours', 'Réalisée', 'Clôturée']
 const EFFICACITES = ['Non vérifiée', 'Vérifiée', 'Non applicable']
@@ -23,7 +23,7 @@ const capa = ref([])
 const changements = ref([])
 
 const devForm = reactive({ id: null, numero: '', date_dev: new Date().toISOString().slice(0, 10), produit_lot: '', zone: '', criticite: '', type: '', description: '', origine: '', responsable: '', statut: 'Ouverte', capa_liee: '' })
-const capaForm = reactive({ id: null, numero: '', date_capa: new Date().toISOString().slice(0, 10), deviation_origine: '', origine: '', type: '', action: '', responsable: '', echeance: '', statut: 'Ouverte', efficacite: 'Non vérifiée' })
+const capaForm = reactive({ id: null, numero: '', date_capa: new Date().toISOString().slice(0, 10), deviation_origine: '', changement_origine: '', origine: '', type: '', action: '', responsable: '', echeance: '', statut: 'Ouverte', efficacite: 'Non vérifiée' })
 const chgForm = reactive({ id: null, numero: '', date_chg: new Date().toISOString().slice(0, 10), objet: '', type: '', description: '', impact: '', responsable: '', statut: 'Demandé', date_cloture: '' })
 
 const devRech = ref(''); const devFiltreStatut = ref('')
@@ -38,6 +38,7 @@ async function charger() {
   if (!rc.error) capa.value = rc.data || []
   const rg = await supabase.from('changements').select('*').order('id', { ascending: false })
   if (!rg.error) changements.value = rg.data || []
+  await chargerPJ()
 }
 onMounted(charger)
 
@@ -81,20 +82,24 @@ async function devSupprimer(d) { if (!confirm('Supprimer la déviation ' + (d.nu
 function creerCapaDepuisDev(d) { capaReset(); capaForm.deviation_origine = d.numero || ''; capaForm.origine = 'Déviation'; capaForm.action = 'Suite à déviation ' + (d.numero || '') + (d.produit_lot ? ' (' + d.produit_lot + ')' : ''); tab.value = 'capa'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
 // ---- CAPA ----
-function capaReset() { Object.assign(capaForm, { id: null, numero: '', date_capa: new Date().toISOString().slice(0, 10), deviation_origine: '', origine: '', type: '', action: '', responsable: '', echeance: '', statut: 'Ouverte', efficacite: 'Non vérifiée' }) }
+function capaReset() { Object.assign(capaForm, { id: null, numero: '', date_capa: new Date().toISOString().slice(0, 10), deviation_origine: '', changement_origine: '', origine: '', type: '', action: '', responsable: '', echeance: '', statut: 'Ouverte', efficacite: 'Non vérifiée' }) }
 async function capaEnregistrer() {
   erreur.value = ''; message.value = ''
   if (!capaForm.action.trim()) { erreur.value = "L'action est obligatoire."; return }
-  const payload = { numero: (capaForm.numero || prochainCapa.value).trim(), date_capa: capaForm.date_capa || null, deviation_origine: capaForm.deviation_origine || null, origine: capaForm.origine || null, type: capaForm.type || null, action: capaForm.action.trim(), responsable: capaForm.responsable || null, echeance: capaForm.echeance || null, statut: capaForm.statut || 'Ouverte', efficacite: capaForm.efficacite || null }
+  const payload = { numero: (capaForm.numero || prochainCapa.value).trim(), date_capa: capaForm.date_capa || null, deviation_origine: capaForm.deviation_origine || null, changement_origine: capaForm.changement_origine || null, origine: capaForm.origine || null, type: capaForm.type || null, action: capaForm.action.trim(), responsable: capaForm.responsable || null, echeance: capaForm.echeance || null, statut: capaForm.statut || 'Ouverte', efficacite: capaForm.efficacite || null }
   const r = capaForm.id ? await supabase.from('capa').update(payload).eq('id', capaForm.id) : await supabase.from('capa').insert(payload)
   if (r.error) { erreur.value = r.error.message; return }
   if (payload.deviation_origine && payload.numero) {
     const dev = deviations.value.find(x => x.numero === payload.deviation_origine)
     if (dev && dev.capa_liee !== payload.numero) await supabase.from('deviations').update({ capa_liee: payload.numero }).eq('id', dev.id)
   }
+  if (payload.changement_origine && payload.numero) {
+    const chg = changements.value.find(x => x.numero === payload.changement_origine)
+    if (chg && chg.capa_liee !== payload.numero) await supabase.from('changements').update({ capa_liee: payload.numero }).eq('id', chg.id)
+  }
   message.value = capaForm.id ? 'CAPA mise à jour.' : 'CAPA enregistrée.'; capaReset(); await charger()
 }
-function capaModifier(c) { Object.assign(capaForm, { id: c.id, numero: c.numero || '', date_capa: c.date_capa || '', deviation_origine: c.deviation_origine || '', origine: c.origine || '', type: c.type || '', action: c.action || '', responsable: c.responsable || '', echeance: c.echeance || '', statut: c.statut || 'Ouverte', efficacite: c.efficacite || 'Non vérifiée' }); tab.value = 'capa'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
+function capaModifier(c) { Object.assign(capaForm, { id: c.id, numero: c.numero || '', date_capa: c.date_capa || '', deviation_origine: c.deviation_origine || '', changement_origine: c.changement_origine || '', origine: c.origine || '', type: c.type || '', action: c.action || '', responsable: c.responsable || '', echeance: c.echeance || '', statut: c.statut || 'Ouverte', efficacite: c.efficacite || 'Non vérifiée' }); tab.value = 'capa'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
 async function capaSupprimer(c) { if (!confirm('Supprimer la CAPA ' + (c.numero || '') + ' ?')) return; const r = await supabase.from('capa').delete().eq('id', c.id); if (r.error) { erreur.value = r.error.message; return } await charger() }
 
 // ---- Changements ----
@@ -203,6 +208,29 @@ function exportDashPDF() {
   const w = window.open('', '_blank'); if (!w) { erreur.value = 'Autorise les pop-ups pour exporter.'; return }
   w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { try { w.print() } catch (e) {} }, 350)
 }
+
+const pj = ref([])
+async function chargerPJ() { const r = await supabase.from('qualite_pj').select('*').order('id', { ascending: false }); if (!r.error) pj.value = r.data || [] }
+const pjDe = (mod, refId) => pj.value.filter(x => x.module === mod && x.ref_id === refId)
+async function ajouterPJ(e, mod, refId) {
+  const f = e.target.files && e.target.files[0]; if (!f) return
+  erreur.value = ''; message.value = ''
+  const path = mod + '/' + refId + '/' + Date.now() + '_' + f.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const up = await supabase.storage.from('qualite').upload(path, f, { upsert: false })
+  if (up.error) { erreur.value = 'Upload : ' + up.error.message; e.target.value = ''; return }
+  const pub = supabase.storage.from('qualite').getPublicUrl(path)
+  const r = await supabase.from('qualite_pj').insert({ module: mod, ref_id: refId, nom: f.name, url: pub.data.publicUrl, path })
+  if (r.error) { erreur.value = r.error.message; e.target.value = ''; return }
+  message.value = 'Pièce jointe ajoutée.'; e.target.value = ''; await chargerPJ()
+}
+async function supprimerPJ(x) {
+  if (!confirm('Supprimer « ' + x.nom + ' » ?')) return
+  if (x.path) await supabase.storage.from('qualite').remove([x.path])
+  const r = await supabase.from('qualite_pj').delete().eq('id', x.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  await chargerPJ()
+}
+function creerCapaDepuisChg(c) { capaReset(); capaForm.changement_origine = c.numero || ''; capaForm.origine = 'Changement'; capaForm.action = 'Suite au changement ' + (c.numero || '') + (c.objet ? ' (' + c.objet + ')' : ''); tab.value = 'capa'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
 </script>
 
 <template>
@@ -252,6 +280,13 @@ function exportDashPDF() {
           <label class="of-col"><span class="of-lbl">CAPA liée</span><select v-model="devForm.capa_liee"><option value="">—</option><option v-for="c in capa" :key="c.id" :value="c.numero">{{ c.numero }}</option></select></label>
           <label class="of-col of-wide"><span class="of-lbl">Description *</span><textarea v-model="devForm.description" rows="2" placeholder="Description de la déviation"></textarea></label>
         </div>
+        <div v-if="devForm.id" class="pj-box">
+          <div class="pj-head">Pièces jointes</div>
+          <div class="pj-list">
+            <div v-for="x in pjDe('dev', devForm.id)" :key="x.id" class="pj-item"><a :href="x.url" target="_blank" class="pj-lnk">📎 {{ x.nom }}</a><button class="pj-del" @click="supprimerPJ(x)" title="Supprimer">×</button></div>
+            <label class="pj-add">+ Ajouter un fichier<input type="file" @change="e => ajouterPJ(e, 'dev', devForm.id)" hidden /></label>
+          </div>
+        </div>
         <div class="q-actions"><button class="q-btn" @click="devEnregistrer">{{ devForm.id ? 'Mettre à jour' : 'Ajouter' }}</button><button v-if="devForm.id" class="q-btn ghost" @click="devReset">Annuler</button></div>
       </section>
       <section class="card">
@@ -289,6 +324,7 @@ function exportDashPDF() {
           <label class="of-col"><span class="of-lbl">N°</span><input v-model="capaForm.numero" :placeholder="prochainCapa" /></label>
           <label class="of-col"><span class="of-lbl">Date</span><input v-model="capaForm.date_capa" type="date" /></label>
           <label class="of-col"><span class="of-lbl">Déviation d'origine</span><select v-model="capaForm.deviation_origine"><option value="">—</option><option v-for="d in deviations" :key="d.id" :value="d.numero">{{ d.numero }}<template v-if="d.produit_lot"> — {{ d.produit_lot }}</template></option></select></label>
+          <label class="of-col"><span class="of-lbl">Changement d'origine</span><select v-model="capaForm.changement_origine"><option value="">—</option><option v-for="c in changements" :key="c.id" :value="c.numero">{{ c.numero }}<template v-if="c.objet"> — {{ c.objet }}</template></option></select></label>
           <label class="of-col"><span class="of-lbl">Origine</span><select v-model="capaForm.origine"><option value="">—</option><option v-for="o in ORIGINES_CAPA" :key="o" :value="o">{{ o }}</option></select></label>
           <label class="of-col"><span class="of-lbl">Type</span><select v-model="capaForm.type"><option value="">—</option><option v-for="t in TYPES_CAPA" :key="t" :value="t">{{ t }}</option></select></label>
           <label class="of-col"><span class="of-lbl">Responsable</span><input v-model="capaForm.responsable" placeholder="Responsable" /></label>
@@ -296,6 +332,13 @@ function exportDashPDF() {
           <label class="of-col"><span class="of-lbl">Statut</span><select v-model="capaForm.statut"><option v-for="s in STATUTS_CAPA" :key="s" :value="s">{{ s }}</option></select></label>
           <label class="of-col"><span class="of-lbl">Efficacité</span><select v-model="capaForm.efficacite"><option v-for="e in EFFICACITES" :key="e" :value="e">{{ e }}</option></select></label>
           <label class="of-col of-wide"><span class="of-lbl">Action *</span><textarea v-model="capaForm.action" rows="2" placeholder="Action corrective / préventive"></textarea></label>
+        </div>
+        <div v-if="capaForm.id" class="pj-box">
+          <div class="pj-head">Pièces jointes</div>
+          <div class="pj-list">
+            <div v-for="x in pjDe('capa', capaForm.id)" :key="x.id" class="pj-item"><a :href="x.url" target="_blank" class="pj-lnk">📎 {{ x.nom }}</a><button class="pj-del" @click="supprimerPJ(x)" title="Supprimer">×</button></div>
+            <label class="pj-add">+ Ajouter un fichier<input type="file" @change="e => ajouterPJ(e, 'capa', capaForm.id)" hidden /></label>
+          </div>
         </div>
         <div class="q-actions"><button class="q-btn" @click="capaEnregistrer">{{ capaForm.id ? 'Mettre à jour' : 'Ajouter' }}</button><button v-if="capaForm.id" class="q-btn ghost" @click="capaReset">Annuler</button></div>
       </section>
@@ -307,7 +350,7 @@ function exportDashPDF() {
             <thead><tr><th>N°</th><th>Date</th><th>Déviation</th><th>Type</th><th>Action</th><th>Responsable</th><th>Échéance</th><th>Statut</th><th></th></tr></thead>
             <tbody>
               <tr v-for="c in capaListe" :key="c.id">
-                <td class="qt-num">{{ c.numero || '—' }}</td><td>{{ fmtD(c.date_capa) }}</td><td>{{ c.deviation_origine || '—' }}</td>
+                <td class="qt-num">{{ c.numero || '—' }}</td><td>{{ fmtD(c.date_capa) }}</td><td>{{ c.deviation_origine || c.changement_origine || '—' }}</td>
                 <td><span v-if="c.type" class="q-type" :class="c.type === 'Corrective' ? 'ty-corr' : 'ty-prev'">{{ c.type }}</span><span v-else>—</span></td>
                 <td class="qt-desc" :title="c.action">{{ c.action || '—' }}</td><td>{{ c.responsable || '—' }}</td>
                 <td><span :class="{ 'q-retard': estEnRetard(c) }">{{ fmtD(c.echeance) }}</span></td>
@@ -341,6 +384,13 @@ function exportDashPDF() {
           <label class="of-col of-wide"><span class="of-lbl">Description</span><textarea v-model="chgForm.description" rows="2" placeholder="Description"></textarea></label>
           <label class="of-col of-wide"><span class="of-lbl">Impact</span><textarea v-model="chgForm.impact" rows="2" placeholder="Impact / évaluation"></textarea></label>
         </div>
+        <div v-if="chgForm.id" class="pj-box">
+          <div class="pj-head">Pièces jointes</div>
+          <div class="pj-list">
+            <div v-for="x in pjDe('chg', chgForm.id)" :key="x.id" class="pj-item"><a :href="x.url" target="_blank" class="pj-lnk">📎 {{ x.nom }}</a><button class="pj-del" @click="supprimerPJ(x)" title="Supprimer">×</button></div>
+            <label class="pj-add">+ Ajouter un fichier<input type="file" @change="e => ajouterPJ(e, 'chg', chgForm.id)" hidden /></label>
+          </div>
+        </div>
         <div class="q-actions"><button class="q-btn" @click="chgEnregistrer">{{ chgForm.id ? 'Mettre à jour' : 'Ajouter' }}</button><button v-if="chgForm.id" class="q-btn ghost" @click="chgReset">Annuler</button></div>
       </section>
       <section class="card">
@@ -348,14 +398,14 @@ function exportDashPDF() {
         <div v-if="!chgListe.length" class="empty-sm">Aucun changement enregistré.</div>
         <div v-else class="q-tablewrap">
           <table class="q-table">
-            <thead><tr><th>N°</th><th>Date</th><th>Objet</th><th>Type</th><th>Responsable</th><th>Clôture</th><th>Statut</th><th></th></tr></thead>
+            <thead><tr><th>N°</th><th>Date</th><th>Objet</th><th>Type</th><th>Responsable</th><th>CAPA</th><th>Clôture</th><th>Statut</th><th></th></tr></thead>
             <tbody>
               <tr v-for="c in chgListe" :key="c.id">
                 <td class="qt-num">{{ c.numero || '—' }}</td><td>{{ fmtD(c.date_chg) }}</td><td class="qt-desc" :title="c.objet">{{ c.objet || '—' }}</td>
                 <td><span v-if="c.type" class="q-type" :class="c.type === 'Majeur' ? 'ty-corr' : 'ty-prev'">{{ c.type }}</span><span v-else>—</span></td>
-                <td>{{ c.responsable || '—' }}</td><td>{{ fmtD(c.date_cloture) }}</td>
+                <td>{{ c.responsable || '—' }}</td><td>{{ c.capa_liee || '—' }}</td><td>{{ fmtD(c.date_cloture) }}</td>
                 <td><span class="q-stat" :class="'st-' + statutKey(c.statut)">{{ c.statut }}</span></td>
-                <td class="qt-act"><button v-if="peutEditer" @click="chgModifier(c)" title="Modifier">✎</button><button v-if="peutEditer" @click="chgSupprimer(c)" title="Supprimer">🗑</button></td>
+                <td class="qt-act"><button v-if="peutEditer && !c.capa_liee" class="lnk" @click="creerCapaDepuisChg(c)" title="Créer une CAPA">→ CAPA</button><button v-if="peutEditer" @click="chgModifier(c)" title="Modifier">✎</button><button v-if="peutEditer" @click="chgSupprimer(c)" title="Supprimer">🗑</button></td>
               </tr>
             </tbody>
           </table>
@@ -501,4 +551,13 @@ function exportDashPDF() {
 .evo2-b { width: 7px; border-radius: 2px 2px 0 0; min-height: 1px; transition: height .3s ease; }
 .evo2-b.dev { background: #6366f1; } .evo2-b.capa { background: #0d9488; } .evo2-b.chg { background: #f59e0b; }
 .evo2-lbl { font-size: 9px; color: #94a3b8; font-weight: 700; white-space: nowrap; }
+.pj-box { margin-top: 14px; padding-top: 14px; border-top: 1px solid #f1f5f9; }
+.pj-head { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; margin-bottom: 8px; }
+.pj-list { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pj-item { display: inline-flex; align-items: center; gap: 4px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px; padding: 4px 8px; font-size: 12px; }
+.pj-lnk { color: #0f766e; text-decoration: none; font-weight: 600; }
+.pj-lnk:hover { text-decoration: underline; }
+.pj-del { border: 0; background: transparent; color: #dc2626; cursor: pointer; font-size: 14px; padding: 0; line-height: 1; }
+.pj-add { background: #eef2ff; color: #4338ca; border: 1px dashed #c7d2fe; border-radius: 8px; padding: 5px 11px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.pj-add:hover { background: #e0e7ff; }
 </style>
