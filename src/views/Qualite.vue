@@ -8,6 +8,7 @@ const erreur = ref('')
 const message = ref('')
 const tab = ref('dev')
 
+const MOIS_COURT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
 const CRITICITES = ['Mineure', 'Majeure', 'Critique']
 const STATUTS_DEV = ['Ouverte', 'En cours', 'Clôturée']
 const ORIGINES_CAPA = ['Déviation', 'Audit', 'Réclamation', 'Autre']
@@ -174,11 +175,34 @@ const blocs = computed(() => [
   { t: 'Déviations · statut', d: repartition(devPeriode.value, 'statut') },
   { t: 'Déviations · zone', d: repartition(devPeriode.value, 'zone') },
   { t: 'Déviations · top produits / lots', d: repartition(devPeriode.value, 'produit_lot').slice(0, 8) },
+  { t: 'Déviations · origine', d: repartition(devPeriode.value, 'origine') },
+  { t: 'Déviations · responsable', d: repartition(devPeriode.value, 'responsable').slice(0, 8) },
   { t: 'CAPA · type', d: repartition(capaPeriode.value, 'type') },
   { t: 'CAPA · statut', d: repartition(capaPeriode.value, 'statut') },
+  { t: 'CAPA · responsable', d: repartition(capaPeriode.value, 'responsable').slice(0, 8) },
   { t: 'Changements · type', d: repartition(chgPeriode.value, 'type') },
   { t: 'Changements · statut', d: repartition(chgPeriode.value, 'statut') }
 ])
+const evolution = computed(() => {
+  const now = new Date(), mois = []
+  for (let i = 11; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); mois.push({ key: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'), label: MOIS_COURT[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2), dev: 0, capa: 0, chg: 0 }) }
+  const idx = {}; mois.forEach((m, i) => idx[m.key] = i)
+  for (const x of deviations.value) { const k = (x.date_dev || '').slice(0, 7); if (k in idx) mois[idx[k]].dev++ }
+  for (const x of capa.value) { const k = (x.date_capa || '').slice(0, 7); if (k in idx) mois[idx[k]].capa++ }
+  for (const x of changements.value) { const k = (x.date_chg || '').slice(0, 7); if (k in idx) mois[idx[k]].chg++ }
+  return mois
+})
+const evoMax = computed(() => Math.max(1, ...evolution.value.map(m => Math.max(m.dev, m.capa, m.chg))))
+function exportDashPDF() {
+  const per = (dashDu.value || dashAu.value) ? ('Période : ' + (dashDu.value || '…') + ' → ' + (dashAu.value || '…')) : 'Toute période'
+  const kp = [['Déviations', devPeriode.value.length], ['dont critiques', devPeriode.value.filter(d => d.criticite === 'Critique').length], ['CAPA', capaPeriode.value.length], ['CAPA en retard', capaPeriode.value.filter(c => estEnRetard(c)).length], ['Changements', chgPeriode.value.length]]
+  const kpHtml = '<div class="kp">' + kp.map(k => '<div class="k"><div class="v">' + k[1] + '</div><div class="l">' + escHtml(k[0]) + '</div></div>').join('') + '</div>'
+  const evoHtml = '<h2>Évolution mensuelle (12 mois)</h2><table><thead><tr><th>Mois</th><th>Déviations</th><th>CAPA</th><th>Changements</th></tr></thead><tbody>' + evolution.value.map(m => '<tr><td>' + m.label + '</td><td style="text-align:right">' + m.dev + '</td><td style="text-align:right">' + m.capa + '</td><td style="text-align:right">' + m.chg + '</td></tr>').join('') + '</tbody></table>'
+  const blocsHtml = blocs.value.map(b => '<h2>' + escHtml(b.t) + '</h2>' + (b.d.length ? '<table><tbody>' + b.d.map(r => '<tr><td>' + escHtml(r.k) + '</td><td style="text-align:right;width:50px">' + r.n + '</td></tr>').join('') + '</tbody></table>' : '<p class="none">Aucune donnée</p>')).join('')
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Tableau de bord Qualité</title><style>body{font-family:Arial,sans-serif;font-size:11px;margin:16px;color:#1b2733}h1{font-size:19px;color:#0d9488;margin:0 0 2px}.sub{color:#64748b;font-size:11px;margin:0 0 14px}h2{font-size:12px;margin:16px 0 6px;border-left:4px solid #0d9488;padding-left:8px}.kp{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}.k{flex:1;min-width:90px;border:1px solid #e2e8f0;border-radius:8px;padding:8px;text-align:center}.k .v{font-size:18px;font-weight:800}.k .l{font-size:9px;text-transform:uppercase;color:#94a3b8;font-weight:700}table{border-collapse:collapse;font-size:10px;margin-bottom:8px;width:100%;max-width:440px}th{background:#f0fdfa;color:#0f766e;padding:4px 6px;border:1px solid #cbd5e1;text-align:left;font-size:9px}td{padding:3px 6px;border:1px solid #e2e8f0}.none{color:#94a3b8;font-size:10px}@media print{body{margin:8mm}}</style></head><body><h1>Tableau de bord — Qualité</h1><p class="sub">' + per + ' — édité le ' + new Date().toLocaleString('fr-FR') + '</p>' + kpHtml + evoHtml + blocsHtml + '</body></html>'
+  const w = window.open('', '_blank'); if (!w) { erreur.value = 'Autorise les pop-ups pour exporter.'; return }
+  w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { try { w.print() } catch (e) {} }, 350)
+}
 </script>
 
 <template>
@@ -345,6 +369,7 @@ const blocs = computed(() => [
         <label class="of-col"><span class="of-lbl">Du</span><input v-model="dashDu" type="date" /></label>
         <label class="of-col"><span class="of-lbl">Au</span><input v-model="dashAu" type="date" /></label>
         <button v-if="dashDu || dashAu" class="q-btn ghost" @click="dashDu = ''; dashAu = ''">Toute période</button>
+        <button class="q-btn" style="margin-left:auto" @click="exportDashPDF">📄 Export PDF</button>
       </div>
       <div class="kpi-grid">
         <div class="kpi"><div class="kpi-v">{{ devPeriode.length }}</div><div class="kpi-l">Déviations</div></div>
@@ -353,6 +378,19 @@ const blocs = computed(() => [
         <div class="kpi"><div class="kpi-v r">{{ capaPeriode.filter(c => estEnRetard(c)).length }}</div><div class="kpi-l">CAPA en retard</div></div>
         <div class="kpi"><div class="kpi-v">{{ chgPeriode.length }}</div><div class="kpi-l">Changements</div></div>
       </div>
+      <section class="card">
+        <div class="dash-head2"><h3 class="dash-t">Évolution mensuelle (12 mois)</h3><div class="evo-leg"><span class="el dev">Déviations</span><span class="el capa">CAPA</span><span class="el chg">Changements</span></div></div>
+        <div class="evo2">
+          <div v-for="m in evolution" :key="m.key" class="evo2-col">
+            <div class="evo2-bars">
+              <div class="evo2-b dev" :style="{ height: (m.dev / evoMax * 90) + 'px' }" :title="m.dev + ' déviations'"></div>
+              <div class="evo2-b capa" :style="{ height: (m.capa / evoMax * 90) + 'px' }" :title="m.capa + ' CAPA'"></div>
+              <div class="evo2-b chg" :style="{ height: (m.chg / evoMax * 90) + 'px' }" :title="m.chg + ' changements'"></div>
+            </div>
+            <div class="evo2-lbl">{{ m.label }}</div>
+          </div>
+        </div>
+      </section>
       <div class="dash-grid">
         <section v-for="b in blocs" :key="b.t" class="card dash-card">
           <h3 class="dash-t">{{ b.t }}</h3>
@@ -452,4 +490,15 @@ const blocs = computed(() => [
 .brk-bar { flex: 1; height: 16px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
 .brk-fill { height: 100%; background: linear-gradient(90deg, #14b8a6, #0d9488); border-radius: 4px; }
 .brk-n { font-size: 12px; font-weight: 800; color: #0f172a; width: 28px; text-align: right; flex-shrink: 0; }
+.dash-head2 { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.evo-leg { display: inline-flex; gap: 12px; font-size: 11px; font-weight: 700; }
+.el { display: inline-flex; align-items: center; gap: 5px; color: #475569; }
+.el::before { content: ''; width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.el.dev::before { background: #6366f1; } .el.capa::before { background: #0d9488; } .el.chg::before { background: #f59e0b; }
+.evo2 { display: flex; align-items: flex-end; gap: 6px; height: 122px; overflow-x: auto; }
+.evo2-col { flex: 1; min-width: 34px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.evo2-bars { display: flex; align-items: flex-end; gap: 2px; height: 94px; }
+.evo2-b { width: 7px; border-radius: 2px 2px 0 0; min-height: 1px; transition: height .3s ease; }
+.evo2-b.dev { background: #6366f1; } .evo2-b.capa { background: #0d9488; } .evo2-b.chg { background: #f59e0b; }
+.evo2-lbl { font-size: 9px; color: #94a3b8; font-weight: 700; white-space: nowrap; }
 </style>
