@@ -21,7 +21,7 @@ const deviations = ref([])
 const capa = ref([])
 const changements = ref([])
 
-const devForm = reactive({ id: null, numero: '', date_dev: new Date().toISOString().slice(0, 10), produit_lot: '', criticite: '', type: '', description: '', origine: '', responsable: '', statut: 'Ouverte', capa_liee: '' })
+const devForm = reactive({ id: null, numero: '', date_dev: new Date().toISOString().slice(0, 10), produit_lot: '', zone: '', criticite: '', type: '', description: '', origine: '', responsable: '', statut: 'Ouverte', capa_liee: '' })
 const capaForm = reactive({ id: null, numero: '', date_capa: new Date().toISOString().slice(0, 10), deviation_origine: '', origine: '', type: '', action: '', responsable: '', echeance: '', statut: 'Ouverte', efficacite: 'Non vérifiée' })
 const chgForm = reactive({ id: null, numero: '', date_chg: new Date().toISOString().slice(0, 10), objet: '', type: '', description: '', impact: '', responsable: '', statut: 'Demandé', date_cloture: '' })
 
@@ -66,16 +66,16 @@ const kpiCapa = computed(() => { const d = capa.value; return { total: d.length,
 const kpiChg = computed(() => { const d = changements.value; return { total: d.length, encours: d.filter(x => statutKey(x.statut) !== 'cloturee').length, cloturees: d.filter(x => statutKey(x.statut) === 'cloturee').length, majeurs: d.filter(x => x.type === 'Majeur' && statutKey(x.statut) !== 'cloturee').length } })
 
 // ---- Déviations ----
-function devReset() { Object.assign(devForm, { id: null, numero: '', date_dev: new Date().toISOString().slice(0, 10), produit_lot: '', criticite: '', type: '', description: '', origine: '', responsable: '', statut: 'Ouverte', capa_liee: '' }) }
+function devReset() { Object.assign(devForm, { id: null, numero: '', date_dev: new Date().toISOString().slice(0, 10), produit_lot: '', zone: '', criticite: '', type: '', description: '', origine: '', responsable: '', statut: 'Ouverte', capa_liee: '' }) }
 async function devEnregistrer() {
   erreur.value = ''; message.value = ''
   if (!devForm.description.trim()) { erreur.value = 'La description est obligatoire.'; return }
-  const payload = { numero: (devForm.numero || prochainDev.value).trim(), date_dev: devForm.date_dev || null, produit_lot: devForm.produit_lot || null, criticite: devForm.criticite || null, type: devForm.type || null, description: devForm.description.trim(), origine: devForm.origine || null, responsable: devForm.responsable || null, statut: devForm.statut || 'Ouverte', capa_liee: devForm.capa_liee || null }
+  const payload = { numero: (devForm.numero || prochainDev.value).trim(), date_dev: devForm.date_dev || null, produit_lot: devForm.produit_lot || null, zone: devForm.zone || null, criticite: devForm.criticite || null, type: devForm.type || null, description: devForm.description.trim(), origine: devForm.origine || null, responsable: devForm.responsable || null, statut: devForm.statut || 'Ouverte', capa_liee: devForm.capa_liee || null }
   const r = devForm.id ? await supabase.from('deviations').update(payload).eq('id', devForm.id) : await supabase.from('deviations').insert(payload)
   if (r.error) { erreur.value = r.error.message; return }
   message.value = devForm.id ? 'Déviation mise à jour.' : 'Déviation enregistrée.'; devReset(); await charger()
 }
-function devModifier(d) { Object.assign(devForm, { id: d.id, numero: d.numero || '', date_dev: d.date_dev || '', produit_lot: d.produit_lot || '', criticite: d.criticite || '', type: d.type || '', description: d.description || '', origine: d.origine || '', responsable: d.responsable || '', statut: d.statut || 'Ouverte', capa_liee: d.capa_liee || '' }); tab.value = 'dev'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
+function devModifier(d) { Object.assign(devForm, { id: d.id, numero: d.numero || '', date_dev: d.date_dev || '', produit_lot: d.produit_lot || '', zone: d.zone || '', criticite: d.criticite || '', type: d.type || '', description: d.description || '', origine: d.origine || '', responsable: d.responsable || '', statut: d.statut || 'Ouverte', capa_liee: d.capa_liee || '' }); tab.value = 'dev'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
 async function devSupprimer(d) { if (!confirm('Supprimer la déviation ' + (d.numero || '') + ' ?')) return; const r = await supabase.from('deviations').delete().eq('id', d.id); if (r.error) { erreur.value = r.error.message; return } await charger() }
 function creerCapaDepuisDev(d) { capaReset(); capaForm.deviation_origine = d.numero || ''; capaForm.origine = 'Déviation'; capaForm.action = 'Suite à déviation ' + (d.numero || '') + (d.produit_lot ? ' (' + d.produit_lot + ')' : ''); tab.value = 'capa'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
@@ -160,6 +160,25 @@ function exportExcel() {
   const lignes = [d.cols.map(esc).join(';')].concat(d.rows.map(r => r.map(esc).join(';')))
   telecharger(lignes.join('\r\n'), d.titre + '_' + new Date().toISOString().slice(0, 10) + '.csv', 'text/csv;charset=utf-8', true)
 }
+
+const dashDu = ref('')
+const dashAu = ref('')
+const dansPeriode = (dateStr) => { if (!dashDu.value && !dashAu.value) return true; if (!dateStr) return false; const d = String(dateStr).slice(0, 10); if (dashDu.value && d < dashDu.value) return false; if (dashAu.value && d > dashAu.value) return false; return true }
+const devPeriode = computed(() => deviations.value.filter(d => dansPeriode(d.date_dev)))
+const capaPeriode = computed(() => capa.value.filter(c => dansPeriode(c.date_capa)))
+const chgPeriode = computed(() => changements.value.filter(c => dansPeriode(c.date_chg)))
+const repartition = (liste, champ) => { const m = {}; for (const x of liste) { const v = ((x[champ] || '') + '').trim() || '—'; m[v] = (m[v] || 0) + 1 }; return Object.keys(m).map(k => ({ k, n: m[k] })).sort((a, b) => b.n - a.n) }
+const maxN = (arr) => Math.max(1, ...arr.map(r => r.n))
+const blocs = computed(() => [
+  { t: 'Déviations · criticité', d: repartition(devPeriode.value, 'criticite') },
+  { t: 'Déviations · statut', d: repartition(devPeriode.value, 'statut') },
+  { t: 'Déviations · zone', d: repartition(devPeriode.value, 'zone') },
+  { t: 'Déviations · top produits / lots', d: repartition(devPeriode.value, 'produit_lot').slice(0, 8) },
+  { t: 'CAPA · type', d: repartition(capaPeriode.value, 'type') },
+  { t: 'CAPA · statut', d: repartition(capaPeriode.value, 'statut') },
+  { t: 'Changements · type', d: repartition(chgPeriode.value, 'type') },
+  { t: 'Changements · statut', d: repartition(chgPeriode.value, 'statut') }
+])
 </script>
 
 <template>
@@ -182,6 +201,7 @@ function exportExcel() {
       <button :class="{ on: tab === 'dev' }" @click="tab = 'dev'">Déviations <span class="qt-n">{{ kpiDev.total }}</span></button>
       <button :class="{ on: tab === 'capa' }" @click="tab = 'capa'">CAPA <span class="qt-n">{{ kpiCapa.total }}</span></button>
       <button :class="{ on: tab === 'chg' }" @click="tab = 'chg'">Changements <span class="qt-n">{{ kpiChg.total }}</span></button>
+      <button :class="{ on: tab === 'dash' }" @click="tab = 'dash'">📊 Tableau de bord</button>
     </div>
 
     <!-- ===== DÉVIATIONS ===== -->
@@ -199,6 +219,7 @@ function exportExcel() {
           <label class="of-col"><span class="of-lbl">N°</span><input v-model="devForm.numero" :placeholder="prochainDev" /></label>
           <label class="of-col"><span class="of-lbl">Date</span><input v-model="devForm.date_dev" type="date" /></label>
           <label class="of-col"><span class="of-lbl">Produit / Lot</span><input v-model="devForm.produit_lot" placeholder="Produit ou n° lot" /></label>
+          <label class="of-col"><span class="of-lbl">Zone / Atelier</span><input v-model="devForm.zone" placeholder="Zone de production" /></label>
           <label class="of-col"><span class="of-lbl">Criticité</span><select v-model="devForm.criticite"><option value="">—</option><option v-for="c in CRITICITES" :key="c" :value="c">{{ c }}</option></select></label>
           <label class="of-col"><span class="of-lbl">Type</span><input v-model="devForm.type" placeholder="Type de déviation" /></label>
           <label class="of-col"><span class="of-lbl">Origine</span><input v-model="devForm.origine" placeholder="Origine / cause" /></label>
@@ -317,6 +338,35 @@ function exportExcel() {
         </div>
       </section>
     </div>
+
+    <!-- ===== TABLEAU DE BORD ===== -->
+    <div v-if="tab === 'dash'">
+      <div class="dash-filtre">
+        <label class="of-col"><span class="of-lbl">Du</span><input v-model="dashDu" type="date" /></label>
+        <label class="of-col"><span class="of-lbl">Au</span><input v-model="dashAu" type="date" /></label>
+        <button v-if="dashDu || dashAu" class="q-btn ghost" @click="dashDu = ''; dashAu = ''">Toute période</button>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-v">{{ devPeriode.length }}</div><div class="kpi-l">Déviations</div></div>
+        <div class="kpi"><div class="kpi-v r">{{ devPeriode.filter(d => d.criticite === 'Critique').length }}</div><div class="kpi-l">dont critiques</div></div>
+        <div class="kpi"><div class="kpi-v">{{ capaPeriode.length }}</div><div class="kpi-l">CAPA</div></div>
+        <div class="kpi"><div class="kpi-v r">{{ capaPeriode.filter(c => estEnRetard(c)).length }}</div><div class="kpi-l">CAPA en retard</div></div>
+        <div class="kpi"><div class="kpi-v">{{ chgPeriode.length }}</div><div class="kpi-l">Changements</div></div>
+      </div>
+      <div class="dash-grid">
+        <section v-for="b in blocs" :key="b.t" class="card dash-card">
+          <h3 class="dash-t">{{ b.t }}</h3>
+          <div v-if="!b.d.length" class="empty-sm">Aucune donnée.</div>
+          <div v-else class="brk">
+            <div v-for="r in b.d" :key="r.k" class="brk-row">
+              <span class="brk-lbl" :title="r.k">{{ r.k }}</span>
+              <div class="brk-bar"><div class="brk-fill" :style="{ width: (r.n / maxN(b.d) * 100) + '%' }"></div></div>
+              <span class="brk-n">{{ r.n }}</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -390,4 +440,16 @@ function exportExcel() {
 .q-exports { display: inline-flex; gap: 6px; }
 .q-exp { border: 1px solid #cbd5e1; background: #fff; border-radius: 7px; padding: 6px 11px; font: inherit; font-size: 12.5px; font-weight: 600; color: #475569; cursor: pointer; }
 .q-exp:hover { background: #f8fafc; border-color: #94a3b8; }
+.dash-filtre { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.dash-filtre .of-col { min-width: 140px; }
+.dash-filtre input { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; }
+.dash-card { margin-bottom: 0; }
+.dash-t { font-size: 13px; font-weight: 800; color: #0f172a; margin: 0 0 12px; }
+.brk { display: flex; flex-direction: column; gap: 7px; }
+.brk-row { display: flex; align-items: center; gap: 8px; }
+.brk-lbl { font-size: 12px; color: #475569; font-weight: 600; width: 115px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+.brk-bar { flex: 1; height: 16px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.brk-fill { height: 100%; background: linear-gradient(90deg, #14b8a6, #0d9488); border-radius: 4px; }
+.brk-n { font-size: 12px; font-weight: 800; color: #0f172a; width: 28px; text-align: right; flex-shrink: 0; }
 </style>
