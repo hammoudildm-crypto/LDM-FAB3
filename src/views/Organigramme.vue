@@ -94,6 +94,6 @@ onMounted(charger)
 .lg-item { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: #475569; }
 .lg-item i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
 .empty-card { background: #fff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 28px; color: #475569; text-align: center; font-size: 15px; }
-.org-chart { overflow-x: auto; padding: 12px 0 4px; }
+.org-chart { overflow-x: auto; padding: 12px 0 4px; zoom: 0.6; }
 .org-root { display: flex; justify-content: center; list-style: none; padding: 0; margin: 0; min-width: min-content; }
 </style>
