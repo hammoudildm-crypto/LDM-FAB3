@@ -22,6 +22,27 @@ const postesList = ref([])
 const nouveauPoste = ref('')
 const editPosteId = ref(null)
 const editPosteNom = ref('')
+const BRANCHES_ISH = [
+  { k: 'mo', nom: "Main-d'œuvre" },
+  { k: 'ma', nom: 'Matière' },
+  { k: 'mat', nom: 'Matériel' },
+  { k: 'me', nom: 'Méthode' },
+  { k: 'mi', nom: 'Milieu' }
+]
+const causesList = ref([])
+const nouvelleCause = reactive({ mo: '', ma: '', mat: '', me: '', mi: '' })
+async function ajouterCause(k) {
+  const v = (nouvelleCause[k] || '').trim(); if (!v) return
+  const r = await supabase.from('causes_types').insert({ branche: k, libelle: v })
+  if (r.error) { erreur.value = r.error.message; return }
+  nouvelleCause[k] = ''; await chargerTout()
+}
+async function supprimerCause(c) {
+  const r = await supabase.from('causes_types').delete().eq('id', c.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  await chargerTout()
+}
+
 const cadList = ref([])
 const cadEquip = ref('')
 const cadProduit = ref('')
@@ -110,7 +131,7 @@ function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
 
 // --- Équipement ---
 const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1 })
-const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, cadences: false, postes: false })
+const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, cadences: false, postes: false, causes: false })
 const sectionActive = ref(null)
 const SECTIONS = [
   { k: 'donneurs', lbl: "Donneurs d'ordre", ic: '🏢', n: () => donneurs.value.length },
@@ -120,7 +141,8 @@ const SECTIONS = [
   { k: 'superviseurs', lbl: 'Vérificateurs', ic: '👤', n: () => supList.value.length },
   { k: 'verifCond', lbl: 'Vérif. conditionnement', ic: '📦', n: () => condList.value.length },
   { k: 'cadences', lbl: 'Cadences', ic: '⏱️', n: () => cadList.value.length },
-  { k: 'postes', lbl: 'Postes', ic: '💼', n: () => postesList.value.length }
+  { k: 'postes', lbl: 'Postes', ic: '💼', n: () => postesList.value.length },
+  { k: 'causes', lbl: 'Causes types', ic: '🐟', n: () => causesList.value.length }
 ]
 function ouvrirSection(k) { sectionActive.value = k; ouvert[k] = true }
 async function ajouterPoste() {
@@ -170,6 +192,8 @@ async function chargerTout() {
   if (!rS.error) supList.value = rS.data
   const rPo = await supabase.from('postes').select('id, nom').order('nom')
   if (!rPo.error) postesList.value = rPo.data
+  const rCt = await supabase.from('causes_types').select('id, branche, libelle').order('libelle')
+  if (!rCt.error) causesList.value = rCt.data
   const rVC = await supabase.from('verificateurs_cond').select('id, nom').order('nom')
   if (!rVC.error) condList.value = rVC.data
   const rCad = await supabase.from('cadences_produit').select('id, cadence_nominale, unite_cadence, mode, equipement_id, produit_id, equipements(code), produits(code_pf, designation)').order('id', { ascending: false })
@@ -739,6 +763,23 @@ onMounted(async () => {
       </div>
     </section>
 
+    <section v-if="sectionActive === 'causes'" class="card">
+      <div class="card-head clickable" @click="ouvert.causes = !ouvert.causes">
+        <h2>Causes types (Ishikawa 5M)</h2>
+        <span class="count">{{ causesList.length }}</span>
+        <span class="chevron">{{ ouvert.causes ? '▾' : '▸' }}</span>
+      </div>
+      <div v-show="ouvert.causes">
+        <div class="ct-grid">
+          <div v-for="b in BRANCHES_ISH" :key="b.k" class="ct-card">
+            <div class="ct-m">{{ b.nom }}</div>
+            <div v-for="c in causesList.filter(x => x.branche === b.k)" :key="c.id" class="ct-row"><span>{{ c.libelle }}</span><button v-if="peutEditer" class="ct-del" @click="supprimerCause(c)">×</button></div>
+            <input v-if="peutEditer" v-model="nouvelleCause[b.k]" class="ct-input" placeholder="+ cause…" @keyup.enter="ajouterCause(b.k)" />
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section v-if="sectionActive === 'verifCond'" class="card">
       <div class="card-head clickable" @click="ouvert.verifCond = !ouvert.verifCond">
         <h2>Vérificateurs conditionnement</h2>
@@ -944,4 +985,10 @@ button.link.danger { color: #b91c1c; }
 .ref-back:hover { background: #e2e8f0; }
 .link.warn { color: #b45309; }
 .sv-dispo { font-size: 11.5px; color: #475569; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; margin-left: auto; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 7px; padding: 3px 9px; }
+.ct-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 12px; }
+.ct-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; }
+.ct-m { font-size: 12px; font-weight: 800; color: #4338ca; margin-bottom: 8px; }
+.ct-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; color: #475569; padding: 3px 0; }
+.ct-del { border: 0; background: transparent; color: #dc2626; cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; }
+.ct-input { width: 100%; box-sizing: border-box; margin-top: 8px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 12px; }
 </style>
