@@ -22,7 +22,7 @@ const deviations = ref([])
 const capa = ref([])
 const changements = ref([])
 
-const devForm = reactive({ id: null, numero: '', date_dev: new Date().toISOString().slice(0, 10), produit_lot: '', zone: '', criticite: '', type: '', description: '', origine: '', responsable: '', statut: 'Ouverte', capa_liee: '' })
+const devForm = reactive({ id: null, numero: '', date_dev: new Date().toISOString().slice(0, 10), produit_lot: '', zone: '', criticite: '', type: '', description: '', origine: '', responsable: '', statut: 'Ouverte', capa_liee: '', ishikawa: { mo: [], ma: [], mat: [], me: [], mi: [] }, cinq_pourquoi: ['', '', '', '', ''], cause_racine: '' })
 const capaForm = reactive({ id: null, numero: '', date_capa: new Date().toISOString().slice(0, 10), deviation_origine: '', changement_origine: '', origine: '', type: '', action: '', responsable: '', echeance: '', statut: 'Ouverte', efficacite: 'Non vérifiée' })
 const chgForm = reactive({ id: null, numero: '', date_chg: new Date().toISOString().slice(0, 10), objet: '', type: '', description: '', impact: '', responsable: '', statut: 'Demandé', date_cloture: '' })
 
@@ -68,16 +68,16 @@ const kpiCapa = computed(() => { const d = capa.value; return { total: d.length,
 const kpiChg = computed(() => { const d = changements.value; return { total: d.length, encours: d.filter(x => statutKey(x.statut) !== 'cloturee').length, cloturees: d.filter(x => statutKey(x.statut) === 'cloturee').length, majeurs: d.filter(x => x.type === 'Majeur' && statutKey(x.statut) !== 'cloturee').length } })
 
 // ---- Déviations ----
-function devReset() { Object.assign(devForm, { id: null, numero: '', date_dev: new Date().toISOString().slice(0, 10), produit_lot: '', zone: '', criticite: '', type: '', description: '', origine: '', responsable: '', statut: 'Ouverte', capa_liee: '' }) }
+function devReset() { Object.assign(devForm, { id: null, numero: '', date_dev: new Date().toISOString().slice(0, 10), produit_lot: '', zone: '', criticite: '', type: '', description: '', origine: '', responsable: '', statut: 'Ouverte', capa_liee: '', ishikawa: { mo: [], ma: [], mat: [], me: [], mi: [] }, cinq_pourquoi: ['', '', '', '', ''], cause_racine: '' }) }
 async function devEnregistrer() {
   erreur.value = ''; message.value = ''
   if (!devForm.description.trim()) { erreur.value = 'La description est obligatoire.'; return }
-  const payload = { numero: (devForm.numero || prochainDev.value).trim(), date_dev: devForm.date_dev || null, produit_lot: devForm.produit_lot || null, zone: devForm.zone || null, criticite: devForm.criticite || null, type: devForm.type || null, description: devForm.description.trim(), origine: devForm.origine || null, responsable: devForm.responsable || null, statut: devForm.statut || 'Ouverte', capa_liee: devForm.capa_liee || null }
+  const payload = { numero: (devForm.numero || prochainDev.value).trim(), date_dev: devForm.date_dev || null, produit_lot: devForm.produit_lot || null, zone: devForm.zone || null, criticite: devForm.criticite || null, type: devForm.type || null, description: devForm.description.trim(), origine: devForm.origine || null, responsable: devForm.responsable || null, statut: devForm.statut || 'Ouverte', capa_liee: devForm.capa_liee || null, ishikawa: devForm.ishikawa, cinq_pourquoi: devForm.cinq_pourquoi, cause_racine: devForm.cause_racine || null }
   const r = devForm.id ? await supabase.from('deviations').update(payload).eq('id', devForm.id) : await supabase.from('deviations').insert(payload)
   if (r.error) { erreur.value = r.error.message; return }
   message.value = devForm.id ? 'Déviation mise à jour.' : 'Déviation enregistrée.'; devReset(); await charger()
 }
-function devModifier(d) { Object.assign(devForm, { id: d.id, numero: d.numero || '', date_dev: d.date_dev || '', produit_lot: d.produit_lot || '', zone: d.zone || '', criticite: d.criticite || '', type: d.type || '', description: d.description || '', origine: d.origine || '', responsable: d.responsable || '', statut: d.statut || 'Ouverte', capa_liee: d.capa_liee || '' }); tab.value = 'dev'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
+function devModifier(d) { Object.assign(devForm, { id: d.id, numero: d.numero || '', date_dev: d.date_dev || '', produit_lot: d.produit_lot || '', zone: d.zone || '', criticite: d.criticite || '', type: d.type || '', description: d.description || '', origine: d.origine || '', responsable: d.responsable || '', statut: d.statut || 'Ouverte', capa_liee: d.capa_liee || '', ishikawa: normIsh(d.ishikawa), cinq_pourquoi: norm5p(d.cinq_pourquoi), cause_racine: d.cause_racine || '' }); tab.value = 'dev'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
 async function devSupprimer(d) { if (!confirm('Supprimer la déviation ' + (d.numero || '') + ' ?')) return; const r = await supabase.from('deviations').delete().eq('id', d.id); if (r.error) { erreur.value = r.error.message; return } await charger() }
 function creerCapaDepuisDev(d) { capaReset(); capaForm.deviation_origine = d.numero || ''; capaForm.origine = 'Déviation'; capaForm.action = 'Suite à déviation ' + (d.numero || '') + (d.produit_lot ? ' (' + d.produit_lot + ')' : ''); tab.value = 'capa'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
@@ -231,6 +231,31 @@ async function supprimerPJ(x) {
   await chargerPJ()
 }
 function creerCapaDepuisChg(c) { capaReset(); capaForm.changement_origine = c.numero || ''; capaForm.origine = 'Changement'; capaForm.action = 'Suite au changement ' + (c.numero || '') + (c.objet ? ' (' + c.objet + ')' : ''); tab.value = 'capa'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
+
+const acrOuvert = ref(false)
+const ISH_W = 720, ISH_H = 360, spineY = 180
+const branchesM = [
+  { k: 'mo', nom: "Main-d'œuvre", top: true, bx: 185 },
+  { k: 'ma', nom: 'Matière', top: true, bx: 335 },
+  { k: 'mat', nom: 'Matériel', top: true, bx: 485 },
+  { k: 'me', nom: 'Méthode', top: false, bx: 260 },
+  { k: 'mi', nom: 'Milieu', top: false, bx: 410 }
+]
+const brEnd = (b) => ({ x: b.bx - 65, y: b.top ? 50 : ISH_H - 50 })
+const causePos = (b, i, n) => { const e = brEnd(b); const f = (i + 1) / (n + 1); return { x: b.bx + (e.x - b.bx) * f, y: spineY + (e.y - spineY) * f } }
+function normIsh(ish) { const base = { mo: [], ma: [], mat: [], me: [], mi: [] }; if (ish) for (const k in base) if (Array.isArray(ish[k])) base[k] = ish[k].slice(); return base }
+function norm5p(arr) { const a = ['', '', '', '', '']; if (Array.isArray(arr)) for (let i = 0; i < 5; i++) a[i] = arr[i] || ''; return a }
+function ajIsh(k, e) { const v = (e.target.value || '').trim(); if (v) { devForm.ishikawa[k].push(v); e.target.value = '' } }
+function ficheACR() {
+  const d = devForm
+  const noms = { mo: "Main-d'œuvre", ma: 'Matière', mat: 'Matériel', me: 'Méthode', mi: 'Milieu' }
+  const ish = normIsh(d.ishikawa), p5 = norm5p(d.cinq_pourquoi)
+  const ishHtml = Object.keys(noms).map(k => '<div class="b"><h3>' + noms[k] + '</h3>' + (ish[k].length ? '<ul>' + ish[k].map(c => '<li>' + escHtml(c) + '</li>').join('') + '</ul>' : '<p class="none">—</p>') + '</div>').join('')
+  const p5Html = '<ol>' + p5.map(r => '<li>' + escHtml(r || '—') + '</li>').join('') + '</ol>'
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fiche ACR</title><style>body{font-family:Arial,sans-serif;font-size:12px;margin:18px;color:#1b2733}h1{font-size:19px;color:#0d9488;margin:0 0 2px}.sub{color:#64748b;margin:0 0 14px;font-size:11px}h2{font-size:13px;margin:16px 0 6px;border-left:4px solid #0d9488;padding-left:8px}h3{font-size:12px;margin:6px 0 4px;color:#4338ca}.g{display:grid;grid-template-columns:1fr 1fr;gap:10px}.b{border:1px solid #e2e8f0;border-radius:8px;padding:8px}ul,ol{margin:4px 0;padding-left:18px}li{margin:2px 0}.none{color:#94a3b8}.box{border:1px solid #e2e8f0;border-radius:8px;padding:10px;background:#f8fafc}@media print{body{margin:10mm}}</style></head><body><h1>Fiche d\'analyse des causes racines</h1><p class="sub">' + escHtml(d.numero || '') + ' — ' + escHtml(d.produit_lot || '') + ' — édité le ' + new Date().toLocaleDateString('fr-FR') + '</p><h2>Problème</h2><div class="box">' + escHtml(d.description || '—') + '</div><h2>Ishikawa (5M) — causes potentielles</h2><div class="g">' + ishHtml + '</div><h2>5 Pourquoi</h2>' + p5Html + '<h2>Cause racine identifiée</h2><div class="box">' + escHtml(d.cause_racine || '—') + '</div></body></html>'
+  const w = window.open('', '_blank'); if (!w) { erreur.value = 'Autorise les pop-ups pour la fiche.'; return }
+  w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { try { w.print() } catch (e) {} }, 350)
+}
 </script>
 
 <template>
@@ -280,6 +305,44 @@ function creerCapaDepuisChg(c) { capaReset(); capaForm.changement_origine = c.nu
           <label class="of-col"><span class="of-lbl">CAPA liée</span><select v-model="devForm.capa_liee"><option value="">—</option><option v-for="c in capa" :key="c.id" :value="c.numero">{{ c.numero }}</option></select></label>
           <label class="of-col of-wide"><span class="of-lbl">Description *</span><textarea v-model="devForm.description" rows="2" placeholder="Description de la déviation"></textarea></label>
         </div>
+        <div v-if="peutEditer" class="acr-box">
+          <button type="button" class="acr-toggle" @click="acrOuvert = !acrOuvert">🔍 Analyse des causes (Ishikawa 5M + 5 Pourquoi) <span class="acr-ch">{{ acrOuvert ? '▲' : '▼' }}</span></button>
+          <div v-if="acrOuvert" class="acr-body">
+            <div class="ish-wrap">
+              <svg :viewBox="'0 0 ' + ISH_W + ' ' + ISH_H" class="ish-svg" preserveAspectRatio="xMidYMid meet">
+                <line :x1="30" :y1="spineY" :x2="ISH_W - 120" :y2="spineY" stroke="#0d9488" stroke-width="2.5" />
+                <polygon :points="(ISH_W - 120) + ',' + (spineY - 24) + ' ' + (ISH_W - 18) + ',' + spineY + ' ' + (ISH_W - 120) + ',' + (spineY + 24)" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5" />
+                <text :x="ISH_W - 69" :y="spineY - 3" text-anchor="middle" class="ish-head-t">Déviation</text>
+                <text :x="ISH_W - 69" :y="spineY + 11" text-anchor="middle" class="ish-head-t2">{{ devForm.numero || '—' }}</text>
+                <g v-for="b in branchesM" :key="b.k">
+                  <line :x1="b.bx" :y1="spineY" :x2="brEnd(b).x" :y2="brEnd(b).y" stroke="#94a3b8" stroke-width="2" />
+                  <rect :x="brEnd(b).x - 46" :y="b.top ? brEnd(b).y - 17 : brEnd(b).y + 1" width="92" height="16" rx="4" fill="#6366f1" />
+                  <text :x="brEnd(b).x" :y="b.top ? brEnd(b).y - 5 : brEnd(b).y + 13" text-anchor="middle" class="ish-m-t">{{ b.nom }}</text>
+                  <g v-for="(c, i) in devForm.ishikawa[b.k].slice(0, 5)" :key="i">
+                    <line :x1="causePos(b, i, Math.min(devForm.ishikawa[b.k].length, 5)).x" :y1="causePos(b, i, Math.min(devForm.ishikawa[b.k].length, 5)).y" :x2="causePos(b, i, Math.min(devForm.ishikawa[b.k].length, 5)).x - 24" :y2="causePos(b, i, Math.min(devForm.ishikawa[b.k].length, 5)).y" stroke="#cbd5e1" stroke-width="1" />
+                    <text :x="causePos(b, i, Math.min(devForm.ishikawa[b.k].length, 5)).x - 27" :y="causePos(b, i, Math.min(devForm.ishikawa[b.k].length, 5)).y + 3" text-anchor="end" class="ish-c-t">{{ c.length > 18 ? c.slice(0, 17) + '…' : c }}</text>
+                  </g>
+                </g>
+              </svg>
+            </div>
+            <div class="ish-cards">
+              <div v-for="b in branchesM" :key="b.k" class="ish-card">
+                <div class="ish-m">{{ b.nom }}</div>
+                <div class="ish-causes"><span v-for="(c, i) in devForm.ishikawa[b.k]" :key="i" class="ish-chip">{{ c }}<button type="button" @click="devForm.ishikawa[b.k].splice(i, 1)">×</button></span></div>
+                <input class="ish-input" placeholder="+ cause…" @keyup.enter="ajIsh(b.k, $event)" />
+              </div>
+            </div>
+            <div class="pq-box">
+              <div class="pq-head">5 Pourquoi — remonter à la cause racine</div>
+              <div v-for="(r, i) in devForm.cinq_pourquoi" :key="i" class="pq-row">
+                <span class="pq-n">Pourquoi {{ i + 1 }} ?</span>
+                <input v-model="devForm.cinq_pourquoi[i]" class="pq-input" placeholder="Parce que…" />
+              </div>
+            </div>
+            <label class="acr-racine"><span class="of-lbl">Cause racine identifiée</span><textarea v-model="devForm.cause_racine" rows="2" placeholder="Conclusion de l'analyse"></textarea></label>
+            <div class="acr-actions"><button type="button" class="q-btn ghost" @click="ficheACR">📄 Fiche ACR (PDF)</button></div>
+          </div>
+        </div>
         <div v-if="devForm.id" class="pj-box">
           <div class="pj-head">Pièces jointes</div>
           <div class="pj-list">
@@ -294,12 +357,12 @@ function creerCapaDepuisChg(c) { capaReset(); capaForm.changement_origine = c.nu
         <div v-if="!devListe.length" class="empty-sm">Aucune déviation enregistrée.</div>
         <div v-else class="q-tablewrap">
           <table class="q-table">
-            <thead><tr><th>N°</th><th>Date</th><th>Produit/Lot</th><th>Criticité</th><th>Description</th><th>Responsable</th><th>CAPA</th><th>Statut</th><th></th></tr></thead>
+            <thead><tr><th>N°</th><th>Date</th><th>Produit/Lot</th><th>Criticité</th><th>Description</th><th>Responsable</th><th>Cause racine</th><th>CAPA</th><th>Statut</th><th></th></tr></thead>
             <tbody>
               <tr v-for="d in devListe" :key="d.id">
                 <td class="qt-num">{{ d.numero || '—' }}</td><td>{{ fmtD(d.date_dev) }}</td><td>{{ d.produit_lot || '—' }}</td>
                 <td><span v-if="d.criticite" class="q-crit" :class="'crit-' + d.criticite.toLowerCase()">{{ d.criticite }}</span><span v-else>—</span></td>
-                <td class="qt-desc" :title="d.description">{{ d.description || '—' }}</td><td>{{ d.responsable || '—' }}</td><td>{{ d.capa_liee || '—' }}</td>
+                <td class="qt-desc" :title="d.description">{{ d.description || '—' }}</td><td>{{ d.responsable || '—' }}</td><td class="qt-desc" :title="d.cause_racine">{{ d.cause_racine || '—' }}</td><td>{{ d.capa_liee || '—' }}</td>
                 <td><span class="q-stat" :class="'st-' + statutKey(d.statut)">{{ d.statut }}</span></td>
                 <td class="qt-act"><button v-if="peutEditer && !d.capa_liee" class="lnk" @click="creerCapaDepuisDev(d)" title="Créer une CAPA">→ CAPA</button><button v-if="peutEditer" @click="devModifier(d)" title="Modifier">✎</button><button v-if="peutEditer" @click="devSupprimer(d)" title="Supprimer">🗑</button></td>
               </tr>
@@ -560,4 +623,30 @@ function creerCapaDepuisChg(c) { capaReset(); capaForm.changement_origine = c.nu
 .pj-del { border: 0; background: transparent; color: #dc2626; cursor: pointer; font-size: 14px; padding: 0; line-height: 1; }
 .pj-add { background: #eef2ff; color: #4338ca; border: 1px dashed #c7d2fe; border-radius: 8px; padding: 5px 11px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
 .pj-add:hover { background: #e0e7ff; }
+.acr-box { margin-top: 14px; padding-top: 14px; border-top: 1px solid #f1f5f9; }
+.acr-toggle { background: #faf5ff; color: #7c3aed; border: 1px solid #e9d5ff; border-radius: 9px; padding: 9px 16px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.acr-toggle:hover { background: #f3e8ff; }
+.acr-ch { font-size: 10px; }
+.acr-body { margin-top: 14px; }
+.ish-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; padding: 8px; margin-bottom: 14px; }
+.ish-svg { width: 100%; min-width: 620px; height: auto; display: block; }
+.ish-head-t { font-size: 11px; font-weight: 800; fill: #0f766e; }
+.ish-head-t2 { font-size: 9px; font-weight: 700; fill: #0d9488; }
+.ish-m-t { font-size: 10px; font-weight: 800; fill: #fff; }
+.ish-c-t { font-size: 9px; fill: #475569; }
+.ish-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.ish-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; }
+.ish-m { font-size: 11px; font-weight: 800; color: #4338ca; margin-bottom: 7px; }
+.ish-causes { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 7px; }
+.ish-chip { background: #ede9fe; color: #6d28d9; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; display: inline-flex; align-items: center; gap: 3px; }
+.ish-chip button { border: 0; background: transparent; color: #6d28d9; cursor: pointer; font-size: 12px; padding: 0; line-height: 1; }
+.ish-input { width: 100%; box-sizing: border-box; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 12px; }
+.pq-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+.pq-head { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; margin-bottom: 10px; }
+.pq-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+.pq-n { font-size: 12px; font-weight: 700; color: #7c3aed; width: 92px; flex-shrink: 0; }
+.pq-input { flex: 1; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; }
+.acr-racine { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.acr-racine textarea { padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; resize: vertical; }
+.acr-actions { display: flex; gap: 8px; }
 </style>
