@@ -175,7 +175,7 @@ const pilotActive = computed(() => PILOT.includes(route.path))
 const THEMES = [['clair', 'Clair'], ['indigo', 'Indigo'], ['emeraude', 'Émeraude'], ['violet', 'Violet'], ['ocean', 'Océan'], ['ardoise', 'Ardoise'], ['sombre', 'Sombre'], ['minuit', 'Minuit']]
 const theme = ref('clair')
 const themeOuvert = ref(false)
-const zoom = ref(80)
+const zoom = ref(70)
 function setZoom(z) {
   zoom.value = Math.max(20, Math.min(200, z))
   try { localStorage.setItem('ldmfab-zoom', String(zoom.value)) } catch (e) { /* ignore */ }
@@ -248,8 +248,8 @@ onMounted(async () => {
   try {
     const saved = localStorage.getItem('ldmfab-theme')
     if (saved) { theme.value = saved; document.documentElement.dataset.theme = saved }
-    const sz = parseInt(localStorage.getItem('ldmfab-zoom') || '', 10)
-    if (sz) zoom.value = Math.max(20, Math.min(200, sz))
+    if (!localStorage.getItem('ldmfab-zoom-v2')) { zoom.value = 70; localStorage.setItem('ldmfab-zoom', '70'); localStorage.setItem('ldmfab-zoom-v2', '1') }
+    else { const sz = parseInt(localStorage.getItem('ldmfab-zoom') || '', 10); if (sz) zoom.value = Math.max(20, Math.min(200, sz)) }
     if (window.innerWidth < 820) zoom.value = 100  // mobile/tablette : zoom 100% pour un responsive correct
     if (localStorage.getItem('ldmfab-sidebar-masquee') === '1') sidebarMasquee.value = true
   } catch (e) { /* ignore */ }
@@ -364,6 +364,8 @@ async function signOut() {
 </template>
 
 <style>
+/* Zoom géré uniquement par le contrôle global du bandeau : on neutralise les zooms définis par page */
+.app-main > main * { zoom: 1 !important; }
 * { box-sizing: border-box; }
 
 :root {
