@@ -39,6 +39,8 @@ async function charger() {
   const rg = await supabase.from('changements').select('*').order('id', { ascending: false })
   if (!rg.error) changements.value = rg.data || []
   await chargerPJ()
+  const rct = await supabase.from('causes_types').select('branche, libelle').order('libelle')
+  if (!rct.error) causesTypes.value = rct.data || []
 }
 onMounted(charger)
 
@@ -241,13 +243,8 @@ const branchesM = [
   { k: 'me', nom: 'Méthode', top: false, bx: 260 },
   { k: 'mi', nom: 'Milieu', top: false, bx: 410 }
 ]
-const BIBLIO = {
-  mo: ['Formation insuffisante', 'Habilitation manquante', 'Erreur humaine / inattention', 'Non-respect de la procédure', 'Charge de travail / stress', 'Communication / transmission', 'Relève d\'équipe', 'Compétence inadaptée'],
-  ma: ['Matière première non conforme', 'Article de conditionnement non conforme', 'Lot fournisseur défaillant', 'Péremption dépassée', 'Erreur d\'identification / étiquetage', 'Contamination', 'Stockage inadapté'],
-  mat: ['Panne équipement', 'Mauvais réglage / paramétrage', 'Maintenance insuffisante', 'Étalonnage expiré', 'Usure / vétusté', 'Nettoyage équipement insuffisant', 'Pièce défectueuse'],
-  me: ['Procédure inadaptée / incomplète', 'Instruction ambiguë', 'Paramètres de procédé inadaptés', 'Mode opératoire non suivi', 'Absence de procédure', 'Procédure obsolète', 'Contrôle en cours insuffisant'],
-  mi: ['Température hors spécification', 'Humidité hors spécification', 'Pression différentielle non conforme', 'Propreté des locaux', 'Flux inadapté', 'Éclairage insuffisant', 'Encombrement de la zone']
-}
+const causesTypes = ref([])
+const BIBLIO = computed(() => { const m = { mo: [], ma: [], mat: [], me: [], mi: [] }; for (const c of causesTypes.value) if (m[c.branche]) m[c.branche].push(c.libelle); return m })
 const brEnd = (b) => ({ x: b.bx - 65, y: b.top ? 50 : ISH_H - 50 })
 const causePos = (b, i, n) => { const e = brEnd(b); const f = (i + 1) / (n + 1); return { x: b.bx + (e.x - b.bx) * f, y: spineY + (e.y - spineY) * f } }
 function normIsh(ish) { const base = { mo: [], ma: [], mat: [], me: [], mi: [] }; if (ish) for (const k in base) if (Array.isArray(ish[k])) base[k] = ish[k].slice(); return base }
