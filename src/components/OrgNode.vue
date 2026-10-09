@@ -11,14 +11,7 @@
         <span v-if="anciente" class="on-anc" :class="ancClass" :title="node.date_recrutement ? ('Recruté le ' + fmtDate(node.date_recrutement)) : ''">⏳ {{ anciente }}</span>
         <span v-if="node.contrat" class="on-ct" :class="'ct-' + contratKey" :title="node.fin_cdd ? ('Fin CDD : ' + fmtDate(node.fin_cdd)) : ''">{{ node.contrat }}</span>
       </div>
-      <div class="on-meta" v-if="node.matricule || node.atelier_id || node.equipe || node.equipement || node.machine">
-        <span v-if="node.matricule">#{{ node.matricule }}</span>
-        <span v-if="node.atelier_id"> · {{ node.atelier_id }}</span>
-        <span v-if="node.equipe"> · Éq.{{ node.equipe }}</span>
-        <span v-if="node.equipement"> · {{ node.equipement }}</span>
-        <span v-if="node.machine"> · 🔧{{ node.machine }}</span>
-      </div>
-      <div class="on-tel" v-if="node.telephone">☎ {{ node.telephone }}</div>
+      <div class="on-meta" v-if="metaTxt">{{ metaTxt }}</div>
       <button v-if="enfants.length" class="on-fold" :class="{ plie: estPlie }" @click.stop="basculer" :title="estPlie ? 'Déplier' : 'Replier'">
         <span class="on-caret">{{ estPlie ? '▸' : '▾' }}</span> 👥 {{ nbDesc }}
       </button>
@@ -85,6 +78,7 @@ const ancMois = computed(() => { const d = props.node.date_recrutement; if (!d) 
 const anciente = computed(() => { const m = ancMois.value; if (m == null) return ''; const a = Math.floor(m / 12); return a >= 1 ? (a + ' an' + (a > 1 ? 's' : '')) : (m + ' mois') })
 const ancClass = computed(() => { const m = ancMois.value; if (m == null) return ''; const a = m / 12; return a >= 10 ? 'anc-or' : (a >= 5 ? 'anc-teal' : 'anc-gris') })
 const contratKey = computed(() => { const c = (props.node.contrat || '').toUpperCase(); if (c.indexOf('CDI') >= 0) return 'cdi'; if (c.indexOf('CDD') >= 0) { const d = props.node.fin_cdd; if (d) { const dt = new Date(d); if (!isNaN(dt) && Math.round((dt - new Date()) / 86400000) <= 60) return 'cdd-u' } return 'cdd' } return 'autre' })
+const metaTxt = computed(() => { const a = []; if (props.node.equipe) a.push('Éq.' + props.node.equipe); if (props.node.equipement) a.push(props.node.equipement); if (props.node.machine) a.push('🔧' + props.node.machine); return a.join(' · ') })
 </script>
 
 <style scoped>
