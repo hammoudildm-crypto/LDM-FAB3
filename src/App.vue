@@ -507,7 +507,7 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-item.perime { backg
 .signout { background: transparent; color: var(--topbar-muted); border: 1px solid var(--topbar-border); padding: 7px 12px; border-radius: 8px; font-size: 13px; cursor: pointer; white-space: nowrap; width: 100%; }
 .signout:hover { color: var(--topbar-text); border-color: var(--topbar-muted); background: rgba(255,255,255,.05); }
 
-main { padding: 16px 22px; max-width: 1560px; margin: 0 auto; width: 100%; }
+main { padding: 16px 14px; max-width: none; margin: 0 auto; width: 100%; }
 
 .error { color: #b91c1c; }
 
