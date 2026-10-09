@@ -184,7 +184,7 @@ const alertesCdd = computed(() => orgNodesAffiches.value
 const alertesEssai = computed(() => orgNodesAffiches.value
   .filter(n => n.fin_essai)
   .map(n => ({ id: n.id, nom: n.nom, fonction: n.fonction, fin: n.fin_essai, j: joursAvant(n.fin_essai) }))
-  .filter(n => n.j != null && n.j <= 30)
+  .filter(n => n.j != null && n.j >= 0 && n.j <= 30)
   .sort((a, b) => a.j - b.j))
 
 const AGE_BRACKETS = [[60, 200, '60 +'], [55, 59, '55-59'], [50, 54, '50-54'], [45, 49, '45-49'], [40, 44, '40-44'], [35, 39, '35-39'], [30, 34, '30-34'], [25, 29, '25-29'], [0, 24, '< 25']]
