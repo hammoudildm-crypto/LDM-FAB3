@@ -249,7 +249,7 @@ const flux = [
     links: [['/suivi', 'Suivi fab. & Saisie TRS'], ['/conditionnement', 'Conditionnement'], ['/passation', 'Passation de consigne']] },
   { label: 'Qualité — DDL', c: '#f43f5e',
     icon: `<g ${S}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></g>`,
-    links: [['/verification-ddl', 'DDL Fab — Production'], ['/verification-ddl-aq', 'DDL Fab — AQ'], ['/verification-ddl-cond', 'DDL Conditionnement'], ['/audit', "Journal d'audit"]] },
+    links: [['/verification-ddl', 'DDL Fab — Production'], ['/verification-ddl-aq', 'DDL Fab — AQ'], ['/verification-ddl-cond', 'DDL Conditionnement'], ['/qualite', 'Déviations / CAPA / Changements'], ['/audit', "Journal d'audit"]] },
   { label: 'Formation & Qualification', c: '#0d9488',
     icon: `<g ${S}><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/></g>`,
     links: [['/effectifs', 'Effectifs'], ['/organigramme', 'Organigramme'], ['/formations', 'Référentiel des formations'], ['/formations-exigences', 'Exigences par fonction'], ['/formations-planning', 'Planification & suivi'], ['/formations-enreg', 'Enregistrements'], ['/formations-matrice', 'Matrice & tableau de bord']] },
