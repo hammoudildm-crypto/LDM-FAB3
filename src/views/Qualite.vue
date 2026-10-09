@@ -559,7 +559,7 @@ function appliquerIA() {
 </template>
 
 <style scoped>
-.q-page { color: #1b2733; }
+.q-page { color: #1b2733; zoom: 0.6; }
 .q-alert { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-bottom: 12px; }
 .q-ok { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-bottom: 12px; }
 .q-tabs { display: inline-flex; flex-wrap: wrap; gap: 4px; background: #f1f5f9; border-radius: 10px; padding: 4px; margin-bottom: 18px; }
