@@ -108,6 +108,58 @@ async function chgEnregistrer() {
 }
 function chgModifier(c) { Object.assign(chgForm, { id: c.id, numero: c.numero || '', date_chg: c.date_chg || '', objet: c.objet || '', type: c.type || '', description: c.description || '', impact: c.impact || '', responsable: c.responsable || '', statut: c.statut || 'Demandé', date_cloture: c.date_cloture || '' }); tab.value = 'chg'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
 async function chgSupprimer(c) { if (!confirm('Supprimer le changement ' + (c.numero || '') + ' ?')) return; const r = await supabase.from('changements').delete().eq('id', c.id); if (r.error) { erreur.value = r.error.message; return } await charger() }
+
+const alertes = computed(() => {
+  const out = []
+  const auj = new Date(new Date().toISOString().slice(0, 10))
+  for (const c of capa.value) {
+    if (estEnRetard(c)) {
+      const j = Math.round((auj - new Date(c.echeance)) / 86400000)
+      out.push({ k: 'capa-' + c.id, type: 'CAPA en retard', numero: c.numero || '', texte: c.action || '', detail: 'échéance dépassée de ' + j + ' j', urgent: j > 15 })
+    }
+  }
+  for (const d of deviations.value) {
+    if (d.criticite === 'Critique' && d.statut !== 'Clôturée') {
+      const j = d.date_dev ? Math.round((auj - new Date(d.date_dev)) / 86400000) : null
+      out.push({ k: 'dev-' + d.id, type: 'Déviation critique', numero: d.numero || '', texte: d.description || '', detail: j != null ? ('ouverte depuis ' + j + ' j') : 'ouverte', urgent: j != null && j > 30 })
+    }
+  }
+  return out.sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0))
+})
+
+function donneesExport() {
+  if (tab.value === 'dev') return { titre: 'Déviations', cols: ['N°', 'Date', 'Produit/Lot', 'Criticité', 'Type', 'Description', 'Origine', 'Responsable', 'CAPA liée', 'Statut'], rows: devListe.value.map(d => [d.numero, fmtD(d.date_dev), d.produit_lot, d.criticite, d.type, d.description, d.origine, d.responsable, d.capa_liee, d.statut]) }
+  if (tab.value === 'capa') return { titre: 'CAPA', cols: ['N°', 'Date', 'Déviation', 'Origine', 'Type', 'Action', 'Responsable', 'Échéance', 'Statut', 'Efficacité'], rows: capaListe.value.map(c => [c.numero, fmtD(c.date_capa), c.deviation_origine, c.origine, c.type, c.action, c.responsable, fmtD(c.echeance), c.statut, c.efficacite]) }
+  return { titre: 'Changements', cols: ['N°', 'Date', 'Objet', 'Type', 'Description', 'Impact', 'Responsable', 'Statut', 'Clôture'], rows: chgListe.value.map(c => [c.numero, fmtD(c.date_chg), c.objet, c.type, c.description, c.impact, c.responsable, c.statut, fmtD(c.date_cloture)]) }
+}
+function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
+function tableHTML() {
+  const d = donneesExport()
+  const th = d.cols.map(c => '<th>' + escHtml(c) + '</th>').join('')
+  const tr = d.rows.map(r => '<tr>' + r.map(c => '<td>' + escHtml(c) + '</td>').join('') + '</tr>').join('')
+  return { titre: d.titre, n: d.rows.length, html: '<table border="1" cellspacing="0" cellpadding="4"><thead><tr>' + th + '</tr></thead><tbody>' + tr + '</tbody></table>' }
+}
+function telecharger(contenu, nom, mime, bom) {
+  const blob = new Blob([(bom ? '\ufeff' : '') + contenu], { type: mime })
+  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = nom; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1500)
+}
+function exportPDF() {
+  const t = tableHTML()
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + t.titre + '</title><style>body{font-family:Arial,sans-serif;font-size:11px;margin:16px}h1{font-size:18px;color:#0d9488;margin:0 0 4px}.sub{color:#64748b;font-size:11px;margin:0 0 12px}table{border-collapse:collapse;width:100%;font-size:9.5px}th{background:#f0fdfa;color:#0f766e;padding:5px;border:1px solid #cbd5e1;text-align:left;font-size:9px}td{padding:4px 5px;border:1px solid #e2e8f0}@media print{body{margin:8mm}}</style></head><body><h1>' + t.titre + ' — Qualité</h1><p class="sub">Édité le ' + new Date().toLocaleString('fr-FR') + ' — ' + t.n + ' ligne(s)</p>' + t.html + '</body></html>'
+  const w = window.open('', '_blank'); if (!w) { erreur.value = 'Autorise les pop-ups pour exporter en PDF.'; return }
+  w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { try { w.print() } catch (e) {} }, 350)
+}
+function exportWord() {
+  const t = tableHTML()
+  const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>body{font-family:Arial}h1{color:#0d9488}table{border-collapse:collapse;width:100%}th{background:#f0fdfa;color:#0f766e;padding:5px;border:1px solid #999;text-align:left}td{padding:4px;border:1px solid #ccc}</style></head><body><h1>' + t.titre + ' — Qualité</h1><p>Édité le ' + new Date().toLocaleString('fr-FR') + '</p>' + t.html + '</body></html>'
+  telecharger(html, t.titre + '_' + new Date().toISOString().slice(0, 10) + '.doc', 'application/msword', false)
+}
+function exportExcel() {
+  const d = donneesExport()
+  const esc = (s) => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"'
+  const lignes = [d.cols.map(esc).join(';')].concat(d.rows.map(r => r.map(esc).join(';')))
+  telecharger(lignes.join('\r\n'), d.titre + '_' + new Date().toISOString().slice(0, 10) + '.csv', 'text/csv;charset=utf-8', true)
+}
 </script>
 
 <template>
@@ -115,6 +167,16 @@ async function chgSupprimer(c) { if (!confirm('Supprimer le changement ' + (c.nu
     <PageHeader title="Qualité" tone="teal" subtitle="Déviations, CAPA et changements." />
     <p v-if="erreur" class="q-alert">{{ erreur }}</p>
     <p v-if="message" class="q-ok">{{ message }}</p>
+
+    <div class="q-alertes" v-if="alertes.length">
+      <div class="qa-head">⚠ Alertes qualité ({{ alertes.length }})</div>
+      <div v-for="a in alertes" :key="a.k" class="qa-row" :class="a.urgent ? 'qa-rouge' : 'qa-ambre'">
+        <span class="qa-tag">{{ a.type }}</span>
+        <span class="qa-num">{{ a.numero }}</span>
+        <span class="qa-txt">{{ a.texte }}</span>
+        <span class="qa-detail">{{ a.detail }}</span>
+      </div>
+    </div>
 
     <div class="q-tabs">
       <button :class="{ on: tab === 'dev' }" @click="tab = 'dev'">Déviations <span class="qt-n">{{ kpiDev.total }}</span></button>
@@ -148,7 +210,7 @@ async function chgSupprimer(c) { if (!confirm('Supprimer le changement ' + (c.nu
         <div class="q-actions"><button class="q-btn" @click="devEnregistrer">{{ devForm.id ? 'Mettre à jour' : 'Ajouter' }}</button><button v-if="devForm.id" class="q-btn ghost" @click="devReset">Annuler</button></div>
       </section>
       <section class="card">
-        <div class="q-bar"><input v-model="devRech" class="q-search" placeholder="Rechercher (N°, lot, description)…" /><select v-model="devFiltreStatut" class="q-filtre"><option value="">Tous les statuts</option><option v-for="s in STATUTS_DEV" :key="s" :value="s">{{ s }}</option></select><span class="q-count">{{ devListe.length }} déviation(s)</span></div>
+        <div class="q-bar"><input v-model="devRech" class="q-search" placeholder="Rechercher (N°, lot, description)…" /><select v-model="devFiltreStatut" class="q-filtre"><option value="">Tous les statuts</option><option v-for="s in STATUTS_DEV" :key="s" :value="s">{{ s }}</option></select><span class="q-count">{{ devListe.length }} déviation(s)</span><div class="q-exports"><button class="q-exp" @click="exportPDF" title="Exporter en PDF">📄 PDF</button><button class="q-exp" @click="exportWord" title="Exporter en Word">📝 Word</button><button class="q-exp" @click="exportExcel" title="Exporter en Excel (CSV)">📊 Excel</button></div></div>
         <div v-if="!devListe.length" class="empty-sm">Aucune déviation enregistrée.</div>
         <div v-else class="q-tablewrap">
           <table class="q-table">
@@ -193,7 +255,7 @@ async function chgSupprimer(c) { if (!confirm('Supprimer le changement ' + (c.nu
         <div class="q-actions"><button class="q-btn" @click="capaEnregistrer">{{ capaForm.id ? 'Mettre à jour' : 'Ajouter' }}</button><button v-if="capaForm.id" class="q-btn ghost" @click="capaReset">Annuler</button></div>
       </section>
       <section class="card">
-        <div class="q-bar"><input v-model="capaRech" class="q-search" placeholder="Rechercher (N°, action, déviation)…" /><select v-model="capaFiltreStatut" class="q-filtre"><option value="">Tous les statuts</option><option v-for="s in STATUTS_CAPA" :key="s" :value="s">{{ s }}</option></select><span class="q-count">{{ capaListe.length }} CAPA</span></div>
+        <div class="q-bar"><input v-model="capaRech" class="q-search" placeholder="Rechercher (N°, action, déviation)…" /><select v-model="capaFiltreStatut" class="q-filtre"><option value="">Tous les statuts</option><option v-for="s in STATUTS_CAPA" :key="s" :value="s">{{ s }}</option></select><span class="q-count">{{ capaListe.length }} CAPA</span><div class="q-exports"><button class="q-exp" @click="exportPDF" title="Exporter en PDF">📄 PDF</button><button class="q-exp" @click="exportWord" title="Exporter en Word">📝 Word</button><button class="q-exp" @click="exportExcel" title="Exporter en Excel (CSV)">📊 Excel</button></div></div>
         <div v-if="!capaListe.length" class="empty-sm">Aucune CAPA enregistrée.</div>
         <div v-else class="q-tablewrap">
           <table class="q-table">
@@ -237,7 +299,7 @@ async function chgSupprimer(c) { if (!confirm('Supprimer le changement ' + (c.nu
         <div class="q-actions"><button class="q-btn" @click="chgEnregistrer">{{ chgForm.id ? 'Mettre à jour' : 'Ajouter' }}</button><button v-if="chgForm.id" class="q-btn ghost" @click="chgReset">Annuler</button></div>
       </section>
       <section class="card">
-        <div class="q-bar"><input v-model="chgRech" class="q-search" placeholder="Rechercher (N°, objet, description)…" /><select v-model="chgFiltreStatut" class="q-filtre"><option value="">Tous les statuts</option><option v-for="s in STATUTS_CHG" :key="s" :value="s">{{ s }}</option></select><span class="q-count">{{ chgListe.length }} changement(s)</span></div>
+        <div class="q-bar"><input v-model="chgRech" class="q-search" placeholder="Rechercher (N°, objet, description)…" /><select v-model="chgFiltreStatut" class="q-filtre"><option value="">Tous les statuts</option><option v-for="s in STATUTS_CHG" :key="s" :value="s">{{ s }}</option></select><span class="q-count">{{ chgListe.length }} changement(s)</span><div class="q-exports"><button class="q-exp" @click="exportPDF" title="Exporter en PDF">📄 PDF</button><button class="q-exp" @click="exportWord" title="Exporter en Word">📝 Word</button><button class="q-exp" @click="exportExcel" title="Exporter en Excel (CSV)">📊 Excel</button></div></div>
         <div v-if="!chgListe.length" class="empty-sm">Aucun changement enregistré.</div>
         <div v-else class="q-tablewrap">
           <table class="q-table">
@@ -314,4 +376,18 @@ async function chgSupprimer(c) { if (!confirm('Supprimer le changement ' + (c.nu
 .qt-act button:hover { background: #f1f5f9; }
 .qt-act .lnk { color: #7c3aed; border-color: #ddd6fe; font-weight: 700; }
 .qt-act .lnk:hover { background: #f5f3ff; }
+.q-alertes { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
+.qa-head { font-size: 12px; font-weight: 800; color: #92400e; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px; }
+.qa-row { display: flex; align-items: center; gap: 8px; padding: 6px 2px; border-top: 1px solid #fef3c7; font-size: 13px; }
+.qa-tag { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.qa-row.qa-rouge .qa-tag { background: #fee2e2; color: #dc2626; }
+.qa-row.qa-ambre .qa-tag { background: #fef3c7; color: #b45309; }
+.qa-num { font-weight: 700; color: #0f172a; white-space: nowrap; }
+.qa-txt { color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.qa-detail { font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.qa-row.qa-rouge .qa-detail { color: #dc2626; }
+.qa-row.qa-ambre .qa-detail { color: #b45309; }
+.q-exports { display: inline-flex; gap: 6px; }
+.q-exp { border: 1px solid #cbd5e1; background: #fff; border-radius: 7px; padding: 6px 11px; font: inherit; font-size: 12.5px; font-weight: 600; color: #475569; cursor: pointer; }
+.q-exp:hover { background: #f8fafc; border-color: #94a3b8; }
 </style>
