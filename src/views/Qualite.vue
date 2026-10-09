@@ -241,6 +241,13 @@ const branchesM = [
   { k: 'me', nom: 'Méthode', top: false, bx: 260 },
   { k: 'mi', nom: 'Milieu', top: false, bx: 410 }
 ]
+const BIBLIO = {
+  mo: ['Formation insuffisante', 'Habilitation manquante', 'Erreur humaine / inattention', 'Non-respect de la procédure', 'Charge de travail / stress', 'Communication / transmission', 'Relève d\'équipe', 'Compétence inadaptée'],
+  ma: ['Matière première non conforme', 'Article de conditionnement non conforme', 'Lot fournisseur défaillant', 'Péremption dépassée', 'Erreur d\'identification / étiquetage', 'Contamination', 'Stockage inadapté'],
+  mat: ['Panne équipement', 'Mauvais réglage / paramétrage', 'Maintenance insuffisante', 'Étalonnage expiré', 'Usure / vétusté', 'Nettoyage équipement insuffisant', 'Pièce défectueuse'],
+  me: ['Procédure inadaptée / incomplète', 'Instruction ambiguë', 'Paramètres de procédé inadaptés', 'Mode opératoire non suivi', 'Absence de procédure', 'Procédure obsolète', 'Contrôle en cours insuffisant'],
+  mi: ['Température hors spécification', 'Humidité hors spécification', 'Pression différentielle non conforme', 'Propreté des locaux', 'Flux inadapté', 'Éclairage insuffisant', 'Encombrement de la zone']
+}
 const brEnd = (b) => ({ x: b.bx - 65, y: b.top ? 50 : ISH_H - 50 })
 const causePos = (b, i, n) => { const e = brEnd(b); const f = (i + 1) / (n + 1); return { x: b.bx + (e.x - b.bx) * f, y: spineY + (e.y - spineY) * f } }
 function normIsh(ish) { const base = { mo: [], ma: [], mat: [], me: [], mi: [] }; if (ish) for (const k in base) if (Array.isArray(ish[k])) base[k] = ish[k].slice(); return base }
@@ -255,6 +262,28 @@ function ficheACR() {
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fiche ACR</title><style>body{font-family:Arial,sans-serif;font-size:12px;margin:18px;color:#1b2733}h1{font-size:19px;color:#0d9488;margin:0 0 2px}.sub{color:#64748b;margin:0 0 14px;font-size:11px}h2{font-size:13px;margin:16px 0 6px;border-left:4px solid #0d9488;padding-left:8px}h3{font-size:12px;margin:6px 0 4px;color:#4338ca}.g{display:grid;grid-template-columns:1fr 1fr;gap:10px}.b{border:1px solid #e2e8f0;border-radius:8px;padding:8px}ul,ol{margin:4px 0;padding-left:18px}li{margin:2px 0}.none{color:#94a3b8}.box{border:1px solid #e2e8f0;border-radius:8px;padding:10px;background:#f8fafc}@media print{body{margin:10mm}}</style></head><body><h1>Fiche d\'analyse des causes racines</h1><p class="sub">' + escHtml(d.numero || '') + ' — ' + escHtml(d.produit_lot || '') + ' — édité le ' + new Date().toLocaleDateString('fr-FR') + '</p><h2>Problème</h2><div class="box">' + escHtml(d.description || '—') + '</div><h2>Ishikawa (5M) — causes potentielles</h2><div class="g">' + ishHtml + '</div><h2>5 Pourquoi</h2>' + p5Html + '<h2>Cause racine identifiée</h2><div class="box">' + escHtml(d.cause_racine || '—') + '</div></body></html>'
   const w = window.open('', '_blank'); if (!w) { erreur.value = 'Autorise les pop-ups pour la fiche.'; return }
   w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { try { w.print() } catch (e) {} }, 350)
+}
+
+const iaEnCours = ref(false)
+const iaSuggestion = ref(null)
+async function assistantIA() {
+  if (!devForm.description.trim()) { erreur.value = 'Saisis d\'abord la description de la déviation.'; return }
+  iaEnCours.value = true; iaSuggestion.value = null; erreur.value = ''; message.value = ''
+  try {
+    const { data, error } = await supabase.functions.invoke('analyse-deviation', { body: { description: devForm.description, produit_lot: devForm.produit_lot, zone: devForm.zone, criticite: devForm.criticite } })
+    if (error) { erreur.value = 'Assistant IA : ' + error.message; iaEnCours.value = false; return }
+    if (data && data.error) { erreur.value = 'Assistant IA : ' + data.error; iaEnCours.value = false; return }
+    iaSuggestion.value = data; acrOuvert.value = true
+  } catch (e) { erreur.value = 'Assistant IA : ' + (e.message || e) }
+  iaEnCours.value = false
+}
+function appliquerIA() {
+  const d = iaSuggestion.value; if (!d) return
+  if (d.criticite && !devForm.criticite) devForm.criticite = d.criticite
+  if (d.ishikawa) for (const k of ['mo', 'ma', 'mat', 'me', 'mi']) if (Array.isArray(d.ishikawa[k])) for (const c of d.ishikawa[k]) if (c && !devForm.ishikawa[k].includes(c)) devForm.ishikawa[k].push(c)
+  if (Array.isArray(d.cinq_pourquoi)) for (let i = 0; i < 5; i++) if (d.cinq_pourquoi[i] && !devForm.cinq_pourquoi[i]) devForm.cinq_pourquoi[i] = d.cinq_pourquoi[i]
+  if (d.cause_racine && !devForm.cause_racine) devForm.cause_racine = d.cause_racine
+  message.value = 'Suggestions IA appliquées — vérifie et ajuste.'; iaSuggestion.value = null
 }
 </script>
 
@@ -308,6 +337,16 @@ function ficheACR() {
         <div v-if="peutEditer" class="acr-box">
           <button type="button" class="acr-toggle" @click="acrOuvert = !acrOuvert">🔍 Analyse des causes (Ishikawa 5M + 5 Pourquoi) <span class="acr-ch">{{ acrOuvert ? '▲' : '▼' }}</span></button>
           <div v-if="acrOuvert" class="acr-body">
+            <div class="ia-box">
+              <button type="button" class="ia-btn" :disabled="iaEnCours" @click="assistantIA">{{ iaEnCours ? '🤖 Analyse en cours…' : '🤖 Assistant IA — proposer une analyse' }}</button>
+              <div v-if="iaSuggestion" class="ia-result">
+                <div class="ia-h">Proposition de l'IA — à valider</div>
+                <div v-if="iaSuggestion.criticite" class="ia-line"><b>Criticité :</b> {{ iaSuggestion.criticite }}</div>
+                <div v-if="iaSuggestion.cause_racine" class="ia-line"><b>Cause racine :</b> {{ iaSuggestion.cause_racine }}</div>
+                <div v-if="iaSuggestion.capa && iaSuggestion.capa.length" class="ia-line"><b>CAPA suggérées :</b><ul class="ia-ul"><li v-for="(c, i) in iaSuggestion.capa" :key="i">{{ c.type }} — {{ c.action }}</li></ul></div>
+                <div class="ia-actions"><button type="button" class="q-btn" @click="appliquerIA">Appliquer à l'analyse</button><button type="button" class="q-btn ghost" @click="iaSuggestion = null">Ignorer</button></div>
+              </div>
+            </div>
             <div class="ish-wrap">
               <svg :viewBox="'0 0 ' + ISH_W + ' ' + ISH_H" class="ish-svg" preserveAspectRatio="xMidYMid meet">
                 <line :x1="30" :y1="spineY" :x2="ISH_W - 120" :y2="spineY" stroke="#0d9488" stroke-width="2.5" />
@@ -329,7 +368,8 @@ function ficheACR() {
               <div v-for="b in branchesM" :key="b.k" class="ish-card">
                 <div class="ish-m">{{ b.nom }}</div>
                 <div class="ish-causes"><span v-for="(c, i) in devForm.ishikawa[b.k]" :key="i" class="ish-chip">{{ c }}<button type="button" @click="devForm.ishikawa[b.k].splice(i, 1)">×</button></span></div>
-                <input class="ish-input" placeholder="+ cause…" @keyup.enter="ajIsh(b.k, $event)" />
+                <input class="ish-input" placeholder="+ cause personnalisée…" @keyup.enter="ajIsh(b.k, $event)" />
+                <div class="ish-lib"><span v-for="c in BIBLIO[b.k].filter(x => !devForm.ishikawa[b.k].includes(x))" :key="c" class="ish-sugg" @click="devForm.ishikawa[b.k].push(c)">+ {{ c }}</span></div>
               </div>
             </div>
             <div class="pq-box">
@@ -641,6 +681,9 @@ function ficheACR() {
 .ish-chip { background: #ede9fe; color: #6d28d9; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; display: inline-flex; align-items: center; gap: 3px; }
 .ish-chip button { border: 0; background: transparent; color: #6d28d9; cursor: pointer; font-size: 12px; padding: 0; line-height: 1; }
 .ish-input { width: 100%; box-sizing: border-box; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 12px; }
+.ish-lib { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.ish-sugg { background: #fff; color: #64748b; border: 1px dashed #cbd5e1; font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 999px; cursor: pointer; }
+.ish-sugg:hover { background: #ede9fe; color: #6d28d9; border-color: #c4b5fd; }
 .pq-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
 .pq-head { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; margin-bottom: 10px; }
 .pq-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
@@ -649,4 +692,15 @@ function ficheACR() {
 .acr-racine { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
 .acr-racine textarea { padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; resize: vertical; }
 .acr-actions { display: flex; gap: 8px; }
+.ia-box { margin-bottom: 14px; }
+.ia-btn { background: linear-gradient(90deg, #8b5cf6, #6366f1); color: #fff; border: 0; border-radius: 9px; padding: 10px 18px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.ia-btn:hover:not(:disabled) { opacity: .92; }
+.ia-btn:disabled { opacity: .6; cursor: wait; }
+.ia-result { margin-top: 12px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 14px; }
+.ia-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #7c3aed; margin-bottom: 8px; }
+.ia-line { font-size: 13px; color: #475569; margin-bottom: 6px; }
+.ia-line b { color: #0f172a; }
+.ia-ul { margin: 4px 0 0; padding-left: 18px; }
+.ia-ul li { margin: 2px 0; }
+.ia-actions { display: flex; gap: 8px; margin-top: 10px; }
 </style>
