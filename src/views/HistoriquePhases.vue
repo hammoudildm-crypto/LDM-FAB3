@@ -341,7 +341,7 @@ function exporterPDF() { window.print() }
 
 <style scoped>
 .ho-page { min-height: 100%; background: #f6f7fb; }
-.ho-wrap { max-width: 1500px; margin: 0 auto; padding: 8px 14px 20px; }
+.ho-wrap { max-width: none; margin: 0; padding: 8px 0 20px; }
 .card { background: #fff; border: 1px solid #e6e8ef; border-radius: 12px; box-shadow: 0 1px 3px rgba(30, 41, 59, .05); }
 .ho-bar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 10px; flex-wrap: wrap; }
 .ho-search { flex: 1; min-width: 220px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
