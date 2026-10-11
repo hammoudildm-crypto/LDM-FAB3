@@ -175,7 +175,10 @@ async function chargerBase() {
   if (rp.error) { erreur.value = rp.error.message; return }
   params.value = rp.data || []
   const rpr = await supabase.from('produits').select('id, code_pf, designation').order('code_pf')
-  if (!rpr.error) produits.value = rpr.data || []
+  // On ne garde que les produits ayant au moins une mesure saisie (données remplies)
+  const rids = await supabase.from('pqr_mesures').select('produit_id')
+  const avecData = new Set((rids.data || []).map(x => Number(x.produit_id)))
+  if (!rpr.error) produits.value = (rpr.data || []).filter(pr => avecData.has(Number(pr.id)))
 }
 onMounted(chargerBase)
 
