@@ -963,10 +963,10 @@ onMounted(chargerTout)
 .pers-table td { padding: 9px 12px; border-top: 1px solid #f1f5f9; white-space: nowrap; }
 .pt-nom { font-weight: 700; color: #0f172a; }
 .pers-table th:first-child, .pers-table td:first-child { position: sticky; left: 0; z-index: 1; }
-.pers-table thead th:first-child { background: #f8fafc; z-index: 2; }
-.pers-table tbody td:first-child { background: #fff; box-shadow: 1px 0 0 #e2e8f0; }
+.pers-table thead th:first-child { background: #e0e7ff; z-index: 2; }
+.pers-table tbody td:first-child { background: #eef2ff; box-shadow: 1px 0 0 #e2e8f0; }
 .pers-table tbody tr:hover td { background: #eff6ff; }
-.pers-table tbody tr:hover td:first-child { background: #e0efff; }
+.pers-table tbody tr:hover td:first-child { background: #c7d2fe; }
 .pt-muted { color: #cbd5e1; }
 .pt-ct { font-size: 10.5px; font-weight: 900; padding: 2px 8px; border-radius: 999px; }
 .pt-ct.ct-cdi { background: #dcfce7; color: #16a34a; }
