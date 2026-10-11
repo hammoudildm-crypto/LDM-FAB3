@@ -17,7 +17,9 @@ const presenceOuverte = ref(false)
 // --- Synchronisation périodique automatique (recharge les pages de consultation) ---
 const AUTO_REFRESH_MS = 300000 // 5 minutes (filet de sécurité ; le temps réel gère l'instantané)
 // Écrans où l'on saisit : jamais de rechargement automatique, il effacerait le travail en cours.
-const ROUTES_SANS_AUTO = ['/ordres', '/suivi', '/conditionnement', '/saisie-trs', '/plan', '/referentiels', '/cadences', '/habilitations', '/effectifs', '/verification-ddl', '/verification-ddl-aq', '/verification-ddl-cond', '/compte', '/login', '/dispo-equipements', '/passation', '/capacite', '/ordonnancement', '/qse', '/equipement']
+// Seuls ces tableaux de bord (lecture seule) se rafraîchissent automatiquement.
+// Toute autre page — saisie, paramétrage, formulaires, pages futures — est protégée par défaut.
+const ROUTES_AVEC_AUTO = ['/accueil', '/temps-reel', '/tableau-de-bord', '/tableau-de-bord-classique', '/avancement', '/encours', '/rendement', '/ca', '/suivi-trs']
 let autoRefreshTimer = null
 // Ne jamais recharger pendant qu'un opérateur saisit (champ focalisé) ou qu'une fenêtre est ouverte
 const refreshEnAttente = ref(false)
@@ -37,20 +39,20 @@ function enSaisie() {
 }
 function surFinSaisie() {
   setTimeout(() => {
-    if (refreshEnAttente.value && !enSaisie() && verrousEdition.value === 0 && !ROUTES_SANS_AUTO.includes(route.path)) { refreshEnAttente.value = false; refreshTick.value++ }
+    if (refreshEnAttente.value && !enSaisie() && verrousEdition.value === 0 && ROUTES_AVEC_AUTO.includes(route.path)) { refreshEnAttente.value = false; refreshTick.value++ }
   }, 500)
 }
 function autoRefresh() {
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
   if (verrousEdition.value > 0) return  // modifications non enregistrées à l'écran
-  if (ROUTES_SANS_AUTO.includes(route.path)) return  // ne pas interrompre un écran de saisie
+  if (!ROUTES_AVEC_AUTO.includes(route.path)) return  // par défaut on protège la saisie ; seuls les tableaux de bord se rafraîchissent
   if (enSaisie()) { refreshEnAttente.value = true; return }  // opérateur en train de saisir : on diffère
   refreshTick.value++
 }
 let canalSync = null
 function onDbChange() {
   if (verrousEdition.value > 0) return  // modifications non enregistrées à l'écran
-  if (ROUTES_SANS_AUTO.includes(route.path)) return  // pas de rechargement pendant une saisie
+  if (!ROUTES_AVEC_AUTO.includes(route.path)) return  // par défaut on protège la saisie
   if (enSaisie()) { refreshEnAttente.value = true; return }  // opérateur en train de saisir : on diffère
   refreshTick.value++
 }
@@ -366,6 +368,8 @@ async function signOut() {
 <style>
 /* Zoom piloté uniquement par le contrôle global : on neutralise les zooms par page */
 .app-main > main * { zoom: 1 !important; }
+/* Exception : la page Hub est affichée un cran plus grand -> 0,7 (global) x 8/7 = 0,8 */
+.app-main > main .hub-root { zoom: 1.143 !important; }
 * { box-sizing: border-box; }
 
 :root {
