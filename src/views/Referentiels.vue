@@ -932,7 +932,7 @@ onMounted(async () => {
         <span class="chevron">{{ ouvert.peseeConfig ? '▾' : '▸' }}</span>
       </div>
       <div v-show="ouvert.peseeConfig">
-        <p style="color:#64748b;font-size:13px;margin:10px 0">Méthode de calcul et quantités théoriques (kg) de chaque produit. Reprises automatiquement dans « Calcul de pesée » à la sélection du produit.</p>
+        <p style="color:#64748b;font-size:13px;margin:10px 0">Méthode de calcul et quantités théoriques (kg) <b>du lot complet</b> de chaque produit. Le calcul de pesée les divise par le nombre de fractions. Reprises automatiquement dans « Calcul de pesée ».</p>
         <div class="form-grid" v-if="peutEditer">
           <label>Produit <span v-if="pcRecherche" style="color:#94a3b8">({{ pcProduitsFiltres.length }})</span>
             <input v-model="pcRecherche" type="search" class="pc-search" placeholder="Rechercher…" />
@@ -942,8 +942,8 @@ onMounted(async () => {
             <select v-model="pcMethode"><option value="standard">Standard</option><option value="cycladol">Cycladol</option><option value="perso">Personnalisé</option><option value="direct">Sans calcul (réel = théo)</option></select>
           </label>
           <label v-if="pcMethode === 'cycladol' || pcMethode === 'perso'">Valeur = 100 %<input v-model.number="pcConv" type="number" min="0" step="any" placeholder="10.46" /></label>
-          <label>Qté théo. API (kg)<input v-model.number="pcTheoApi" type="number" min="0" step="any" /></label>
-          <label>Qté théo. excipient (kg)<input v-model.number="pcTheoExc" type="number" min="0" step="any" /></label>
+          <label>Qté théo. API — lot (kg)<input v-model.number="pcTheoApi" type="number" min="0" step="any" /></label>
+          <label>Qté théo. excip. — lot (kg)<input v-model.number="pcTheoExc" type="number" min="0" step="any" /></label>
           <label>Nb fractions<input v-model.number="pcNbFrac" type="number" min="1" step="1" /></label>
           <div class="form-actions">
             <button class="btn" @click="enregistrerPC">{{ pcEditId ? 'Mettre à jour' : 'Ajouter' }}</button>
