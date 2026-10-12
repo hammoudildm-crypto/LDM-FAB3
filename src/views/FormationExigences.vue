@@ -15,7 +15,7 @@
         </select>
       </div>
 
-      <div v-if="!fonctions.length" class="empty-card">Aucune fonction trouvée dans l'organigramme. Ajoute des postes d'abord.</div>
+      <div v-if="!fonctions.length" class="empty-card">Aucun poste défini dans Référentiels. Ajoute des postes dans « Référentiels » d'abord.</div>
       <div v-else-if="!formations.length" class="empty-card">Aucune formation au référentiel. Ajoute des formations d'abord.</div>
       <div v-else-if="!fonctionSel" class="empty-card">Choisis une fonction pour définir ses formations obligatoires.</div>
 
@@ -48,7 +48,7 @@ import PageHeader from '../components/PageHeader.vue'
 const peutEditer = inject('peutEditer', ref(true))
 const CATS = ['BPF', 'Hygiène', 'Sécurité', 'Procédé', 'Documentation', 'Équipement']
 const formations = ref([])
-const fonctions = ref([])
+const postes = ref([])
 const requises = ref([])
 const fonctionSel = ref('')
 const requisSet = ref({})
@@ -58,8 +58,8 @@ const message = ref('')
 async function charger() {
   const rf = await supabase.from('formations').select('id, nom, categorie, validite_mois').eq('actif', true).order('ordre')
   if (!rf.error) formations.value = rf.data || []
-  const ro = await supabase.from('organigramme').select('fonction').eq('actif', true)
-  if (!ro.error) fonctions.value = [...new Set((ro.data || []).map(r => (r.fonction || '').trim()).filter(Boolean))].sort()
+  const rp = await supabase.from('postes').select('nom').order('nom')
+  if (!rp.error) postes.value = (rp.data || []).map(r => (r.nom || '').trim()).filter(Boolean)
   const rr = await supabase.from('formation_requise').select('*')
   if (!rr.error) requises.value = rr.data || []
 }
@@ -69,6 +69,11 @@ const catIndex = (c) => { const i = CATS.indexOf(c); return i >= 0 ? i : 999 }
 const categories = computed(() => [...new Set(formations.value.map(f => f.categorie || ''))].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : (catIndex(a) - catIndex(b)) || a.localeCompare(b))))
 function formationsDe(cat) { return formations.value.filter(f => (f.categorie || '') === cat).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
 const compteRequis = computed(() => { const m = {}; for (const r of requises.value) m[r.fonction] = (m[r.fonction] || 0) + 1; return m })
+// Liste des fonctions = postes du référentiel + toute fonction ayant déjà des exigences (pour ne rien perdre)
+const fonctions = computed(() => {
+  const dejaRequis = [...new Set(requises.value.map(r => (r.fonction || '').trim()).filter(Boolean))]
+  return [...new Set([...postes.value, ...dejaRequis])].sort((a, b) => a.localeCompare(b))
+})
 
 watch(fonctionSel, (fn) => {
   const obj = {}
