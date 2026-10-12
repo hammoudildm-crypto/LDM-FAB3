@@ -17,6 +17,16 @@
       </div>
 
       <div class="grid">
+        <label class="fld">Méthode de calcul
+          <select v-model="methode">
+            <option value="standard">Standard (× 100 ÷ titre)</option>
+            <option value="cycladol">Cycladol (× 10,46 ÷ titre)</option>
+            <option value="perso">Personnalisé</option>
+          </select>
+        </label>
+        <label class="fld" v-if="methode === 'perso'">Facteur
+          <input v-model.number="facteurPerso" type="number" min="0" step="any" placeholder="ex. 100" />
+        </label>
         <label class="fld">Quantité théorique totale API ({{ unite }})
           <input v-model.number="theoTotalAPI" type="number" min="0" step="any" placeholder="ex. 30" />
         </label>
@@ -54,9 +64,10 @@
 
       <p class="hint">
         <b>Titre</b> = Dosage − LOD. On traite les lots dans l'ordre à partir du théorique total.<br />
-        <b>Lot pesé / épuisé</b> : saisis sa <b>quantité réelle obtenue</b> → sa quantité théorique couverte = obtenue × titre ÷ 100.<br />
-        <b>Lot qui complète</b> : laisse la quantité obtenue <b>vide</b> → sa quantité à peser = théorique restant × 100 ÷ titre.<br />
-        <b>Titre ≥ 100 %</b> : aucune correction appliquée → la quantité réelle = la quantité théorique.
+        <b>Lot pesé / épuisé</b> : saisis sa <b>quantité réelle obtenue</b> → sa quantité théorique couverte = obtenue × titre ÷ {{ fmt(facteur) }}.<br />
+        <b>Lot qui complète</b> : laisse la quantité obtenue <b>vide</b> → sa quantité à peser = théorique restant × {{ fmt(facteur) }} ÷ titre.<br />
+        <span v-if="plafond != null"><b>Titre ≥ {{ plafond }} %</b> : aucune correction appliquée → la quantité réelle = la quantité théorique.</span>
+        <span v-else><b>Méthode {{ methode === 'cycladol' ? 'Cycladol' : 'personnalisée' }}</b> : facteur {{ fmt(facteur) }} (pas de plafond de titre).</span>
       </p>
       <p v-if="resteACouvrir != null && Math.abs(resteACouvrir) > 0.0005" class="warn">
         Reste théorique non couvert : <b>{{ fmt(resteACouvrir) }} {{ unite }}</b>.
@@ -192,6 +203,8 @@ const unite = ref('g')
 const theoTotalAPI = ref(null)
 const theoExc = ref(null)
 const lots = ref([{ lot: '', dosage: null, lod: null, obtenu: null }])
+const methode = ref('standard')
+const facteurPerso = ref(100)
 
 const produits = ref([])
 const produitSel = ref('')
@@ -215,28 +228,43 @@ const produitsFiltres = computed(() => {
 
 const vide = (x) => x === null || x === '' || x === undefined
 
+// Méthodes de calcul : facteur du produit + plafond éventuel du titre
+const METHODES = {
+  standard: { facteur: 100, plafond: 100 },
+  cycladol: { facteur: 10.46, plafond: null }
+}
+const facteur = computed(() => methode.value === 'perso' ? (Number(facteurPerso.value) > 0 ? Number(facteurPerso.value) : null) : METHODES[methode.value].facteur)
+const plafond = computed(() => methode.value === 'perso' ? null : METHODES[methode.value].plafond)
+function labelMethode(key, fac) {
+  if (key === 'cycladol') return 'Cycladol (× 10,46 ÷ titre)'
+  if (key === 'perso') return 'Personnalisé (× ' + fmt(fac) + ' ÷ titre)'
+  return 'Standard (× 100 ÷ titre)'
+}
+const methodeLabel = computed(() => labelMethode(methode.value, facteur.value))
+
 // Calcul séquentiel : on part du théorique total ; chaque lot pesé déduit sa part (obtenue x titre / 100),
 // le lot sans quantité obtenue prend le théorique restant et sa qté à peser = restant x 100 / titre.
 const lotsCalc = computed(() => {
   const total = (!vide(theoTotalAPI.value) && Number(theoTotalAPI.value) >= 0) ? Number(theoTotalAPI.value) : null
   let remaining = total
+  const fac = facteur.value, plaf = plafond.value
   const out = []
   for (let i = 0; i < lots.value.length; i++) {
     const l = lots.value[i]
     const dosage = Number(l.dosage), lod = Number(l.lod)
     const titre = (!vide(l.dosage) && !vide(l.lod)) ? dosage - lod : null
-    // Titre >= 100 % : aucune correction -> la quantité réelle = la quantité théorique (titre plafonné à 100)
-    const titreEff = titre != null ? Math.min(titre, 100) : null
+    // Titre effectif : plafonné selon la méthode (standard : 100 % ; Cycladol / perso : pas de plafond)
+    const titreEff = (titre != null) ? (plaf != null ? Math.min(titre, plaf) : titre) : null
     const obtenue = (!vide(l.obtenu) && Number(l.obtenu) >= 0) ? Number(l.obtenu) : null
     let theo = null, aPeser = null
-    if (titreEff != null && titreEff > 0 && remaining != null) {
+    if (fac != null && titreEff != null && titreEff > 0 && remaining != null) {
       if (obtenue != null) {
-        theo = obtenue * titreEff / 100
+        theo = obtenue * titreEff / fac
         aPeser = obtenue
         remaining = remaining - theo
       } else {
         theo = remaining > 0 ? remaining : 0
-        aPeser = theo * 100 / titreEff
+        aPeser = theo * fac / titreEff
         remaining = remaining - theo
       }
     } else {
@@ -312,7 +340,7 @@ function addLot() { lots.value.push({ lot: '', dosage: null, lod: null, obtenu: 
 function removeLot(i) { if (lots.value.length > 1) lots.value.splice(i, 1) }
 function reset() {
   lots.value = [{ lot: '', dosage: null, lod: null, obtenu: null }]
-  theoTotalAPI.value = null; theoExc.value = null; produitSel.value = ''; ofNum.value = ''; operateur.value = ''
+  theoTotalAPI.value = null; theoExc.value = null; methode.value = 'standard'; facteurPerso.value = 100; produitSel.value = ''; ofNum.value = ''; operateur.value = ''
   datePesee.value = new Date().toISOString().slice(0, 10); erreur.value = ''; message.value = ''
 }
 
@@ -351,6 +379,8 @@ async function enregistrer() {
     of_numero: ofNum.value || null,
     operateur: operateur.value || null,
     unite: unite.value,
+    methode: methode.value,
+    facteur: facteur.value,
     total_theo_api: totalTheoAPINum.value,
     total_reel_api: totalReelAPI.value,
     theo_excipient: vide(theoExc.value) ? null : Number(theoExc.value),
@@ -366,6 +396,8 @@ async function enregistrer() {
 
 function chargerPesee(p) {
   unite.value = p.unite || 'g'
+  methode.value = p.methode || 'standard'
+  if (p.methode === 'perso' && p.facteur != null) facteurPerso.value = p.facteur
   theoTotalAPI.value = p.total_theo_api
   theoExc.value = p.theo_excipient
   produitSel.value = p.produit_id != null ? String(p.produit_id) : ''
@@ -392,7 +424,7 @@ function snapshotActuel() {
   return {
     prNom: pr ? (pr.code_pf + ' — ' + pr.designation) : '—',
     ofNum: ofNum.value || '—', datePesee: datePesee.value || '—', operateur: operateur.value || '—',
-    unite: unite.value, theoTotal: totalTheoAPINum.value,
+    unite: unite.value, theoTotal: totalTheoAPINum.value, methode: methodeLabel.value,
     lots: lots.value.map((l, i) => ({ lot: l.lot || ('n°' + (i + 1)), dosage: vide(l.dosage) ? null : Number(l.dosage), lod: vide(l.lod) ? null : Number(l.lod), titre: lotsCalc.value[i].titre, obtenu: lotsCalc.value[i].obtenue, theo: lotsCalc.value[i].theo, reel: lotsCalc.value[i].aPeser })).filter(l => l.reel != null),
     theoExc: vide(theoExc.value) ? null : Number(theoExc.value), reelExc: reelExc.value,
     totalReelAPI: totalReelAPI.value, totalTheo: totalTheo.value, totalReel: totalReel.value
@@ -404,7 +436,7 @@ function snapshotStored(p) {
   const totReel = (p.total_reel_api != null && p.reel_excipient != null) ? p.total_reel_api + p.reel_excipient : null
   return {
     prNom: p.produit_libelle || '—', ofNum: p.of_numero || '—', datePesee: p.date_pesee || '—', operateur: p.operateur || '—',
-    unite: p.unite || 'g', theoTotal: p.total_theo_api,
+    unite: p.unite || 'g', theoTotal: p.total_theo_api, methode: labelMethode(p.methode || 'standard', p.facteur),
     lots: ls.map((l, i) => ({ lot: l.lot || ('n°' + (i + 1)), dosage: l.dosage, lod: l.lod, titre: l.titre, obtenu: l.obtenu, theo: l.theo, reel: l.reel })),
     theoExc: p.theo_excipient, reelExc: p.reel_excipient,
     totalReelAPI: p.total_reel_api, totalTheo: totTheo, totalReel: totReel
@@ -435,7 +467,8 @@ td.b{font-weight:800;color:#3730a3} tr.tot td{font-weight:800;background:#fafafa
 <div class="meta">
   <span>Produit : <b>${d.prNom}</b></span><span>N° OF : <b>${d.ofNum}</b></span>
   <span>Date de pesée : <b>${d.datePesee}</b></span><span>Opérateur : <b>${d.operateur}</b></span>
-  <span>Théorique total API : <b>${fmt(d.theoTotal)} ${u}</b></span><span>Édité le : <b>${now}</b></span>
+  <span>Théorique total API : <b>${fmt(d.theoTotal)} ${u}</b></span><span>Méthode : <b>${d.methode}</b></span>
+  <span>Édité le : <b>${now}</b></span>
 </div>
 <table>
   <thead><tr><th>Composant / Lot</th><th class="r">Dosage (%)</th><th class="r">LOD (%)</th><th class="r">Titre (%)</th><th class="r">Obtenue (${u})</th><th class="r">Théorique (${u})</th><th class="r">Réel à peser (${u})</th></tr></thead>
