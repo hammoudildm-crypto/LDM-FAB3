@@ -205,9 +205,8 @@ async function chargerTout() {
 
 // --- Configuration pesée par produit ---
 const pcProduit = ref('')
-const pcMethode = ref('standard')
-const pcConv = ref(null)
-const pcTheoApi = ref(null)
+function pcNewAPI() { return { nom: '', methode: 'standard', conversion: null, theo_api: null } }
+const pcApis = ref([pcNewAPI()])
 const pcTheoExc = ref(null)
 const pcNbFrac = ref(1)
 const pcEditId = ref(null)
@@ -226,14 +225,28 @@ async function chargerPC() {
   const r = await supabase.from('pesee_config').select('*')
   if (!r.error) peseeConfigs.value = r.data || []
 }
-function resetPC() { pcEditId.value = null; pcProduit.value = ''; pcRecherche.value = ''; pcMethode.value = 'standard'; pcConv.value = null; pcTheoApi.value = null; pcTheoExc.value = null; pcNbFrac.value = 1 }
+function resetPC() { pcEditId.value = null; pcProduit.value = ''; pcRecherche.value = ''; pcTheoExc.value = null; pcNbFrac.value = 1; pcApis.value = [pcNewAPI()] }
+function pcAddAPI() { pcApis.value.push(pcNewAPI()) }
+function pcRemoveAPI(i) { if (pcApis.value.length > 1) pcApis.value.splice(i, 1) }
+function resumeApis(c) {
+  const al = (c.apis && c.apis.length) ? c.apis : ((c.methode || c.theo_api != null) ? [{ nom: 'API', methode: c.methode, theo_api: c.theo_api }] : [])
+  if (!al.length) return '—'
+  return al.map(a => (a.nom || 'API') + ' (' + (a.methode || 'standard') + (a.theo_api != null ? ', ' + a.theo_api : '') + ')').join(' · ')
+}
 async function enregistrerPC() {
   if (!pcProduit.value) { erreur.value = 'Choisis un produit.'; return }
+  const apis = pcApis.value.map((a, i) => ({
+    nom: a.nom || ('API ' + (i + 1)), methode: a.methode,
+    conversion: ((a.methode === 'cycladol' || a.methode === 'perso') && a.conversion != null && a.conversion !== '') ? Number(a.conversion) : null,
+    theo_api: (a.theo_api != null && a.theo_api !== '') ? Number(a.theo_api) : null
+  }))
+  const first = apis[0] || {}
   const payload = {
     produit_id: Number(pcProduit.value),
-    methode: pcMethode.value,
-    conversion: (pcMethode.value !== 'standard' && pcConv.value != null && pcConv.value !== '') ? Number(pcConv.value) : null,
-    theo_api: (pcTheoApi.value != null && pcTheoApi.value !== '') ? Number(pcTheoApi.value) : null,
+    apis,
+    methode: first.methode || 'standard',
+    conversion: first.conversion != null ? first.conversion : null,
+    theo_api: first.theo_api != null ? first.theo_api : null,
     theo_excipient: (pcTheoExc.value != null && pcTheoExc.value !== '') ? Number(pcTheoExc.value) : null,
     nb_fractions: (pcNbFrac.value != null && pcNbFrac.value >= 1) ? Math.floor(Number(pcNbFrac.value)) : 1
   }
@@ -244,8 +257,11 @@ async function enregistrerPC() {
   erreur.value = ''; resetPC(); await chargerPC()
 }
 function editerPC(c) {
-  pcEditId.value = c.id; pcProduit.value = String(c.produit_id); pcMethode.value = c.methode || 'standard'
-  pcConv.value = c.conversion; pcTheoApi.value = c.theo_api; pcTheoExc.value = c.theo_excipient; pcNbFrac.value = c.nb_fractions || 1
+  pcEditId.value = c.id; pcProduit.value = String(c.produit_id)
+  pcTheoExc.value = c.theo_excipient; pcNbFrac.value = c.nb_fractions || 1
+  let al = (c.apis && c.apis.length) ? c.apis : null
+  if (!al && (c.methode || c.theo_api != null)) al = [{ nom: 'API', methode: c.methode || 'standard', conversion: c.conversion, theo_api: c.theo_api }]
+  pcApis.value = (al && al.length) ? al.map(a => ({ nom: a.nom || '', methode: a.methode || 'standard', conversion: a.conversion, theo_api: a.theo_api })) : [pcNewAPI()]
 }
 async function supprimerPC(c) {
   if (!confirm('Supprimer cette configuration ?')) return
@@ -932,34 +948,40 @@ onMounted(async () => {
         <span class="chevron">{{ ouvert.peseeConfig ? '▾' : '▸' }}</span>
       </div>
       <div v-show="ouvert.peseeConfig">
-        <p style="color:#64748b;font-size:13px;margin:10px 0">Méthode de calcul et quantités théoriques (kg) <b>du lot complet</b> de chaque produit. Le calcul de pesée les divise par le nombre de fractions. Reprises automatiquement dans « Calcul de pesée ».</p>
+        <p style="color:#64748b;font-size:13px;margin:10px 0">Pour chaque produit : nombre de fractions, excipient, et une ou <b>plusieurs API</b> (chacune avec sa méthode et sa quantité théorique <b>du lot complet</b>, en kg). Le calcul de pesée divise par le nombre de fractions.</p>
         <div class="form-grid" v-if="peutEditer">
           <label>Produit <span v-if="pcRecherche" style="color:#94a3b8">({{ pcProduitsFiltres.length }})</span>
             <input v-model="pcRecherche" type="search" class="pc-search" placeholder="Rechercher…" />
             <select v-model="pcProduit"><option value="">— Choisir —</option><option v-for="p in pcProduitsFiltres" :key="p.id" :value="String(p.id)">{{ p.code_pf }} — {{ p.designation }}</option></select>
           </label>
-          <label>Méthode
-            <select v-model="pcMethode"><option value="standard">Standard</option><option value="cycladol">Cycladol</option><option value="perso">Personnalisé</option><option value="direct">Sans calcul (réel = théo)</option></select>
-          </label>
-          <label v-if="pcMethode === 'cycladol' || pcMethode === 'perso'">Valeur = 100 %<input v-model.number="pcConv" type="number" min="0" step="any" placeholder="10.46" /></label>
-          <label>Qté théo. API — lot (kg)<input v-model.number="pcTheoApi" type="number" min="0" step="any" /></label>
           <label>Qté théo. excip. — lot (kg)<input v-model.number="pcTheoExc" type="number" min="0" step="any" /></label>
           <label>Nb fractions<input v-model.number="pcNbFrac" type="number" min="1" step="1" /></label>
-          <div class="form-actions">
-            <button class="btn" @click="enregistrerPC">{{ pcEditId ? 'Mettre à jour' : 'Ajouter' }}</button>
-            <button v-if="pcEditId" class="btn ghost" @click="resetPC">Annuler</button>
+        </div>
+        <div v-if="peutEditer" class="pc-apis">
+          <div class="pc-apis-head">Principes actifs (API)</div>
+          <div class="pc-api-row" v-for="(a, i) in pcApis" :key="i">
+            <input v-model="a.nom" type="text" placeholder="Nom API" class="pc-i pc-nom" />
+            <select v-model="a.methode" class="pc-i">
+              <option value="standard">Standard</option><option value="cycladol">Cycladol</option><option value="perso">Personnalisé</option><option value="direct">Sans calcul</option>
+            </select>
+            <input v-if="a.methode === 'cycladol' || a.methode === 'perso'" v-model.number="a.conversion" type="number" step="any" placeholder="100 % =" class="pc-i pc-conv" />
+            <input v-model.number="a.theo_api" type="number" step="any" placeholder="Qté théo. lot (kg)" class="pc-i" />
+            <button v-if="pcApis.length > 1" class="link danger pc-rm" @click="pcRemoveAPI(i)">✕</button>
           </div>
+          <button class="btn ghost" style="margin-top:8px" @click="pcAddAPI">+ Ajouter une API</button>
+        </div>
+        <div v-if="peutEditer" class="form-actions" style="margin-top:12px">
+          <button class="btn" @click="enregistrerPC">{{ pcEditId ? 'Mettre à jour' : 'Ajouter' }}</button>
+          <button v-if="pcEditId" class="btn ghost" @click="resetPC">Annuler</button>
         </div>
         <div v-if="!peseeConfigs.length" class="empty">Aucune configuration.</div>
         <div class="table-scroll" v-else>
           <table class="grid">
-            <thead><tr><th>Produit</th><th>Méthode</th><th class="right">100 %</th><th class="right">Théo API</th><th class="right">Théo excip.</th><th class="right">Fractions</th><th class="right">Actions</th></tr></thead>
+            <thead><tr><th>Produit</th><th>API (méthode, qté lot)</th><th class="right">Théo excip.</th><th class="right">Fractions</th><th class="right">Actions</th></tr></thead>
             <tbody>
               <tr v-for="c in peseeConfigs" :key="c.id">
                 <td>{{ libellePC(c.produit_id) }}</td>
-                <td>{{ c.methode }}</td>
-                <td class="right">{{ c.conversion != null ? c.conversion : '—' }}</td>
-                <td class="right">{{ c.theo_api != null ? c.theo_api : '—' }}</td>
+                <td>{{ resumeApis(c) }}</td>
                 <td class="right">{{ c.theo_excipient != null ? c.theo_excipient : '—' }}</td>
                 <td class="right">{{ c.nb_fractions || 1 }}</td>
                 <td class="right nowrap">
@@ -1096,4 +1118,11 @@ button.link.danger { color: #b91c1c; }
 .ct-del { border: 0; background: transparent; color: #dc2626; cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; }
 .ct-input { width: 100%; box-sizing: border-box; margin-top: 8px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 12px; }
 .pc-search { width: 100%; box-sizing: border-box; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 12px; margin-bottom: 2px; }
+.pc-apis { background: #f8fafc; border: 1px solid #eef2f6; border-radius: 10px; padding: 11px; margin-top: 8px; }
+.pc-apis-head { font-size: 12px; font-weight: 700; color: #4338ca; margin-bottom: 8px; }
+.pc-api-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 7px; }
+.pc-i { padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; }
+.pc-nom { flex: 1; min-width: 130px; }
+.pc-conv { width: 90px; }
+.pc-rm { border: 0; background: transparent; cursor: pointer; }
 </style>
