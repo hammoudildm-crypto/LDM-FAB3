@@ -86,6 +86,9 @@
     <section class="card">
       <h2 class="card-title">Excipient</h2>
       <div class="grid">
+        <label class="fld">N° lot excipient
+          <input v-model="lotExc" type="text" placeholder="N° lot" />
+        </label>
         <label class="fld">Quantité théorique excipient ({{ unite }})
           <input v-model.number="theoExc" type="number" min="0" step="any" placeholder="ex. 1500" />
         </label>
@@ -130,7 +133,7 @@
               <td class="r" :class="ecartCls(ecartAPI)">{{ sign(ecartAPI) }}{{ fmt(ecartAPI) }}</td>
             </tr>
             <tr v-if="reelExc != null">
-              <td>Excipient</td>
+              <td>Excipient <span v-if="lotExc" class="titre-badge">lot {{ lotExc }}</span></td>
               <td class="r">{{ fmt(theoExc) }}</td>
               <td class="r b">{{ fmt(reelExc) }}</td>
               <td class="r" :class="ecartCls(-ecartAPI)">{{ sign(-ecartAPI) }}{{ fmt(-ecartAPI) }}</td>
@@ -203,6 +206,7 @@ const peutEditer = inject('peutEditer', ref(true))
 const unite = ref('kg')
 const theoTotalAPI = ref(null)
 const theoExc = ref(null)
+const lotExc = ref('')
 const lots = ref([{ lot: '', dosage: null, lod: null, obtenu: null }])
 const methode = ref('standard')
 const convPerso = ref(100)
@@ -348,7 +352,7 @@ function addLot() { lots.value.push({ lot: '', dosage: null, lod: null, obtenu: 
 function removeLot(i) { if (lots.value.length > 1) lots.value.splice(i, 1) }
 function reset() {
   lots.value = [{ lot: '', dosage: null, lod: null, obtenu: null }]
-  theoTotalAPI.value = null; theoExc.value = null; methode.value = 'standard'; convPerso.value = 100; produitSel.value = ''; ofNum.value = ''; operateur.value = ''
+  theoTotalAPI.value = null; theoExc.value = null; lotExc.value = ''; methode.value = 'standard'; convPerso.value = 100; produitSel.value = ''; ofNum.value = ''; operateur.value = ''
   datePesee.value = new Date().toISOString().slice(0, 10); erreur.value = ''; message.value = ''
 }
 
@@ -414,6 +418,7 @@ async function enregistrer() {
     total_theo_api: totalTheoAPINum.value,
     total_reel_api: totalReelAPI.value,
     theo_excipient: vide(theoExc.value) ? null : Number(theoExc.value),
+    lot_excipient: lotExc.value || null,
     reel_excipient: reelExc.value,
     lots: lotsPayload()
   }
@@ -430,6 +435,7 @@ function chargerPesee(p) {
   if (p.methode === 'perso' && p.facteur != null) convPerso.value = p.facteur
   theoTotalAPI.value = p.total_theo_api
   theoExc.value = p.theo_excipient
+  lotExc.value = p.lot_excipient || ''
   produitSel.value = p.produit_id != null ? String(p.produit_id) : ''
   ofNum.value = p.of_numero || ''
   operateur.value = p.operateur || ''
@@ -457,7 +463,7 @@ function snapshotActuel() {
     ofNum: ofNum.value || '—', datePesee: datePesee.value || '—', operateur: operateur.value || '—',
     unite: unite.value, theoTotal: totalTheoAPINum.value, methode: methodeLabel.value,
     lots: lots.value.map((l, i) => ({ lot: l.lot || ('n°' + (i + 1)), dosage: vide(l.dosage) ? null : Number(l.dosage), lod: vide(l.lod) ? null : Number(l.lod), titre: lotsCalc.value[i].titre, obtenu: lotsCalc.value[i].obtenue, theo: lotsCalc.value[i].theo, reel: lotsCalc.value[i].aPeser })).filter(l => l.reel != null),
-    theoExc: vide(theoExc.value) ? null : Number(theoExc.value), reelExc: reelExc.value,
+    lotExc: lotExc.value, theoExc: vide(theoExc.value) ? null : Number(theoExc.value), reelExc: reelExc.value,
     totalReelAPI: totalReelAPI.value, totalTheo: totalTheo.value, totalReel: totalReel.value
   }
 }
@@ -469,7 +475,7 @@ function snapshotStored(p) {
     prNom: p.produit_libelle || '—', ofNum: p.of_numero || '—', datePesee: p.date_pesee || '—', operateur: p.operateur || '—',
     unite: p.unite || 'g', theoTotal: p.total_theo_api, methode: labelMethode(p.methode || 'standard', p.facteur),
     lots: ls.map((l, i) => ({ lot: l.lot || ('n°' + (i + 1)), dosage: l.dosage, lod: l.lod, titre: l.titre, obtenu: l.obtenu, theo: l.theo, reel: l.reel })),
-    theoExc: p.theo_excipient, reelExc: p.reel_excipient,
+    lotExc: p.lot_excipient, theoExc: p.theo_excipient, reelExc: p.reel_excipient,
     totalReelAPI: p.total_reel_api, totalTheo: totTheo, totalReel: totReel
   }
 }
@@ -477,7 +483,7 @@ function ficheHTML(d) {
   const now = new Date().toLocaleString('fr-FR')
   const u = d.unite
   const lignes = d.lots.map(l => `<tr><td>${l.lot}</td><td class="r">${l.dosage != null ? fmt(l.dosage) : '—'}</td><td class="r">${l.lod != null ? fmt(l.lod) : '—'}</td><td class="r">${l.titre != null ? fmt(l.titre) : '—'}</td><td class="r">${l.obtenu != null ? fmt(l.obtenu) : '—'}</td><td class="r">${fmt(l.theo)}</td><td class="r b">${fmt(l.reel)}</td></tr>`).join('')
-  const excLigne = d.reelExc != null ? `<tr><td>Excipient</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">${fmt(d.theoExc)}</td><td class="r b">${fmt(d.reelExc)}</td></tr>` : ''
+  const excLigne = d.reelExc != null ? `<tr><td>Excipient${d.lotExc ? ' — lot ' + d.lotExc : ''}</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">${fmt(d.theoExc)}</td><td class="r b">${fmt(d.reelExc)}</td></tr>` : ''
   const totLigne = d.totalReel != null ? `<tr class="tot"><td>Total</td><td colspan="4"></td><td class="r">${fmt(d.totalTheo)}</td><td class="r b">${fmt(d.totalReel)}</td></tr>` : ''
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Fiche de pesée</title>
 <style>
