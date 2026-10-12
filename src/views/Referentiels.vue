@@ -210,12 +210,22 @@ const pcConv = ref(null)
 const pcTheoApi = ref(null)
 const pcTheoExc = ref(null)
 const pcEditId = ref(null)
+const pcRecherche = ref('')
+const pcProduitsFiltres = computed(() => {
+  const q = pcRecherche.value.trim().toLowerCase()
+  let list = q ? produits.value.filter(p => ((p.code_pf || '') + ' ' + (p.designation || '')).toLowerCase().includes(q)) : produits.value
+  if (pcProduit.value && !list.some(p => String(p.id) === pcProduit.value)) {
+    const sel = produits.value.find(p => String(p.id) === pcProduit.value)
+    if (sel) list = [sel, ...list]
+  }
+  return list
+})
 function libellePC(id) { const pr = produits.value.find(x => String(x.id) === String(id)); return pr ? (pr.code_pf + ' — ' + pr.designation) : ('#' + id) }
 async function chargerPC() {
   const r = await supabase.from('pesee_config').select('*')
   if (!r.error) peseeConfigs.value = r.data || []
 }
-function resetPC() { pcEditId.value = null; pcProduit.value = ''; pcMethode.value = 'standard'; pcConv.value = null; pcTheoApi.value = null; pcTheoExc.value = null }
+function resetPC() { pcEditId.value = null; pcProduit.value = ''; pcRecherche.value = ''; pcMethode.value = 'standard'; pcConv.value = null; pcTheoApi.value = null; pcTheoExc.value = null }
 async function enregistrerPC() {
   if (!pcProduit.value) { erreur.value = 'Choisis un produit.'; return }
   const payload = {
@@ -922,8 +932,9 @@ onMounted(async () => {
       <div v-show="ouvert.peseeConfig">
         <p style="color:#64748b;font-size:13px;margin:10px 0">Méthode de calcul et quantités théoriques (kg) de chaque produit. Reprises automatiquement dans « Calcul de pesée » à la sélection du produit.</p>
         <div class="form-grid" v-if="peutEditer">
-          <label>Produit
-            <select v-model="pcProduit"><option value="">— Choisir —</option><option v-for="p in produits" :key="p.id" :value="String(p.id)">{{ p.code_pf }} — {{ p.designation }}</option></select>
+          <label>Produit <span v-if="pcRecherche" style="color:#94a3b8">({{ pcProduitsFiltres.length }})</span>
+            <input v-model="pcRecherche" type="search" class="pc-search" placeholder="Rechercher…" />
+            <select v-model="pcProduit"><option value="">— Choisir —</option><option v-for="p in pcProduitsFiltres" :key="p.id" :value="String(p.id)">{{ p.code_pf }} — {{ p.designation }}</option></select>
           </label>
           <label>Méthode
             <select v-model="pcMethode"><option value="standard">Standard</option><option value="cycladol">Cycladol</option><option value="perso">Personnalisé</option></select>
@@ -1080,4 +1091,5 @@ button.link.danger { color: #b91c1c; }
 .ct-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; color: #475569; padding: 3px 0; }
 .ct-del { border: 0; background: transparent; color: #dc2626; cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; }
 .ct-input { width: 100%; box-sizing: border-box; margin-top: 8px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 12px; }
+.pc-search { width: 100%; box-sizing: border-box; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 12px; margin-bottom: 2px; }
 </style>
