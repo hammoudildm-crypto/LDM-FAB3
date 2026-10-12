@@ -16,7 +16,7 @@
         </select>
       </label>
       <p v-if="produitSel && configParProduit[produitSel]" class="cfg-note ok-note">✓ Méthode et quantités théoriques chargées depuis la configuration du produit.</p>
-      <p v-else-if="produitSel" class="cfg-note">Aucune configuration pour ce produit. <a class="lnk" @click="ouvrirConfigProduit">Configurer maintenant</a></p>
+      <p v-else-if="produitSel" class="cfg-note">Aucune configuration pour ce produit. <router-link to="/referentiels" class="lnk">Configurer dans Référentiels</router-link></p>
     </section>
 
     <section class="card">
@@ -167,47 +167,6 @@
       </div>
     </section>
 
-    <section class="card">
-      <h2 class="card-title"><button class="cfg-toggle" @click="cfgOuvert = !cfgOuvert">{{ cfgOuvert ? '▾' : '▸' }} Configuration par produit ({{ configs.length }})</button></h2>
-      <div v-if="cfgOuvert">
-        <p class="hint">Définis pour chaque produit sa méthode et ses quantités théoriques. À la sélection du produit (en haut), tout est pré-rempli — plus de saisie manuelle.</p>
-        <p v-if="cfgMsg" class="ok">{{ cfgMsg }}</p>
-        <div class="grid">
-          <label class="fld">Produit
-            <select v-model="cfgProduit"><option value="">— Choisir —</option><option v-for="p in produits" :key="p.id" :value="String(p.id)">{{ p.code_pf }} — {{ p.designation }}</option></select>
-          </label>
-          <label class="fld">Méthode
-            <select v-model="cfgMethode"><option value="standard">Standard</option><option value="cycladol">Cycladol</option><option value="perso">Personnalisé</option></select>
-          </label>
-          <label class="fld" v-if="cfgMethode !== 'standard'">Valeur = 100 %
-            <input v-model.number="cfgConv" type="number" min="0" step="any" placeholder="ex. 10.46" />
-          </label>
-          <label class="fld">Qté théorique API (kg)
-            <input v-model.number="cfgTheoApi" type="number" min="0" step="any" />
-          </label>
-          <label class="fld">Qté théorique excipient (kg)
-            <input v-model.number="cfgTheoExc" type="number" min="0" step="any" />
-          </label>
-        </div>
-        <button class="btn" :disabled="!peutEditer" @click="enregistrerConfig">Enregistrer la configuration</button>
-        <div class="lots-wrap" style="margin-top:14px" v-if="configs.length">
-          <table class="t">
-            <thead><tr><th>Produit</th><th>Méthode</th><th class="r">100 %</th><th class="r">Théo API</th><th class="r">Théo excipient</th><th></th></tr></thead>
-            <tbody>
-              <tr v-for="c in configs" :key="c.id">
-                <td>{{ libelleProduit(c.produit_id) }}</td>
-                <td>{{ c.methode }}</td>
-                <td class="r">{{ c.conversion != null ? fmt(c.conversion) : '—' }}</td>
-                <td class="r">{{ c.theo_api != null ? fmt(c.theo_api) : '—' }}</td>
-                <td class="r">{{ c.theo_excipient != null ? fmt(c.theo_excipient) : '—' }}</td>
-                <td class="row-act"><button class="mini" @click="editerConfig(c)">Modifier</button><button v-if="peutEditer" class="mini del" @click="supprimerConfig(c)">✕</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
     <section class="card" v-if="historique.length">
       <h2 class="card-title">Pesées enregistrées</h2>
       <div class="lots-wrap">
@@ -248,15 +207,7 @@ const lots = ref([{ lot: '', dosage: null, lod: null, obtenu: null }])
 const methode = ref('standard')
 const convPerso = ref(100)
 let suppressWatch = false
-// Configuration par produit
 const configs = ref([])
-const cfgOuvert = ref(false)
-const cfgProduit = ref('')
-const cfgMethode = ref('standard')
-const cfgConv = ref(null)
-const cfgTheoApi = ref(null)
-const cfgTheoExc = ref(null)
-const cfgMsg = ref('')
 
 const produits = ref([])
 const produitSel = ref('')
@@ -295,7 +246,6 @@ function labelMethode(key, cv) {
 }
 const methodeLabel = computed(() => labelMethode(methode.value, conv.value))
 const configParProduit = computed(() => { const m = {}; for (const c of configs.value) if (c.produit_id != null) m[String(c.produit_id)] = c; return m })
-function libelleProduit(id) { const pr = produits.value.find(x => String(x.id) === String(id)); return pr ? (pr.code_pf + ' — ' + pr.designation) : ('#' + id) }
 
 // Calcul séquentiel : on part du théorique total ; chaque lot pesé déduit sa part (obtenue x titre / 100),
 // le lot sans quantité obtenue prend le théorique restant et sa qté à peser = restant x 100 / titre.
@@ -411,42 +361,6 @@ async function charger() {
 async function chargerConfigs() {
   const r = await supabase.from('pesee_config').select('*')
   if (!r.error) configs.value = r.data || []
-}
-async function enregistrerConfig() {
-  cfgMsg.value = ''
-  if (!cfgProduit.value) { cfgMsg.value = 'Choisis un produit.'; return }
-  const payload = {
-    produit_id: Number(cfgProduit.value),
-    methode: cfgMethode.value,
-    conversion: (cfgMethode.value !== 'standard' && !vide(cfgConv.value)) ? Number(cfgConv.value) : null,
-    theo_api: vide(cfgTheoApi.value) ? null : Number(cfgTheoApi.value),
-    theo_excipient: vide(cfgTheoExc.value) ? null : Number(cfgTheoExc.value)
-  }
-  const r = await supabase.from('pesee_config').upsert(payload, { onConflict: 'produit_id' })
-  if (r.error) { cfgMsg.value = r.error.message; return }
-  cfgMsg.value = 'Configuration enregistrée.'
-  await chargerConfigs()
-  if (produitSel.value === String(payload.produit_id)) {
-    if (payload.methode) methode.value = payload.methode
-    if (payload.methode === 'perso' && payload.conversion != null) convPerso.value = payload.conversion
-    if (payload.theo_api != null) theoTotalAPI.value = payload.theo_api
-    if (payload.theo_excipient != null) theoExc.value = payload.theo_excipient
-  }
-}
-function editerConfig(c) {
-  cfgProduit.value = String(c.produit_id); cfgMethode.value = c.methode || 'standard'
-  cfgConv.value = c.conversion; cfgTheoApi.value = c.theo_api; cfgTheoExc.value = c.theo_excipient
-  cfgOuvert.value = true; cfgMsg.value = ''
-}
-async function supprimerConfig(c) {
-  if (!window.confirm('Supprimer cette configuration ?')) return
-  const r = await supabase.from('pesee_config').delete().eq('id', c.id)
-  if (!r.error) await chargerConfigs()
-}
-function ouvrirConfigProduit() {
-  cfgProduit.value = produitSel.value; cfgMethode.value = methode.value
-  cfgConv.value = conv.value; cfgTheoApi.value = theoTotalAPI.value; cfgTheoExc.value = theoExc.value
-  cfgOuvert.value = true
 }
 async function chargerHistorique() {
   const r = await supabase.from('pesees').select('*').order('created_at', { ascending: false }).limit(50)
