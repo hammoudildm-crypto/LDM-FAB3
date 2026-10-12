@@ -48,6 +48,7 @@ import FormationReferentiel from '../views/FormationReferentiel.vue'
 import FormationEnregistrements from '../views/FormationEnregistrements.vue'
 import FormationMatrice from '../views/FormationMatrice.vue'
 import FormationExigences from '../views/FormationExigences.vue'
+import CalculPesee from '../views/CalculPesee.vue'
 import FormationPlanning from '../views/FormationPlanning.vue'
 
 const routes = [
@@ -76,6 +77,7 @@ const routes = [
   { path: '/formations-enreg', name: 'formations-enreg', component: FormationEnregistrements },
   { path: '/formations-matrice', name: 'formations-matrice', component: FormationMatrice },
   { path: '/formations-exigences', name: 'formations-exigences', component: FormationExigences },
+  { path: '/calcul-pesee', name: 'calcul-pesee', component: CalculPesee },
   { path: '/formations-planning', name: 'formations-planning', component: FormationPlanning },
   { path: '/ca', name: 'ca', component: ChiffreAffaires },
   { path: '/effectifs', name: 'effectifs', component: Effectifs },
