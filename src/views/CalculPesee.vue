@@ -193,7 +193,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, inject } from 'vue'
+import { ref, computed, onMounted, inject, watch } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
@@ -354,6 +354,14 @@ async function chargerHistorique() {
   if (!r.error) historique.value = r.data || []
 }
 onMounted(charger)
+
+// Sélection auto de la méthode Cycladol quand le produit Cycladol est choisi
+watch(produitSel, (id) => {
+  const pr = produits.value.find(x => String(x.id) === id)
+  const estCycladol = pr && /cycladol/i.test((pr.code_pf || '') + ' ' + (pr.designation || ''))
+  if (estCycladol) methode.value = 'cycladol'
+  else if (methode.value === 'cycladol') methode.value = 'standard'
+})
 
 function lotsPayload() {
   return lots.value.map((l, i) => ({
