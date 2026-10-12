@@ -20,11 +20,6 @@
       </label>
       <p v-if="produitSel && configParProduit[produitSel]" class="cfg-note ok-note">✓ Méthode(s) et quantités théoriques chargées depuis la configuration du produit.</p>
       <p v-else-if="produitSel" class="cfg-note">Aucune configuration pour ce produit. <router-link to="/referentiels" class="lnk">Configurer dans Référentiels</router-link></p>
-      <div class="grid" style="margin-top:12px">
-        <label class="fld">Nombre de fractions
-          <input v-model.number="nbFractions" type="number" min="1" step="1" />
-        </label>
-      </div>
       <p v-if="nbFracNum > 1 && totalTheoAPIFrac != null" class="frac-note">Lot divisé en <b>{{ nbFracNum }} fractions</b> → pesée d'<b>1 fraction</b> : API <b>{{ fmt(totalTheoAPIFrac) }} {{ unite }}</b><span v-if="theoExcFrac != null">, excipient <b>{{ fmt(theoExcFrac) }} {{ unite }}</b></span>. À répéter {{ nbFracNum }} fois.</p>
     </section>
 
