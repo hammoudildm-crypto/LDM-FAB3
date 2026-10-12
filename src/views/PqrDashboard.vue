@@ -153,11 +153,13 @@
             <div class="corr-card"><div class="cc-v">{{ corrData.n }}</div><div class="cc-l">Lots comparés</div></div>
           </div>
           <p class="corr-verdict" :class="corrForceCls">{{ corrTexte }}</p>
+          <div class="corr-actions"><button class="btn sm" @click="exporterAnalysePDF">📄 Exporter l'analyse (PDF)</button></div>
           <div class="chart-wrap">
             <svg :viewBox="'0 0 ' + corrData.W + ' ' + corrData.H" class="trend" preserveAspectRatio="xMidYMid meet">
               <line :x1="corrData.mL" :y1="corrData.mT" :x2="corrData.mL" :y2="corrData.H - corrData.mB" class="axis" />
               <line :x1="corrData.mL" :y1="corrData.H - corrData.mB" :x2="corrData.W - corrData.mR" :y2="corrData.H - corrData.mB" class="axis" />
               <line :x1="corrData.line.x1" :y1="corrData.line.y1" :x2="corrData.line.x2" :y2="corrData.line.y2" class="l-reg" />
+              <text :x="corrData.W - corrData.mR - 6" :y="corrData.mT + 14" class="eq-lbl" text-anchor="end">{{ corrEq }}</text>
               <circle v-for="(pt, i) in corrData.pts" :key="'cp' + i" :cx="pt.cx" :cy="pt.cy" r="4.5" class="pt-ok"><title>{{ pt.lot }} — X: {{ fmtNum(pt.x) }} · Y: {{ fmtNum(pt.y) }}</title></circle>
               <text :x="corrData.mL - 6" :y="corrData.mT + 5" class="ax">{{ corrData.ymax.toFixed(1) }}</text>
               <text :x="corrData.mL - 6" :y="corrData.H - corrData.mB + 4" class="ax">{{ corrData.ymin.toFixed(1) }}</text>
@@ -167,6 +169,26 @@
               <text x="14" :y="(corrData.mT + corrData.H - corrData.mB) / 2" class="ax-lbl" text-anchor="middle" :transform="'rotate(-90 14 ' + ((corrData.mT + corrData.H - corrData.mB) / 2) + ')'">{{ corrYnom }}</text>
             </svg>
             <div class="leg"><span class="lg"><i class="d-ok"></i>Lot (X, Y)</span><span class="lg"><i class="l-rg"></i>Tendance (régression)</span></div>
+          </div>
+        </div>
+
+        <div v-if="matriceCorr" class="mat-block">
+          <button class="mat-toggle" @click="matriceOuverte = !matriceOuverte">{{ matriceOuverte ? '▾' : '▸' }} Matrice de corrélation ({{ matriceCorr.params.length }} paramètres)</button>
+          <div v-if="matriceOuverte" class="mat-wrap">
+            <p class="hint">Chaque case = corrélation (r) entre deux paramètres. Bleu = positive, rouge = négative, intensité = force. Clique une case pour l'analyser en détail.</p>
+            <div class="mat-scroll">
+              <table class="mat-tbl">
+                <thead><tr><th class="mat-corner"></th><th v-for="(p, j) in matriceCorr.params" :key="'mh' + p.id" class="mat-h" :title="p.nom">{{ j + 1 }}</th></tr></thead>
+                <tbody>
+                  <tr v-for="(row, i) in matriceCorr.cells" :key="'mr' + i">
+                    <th class="mat-rh" :title="matriceCorr.params[i].nom">{{ i + 1 }}. {{ matriceCorr.params[i].nom }}</th>
+                    <td v-for="(c, j) in row" :key="'mc' + i + '_' + j" class="mat-c" :style="{ background: corrBg(c.r, c.self), color: corrFg(c.r, c.self) }"
+                        :title="matriceCorr.params[i].nom + ' × ' + matriceCorr.params[j].nom + (c.r != null ? ' : r = ' + c.r.toFixed(2) + (c.n ? ' (' + c.n + ' lots)' : '') : ' : données insuffisantes')"
+                        @click="!c.self && c.r != null && choisirPaire(matriceCorr.params[j].id, matriceCorr.params[i].id)">{{ c.self ? '1' : (c.r != null ? c.r.toFixed(2) : '·') }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -262,6 +284,37 @@ function cpkCalc(mean, std, lsl, usl) { if (std <= 0 || (lsl == null && usl == n
 const paramById = computed(() => { const m = {}; for (const p of params.value) m[p.id] = p; return m })
 
 // ---- Analyse d'impact entre paramètres (corrélation par lot) ----
+// valeurs moyennes par lot pour chaque paramètre numérique (réutilisé par le nuage et la matrice)
+const valParLotParam = computed(() => {
+  const m = {}
+  for (const r of mesuresPlat.value) {
+    const v = Number(r.valeur); if (Number.isNaN(v)) continue
+    const key = r.of_id != null ? 'of' + r.of_id : 'lot' + (r.numero_lot || '')
+    if (key === 'of' || key === 'lot') continue
+    if (!m[r.parametre_id]) m[r.parametre_id] = {}
+    const o = m[r.parametre_id]
+    if (!o[key]) o[key] = { s: 0, n: 0, lot: r.numero_lot }
+    o[key].s += v; o[key].n++
+  }
+  return m
+})
+function pearsonEntre(xid, yid) {
+  const mp = valParLotParam.value
+  const X = mp[xid], Y = mp[yid]
+  if (!X || !Y) return null
+  const pairs = []
+  for (const key of Object.keys(X)) { if (Y[key]) pairs.push({ x: X[key].s / X[key].n, y: Y[key].s / Y[key].n, lot: X[key].lot || Y[key].lot || '' }) }
+  if (pairs.length < 3) return { pairs, n: pairs.length, r: null }
+  const n = pairs.length
+  const mx = pairs.reduce((a, q) => a + q.x, 0) / n
+  const my = pairs.reduce((a, q) => a + q.y, 0) / n
+  let sxy = 0, sxx = 0, syy = 0
+  for (const q of pairs) { const dx = q.x - mx, dy = q.y - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy }
+  const r = (sxx > 0 && syy > 0) ? sxy / Math.sqrt(sxx * syy) : 0
+  const slope = sxx > 0 ? sxy / sxx : 0
+  const intercept = my - slope * mx
+  return { pairs, n, r, slope, intercept }
+}
 const paramsNumDispo = computed(() => {
   const avecData = new Set(mesuresPlat.value.map(m => m.parametre_id))
   return params.value.filter(p => p.type !== 'bool' && avecData.has(p.id))
@@ -269,28 +322,10 @@ const paramsNumDispo = computed(() => {
 const corrData = computed(() => {
   const xid = Number(corrX.value), yid = Number(corrY.value)
   if (!xid || !yid || xid === yid) return null
-  const parLotX = {}, parLotY = {}
-  const acc = (map, key, v, lot) => { if (!map[key]) map[key] = { s: 0, n: 0, lot }; map[key].s += v; map[key].n++ }
-  for (const m of mesuresPlat.value) {
-    const v = Number(m.valeur); if (Number.isNaN(v)) continue
-    const key = m.of_id != null ? 'of' + m.of_id : 'lot' + (m.numero_lot || '')
-    if (key === 'of' || key === 'lot') continue
-    if (m.parametre_id === xid) acc(parLotX, key, v, m.numero_lot)
-    if (m.parametre_id === yid) acc(parLotY, key, v, m.numero_lot)
-  }
-  const pairs = []
-  for (const key of Object.keys(parLotX)) {
-    if (parLotY[key]) pairs.push({ x: parLotX[key].s / parLotX[key].n, y: parLotY[key].s / parLotY[key].n, lot: parLotX[key].lot || parLotY[key].lot || '' })
-  }
-  if (pairs.length < 3) return { insuffisant: true, n: pairs.length }
-  const n = pairs.length
-  const mx = pairs.reduce((a, p) => a + p.x, 0) / n
-  const my = pairs.reduce((a, p) => a + p.y, 0) / n
-  let sxy = 0, sxx = 0, syy = 0
-  for (const p of pairs) { const dx = p.x - mx, dy = p.y - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy }
-  const r = (sxx > 0 && syy > 0) ? sxy / Math.sqrt(sxx * syy) : 0
-  const slope = sxx > 0 ? sxy / sxx : 0
-  const intercept = my - slope * mx
+  const c = pearsonEntre(xid, yid)
+  if (!c) return null
+  if (c.r == null) return { insuffisant: true, n: c.n }
+  const { pairs, n, r, slope, intercept } = c
   const W = 760, H = 380, mL = 58, mR = 24, mT = 22, mB = 52
   const xs = pairs.map(p => p.x), ys = pairs.map(p => p.y)
   let xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys)
@@ -318,6 +353,34 @@ const corrTexte = computed(() => {
   const sens = d.r > 0 ? 'augmenter' : 'diminuer'
   return 'Corrélation ' + force + ' et ' + (d.r > 0 ? 'positive' : 'négative') + ' (r = ' + d.r.toFixed(2) + ', R² = ' + (d.r2 * 100).toFixed(0) + '%) : lorsque ' + nx + ' augmente, ' + ny + ' tend à ' + sens + '. Le R² est la part de variation de ' + ny + ' statistiquement liée à ' + nx + '.'
 })
+const corrEq = computed(() => {
+  const d = corrData.value
+  if (!d || d.insuffisant) return ''
+  const a = d.slope, b = d.intercept
+  const af = parseFloat(a.toFixed(4)).toString()
+  const bf = parseFloat(Math.abs(b).toFixed(4)).toString()
+  return 'y = ' + af + '·x ' + (b >= 0 ? '+ ' : '− ') + bf
+})
+const matriceOuverte = ref(false)
+const matriceCorr = computed(() => {
+  const ps = paramsNumDispo.value
+  if (ps.length < 2) return null
+  const cells = ps.map(pi => ps.map(pj => {
+    if (pi.id === pj.id) return { r: 1, self: true, n: null }
+    const c = pearsonEntre(pi.id, pj.id)
+    return { r: (c && c.r != null) ? c.r : null, n: c ? c.n : 0, self: false }
+  }))
+  return { params: ps, cells }
+})
+function corrBg(r, self) {
+  if (self) return '#eef2ff'
+  if (r == null) return '#f8fafc'
+  const a = Math.min(1, Math.abs(r))
+  if (r >= 0) return 'rgba(37, 99, 235, ' + (0.1 + a * 0.72).toFixed(2) + ')'
+  return 'rgba(220, 38, 38, ' + (0.1 + a * 0.72).toFixed(2) + ')'
+}
+function corrFg(r, self) { if (self) return '#4338ca'; return (r != null && Math.abs(r) > 0.55) ? '#fff' : '#334155' }
+function choisirPaire(xid, yid) { corrX.value = String(xid); corrY.value = String(yid) }
 const synthese = computed(() => {
   const byParam = {}
   for (const m of mesuresPlat.value) { const v = Number(m.valeur); if (!Number.isNaN(v)) (byParam[m.parametre_id] = byParam[m.parametre_id] || []).push(v) }
@@ -463,6 +526,81 @@ tr.ph td{background:#f8fafc;font-weight:800;color:#a855f7;text-transform:upperca
   w.document.write(html); w.document.close(); w.focus()
   setTimeout(() => { try { w.print() } catch (e) {} }, 350)
 }
+
+function exporterAnalysePDF() {
+  const d = corrData.value
+  const pr = produits.value.find(x => String(x.id) === produitSel.value)
+  const prNom = pr ? (pr.code_pf + ' — ' + pr.designation) : ''
+  const now = new Date().toLocaleString('fr-FR')
+  const nx = corrXnom.value, ny = corrYnom.value
+  let scatterSvg = ''
+  if (d && !d.insuffisant) {
+    const ptsSvg = d.pts.map(pt => `<circle cx="${pt.cx}" cy="${pt.cy}" r="4" fill="#4f46e5" />`).join('')
+    scatterSvg = `<svg viewBox="0 0 ${d.W} ${d.H}" width="100%" style="max-width:560px;border:1px solid #e2e8f0;border-radius:8px;margin-top:6px">
+      <line x1="${d.mL}" y1="${d.mT}" x2="${d.mL}" y2="${d.H - d.mB}" stroke="#94a3b8" stroke-width="1"/>
+      <line x1="${d.mL}" y1="${d.H - d.mB}" x2="${d.W - d.mR}" y2="${d.H - d.mB}" stroke="#94a3b8" stroke-width="1"/>
+      <line x1="${d.line.x1}" y1="${d.line.y1}" x2="${d.line.x2}" y2="${d.line.y2}" stroke="#4f46e5" stroke-width="2" stroke-dasharray="6 4"/>
+      ${ptsSvg}
+      <text x="${d.W - d.mR - 6}" y="${d.mT + 14}" font-size="12" fill="#4f46e5" font-weight="700" text-anchor="end">${corrEq.value}</text>
+      <text x="${d.mL - 6}" y="${d.mT + 5}" font-size="10" fill="#64748b" text-anchor="end">${d.ymax.toFixed(1)}</text>
+      <text x="${d.mL - 6}" y="${d.H - d.mB + 4}" font-size="10" fill="#64748b" text-anchor="end">${d.ymin.toFixed(1)}</text>
+      <text x="${d.mL}" y="${d.H - d.mB + 16}" font-size="10" fill="#64748b">${d.xmin.toFixed(1)}</text>
+      <text x="${d.W - d.mR}" y="${d.H - d.mB + 16}" font-size="10" fill="#64748b" text-anchor="end">${d.xmax.toFixed(1)}</text>
+      <text x="${(d.mL + d.W - d.mR) / 2}" y="${d.H - 6}" font-size="11" fill="#475569" font-weight="700" text-anchor="middle">${nx}</text>
+    </svg>`
+  }
+  let matHtml = ''
+  const mc = matriceCorr.value
+  if (mc) {
+    const head = mc.params.map((p, j) => `<th title="${p.nom}">${j + 1}</th>`).join('')
+    const rows = mc.cells.map((row, i) => {
+      const tds = row.map(c => {
+        const bg = corrBg(c.r, c.self), fg = corrFg(c.r, c.self)
+        const txt = c.self ? '1' : (c.r != null ? c.r.toFixed(2) : '·')
+        return `<td style="background:${bg};color:${fg};text-align:center">${txt}</td>`
+      }).join('')
+      return `<tr><th style="text-align:left;white-space:nowrap">${i + 1}. ${mc.params[i].nom}</th>${tds}</tr>`
+    }).join('')
+    const leg = mc.params.map((p, j) => `${j + 1} = ${p.nom}`).join(' · ')
+    matHtml = `<h2>Matrice de corrélation</h2>
+      <table class="mat"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table>
+      <p class="note">${leg}</p>
+      <p class="note">Bleu = corrélation positive · Rouge = négative · intensité = force (|r|). « · » : moins de 3 lots communs.</p>`
+  }
+  const statBlock = (d && !d.insuffisant)
+    ? `<div class="kpis"><div class="k"><div class="v">${d.r.toFixed(3)}</div><div class="l">Corrélation r</div></div><div class="k"><div class="v">${(d.r2 * 100).toFixed(0)}%</div><div class="l">Variance R²</div></div><div class="k"><div class="v">${d.n}</div><div class="l">Lots comparés</div></div></div>
+       <p class="eq">Droite de régression : <b>${corrEq.value}</b></p>
+       <p class="verdict">${corrTexte.value}</p>
+       ${scatterSvg}`
+    : `<p class="note">Sélectionne deux paramètres ayant au moins 3 lots communs pour l'analyse détaillée (le tableau ci-dessous reste disponible).</p>`
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Analyse d'impact PQR</title>
+<style>
+*{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:28px;font-size:12px}
+h1{font-size:19px;margin:0 0 2px;color:#6b21a8} .sub{color:#64748b;font-size:12px;margin:0 0 14px}
+.meta{display:flex;gap:22px;flex-wrap:wrap;font-size:11px;color:#475569;border-top:2px solid #a855f7;border-bottom:1px solid #e2e8f0;padding:8px 0;margin-bottom:14px} .meta b{color:#0f172a}
+h2{font-size:13px;margin:18px 0 6px;border-left:4px solid #a855f7;padding-left:8px}
+.kpis{display:flex;gap:10px;margin:0 0 10px} .k{flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:8px;text-align:center}
+.k .v{font-size:18px;font-weight:800;color:#4f46e5} .k .l{font-size:10px;text-transform:uppercase;color:#94a3b8;font-weight:700}
+.eq{font-size:13px;margin:4px 0} .verdict{font-size:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 11px;line-height:1.45;margin:6px 0 12px}
+table.mat{border-collapse:collapse;font-size:10px;margin-top:4px}
+table.mat th{background:#faf5ff;color:#6b21a8;padding:3px 6px;border:1px solid #e9d5ff;font-weight:700}
+table.mat td{padding:3px 7px;border:1px solid #fff;font-weight:600}
+.note{font-size:10px;color:#94a3b8;margin-top:6px}
+.foot{margin-top:20px;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px}
+@media print{body{margin:12mm}}
+</style></head><body>
+<h1>Analyse d'impact entre paramètres — PQR</h1><p class="sub">${prNom}</p>
+<div class="meta"><span>Paramètres : <b>${nx || '—'}</b> vs <b>${ny || '—'}</b></span><span>Édité le <b>${now}</b></span></div>
+<h2>Relation ${nx || 'X'} → ${ny || 'Y'}</h2>
+${statBlock}
+${matHtml}
+<div class="foot">Document généré par ProdTrack — Module PQR. Une corrélation statistique n'implique pas nécessairement une relation de cause à effet.</div>
+</body></html>`
+  const w = window.open('', '_blank')
+  if (!w) { erreur.value = "Autorise les pop-ups pour exporter l'analyse en PDF."; return }
+  w.document.write(html); w.document.close(); w.focus()
+  setTimeout(() => { try { w.print() } catch (e) {} }, 350)
+}
 </script>
 
 <style scoped>
@@ -546,6 +684,20 @@ tr.ph td{background:#f8fafc;font-weight:800;color:#a855f7;text-transform:upperca
 .l-reg { stroke: #4f46e5; stroke-width: 2; stroke-dasharray: 6 4; fill: none; }
 .leg .l-rg { display: inline-block; width: 16px; height: 2px; background: repeating-linear-gradient(90deg, #4f46e5 0 5px, transparent 5px 9px); vertical-align: middle; }
 .ax-lbl { font-size: 11px; fill: #475569; font-weight: 700; }
+.eq-lbl { font-size: 12px; fill: #4f46e5; font-weight: 700; }
+.corr-actions { margin: 10px 0 2px; }
+.mat-block { margin-top: 16px; }
+.mat-toggle { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 700; color: #334155; cursor: pointer; }
+.mat-toggle:hover { background: #e2e8f0; }
+.mat-wrap { margin-top: 8px; }
+.mat-scroll { overflow-x: auto; }
+.mat-tbl { border-collapse: collapse; font-size: 11px; }
+.mat-tbl th { background: #faf5ff; color: #6b21a8; padding: 4px 8px; border: 1px solid #e9d5ff; font-weight: 700; white-space: nowrap; }
+.mat-tbl .mat-rh { text-align: left; position: sticky; left: 0; z-index: 1; }
+.mat-tbl .mat-h { text-align: center; min-width: 34px; }
+.mat-tbl .mat-corner { position: sticky; left: 0; z-index: 2; }
+.mat-tbl .mat-c { text-align: center; padding: 5px 8px; border: 1px solid #fff; font-weight: 700; cursor: pointer; min-width: 34px; }
+.mat-tbl .mat-c:hover { outline: 2px solid #4f46e5; outline-offset: -2px; }
 .trend { width: 100%; height: auto; background: #fcfcfd; border: 1px solid #eef2f6; border-radius: 12px; }
 .trend .axis { stroke: #cbd5e1; stroke-width: 1; }
 .trend .l-spec { stroke: #f87171; stroke-width: 1.5; stroke-dasharray: 5 4; }
