@@ -9,11 +9,7 @@
     <section class="card">
       <div class="card-head">
         <h2 class="card-title">API</h2>
-        <select v-model="unite" class="u-sel" style="margin-left:auto">
-          <option value="mg">mg</option>
-          <option value="g">g</option>
-          <option value="kg">kg</option>
-        </select>
+        <span class="u-fixed" style="margin-left:auto">Unité : kg</span>
       </div>
 
       <div class="grid">
@@ -199,7 +195,7 @@ import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
 
-const unite = ref('g')
+const unite = ref('kg')
 const theoTotalAPI = ref(null)
 const theoExc = ref(null)
 const lots = ref([{ lot: '', dosage: null, lod: null, obtenu: null }])
@@ -403,7 +399,6 @@ async function enregistrer() {
 }
 
 function chargerPesee(p) {
-  unite.value = p.unite || 'g'
   methode.value = p.methode || 'standard'
   if (p.methode === 'perso' && p.facteur != null) facteurPerso.value = p.facteur
   theoTotalAPI.value = p.total_theo_api
@@ -505,7 +500,7 @@ function exporterPeseePDF(p) { imprimer(ficheHTML(snapshotStored(p))) }
 .alert { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; font-size: 13px; }
 .warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 9px 12px; border-radius: 8px; margin: 10px 0 0; font-size: 12px; }
 .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; font-size: 13px; }
-.u-sel { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 700; background: #fff; color: #1b2733; }
+.u-fixed { font-size: 13px; font-weight: 700; color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 8px; padding: 6px 12px; }
 .lots-wrap { overflow-x: auto; margin-bottom: 10px; }
 .lots-tbl { border-collapse: collapse; width: 100%; font-size: 13px; }
 .lots-tbl th { text-align: left; background: #f8fafc; color: #475569; padding: 7px 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-transform: uppercase; white-space: nowrap; vertical-align: bottom; }
