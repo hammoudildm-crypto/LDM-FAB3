@@ -1,14 +1,14 @@
 <template>
   <div class="pes-page">
     <PageHeader title="Pesée — Calcul API / Excipient" tone="#4f46e5"
-      subtitle="Calcule les quantités réelles à peser, enregistre la pesée et édite la fiche. Le titre de chaque lot d'API est déduit du dosage et de la LOD." />
+      subtitle="Pesée séquentielle multi-lots : on part du théorique total, chaque lot épuisé déduit sa part, et le lot qui complète est calculé sur le théorique restant." />
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="message" class="ok">{{ message }}</p>
 
     <section class="card">
       <div class="card-head">
-        <h2 class="card-title">API — lots</h2>
+        <h2 class="card-title">API</h2>
         <select v-model="unite" class="u-sel" style="margin-left:auto">
           <option value="mg">mg</option>
           <option value="g">g</option>
@@ -16,27 +16,35 @@
         </select>
       </div>
 
+      <div class="grid">
+        <label class="fld">Quantité théorique totale API ({{ unite }})
+          <input v-model.number="theoTotalAPI" type="number" min="0" step="any" placeholder="ex. 30" />
+        </label>
+      </div>
+
       <div class="lots-wrap">
         <table class="lots-tbl">
           <thead>
             <tr>
               <th>Lot API</th>
-              <th>Qté théorique ({{ unite }})</th>
               <th>Dosage (%)</th>
               <th>LOD (%)</th>
               <th>Titre (%)</th>
-              <th>Qté réelle ({{ unite }})</th>
+              <th>Qté réelle obtenue ({{ unite }})<br /><span class="th-sub">lot pesé / épuisé</span></th>
+              <th>Qté théorique ({{ unite }})</th>
+              <th>Qté réelle à peser ({{ unite }})</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(l, i) in lots" :key="i">
               <td><input v-model="l.lot" type="text" placeholder="N° lot" /></td>
-              <td><input v-model.number="l.theo" type="number" min="0" step="any" placeholder="ex. 500" /></td>
-              <td><input v-model.number="l.dosage" type="number" min="0" step="any" placeholder="ex. 99.5" /></td>
-              <td><input v-model.number="l.lod" type="number" min="0" step="any" placeholder="ex. 0.5" /></td>
+              <td><input v-model.number="l.dosage" type="number" min="0" step="any" placeholder="99.5" /></td>
+              <td><input v-model.number="l.lod" type="number" min="0" step="any" placeholder="0.5" /></td>
               <td class="calc">{{ lotsCalc[i].titre != null ? fmt(lotsCalc[i].titre) + ' %' : '—' }}</td>
-              <td class="calc b">{{ lotsCalc[i].reel != null ? fmt(lotsCalc[i].reel) : '—' }}</td>
+              <td><input v-model.number="l.obtenu" type="number" min="0" step="any" placeholder="laisser vide = lot qui complète" /></td>
+              <td class="calc">{{ lotsCalc[i].theo != null ? fmt(lotsCalc[i].theo) : '—' }}</td>
+              <td class="calc b" :class="{ hl: lotsCalc[i].obtenue == null && lotsCalc[i].aPeser != null }">{{ lotsCalc[i].aPeser != null ? fmt(lotsCalc[i].aPeser) : '—' }}</td>
               <td><button v-if="lots.length > 1" class="x" @click="removeLot(i)" title="Supprimer ce lot">✕</button></td>
             </tr>
           </tbody>
@@ -45,9 +53,13 @@
       <button class="btn ghost sm" @click="addLot">+ Ajouter un lot API</button>
 
       <p class="hint">
-        <b>Titre</b> de chaque lot = <b>Dosage − LOD</b>.<br />
-        <b>API :</b> qté réelle × titre = qté théorique × 100 → qté réelle = qté théorique × 100 ÷ titre (par lot).<br />
-        <b>Excipient :</b> total réel API + réel excipient = total théorique API + théorique excipient (masse totale constante).
+        <b>Titre</b> = Dosage − LOD. On traite les lots dans l'ordre à partir du théorique total.<br />
+        <b>Lot pesé / épuisé</b> : saisis sa <b>quantité réelle obtenue</b> → sa quantité théorique couverte = obtenue × titre ÷ 100.<br />
+        <b>Lot qui complète</b> : laisse la quantité obtenue <b>vide</b> → sa quantité à peser = théorique restant × 100 ÷ titre.
+      </p>
+      <p v-if="resteACouvrir != null && Math.abs(resteACouvrir) > 0.0005" class="warn">
+        Reste théorique non couvert : <b>{{ fmt(resteACouvrir) }} {{ unite }}</b>.
+        {{ resteACouvrir > 0 ? 'Ajoute un lot (ou laisse le dernier lot sans quantité obtenue) pour compléter.' : 'Les quantités obtenues dépassent le théorique total.' }}
       </p>
     </section>
 
@@ -70,7 +82,7 @@
           <div class="res-card api">
             <div class="rc-l">Total réel API</div>
             <div class="rc-v">{{ fmt(totalReelAPI) }} <span>{{ unite }}</span></div>
-            <div class="rc-e" v-if="ecartAPI != null">{{ sign(ecartAPI) }}{{ fmt(ecartAPI) }} {{ unite }} vs théorique</div>
+            <div class="rc-e" v-if="ecartAPI != null">{{ sign(ecartAPI) }}{{ fmt(ecartAPI) }} {{ unite }} vs théorique ({{ fmt(theoTotalAPI) }})</div>
           </div>
           <div class="res-card exc" :class="{ neg: excipientNegatif }" v-if="reelExc != null">
             <div class="rc-l">Quantité réelle excipient</div>
@@ -83,14 +95,17 @@
           <thead><tr><th>Composant</th><th class="r">Théorique ({{ unite }})</th><th class="r">Réel ({{ unite }})</th><th class="r">Écart ({{ unite }})</th></tr></thead>
           <tbody>
             <tr v-for="l in lotsReels" :key="l.idx">
-              <td>API — lot {{ l.lot || ('n°' + (l.idx + 1)) }} <span class="titre-badge">titre {{ fmt(l.titre) }} %</span></td>
-              <td class="r">{{ fmt(l.theoNum) }}</td>
-              <td class="r b">{{ fmt(l.reel) }}</td>
-              <td class="r" :class="ecartCls(l.reel - l.theoNum)">{{ sign(l.reel - l.theoNum) }}{{ fmt(l.reel - l.theoNum) }}</td>
+              <td>API — lot {{ l.lot || ('n°' + (l.idx + 1)) }}
+                <span class="titre-badge">titre {{ fmt(l.titre) }} %</span>
+                <span v-if="l.obtenue == null" class="comp-badge">complète</span>
+              </td>
+              <td class="r">{{ fmt(l.theo) }}</td>
+              <td class="r b">{{ fmt(l.aPeser) }}</td>
+              <td class="r" :class="ecartCls(l.aPeser - l.theo)">{{ sign(l.aPeser - l.theo) }}{{ fmt(l.aPeser - l.theo) }}</td>
             </tr>
             <tr class="sub" v-if="lotsReels.length > 1">
               <td>Total API</td>
-              <td class="r">{{ fmt(totalTheoAPI) }}</td>
+              <td class="r">{{ fmt(theoTotalAPI) }}</td>
               <td class="r b">{{ fmt(totalReelAPI) }}</td>
               <td class="r" :class="ecartCls(ecartAPI)">{{ sign(ecartAPI) }}{{ fmt(ecartAPI) }}</td>
             </tr>
@@ -172,8 +187,9 @@ import PageHeader from '../components/PageHeader.vue'
 const peutEditer = inject('peutEditer', ref(true))
 
 const unite = ref('g')
+const theoTotalAPI = ref(null)
 const theoExc = ref(null)
-const lots = ref([{ lot: '', theo: null, dosage: null, lod: null }])
+const lots = ref([{ lot: '', dosage: null, lod: null, obtenu: null }])
 
 const produits = ref([])
 const produitSel = ref('')
@@ -187,41 +203,80 @@ const enreg = ref(false)
 
 const vide = (x) => x === null || x === '' || x === undefined
 
-// Calcul par lot : titre = dosage - LOD ; qté réelle = théo x 100 / titre
-const lotsCalc = computed(() => lots.value.map((l, i) => {
-  const dosage = Number(l.dosage), lod = Number(l.lod), theo = Number(l.theo)
-  const titre = (!vide(l.dosage) && !vide(l.lod)) ? dosage - lod : null
-  const theoNum = (!vide(l.theo) && theo >= 0) ? theo : null
-  const reel = (theoNum != null && theoNum > 0 && titre != null && titre > 0) ? theoNum * 100 / titre : null
-  return { idx: i, lot: l.lot, titre, theoNum, reel }
-}))
-const lotsReels = computed(() => lotsCalc.value.filter(l => l.reel != null && l.theoNum != null))
+// Calcul séquentiel : on part du théorique total ; chaque lot pesé déduit sa part (obtenue x titre / 100),
+// le lot sans quantité obtenue prend le théorique restant et sa qté à peser = restant x 100 / titre.
+const lotsCalc = computed(() => {
+  const total = (!vide(theoTotalAPI.value) && Number(theoTotalAPI.value) >= 0) ? Number(theoTotalAPI.value) : null
+  let remaining = total
+  const out = []
+  for (let i = 0; i < lots.value.length; i++) {
+    const l = lots.value[i]
+    const dosage = Number(l.dosage), lod = Number(l.lod)
+    const titre = (!vide(l.dosage) && !vide(l.lod)) ? dosage - lod : null
+    const obtenue = (!vide(l.obtenu) && Number(l.obtenu) >= 0) ? Number(l.obtenu) : null
+    let theo = null, aPeser = null
+    if (titre != null && titre > 0 && remaining != null) {
+      if (obtenue != null) {
+        theo = obtenue * titre / 100
+        aPeser = obtenue
+        remaining = remaining - theo
+      } else {
+        theo = remaining > 0 ? remaining : 0
+        aPeser = theo * 100 / titre
+        remaining = remaining - theo
+      }
+    } else {
+      // lot non calculable (titre invalide/manquant ou chaîne rompue) → stoppe la chaîne
+      remaining = null
+    }
+    out.push({ idx: i, lot: l.lot, titre, obtenue, theo, aPeser })
+  }
+  return out
+})
+const lotsReels = computed(() => lotsCalc.value.filter(l => l.aPeser != null && l.theo != null))
 const titreInvalide = computed(() => lotsCalc.value.some(l => l.titre != null && l.titre <= 0))
 
-const totalTheoAPI = computed(() => {
-  let s = 0, any = false
-  for (const l of lotsCalc.value) { if (l.theoNum != null) { s += l.theoNum; any = true } }
-  return any ? s : null
-})
+const totalTheoAPINum = computed(() => (!vide(theoTotalAPI.value) && Number(theoTotalAPI.value) >= 0) ? Number(theoTotalAPI.value) : null)
+
+// Total réel API : somme des « à peser », null si un lot renseigné n'est pas calculable
 const totalReelAPI = computed(() => {
+  if (totalTheoAPINum.value == null) return null
   let s = 0, any = false
-  for (const l of lotsCalc.value) {
-    if (l.theoNum != null && l.theoNum > 0) {
-      if (l.reel == null) return null
-      s += l.reel; any = true
+  for (let i = 0; i < lots.value.length; i++) {
+    const raw = lots.value[i], c = lotsCalc.value[i]
+    const actif = !vide(raw.dosage) || !vide(raw.lod) || !vide(raw.obtenu)
+    if (actif) {
+      if (c.aPeser == null) return null
+      s += c.aPeser; any = true
     }
   }
   return any ? s : null
 })
+// Reste théorique non couvert par les lots
+const resteACouvrir = computed(() => {
+  const tta = totalTheoAPINum.value
+  if (tta == null) return null
+  let covered = 0, anyIncomplete = false
+  for (let i = 0; i < lots.value.length; i++) {
+    const raw = lots.value[i], c = lotsCalc.value[i]
+    const actif = !vide(raw.dosage) || !vide(raw.lod) || !vide(raw.obtenu)
+    if (actif) {
+      if (c.theo == null) { anyIncomplete = true; break }
+      covered += c.theo
+    }
+  }
+  if (anyIncomplete) return null
+  return tta - covered
+})
 const reelExc = computed(() => {
-  const tra = totalReelAPI.value, tta = totalTheoAPI.value
+  const tra = totalReelAPI.value, tta = totalTheoAPINum.value
   if (tra == null || tta == null || vide(theoExc.value)) return null
   const te = Number(theoExc.value)
   if (!(te >= 0)) return null
   return (tta + te) - tra
 })
 const totalTheo = computed(() => {
-  const tta = totalTheoAPI.value
+  const tta = totalTheoAPINum.value
   if (tta == null || vide(theoExc.value)) return null
   const te = Number(theoExc.value)
   return (te >= 0) ? tta + te : null
@@ -231,7 +286,7 @@ const totalReel = computed(() => {
   return (tra != null && re != null) ? tra + re : null
 })
 const ecartAPI = computed(() => {
-  const tra = totalReelAPI.value, tta = totalTheoAPI.value
+  const tra = totalReelAPI.value, tta = totalTheoAPINum.value
   return (tra != null && tta != null) ? tra - tta : null
 })
 const excipientNegatif = computed(() => reelExc.value != null && reelExc.value < 0)
@@ -239,11 +294,11 @@ const excipientNegatif = computed(() => reelExc.value != null && reelExc.value <
 function fmt(v) { if (v == null || Number.isNaN(Number(v))) return '—'; return Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 3 }) }
 function sign(v) { return (v != null && v > 1e-9) ? '+' : '' }
 function ecartCls(v) { if (v == null || Math.abs(v) < 1e-9) return ''; return v > 0 ? 'up' : 'down' }
-function addLot() { lots.value.push({ lot: '', theo: null, dosage: null, lod: null }) }
+function addLot() { lots.value.push({ lot: '', dosage: null, lod: null, obtenu: null }) }
 function removeLot(i) { if (lots.value.length > 1) lots.value.splice(i, 1) }
 function reset() {
-  lots.value = [{ lot: '', theo: null, dosage: null, lod: null }]
-  theoExc.value = null; produitSel.value = ''; ofNum.value = ''; operateur.value = ''
+  lots.value = [{ lot: '', dosage: null, lod: null, obtenu: null }]
+  theoTotalAPI.value = null; theoExc.value = null; produitSel.value = ''; ofNum.value = ''; operateur.value = ''
   datePesee.value = new Date().toISOString().slice(0, 10); erreur.value = ''; message.value = ''
 }
 
@@ -260,16 +315,19 @@ onMounted(charger)
 
 function lotsPayload() {
   return lots.value.map((l, i) => ({
-    lot: l.lot || '', theo: lotsCalc.value[i].theoNum,
+    lot: l.lot || '',
     dosage: vide(l.dosage) ? null : Number(l.dosage),
     lod: vide(l.lod) ? null : Number(l.lod),
-    titre: lotsCalc.value[i].titre, reel: lotsCalc.value[i].reel
+    titre: lotsCalc.value[i].titre,
+    obtenu: lotsCalc.value[i].obtenue,
+    theo: lotsCalc.value[i].theo,
+    reel: lotsCalc.value[i].aPeser
   })).filter(l => l.reel != null)
 }
 
 async function enregistrer() {
   erreur.value = ''; message.value = ''
-  if (totalReelAPI.value == null) { erreur.value = 'Complète au moins un lot API (quantité, dosage, LOD) avant d\'enregistrer.'; return }
+  if (totalReelAPI.value == null) { erreur.value = 'Renseigne la quantité théorique totale et au moins un lot (dosage, LOD) avant d\'enregistrer.'; return }
   const pr = produits.value.find(x => String(x.id) === produitSel.value)
   enreg.value = true
   const payload = {
@@ -279,7 +337,7 @@ async function enregistrer() {
     of_numero: ofNum.value || null,
     operateur: operateur.value || null,
     unite: unite.value,
-    total_theo_api: totalTheoAPI.value,
+    total_theo_api: totalTheoAPINum.value,
     total_reel_api: totalReelAPI.value,
     theo_excipient: vide(theoExc.value) ? null : Number(theoExc.value),
     reel_excipient: reelExc.value,
@@ -294,14 +352,15 @@ async function enregistrer() {
 
 function chargerPesee(p) {
   unite.value = p.unite || 'g'
+  theoTotalAPI.value = p.total_theo_api
   theoExc.value = p.theo_excipient
   produitSel.value = p.produit_id != null ? String(p.produit_id) : ''
   ofNum.value = p.of_numero || ''
   operateur.value = p.operateur || ''
   datePesee.value = p.date_pesee || new Date().toISOString().slice(0, 10)
   lots.value = (p.lots && p.lots.length)
-    ? p.lots.map(l => ({ lot: l.lot || '', theo: l.theo, dosage: l.dosage, lod: l.lod }))
-    : [{ lot: '', theo: null, dosage: null, lod: null }]
+    ? p.lots.map(l => ({ lot: l.lot || '', dosage: l.dosage, lod: l.lod, obtenu: l.obtenu }))
+    : [{ lot: '', dosage: null, lod: null, obtenu: null }]
   message.value = 'Pesée chargée dans le calcul.'; erreur.value = ''
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -319,10 +378,10 @@ function snapshotActuel() {
   return {
     prNom: pr ? (pr.code_pf + ' — ' + pr.designation) : '—',
     ofNum: ofNum.value || '—', datePesee: datePesee.value || '—', operateur: operateur.value || '—',
-    unite: unite.value,
-    lots: lots.value.map((l, i) => ({ lot: l.lot || ('n°' + (i + 1)), theo: lotsCalc.value[i].theoNum, dosage: vide(l.dosage) ? null : Number(l.dosage), lod: vide(l.lod) ? null : Number(l.lod), titre: lotsCalc.value[i].titre, reel: lotsCalc.value[i].reel })).filter(l => l.reel != null),
+    unite: unite.value, theoTotal: totalTheoAPINum.value,
+    lots: lots.value.map((l, i) => ({ lot: l.lot || ('n°' + (i + 1)), dosage: vide(l.dosage) ? null : Number(l.dosage), lod: vide(l.lod) ? null : Number(l.lod), titre: lotsCalc.value[i].titre, obtenu: lotsCalc.value[i].obtenue, theo: lotsCalc.value[i].theo, reel: lotsCalc.value[i].aPeser })).filter(l => l.reel != null),
     theoExc: vide(theoExc.value) ? null : Number(theoExc.value), reelExc: reelExc.value,
-    totalTheoAPI: totalTheoAPI.value, totalReelAPI: totalReelAPI.value, totalTheo: totalTheo.value, totalReel: totalReel.value
+    totalReelAPI: totalReelAPI.value, totalTheo: totalTheo.value, totalReel: totalReel.value
   }
 }
 function snapshotStored(p) {
@@ -331,41 +390,41 @@ function snapshotStored(p) {
   const totReel = (p.total_reel_api != null && p.reel_excipient != null) ? p.total_reel_api + p.reel_excipient : null
   return {
     prNom: p.produit_libelle || '—', ofNum: p.of_numero || '—', datePesee: p.date_pesee || '—', operateur: p.operateur || '—',
-    unite: p.unite || 'g',
-    lots: ls.map((l, i) => ({ lot: l.lot || ('n°' + (i + 1)), theo: l.theo, dosage: l.dosage, lod: l.lod, titre: l.titre, reel: l.reel })),
+    unite: p.unite || 'g', theoTotal: p.total_theo_api,
+    lots: ls.map((l, i) => ({ lot: l.lot || ('n°' + (i + 1)), dosage: l.dosage, lod: l.lod, titre: l.titre, obtenu: l.obtenu, theo: l.theo, reel: l.reel })),
     theoExc: p.theo_excipient, reelExc: p.reel_excipient,
-    totalTheoAPI: p.total_theo_api, totalReelAPI: p.total_reel_api, totalTheo: totTheo, totalReel: totReel
+    totalReelAPI: p.total_reel_api, totalTheo: totTheo, totalReel: totReel
   }
 }
 function ficheHTML(d) {
   const now = new Date().toLocaleString('fr-FR')
   const u = d.unite
-  const lignes = d.lots.map(l => `<tr><td>${l.lot}</td><td class="r">${fmt(l.theo)}</td><td class="r">${l.dosage != null ? fmt(l.dosage) : '—'}</td><td class="r">${l.lod != null ? fmt(l.lod) : '—'}</td><td class="r">${l.titre != null ? fmt(l.titre) : '—'}</td><td class="r b">${fmt(l.reel)}</td></tr>`).join('')
-  const excLigne = d.reelExc != null ? `<tr><td>Excipient</td><td class="r">${fmt(d.theoExc)}</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r b">${fmt(d.reelExc)}</td></tr>` : ''
-  const totLigne = d.totalReel != null ? `<tr class="tot"><td>Total</td><td class="r">${fmt(d.totalTheo)}</td><td></td><td></td><td></td><td class="r b">${fmt(d.totalReel)}</td></tr>` : ''
+  const lignes = d.lots.map(l => `<tr><td>${l.lot}</td><td class="r">${l.dosage != null ? fmt(l.dosage) : '—'}</td><td class="r">${l.lod != null ? fmt(l.lod) : '—'}</td><td class="r">${l.titre != null ? fmt(l.titre) : '—'}</td><td class="r">${l.obtenu != null ? fmt(l.obtenu) : '—'}</td><td class="r">${fmt(l.theo)}</td><td class="r b">${fmt(l.reel)}</td></tr>`).join('')
+  const excLigne = d.reelExc != null ? `<tr><td>Excipient</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">${fmt(d.theoExc)}</td><td class="r b">${fmt(d.reelExc)}</td></tr>` : ''
+  const totLigne = d.totalReel != null ? `<tr class="tot"><td>Total</td><td colspan="4"></td><td class="r">${fmt(d.totalTheo)}</td><td class="r b">${fmt(d.totalReel)}</td></tr>` : ''
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Fiche de pesée</title>
 <style>
 *{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:28px;font-size:12px}
 h1{font-size:19px;margin:0 0 2px;color:#3730a3} .sub{color:#64748b;font-size:12px;margin:0 0 14px}
 .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;font-size:12px;color:#334155;border-top:2px solid #6366f1;border-bottom:1px solid #e2e8f0;padding:10px 0;margin-bottom:16px}
 .meta b{color:#0f172a}
-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px}
-th{text-align:left;background:#eef2ff;color:#3730a3;padding:6px 8px;border:1px solid #e0e7ff;font-size:10px;text-transform:uppercase}
-th.r,td.r{text-align:right} td{padding:6px 8px;border:1px solid #eef2f6}
+table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px}
+th{text-align:left;background:#eef2ff;color:#3730a3;padding:6px 7px;border:1px solid #e0e7ff;font-size:9.5px;text-transform:uppercase}
+th.r,td.r{text-align:right} td{padding:6px 7px;border:1px solid #eef2f6}
 td.b{font-weight:800;color:#3730a3} tr.tot td{font-weight:800;background:#fafafa;border-top:2px solid #e2e8f0}
 .sig{display:flex;gap:40px;margin-top:34px}
 .sig .box{flex:1;border-top:1px solid #94a3b8;padding-top:6px;font-size:11px;color:#64748b}
 .foot{margin-top:24px;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px}
 @media print{body{margin:14mm}}
 </style></head><body>
-<h1>Fiche de pesée</h1><p class="sub">Correction de titre par lot (titre = dosage − LOD) — masse totale constante</p>
+<h1>Fiche de pesée</h1><p class="sub">Pesée séquentielle multi-lots — titre = dosage − LOD — masse totale constante</p>
 <div class="meta">
   <span>Produit : <b>${d.prNom}</b></span><span>N° OF : <b>${d.ofNum}</b></span>
   <span>Date de pesée : <b>${d.datePesee}</b></span><span>Opérateur : <b>${d.operateur}</b></span>
-  <span>Unité : <b>${u}</b></span><span>Édité le : <b>${now}</b></span>
+  <span>Théorique total API : <b>${fmt(d.theoTotal)} ${u}</b></span><span>Édité le : <b>${now}</b></span>
 </div>
 <table>
-  <thead><tr><th>Composant / Lot</th><th class="r">Théorique (${u})</th><th class="r">Dosage (%)</th><th class="r">LOD (%)</th><th class="r">Titre (%)</th><th class="r">Réel à peser (${u})</th></tr></thead>
+  <thead><tr><th>Composant / Lot</th><th class="r">Dosage (%)</th><th class="r">LOD (%)</th><th class="r">Titre (%)</th><th class="r">Obtenue (${u})</th><th class="r">Théorique (${u})</th><th class="r">Réel à peser (${u})</th></tr></thead>
   <tbody>${lignes}${excLigne}${totLigne}</tbody>
 </table>
 <div class="sig"><div class="box">Pesé par (nom, date, visa)</div><div class="box">Vérifié par (nom, date, visa)</div></div>
@@ -389,17 +448,20 @@ function exporterPeseePDF(p) { imprimer(ficheHTML(snapshotStored(p))) }
 .card-title { margin: 0 0 14px; font-size: 17px; }
 .card-head .card-title { margin: 0; }
 .alert { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; font-size: 13px; }
+.warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 9px 12px; border-radius: 8px; margin: 10px 0 0; font-size: 12px; }
 .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; font-size: 13px; }
 .u-sel { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 700; background: #fff; color: #1b2733; }
 .lots-wrap { overflow-x: auto; margin-bottom: 10px; }
 .lots-tbl { border-collapse: collapse; width: 100%; font-size: 13px; }
-.lots-tbl th { text-align: left; background: #f8fafc; color: #475569; padding: 7px 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-transform: uppercase; white-space: nowrap; }
+.lots-tbl th { text-align: left; background: #f8fafc; color: #475569; padding: 7px 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-transform: uppercase; white-space: nowrap; vertical-align: bottom; }
+.lots-tbl .th-sub { font-size: 9px; font-weight: 500; text-transform: none; color: #94a3b8; }
 .lots-tbl td { padding: 5px 6px; border-bottom: 1px solid #f1f5f9; }
-.lots-tbl input { width: 100%; min-width: 74px; padding: 7px 8px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 14px; color: #0f172a; }
+.lots-tbl input { width: 100%; min-width: 80px; padding: 7px 8px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 14px; color: #0f172a; }
 .lots-tbl input[type=text] { min-width: 94px; }
 .lots-tbl input:focus { outline: 2px solid #c7d2fe; border-color: #6366f1; }
 .lots-tbl .calc { text-align: right; font-weight: 600; color: #0f172a; white-space: nowrap; }
 .lots-tbl .calc.b { font-weight: 800; color: #4f46e5; }
+.lots-tbl .calc.hl { background: #eef2ff; border-radius: 6px; }
 .lots-tbl .x { background: #fff; border: 1px solid #fca5a5; color: #dc2626; border-radius: 6px; width: 28px; height: 28px; cursor: pointer; font-size: 13px; }
 .lots-tbl .x:hover { background: #fef2f2; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 12px; }
@@ -431,6 +493,7 @@ function exporterPeseePDF(p) { imprimer(ficheHTML(snapshotStored(p))) }
 .t td.up { color: #047857; }
 .t td.down { color: #b91c1c; }
 .titre-badge { font-size: 11px; color: #64748b; font-weight: 600; background: #f1f5f9; padding: 1px 6px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
+.comp-badge { font-size: 11px; color: #3730a3; font-weight: 700; background: #e0e7ff; padding: 1px 6px; border-radius: 10px; margin-left: 4px; white-space: nowrap; }
 .note { font-size: 12px; color: #64748b; margin-top: 10px; line-height: 1.5; }
 .row-act { white-space: nowrap; text-align: right; }
 .mini { background: #eef2ff; border: 1px solid #c7d2fe; color: #4338ca; border-radius: 6px; padding: 4px 9px; font-size: 12px; font-weight: 600; cursor: pointer; margin-left: 5px; }
