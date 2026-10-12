@@ -84,7 +84,8 @@
           <input v-model.number="theoExc" type="number" min="0" step="any" placeholder="ex. 1500" />
         </label>
       </div>
-      <p class="hint">Chaque API est corrigée par sa propre méthode (titre = dosage − LOD, ou conversion, ou sans calcul). L'excipient compense le surplus <b>total</b> des API pour garder la masse constante.</p>
+      <p class="hint" v-if="ajustExc">Chaque API est corrigée par sa propre méthode (titre = dosage − LOD, ou conversion, ou sans calcul). L'excipient <b>compense</b> le surplus total des API pour garder la masse constante.</p>
+      <p class="frac-note" v-else>Produit <b>sans ajustage excipient</b> : la quantité réelle d'excipient reste égale à la quantité théorique (pas de compensation de la correction API).</p>
     </section>
 
     <section class="card" v-if="totalReelAPI != null && recapFraction.length">
@@ -117,7 +118,7 @@
           <div class="res-card exc" :class="{ neg: excipientNegatif }" v-if="reelExc != null">
             <div class="rc-l">Quantité réelle excipient</div>
             <div class="rc-v">{{ fmt(reelExc) }} <span>{{ unite }}</span></div>
-            <div class="rc-e" v-if="ecartAPI != null">{{ sign(-ecartAPI) }}{{ fmt(-ecartAPI) }} {{ unite }} vs théorique</div>
+            <div class="rc-e" v-if="ecartExc != null">{{ sign(ecartExc) }}{{ fmt(ecartExc) }} {{ unite }} vs théorique</div>
           </div>
         </div>
 
@@ -143,7 +144,7 @@
               <td>{{ designExc || 'Excipient' }}<span v-if="lotExc" class="titre-badge">lot {{ lotExc }}</span></td>
               <td class="r">{{ fmt(theoExcFrac) }}</td>
               <td class="r b">{{ fmt(reelExc) }}</td>
-              <td class="r" :class="ecartCls(-ecartAPI)">{{ sign(-ecartAPI) }}{{ fmt(-ecartAPI) }}</td>
+              <td class="r" :class="ecartCls(ecartExc)">{{ sign(ecartExc) }}{{ fmt(ecartExc) }}</td>
             </tr>
             <tr class="tot" v-if="totalReel != null">
               <td>Total</td>
@@ -218,6 +219,7 @@ const nbFractions = ref(1)
 const theoExc = ref(null)
 const lotExc = ref('')
 const designExc = ref('')
+const ajustExc = ref(true)
 const apis = ref([newAPI()])
 
 const produits = ref([])
@@ -316,9 +318,12 @@ const titreInvalide = computed(() => apisCalc.value.some(ap => ap.titreInvalide)
 const theoExcFrac = computed(() => (!vide(theoExc.value) && Number(theoExc.value) >= 0) ? Number(theoExc.value) / nbFracNum.value : null)
 const reelExc = computed(() => {
   const tra = totalReelAPI.value, tta = totalTheoAPIFrac.value, te = theoExcFrac.value
-  if (tra == null || tta == null || te == null) return null
+  if (te == null) return null
+  if (!ajustExc.value) return te
+  if (tra == null || tta == null) return null
   return (tta + te) - tra
 })
+const ecartExc = computed(() => { const re = reelExc.value, te = theoExcFrac.value; return (re != null && te != null) ? re - te : null })
 const totalTheo = computed(() => {
   const tta = totalTheoAPIFrac.value, te = theoExcFrac.value
   if (tta == null || te == null) return null
@@ -351,7 +356,7 @@ function removeLot(ai, li) { if (apis.value[ai].lots.length > 1) apis.value[ai].
 function addAPI() { apis.value.push(newAPI()) }
 function removeAPI(ai) { if (apis.value.length > 1) apis.value.splice(ai, 1) }
 function reset() {
-  apis.value = [newAPI()]; theoExc.value = null; lotExc.value = ''; designExc.value = ''; nbFractions.value = 1
+  apis.value = [newAPI()]; theoExc.value = null; lotExc.value = ''; designExc.value = ''; ajustExc.value = true; nbFractions.value = 1
   produitSel.value = ''; ofNum.value = ''; operateur.value = ''
   datePesee.value = new Date().toISOString().slice(0, 10); erreur.value = ''; message.value = ''
 }
@@ -381,6 +386,7 @@ watch(produitSel, (id) => {
     nbFractions.value = cfg.nb_fractions != null ? cfg.nb_fractions : 1
     if (cfg.theo_excipient != null) theoExc.value = cfg.theo_excipient
     if (cfg.design_excipient) designExc.value = cfg.design_excipient
+    ajustExc.value = cfg.ajust_excipient !== false
     let apiList = (cfg.apis && cfg.apis.length) ? cfg.apis : null
     if (!apiList && (cfg.methode || cfg.theo_api != null)) {
       apiList = [{ nom: 'API', methode: cfg.methode || 'standard', conversion: cfg.conversion, theo_api: cfg.theo_api }]
@@ -433,6 +439,7 @@ async function enregistrer() {
     reel_excipient: reelExc.value,
     lot_excipient: lotExc.value || null,
     design_excipient: designExc.value || null,
+    ajust_excipient: ajustExc.value,
     apis: apisPayload()
   }
   const r = await supabase.from('pesees').insert(payload)
@@ -448,6 +455,7 @@ function chargerPesee(p) {
   theoExc.value = p.theo_excipient
   lotExc.value = p.lot_excipient || ''
   designExc.value = p.design_excipient || ''
+  ajustExc.value = p.ajust_excipient !== false
   produitSel.value = p.produit_id != null ? String(p.produit_id) : ''
   ofNum.value = p.of_numero || ''
   operateur.value = p.operateur || ''
