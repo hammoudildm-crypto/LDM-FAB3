@@ -79,6 +79,9 @@
     <section class="card">
       <h2 class="card-title">Excipient</h2>
       <div class="grid">
+        <label class="fld">Désignation excipient
+          <input v-model="designExc" type="text" placeholder="ex. Lactose" />
+        </label>
         <label class="fld">N° lot excipient
           <input v-model="lotExc" type="text" placeholder="N° lot" />
         </label>
@@ -89,8 +92,22 @@
       <p class="hint">Chaque API est corrigée par sa propre méthode (titre = dosage − LOD, ou conversion, ou sans calcul). L'excipient compense le surplus <b>total</b> des API pour garder la masse constante.</p>
     </section>
 
+    <section class="card" v-if="totalReelAPI != null && recapFraction.length">
+      <h2 class="card-title">Pesée d'une fraction<span v-if="nbFracNum > 1" class="rep-badge">à répéter {{ nbFracNum }} ×</span></h2>
+      <div class="recap">
+        <div class="recap-row" v-for="(l, i) in recapFraction" :key="i">
+          <span class="recap-nom">{{ l.nom }} <span class="recap-type" :class="l.type === 'Excipient' ? 'exc' : 'api'">{{ l.type }}</span></span>
+          <span class="recap-q"><b>{{ fmt(l.reel) }}</b> {{ unite }}</span>
+        </div>
+        <div class="recap-row recap-tot">
+          <span class="recap-nom">Total fraction</span>
+          <span class="recap-q"><b>{{ fmt(totalReel) }}</b> {{ unite }}</span>
+        </div>
+      </div>
+    </section>
+
     <section class="card" v-if="totalReelAPI != null || titreInvalide">
-      <h2 class="card-title">Résultats</h2>
+      <h2 class="card-title">Détail par lot</h2>
       <p v-if="nbFracNum > 1" class="frac-banner">Pesée d'<b>une fraction</b> — à répéter <b>{{ nbFracNum }} fois</b> pour le lot complet.</p>
       <p v-if="titreInvalide" class="alert">Un lot a un titre invalide (≤ 0). Vérifie le dosage et la LOD.</p>
       <p v-if="excipientNegatif" class="alert">⚠ Excipient négatif : la quantité réelle totale d'API dépasse la masse théorique. Vérifie les titres et les quantités.</p>
@@ -128,7 +145,7 @@
               <td class="r" :class="ecartCls(ecartAPI)">{{ sign(ecartAPI) }}{{ fmt(ecartAPI) }}</td>
             </tr>
             <tr v-if="reelExc != null">
-              <td>Excipient <span v-if="lotExc" class="titre-badge">lot {{ lotExc }}</span></td>
+              <td>{{ designExc || 'Excipient' }}<span v-if="lotExc" class="titre-badge">lot {{ lotExc }}</span></td>
               <td class="r">{{ fmt(theoExcFrac) }}</td>
               <td class="r b">{{ fmt(reelExc) }}</td>
               <td class="r" :class="ecartCls(-ecartAPI)">{{ sign(-ecartAPI) }}{{ fmt(-ecartAPI) }}</td>
@@ -205,6 +222,7 @@ function newAPI() { return { nom: '', methode: 'standard', convPerso: 100, theoT
 const nbFractions = ref(1)
 const theoExc = ref(null)
 const lotExc = ref('')
+const designExc = ref('')
 const apis = ref([newAPI()])
 
 const produits = ref([])
@@ -315,6 +333,15 @@ const totalReel = computed(() => {
   const tra = totalReelAPI.value, re = reelExc.value
   return (tra != null && re != null) ? tra + re : null
 })
+const recapFraction = computed(() => {
+  const l = []
+  for (let ai = 0; ai < apisCalc.value.length; ai++) {
+    const ap = apisCalc.value[ai]
+    if (ap.totalReel != null) l.push({ nom: ap.nom || ('API ' + (ai + 1)), type: 'API', theo: ap.totalFrac, reel: ap.totalReel })
+  }
+  if (reelExc.value != null) l.push({ nom: designExc.value || 'Excipient', type: 'Excipient', theo: theoExcFrac.value, reel: reelExc.value })
+  return l
+})
 const ecartAPI = computed(() => {
   const tra = totalReelAPI.value, tta = totalTheoAPIFrac.value
   return (tra != null && tta != null) ? tra - tta : null
@@ -329,7 +356,7 @@ function removeLot(ai, li) { if (apis.value[ai].lots.length > 1) apis.value[ai].
 function addAPI() { apis.value.push(newAPI()) }
 function removeAPI(ai) { if (apis.value.length > 1) apis.value.splice(ai, 1) }
 function reset() {
-  apis.value = [newAPI()]; theoExc.value = null; lotExc.value = ''; nbFractions.value = 1
+  apis.value = [newAPI()]; theoExc.value = null; lotExc.value = ''; designExc.value = ''; nbFractions.value = 1
   produitSel.value = ''; ofNum.value = ''; operateur.value = ''
   datePesee.value = new Date().toISOString().slice(0, 10); erreur.value = ''; message.value = ''
 }
@@ -358,6 +385,7 @@ watch(produitSel, (id) => {
   if (cfg) {
     nbFractions.value = cfg.nb_fractions != null ? cfg.nb_fractions : 1
     if (cfg.theo_excipient != null) theoExc.value = cfg.theo_excipient
+    if (cfg.design_excipient) designExc.value = cfg.design_excipient
     let apiList = (cfg.apis && cfg.apis.length) ? cfg.apis : null
     if (!apiList && (cfg.methode || cfg.theo_api != null)) {
       apiList = [{ nom: 'API', methode: cfg.methode || 'standard', conversion: cfg.conversion, theo_api: cfg.theo_api }]
@@ -409,6 +437,7 @@ async function enregistrer() {
     theo_excipient: vide(theoExc.value) ? null : Number(theoExc.value),
     reel_excipient: reelExc.value,
     lot_excipient: lotExc.value || null,
+    design_excipient: designExc.value || null,
     apis: apisPayload()
   }
   const r = await supabase.from('pesees').insert(payload)
@@ -423,6 +452,7 @@ function chargerPesee(p) {
   nbFractions.value = p.nb_fractions != null ? p.nb_fractions : 1
   theoExc.value = p.theo_excipient
   lotExc.value = p.lot_excipient || ''
+  designExc.value = p.design_excipient || ''
   produitSel.value = p.produit_id != null ? String(p.produit_id) : ''
   ofNum.value = p.of_numero || ''
   operateur.value = p.operateur || ''
@@ -458,7 +488,7 @@ function snapshotActuel() {
         lots: api.lots.map((l, li) => ({ lot: l.lot || ('n°' + (li + 1)), dosage: vide(l.dosage) ? null : Number(l.dosage), lod: vide(l.lod) ? null : Number(l.lod), titre: c.lots[li].titre, obtenu: c.lots[li].obtenue, theo: c.lots[li].theo, reel: c.lots[li].aPeser })).filter(l => l.reel != null)
       }
     }),
-    lotExc: lotExc.value, theoExc: theoExcFrac.value, reelExc: reelExc.value,
+    designExc: designExc.value, lotExc: lotExc.value, theoExc: theoExcFrac.value, reelExc: reelExc.value,
     totalReelAPI: totalReelAPI.value, totalTheoAPI: totalTheoAPIFrac.value, totalTheo: totalTheo.value, totalReel: totalReel.value
   }
 }
@@ -472,7 +502,7 @@ function snapshotStored(p) {
       nom: a.nom || ('API ' + (ai + 1)), methode: labelCourt(a.methode || 'standard'), direct: (a.methode === 'direct'),
       lots: (a.lots || []).filter(l => l.reel != null).map((l, li) => ({ lot: l.lot || ('n°' + (li + 1)), dosage: l.dosage, lod: l.lod, titre: l.titre, obtenu: l.obtenu, theo: l.theo, reel: l.reel }))
     })),
-    lotExc: p.lot_excipient, theoExc: (p.theo_excipient != null) ? p.theo_excipient / nb : null, reelExc: p.reel_excipient,
+    designExc: p.design_excipient, lotExc: p.lot_excipient, theoExc: (p.theo_excipient != null) ? p.theo_excipient / nb : null, reelExc: p.reel_excipient,
     totalReelAPI: p.total_reel_api, totalTheoAPI: p.total_theo_api,
     totalTheo: (p.total_theo_api != null && p.reel_excipient != null) ? p.total_theo_api + (p.theo_excipient != null ? p.theo_excipient / nb : 0) : null,
     totalReel: (p.total_reel_api != null && p.reel_excipient != null) ? p.total_reel_api + p.reel_excipient : null
@@ -485,7 +515,7 @@ function ficheHTML(d) {
     corps += `<tr class="grp"><td colspan="7">${ap.nom} — ${ap.methode}</td></tr>`
     corps += ap.lots.map(l => `<tr><td>${l.lot}</td><td class="r">${l.dosage != null ? fmt(l.dosage) : '—'}</td><td class="r">${l.lod != null ? fmt(l.lod) : '—'}</td><td class="r">${l.titre != null ? fmt(l.titre) : '—'}</td><td class="r">${l.obtenu != null ? fmt(l.obtenu) : '—'}</td><td class="r">${fmt(l.theo)}</td><td class="r b">${fmt(l.reel)}</td></tr>`).join('')
   }
-  if (d.reelExc != null) corps += `<tr><td>Excipient${d.lotExc ? ' — lot ' + d.lotExc : ''}</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">${fmt(d.theoExc)}</td><td class="r b">${fmt(d.reelExc)}</td></tr>`
+  if (d.reelExc != null) corps += `<tr><td>${d.designExc || 'Excipient'}${d.lotExc ? ' — lot ' + d.lotExc : ''}</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">${fmt(d.theoExc)}</td><td class="r b">${fmt(d.reelExc)}</td></tr>`
   if (d.totalReel != null) corps += `<tr class="tot"><td>Total</td><td colspan="4"></td><td class="r">${fmt(d.totalTheo)}</td><td class="r b">${fmt(d.totalReel)}</td></tr>`
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Fiche de pesée</title>
 <style>
@@ -592,6 +622,19 @@ function exporterPeseePDF(p) { imprimer(ficheHTML(snapshotStored(p))) }
 .meth-badge { font-size: 11px; color: #4338ca; font-weight: 700; background: #e0e7ff; padding: 1px 7px; border-radius: 10px; margin-left: 6px; }
 .titre-badge { font-size: 11px; color: #64748b; font-weight: 600; background: #f1f5f9; padding: 1px 6px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
 .note { font-size: 12px; color: #64748b; margin-top: 10px; line-height: 1.5; }
+.rep-badge { font-size: 12px; font-weight: 700; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 2px 10px; margin-left: 10px; }
+.recap { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+.recap-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
+.recap-row:last-child { border-bottom: 0; }
+.recap-nom { font-size: 15px; font-weight: 700; color: #0f172a; }
+.recap-type { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; margin-left: 6px; letter-spacing: .03em; }
+.recap-type.api { background: #e0e7ff; color: #4338ca; }
+.recap-type.exc { background: #ccfbf1; color: #0f766e; }
+.recap-q { font-size: 15px; color: #64748b; white-space: nowrap; }
+.recap-q b { font-size: 19px; color: #4f46e5; }
+.recap-row.recap-tot { background: #fafafa; border-top: 2px solid #e2e8f0; }
+.recap-row.recap-tot .recap-nom { color: #475569; }
+.recap-row.recap-tot .recap-q b { color: #0f172a; }
 .row-act { white-space: nowrap; text-align: right; }
 .mini { background: #eef2ff; border: 1px solid #c7d2fe; color: #4338ca; border-radius: 6px; padding: 4px 9px; font-size: 12px; font-weight: 600; cursor: pointer; margin-left: 5px; }
 .mini:hover { background: #e0e7ff; }
