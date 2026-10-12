@@ -36,10 +36,14 @@
         <label class="fld" v-if="methode === 'perso'">Valeur représentant 100 %
           <input v-model.number="convPerso" type="number" min="0" step="any" placeholder="ex. 10.46" />
         </label>
-        <label class="fld">Quantité théorique totale API ({{ unite }})
+        <label class="fld">Qté théorique API — lot complet ({{ unite }})
           <input v-model.number="theoTotalAPI" type="number" min="0" step="any" placeholder="ex. 30" />
         </label>
+        <label class="fld">Nombre de fractions
+          <input v-model.number="nbFractions" type="number" min="1" step="1" />
+        </label>
       </div>
+      <p v-if="nbFracNum > 1 && totalTheoAPINum != null" class="frac-note">Lot divisé en <b>{{ nbFracNum }} fractions</b> → le calcul porte sur <b>1 fraction</b> : API théorique <b>{{ fmt(totalTheoAPINum) }} {{ unite }}</b><span v-if="theoExcFrac != null">, excipient théorique <b>{{ fmt(theoExcFrac) }} {{ unite }}</b></span>. À répéter {{ nbFracNum }} fois.</p>
 
       <div class="lots-wrap">
         <table class="lots-tbl">
@@ -97,6 +101,7 @@
 
     <section class="card" v-if="totalReelAPI != null || titreInvalide">
       <h2 class="card-title">Résultats</h2>
+      <p v-if="nbFracNum > 1" class="frac-banner">Pesée d'<b>une fraction</b> — à répéter <b>{{ nbFracNum }} fois</b> pour le lot complet.</p>
       <p v-if="titreInvalide" class="alert">Un lot a un titre invalide (Dosage − LOD ≤ 0). Vérifie le dosage et la LOD.</p>
       <p v-if="excipientNegatif" class="alert">⚠ Excipient négatif : la quantité réelle totale d'API ({{ fmt(totalReelAPI) }} {{ unite }}) dépasse la masse totale théorique ({{ fmt(totalTheo) }} {{ unite }}). Vérifie les titres et les quantités.</p>
 
@@ -205,6 +210,7 @@ const peutEditer = inject('peutEditer', ref(true))
 
 const unite = ref('kg')
 const theoTotalAPI = ref(null)
+const nbFractions = ref(1)
 const theoExc = ref(null)
 const lotExc = ref('')
 const lots = ref([{ lot: '', dosage: null, lod: null, obtenu: null }])
@@ -254,7 +260,7 @@ const configParProduit = computed(() => { const m = {}; for (const c of configs.
 // Calcul séquentiel : on part du théorique total ; chaque lot pesé déduit sa part (obtenue x titre / 100),
 // le lot sans quantité obtenue prend le théorique restant et sa qté à peser = restant x 100 / titre.
 const lotsCalc = computed(() => {
-  const total = (!vide(theoTotalAPI.value) && Number(theoTotalAPI.value) >= 0) ? Number(theoTotalAPI.value) : null
+  const total = totalTheoAPINum.value
   let remaining = total
   const cv = conv.value, plaf = plafond.value
   const out = []
@@ -290,7 +296,10 @@ const lotsCalc = computed(() => {
 const lotsReels = computed(() => lotsCalc.value.filter(l => l.aPeser != null && l.theo != null))
 const titreInvalide = computed(() => lotsCalc.value.some(l => l.titre != null && l.titre <= 0))
 
-const totalTheoAPINum = computed(() => (!vide(theoTotalAPI.value) && Number(theoTotalAPI.value) >= 0) ? Number(theoTotalAPI.value) : null)
+const nbFracNum = computed(() => { const n = Number(nbFractions.value); return (n >= 1) ? Math.floor(n) : 1 })
+// Quantités THÉORIQUES d'une fraction = quantités du lot ÷ nombre de fractions
+const totalTheoAPINum = computed(() => (!vide(theoTotalAPI.value) && Number(theoTotalAPI.value) >= 0) ? Number(theoTotalAPI.value) / nbFracNum.value : null)
+const theoExcFrac = computed(() => (!vide(theoExc.value) && Number(theoExc.value) >= 0) ? Number(theoExc.value) / nbFracNum.value : null)
 
 // Total réel API : somme des « à peser », null si un lot renseigné n'est pas calculable
 const totalReelAPI = computed(() => {
@@ -323,17 +332,14 @@ const resteACouvrir = computed(() => {
   return tta - covered
 })
 const reelExc = computed(() => {
-  const tra = totalReelAPI.value, tta = totalTheoAPINum.value
-  if (tra == null || tta == null || vide(theoExc.value)) return null
-  const te = Number(theoExc.value)
-  if (!(te >= 0)) return null
+  const tra = totalReelAPI.value, tta = totalTheoAPINum.value, te = theoExcFrac.value
+  if (tra == null || tta == null || te == null) return null
   return (tta + te) - tra
 })
 const totalTheo = computed(() => {
-  const tta = totalTheoAPINum.value
-  if (tta == null || vide(theoExc.value)) return null
-  const te = Number(theoExc.value)
-  return (te >= 0) ? tta + te : null
+  const tta = totalTheoAPINum.value, te = theoExcFrac.value
+  if (tta == null || te == null) return null
+  return tta + te
 })
 const totalReel = computed(() => {
   const tra = totalReelAPI.value, re = reelExc.value
@@ -352,7 +358,7 @@ function addLot() { lots.value.push({ lot: '', dosage: null, lod: null, obtenu: 
 function removeLot(i) { if (lots.value.length > 1) lots.value.splice(i, 1) }
 function reset() {
   lots.value = [{ lot: '', dosage: null, lod: null, obtenu: null }]
-  theoTotalAPI.value = null; theoExc.value = null; lotExc.value = ''; methode.value = 'standard'; convPerso.value = 100; produitSel.value = ''; ofNum.value = ''; operateur.value = ''
+  theoTotalAPI.value = null; theoExc.value = null; nbFractions.value = 1; lotExc.value = ''; methode.value = 'standard'; convPerso.value = 100; produitSel.value = ''; ofNum.value = ''; operateur.value = ''
   datePesee.value = new Date().toISOString().slice(0, 10); erreur.value = ''; message.value = ''
 }
 
@@ -381,6 +387,7 @@ watch(produitSel, (id) => {
     if (cfg.methode === 'perso' && cfg.conversion != null) convPerso.value = cfg.conversion
     if (cfg.theo_api != null) theoTotalAPI.value = cfg.theo_api
     if (cfg.theo_excipient != null) theoExc.value = cfg.theo_excipient
+    nbFractions.value = cfg.nb_fractions != null ? cfg.nb_fractions : 1
   } else {
     const pr = produits.value.find(x => String(x.id) === id)
     const estCycladol = pr && /cycladol/i.test((pr.code_pf || '') + ' ' + (pr.designation || ''))
@@ -415,7 +422,8 @@ async function enregistrer() {
     unite: unite.value,
     methode: methode.value,
     facteur: conv.value,
-    total_theo_api: totalTheoAPINum.value,
+    total_theo_api: vide(theoTotalAPI.value) ? null : Number(theoTotalAPI.value),
+    nb_fractions: nbFracNum.value,
     total_reel_api: totalReelAPI.value,
     theo_excipient: vide(theoExc.value) ? null : Number(theoExc.value),
     lot_excipient: lotExc.value || null,
@@ -434,6 +442,7 @@ function chargerPesee(p) {
   methode.value = p.methode || 'standard'
   if (p.methode === 'perso' && p.facteur != null) convPerso.value = p.facteur
   theoTotalAPI.value = p.total_theo_api
+  nbFractions.value = p.nb_fractions != null ? p.nb_fractions : 1
   theoExc.value = p.theo_excipient
   lotExc.value = p.lot_excipient || ''
   produitSel.value = p.produit_id != null ? String(p.produit_id) : ''
@@ -461,7 +470,7 @@ function snapshotActuel() {
   return {
     prNom: pr ? (pr.code_pf + ' — ' + pr.designation) : '—',
     ofNum: ofNum.value || '—', datePesee: datePesee.value || '—', operateur: operateur.value || '—',
-    unite: unite.value, theoTotal: totalTheoAPINum.value, methode: methodeLabel.value,
+    unite: unite.value, theoTotal: totalTheoAPINum.value, theoLot: vide(theoTotalAPI.value) ? null : Number(theoTotalAPI.value), nbFrac: nbFracNum.value, methode: methodeLabel.value,
     lots: lots.value.map((l, i) => ({ lot: l.lot || ('n°' + (i + 1)), dosage: vide(l.dosage) ? null : Number(l.dosage), lod: vide(l.lod) ? null : Number(l.lod), titre: lotsCalc.value[i].titre, obtenu: lotsCalc.value[i].obtenue, theo: lotsCalc.value[i].theo, reel: lotsCalc.value[i].aPeser })).filter(l => l.reel != null),
     lotExc: lotExc.value, theoExc: vide(theoExc.value) ? null : Number(theoExc.value), reelExc: reelExc.value,
     totalReelAPI: totalReelAPI.value, totalTheo: totalTheo.value, totalReel: totalReel.value
@@ -473,7 +482,7 @@ function snapshotStored(p) {
   const totReel = (p.total_reel_api != null && p.reel_excipient != null) ? p.total_reel_api + p.reel_excipient : null
   return {
     prNom: p.produit_libelle || '—', ofNum: p.of_numero || '—', datePesee: p.date_pesee || '—', operateur: p.operateur || '—',
-    unite: p.unite || 'g', theoTotal: p.total_theo_api, methode: labelMethode(p.methode || 'standard', p.facteur),
+    unite: p.unite || 'g', theoTotal: (p.total_theo_api != null && p.nb_fractions) ? p.total_theo_api / p.nb_fractions : p.total_theo_api, theoLot: p.total_theo_api, nbFrac: p.nb_fractions != null ? p.nb_fractions : 1, methode: labelMethode(p.methode || 'standard', p.facteur),
     lots: ls.map((l, i) => ({ lot: l.lot || ('n°' + (i + 1)), dosage: l.dosage, lod: l.lod, titre: l.titre, obtenu: l.obtenu, theo: l.theo, reel: l.reel })),
     lotExc: p.lot_excipient, theoExc: p.theo_excipient, reelExc: p.reel_excipient,
     totalReelAPI: p.total_reel_api, totalTheo: totTheo, totalReel: totReel
@@ -504,7 +513,8 @@ td.b{font-weight:800;color:#3730a3} tr.tot td{font-weight:800;background:#fafafa
 <div class="meta">
   <span>Produit : <b>${d.prNom}</b></span><span>N° OF : <b>${d.ofNum}</b></span>
   <span>Date de pesée : <b>${d.datePesee}</b></span><span>Opérateur : <b>${d.operateur}</b></span>
-  <span>Théorique total API : <b>${fmt(d.theoTotal)} ${u}</b></span><span>Méthode : <b>${d.methode}</b></span>
+  <span>Théorique API / fraction : <b>${fmt(d.theoTotal)} ${u}</b></span><span>Méthode : <b>${d.methode}</b></span>
+  ${d.nbFrac > 1 ? `<span>Lot complet API : <b>${fmt(d.theoLot)} ${u}</b></span><span>Nombre de fractions : <b>${d.nbFrac}</b> (fiche = 1 fraction)</span>` : ''}
   <span>Édité le : <b>${now}</b></span>
 </div>
 <table>
@@ -581,6 +591,8 @@ function exporterPeseePDF(p) { imprimer(ficheHTML(snapshotStored(p))) }
 .titre-badge { font-size: 11px; color: #64748b; font-weight: 600; background: #f1f5f9; padding: 1px 6px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
 .comp-badge { font-size: 11px; color: #3730a3; font-weight: 700; background: #e0e7ff; padding: 1px 6px; border-radius: 10px; margin-left: 4px; white-space: nowrap; }
 .note { font-size: 12px; color: #64748b; margin-top: 10px; line-height: 1.5; }
+.frac-note { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 9px 12px; border-radius: 8px; font-size: 12.5px; margin: 0 0 4px; line-height: 1.5; }
+.frac-banner { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 9px 12px; border-radius: 8px; font-size: 13px; margin: 0 0 14px; }
 .row-act { white-space: nowrap; text-align: right; }
 .mini { background: #eef2ff; border: 1px solid #c7d2fe; color: #4338ca; border-radius: 6px; padding: 4px 9px; font-size: 12px; font-weight: 600; cursor: pointer; margin-left: 5px; }
 .mini:hover { background: #e0e7ff; }
