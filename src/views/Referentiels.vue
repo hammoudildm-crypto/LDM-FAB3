@@ -209,6 +209,7 @@ function pcNewAPI() { return { nom: '', methode: 'standard', conversion: null, t
 const pcApis = ref([pcNewAPI()])
 const pcTheoExc = ref(null)
 const pcDesignExc = ref('')
+const pcAjustExc = ref(true)
 const pcNbFrac = ref(1)
 const pcEditId = ref(null)
 const pcRecherche = ref('')
@@ -226,7 +227,7 @@ async function chargerPC() {
   const r = await supabase.from('pesee_config').select('*')
   if (!r.error) peseeConfigs.value = r.data || []
 }
-function resetPC() { pcEditId.value = null; pcProduit.value = ''; pcRecherche.value = ''; pcTheoExc.value = null; pcDesignExc.value = ''; pcNbFrac.value = 1; pcApis.value = [pcNewAPI()] }
+function resetPC() { pcEditId.value = null; pcProduit.value = ''; pcRecherche.value = ''; pcTheoExc.value = null; pcDesignExc.value = ''; pcAjustExc.value = true; pcNbFrac.value = 1; pcApis.value = [pcNewAPI()] }
 function pcAddAPI() { pcApis.value.push(pcNewAPI()) }
 function pcRemoveAPI(i) { if (pcApis.value.length > 1) pcApis.value.splice(i, 1) }
 function resumeApis(c) {
@@ -250,6 +251,7 @@ async function enregistrerPC() {
     theo_api: first.theo_api != null ? first.theo_api : null,
     theo_excipient: (pcTheoExc.value != null && pcTheoExc.value !== '') ? Number(pcTheoExc.value) : null,
     design_excipient: pcDesignExc.value || null,
+    ajust_excipient: pcAjustExc.value,
     nb_fractions: (pcNbFrac.value != null && pcNbFrac.value >= 1) ? Math.floor(Number(pcNbFrac.value)) : 1
   }
   const r = pcEditId.value
@@ -260,7 +262,7 @@ async function enregistrerPC() {
 }
 function editerPC(c) {
   pcEditId.value = c.id; pcProduit.value = String(c.produit_id)
-  pcTheoExc.value = c.theo_excipient; pcDesignExc.value = c.design_excipient || ''; pcNbFrac.value = c.nb_fractions || 1
+  pcTheoExc.value = c.theo_excipient; pcDesignExc.value = c.design_excipient || ''; pcAjustExc.value = c.ajust_excipient !== false; pcNbFrac.value = c.nb_fractions || 1
   let al = (c.apis && c.apis.length) ? c.apis : null
   if (!al && (c.methode || c.theo_api != null)) al = [{ nom: 'API', methode: c.methode || 'standard', conversion: c.conversion, theo_api: c.theo_api }]
   pcApis.value = (al && al.length) ? al.map(a => ({ nom: a.nom || '', methode: a.methode || 'standard', conversion: a.conversion, theo_api: a.theo_api })) : [pcNewAPI()]
@@ -959,6 +961,7 @@ onMounted(async () => {
           <label>Désignation excipient<input v-model="pcDesignExc" type="text" placeholder="ex. Lactose" /></label>
           <label>Qté théo. excip. — lot (kg)<input v-model.number="pcTheoExc" type="number" min="0" step="any" /></label>
           <label>Nb fractions<input v-model.number="pcNbFrac" type="number" min="1" step="1" /></label>
+          <label class="pc-chk"><input type="checkbox" v-model="pcAjustExc" /> Ajustage excipient (compenser la correction API)</label>
         </div>
         <div v-if="peutEditer" class="pc-apis">
           <div class="pc-apis-head">Principes actifs (API)</div>
@@ -1128,4 +1131,6 @@ button.link.danger { color: #b91c1c; }
 .pc-nom { flex: 1; min-width: 130px; }
 .pc-conv { width: 90px; }
 .pc-rm { border: 0; background: transparent; cursor: pointer; }
+.pc-chk { flex-direction: row !important; align-items: center; gap: 7px !important; font-size: 12.5px; }
+.pc-chk input { width: auto; }
 </style>
