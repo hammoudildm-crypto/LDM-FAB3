@@ -102,6 +102,27 @@
       </div>
     </section>
 
+    <section class="card" v-if="totalReelAPI != null && nbFracNum > 1 && recapFraction.length">
+      <h2 class="card-title">Détail par fraction</h2>
+      <div class="lots-wrap">
+        <table class="t">
+          <thead><tr><th>Fraction</th><th v-for="(c, i) in recapFraction" :key="i" class="r">{{ c.nom }} ({{ unite }})</th><th class="r">Total ({{ unite }})</th></tr></thead>
+          <tbody>
+            <tr v-for="f in nbFracNum" :key="f">
+              <td>Fraction {{ f }} / {{ nbFracNum }}</td>
+              <td v-for="(c, i) in recapFraction" :key="i" class="r">{{ fmt(c.reel) }}</td>
+              <td class="r b">{{ fmt(totalReel) }}</td>
+            </tr>
+            <tr class="tot">
+              <td>Lot complet</td>
+              <td v-for="(c, i) in recapFraction" :key="i" class="r">{{ fmt(c.reel * nbFracNum) }}</td>
+              <td class="r b">{{ fmt(totalReel * nbFracNum) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="card" v-if="totalReelAPI != null || titreInvalide">
       <h2 class="card-title">Détail par lot</h2>
       <p v-if="nbFracNum > 1" class="frac-banner">Pesée d'<b>une fraction</b> — à répéter <b>{{ nbFracNum }} fois</b> pour le lot complet.</p>
@@ -492,7 +513,8 @@ function snapshotActuel() {
       }
     }),
     designExc: designExc.value, lotExc: lotExc.value, theoExc: theoExcFrac.value, reelExc: reelExc.value,
-    totalReelAPI: totalReelAPI.value, totalTheoAPI: totalTheoAPIFrac.value, totalTheo: totalTheo.value, totalReel: totalReel.value
+    totalReelAPI: totalReelAPI.value, totalTheoAPI: totalTheoAPIFrac.value, totalTheo: totalTheo.value, totalReel: totalReel.value,
+    recapFrac: recapFraction.value.map(c => ({ nom: c.nom, reel: c.reel }))
   }
 }
 function snapshotStored(p) {
@@ -508,7 +530,8 @@ function snapshotStored(p) {
     designExc: p.design_excipient, lotExc: p.lot_excipient, theoExc: (p.theo_excipient != null) ? p.theo_excipient / nb : null, reelExc: p.reel_excipient,
     totalReelAPI: p.total_reel_api, totalTheoAPI: p.total_theo_api,
     totalTheo: (p.total_theo_api != null && p.reel_excipient != null) ? p.total_theo_api + (p.theo_excipient != null ? p.theo_excipient / nb : 0) : null,
-    totalReel: (p.total_reel_api != null && p.reel_excipient != null) ? p.total_reel_api + p.reel_excipient : null
+    totalReel: (p.total_reel_api != null && p.reel_excipient != null) ? p.total_reel_api + p.reel_excipient : null,
+    recapFrac: [...al.map((a, ai) => ({ nom: a.nom || ('API ' + (ai + 1)), reel: a.total_reel })).filter(c => c.reel != null), ...(p.reel_excipient != null ? [{ nom: p.design_excipient || 'Excipient', reel: p.reel_excipient }] : [])]
   }
 }
 function ficheHTML(d) {
@@ -520,6 +543,13 @@ function ficheHTML(d) {
   }
   if (d.reelExc != null) corps += `<tr><td>${d.designExc || 'Excipient'}${d.lotExc ? ' — lot ' + d.lotExc : ''}</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">${fmt(d.theoExc)}</td><td class="r b">${fmt(d.reelExc)}</td></tr>`
   if (d.totalReel != null) corps += `<tr class="tot"><td>Total</td><td colspan="4"></td><td class="r">${fmt(d.totalTheo)}</td><td class="r b">${fmt(d.totalReel)}</td></tr>`
+  let fracTable = ''
+  if (d.nbFrac > 1 && d.recapFrac && d.recapFrac.length) {
+    const head = d.recapFrac.map(c => `<th class="r">${c.nom} (${u})</th>`).join('')
+    let rows = ''
+    for (let f = 1; f <= d.nbFrac; f++) rows += `<tr><td>Fraction ${f}</td>${d.recapFrac.map(c => `<td class="r">${fmt(c.reel)}</td>`).join('')}</tr>`
+    fracTable = `<h2 style="font-size:13px;margin:16px 0 6px;color:#3730a3;border-left:4px solid #a855f7;padding-left:8px">Détail par fraction</h2><table><thead><tr><th>Fraction</th>${head}</tr></thead><tbody>${rows}</tbody></table>`
+  }
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Fiche de pesée</title>
 <style>
 *{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:28px;font-size:12px}
@@ -546,6 +576,7 @@ tr.grp td{background:#f5f3ff;font-weight:800;color:#4338ca}
   <thead><tr><th>Composant / Lot</th><th class="r">Dosage (%)</th><th class="r">LOD (%)</th><th class="r">Titre (%)</th><th class="r">Obtenue (${u})</th><th class="r">Théorique (${u})</th><th class="r">Réel à peser (${u})</th></tr></thead>
   <tbody>${corps}</tbody>
 </table>
+${fracTable}
 <div class="sig"><div class="box">Pesé par (nom, date, visa)</div><div class="box">Vérifié par (nom, date, visa)</div></div>
 <div class="foot">Document généré par ProdTrack — Module Pesée.</div>
 </body></html>`
