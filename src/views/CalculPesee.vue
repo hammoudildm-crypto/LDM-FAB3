@@ -26,16 +26,6 @@
       </div>
 
       <div class="grid">
-        <label class="fld">Méthode de calcul
-          <select v-model="methode">
-            <option value="standard">Standard (titre = dosage − LOD)</option>
-            <option value="cycladol">Cycladol (10,46 = 100 %)</option>
-            <option value="perso">Personnalisé</option>
-          </select>
-        </label>
-        <label class="fld" v-if="methode === 'perso'">Valeur représentant 100 %
-          <input v-model.number="convPerso" type="number" min="0" step="any" placeholder="ex. 10.46" />
-        </label>
         <label class="fld">Qté théorique API — lot complet ({{ unite }})
           <input v-model.number="theoTotalAPI" type="number" min="0" step="any" placeholder="ex. 30" />
         </label>
