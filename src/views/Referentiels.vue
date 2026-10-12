@@ -131,8 +131,9 @@ function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
 
 // --- Équipement ---
 const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1 })
-const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, cadences: false, postes: false, causes: false })
+const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, cadences: false, postes: false, causes: false, peseeConfig: false })
 const sectionActive = ref(null)
+const peseeConfigs = ref([])
 const SECTIONS = [
   { k: 'donneurs', lbl: "Donneurs d'ordre", ic: '🏢', n: () => donneurs.value.length },
   { k: 'ateliers', lbl: 'Ateliers', ic: '🏭', n: () => ateliers.value.length },
@@ -142,7 +143,8 @@ const SECTIONS = [
   { k: 'verifCond', lbl: 'Vérif. conditionnement', ic: '📦', n: () => condList.value.length },
   { k: 'cadences', lbl: 'Cadences', ic: '⏱️', n: () => cadList.value.length },
   { k: 'postes', lbl: 'Postes', ic: '💼', n: () => postesList.value.length },
-  { k: 'causes', lbl: 'Causes types', ic: '🐟', n: () => causesList.value.length }
+  { k: 'causes', lbl: 'Causes types', ic: '🐟', n: () => causesList.value.length },
+  { k: 'peseeConfig', lbl: 'Config pesée', ic: '⚖️', n: () => peseeConfigs.value.length }
 ]
 function ouvrirSection(k) { sectionActive.value = k; ouvert[k] = true }
 async function ajouterPoste() {
@@ -198,6 +200,45 @@ async function chargerTout() {
   if (!rVC.error) condList.value = rVC.data
   const rCad = await supabase.from('cadences_produit').select('id, cadence_nominale, unite_cadence, mode, equipement_id, produit_id, equipements(code), produits(code_pf, designation)').order('id', { ascending: false })
   if (!rCad.error) cadList.value = rCad.data
+  await chargerPC()
+}
+
+// --- Configuration pesée par produit ---
+const pcProduit = ref('')
+const pcMethode = ref('standard')
+const pcConv = ref(null)
+const pcTheoApi = ref(null)
+const pcTheoExc = ref(null)
+const pcEditId = ref(null)
+function libellePC(id) { const pr = produits.value.find(x => String(x.id) === String(id)); return pr ? (pr.code_pf + ' — ' + pr.designation) : ('#' + id) }
+async function chargerPC() {
+  const r = await supabase.from('pesee_config').select('*')
+  if (!r.error) peseeConfigs.value = r.data || []
+}
+function resetPC() { pcEditId.value = null; pcProduit.value = ''; pcMethode.value = 'standard'; pcConv.value = null; pcTheoApi.value = null; pcTheoExc.value = null }
+async function enregistrerPC() {
+  if (!pcProduit.value) { erreur.value = 'Choisis un produit.'; return }
+  const payload = {
+    produit_id: Number(pcProduit.value),
+    methode: pcMethode.value,
+    conversion: (pcMethode.value !== 'standard' && pcConv.value != null && pcConv.value !== '') ? Number(pcConv.value) : null,
+    theo_api: (pcTheoApi.value != null && pcTheoApi.value !== '') ? Number(pcTheoApi.value) : null,
+    theo_excipient: (pcTheoExc.value != null && pcTheoExc.value !== '') ? Number(pcTheoExc.value) : null
+  }
+  const r = pcEditId.value
+    ? await supabase.from('pesee_config').update(payload).eq('id', pcEditId.value)
+    : await supabase.from('pesee_config').upsert(payload, { onConflict: 'produit_id' })
+  if (r.error) { erreur.value = r.error.message; return }
+  erreur.value = ''; resetPC(); await chargerPC()
+}
+function editerPC(c) {
+  pcEditId.value = c.id; pcProduit.value = String(c.produit_id); pcMethode.value = c.methode || 'standard'
+  pcConv.value = c.conversion; pcTheoApi.value = c.theo_api; pcTheoExc.value = c.theo_excipient
+}
+async function supprimerPC(c) {
+  if (!confirm('Supprimer cette configuration ?')) return
+  const r = await supabase.from('pesee_config').delete().eq('id', c.id)
+  if (!r.error) await chargerPC()
 }
 
 // --- Actions Vérificateurs ---
@@ -864,6 +905,54 @@ onMounted(async () => {
                   <td>{{ c.unite_cadence }}</td>
                   <td class="right nowrap"><button v-if="peutEditer" class="link" @click="ouvrirEditCad(c)">Modifier</button> <button v-if="peutEditer" class="link danger" @click="supprimerCad(c)">Supprimer</button></td>
                 </template>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONFIG PESEE -->
+    <section v-if="sectionActive === 'peseeConfig'" class="card">
+      <div class="card-head clickable" @click="ouvert.peseeConfig = !ouvert.peseeConfig">
+        <h2>Configuration pesée par produit</h2>
+        <span class="count">{{ peseeConfigs.length }}</span>
+        <span class="chevron">{{ ouvert.peseeConfig ? '▾' : '▸' }}</span>
+      </div>
+      <div v-show="ouvert.peseeConfig">
+        <p style="color:#64748b;font-size:13px;margin:10px 0">Méthode de calcul et quantités théoriques (kg) de chaque produit. Reprises automatiquement dans « Calcul de pesée » à la sélection du produit.</p>
+        <div class="form-grid" v-if="peutEditer">
+          <label>Produit
+            <select v-model="pcProduit"><option value="">— Choisir —</option><option v-for="p in produits" :key="p.id" :value="String(p.id)">{{ p.code_pf }} — {{ p.designation }}</option></select>
+          </label>
+          <label>Méthode
+            <select v-model="pcMethode"><option value="standard">Standard</option><option value="cycladol">Cycladol</option><option value="perso">Personnalisé</option></select>
+          </label>
+          <label v-if="pcMethode !== 'standard'">Valeur = 100 %<input v-model.number="pcConv" type="number" min="0" step="any" placeholder="10.46" /></label>
+          <label>Qté théo. API (kg)<input v-model.number="pcTheoApi" type="number" min="0" step="any" /></label>
+          <label>Qté théo. excipient (kg)<input v-model.number="pcTheoExc" type="number" min="0" step="any" /></label>
+          <div class="form-actions">
+            <button class="btn" @click="enregistrerPC">{{ pcEditId ? 'Mettre à jour' : 'Ajouter' }}</button>
+            <button v-if="pcEditId" class="btn ghost" @click="resetPC">Annuler</button>
+          </div>
+        </div>
+        <div v-if="!peseeConfigs.length" class="empty">Aucune configuration.</div>
+        <div class="table-scroll" v-else>
+          <table class="grid">
+            <thead><tr><th>Produit</th><th>Méthode</th><th class="right">100 %</th><th class="right">Théo API</th><th class="right">Théo excip.</th><th class="right">Actions</th></tr></thead>
+            <tbody>
+              <tr v-for="c in peseeConfigs" :key="c.id">
+                <td>{{ libellePC(c.produit_id) }}</td>
+                <td>{{ c.methode }}</td>
+                <td class="right">{{ c.conversion != null ? c.conversion : '—' }}</td>
+                <td class="right">{{ c.theo_api != null ? c.theo_api : '—' }}</td>
+                <td class="right">{{ c.theo_excipient != null ? c.theo_excipient : '—' }}</td>
+                <td class="right nowrap">
+                  <template v-if="peutEditer">
+                    <button class="link" @click="editerPC(c)">Modifier</button>
+                    <button class="link danger" @click="supprimerPC(c)">Supprimer</button>
+                  </template>
+                </td>
               </tr>
             </tbody>
           </table>
