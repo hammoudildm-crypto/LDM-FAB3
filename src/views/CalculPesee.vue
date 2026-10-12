@@ -130,10 +130,11 @@
     <section class="card" v-if="totalReelAPI != null">
       <h2 class="card-title">Traçabilité</h2>
       <div class="grid">
-        <label class="fld">Produit
+        <label class="fld">Produit <span v-if="rechercheProduit" class="cnt">({{ produitsFiltres.length }})</span>
+          <input v-model="rechercheProduit" type="text" class="prod-search" placeholder="Rechercher (code ou désignation)…" />
           <select v-model="produitSel">
             <option value="">— Choisir —</option>
-            <option v-for="p in produits" :key="p.id" :value="String(p.id)">{{ p.code_pf }} — {{ p.designation }}</option>
+            <option v-for="p in produitsFiltres" :key="p.id" :value="String(p.id)">{{ p.code_pf }} — {{ p.designation }}</option>
           </select>
         </label>
         <label class="fld">N° OF (ordre de fabrication)
@@ -200,6 +201,16 @@ const historique = ref([])
 const erreur = ref('')
 const message = ref('')
 const enreg = ref(false)
+const rechercheProduit = ref('')
+const produitsFiltres = computed(() => {
+  const q = rechercheProduit.value.trim().toLowerCase()
+  let list = q ? produits.value.filter(p => ((p.code_pf || '') + ' ' + (p.designation || '')).toLowerCase().includes(q)) : produits.value
+  if (produitSel.value && !list.some(p => String(p.id) === produitSel.value)) {
+    const sel = produits.value.find(p => String(p.id) === produitSel.value)
+    if (sel) list = [sel, ...list]
+  }
+  return list
+})
 
 const vide = (x) => x === null || x === '' || x === undefined
 
@@ -468,6 +479,8 @@ function exporterPeseePDF(p) { imprimer(ficheHTML(snapshotStored(p))) }
 .fld { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 600; color: #475569; }
 .fld input, .fld select { padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 15px; color: #0f172a; background: #fff; }
 .fld input:focus, .fld select:focus { outline: 2px solid #c7d2fe; border-color: #6366f1; }
+.prod-search { font-size: 13px !important; padding: 7px 10px !important; }
+.cnt { font-size: 11px; color: #94a3b8; font-weight: 600; }
 .hint { font-size: 12px; color: #64748b; margin: 12px 0 0; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 8px; padding: 9px 11px; line-height: 1.6; }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn { background: #4f46e5; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
