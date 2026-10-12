@@ -939,9 +939,9 @@ onMounted(async () => {
             <select v-model="pcProduit"><option value="">— Choisir —</option><option v-for="p in pcProduitsFiltres" :key="p.id" :value="String(p.id)">{{ p.code_pf }} — {{ p.designation }}</option></select>
           </label>
           <label>Méthode
-            <select v-model="pcMethode"><option value="standard">Standard</option><option value="cycladol">Cycladol</option><option value="perso">Personnalisé</option></select>
+            <select v-model="pcMethode"><option value="standard">Standard</option><option value="cycladol">Cycladol</option><option value="perso">Personnalisé</option><option value="direct">Sans calcul (réel = théo)</option></select>
           </label>
-          <label v-if="pcMethode !== 'standard'">Valeur = 100 %<input v-model.number="pcConv" type="number" min="0" step="any" placeholder="10.46" /></label>
+          <label v-if="pcMethode === 'cycladol' || pcMethode === 'perso'">Valeur = 100 %<input v-model.number="pcConv" type="number" min="0" step="any" placeholder="10.46" /></label>
           <label>Qté théo. API (kg)<input v-model.number="pcTheoApi" type="number" min="0" step="any" /></label>
           <label>Qté théo. excipient (kg)<input v-model.number="pcTheoExc" type="number" min="0" step="any" /></label>
           <label>Nb fractions<input v-model.number="pcNbFrac" type="number" min="1" step="1" /></label>
