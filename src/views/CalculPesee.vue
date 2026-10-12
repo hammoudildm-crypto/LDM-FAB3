@@ -33,7 +33,7 @@
           <input v-model.number="nbFractions" type="number" min="1" step="1" />
         </label>
       </div>
-      <p v-if="nbFracNum > 1 && totalTheoAPINum != null" class="frac-note">Lot divisé en <b>{{ nbFracNum }} fractions</b> → le calcul porte sur <b>1 fraction</b> : API théorique <b>{{ fmt(totalTheoAPINum) }} {{ unite }}</b><span v-if="theoExcFrac != null">, excipient théorique <b>{{ fmt(theoExcFrac) }} {{ unite }}</b></span>. À répéter {{ nbFracNum }} fois.</p>
+      <p v-if="nbFracNum > 1 && totalTheoAPINum != null" class="frac-note">Lot divisé en <b>{{ nbFracNum }} fractions</b> → pesée d'<b>1 fraction</b> : API <b>{{ fmt(totalTheoAPINum) }} {{ unite }}</b><span v-if="theoExcFrac != null">, excipient <b>{{ fmt(theoExcFrac) }} {{ unite }}</b></span>. À répéter {{ nbFracNum }} fois.</p>
 
       <div class="lots-wrap">
         <table class="lots-tbl">
@@ -85,7 +85,7 @@
         <label class="fld">N° lot excipient
           <input v-model="lotExc" type="text" placeholder="N° lot" />
         </label>
-        <label class="fld">Quantité théorique excipient ({{ unite }})
+        <label class="fld">Quantité théorique excipient — lot complet ({{ unite }})
           <input v-model.number="theoExc" type="number" min="0" step="any" placeholder="ex. 1500" />
         </label>
       </div>
@@ -293,7 +293,7 @@ const lotsReels = computed(() => lotsCalc.value.filter(l => l.aPeser != null && 
 const titreInvalide = computed(() => lotsCalc.value.some(l => l.titre != null && l.titre <= 0))
 
 const nbFracNum = computed(() => { const n = Number(nbFractions.value); return (n >= 1) ? Math.floor(n) : 1 })
-// Quantités THÉORIQUES d'une fraction = quantités du lot ÷ nombre de fractions
+// Quantités saisies = lot complet → quantités d'une fraction = lot ÷ nombre de fractions
 const totalTheoAPINum = computed(() => (!vide(theoTotalAPI.value) && Number(theoTotalAPI.value) >= 0) ? Number(theoTotalAPI.value) / nbFracNum.value : null)
 const theoExcFrac = computed(() => (!vide(theoExc.value) && Number(theoExc.value) >= 0) ? Number(theoExc.value) / nbFracNum.value : null)
 
