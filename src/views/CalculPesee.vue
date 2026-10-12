@@ -40,9 +40,9 @@
           <thead>
             <tr>
               <th>Lot API</th>
-              <th>Dosage (%)</th>
-              <th>LOD (%)</th>
-              <th>Titre (%)</th>
+              <th v-if="avecTitre">Dosage (%)</th>
+              <th v-if="avecTitre">LOD (%)</th>
+              <th v-if="avecTitre">Titre (%)</th>
               <th>Qté réelle obtenue ({{ unite }})<br /><span class="th-sub">lot pesé / épuisé</span></th>
               <th>Qté théorique ({{ unite }})</th>
               <th>Qté réelle à peser ({{ unite }})</th>
@@ -52,9 +52,9 @@
           <tbody>
             <tr v-for="(l, i) in lots" :key="i">
               <td><input v-model="l.lot" type="text" placeholder="N° lot" /></td>
-              <td><input v-model.number="l.dosage" type="number" min="0" step="any" placeholder="99.5" /></td>
-              <td><input v-model.number="l.lod" type="number" min="0" step="any" placeholder="0.5" /></td>
-              <td class="calc">{{ lotsCalc[i].titre != null ? fmt(lotsCalc[i].titre) + ' %' : '—' }}</td>
+              <td v-if="avecTitre"><input v-model.number="l.dosage" type="number" min="0" step="any" placeholder="99.5" /></td>
+              <td v-if="avecTitre"><input v-model.number="l.lod" type="number" min="0" step="any" placeholder="0.5" /></td>
+              <td v-if="avecTitre" class="calc">{{ lotsCalc[i].titre != null ? fmt(lotsCalc[i].titre) + ' %' : '—' }}</td>
               <td><input v-model.number="l.obtenu" type="number" min="0" step="any" placeholder="laisser vide = lot qui complète" /></td>
               <td class="calc">{{ lotsCalc[i].theo != null ? fmt(lotsCalc[i].theo) : '—' }}</td>
               <td class="calc b" :class="{ hl: lotsCalc[i].obtenue == null && lotsCalc[i].aPeser != null }">{{ lotsCalc[i].aPeser != null ? fmt(lotsCalc[i].aPeser) : '—' }}</td>
@@ -66,10 +66,12 @@
       <button class="btn ghost sm" @click="addLot">+ Ajouter un lot API</button>
 
       <p class="hint">
-        <b>Titre</b> : <span v-if="conv != null">dosage converti (dosage × 100 ÷ {{ fmt(conv) }}) − LOD</span><span v-else>dosage − LOD</span>. On traite les lots dans l'ordre à partir du théorique total.<br />
-        <b>Lot pesé / épuisé</b> : saisis sa <b>quantité réelle obtenue</b> → sa quantité théorique couverte = obtenue × titre ÷ 100.<br />
-        <b>Lot qui complète</b> : laisse la quantité obtenue <b>vide</b> → sa quantité à peser = théorique restant × 100 ÷ titre.<br />
-        <b>Titre ≥ 100 %</b> : aucune correction appliquée → la quantité réelle = la quantité théorique.
+        <span v-if="avecTitre"><b>Titre</b> : <span v-if="conv != null">dosage converti (dosage × 100 ÷ {{ fmt(conv) }}) − LOD</span><span v-else>dosage − LOD</span>. </span>
+        <span v-else><b>Produit sans correction</b> : la quantité réelle = la quantité théorique. </span>
+        On traite les lots dans l'ordre à partir du théorique total.<br />
+        <b>Lot pesé / épuisé</b> : saisis sa <b>quantité réelle obtenue</b><span v-if="avecTitre"> → quantité théorique couverte = obtenue × titre ÷ 100</span>.<br />
+        <b>Lot qui complète</b> : laisse la quantité obtenue <b>vide</b> → quantité à peser = théorique restant<span v-if="avecTitre"> × 100 ÷ titre</span>.<br />
+        <span v-if="avecTitre"><b>Titre ≥ 100 %</b> : aucune correction → quantité réelle = quantité théorique.</span>
       </p>
       <p v-if="resteACouvrir != null && Math.abs(resteACouvrir) > 0.0005" class="warn">
         Reste théorique non couvert : <b>{{ fmt(resteACouvrir) }} {{ unite }}</b>.
@@ -114,7 +116,7 @@
           <tbody>
             <tr v-for="l in lotsReels" :key="l.idx">
               <td>API — lot {{ l.lot || ('n°' + (l.idx + 1)) }}
-                <span class="titre-badge">titre {{ fmt(l.titre) }} %</span>
+                <span v-if="avecTitre" class="titre-badge">titre {{ fmt(l.titre) }} %</span>
                 <span v-if="l.obtenue == null" class="comp-badge">complète</span>
               </td>
               <td class="r">{{ fmt(l.theo) }}</td>
@@ -235,16 +237,20 @@ const vide = (x) => x === null || x === '' || x === undefined
 // la quantité réelle se calcule ensuite de façon standard (× 100 ÷ titre), plafond 100 %.
 const METHODES = {
   standard: { conv: null, plafond: 100 },
-  cycladol: { conv: 10.46, plafond: 100 }
+  cycladol: { conv: 10.46, plafond: 100 },
+  direct: { conv: null, plafond: 100 }
 }
 const conv = computed(() => methode.value === 'perso' ? (Number(convPerso.value) > 0 ? Number(convPerso.value) : null) : METHODES[methode.value].conv)
 const plafond = computed(() => methode.value === 'perso' ? 100 : METHODES[methode.value].plafond)
 function labelMethode(key, cv) {
   if (key === 'cycladol') return 'Cycladol (dosage converti : 10,46 = 100 %)'
   if (key === 'perso') return 'Personnalisé (dosage converti : ' + fmt(cv) + ' = 100 %)'
+  if (key === 'direct') return 'Sans calcul (réel = théorique)'
   return 'Standard (titre = dosage − LOD)'
 }
 const methodeLabel = computed(() => labelMethode(methode.value, conv.value))
+const estDirect = computed(() => methode.value === 'direct')
+const avecTitre = computed(() => methode.value !== 'direct')
 const configParProduit = computed(() => { const m = {}; for (const c of configs.value) if (c.produit_id != null) m[String(c.produit_id)] = c; return m })
 
 // Calcul séquentiel : on part du théorique total ; chaque lot pesé déduit sa part (obtenue x titre / 100),
@@ -252,15 +258,15 @@ const configParProduit = computed(() => { const m = {}; for (const c of configs.
 const lotsCalc = computed(() => {
   const total = totalTheoAPINum.value
   let remaining = total
-  const cv = conv.value, plaf = plafond.value
+  const cv = conv.value, plaf = plafond.value, direct = estDirect.value
   const out = []
   for (let i = 0; i < lots.value.length; i++) {
     const l = lots.value[i]
     const dosage = Number(l.dosage), lod = Number(l.lod)
     // Étape 1 : conversion du dosage si la méthode le demande (ex. Cycladol : 10,46 = 100 %)
     const dosageConv = (!vide(l.dosage)) ? (cv != null ? dosage * 100 / cv : dosage) : null
-    // Étape 2 : titre = dosage converti − LOD
-    const titre = (dosageConv != null && !vide(l.lod)) ? dosageConv - lod : null
+    // Étape 2 : titre = dosage converti − LOD (ou 100 % pour la méthode sans calcul)
+    const titre = direct ? 100 : ((dosageConv != null && !vide(l.lod)) ? dosageConv - lod : null)
     // Titre effectif plafonné (>= 100 % : pas de correction)
     const titreEff = (titre != null) ? (plaf != null ? Math.min(titre, plaf) : titre) : null
     const obtenue = (!vide(l.obtenu) && Number(l.obtenu) >= 0) ? Number(l.obtenu) : null
