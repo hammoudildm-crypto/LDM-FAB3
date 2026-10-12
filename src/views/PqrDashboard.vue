@@ -132,6 +132,44 @@
           <div v-else class="empty-sm">Au moins 2 mesures sont nécessaires pour construire la carte de contrôle.</div>
         </div>
 
+        <h3 class="sec-titre">Analyse d'impact entre paramètres</h3>
+        <p class="hint">Relation entre deux paramètres, appariés par lot (moyenne par lot). Un lien statistique n'implique pas forcément une cause directe.</p>
+        <div class="corr-ctrls">
+          <label>Paramètre X
+            <select v-model="corrX"><option value="">—</option><option v-for="p in paramsNumDispo" :key="'cx' + p.id" :value="String(p.id)">{{ p.nom }}</option></select>
+          </label>
+          <span class="corr-vs">vs</span>
+          <label>Paramètre Y
+            <select v-model="corrY"><option value="">—</option><option v-for="p in paramsNumDispo" :key="'cy' + p.id" :value="String(p.id)">{{ p.nom }}</option></select>
+          </label>
+        </div>
+        <div v-if="!corrX || !corrY" class="empty-sm">Choisis deux paramètres à comparer.</div>
+        <div v-else-if="corrX === corrY" class="empty-sm">Choisis deux paramètres différents.</div>
+        <div v-else-if="corrData && corrData.insuffisant" class="empty-sm">Pas assez de lots communs ({{ corrData.n }}) — il en faut au moins 3 avec les deux paramètres mesurés.</div>
+        <div v-else-if="corrData" class="corr-wrap">
+          <div class="corr-cards">
+            <div class="corr-card"><div class="cc-v">{{ corrData.r.toFixed(3) }}</div><div class="cc-l">Corrélation (r)</div></div>
+            <div class="corr-card"><div class="cc-v">{{ (corrData.r2 * 100).toFixed(0) }}%</div><div class="cc-l">Variance expliquée (R²)</div></div>
+            <div class="corr-card"><div class="cc-v">{{ corrData.n }}</div><div class="cc-l">Lots comparés</div></div>
+          </div>
+          <p class="corr-verdict" :class="corrForceCls">{{ corrTexte }}</p>
+          <div class="chart-wrap">
+            <svg :viewBox="'0 0 ' + corrData.W + ' ' + corrData.H" class="trend" preserveAspectRatio="xMidYMid meet">
+              <line :x1="corrData.mL" :y1="corrData.mT" :x2="corrData.mL" :y2="corrData.H - corrData.mB" class="axis" />
+              <line :x1="corrData.mL" :y1="corrData.H - corrData.mB" :x2="corrData.W - corrData.mR" :y2="corrData.H - corrData.mB" class="axis" />
+              <line :x1="corrData.line.x1" :y1="corrData.line.y1" :x2="corrData.line.x2" :y2="corrData.line.y2" class="l-reg" />
+              <circle v-for="(pt, i) in corrData.pts" :key="'cp' + i" :cx="pt.cx" :cy="pt.cy" r="4.5" class="pt-ok"><title>{{ pt.lot }} — X: {{ fmtNum(pt.x) }} · Y: {{ fmtNum(pt.y) }}</title></circle>
+              <text :x="corrData.mL - 6" :y="corrData.mT + 5" class="ax">{{ corrData.ymax.toFixed(1) }}</text>
+              <text :x="corrData.mL - 6" :y="corrData.H - corrData.mB + 4" class="ax">{{ corrData.ymin.toFixed(1) }}</text>
+              <text :x="corrData.mL" :y="corrData.H - corrData.mB + 16" class="ax">{{ corrData.xmin.toFixed(1) }}</text>
+              <text :x="corrData.W - corrData.mR" :y="corrData.H - corrData.mB + 16" class="ax" text-anchor="end">{{ corrData.xmax.toFixed(1) }}</text>
+              <text :x="(corrData.mL + corrData.W - corrData.mR) / 2" :y="corrData.H - 8" class="ax-lbl" text-anchor="middle">{{ corrXnom }}</text>
+              <text x="14" :y="(corrData.mT + corrData.H - corrData.mB) / 2" class="ax-lbl" text-anchor="middle" :transform="'rotate(-90 14 ' + ((corrData.mT + corrData.H - corrData.mB) / 2) + ')'">{{ corrYnom }}</text>
+            </svg>
+            <div class="leg"><span class="lg"><i class="d-ok"></i>Lot (X, Y)</span><span class="lg"><i class="l-rg"></i>Tendance (régression)</span></div>
+          </div>
+        </div>
+
         <h3 class="sec-titre">Lots hors spec</h3>
         <div v-if="!horsSpecListe.length" class="empty-sm">Aucun lot hors spec 🎉</div>
         <table v-else class="pqr-tbl">
@@ -166,6 +204,8 @@ const specByParam = ref({})
 const mesures = ref([])
 const paramSel = ref(null)
 const chartMode = ref('trend')
+const corrX = ref('')
+const corrY = ref('')
 const erreur = ref('')
 const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 const produitsFiltres = computed(() => { const q = normR(rechercheProd.value).trim(); if (!q) return produits.value; return produits.value.filter(pr => normR((pr.code_pf || '') + ' ' + (pr.designation || '')).includes(q)) })
@@ -183,7 +223,7 @@ async function chargerBase() {
 onMounted(chargerBase)
 
 watch(produitSel, async (pid) => {
-  specByParam.value = {}; mesures.value = []; paramSel.value = null
+  specByParam.value = {}; mesures.value = []; paramSel.value = null; corrX.value = ''; corrY.value = ''
   if (!pid) return
   const rs = await supabase.from('pqr_specs_produit').select('*').eq('produit_id', Number(pid))
   if (!rs.error) { const by = {}; for (const s of (rs.data || [])) by[s.parametre_id] = s; specByParam.value = by }
@@ -220,6 +260,64 @@ function stats(vals) { const n = vals.length; const mean = vals.reduce((a, b) =>
 function cpkCalc(mean, std, lsl, usl) { if (std <= 0 || (lsl == null && usl == null)) return { cp: null, cpk: null }; const cp = (lsl != null && usl != null) ? (usl - lsl) / (6 * std) : null; const cpu = usl != null ? (usl - mean) / (3 * std) : Infinity; const cpl = lsl != null ? (mean - lsl) / (3 * std) : Infinity; const cpk = Math.min(cpu, cpl); return { cp, cpk: cpk === Infinity ? null : cpk } }
 
 const paramById = computed(() => { const m = {}; for (const p of params.value) m[p.id] = p; return m })
+
+// ---- Analyse d'impact entre paramètres (corrélation par lot) ----
+const paramsNumDispo = computed(() => {
+  const avecData = new Set(mesuresPlat.value.map(m => m.parametre_id))
+  return params.value.filter(p => p.type !== 'bool' && avecData.has(p.id))
+})
+const corrData = computed(() => {
+  const xid = Number(corrX.value), yid = Number(corrY.value)
+  if (!xid || !yid || xid === yid) return null
+  const parLotX = {}, parLotY = {}
+  const acc = (map, key, v, lot) => { if (!map[key]) map[key] = { s: 0, n: 0, lot }; map[key].s += v; map[key].n++ }
+  for (const m of mesuresPlat.value) {
+    const v = Number(m.valeur); if (Number.isNaN(v)) continue
+    const key = m.of_id != null ? 'of' + m.of_id : 'lot' + (m.numero_lot || '')
+    if (key === 'of' || key === 'lot') continue
+    if (m.parametre_id === xid) acc(parLotX, key, v, m.numero_lot)
+    if (m.parametre_id === yid) acc(parLotY, key, v, m.numero_lot)
+  }
+  const pairs = []
+  for (const key of Object.keys(parLotX)) {
+    if (parLotY[key]) pairs.push({ x: parLotX[key].s / parLotX[key].n, y: parLotY[key].s / parLotY[key].n, lot: parLotX[key].lot || parLotY[key].lot || '' })
+  }
+  if (pairs.length < 3) return { insuffisant: true, n: pairs.length }
+  const n = pairs.length
+  const mx = pairs.reduce((a, p) => a + p.x, 0) / n
+  const my = pairs.reduce((a, p) => a + p.y, 0) / n
+  let sxy = 0, sxx = 0, syy = 0
+  for (const p of pairs) { const dx = p.x - mx, dy = p.y - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy }
+  const r = (sxx > 0 && syy > 0) ? sxy / Math.sqrt(sxx * syy) : 0
+  const slope = sxx > 0 ? sxy / sxx : 0
+  const intercept = my - slope * mx
+  const W = 760, H = 380, mL = 58, mR = 24, mT = 22, mB = 52
+  const xs = pairs.map(p => p.x), ys = pairs.map(p => p.y)
+  let xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys)
+  if (xmin === xmax) { xmin -= 1; xmax += 1 }
+  if (ymin === ymax) { ymin -= 1; ymax += 1 }
+  const pX = (xmax - xmin) * 0.08, pY = (ymax - ymin) * 0.08
+  xmin -= pX; xmax += pX; ymin -= pY; ymax += pY
+  const xx = (v) => mL + (v - xmin) / (xmax - xmin) * (W - mL - mR)
+  const yy = (v) => H - mB - (v - ymin) / (ymax - ymin) * (H - mT - mB)
+  const pts = pairs.map(p => ({ cx: xx(p.x), cy: yy(p.y), x: p.x, y: p.y, lot: p.lot }))
+  const line = { x1: xx(xmin), y1: yy(slope * xmin + intercept), x2: xx(xmax), y2: yy(slope * xmax + intercept) }
+  return { insuffisant: false, n, r, r2: r * r, slope, intercept, W, H, mL, mR, mT, mB, xmin, xmax, ymin, ymax, pts, line }
+})
+const corrXnom = computed(() => { const p = paramById.value[Number(corrX.value)]; return p ? p.nom + (uniteEff(p) ? ' (' + uniteEff(p) + ')' : '') : '' })
+const corrYnom = computed(() => { const p = paramById.value[Number(corrY.value)]; return p ? p.nom + (uniteEff(p) ? ' (' + uniteEff(p) + ')' : '') : '' })
+const corrForceCls = computed(() => { const d = corrData.value; if (!d || d.insuffisant) return ''; const ar = Math.abs(d.r); return ar < 0.4 ? 'cv-weak' : ar < 0.6 ? 'cv-mod' : 'cv-strong' })
+const corrTexte = computed(() => {
+  const d = corrData.value
+  if (!d || d.insuffisant) return ''
+  const ar = Math.abs(d.r)
+  const force = ar < 0.2 ? 'négligeable' : ar < 0.4 ? 'faible' : ar < 0.6 ? 'modérée' : ar < 0.8 ? 'forte' : 'très forte'
+  const px = paramById.value[Number(corrX.value)], py = paramById.value[Number(corrY.value)]
+  const nx = px ? px.nom : 'X', ny = py ? py.nom : 'Y'
+  if (ar < 0.2) return 'Corrélation ' + force + ' (r = ' + d.r.toFixed(2) + ') : aucune relation nette entre ' + nx + ' et ' + ny + ' sur les lots mesurés.'
+  const sens = d.r > 0 ? 'augmenter' : 'diminuer'
+  return 'Corrélation ' + force + ' et ' + (d.r > 0 ? 'positive' : 'négative') + ' (r = ' + d.r.toFixed(2) + ', R² = ' + (d.r2 * 100).toFixed(0) + '%) : lorsque ' + nx + ' augmente, ' + ny + ' tend à ' + sens + '. Le R² est la part de variation de ' + ny + ' statistiquement liée à ' + nx + '.'
+})
 const synthese = computed(() => {
   const byParam = {}
   for (const m of mesuresPlat.value) { const v = Number(m.valeur); if (!Number.isNaN(v)) (byParam[m.parametre_id] = byParam[m.parametre_id] || []).push(v) }
@@ -433,6 +531,21 @@ tr.ph td{background:#f8fafc;font-weight:800;color:#a855f7;text-transform:upperca
 .tabs button.on { background: #fff; color: #a855f7; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
 
 .chart-wrap { margin-top: 10px; }
+.corr-ctrls { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin: 8px 0 12px; }
+.corr-ctrls label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 600; color: #475569; }
+.corr-ctrls select { padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; font-size: 13px; min-width: 210px; }
+.corr-vs { align-self: center; font-weight: 700; color: #94a3b8; padding-bottom: 7px; }
+.corr-cards { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.corr-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; padding: 8px 18px; text-align: center; min-width: 118px; }
+.cc-v { font-size: 20px; font-weight: 800; color: #4f46e5; }
+.cc-l { font-size: 11px; color: #64748b; margin-top: 2px; }
+.corr-verdict { font-size: 13px; padding: 9px 12px; border-radius: 8px; margin: 4px 0 10px; line-height: 1.45; }
+.cv-weak { background: #f1f5f9; color: #475569; }
+.cv-mod { background: #fef3c7; color: #92400e; }
+.cv-strong { background: #dbeafe; color: #1e40af; }
+.l-reg { stroke: #4f46e5; stroke-width: 2; stroke-dasharray: 6 4; fill: none; }
+.leg .l-rg { display: inline-block; width: 16px; height: 2px; background: repeating-linear-gradient(90deg, #4f46e5 0 5px, transparent 5px 9px); vertical-align: middle; }
+.ax-lbl { font-size: 11px; fill: #475569; font-weight: 700; }
 .trend { width: 100%; height: auto; background: #fcfcfd; border: 1px solid #eef2f6; border-radius: 12px; }
 .trend .axis { stroke: #cbd5e1; stroke-width: 1; }
 .trend .l-spec { stroke: #f87171; stroke-width: 1.5; stroke-dasharray: 5 4; }
