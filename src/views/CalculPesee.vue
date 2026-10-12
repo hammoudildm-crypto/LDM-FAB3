@@ -55,7 +55,8 @@
       <p class="hint">
         <b>Titre</b> = Dosage − LOD. On traite les lots dans l'ordre à partir du théorique total.<br />
         <b>Lot pesé / épuisé</b> : saisis sa <b>quantité réelle obtenue</b> → sa quantité théorique couverte = obtenue × titre ÷ 100.<br />
-        <b>Lot qui complète</b> : laisse la quantité obtenue <b>vide</b> → sa quantité à peser = théorique restant × 100 ÷ titre.
+        <b>Lot qui complète</b> : laisse la quantité obtenue <b>vide</b> → sa quantité à peser = théorique restant × 100 ÷ titre.<br />
+        <b>Titre ≥ 100 %</b> : aucune correction appliquée → la quantité réelle = la quantité théorique.
       </p>
       <p v-if="resteACouvrir != null && Math.abs(resteACouvrir) > 0.0005" class="warn">
         Reste théorique non couvert : <b>{{ fmt(resteACouvrir) }} {{ unite }}</b>.
@@ -224,16 +225,18 @@ const lotsCalc = computed(() => {
     const l = lots.value[i]
     const dosage = Number(l.dosage), lod = Number(l.lod)
     const titre = (!vide(l.dosage) && !vide(l.lod)) ? dosage - lod : null
+    // Titre >= 100 % : aucune correction -> la quantité réelle = la quantité théorique (titre plafonné à 100)
+    const titreEff = titre != null ? Math.min(titre, 100) : null
     const obtenue = (!vide(l.obtenu) && Number(l.obtenu) >= 0) ? Number(l.obtenu) : null
     let theo = null, aPeser = null
-    if (titre != null && titre > 0 && remaining != null) {
+    if (titreEff != null && titreEff > 0 && remaining != null) {
       if (obtenue != null) {
-        theo = obtenue * titre / 100
+        theo = obtenue * titreEff / 100
         aPeser = obtenue
         remaining = remaining - theo
       } else {
         theo = remaining > 0 ? remaining : 0
-        aPeser = theo * 100 / titre
+        aPeser = theo * 100 / titreEff
         remaining = remaining - theo
       }
     } else {
