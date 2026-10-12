@@ -1,7 +1,10 @@
 <template>
   <div class="pes-page">
     <PageHeader title="Pesée — Calcul API / Excipient" tone="#4f46e5"
-      subtitle="Calcule les quantités réelles à peser. Le titre de chaque lot d'API est déduit du dosage et de la LOD. La masse totale du lot reste constante." />
+      subtitle="Calcule les quantités réelles à peser, enregistre la pesée et édite la fiche. Le titre de chaque lot d'API est déduit du dosage et de la LOD." />
+
+    <p v-if="erreur" class="alert">{{ erreur }}</p>
+    <p v-if="message" class="ok">{{ message }}</p>
 
     <section class="card">
       <div class="card-head">
@@ -55,7 +58,6 @@
           <input v-model.number="theoExc" type="number" min="0" step="any" placeholder="ex. 1500" />
         </label>
       </div>
-      <button class="btn ghost sm" @click="reset">Réinitialiser tout</button>
     </section>
 
     <section class="card" v-if="totalReelAPI != null || titreInvalide">
@@ -106,20 +108,82 @@
             </tr>
           </tbody>
         </table>
-        <p class="note" v-if="reelExc != null">Chaque lot est corrigé par son propre titre (= dosage − LOD). L'excipient compense exactement le surplus (ou le déficit) total d'API, la masse totale restant constante.</p>
-        <p class="note" v-else>Renseigne la quantité théorique d'excipient pour obtenir sa quantité réelle et le total.</p>
+        <p class="note" v-if="reelExc != null">Chaque lot est corrigé par son propre titre (= dosage − LOD). L'excipient compense le surplus total d'API, la masse totale restant constante.</p>
       </template>
+    </section>
+
+    <section class="card" v-if="totalReelAPI != null">
+      <h2 class="card-title">Traçabilité</h2>
+      <div class="grid">
+        <label class="fld">Produit
+          <select v-model="produitSel">
+            <option value="">— Choisir —</option>
+            <option v-for="p in produits" :key="p.id" :value="String(p.id)">{{ p.code_pf }} — {{ p.designation }}</option>
+          </select>
+        </label>
+        <label class="fld">N° OF (ordre de fabrication)
+          <input v-model="ofNum" type="text" placeholder="ex. OF-2026-0123" />
+        </label>
+        <label class="fld">Date de pesée
+          <input v-model="datePesee" type="date" />
+        </label>
+        <label class="fld">Opérateur
+          <input v-model="operateur" type="text" placeholder="Nom" />
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn" :disabled="!peutEditer || enreg" @click="enregistrer">{{ enreg ? 'Enregistrement…' : '💾 Enregistrer la pesée' }}</button>
+        <button class="btn ghost" @click="exporterPDF">📄 Fiche de pesée (PDF)</button>
+        <button class="btn ghost sm" @click="reset">Réinitialiser</button>
+      </div>
+    </section>
+
+    <section class="card" v-if="historique.length">
+      <h2 class="card-title">Pesées enregistrées</h2>
+      <div class="lots-wrap">
+        <table class="t">
+          <thead><tr><th>Date</th><th>Produit</th><th>OF</th><th>Opérateur</th><th class="r">Total réel API</th><th class="r">Lots</th><th></th></tr></thead>
+          <tbody>
+            <tr v-for="p in historique" :key="p.id">
+              <td>{{ p.date_pesee || '—' }}</td>
+              <td>{{ p.produit_libelle || '—' }}</td>
+              <td>{{ p.of_numero || '—' }}</td>
+              <td>{{ p.operateur || '—' }}</td>
+              <td class="r b">{{ p.total_reel_api != null ? fmt(p.total_reel_api) + ' ' + (p.unite || '') : '—' }}</td>
+              <td class="r">{{ (p.lots && p.lots.length) || 0 }}</td>
+              <td class="row-act">
+                <button class="mini" @click="chargerPesee(p)" title="Recharger dans le calcul">Charger</button>
+                <button class="mini" @click="exporterPeseePDF(p)" title="Fiche PDF">PDF</button>
+                <button v-if="peutEditer" class="mini del" @click="supprimerPesee(p)" title="Supprimer">✕</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, inject } from 'vue'
+import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
+
+const peutEditer = inject('peutEditer', ref(true))
 
 const unite = ref('g')
 const theoExc = ref(null)
 const lots = ref([{ lot: '', theo: null, dosage: null, lod: null }])
+
+const produits = ref([])
+const produitSel = ref('')
+const ofNum = ref('')
+const datePesee = ref(new Date().toISOString().slice(0, 10))
+const operateur = ref('')
+const historique = ref([])
+const erreur = ref('')
+const message = ref('')
+const enreg = ref(false)
 
 const vide = (x) => x === null || x === '' || x === undefined
 
@@ -132,7 +196,6 @@ const lotsCalc = computed(() => lots.value.map((l, i) => {
   return { idx: i, lot: l.lot, titre, theoNum, reel }
 }))
 const lotsReels = computed(() => lotsCalc.value.filter(l => l.reel != null && l.theoNum != null))
-
 const titreInvalide = computed(() => lotsCalc.value.some(l => l.titre != null && l.titre <= 0))
 
 const totalTheoAPI = computed(() => {
@@ -140,7 +203,6 @@ const totalTheoAPI = computed(() => {
   for (const l of lotsCalc.value) { if (l.theoNum != null) { s += l.theoNum; any = true } }
   return any ? s : null
 })
-// null si un lot a une qté théorique mais un réel non calculable (calcul incomplet)
 const totalReelAPI = computed(() => {
   let s = 0, any = false
   for (const l of lotsCalc.value) {
@@ -179,7 +241,145 @@ function sign(v) { return (v != null && v > 1e-9) ? '+' : '' }
 function ecartCls(v) { if (v == null || Math.abs(v) < 1e-9) return ''; return v > 0 ? 'up' : 'down' }
 function addLot() { lots.value.push({ lot: '', theo: null, dosage: null, lod: null }) }
 function removeLot(i) { if (lots.value.length > 1) lots.value.splice(i, 1) }
-function reset() { lots.value = [{ lot: '', theo: null, dosage: null, lod: null }]; theoExc.value = null }
+function reset() {
+  lots.value = [{ lot: '', theo: null, dosage: null, lod: null }]
+  theoExc.value = null; produitSel.value = ''; ofNum.value = ''; operateur.value = ''
+  datePesee.value = new Date().toISOString().slice(0, 10); erreur.value = ''; message.value = ''
+}
+
+async function charger() {
+  const rp = await supabase.from('produits').select('id, code_pf, designation').order('code_pf')
+  if (!rp.error) produits.value = rp.data || []
+  await chargerHistorique()
+}
+async function chargerHistorique() {
+  const r = await supabase.from('pesees').select('*').order('created_at', { ascending: false }).limit(50)
+  if (!r.error) historique.value = r.data || []
+}
+onMounted(charger)
+
+function lotsPayload() {
+  return lots.value.map((l, i) => ({
+    lot: l.lot || '', theo: lotsCalc.value[i].theoNum,
+    dosage: vide(l.dosage) ? null : Number(l.dosage),
+    lod: vide(l.lod) ? null : Number(l.lod),
+    titre: lotsCalc.value[i].titre, reel: lotsCalc.value[i].reel
+  })).filter(l => l.reel != null)
+}
+
+async function enregistrer() {
+  erreur.value = ''; message.value = ''
+  if (totalReelAPI.value == null) { erreur.value = 'Complète au moins un lot API (quantité, dosage, LOD) avant d\'enregistrer.'; return }
+  const pr = produits.value.find(x => String(x.id) === produitSel.value)
+  enreg.value = true
+  const payload = {
+    date_pesee: datePesee.value || null,
+    produit_id: pr ? pr.id : null,
+    produit_libelle: pr ? (pr.code_pf + ' — ' + pr.designation) : null,
+    of_numero: ofNum.value || null,
+    operateur: operateur.value || null,
+    unite: unite.value,
+    total_theo_api: totalTheoAPI.value,
+    total_reel_api: totalReelAPI.value,
+    theo_excipient: vide(theoExc.value) ? null : Number(theoExc.value),
+    reel_excipient: reelExc.value,
+    lots: lotsPayload()
+  }
+  const r = await supabase.from('pesees').insert(payload)
+  enreg.value = false
+  if (r.error) { erreur.value = r.error.message; return }
+  message.value = 'Pesée enregistrée.'
+  await chargerHistorique()
+}
+
+function chargerPesee(p) {
+  unite.value = p.unite || 'g'
+  theoExc.value = p.theo_excipient
+  produitSel.value = p.produit_id != null ? String(p.produit_id) : ''
+  ofNum.value = p.of_numero || ''
+  operateur.value = p.operateur || ''
+  datePesee.value = p.date_pesee || new Date().toISOString().slice(0, 10)
+  lots.value = (p.lots && p.lots.length)
+    ? p.lots.map(l => ({ lot: l.lot || '', theo: l.theo, dosage: l.dosage, lod: l.lod }))
+    : [{ lot: '', theo: null, dosage: null, lod: null }]
+  message.value = 'Pesée chargée dans le calcul.'; erreur.value = ''
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function supprimerPesee(p) {
+  if (!window.confirm('Supprimer définitivement cette pesée enregistrée ?')) return
+  const r = await supabase.from('pesees').delete().eq('id', p.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  await chargerHistorique()
+}
+
+// ---- Fiche de pesée PDF ----
+function snapshotActuel() {
+  const pr = produits.value.find(x => String(x.id) === produitSel.value)
+  return {
+    prNom: pr ? (pr.code_pf + ' — ' + pr.designation) : '—',
+    ofNum: ofNum.value || '—', datePesee: datePesee.value || '—', operateur: operateur.value || '—',
+    unite: unite.value,
+    lots: lots.value.map((l, i) => ({ lot: l.lot || ('n°' + (i + 1)), theo: lotsCalc.value[i].theoNum, dosage: vide(l.dosage) ? null : Number(l.dosage), lod: vide(l.lod) ? null : Number(l.lod), titre: lotsCalc.value[i].titre, reel: lotsCalc.value[i].reel })).filter(l => l.reel != null),
+    theoExc: vide(theoExc.value) ? null : Number(theoExc.value), reelExc: reelExc.value,
+    totalTheoAPI: totalTheoAPI.value, totalReelAPI: totalReelAPI.value, totalTheo: totalTheo.value, totalReel: totalReel.value
+  }
+}
+function snapshotStored(p) {
+  const ls = (p.lots || []).filter(l => l.reel != null)
+  const totTheo = (p.total_theo_api != null && p.theo_excipient != null) ? p.total_theo_api + p.theo_excipient : null
+  const totReel = (p.total_reel_api != null && p.reel_excipient != null) ? p.total_reel_api + p.reel_excipient : null
+  return {
+    prNom: p.produit_libelle || '—', ofNum: p.of_numero || '—', datePesee: p.date_pesee || '—', operateur: p.operateur || '—',
+    unite: p.unite || 'g',
+    lots: ls.map((l, i) => ({ lot: l.lot || ('n°' + (i + 1)), theo: l.theo, dosage: l.dosage, lod: l.lod, titre: l.titre, reel: l.reel })),
+    theoExc: p.theo_excipient, reelExc: p.reel_excipient,
+    totalTheoAPI: p.total_theo_api, totalReelAPI: p.total_reel_api, totalTheo: totTheo, totalReel: totReel
+  }
+}
+function ficheHTML(d) {
+  const now = new Date().toLocaleString('fr-FR')
+  const u = d.unite
+  const lignes = d.lots.map(l => `<tr><td>${l.lot}</td><td class="r">${fmt(l.theo)}</td><td class="r">${l.dosage != null ? fmt(l.dosage) : '—'}</td><td class="r">${l.lod != null ? fmt(l.lod) : '—'}</td><td class="r">${l.titre != null ? fmt(l.titre) : '—'}</td><td class="r b">${fmt(l.reel)}</td></tr>`).join('')
+  const excLigne = d.reelExc != null ? `<tr><td>Excipient</td><td class="r">${fmt(d.theoExc)}</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r b">${fmt(d.reelExc)}</td></tr>` : ''
+  const totLigne = d.totalReel != null ? `<tr class="tot"><td>Total</td><td class="r">${fmt(d.totalTheo)}</td><td></td><td></td><td></td><td class="r b">${fmt(d.totalReel)}</td></tr>` : ''
+  return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Fiche de pesée</title>
+<style>
+*{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:28px;font-size:12px}
+h1{font-size:19px;margin:0 0 2px;color:#3730a3} .sub{color:#64748b;font-size:12px;margin:0 0 14px}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;font-size:12px;color:#334155;border-top:2px solid #6366f1;border-bottom:1px solid #e2e8f0;padding:10px 0;margin-bottom:16px}
+.meta b{color:#0f172a}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px}
+th{text-align:left;background:#eef2ff;color:#3730a3;padding:6px 8px;border:1px solid #e0e7ff;font-size:10px;text-transform:uppercase}
+th.r,td.r{text-align:right} td{padding:6px 8px;border:1px solid #eef2f6}
+td.b{font-weight:800;color:#3730a3} tr.tot td{font-weight:800;background:#fafafa;border-top:2px solid #e2e8f0}
+.sig{display:flex;gap:40px;margin-top:34px}
+.sig .box{flex:1;border-top:1px solid #94a3b8;padding-top:6px;font-size:11px;color:#64748b}
+.foot{margin-top:24px;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px}
+@media print{body{margin:14mm}}
+</style></head><body>
+<h1>Fiche de pesée</h1><p class="sub">Correction de titre par lot (titre = dosage − LOD) — masse totale constante</p>
+<div class="meta">
+  <span>Produit : <b>${d.prNom}</b></span><span>N° OF : <b>${d.ofNum}</b></span>
+  <span>Date de pesée : <b>${d.datePesee}</b></span><span>Opérateur : <b>${d.operateur}</b></span>
+  <span>Unité : <b>${u}</b></span><span>Édité le : <b>${now}</b></span>
+</div>
+<table>
+  <thead><tr><th>Composant / Lot</th><th class="r">Théorique (${u})</th><th class="r">Dosage (%)</th><th class="r">LOD (%)</th><th class="r">Titre (%)</th><th class="r">Réel à peser (${u})</th></tr></thead>
+  <tbody>${lignes}${excLigne}${totLigne}</tbody>
+</table>
+<div class="sig"><div class="box">Pesé par (nom, date, visa)</div><div class="box">Vérifié par (nom, date, visa)</div></div>
+<div class="foot">Document généré par ProdTrack — Module Pesée.</div>
+</body></html>`
+}
+function imprimer(html) {
+  const w = window.open('', '_blank')
+  if (!w) { erreur.value = 'Autorise les pop-ups pour éditer la fiche de pesée.'; return }
+  w.document.write(html); w.document.close(); w.focus()
+  setTimeout(() => { try { w.print() } catch (e) {} }, 350)
+}
+function exporterPDF() { imprimer(ficheHTML(snapshotActuel())) }
+function exporterPeseePDF(p) { imprimer(ficheHTML(snapshotStored(p))) }
 </script>
 
 <style scoped>
@@ -188,6 +388,8 @@ function reset() { lots.value = [{ lot: '', theo: null, dosage: null, lod: null 
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
 .card-title { margin: 0 0 14px; font-size: 17px; }
 .card-head .card-title { margin: 0; }
+.alert { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; font-size: 13px; }
+.ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; font-size: 13px; }
 .u-sel { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 700; background: #fff; color: #1b2733; }
 .lots-wrap { overflow-x: auto; margin-bottom: 10px; }
 .lots-tbl { border-collapse: collapse; width: 100%; font-size: 13px; }
@@ -202,13 +404,14 @@ function reset() { lots.value = [{ lot: '', theo: null, dosage: null, lod: null 
 .lots-tbl .x:hover { background: #fef2f2; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 12px; }
 .fld { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 600; color: #475569; }
-.fld input { padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 15px; color: #0f172a; }
-.fld input:focus { outline: 2px solid #c7d2fe; border-color: #6366f1; }
+.fld input, .fld select { padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 15px; color: #0f172a; background: #fff; }
+.fld input:focus, .fld select:focus { outline: 2px solid #c7d2fe; border-color: #6366f1; }
 .hint { font-size: 12px; color: #64748b; margin: 12px 0 0; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 8px; padding: 9px 11px; line-height: 1.6; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn { background: #4f46e5; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
 .btn.ghost { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
 .btn.sm { padding: 6px 12px; font-size: 13px; }
-.alert { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; font-size: 13px; }
 .res { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
 .res-card { flex: 1; min-width: 220px; border-radius: 12px; padding: 16px 18px; border: 1px solid; }
 .res-card.api { background: #eef2ff; border-color: #c7d2fe; }
@@ -219,7 +422,7 @@ function reset() { lots.value = [{ lot: '', theo: null, dosage: null, lod: null 
 .rc-v span { font-size: 16px; font-weight: 600; color: #64748b; }
 .rc-e { font-size: 12px; color: #64748b; margin-top: 4px; font-weight: 600; }
 .t { width: 100%; border-collapse: collapse; font-size: 13px; }
-.t th { text-align: left; background: #f8fafc; color: #475569; padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 12px; text-transform: uppercase; }
+.t th { text-align: left; background: #f8fafc; color: #475569; padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 12px; text-transform: uppercase; white-space: nowrap; }
 .t th.r, .t td.r { text-align: right; }
 .t td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
 .t td.b { font-weight: 800; color: #0f172a; }
@@ -229,4 +432,9 @@ function reset() { lots.value = [{ lot: '', theo: null, dosage: null, lod: null 
 .t td.down { color: #b91c1c; }
 .titre-badge { font-size: 11px; color: #64748b; font-weight: 600; background: #f1f5f9; padding: 1px 6px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
 .note { font-size: 12px; color: #64748b; margin-top: 10px; line-height: 1.5; }
+.row-act { white-space: nowrap; text-align: right; }
+.mini { background: #eef2ff; border: 1px solid #c7d2fe; color: #4338ca; border-radius: 6px; padding: 4px 9px; font-size: 12px; font-weight: 600; cursor: pointer; margin-left: 5px; }
+.mini:hover { background: #e0e7ff; }
+.mini.del { background: #fff; border-color: #fca5a5; color: #dc2626; }
+.mini.del:hover { background: #fef2f2; }
 </style>
