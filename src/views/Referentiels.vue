@@ -209,6 +209,7 @@ const pcMethode = ref('standard')
 const pcConv = ref(null)
 const pcTheoApi = ref(null)
 const pcTheoExc = ref(null)
+const pcNbFrac = ref(1)
 const pcEditId = ref(null)
 const pcRecherche = ref('')
 const pcProduitsFiltres = computed(() => {
@@ -225,7 +226,7 @@ async function chargerPC() {
   const r = await supabase.from('pesee_config').select('*')
   if (!r.error) peseeConfigs.value = r.data || []
 }
-function resetPC() { pcEditId.value = null; pcProduit.value = ''; pcRecherche.value = ''; pcMethode.value = 'standard'; pcConv.value = null; pcTheoApi.value = null; pcTheoExc.value = null }
+function resetPC() { pcEditId.value = null; pcProduit.value = ''; pcRecherche.value = ''; pcMethode.value = 'standard'; pcConv.value = null; pcTheoApi.value = null; pcTheoExc.value = null; pcNbFrac.value = 1 }
 async function enregistrerPC() {
   if (!pcProduit.value) { erreur.value = 'Choisis un produit.'; return }
   const payload = {
@@ -233,7 +234,8 @@ async function enregistrerPC() {
     methode: pcMethode.value,
     conversion: (pcMethode.value !== 'standard' && pcConv.value != null && pcConv.value !== '') ? Number(pcConv.value) : null,
     theo_api: (pcTheoApi.value != null && pcTheoApi.value !== '') ? Number(pcTheoApi.value) : null,
-    theo_excipient: (pcTheoExc.value != null && pcTheoExc.value !== '') ? Number(pcTheoExc.value) : null
+    theo_excipient: (pcTheoExc.value != null && pcTheoExc.value !== '') ? Number(pcTheoExc.value) : null,
+    nb_fractions: (pcNbFrac.value != null && pcNbFrac.value >= 1) ? Math.floor(Number(pcNbFrac.value)) : 1
   }
   const r = pcEditId.value
     ? await supabase.from('pesee_config').update(payload).eq('id', pcEditId.value)
@@ -243,7 +245,7 @@ async function enregistrerPC() {
 }
 function editerPC(c) {
   pcEditId.value = c.id; pcProduit.value = String(c.produit_id); pcMethode.value = c.methode || 'standard'
-  pcConv.value = c.conversion; pcTheoApi.value = c.theo_api; pcTheoExc.value = c.theo_excipient
+  pcConv.value = c.conversion; pcTheoApi.value = c.theo_api; pcTheoExc.value = c.theo_excipient; pcNbFrac.value = c.nb_fractions || 1
 }
 async function supprimerPC(c) {
   if (!confirm('Supprimer cette configuration ?')) return
@@ -942,6 +944,7 @@ onMounted(async () => {
           <label v-if="pcMethode !== 'standard'">Valeur = 100 %<input v-model.number="pcConv" type="number" min="0" step="any" placeholder="10.46" /></label>
           <label>Qté théo. API (kg)<input v-model.number="pcTheoApi" type="number" min="0" step="any" /></label>
           <label>Qté théo. excipient (kg)<input v-model.number="pcTheoExc" type="number" min="0" step="any" /></label>
+          <label>Nb fractions<input v-model.number="pcNbFrac" type="number" min="1" step="1" /></label>
           <div class="form-actions">
             <button class="btn" @click="enregistrerPC">{{ pcEditId ? 'Mettre à jour' : 'Ajouter' }}</button>
             <button v-if="pcEditId" class="btn ghost" @click="resetPC">Annuler</button>
@@ -950,7 +953,7 @@ onMounted(async () => {
         <div v-if="!peseeConfigs.length" class="empty">Aucune configuration.</div>
         <div class="table-scroll" v-else>
           <table class="grid">
-            <thead><tr><th>Produit</th><th>Méthode</th><th class="right">100 %</th><th class="right">Théo API</th><th class="right">Théo excip.</th><th class="right">Actions</th></tr></thead>
+            <thead><tr><th>Produit</th><th>Méthode</th><th class="right">100 %</th><th class="right">Théo API</th><th class="right">Théo excip.</th><th class="right">Fractions</th><th class="right">Actions</th></tr></thead>
             <tbody>
               <tr v-for="c in peseeConfigs" :key="c.id">
                 <td>{{ libellePC(c.produit_id) }}</td>
@@ -958,6 +961,7 @@ onMounted(async () => {
                 <td class="right">{{ c.conversion != null ? c.conversion : '—' }}</td>
                 <td class="right">{{ c.theo_api != null ? c.theo_api : '—' }}</td>
                 <td class="right">{{ c.theo_excipient != null ? c.theo_excipient : '—' }}</td>
+                <td class="right">{{ c.nb_fractions || 1 }}</td>
                 <td class="right nowrap">
                   <template v-if="peutEditer">
                     <button class="link" @click="editerPC(c)">Modifier</button>
