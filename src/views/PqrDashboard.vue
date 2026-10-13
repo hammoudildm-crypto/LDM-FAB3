@@ -249,17 +249,19 @@
           </div>
         </div>
 
-        <h3 class="sec-titre">Lots hors spec</h3>
+        <h3 class="sec-titre">Lots hors spec <span v-if="horsSpecListe.length" class="count">{{ horsSpecListe.length }}</span></h3>
         <div v-if="!horsSpecListe.length" class="empty-sm">Aucun lot hors spec 🎉</div>
-        <table v-else class="pqr-tbl">
-          <thead><tr><th>Lot</th><th>Phase</th><th>Paramètre</th><th class="r">Valeur</th><th class="r">Limites</th><th>Date</th></tr></thead>
-          <tbody>
-            <tr v-for="(h, i) in horsSpecListe" :key="i" class="row-ko">
-              <td class="nom">{{ h.lot }}</td><td>{{ h.phase }}</td><td>{{ h.nom }}</td>
-              <td class="r val-ko">{{ h.valeur }} {{ h.unite }}</td><td class="r lim">{{ h.bool ? ('Attendu ' + h.attendu) : limTxt(h.lsl, h.usl) }}</td><td>{{ h.date || '—' }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else class="hors-wrap">
+          <table class="pqr-tbl hors-tbl">
+            <thead><tr><th>Lot</th><th>Phase</th><th>Paramètre</th><th class="r">Valeur</th><th class="r">Limites</th><th>Date</th></tr></thead>
+            <tbody>
+              <tr v-for="(h, i) in horsSpecListe" :key="i" class="row-ko">
+                <td class="nom">{{ h.lot }}</td><td>{{ h.phase }}</td><td>{{ h.nom }}</td>
+                <td class="r val-ko">{{ h.valeur }} {{ h.unite }}</td><td class="r lim">{{ h.bool ? ('Attendu ' + h.attendu) : limTxt(h.lsl, h.usl) }}</td><td>{{ h.date || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </template>
     </section>
   </div>
@@ -799,6 +801,8 @@ ${matHtml}
 .pqr-tbl .etape-row td { background: #f1f5f9; font-weight: 800; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 5px 10px; cursor: default; }
 .pqr-tbl tr.row-ko { background: #fef2f2; cursor: default; }
 .pqr-tbl td.val-ko { color: #b91c1c; font-weight: 800; }
+.hors-wrap { max-height: 240px; overflow: auto; border: 1px solid #f1f5f9; border-radius: 10px; }
+.hors-wrap .hors-tbl thead th { position: sticky; top: 0; z-index: 1; background: #fff; }
 .c-ok { color: #16a34a; font-weight: 700; } .c-ko { color: #dc2626; font-weight: 700; }
 .verdict { font-size: 11px; font-weight: 800; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
 .verdict.v-ok { background: #dcfce7; color: #166534; } .verdict.v-mid { background: #fef3c7; color: #92400e; } .verdict.v-ko { background: #fee2e2; color: #b91c1c; } .verdict.v-na { background: #f1f5f9; color: #94a3b8; }
