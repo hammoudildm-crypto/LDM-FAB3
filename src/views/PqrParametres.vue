@@ -125,7 +125,7 @@ import PageHeader from '../components/PageHeader.vue'
 const peutEditer = inject('peutEditer', ref(true))
 const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Contrôle Qualité']
 const UNITES = ['N', 'Kp', 'mg', 'g', 'kg', '°C', '%', 'min', 'mm', 'tr/min', 'bar']
-const ETAPES = ['Mélange sec', 'Mouillage', 'Granulation', 'Séchage', 'Calibrage', 'Tamisage', 'Lubrification', 'Réglage', 'Démarrage', 'Milieu', 'Fin']
+const ETAPES = ['Mélange sec', 'Mouillage', 'Granulation', 'Séchage', 'Refroidissement', 'Calibrage', 'Tamisage', 'Lubrification', 'Réglage', 'Démarrage', 'Milieu', 'Fin']
 const STANDARD = [
   ['Pesée', 'Écart de pesée', '%'],
   ['Granulation et Séchage', 'Température produit', '°C'],
