@@ -212,6 +212,55 @@ const retraites = computed(() => {
   }).filter(n => n && n.reste <= horizonRetraite).sort((a, b) => a.reste - b.reste)
 })
 
+// ===== Synthèse de l'ancienneté =====
+const ancMoisDe = (d) => {
+  if (!d) return null
+  const dt = new Date(d); if (isNaN(dt)) return null
+  const now = new Date()
+  let m = (now.getFullYear() - dt.getFullYear()) * 12 + (now.getMonth() - dt.getMonth())
+  if (now.getDate() < dt.getDate()) m--
+  return m >= 0 ? m : null
+}
+const ancFmt = (mois) => {
+  if (mois == null) return '—'
+  const a = Math.floor(mois / 12), mo = mois % 12
+  if (a <= 0) return (mo || 0) + ' mois'
+  if (mo === 0) return a + (a > 1 ? ' ans' : ' an')
+  return a + (a > 1 ? ' ans ' : ' an ') + mo + ' mois'
+}
+const ancData = computed(() => orgNodesAffiches.value
+  .map(n => ({ n, mois: ancMoisDe(n.date_recrutement) }))
+  .filter(x => x.mois != null))
+const nbAvecAnc = computed(() => ancData.value.length)
+const ancStats = computed(() => {
+  const arr = ancData.value.map(x => x.mois).slice().sort((a, b) => a - b)
+  if (!arr.length) return { moy: null, med: null, min: null, max: null }
+  const moy = arr.reduce((s, v) => s + v, 0) / arr.length
+  const mid = Math.floor(arr.length / 2)
+  const med = arr.length % 2 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2
+  return { moy, med, min: arr[0], max: arr[arr.length - 1] }
+})
+const doyen = computed(() => { let b = null; for (const x of ancData.value) if (!b || x.mois > b.mois) b = x; return b })
+const recrue = computed(() => { let b = null; for (const x of ancData.value) if (!b || x.mois < b.mois) b = x; return b })
+const ANC_BRACKETS = [[0, 11, '< 1 an'], [12, 35, '1–3 ans'], [36, 59, '3–5 ans'], [60, 119, '5–10 ans'], [120, 179, '10–15 ans'], [180, 239, '15–20 ans'], [240, 100000, '20 ans +']]
+const ancDistribution = computed(() => ANC_BRACKETS.map(([lo, hi, label]) => {
+  const c = ancData.value.filter(x => x.mois >= lo && x.mois <= hi).length
+  return { label, c, pct: nbAvecAnc.value ? Math.round(c / nbAvecAnc.value * 100) : 0 }
+}))
+const ancDistMax = computed(() => Math.max(1, ...ancDistribution.value.map(b => b.c)))
+const ancParPerim = computed(() => {
+  const map = {}
+  for (const x of ancData.value) {
+    const raw = x.n.atelier_id || '—', k = normOrg(raw)
+    if (!map[k]) map[k] = { label: raw, sum: 0, n: 0 }
+    map[k].sum += x.mois; map[k].n++
+  }
+  return Object.values(map).map(v => ({ label: v.label, moyMois: v.sum / v.n, n: v.n })).sort((a, b) => b.moyMois - a.moyMois)
+})
+const ancPerimMax = computed(() => Math.max(1, ...ancParPerim.value.map(b => b.moyMois)))
+const doyens = computed(() => ancData.value.slice().sort((a, b) => b.mois - a.mois).slice(0, 5)
+  .map(x => ({ id: x.n.id, nom: x.n.nom, fonction: x.n.fonction, mois: x.mois, date: x.n.date_recrutement })))
+
 const MOIS_COURT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
 const mouvAnnee = ref(new Date().getFullYear())
 const anneesMouv = computed(() => { const c = new Date().getFullYear(); return [c - 2, c - 1, c] })
@@ -549,6 +598,7 @@ onMounted(chargerTout)
       <div class="rh-tabs">
         <button :class="{ on: tab === 'org' }" @click="tab = 'org'">Personnel</button>
         <button :class="{ on: tab === 'demo' }" @click="tab = 'demo'">Démographie</button>
+        <button :class="{ on: tab === 'anc' }" @click="tab = 'anc'">Ancienneté</button>
         <button :class="{ on: tab === 'contrats' }" @click="tab = 'contrats'">Contrats<span v-if="alertesCdd.length + alertesEssai.length" class="tb">{{ alertesCdd.length + alertesEssai.length }}</span></button>
         <button :class="{ on: tab === 'mouv' }" @click="tab = 'mouv'">Mouvements</button>
         <button :class="{ on: tab === 'dash' }" @click="tab = 'dash'">Tableau de bord RH</button>
@@ -583,6 +633,11 @@ onMounted(chargerTout)
           <div class="dc-t">Âge</div>
           <div class="dc-big">{{ ageMoyTxt }}</div>
           <div class="dc-sub">{{ retraites.length }} départ(s) retraite &lt; 5 ans</div>
+        </div>
+        <div class="dash-card" @click="tab = 'anc'">
+          <div class="dc-t">Ancienneté</div>
+          <div class="dc-big">{{ ancStats.moy != null ? ancFmt(Math.round(ancStats.moy)) : '—' }}</div>
+          <div class="dc-sub">médiane {{ ancStats.med != null ? ancFmt(Math.round(ancStats.med)) : '—' }}</div>
         </div>
         <div class="dash-card" @click="tab = 'mouv'">
           <div class="dc-t">Turnover {{ mouvAnnee }}</div>
@@ -651,6 +706,53 @@ onMounted(chargerTout)
         </div>
       </section>
       <div v-if="!nbAvecAge" class="empty-sm">Renseigne les dates de naissance pour afficher la pyramide des âges et les départs en retraite.</div>
+      </div>
+
+      <div v-if="tab === 'anc'">
+      <div v-if="!nbAvecAnc" class="empty-sm">Renseigne les dates de recrutement du personnel pour afficher la synthèse de l'ancienneté.</div>
+      <template v-else>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.teal"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span><div class="kpi-val accent">{{ ancFmt(Math.round(ancStats.moy)) }}</div></div><div class="kpi-lbl">Ancienneté moyenne</div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.hourglass"></svg></span><div class="kpi-val">{{ ancFmt(Math.round(ancStats.med)) }}</div></div><div class="kpi-lbl">Ancienneté médiane</div></div>
+        <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.users"></svg></span><div class="kpi-val">{{ nbAvecAnc }}</div></div><div class="kpi-lbl">Effectif avec date connue</div></div>
+        <div class="kpi" v-if="doyen"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.green"><svg viewBox="0 0 24 24" v-html="ICONS.check"></svg></span><div class="kpi-val" style="font-size:15px">{{ ancFmt(doyen.mois) }}</div></div><div class="kpi-lbl">Doyen · {{ doyen.n.nom }}</div></div>
+        <div class="kpi" v-if="recrue"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.rose"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><div class="kpi-val" style="font-size:15px">{{ ancFmt(recrue.mois) }}</div></div><div class="kpi-lbl">Dernière recrue · {{ recrue.n.nom }}</div></div>
+      </div>
+
+      <section class="card">
+        <div class="card-head"><h2 class="card-title">Répartition par tranche d'ancienneté</h2><span class="count">{{ nbAvecAnc }} pers.</span></div>
+        <div class="anc-dist">
+          <div v-for="b in ancDistribution" :key="b.label" class="anc-row">
+            <div class="anc-lbl">{{ b.label }}</div>
+            <div class="anc-track"><div class="anc-fill" :style="{ width: (b.c / ancDistMax * 100) + '%' }"></div></div>
+            <div class="anc-val">{{ b.c }} <span class="anc-pct">· {{ b.pct }}%</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" v-if="ancParPerim.length > 1">
+        <div class="card-head"><h2 class="card-title">Ancienneté moyenne par périmètre</h2></div>
+        <div class="anc-dist">
+          <div v-for="b in ancParPerim" :key="b.label" class="anc-row">
+            <div class="anc-lbl">{{ b.label }} <span class="anc-sub">({{ b.n }})</span></div>
+            <div class="anc-track"><div class="anc-fill alt" :style="{ width: (b.moyMois / ancPerimMax * 100) + '%' }"></div></div>
+            <div class="anc-val">{{ ancFmt(Math.round(b.moyMois)) }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2 class="card-title">Les plus anciens</h2><span class="count">Top {{ doyens.length }}</span></div>
+        <div class="ret-list">
+          <div v-for="n in doyens" :key="n.id" class="ret-row">
+            <span class="rr-nom">{{ n.nom }}</span>
+            <span class="rr-fct" v-if="n.fonction">· {{ n.fonction }}</span>
+            <span class="rr-age">recruté {{ fmtD(n.date) }}</span>
+            <span class="rr-badge u-anc">{{ ancFmt(n.mois) }}</span>
+          </div>
+        </div>
+      </section>
+      </template>
       </div>
 
       <div v-if="tab === 'mouv'">
@@ -932,6 +1034,16 @@ onMounted(chargerTout)
 .rr-badge { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .rr-badge.u-rouge { background: #fee2e2; color: #dc2626; }
 .rr-badge.u-ambre { background: #fef3c7; color: #b45309; }
+.rr-badge.u-anc { background: #ccfbf1; color: #0f766e; }
+.anc-dist { display: flex; flex-direction: column; gap: 9px; margin-top: 4px; }
+.anc-row { display: grid; grid-template-columns: 116px 1fr auto; align-items: center; gap: 10px; }
+.anc-lbl { font-size: 12.5px; color: #475569; font-weight: 600; }
+.anc-lbl .anc-sub { color: #94a3b8; font-weight: 500; }
+.anc-track { background: #f1f5f9; border-radius: 5px; height: 16px; overflow: hidden; }
+.anc-fill { height: 100%; border-radius: 5px; background: #0d9488; min-width: 2px; transition: width .3s ease; }
+.anc-fill.alt { background: #6366f1; }
+.anc-val { font-size: 12.5px; font-weight: 700; color: #0f172a; white-space: nowrap; }
+.anc-val .anc-pct { color: #94a3b8; font-weight: 500; }
 .mouv-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 12px; }
 .mk { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; }
 .mk-v { font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -.02em; }
