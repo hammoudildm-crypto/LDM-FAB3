@@ -83,14 +83,14 @@
             <button v-if="zoneActive" class="zone-reset" @click="resetZone">↺ Tout</button>
           </div>
           <div class="zone-row">
-            <button class="zone-step" @click="zoneGrow(-1)" :disabled="zoneA === zoneB" title="Réduire la zone">−</button>
+            <button class="zone-step" @click="zoneGrow(-1)" :disabled="zoneA === zoneB" title="Réduire côté lots récents">−</button>
             <div class="zone-slider">
               <div class="zs-track"></div>
               <div class="zs-sel" :style="{ left: zonePct(Math.min(zoneA, zoneB)) + '%', right: (100 - zonePct(Math.max(zoneA, zoneB))) + '%' }"></div>
               <input type="range" class="zs-input" :min="0" :max="lotsOrdonnes.length - 1" step="1" :value="zoneA" @input="onZoneA" />
               <input type="range" class="zs-input" :min="0" :max="lotsOrdonnes.length - 1" step="1" :value="zoneB" @input="onZoneB" />
             </div>
-            <button class="zone-step" @click="zoneGrow(1)" :disabled="Math.min(zoneA, zoneB) === 0 && Math.max(zoneA, zoneB) === lotsOrdonnes.length - 1" title="Agrandir la zone">+</button>
+            <button class="zone-step" @click="zoneGrow(1)" :disabled="Math.max(zoneA, zoneB) === lotsOrdonnes.length - 1" title="Étendre vers les lots récents">+</button>
           </div>
           <p class="hint" style="margin:6px 0 0">La fenêtre choisie filtre toute l'analyse : synthèse, Cp/Cpk, conformité et graphes.</p>
         </div>
@@ -347,10 +347,10 @@ function onZoneA(e) { zoneA.value = Number(e.target.value) }
 function onZoneB(e) { zoneB.value = Number(e.target.value) }
 function zoneGrow(d) {
   const n = lotsOrdonnes.value.length
-  let a = Math.min(zoneA.value, zoneB.value), b = Math.max(zoneA.value, zoneB.value)
-  if (d > 0) { a = Math.max(0, a - 1); b = Math.min(n - 1, b + 1) }
-  else if (b - a >= 2) { a = a + 1; b = b - 1 }
-  else { const mid = Math.round((a + b) / 2); a = mid; b = mid }
+  const a = Math.min(zoneA.value, zoneB.value)
+  let b = Math.max(zoneA.value, zoneB.value)
+  if (d > 0) b = Math.min(n - 1, b + 1)   // étend vers la droite (lots récents)
+  else b = Math.max(a, b - 1)             // réduit côté droit, garde le bord gauche
   zoneA.value = a; zoneB.value = b
 }
 function zonePct(i) { const n = lotsOrdonnes.value.length; return n <= 1 ? 0 : i / (n - 1) * 100 }
