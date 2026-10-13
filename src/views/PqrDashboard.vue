@@ -44,11 +44,12 @@
         <div v-for="ph in phasesSynAffichees" :key="ph" class="pqr-phase">
           <h4 class="pqr-phase-titre">{{ ph }}</h4>
           <table class="pqr-tbl">
-            <thead><tr><th>Paramètre</th><th class="r">n</th><th class="r">Moyenne</th><th class="r">σ</th><th class="r">Limites</th><th class="r">Conf.</th><th class="r">Cp</th><th class="r">Cpk</th><th>Capabilité</th></tr></thead>
+            <thead><tr><th class="r cmp-th" title="Cocher pour comparer sur le même graphe">⇄</th><th>Paramètre</th><th class="r">n</th><th class="r">Moyenne</th><th class="r">σ</th><th class="r">Limites</th><th class="r">Conf.</th><th class="r">Cp</th><th class="r">Cpk</th><th>Capabilité</th></tr></thead>
             <tbody>
               <template v-for="et in etapesDeSyn(ph)" :key="ph + '|' + et">
-              <tr v-if="et" class="etape-row"><td colspan="9">{{ et }}</td></tr>
-              <tr v-for="r in syntheseDeEtape(ph, et)" :key="r.id" :class="{ sel: r.id === paramSel }" @click="paramSel = r.id">
+              <tr v-if="et" class="etape-row"><td colspan="10">{{ et }}</td></tr>
+              <tr v-for="r in syntheseDeEtape(ph, et)" :key="r.id" :class="{ sel: r.id === paramSel, cmp: estCompare(r.id) }" @click="paramSel = r.id">
+                <td class="r cmp-td"><input type="checkbox" :checked="estCompare(r.id)" :disabled="r.bool" @click.stop="toggleCompare(r.id)" title="Comparer ce paramètre" /></td>
                 <td class="nom">{{ r.nom }} <span v-if="r.bool" class="tag-bool">ON/OFF</span><span v-else class="u">{{ r.unite ? '(' + r.unite + ')' : '' }}</span></td>
                 <td class="r">{{ r.n }}</td>
                 <td class="r">{{ r.bool ? (r.nOn + ' ON / ' + (r.n - r.nOn) + ' OFF') : fmtNum(r.mean) }}</td>
@@ -67,10 +68,11 @@
         </div>
 
         <div class="chart-head">
-          <h3 class="sec-titre">{{ paramSelObj ? paramSelObj.nom : '—' }}<span v-if="paramSelObj && uniteEff(paramSelObj)" class="u"> ({{ uniteEff(paramSelObj) }})</span></h3>
+          <h3 class="sec-titre">{{ chartMode === 'compare' ? ('Comparaison · ' + comparIds.length + ' paramètre' + (comparIds.length > 1 ? 's' : '')) : (paramSelObj ? paramSelObj.nom : '—') }}<span v-if="chartMode !== 'compare' && paramSelObj && uniteEff(paramSelObj)" class="u"> ({{ uniteEff(paramSelObj) }})</span></h3>
           <div class="tabs">
             <button :class="{ on: chartMode === 'trend' }" @click="chartMode = 'trend'">Tendance vs specs</button>
             <button :class="{ on: chartMode === 'control' }" @click="chartMode = 'control'">Carte de contrôle</button>
+            <button :class="{ on: chartMode === 'compare' }" @click="chartMode = 'compare'">Comparer ({{ comparIds.length }})</button>
           </div>
         </div>
 
@@ -96,7 +98,7 @@
         </div>
 
         <!-- Carte de contrôle -->
-        <div v-else>
+        <div v-else-if="chartMode === 'control'">
           <div v-if="controlData" class="chart-wrap">
             <svg :viewBox="'0 0 ' + controlData.W + ' ' + controlData.H" class="trend" preserveAspectRatio="xMidYMid meet">
               <line :x1="controlData.mL" :y1="controlData.mT" :x2="controlData.mL" :y2="controlData.H - controlData.mB" class="axis" />
@@ -130,6 +132,28 @@
           </div>
           <div v-else-if="paramBool" class="empty-sm">Carte de contrôle non applicable à un paramètre ON/OFF.</div>
           <div v-else class="empty-sm">Au moins 2 mesures sont nécessaires pour construire la carte de contrôle.</div>
+        </div>
+
+        <!-- Comparaison multi-paramètres -->
+        <div v-else-if="chartMode === 'compare'">
+          <div v-if="multiChartData" class="chart-wrap">
+            <svg :viewBox="'0 0 ' + multiChartData.W + ' ' + multiChartData.H" class="trend" preserveAspectRatio="xMidYMid meet">
+              <line :x1="multiChartData.mL" :y1="multiChartData.mT" :x2="multiChartData.mL" :y2="multiChartData.H - multiChartData.mB" class="axis" />
+              <line :x1="multiChartData.mL" :y1="multiChartData.H - multiChartData.mB" :x2="multiChartData.W - multiChartData.mR" :y2="multiChartData.H - multiChartData.mB" class="axis" />
+              <g v-for="s in multiChartData.series" :key="'ser' + s.id">
+                <path :d="s.path" class="l-multi" :style="{ stroke: s.color }" />
+                <circle v-for="(pt, i) in s.pts" :key="i" :cx="pt.x" :cy="pt.y" r="3.6" :style="{ fill: s.color }"><title>{{ s.nom }} — {{ pt.lot }} : {{ pt.v }}{{ s.unite ? ' ' + s.unite : '' }}</title></circle>
+              </g>
+              <g v-for="(l, i) in multiChartData.lotLabels" :key="'mll' + i"><text v-if="i % multiChartData.step === 0" :x="l.x" :y="multiChartData.H - multiChartData.mB + 11" class="lot-lbl" :transform="'rotate(-45 ' + l.x + ' ' + (multiChartData.H - multiChartData.mB + 11) + ')'">{{ l.lot }}</text></g>
+              <text :x="multiChartData.mL - 6" :y="multiChartData.mT + 5" class="ax">100%</text>
+              <text :x="multiChartData.mL - 6" :y="multiChartData.H - multiChartData.mB + 4" class="ax">0%</text>
+            </svg>
+            <div class="multi-leg">
+              <span v-for="s in multiChartData.series" :key="'lg' + s.id" class="ml-item"><span class="ml-dot" :style="{ background: s.color }"></span>{{ s.nom }} <span class="ml-rg">{{ fmtNum(s.min) }}–{{ fmtNum(s.max) }}{{ s.unite ? ' ' + s.unite : '' }}</span></span>
+            </div>
+            <p class="hint">Chaque courbe est normalisée sur sa propre plage (0 % = min, 100 % = max) pour comparer les tendances malgré des unités différentes. Valeurs moyennées par lot ; survole un point pour la valeur réelle.</p>
+          </div>
+          <div v-else class="empty-sm">Coche au moins un paramètre numérique dans la synthèse ci-dessus (colonne ⇄) pour superposer leurs courbes ici.</div>
         </div>
 
         <h3 class="sec-titre">Analyse d'impact entre paramètres</h3>
@@ -225,6 +249,9 @@ const params = ref([])
 const specByParam = ref({})
 const mesures = ref([])
 const paramSel = ref(null)
+const comparIds = ref([])
+function estCompare(id) { return comparIds.value.includes(id) }
+function toggleCompare(id) { const i = comparIds.value.indexOf(id); if (i >= 0) comparIds.value.splice(i, 1); else comparIds.value.push(id) }
 const chartMode = ref('trend')
 const corrX = ref('')
 const corrY = ref('')
@@ -245,7 +272,7 @@ async function chargerBase() {
 onMounted(chargerBase)
 
 watch(produitSel, async (pid) => {
-  specByParam.value = {}; mesures.value = []; paramSel.value = null; corrX.value = ''; corrY.value = ''
+  specByParam.value = {}; mesures.value = []; paramSel.value = null; corrX.value = ''; corrY.value = ''; comparIds.value = []
   if (!pid) return
   const rs = await supabase.from('pqr_specs_produit').select('*').eq('produit_id', Number(pid))
   if (!rs.error) { const by = {}; for (const s of (rs.data || [])) by[s.parametre_id] = s; specByParam.value = by }
@@ -434,6 +461,48 @@ const chartData = computed(() => {
   const pts = ms.map((m, i) => ({ x: xx(i), y: yy(Number(m.valeur)), v: Number(m.valeur), lot: m.numero_lot || '', ko: horsSpecVal(Number(m.valeur), lsl, usl) }))
   const path = pts.map((pt, i) => (i ? 'L' : 'M') + pt.x.toFixed(1) + ' ' + pt.y.toFixed(1)).join(' ')
   return { W, H, mL, mR, mT, mB, step, pts, path, lsl, usl, cible, ymin, ymax, yLsl: lsl != null ? yy(lsl) : null, yUsl: usl != null ? yy(usl) : null, yCible: cible != null ? yy(cible) : null }
+})
+
+// ---- Comparaison multi-paramètres (courbes superposées, normalisées 0–100 %) ----
+const SERIES_COLORS = ['#6366f1', '#0d9488', '#e11d48', '#f59e0b', '#2563eb', '#9333ea', '#16a34a', '#0891b2']
+const multiChartData = computed(() => {
+  const ids = comparIds.value.map(Number).filter(id => { const p = paramById.value[id]; return p && p.type !== 'bool' })
+  if (!ids.length) return null
+  const acc = {}, lotMeta = {}
+  for (const id of ids) acc[id] = {}
+  for (const m of mesuresPlat.value) {
+    const id = m.parametre_id; if (!acc[id]) continue
+    const v = Number(m.valeur); if (Number.isNaN(v)) continue
+    const key = m.of_id != null ? 'of' + m.of_id : 'lot' + (m.numero_lot || '')
+    if (key === 'of' || key === 'lot') continue
+    if (!acc[id][key]) acc[id][key] = { s: 0, n: 0 }
+    acc[id][key].s += v; acc[id][key].n++
+    if (!lotMeta[key]) lotMeta[key] = { lot: m.numero_lot || key, date: m.date_mesure || '' }
+    else if (m.date_mesure && (!lotMeta[key].date || m.date_mesure < lotMeta[key].date)) lotMeta[key].date = m.date_mesure
+  }
+  const allKeys = new Set()
+  for (const id of ids) for (const k of Object.keys(acc[id])) allKeys.add(k)
+  const keys = [...allKeys].sort((a, b) => String(lotMeta[a].date).localeCompare(String(lotMeta[b].date)) || a.localeCompare(b))
+  if (!keys.length) return null
+  const W = 760, H = 300, mL = 42, mR = 22, mT = 16, mB = 64, n = keys.length
+  const xx = (i) => mL + (n === 1 ? (W - mL - mR) / 2 : i * (W - mL - mR) / (n - 1))
+  const yy = (t) => mT + (1 - t) * (H - mT - mB)
+  const series = ids.map((id, si) => {
+    const p = paramById.value[id]
+    const raw = keys.map(k => acc[id][k] ? acc[id][k].s / acc[id][k].n : null)
+    const present = raw.filter(v => v != null)
+    if (!present.length) return null
+    const rMin = Math.min(...present), rMax = Math.max(...present)
+    let a = rMin, b = rMax; if (a === b) { a -= 1; b += 1 }
+    const pts = raw.map((v, i) => v == null ? null : { x: xx(i), y: yy((v - a) / (b - a)), v, lot: lotMeta[keys[i]].lot })
+    let path = '', pen = false
+    for (const pt of pts) { if (!pt) { pen = false; continue } path += (pen ? 'L' : 'M') + pt.x.toFixed(1) + ' ' + pt.y.toFixed(1) + ' '; pen = true }
+    return { id, nom: p.nom, unite: uniteEff(p), color: SERIES_COLORS[si % SERIES_COLORS.length], pts: pts.filter(Boolean), path: path.trim(), min: rMin, max: rMax }
+  }).filter(Boolean)
+  if (!series.length) return null
+  const step = Math.max(1, Math.ceil(n / 22))
+  const lotLabels = keys.map((k, i) => ({ x: xx(i), lot: lotMeta[k].lot }))
+  return { W, H, mL, mR, mT, mB, step, series, lotLabels, n }
 })
 
 function detectViolations(vals, mean, std) {
@@ -721,6 +790,15 @@ ${matHtml}
 .leg .d-ok, .leg .d-ko { width: 10px; height: 10px; border-radius: 50%; }
 .leg .d-ok { background: #0ea5e9; } .leg .d-ko { background: #dc2626; }
 .leg .l-c { background: #a855f7; } .leg .l-s { background: #f87171; } .leg .l-clg { background: #16a34a; } .leg .l-ug { background: #ef4444; }
+.trend .l-multi { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.multi-leg { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; padding-left: 4px; }
+.multi-leg .ml-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #334155; font-weight: 600; }
+.multi-leg .ml-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; flex: none; }
+.multi-leg .ml-rg { color: #94a3b8; font-weight: 500; font-size: 11px; font-variant-numeric: tabular-nums; }
+.pqr-tbl th.cmp-th, .pqr-tbl td.cmp-td { text-align: center; width: 30px; padding-left: 4px; padding-right: 4px; }
+.pqr-tbl td.cmp-td input { cursor: pointer; margin: 0; }
+.pqr-tbl tbody tr.cmp { background: #eef2ff; }
+.pqr-tbl tbody tr.cmp.sel { background: #e0e7ff; }
 
 .viol-box { margin-top: 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 10px 13px; }
 .viol-titre { font-size: 12px; font-weight: 800; color: #b91c1c; margin-bottom: 5px; }
