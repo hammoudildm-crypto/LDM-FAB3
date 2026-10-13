@@ -253,7 +253,8 @@
           </div>
         </div>
 
-        <h3 class="sec-titre">Lots hors spec <span v-if="horsSpecListe.length" class="count">{{ horsSpecListe.length }}</span></h3>
+        <h3 class="sec-titre hors-head" @click="horsPlie = !horsPlie"><span class="hors-chev">{{ horsPlie ? '▸' : '▾' }}</span> Lots hors spec <span v-if="horsSpecListe.length" class="count">{{ horsSpecListe.length }}</span></h3>
+        <template v-if="!horsPlie">
         <div v-if="!horsSpecListe.length" class="empty-sm">Aucun lot hors spec 🎉</div>
         <div v-else class="hors-wrap">
           <table class="pqr-tbl hors-tbl">
@@ -266,6 +267,7 @@
             </tbody>
           </table>
         </div>
+        </template>
       </template>
     </section>
   </div>
@@ -292,6 +294,7 @@ const comparIds = ref([])
 function estCompare(id) { return comparIds.value.includes(id) }
 function toggleCompare(id) { const i = comparIds.value.indexOf(id); if (i >= 0) comparIds.value.splice(i, 1); else comparIds.value.push(id) }
 const chartMode = ref('trend')
+const horsPlie = ref(true)
 const corrX = ref('')
 const corrY = ref('')
 const erreur = ref('')
@@ -815,6 +818,9 @@ ${matHtml}
 .pqr-tbl td.val-ko { color: #b91c1c; font-weight: 800; }
 .hors-wrap { max-height: 240px; overflow: auto; border: 1px solid #f1f5f9; border-radius: 10px; }
 .hors-wrap .hors-tbl thead th { position: sticky; top: 0; z-index: 1; background: #fff; }
+.hors-head { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 7px; }
+.hors-head:hover { color: #a855f7; }
+.hors-chev { color: #94a3b8; font-size: 12px; font-weight: 700; }
 .c-ok { color: #16a34a; font-weight: 700; } .c-ko { color: #dc2626; font-weight: 700; }
 .verdict { font-size: 11px; font-weight: 800; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
 .verdict.v-ok { background: #dcfce7; color: #166534; } .verdict.v-mid { background: #fef3c7; color: #92400e; } .verdict.v-ko { background: #fee2e2; color: #b91c1c; } .verdict.v-na { background: #f1f5f9; color: #94a3b8; }
