@@ -79,7 +79,7 @@
         <!-- Tendance vs specs -->
         <div v-if="chartMode === 'trend'">
           <div v-if="chartData" class="chart-wrap">
-            <svg :viewBox="'0 0 ' + chartData.W + ' ' + chartData.H" class="trend" preserveAspectRatio="xMidYMid meet">
+            <svg :viewBox="'0 0 ' + chartData.W + ' ' + chartData.H" class="trend" preserveAspectRatio="xMidYMid meet" @mousemove="moveCur($event, chartData)" @mouseleave="clearCur()">
               <line :x1="chartData.mL" :y1="chartData.mT" :x2="chartData.mL" :y2="chartData.H - chartData.mB" class="axis" />
               <line :x1="chartData.mL" :y1="chartData.H - chartData.mB" :x2="chartData.W - chartData.mR" :y2="chartData.H - chartData.mB" class="axis" />
               <template v-if="chartData.yUsl != null"><line :x1="chartData.mL" :y1="chartData.yUsl" :x2="chartData.W - chartData.mR" :y2="chartData.yUsl" class="l-spec" /><text :x="chartData.W - chartData.mR" :y="chartData.yUsl - 4" class="lbl-spec">Max {{ chartData.usl }}</text></template>
@@ -90,8 +90,13 @@
               <g v-for="(pt, i) in chartData.pts" :key="'ll' + i"><text v-if="i % chartData.step === 0" :x="pt.x" :y="chartData.H - chartData.mB + 11" class="lot-lbl" :transform="'rotate(-45 ' + pt.x + ' ' + (chartData.H - chartData.mB + 11) + ')'">{{ pt.lot }}</text></g>
               <text :x="chartData.mL - 6" :y="chartData.mT + 5" class="ax">{{ chartData.ymax.toFixed(1) }}</text>
               <text :x="chartData.mL - 6" :y="chartData.H - chartData.mB + 4" class="ax">{{ chartData.ymin.toFixed(1) }}</text>
+              <template v-if="cur.i >= 0 && chartData.pts[cur.i]">
+                <line :x1="cur.x" :y1="chartData.mT" :x2="cur.x" :y2="chartData.H - chartData.mB" class="cur-line" />
+                <circle :cx="cur.x" :cy="chartData.pts[cur.i].y" r="5.5" class="cur-dot" />
+              </template>
             </svg>
             <div class="leg"><span class="lg"><i class="d-ok"></i>Conforme</span><span class="lg"><i class="d-ko"></i>Hors spec</span><span class="lg"><i class="l-c"></i>Cible</span><span class="lg"><i class="l-s"></i>Limites spec</span></div>
+            <div v-if="cur.i >= 0 && chartData.pts[cur.i]" class="cur-readout"><b>{{ chartData.pts[cur.i].lot || '—' }}</b> · {{ chartData.pts[cur.i].v }}{{ paramSelObj && uniteEff(paramSelObj) ? ' ' + uniteEff(paramSelObj) : '' }}</div>
           </div>
           <div v-else-if="paramBool" class="empty-sm">Paramètre ON/OFF — pas de courbe applicable (conformité dans la synthèse).</div>
           <div v-else class="empty-sm">Sélectionne un paramètre ci-dessus.</div>
@@ -100,7 +105,7 @@
         <!-- Carte de contrôle -->
         <div v-else-if="chartMode === 'control'">
           <div v-if="controlData" class="chart-wrap">
-            <svg :viewBox="'0 0 ' + controlData.W + ' ' + controlData.H" class="trend" preserveAspectRatio="xMidYMid meet">
+            <svg :viewBox="'0 0 ' + controlData.W + ' ' + controlData.H" class="trend" preserveAspectRatio="xMidYMid meet" @mousemove="moveCur($event, controlData)" @mouseleave="clearCur()">
               <line :x1="controlData.mL" :y1="controlData.mT" :x2="controlData.mL" :y2="controlData.H - controlData.mB" class="axis" />
               <line :x1="controlData.mL" :y1="controlData.H - controlData.mB" :x2="controlData.W - controlData.mR" :y2="controlData.H - controlData.mB" class="axis" />
               <line :x1="controlData.mL" :y1="controlData.yUcl" :x2="controlData.W - controlData.mR" :y2="controlData.yUcl" class="l-ucl" />
@@ -121,8 +126,13 @@
               <g v-for="(pt, i) in controlData.pts" :key="'cll' + i"><text v-if="i % controlData.step === 0" :x="pt.x" :y="controlData.H - controlData.mB + 11" class="lot-lbl" :transform="'rotate(-45 ' + pt.x + ' ' + (controlData.H - controlData.mB + 11) + ')'">{{ pt.lot }}</text></g>
               <text :x="controlData.mL - 6" :y="controlData.mT + 5" class="ax">{{ controlData.ymax.toFixed(1) }}</text>
               <text :x="controlData.mL - 6" :y="controlData.H - controlData.mB + 4" class="ax">{{ controlData.ymin.toFixed(1) }}</text>
+              <template v-if="cur.i >= 0 && controlData.pts[cur.i]">
+                <line :x1="cur.x" :y1="controlData.mT" :x2="cur.x" :y2="controlData.H - controlData.mB" class="cur-line" />
+                <circle :cx="cur.x" :cy="controlData.pts[cur.i].y" r="5.5" class="cur-dot" />
+              </template>
             </svg>
             <div class="leg"><span class="lg"><i class="l-clg"></i>Moyenne (CL)</span><span class="lg"><i class="l-ug"></i>±3σ (UCL/LCL)</span><span class="lg"><i class="d-ko"></i>Violation de règle</span></div>
+            <div v-if="cur.i >= 0 && controlData.pts[cur.i]" class="cur-readout"><b>{{ controlData.pts[cur.i].lot || '—' }}</b> · {{ controlData.pts[cur.i].v }}{{ paramSelObj && uniteEff(paramSelObj) ? ' ' + uniteEff(paramSelObj) : '' }}<span v-if="controlData.pts[cur.i].viol.length" class="cur-viol">⚠ {{ controlData.pts[cur.i].viol.join(', ') }}</span></div>
             <div v-if="controlData.alertes.length" class="viol-box">
               <div class="viol-titre">⚠ Signaux de maîtrise détectés</div>
               <div v-for="(a, i) in controlData.alertes" :key="i" class="viol-row"><b>{{ a.lot }}</b> ({{ a.v }}) — {{ a.rules.join(' · ') }}</div>
@@ -137,19 +147,27 @@
         <!-- Comparaison multi-paramètres -->
         <div v-else-if="chartMode === 'compare'">
           <div v-if="multiChartData" class="chart-wrap">
-            <svg :viewBox="'0 0 ' + multiChartData.W + ' ' + multiChartData.H" class="trend" preserveAspectRatio="xMidYMid meet">
+            <svg :viewBox="'0 0 ' + multiChartData.W + ' ' + multiChartData.H" class="trend" preserveAspectRatio="xMidYMid meet" @mousemove="moveCur($event, multiChartData)" @mouseleave="clearCur()">
               <line :x1="multiChartData.mL" :y1="multiChartData.mT" :x2="multiChartData.mL" :y2="multiChartData.H - multiChartData.mB" class="axis" />
               <line :x1="multiChartData.mL" :y1="multiChartData.H - multiChartData.mB" :x2="multiChartData.W - multiChartData.mR" :y2="multiChartData.H - multiChartData.mB" class="axis" />
               <g v-for="s in multiChartData.series" :key="'ser' + s.id">
                 <path :d="s.path" class="l-multi" :style="{ stroke: s.color }" />
-                <circle v-for="(pt, i) in s.pts" :key="i" :cx="pt.x" :cy="pt.y" r="3.6" :style="{ fill: s.color }"><title>{{ s.nom }} — {{ pt.lot }} : {{ pt.v }}{{ s.unite ? ' ' + s.unite : '' }}</title></circle>
+                <template v-for="(pt, i) in s.pts" :key="i"><circle v-if="pt" :cx="pt.x" :cy="pt.y" r="3.6" :style="{ fill: s.color }"><title>{{ s.nom }} — {{ pt.lot }} : {{ pt.v }}{{ s.unite ? ' ' + s.unite : '' }}</title></circle></template>
               </g>
               <g v-for="(l, i) in multiChartData.lotLabels" :key="'mll' + i"><text v-if="i % multiChartData.step === 0" :x="l.x" :y="multiChartData.H - multiChartData.mB + 11" class="lot-lbl" :transform="'rotate(-45 ' + l.x + ' ' + (multiChartData.H - multiChartData.mB + 11) + ')'">{{ l.lot }}</text></g>
               <text :x="multiChartData.mL - 6" :y="multiChartData.mT + 5" class="ax">100%</text>
               <text :x="multiChartData.mL - 6" :y="multiChartData.H - multiChartData.mB + 4" class="ax">0%</text>
+              <template v-if="cur.i >= 0">
+                <line :x1="cur.x" :y1="multiChartData.mT" :x2="cur.x" :y2="multiChartData.H - multiChartData.mB" class="cur-line" />
+                <template v-for="s in multiChartData.series" :key="'cd' + s.id"><circle v-if="s.pts[cur.i]" :cx="cur.x" :cy="s.pts[cur.i].y" r="5" class="cur-dot" :style="{ stroke: s.color }" /></template>
+              </template>
             </svg>
             <div class="multi-leg">
               <span v-for="s in multiChartData.series" :key="'lg' + s.id" class="ml-item"><span class="ml-dot" :style="{ background: s.color }"></span>{{ s.nom }} <span class="ml-rg">{{ fmtNum(s.min) }}–{{ fmtNum(s.max) }}{{ s.unite ? ' ' + s.unite : '' }}</span></span>
+            </div>
+            <div v-if="cur.i >= 0 && multiChartData.lotLabels[cur.i]" class="cur-readout">
+              <b>{{ multiChartData.lotLabels[cur.i].lot || '—' }}</b>
+              <span v-for="s in multiChartData.series" :key="'cr' + s.id" class="cr-it"><span class="cr-dot" :style="{ background: s.color }"></span>{{ s.nom }} : {{ s.pts[cur.i] ? s.pts[cur.i].v : '—' }}{{ s.pts[cur.i] && s.unite ? ' ' + s.unite : '' }}</span>
             </div>
             <p class="hint">Chaque courbe est normalisée sur sa propre plage (0 % = min, 100 % = max) pour comparer les tendances malgré des unités différentes. Valeurs moyennées par lot ; survole un point pour la valeur réelle.</p>
           </div>
@@ -460,7 +478,7 @@ const chartData = computed(() => {
   const yy = (v) => mT + (ymax - v) / (ymax - ymin) * (H - mT - mB)
   const pts = ms.map((m, i) => ({ x: xx(i), y: yy(Number(m.valeur)), v: Number(m.valeur), lot: m.numero_lot || '', ko: horsSpecVal(Number(m.valeur), lsl, usl) }))
   const path = pts.map((pt, i) => (i ? 'L' : 'M') + pt.x.toFixed(1) + ' ' + pt.y.toFixed(1)).join(' ')
-  return { W, H, mL, mR, mT, mB, step, pts, path, lsl, usl, cible, ymin, ymax, yLsl: lsl != null ? yy(lsl) : null, yUsl: usl != null ? yy(usl) : null, yCible: cible != null ? yy(cible) : null }
+  return { W, H, mL, mR, mT, mB, step, xs: pts.map(p => p.x), pts, path, lsl, usl, cible, ymin, ymax, yLsl: lsl != null ? yy(lsl) : null, yUsl: usl != null ? yy(usl) : null, yCible: cible != null ? yy(cible) : null }
 })
 
 // ---- Comparaison multi-paramètres (courbes superposées, normalisées 0–100 %) ----
@@ -497,13 +515,26 @@ const multiChartData = computed(() => {
     const pts = raw.map((v, i) => v == null ? null : { x: xx(i), y: yy((v - a) / (b - a)), v, lot: lotMeta[keys[i]].lot })
     let path = '', pen = false
     for (const pt of pts) { if (!pt) { pen = false; continue } path += (pen ? 'L' : 'M') + pt.x.toFixed(1) + ' ' + pt.y.toFixed(1) + ' '; pen = true }
-    return { id, nom: p.nom, unite: uniteEff(p), color: SERIES_COLORS[si % SERIES_COLORS.length], pts: pts.filter(Boolean), path: path.trim(), min: rMin, max: rMax }
+    return { id, nom: p.nom, unite: uniteEff(p), color: SERIES_COLORS[si % SERIES_COLORS.length], pts, path: path.trim(), min: rMin, max: rMax }
   }).filter(Boolean)
   if (!series.length) return null
   const step = Math.max(1, Math.ceil(n / 22))
   const lotLabels = keys.map((k, i) => ({ x: xx(i), lot: lotMeta[k].lot }))
-  return { W, H, mL, mR, mT, mB, step, series, lotLabels, n }
+  return { W, H, mL, mR, mT, mB, step, xs: lotLabels.map(l => l.x), series, lotLabels, n }
 })
+
+// ---- Curseur vertical : lecture des valeurs au lot pointé ----
+const cur = ref({ i: -1, x: 0 })
+function clearCur() { cur.value = { i: -1, x: 0 } }
+function moveCur(ev, data) {
+  if (!data || !data.xs || !data.xs.length) return
+  const r = ev.currentTarget.getBoundingClientRect(); if (!r.width) return
+  const sx = (ev.clientX - r.left) / r.width * data.W
+  let best = 0, bd = Infinity
+  for (let i = 0; i < data.xs.length; i++) { const d = Math.abs(data.xs[i] - sx); if (d < bd) { bd = d; best = i } }
+  cur.value = { i: best, x: data.xs[best] }
+}
+watch([chartMode, produitSel], clearCur)
 
 function detectViolations(vals, mean, std) {
   const n = vals.length, flags = vals.map(() => [])
@@ -537,7 +568,7 @@ const controlData = computed(() => {
   const path = pts.map((pt, i) => (i ? 'L' : 'M') + pt.x.toFixed(1) + ' ' + pt.y.toFixed(1)).join(' ')
   const alertes = []
   pts.forEach(pt => { if (pt.viol.length) alertes.push({ lot: pt.lot || '(lot ?)', v: pt.v, rules: pt.viol }) })
-  return { W, H, mL, mR, mT, mB, step, pts, path, mean, std, ymin, ymax, alertes,
+  return { W, H, mL, mR, mT, mB, step, xs: pts.map(p => p.x), pts, path, mean, std, ymin, ymax, alertes,
     yCl: yy(mean), yUcl: yy(ucl), yLcl: yy(lcl), y2u: yy(mean + 2 * std), y2l: yy(mean - 2 * std), y1u: yy(mean + std), y1l: yy(mean - std) }
 })
 
