@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
@@ -75,7 +75,7 @@ async function charger() {
   equipements.value = re.data || []
 
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, en_triage, triage_debut, triage_fin, qte_a_trier, qte_triee, en_triage_cond, triage_cond_debut, triage_cond_fin, deviation, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite, taille_lot, poids_unitaire_mg), equipements(code, nom)')
+    .select('id, numero_lot, statut, produit_id, deviation, deviation_cond, en_triage, triage_debut, triage_fin, qte_a_trier, qte_triee, en_triage_cond, triage_cond_debut, triage_cond_fin, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite, taille_lot, poids_unitaire_mg, poids_sac_kg), equipements(code, nom)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
@@ -86,10 +86,12 @@ async function charger() {
   conds.value = rc.data || []
 
   const rs = await fetchAllPaged(() => supabase.from('suivi_phases')
-    .select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
+    .select('ordre_id, phase, statut, date_phase, date_debut, en_triage, triage_debut, triage_fin').eq('actif', true))
   if (rs.error) { erreur.value = rs.error.message; chargement.value = false; return }
   suivi.value = rs.data || []
 
+  await chargerSacs()
+  await chargerControlesAql()
   const rpl = await fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produits(gamme)'))
   if (!rpl.error) planRows.value = rpl.data || []
 
@@ -217,6 +219,12 @@ const phasesLot = computed(() => {
 })
 
 // Lots en cours de triage (ordres_fabrication.en_triage === 'Triage')
+// Ancienneté du triage en nombre (le joursDepuis() existant renvoie une chaîne, inutilisable pour trier).
+function joursOuvertTriage(d) {
+  if (!d) return null
+  const n = Math.floor((Date.now() - new Date(d).getTime()) / 86400000)
+  return n >= 0 ? n : null
+}
 const lotsTriage = computed(() => {
   const pl = phasesLot.value
   return ofs.value.filter(o => !!o.en_triage && !o.triage_fin).map(o => {
@@ -229,12 +237,15 @@ const lotsTriage = computed(() => {
     const boitesT = Number(o.boites_fabriquees) || Number(prod.taille_lot) || 0
     const kgLot = Math.round((boitesT * upbT * pmgT) / 1e6 * 100) / 100
     const aTrierDef = o.qte_a_trier != null ? o.qte_a_trier : kgLot
-    return { id: o.id, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin || '', qteATrier: aTrierDef, qteTriee: o.qte_triee != null ? o.qte_triee : 0 }
-  })
+    return { id: o.id, produitId: o.produit_id, poidsSacProd: prod.poids_sac_kg, jours: joursOuvertTriage(o.triage_debut), lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin || '', qteATrier: aTrierDef, qteTriee: o.qte_triee != null ? o.qte_triee : 0 }
+  }).sort((a, b) => (b.jours == null ? -1 : b.jours) - (a.jours == null ? -1 : a.jours))   // les plus anciens en tête
 })
 
 const triageIds = computed(() => new Set(lotsTriage.value.map(l => l.id)))
 const triageCondIds = computed(() => new Set(ofs.value.filter(o => !!o.en_triage_cond && !o.triage_cond_fin).map(o => o.id)))
+// Déviations déclarées sur l'OF (page Ordres de fabrication)
+const deviationIds = computed(() => new Set(ofs.value.filter(o => !!o.deviation).map(o => o.id)))
+const deviationCondIds = computed(() => new Set(ofs.value.filter(o => !!o.deviation_cond).map(o => o.id)))
 // File par phase : lots à l'étape courante (en attente = étape précédente finie ; en cours = démarrée)
 const anneeCourante = new Date().getFullYear()
 const planParPhase = computed(() => {
@@ -285,7 +296,7 @@ const queuePhase = computed(() => {
     // Fabrication finie = dernière phase de la gamme du produit terminée (critère fiable, pas la date).
     const kDern = gamme.length ? phaseKey(gamme[gamme.length - 1]) : null
     const fabTerminee = !!o.date_fin_fabrication || !!(kDern && pl[kDern] && pl[kDern].statut === 'Terminé')
-    const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), deviation: !!o.deviation, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
+    const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), deviation: deviationIds.value.has(o.id), deviationCond: deviationCondIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !fabTerminee) ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
     if (directCond) {
@@ -385,6 +396,14 @@ const vueFile = computed(() => {
 })
 
 // Planning CONDITIONNEMENT : lots regroupés par LIGNE RÉSERVÉE (equipement_id de l'ordre)
+// Ordre d'affichage des lignes de conditionnement, imposé par la production.
+// Une ligne absente de cette liste se place après les autres, jamais masquée.
+const ORDRE_COND = ['PR051', 'PR014', 'PR001', 'PR063', 'PR100', 'PR206', 'OTC002', 'PR281', 'PR249', 'PR302', 'PR384']
+function codeDeLigne(label) { return String(label || '').split('—')[0].trim().toUpperCase() }
+function rangCond(g) {
+  const i = ORDRE_COND.indexOf(g.code)
+  return i >= 0 ? i : ORDRE_COND.length
+}
 const vueCondLignes = computed(() => {
   const qc = queuePhase.value.conditionnement
   const rq = recherche.value.trim().toLowerCase()
@@ -395,13 +414,13 @@ const vueCondLignes = computed(() => {
   if (!rq) {
     for (const e of equipements.value) {
       if (phaseEquip(e) !== 'conditionnement') continue
-      groups[e.id] = { id: e.id, label: e.code + (e.nom ? ' — ' + e.nom : ''), reserve: true, attente: [], cours: [] }
+      groups[e.id] = { id: e.id, code: String(e.code || '').trim().toUpperCase(), label: e.code + (e.nom ? ' — ' + e.nom : ''), reserve: true, attente: [], cours: [] }
     }
   }
   const add = (l, type) => {
     if (!mL(l)) return
     const key = l.reserveId || '__none__'
-    if (!groups[key]) groups[key] = { id: key, label: l.reserveLabel || 'Non réservé', reserve: !!l.reserveId, attente: [], cours: [] }
+    if (!groups[key]) groups[key] = { id: key, code: codeDeLigne(l.reserveLabel), label: l.reserveLabel || 'Non réservé', reserve: !!l.reserveId, attente: [], cours: [] }
     groups[key][type].push(l)
   }
   for (const l of qc.cours) add(l, 'cours')
@@ -409,7 +428,12 @@ const vueCondLignes = computed(() => {
   return Object.values(groups).map(g => ({ ...g,
     volAttente: g.attente.reduce((s, l) => s + l.boites, 0), volCours: g.cours.reduce((s, l) => s + l.boites, 0),
     tot: g.attente.length + g.cours.length }))
-    .sort((a, b) => (a.reserve === b.reserve ? b.tot - a.tot : (a.reserve ? -1 : 1)))
+    .sort((a, b) => {
+      if (a.reserve !== b.reserve) return a.reserve ? -1 : 1   // « Non réservé » en dernier
+      const ra = rangCond(a), rb = rangCond(b)
+      if (ra !== rb) return ra - rb
+      return b.tot - a.tot                                      // hors liste : les plus chargées d'abord
+    })
 })
 
 const kpisFile = computed(() => {
@@ -440,12 +464,87 @@ const kpisFile = computed(() => {
     { v: fmt(perimes), l: "OF périmés", tint: perimes > 0 ? TINTS.rose : TINTS.slate, ic: ICONS.alert },
   ]
 })
-const chargeAteliers = computed(() => {
-  const arr = vueFile.value.map(ph => ({ label: ph.phase.label, attente: ph.attente.length, cours: ph.cours.length, total: ph.attente.length + ph.cours.length }))
-  if (attentePeseeList.value.length) arr.unshift({ label: "Pesée (attente)", attente: attentePeseeList.value.length, cours: 0, total: attentePeseeList.value.length })
-  const max = Math.max(1, ...arr.map(x => x.total))
-  return arr.map(x => ({ ...x, pct: Math.round(x.total / max * 100) })).sort((a, b) => b.total - a.total)
+// ===== Qualité : suivi du triage et des déviations =====
+// Population annuelle : lots dont la fabrication est terminée dans l'année (même base que le rapport hebdo).
+const qualiteAnnee = computed(() => {
+  const finis = ofs.value.filter(o => o.date_fin_fabrication
+    && new Date(o.date_fin_fabrication).getFullYear() === anneeCourante
+    && ['Terminé', 'Libéré', 'Rejeté'].includes(o.statut))
+  const brft = (k) => finis.length ? Math.round(finis.filter(o => o.statut !== 'Rejeté' && !o[k]).length / finis.length * 1000) / 10 : null
+  return {
+    finis: finis.length,
+    devFab: finis.filter(o => !!o.deviation).length,
+    devCond: finis.filter(o => !!o.deviation_cond).length,
+    brftFab: brft('deviation'), brftCond: brft('deviation_cond')
+  }
 })
+// Répartition par atelier sur les lots actuellement en file (attente + en cours)
+const qualiteParAtelier = computed(() => {
+  const compte = (attente, cours, pk) => {
+    let tri = 0
+    const devLots = []
+    for (const l of [...attente, ...cours]) {
+      if (l.triage || l.triageCond) tri++
+      if (l.deviation || l.deviationCond) devLots.push({ id: l.id, lot: l.lot, code: l.code, desig: l.desig, deviation: !!l.deviation, deviationCond: !!l.deviationCond, pk })
+    }
+    const bts = (arr) => arr.reduce((n, l) => n + (Number(l.boites) || 0), 0)
+    return { tot: attente.length + cours.length, att: attente.length, enc: cours.length,
+      bts: bts(attente) + bts(cours), btsAtt: bts(attente), btsEnc: bts(cours),
+      tri, dev: devLots.length, devLots }
+  }
+  const rows = []
+  const pes = attentePeseeList.value.map(l => ({
+    id: l.id, lot: l.lot, code: l.code, desig: l.desig, boites: l.boites,
+    triage: triageIds.value.has(l.id), triageCond: triageCondIds.value.has(l.id),
+    deviation: deviationIds.value.has(l.id), deviationCond: deviationCondIds.value.has(l.id)
+  }))
+  const p = compte(pes, [], 'pesee')
+  if (p.tot) rows.push({ label: 'Pesée (attente)', ...p })
+  for (const ph of vueFile.value) rows.push({ label: ph.phase.label, ...compte(ph.attente, ph.cours, ph.key) })
+  let cAtt = [], cCours = []
+  for (const g of vueCondLignes.value) { cAtt = cAtt.concat(g.attente); cCours = cCours.concat(g.cours) }
+  const c = compte(cAtt, cCours, 'conditionnement')
+  if (c.tot) rows.push({ label: 'Conditionnement', ...c })
+  // Charge relative : barre proportionnelle à l'atelier le plus chargé (reprend « Charge par atelier »)
+  const max = Math.max(1, ...rows.map(r => r.tot))
+  return rows.map(r => ({ ...r, pct: Math.round(r.tot / max * 100), pctDev: r.tot ? Math.round(r.dev / r.tot * 100) : 0 }))
+})
+// Dépliage du détail des lots en déviation (clic sur la colonne « Avec déviation »)
+const devOuvert = ref(null)
+function toggleDev(label, n) { if (!n) return; devOuvert.value = devOuvert.value === label ? null : label }
+const devLotsTous = computed(() => {
+  const out = []
+  for (const r of qualiteParAtelier.value) for (const l of r.devLots) out.push({ ...l, atelier: r.label })
+  return out
+})
+const qualiteTotaux = computed(() => {
+  const t = qualiteParAtelier.value.reduce((a, r) => ({ tot: a.tot + r.tot, att: a.att + r.att, enc: a.enc + r.enc, bts: a.bts + r.bts, tri: a.tri + r.tri, dev: a.dev + r.dev }), { tot: 0, att: 0, enc: 0, bts: 0, tri: 0, dev: 0 })
+  return { ...t, pctDev: t.tot ? Math.round(t.dev / t.tot * 100) : 0 }
+})
+const kpisQualite = computed(() => {
+  const q = qualiteAnnee.value
+  const a = aqlStats.value
+  const enTriFab = lotsTriage.value.length
+  const enTriCond = triageCondIds.value.size
+  let aTrier = 0, triee = 0
+  for (const l of lotsTriage.value) { const e = qteEdit[l.id] || {}; aTrier += Number(e.aTrier) || 0; triee += Number(e.triee) || 0 }
+  const pctTri = aTrier > 0 ? Math.min(100, Math.round(triee / aTrier * 100)) : null
+  const devProd = qualiteTotaux.value.dev
+  return [
+    { v: fmt(enTriFab), l: 'Lots en triage — fabrication', tint: enTriFab ? TINTS.amber : TINTS.slate, ic: ICONS.hourglass },
+    { v: fmt(enTriCond), l: 'Lots en triage — conditionnement', tint: enTriCond ? TINTS.amber : TINTS.slate, ic: ICONS.package },
+    { v: pctTri == null ? '—' : pctTri + ' %', l: 'Avancement du triage (Kg triés / à trier)', tint: TINTS.blue, ic: ICONS.percent },
+    { v: fmt(devProd), l: 'Lots en file avec déviation', tint: devProd ? TINTS.rose : TINTS.slate, ic: ICONS.alert },
+    { v: fmt(q.devFab), l: 'Déviations fabrication ' + anneeCourante, tint: q.devFab ? TINTS.rose : TINTS.slate, ic: ICONS.flask },
+    { v: q.brftFab == null ? '—' : q.brftFab + ' %', l: 'BRFT fabrication ' + anneeCourante + ' (' + q.finis + ' lots)', tint: TINTS.emerald, ic: ICONS.check },
+    { v: q.brftCond == null ? '—' : q.brftCond + ' %', l: 'BRFT conditionnement ' + anneeCourante, tint: TINTS.teal, ic: ICONS.check },
+    { v: fmt(a.n), l: 'Contrôles AQL ' + anneeCourante, tint: TINTS.indigo, ic: ICONS.clipboard },
+    { v: a.taux == null ? '—' : a.taux + ' %', l: 'Taux d\'acceptation AQL', tint: a.taux != null && a.taux < 100 ? TINTS.amber : TINTS.emerald, ic: ICONS.target },
+    { v: fmt(a.refuses), l: 'Contrôles AQL refusés ' + anneeCourante, tint: a.refuses ? TINTS.rose : TINTS.slate, ic: ICONS.xCircle },
+    { v: fmt(a.aControler), l: 'Lots à contrôler (compression close, sans AQL)', tint: a.aControler ? TINTS.amber : TINTS.slate, ic: ICONS.hourglass },
+  ]
+})
+
 // Lots planifiés EN ATTENTE DE PESÉE : réception OF faite, pesée pas encore terminée
 const attentePeseeList = computed(() => {
   const rq = recherche.value.trim().toLowerCase()
@@ -463,7 +562,7 @@ const attentePeseeList = computed(() => {
     if (Object.keys(pl).some(k => k !== 'pesee')) continue // a une phase au-delà de la pesée -> plus en attente de pesée
     const p = o.produits || {}
     res.push({
-      id: o.id, lot: o.numero_lot || '—', deviation: !!o.deviation, code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '',
+      id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '',
       boites: Number(o.quantite_theorique || 0), date: o.date_reception || o.date_lancement,
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !o.date_fin_fabrication) ? (new Date(o.date_fin_validite) < now) : false
     })
@@ -483,7 +582,7 @@ const attenteReceptionList = computed(() => {
     if (o.statut === 'Libéré' || o.statut === 'Rejeté' || o.statut === 'Terminé') continue
     const p = o.produits || {}
     if (estDirectCond(p)) continue
-    res.push({ id: o.id, lot: o.numero_lot || '—', deviation: !!o.deviation, code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), validite: o.date_fin_validite || null })
+    res.push({ id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), validite: o.date_fin_validite || null })
   }
   return res.filter(mL).sort((a, b) => String(a.lot || '').localeCompare(String(b.lot || ''), undefined, { numeric: true }))
 })
@@ -501,10 +600,423 @@ function ouvrirLot(l, phaseKey) {
   if (phaseKey === 'conditionnement') router.push({ path: '/conditionnement', query: { lot: l.id } })
   else router.push({ path: '/suivi', query: { lot: l.id } })
 }
-function ouvrirTriageFin(id) { router.push({ path: '/ordres', query: { edit: id } }) }
+// La fin de triage se saisit sur l'étape, dans Suivi des phases
+function ouvrirTriageFin(id) { router.push({ path: '/suivi', query: { lot: id, triage: 1 } }) }
+// ===== Triage sac par sac =====
+// Nombre de sacs = ceil(Kg à trier / poids du sac du produit). Un sac coché = trié et conforme.
+const CLE_POIDS_SAC = 'dispo_poids_sac'   // défaut, pour les produits sans poids de sac renseigné
+const poidsProd = reactive({})            // surcharges locales après enregistrement, par produit
+const poidsSac = ref(25)
+try { const v = Number(localStorage.getItem(CLE_POIDS_SAC)); if (v > 0) poidsSac.value = v } catch (e) { /* ignore */ }
+watch(poidsSac, (v) => { try { localStorage.setItem(CLE_POIDS_SAC, String(Number(v) > 0 ? v : 25)) } catch (e) { /* ignore */ } })
+const sacs = ref([])
+const sacsOuvert = ref(null)
+const majSac = ref('')
+// ===== Contrôles AQL =====
+const controlesAql = ref([])
+async function chargerControlesAql() {
+  const r = await fetchAllPaged(() => supabase.from('controles_aql').select('ordre_id, phase, verdict, controle_le'))
+  // Table absente (migration 006 non passée) : on n'affiche rien plutôt que de casser la page.
+  controlesAql.value = r.error || !Array.isArray(r.data) ? [] : r.data
+}
+const aqlStats = computed(() => {
+  const liste = Array.isArray(controlesAql.value) ? controlesAql.value : []
+  const annee = liste.filter(x => x.controle_le && new Date(x.controle_le).getFullYear() === anneeCourante)
+  const refuses = annee.filter(x => x.verdict === 'Refusé').length
+  const controles = new Set(liste.map(x => x.ordre_id))
+  // Lots encore en production dont la compression est terminée mais sans aucun contrôle AQL
+  let aControler = 0
+  const pl = phasesLot.value
+  for (const o of ofs.value) {
+    if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
+    const c = (pl[o.id] || {}).compression
+    if (!c || c.statut !== 'Terminé') continue
+    if (!controles.has(o.id)) aControler++
+  }
+  return {
+    n: annee.length, refuses,
+    taux: annee.length ? Math.round((annee.length - refuses) / annee.length * 1000) / 10 : null,
+    aControler
+  }
+})
+async function chargerSacs() {
+  const r = await fetchAllPaged(() => supabase.from('triage_sacs').select('id, ordre_id, numero_sac, coche_par, coche_le'))
+  // fetchAllPaged renvoie { data, error } : si la table n'existe pas encore, on reste sur une liste vide.
+  if (r.error) { sacs.value = []; majSac.value = 'Suivi par sac indisponible : ' + r.error.message; return }
+  sacs.value = Array.isArray(r.data) ? r.data : []
+}
+const sacsParLot = computed(() => {
+  const m = {}
+  const liste = Array.isArray(sacs.value) ? sacs.value : []
+  for (const x of liste) { if (!m[x.ordre_id]) m[x.ordre_id] = new Set(); m[x.ordre_id].add(x.numero_sac) }
+  return m
+})
+// Poids du sac : celui du produit s'il est renseigné, sinon le défaut de la page.
+function poidsSacDe(l) {
+  const loc = poidsProd[l.produitId]
+  const v = Number(loc !== undefined ? loc : l.poidsSacProd) || 0
+  return v > 0 ? v : (Number(poidsSac.value) || 0)
+}
+async function sauverPoidsSac(l, val) {
+  majSac.value = ''
+  if (!l.produitId) { majSac.value = 'Produit inconnu pour ce lot : poids de sac non enregistrable.'; return }
+  const n = Number(val) || 0
+  const r = await supabase.from('produits').update({ poids_sac_kg: n > 0 ? n : null }).eq('id', l.produitId)
+  if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
+  poidsProd[l.produitId] = n > 0 ? n : null
+  await syncKgTries(l)
+}
+function nbSacs(l) {
+  const q = Number((qteEdit[l.id] || {}).aTrier) || 0
+  const ps = poidsSacDe(l)
+  return ps > 0 ? Math.ceil(q / ps) : 0
+}
+function sacCoche(l, n) { const s = sacsParLot.value[l.id]; return !!(s && s.has(n)) }
+function nbSacsCoches(l) {
+  const s = sacsParLot.value[l.id]; if (!s) return 0
+  const tot = nbSacs(l)
+  let n = 0; for (const v of s) if (v <= tot) n++
+  return n
+}
+function pctSacs(l) { const t = nbSacs(l); return t > 0 ? Math.round(nbSacsCoches(l) / t * 100) : 0 }
+// Kg réellement triés : les sacs pleins valent poidsSac, le DERNIER ne vaut que le reliquat.
+function kgSacs(l) {
+  const q = Number((qteEdit[l.id] || {}).aTrier) || 0
+  const ps = poidsSacDe(l)
+  const tot = nbSacs(l)
+  if (tot <= 0 || ps <= 0) return 0
+  const reste = q - (tot - 1) * ps
+  let kg = 0, nb = 0
+  for (let n = 1; n <= tot; n++) if (sacCoche(l, n)) { kg += (n === tot ? reste : ps); nb++ }
+  // Tous les sacs conformes : on renvoie la quantité à trier telle quelle, pour que le
+  // taux tombe exactement sur 100 % sans dérive de virgule flottante.
+  if (nb >= tot) return q
+  return Math.round(kg * 100) / 100
+}
+// --- Clôture automatique du triage quand tous les sacs sont conformes ---------
+// La date retenue est celle du DERNIER sac coché, pas la date du jour : si les sacs
+// ont été saisis après coup, la clôture doit refléter la fin réelle du triage.
+function dateDernierSac(l) {
+  const tot = nbSacs(l)
+  const liste = (Array.isArray(sacs.value) ? sacs.value : []).filter(x => x.ordre_id === l.id && x.numero_sac <= tot)
+  let d = null
+  for (const x of liste) if (x.coche_le && (!d || x.coche_le > d)) d = x.coche_le
+  const dt = d ? new Date(d) : new Date()
+  return isNaN(dt) ? new Date().toISOString().slice(0, 10) : dt.toISOString().slice(0, 10)
+}
+// Report sur l'OF, même règle que majDatesLot() : la date de fin ne remonte que si
+// TOUTES les phases en triage sont closes.
+async function reporterTriageSurOf(id, finSiAucunePhase) {
+  const r = await supabase.from('suivi_phases').select('en_triage, triage_debut, triage_fin').eq('ordre_id', id).eq('actif', true)
+  const rows = (r.error || !Array.isArray(r.data)) ? [] : r.data
+  const tri = rows.filter(p => !!p.en_triage)
+  const maj = {}
+  if (tri.length) {
+    const ouverts = tri.filter(p => !p.triage_fin)
+    let deb = null, fin = null
+    for (const p of tri) {
+      if (p.triage_debut && (!deb || p.triage_debut < deb)) deb = p.triage_debut
+      if (p.triage_fin && (!fin || p.triage_fin > fin)) fin = p.triage_fin
+    }
+    maj.en_triage = true; maj.triage_debut = deb
+    maj.triage_fin = ouverts.length ? null : fin
+  } else {
+    // Lot marqué en triage au niveau de l'OF seulement (antérieur à la saisie par étape)
+    maj.triage_fin = finSiAucunePhase
+  }
+  const u = await supabase.from('ordres_fabrication').update(maj).eq('id', id)
+  if (u.error) { majSac.value = 'Erreur : ' + u.error.message; return null }
+  const o = ofs.value.find(x => x.id === id)
+  if (o) Object.assign(o, maj)
+  return maj.triage_fin
+}
+async function majClotureTriage(l) {
+  const tot = nbSacs(l)
+  if (tot <= 0) return
+  const complet = nbSacsCoches(l) >= tot
+  const dateFin = complet ? dateDernierSac(l) : null
+  const rp = await supabase.from('suivi_phases').select('id').eq('ordre_id', l.id).eq('actif', true).eq('en_triage', true)
+  if (!rp.error && Array.isArray(rp.data) && rp.data.length) {
+    for (const ph of rp.data) {
+      const u = await supabase.from('suivi_phases').update({ triage_fin: dateFin }).eq('id', ph.id)
+      if (u.error) { majSac.value = 'Erreur : ' + u.error.message; return }
+    }
+  }
+  const fin = await reporterTriageSurOf(l.id, dateFin)
+  if (complet && fin) majSac.value = 'Triage du lot ' + l.lot + ' clôturé au ' + fin + ' (dernier sac conforme).'
+  else if (!complet) majSac.value = 'Sac décoché : le triage du lot ' + l.lot + ' est rouvert.'
+}
+async function syncKgTries(l) {
+  if (!qteEdit[l.id]) return
+  const kg = kgSacs(l)
+  const aTrier = Number(qteEdit[l.id].aTrier) || 0
+  qteEdit[l.id].triee = kg
+  // La quantité à trier est enregistrée en même temps : les sacs en découlent, et sans elle
+  // l'historique affichait « Triée 102,99 » face à « À trier 0 », donc un taux de 0 %.
+  const r = await supabase.from('ordres_fabrication').update({ qte_a_trier: aTrier, qte_triee: kg }).eq('id', l.id)
+  if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
+  const o = ofs.value.find(x => x.id === l.id)   // sinon la ligne resterait marquée « à enregistrer »
+  if (o) { o.qte_a_trier = aTrier; o.qte_triee = kg }
+  await majClotureTriage(l)   // clôture ou réouverture selon l'état des sacs
+}
+async function basculerSac(l, n, sync) {
+  majSac.value = ''
+  if (sacCoche(l, n)) {
+    const r = await supabase.from('triage_sacs').delete().eq('ordre_id', l.id).eq('numero_sac', n)
+    if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
+    sacs.value = sacs.value.filter(x => !(x.ordre_id === l.id && x.numero_sac === n))
+  } else {
+    let email = null
+    try { const se = await supabase.auth.getSession(); email = se.data && se.data.session ? se.data.session.user.email : null } catch (e) { /* ignore */ }
+    const r = await supabase.from('triage_sacs').insert({ ordre_id: l.id, numero_sac: n, conforme: true, coche_par: email }).select('id, ordre_id, numero_sac, coche_par, coche_le').single()
+    if (r.error) { majSac.value = 'Erreur : ' + r.error.message; return }
+    sacs.value = sacs.value.concat([r.data || { ordre_id: l.id, numero_sac: n }])
+  }
+  if (sync !== false) await syncKgTries(l)
+}
+async function cocherTousSacs(l) {
+  const tot = nbSacs(l)
+  for (let n = 1; n <= tot; n++) if (!sacCoche(l, n)) await basculerSac(l, n, false)
+  await syncKgTries(l)
+}
+async function decocherTousSacs(l) {
+  const tot = nbSacs(l)
+  for (let n = 1; n <= tot; n++) if (sacCoche(l, n)) await basculerSac(l, n, false)
+  await syncKgTries(l)
+}
+function toggleSacs(l) { sacsOuvert.value = sacsOuvert.value === l.id ? null : l.id }
+
+// ===== Historique des triages clos =====
+const histOuvert = ref(null)
+function toggleHist(id) { histOuvert.value = histOuvert.value === id ? null : id }
+function joursEntre(a, b) {
+  if (!a || !b) return null
+  const d = Math.round((new Date(b) - new Date(a)) / 86400000)
+  return d >= 0 ? d : null
+}
+function dateHeure(v) {
+  if (!v) return '—'
+  const d = new Date(v)
+  return isNaN(d) ? '—' : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+function sacsDuLot(id) {
+  const liste = Array.isArray(sacs.value) ? sacs.value : []
+  return liste.filter(x => x.ordre_id === id).sort((a, b) => a.numero_sac - b.numero_sac)
+}
+// Étape réellement déclarée en triage, lue sur suivi_phases et non devinée
+const etapeTriage = computed(() => {
+  const m = {}
+  for (const sp of suivi.value) if (sp.en_triage) m[sp.ordre_id] = sp.phase
+  return m
+})
+const triagesClos = computed(() => {
+  const parLot = sacsParLot.value
+  return ofs.value.filter(o => !!o.en_triage && !!o.triage_fin).map(o => {
+    const prod = o.produits || {}
+    const aTrier = Number(o.qte_a_trier) || 0
+    const triee = Number(o.qte_triee) || 0
+    // Taux fondé sur les SACS dès qu'il y en a d'enregistrés : tous conformes = 100 %,
+    // quel que soit l'arrondi des kilos. Repli sur les Kg pour les triages antérieurs.
+    const ps = Number(poidsProd[o.produit_id] !== undefined ? poidsProd[o.produit_id] : prod.poids_sac_kg) || Number(poidsSac.value) || 0
+    const ens = parLot[o.id]
+    // Quantité à trier absente (triage enregistré avant cette correction) : le plus grand
+    // numéro de sac enregistré sert de total, un sac n'existant que s'il a été coché.
+    let maxSac = 0
+    if (ens) for (const v of ens) if (v > maxSac) maxSac = v
+    const sacsTot = ps > 0 && aTrier > 0 ? Math.ceil(aTrier / ps) : maxSac
+    let sacsOk = 0
+    if (ens) for (const v of ens) if (v <= sacsTot) sacsOk++
+    return {
+      id: o.id, lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '',
+      phase: etapeTriage.value[o.id] || '', debut: o.triage_debut || '', fin: o.triage_fin,
+      duree: joursEntre(o.triage_debut, o.triage_fin), aTrier, triee, sacsTot, sacsOk,
+      // Quantité de référence : celle saisie, ou à défaut celle déduite des sacs
+      qte: aTrier > 0 ? aTrier : (sacsTot > 0 && ps > 0 ? Math.round(sacsTot * ps * 100) / 100 : 0),
+      pct: sacsTot > 0 && sacsOk > 0
+        ? Math.min(100, Math.round(sacsOk / sacsTot * 100))
+        : (aTrier > 0 ? Math.min(100, Math.round(triee / aTrier * 100)) : 0)
+    }
+  }).sort((a, b) => String(b.fin).localeCompare(String(a.fin)))
+})
+// ===== Synthèse du triage par produit =====
+// Population : les OF dont la fabrication s'est terminée dans l'année (hors Rejeté),
+// qu'ils aient été triés ou non. C'est le dénominateur qui donne un sens au taux.
+const vueSynthese = ref(false)
+const anneeSynth = ref(anneeCourante)
+const anneesTriage = computed(() => {
+  const set = new Set([anneeCourante])
+  for (const o of ofs.value) if (o.date_fin_fabrication) set.add(new Date(o.date_fin_fabrication).getFullYear())
+  return [...set].sort((a, b) => b - a)
+})
+const syntheseProduits = computed(() => {
+  const an = anneeSynth.value
+  const m = {}
+  for (const o of ofs.value) {
+    if (o.statut === 'Rejeté') continue
+    if (!o.date_fin_fabrication) continue
+    if (new Date(o.date_fin_fabrication).getFullYear() !== an) continue
+    const pr = o.produits || {}
+    const k = pr.code_pf || '—'
+    if (!m[k]) m[k] = { code: k, desig: pr.designation || '', lots: 0, boites: 0, lotsTri: 0, boitesTri: 0, kg: 0, durees: [] }
+    const e = m[k]
+    const b = Number(o.boites_fabriquees) || Number(o.quantite_theorique) || 0
+    e.lots++; e.boites += b
+    if (o.en_triage) {
+      e.lotsTri++; e.boitesTri += b
+      e.kg += Number(o.qte_triee) || 0
+      const d = joursEntre(o.triage_debut, o.triage_fin)
+      if (d != null) e.durees.push(d)
+    }
+  }
+  return Object.values(m).filter(e => e.lotsTri > 0).map(e => ({
+    ...e,
+    kg: Math.round(e.kg * 100) / 100,
+    tauxLots: e.lots ? Math.round(e.lotsTri / e.lots * 1000) / 10 : 0,
+    tauxBoites: e.boites ? Math.round(e.boitesTri / e.boites * 1000) / 10 : 0,
+    duree: e.durees.length ? Math.round(e.durees.reduce((a, b) => a + b, 0) / e.durees.length * 10) / 10 : null
+  })).sort((a, b) => b.lotsTri - a.lotsTri || b.tauxLots - a.tauxLots)
+})
+const syntheseTotaux = computed(() => {
+  const r = syntheseProduits.value
+  const t = r.reduce((a, e) => ({
+    lots: a.lots + e.lots, boites: a.boites + e.boites,
+    lotsTri: a.lotsTri + e.lotsTri, boitesTri: a.boitesTri + e.boitesTri, kg: a.kg + e.kg
+  }), { lots: 0, boites: 0, lotsTri: 0, boitesTri: 0, kg: 0 })
+  return {
+    ...t, kg: Math.round(t.kg * 100) / 100, produits: r.length,
+    tauxLots: t.lots ? Math.round(t.lotsTri / t.lots * 1000) / 10 : 0,
+    tauxBoites: t.boites ? Math.round(t.boitesTri / t.boites * 1000) / 10 : 0
+  }
+})
+// --- Estimation de la durée de triage ---------------------------------------
+// Cadence déduite des triages déjà clos : Kg triés par jour. On prend la MÉDIANE,
+// pas la moyenne : un seul triage anormalement long fausserait durablement le repère.
+function mediane(v) {
+  if (!v.length) return null
+  const a = [...v].sort((x, y) => x - y)
+  const m = Math.floor(a.length / 2)
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2
+}
+const cadenceTriage = computed(() => {
+  const glob = [], parProd = {}
+  for (const h of triagesClos.value) {
+    if (!h.duree || h.duree <= 0 || h.qte <= 0) continue   // un triage clos le jour même ne mesure rien
+    const kgj = h.qte / h.duree
+    glob.push(kgj)
+    if (!parProd[h.code]) parProd[h.code] = []
+    parProd[h.code].push(kgj)
+  }
+  const med = {}
+  for (const k in parProd) if (parProd[k].length >= 2) med[k] = mediane(parProd[k])
+  return { globale: mediane(glob), n: glob.length, parProduit: med }
+})
+// Estimation pour un lot : sa quantité divisée par la cadence de son produit
+// quand elle existe (au moins 2 mesures), sinon par la cadence globale.
+function estimerDuree(h) {
+  const c = cadenceTriage.value
+  const taux = c.parProduit[h.code] || c.globale
+  if (!taux || taux <= 0 || !h.qte) return null
+  return Math.max(1, Math.round(h.qte / taux))
+}
+// Comparaison réel / estimé : au-delà de 1,5 fois, le triage est anormalement long.
+function ecartEstim(h) {
+  const e = estimerDuree(h)
+  if (!e || h.duree == null) return ''
+  if (h.duree > e * 1.5) return 'est-long'
+  if (h.duree <= e) return 'est-court'
+  return ''
+}
+function sourceEstimation(h) {
+  return cadenceTriage.value.parProduit[h.code] ? 'cadence du produit ' + h.code : 'cadence globale'
+}
+
+// --- Édition d'une ligne d'historique ---------------------------------------
+// Sert notamment à réparer les triages clôturés avant l'enregistrement de la
+// quantité à trier, qui affichaient « À trier 0 » et un taux faussé.
+const histEdit = ref(null)
+const histMsg = ref('')
+function modifierHist(h) {
+  histMsg.value = ''
+  histEdit.value = { id: h.id, lot: h.lot, aTrier: h.aTrier, triee: h.triee, debut: h.debut || '', fin: h.fin || '' }
+}
+function annulerHist() { histEdit.value = null; histMsg.value = '' }
+async function enregistrerHist() {
+  const e = histEdit.value
+  if (!e) return
+  histMsg.value = ''
+  const aTrier = Number(e.aTrier) || 0
+  const triee = Number(e.triee) || 0
+  if (e.debut && e.fin && e.fin < e.debut) { histMsg.value = 'La date de fin précède la date de début.'; return }
+  const maj = {
+    qte_a_trier: aTrier, qte_triee: triee,
+    triage_debut: e.debut || null, triage_fin: e.fin || null
+  }
+  const r = await supabase.from('ordres_fabrication').update(maj).eq('id', e.id)
+  if (r.error) { histMsg.value = 'Erreur : ' + r.error.message; return }
+  // Les dates sont aussi portées sur l'étape : sinon majDatesLot(), dans Suivi des
+  // phases, les recalculerait depuis suivi_phases et écraserait la correction.
+  const rp = await supabase.from('suivi_phases').select('id').eq('ordre_id', e.id).eq('actif', true).eq('en_triage', true)
+  if (!rp.error && Array.isArray(rp.data)) {
+    for (const ph of rp.data) {
+      await supabase.from('suivi_phases').update({ triage_debut: e.debut || null, triage_fin: e.fin || null }).eq('id', ph.id)
+    }
+  }
+  const o = ofs.value.find(x => x.id === e.id)
+  if (o) Object.assign(o, maj)
+  if (qteEdit[e.id]) { qteEdit[e.id].aTrier = aTrier; qteEdit[e.id].triee = triee }
+  histMsg.value = e.fin ? 'Lot ' + e.lot + ' mis à jour.' : 'Lot ' + e.lot + ' rouvert : il revient dans les triages en cours.'
+  histEdit.value = null
+}
+const histoTotaux = computed(() => {
+  const r = triagesClos.value
+  const durees = r.map(x => x.duree).filter(d => d != null)
+  return {
+    n: r.length,
+    kg: Math.round(r.reduce((s, x) => s + x.triee, 0) * 100) / 100,
+    duree: durees.length ? Math.round(durees.reduce((s, d) => s + d, 0) / durees.length * 10) / 10 : null
+  }
+})
 const qteEdit = reactive({})
+// Verrou anti-rechargement : tant qu'une saisie n'est pas enregistrée, App.vue ne recharge pas.
+const verrouEdition = inject('verrouEdition', null)
+let verrouPose = false
+const aDesModifs = computed(() => {
+  for (const l of lotsTriage.value) {
+    const q = qteEdit[l.id]
+    if (!q) continue
+    if ((Number(q.aTrier) || 0) !== (Number(l.qteATrier) || 0)) return true
+    if ((Number(q.triee) || 0) !== (Number(l.qteTriee) || 0)) return true
+  }
+  return sacsOuvert.value != null || devOuvert.value != null || histOuvert.value != null
+})
+watch(aDesModifs, (v) => {
+  if (!verrouEdition) return
+  if (v && !verrouPose) { verrouEdition.poser(); verrouPose = true }
+  else if (!v && verrouPose) { verrouEdition.liberer(); verrouPose = false }
+})
+onUnmounted(() => { if (verrouEdition && verrouPose) { verrouEdition.liberer(); verrouPose = false } })
 watch(lotsTriage, (lots) => { for (const l of lots) if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: l.qteATrier || 0, triee: l.qteTriee || 0 } }, { immediate: true })
 function pctTriage(id) { const q = qteEdit[id] || {}; const t = Number(q.aTrier) || 0; return t > 0 ? Math.min(100, Math.round((Number(q.triee) || 0) / t * 100)) : 0 }
+// Une ligne est « à enregistrer » tant que la saisie diffère de ce qui est en base.
+function estModifie(l) {
+  const q = qteEdit[l.id]
+  if (!q) return false
+  return (Number(q.aTrier) || 0) !== (Number(l.qteATrier) || 0) || (Number(q.triee) || 0) !== (Number(l.qteTriee) || 0)
+}
+const resumeTriage = computed(() => {
+  let aTrier = 0, triee = 0, prets = 0, vieux = 0
+  for (const l of lotsTriage.value) {
+    const q = qteEdit[l.id] || {}
+    aTrier += Number(q.aTrier) || 0
+    triee += Number(q.triee) || 0
+    if (pctTriage(l.id) >= 100) prets++
+    if (l.jours != null && l.jours > 14) vieux++
+  }
+  return {
+    aTrier: Math.round(aTrier * 100) / 100, triee: Math.round(triee * 100) / 100,
+    pct: aTrier > 0 ? Math.min(100, Math.round(triee / aTrier * 100)) : 0, prets, vieux
+  }
+})
 async function sauverTriage(l) {
   const q = qteEdit[l.id] || {}
   const r = await supabase.from('ordres_fabrication').update({ qte_a_trier: Number(q.aTrier) || 0, qte_triee: Number(q.triee) || 0 }).eq('id', l.id)
@@ -623,27 +1135,99 @@ onMounted(async () => {
 
       <!-- ===================== FILE D'ATTENTE ===================== -->
       <div v-show="ongletDispo === 'file'">
-        <div class="kpi-grid k3">
-          <div class="kpi" v-for="(k, i) in kpisFile" :key="i">
-            <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
-            <div class="kpi-lbl">{{ k.l }}</div>
-          </div>
-        </div>
-        <section v-if="chargeAteliers.length" class="card charge-card">
-          <h3 class="card-title">Charge par atelier — lots en file</h3>
-          <div class="charge-list">
-            <div v-for="c in chargeAteliers" :key="c.label" class="charge-row">
-              <span class="charge-lbl">{{ c.label }}</span>
-              <div class="charge-bar-wrap"><div class="charge-bar" :style="{ width: c.pct + '%' }"></div></div>
-              <span class="charge-val">{{ c.total }}<span v-if="c.attente" class="charge-att"> · {{ c.attente }} att.</span></span>
+        <section class="qual-box">
+          <h3 class="qual-h">Charge, triage et déviations par atelier</h3>
+          <p class="qual-sub">File de production</p>
+          <div class="kpi-grid qual-kpis">
+            <div class="kpi" v-for="(k, i) in kpisFile" :key="'f' + i">
+              <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
+              <div class="kpi-lbl">{{ k.l }}</div>
             </div>
           </div>
+          <p class="qual-sub">Qualité</p>
+          <div class="kpi-grid qual-kpis">
+            <div class="kpi" v-for="(k, i) in kpisQualite" :key="'q' + i">
+              <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
+              <div class="kpi-lbl">{{ k.l }}</div>
+            </div>
+          </div>
+            <p class="qual-sub">Détail par atelier</p>
+            <table v-if="qualiteParAtelier.length" class="qual-tbl">
+              <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">Boîtes</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th></tr></thead>
+              <tbody>
+                <template v-for="r in qualiteParAtelier" :key="r.label">
+                  <tr>
+                    <td class="q-at">{{ r.label }}</td>
+                    <td>
+                      <div class="q-charge">
+                        <div class="qc-bar"><div class="qc-fill" :style="{ width: r.pct + '%' }"></div></div>
+                        <span class="qc-val">{{ fmt(r.tot) }}<span v-if="r.att" class="qc-att"> · {{ r.att }} att.</span><span v-if="r.enc" class="qc-enc"> · {{ r.enc }} en cours</span></span>
+                      </div>
+                    </td>
+                    <td class="qnum q-bts" :title="fmt(r.btsAtt) + ' bts en attente · ' + fmt(r.btsEnc) + ' bts en cours'">{{ fmt(r.bts) }} <span class="unit">bts</span></td>
+                    <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
+                    <td class="qnum" :class="{ 'q-bad': r.dev > 0, 'q-clic': r.dev > 0 }" @click="toggleDev(r.label, r.dev)" :title="r.dev ? 'Voir les lots en déviation' : ''">
+                      {{ r.dev || '—' }}<span v-if="r.dev" class="q-caret">{{ devOuvert === r.label ? '▾' : '▸' }}</span>
+                    </td>
+                    <td class="qnum" :class="{ 'q-bad': r.pctDev >= 20 }">{{ r.pctDev }}%</td>
+                  </tr>
+                  <tr v-if="devOuvert === r.label" class="q-detail">
+                    <td colspan="6">
+                      <table class="qd-tbl">
+                        <thead><tr><th>N° lot</th><th>Produit</th><th>Déviation</th></tr></thead>
+                        <tbody>
+                          <tr v-for="l in r.devLots" :key="l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
+                            <td class="qd-lot">{{ l.lot }}</td>
+                            <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
+                            <td>
+                              <span v-if="l.deviation" class="qd-tag qd-fab">Fabrication</span>
+                              <span v-if="l.deviationCond" class="qd-tag qd-cond">Conditionnement</span>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+              <tfoot>
+                <tr class="q-tot">
+                  <td class="q-at">Total</td>
+                  <td class="qc-tot">{{ fmt(qualiteTotaux.tot) }}<span v-if="qualiteTotaux.att" class="qc-att"> · {{ qualiteTotaux.att }} att.</span><span v-if="qualiteTotaux.enc" class="qc-enc"> · {{ qualiteTotaux.enc }} en cours</span></td>
+                  <td class="qnum q-bts">{{ fmt(qualiteTotaux.bts) }} <span class="unit">bts</span></td>
+                  <td class="qnum">{{ qualiteTotaux.tri || '—' }}</td>
+                  <td class="qnum" :class="{ 'q-clic': qualiteTotaux.dev > 0 }" @click="toggleDev('__tous__', qualiteTotaux.dev)" :title="qualiteTotaux.dev ? 'Voir tous les lots en déviation' : ''">
+                    {{ qualiteTotaux.dev || '—' }}<span v-if="qualiteTotaux.dev" class="q-caret">{{ devOuvert === '__tous__' ? '▾' : '▸' }}</span>
+                  </td>
+                  <td class="qnum">{{ qualiteTotaux.pctDev }}%</td>
+                </tr>
+                <tr v-if="devOuvert === '__tous__'" class="q-detail">
+                  <td colspan="6">
+                    <table class="qd-tbl">
+                      <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier</th><th>Déviation</th></tr></thead>
+                      <tbody>
+                        <tr v-for="l in devLotsTous" :key="l.atelier + '-' + l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de ce lot">
+                          <td class="qd-lot">{{ l.lot }}</td>
+                          <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
+                          <td>{{ l.atelier }}</td>
+                          <td>
+                            <span v-if="l.deviation" class="qd-tag qd-fab">Fabrication</span>
+                            <span v-if="l.deviationCond" class="qd-tag qd-cond">Conditionnement</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
         </section>
         <div class="searchbar">
           <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
           <label class="filtre-chk"><input type="checkbox" v-model="filtreUrgent" /> Urgents (&gt;{{ SEUIL_URGENT }} j)</label>
           <label class="filtre-chk"><input type="checkbox" v-model="filtrePerime" /> OF périmés</label>
-        </div>        <h3 class="board-h">Fabrication — files par atelier</h3>
+        </div>
+        <h3 class="board-h">Fabrication — files par atelier</h3>
         <p class="note">
           Chaque lot apparaît dans l'atelier de son <strong>étape courante</strong> : « en cours » s'il y est démarré, « en attente » si l'étape précédente est terminée.
           Une file <strong>vide</strong> = atelier à sec (risque de rupture). Les lots les plus anciens sont en haut.
@@ -667,7 +1251,7 @@ onMounted(async () => {
                 <div class="q-title attente">À recevoir — {{ attenteReceptionList.length }} OF</div>
                 <div v-if="attenteReceptionList.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in attenteReceptionList" :key="l.id" class="lot-row" :class="{ 'en-deviation': l.deviation }" @click="ouvrirLot(l, 'pesee')" title="Ouvrir le suivi de fabrication de ce lot">
+                    <tr v-for="l in attenteReceptionList" :key="l.id" class="lot-row" :class="{ 'en-deviation': l.deviation || l.deviationCond }" @click="ouvrirLot(l, 'pesee')" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                       <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                     </tr>
@@ -694,7 +1278,7 @@ onMounted(async () => {
                 <div class="q-title attente">À peser — {{ attentePeseeList.length }} lot(s)</div>
                 <div v-if="attentePeseeList.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in attentePeseeList" :key="l.id" class="lot-row" :class="{ 'row-perime': l.perime, 'en-deviation': l.deviation }" @click="ouvrirLot(l, 'pesee')" title="Ouvrir le suivi de fabrication de ce lot">
+                    <tr v-for="l in attentePeseeList" :key="l.id" class="lot-row" :class="{ 'row-perime': l.perime, 'en-deviation': l.deviation || l.deviationCond }" @click="ouvrirLot(l, 'pesee')" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                       <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                       <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -724,7 +1308,7 @@ onMounted(async () => {
                 <div class="q-title cours">En cours — {{ ph.cours.length }} lot(s) · {{ fmtC(ph.volCours) }} bts</div>
                 <div v-if="ph.cours.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'en-deviation': l.deviation }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
+                    <tr v-for="l in ph.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'en-deviation': l.deviation || l.deviationCond }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                       <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                       <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -738,7 +1322,7 @@ onMounted(async () => {
                 <div class="q-title attente">En attente — {{ ph.attente.length }} lot(s) · {{ fmtC(ph.volAttente) }} bts</div>
                 <div v-if="ph.attente.length" class="prod-scroll">
                   <table class="grid"><tbody>
-                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'en-deviation': l.deviation }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
+                    <tr v-for="l in ph.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'en-deviation': l.deviation || l.deviationCond }" @click="ouvrirLot(l, ph.phase.key)" title="Ouvrir le suivi de fabrication de ce lot">
                       <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                       <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                       <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -774,7 +1358,7 @@ onMounted(async () => {
                   <div class="q-title cours">En cours — {{ g.cours.length }} lot(s) · {{ fmtC(g.volCours) }} bts</div>
                   <div v-if="g.cours.length" class="prod-scroll">
                     <table class="grid"><tbody>
-                      <tr v-for="l in g.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'en-deviation': l.deviation }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
+                      <tr v-for="l in g.cours" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'en-deviation': l.deviation || l.deviationCond }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
                         <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                         <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                         <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -787,7 +1371,7 @@ onMounted(async () => {
                   <div class="q-title attente">En attente — {{ g.attente.length }} lot(s) · {{ fmtC(g.volAttente) }} bts</div>
                   <div v-if="g.attente.length" class="prod-scroll">
                     <table class="grid"><tbody>
-                      <tr v-for="l in g.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'en-deviation': l.deviation }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
+                      <tr v-for="l in g.attente" :key="l.id" class="lot-row" :class="{ 'en-triage': l.triage, 'en-deviation': l.deviation || l.deviationCond }" @click="ouvrirLot(l, 'conditionnement')" title="Ouvrir ce lot dans le conditionnement">
                         <td><span class="pf">{{ l.lot }}</span> <span class="pd">{{ l.desig }}</span><span v-if="l.perime" class="perime-tag">OF périmé</span><span v-if="l.validite" class="lot-sub">Validité : {{ fmtDate(l.validite) }}</span></td>
                         <td class="num">{{ fmt(l.boites) }} <span class="unit">bts</span></td>
                         <td class="num age" :class="ageClass(l.date)" :title="l.date ? 'En stock depuis le ' + fmtDate(l.date) : ''">{{ joursDepuis(l.date) }}</td>
@@ -801,25 +1385,142 @@ onMounted(async () => {
           </section>
         </div>
         <section class="triage-box">
-          <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
+          <div class="triage-head">
+            <h3 class="triage-h">🔍 Lots en cours de triage ({{ lotsTriage.length }})</h3>
+            <label class="sac-poids" title="Utilisé pour les produits dont le poids de sac n'est pas renseigné">Poids de sac par défaut<input type="number" min="0.1" step="any" v-model.number="poidsSac" /> Kg</label>
+          </div>
+          <p v-if="majSac" class="sac-err">{{ majSac }}</p>
+          <div v-if="lotsTriage.length" class="tr-resume">
+            <span class="trr"><b>{{ fmt(resumeTriage.aTrier) }}</b> Kg à trier</span>
+            <span class="trr"><b>{{ fmt(resumeTriage.triee) }}</b> Kg triés</span>
+            <span class="trr trr-bar"><span class="trrb"><span class="trrf" :style="{ width: resumeTriage.pct + '%' }"></span></span><b>{{ resumeTriage.pct }} %</b></span>
+            <span v-if="resumeTriage.prets" class="trr ok">{{ resumeTriage.prets }} lot(s) à 100 % — à clore</span>
+            <span v-if="resumeTriage.vieux" class="trr ko">{{ resumeTriage.vieux }} lot(s) ouverts depuis plus de 14 j</span>
+          </div>
           <table v-if="lotsTriage.length" class="triage-tbl">
-            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th class="tnum">À trier (Kg)</th><th class="tnum">Triée (Kg)</th><th>Avancement</th><th></th></tr></thead>
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th class="tnum">Ouvert</th><th class="tnum">À trier (Kg)</th><th class="tnum">Triée (Kg)</th><th class="tnum">Sacs conformes</th><th>Avancement</th><th></th></tr></thead>
             <tbody>
-              <tr v-for="l in lotsTriage" :key="l.id" class="triage-row">
-                <td class="t-lot" @click="ouvrirTriageFin(l.id)" title="Ouvrir l'OF (date de fin de triage)">{{ l.lot }}</td>
-                <td @click="ouvrirTriageFin(l.id)">{{ l.code }} — {{ l.desig }}</td>
-                <td>{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
+              <template v-for="l in lotsTriage" :key="l.id">
+              <tr class="triage-row" :class="{ pret: pctTriage(l.id) >= 100, vieux: l.jours != null && l.jours > 14 }">
+                <td class="t-lot" @click="ouvrirTriageFin(l.id)" title="Ouvrir l'étape en triage pour saisir la date de fin">{{ l.lot }}</td>
+                <td class="t-prod" @click="ouvrirTriageFin(l.id)"><span class="t-code">{{ l.code }}</span><span v-if="l.desig" class="t-desig">{{ l.desig }}</span></td>
+                <td class="t-etape">{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
+                <td class="tnum t-age" :class="l.jours == null ? '' : (l.jours > 14 ? 'ko' : (l.jours > 7 ? 'warn' : ''))" :title="l.debut ? 'Triage ouvert le ' + l.debut : 'Date de début non renseignée'">{{ l.jours == null ? "—" : l.jours + " j" }}</td>
                 <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop /></td>
                 <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].triee" class="tq" @click.stop /></td>
+                <td class="tnum">
+                  <button type="button" class="sac-btn" :class="{ ok: nbSacs(l) > 0 && nbSacsCoches(l) >= nbSacs(l) }" :disabled="!nbSacs(l)" @click.stop="toggleSacs(l)" :title="nbSacs(l) ? 'Détail des sacs' : 'Renseigne les Kg à trier et le poids du sac'">
+                    {{ nbSacsCoches(l) }} / {{ nbSacs(l) || '—' }}<span v-if="nbSacs(l)" class="sac-caret">{{ sacsOuvert === l.id ? '▾' : '▸' }}</span>
+                  </button>
+                </td>
                 <td class="t-prog">
                   <div class="tp-bar"><div class="tp-fill" :class="{ full: pctTriage(l.id) >= 100 }" :style="{ width: pctTriage(l.id) + '%' }"></div></div>
-                  <span class="tp-pct">{{ pctTriage(l.id) }}%</span>
+                  <span class="tp-pct" :class="{ full: pctTriage(l.id) >= 100 }">{{ pctTriage(l.id) }}%</span>
                 </td>
-                <td><button class="tq-save" @click.stop="sauverTriage(l)" title="Enregistrer">💾</button></td>
+                <td class="t-act">
+                  <button v-if="estModifie(l)" class="tq-save dirty" @click.stop="sauverTriage(l)" title="Modifications non enregistrées — cliquer pour enregistrer">Enregistrer</button>
+                  <button v-else-if="pctTriage(l.id) >= 100" class="tq-clore" @click.stop="ouvrirTriageFin(l.id)" title="Saisir la date de fin de triage dans Suivi des phases">Clore ▸</button>
+                  <span v-else class="tq-ok" title="À jour">✓</span>
+                </td>
               </tr>
+              <tr v-if="sacsOuvert === l.id && nbSacs(l)" class="sac-detail">
+                <td colspan="9">
+                  <div class="sac-bar">
+                    <span class="sac-tit">{{ nbSacs(l) }} sacs — coche un sac quand son triage est terminé et conforme</span>
+                    <label class="sac-pp">Poids du sac · {{ l.code }}<input type="number" min="0" step="any" :value="poidsSacDe(l)" @change="sauverPoidsSac(l, $event.target.value)" title="Enregistré sur le produit, donc valable pour tous ses lots" /> Kg</label>
+                    <button type="button" class="sac-act" @click="cocherTousSacs(l)">Tout cocher</button>
+                    <button type="button" class="sac-act" @click="decocherTousSacs(l)">Tout décocher</button>
+                  </div>
+                  <div class="sac-grid">
+                    <button v-for="n in nbSacs(l)" :key="n" type="button" class="sac-chip" :class="{ on: sacCoche(l, n) }" @click="basculerSac(l, n)" :title="'Sac ' + n + (sacCoche(l, n) ? ' — conforme' : ' — à trier')">
+                      <span class="sac-tick">{{ sacCoche(l, n) ? '✓' : '' }}</span>{{ n }}
+                    </button>
+                  </div>
+                  <div class="sac-pied">{{ nbSacsCoches(l) }} / {{ nbSacs(l) }} sacs conformes · {{ pctSacs(l) }} % · {{ fmt(kgSacs(l)) }} Kg reportés automatiquement dans « Triée (Kg) »<span v-if="nbSacs(l) > 1"> · dernier sac : {{ fmt(Math.round((((qteEdit[l.id] || {}).aTrier || 0) - (nbSacs(l) - 1) * poidsSacDe(l)) * 100) / 100) }} Kg</span></div>
+                </td>
+              </tr>
+              </template>
             </tbody>
           </table>
           <p v-else class="triage-vide">Aucun lot coché « En triage fabrication » pour l'instant (case à cocher sur la page Ordres de fabrication).</p>
+        </section>
+        <section v-if="triagesClos.length" class="histo-box">
+          <div class="triage-head">
+            <h3 class="histo-h">📜 Historique des triages ({{ histoTotaux.n }})</h3>
+            <span v-if="histMsg" class="he-msg">{{ histMsg }}</span>
+            <div class="histo-act">
+              <span class="histo-res">{{ fmt(histoTotaux.kg) }} Kg triés<span v-if="histoTotaux.duree != null"> · {{ histoTotaux.duree }} j de durée moyenne</span></span>
+              <span v-if="cadenceTriage.globale" class="est-base">Estimation : {{ fmt(Math.round(cadenceTriage.globale)) }} Kg/j sur {{ cadenceTriage.n }} triage(s) mesuré(s)</span>
+              <select v-if="vueSynthese" v-model.number="anneeSynth" class="histo-an"><option v-for="a in anneesTriage" :key="a" :value="a">{{ a }}</option></select>
+              <button type="button" class="histo-bascule" @click="vueSynthese = !vueSynthese">{{ vueSynthese ? "Par lot" : "Par produit" }}</button>
+            </div>
+          </div>
+          <table v-if="vueSynthese" class="histo-tbl synth-tbl">
+            <thead><tr><th>Produit</th><th class="tnum">Lots fabriqués</th><th class="tnum">Lots triés</th><th class="tnum">Taux (lots)</th><th class="tnum">Boîtes fabriquées</th><th class="tnum">Taux (boîtes)</th><th class="tnum">Kg triés</th><th class="tnum">Durée moy.</th></tr></thead>
+            <tbody>
+              <tr v-for="e in syntheseProduits" :key="e.code">
+                <td class="q-at">{{ e.code }}<span v-if="e.desig" class="hdesig"> — {{ e.desig }}</span></td>
+                <td class="tnum">{{ fmt(e.lots) }}</td>
+                <td class="tnum strong">{{ fmt(e.lotsTri) }}<span v-if="e.lotsTri > 1" class="synth-rec" title="Triage récurrent sur ce produit">↻</span></td>
+                <td class="tnum" :class="{ ko: e.tauxLots >= 25 }">{{ e.tauxLots }} %</td>
+                <td class="tnum">{{ fmt(e.boites) }}</td>
+                <td class="tnum" :class="{ ko: e.tauxBoites >= 25 }">{{ e.tauxBoites }} %</td>
+                <td class="tnum">{{ fmt(e.kg) }}</td>
+                <td class="tnum">{{ e.duree == null ? "—" : e.duree + " j" }}</td>
+              </tr>
+              <tr v-if="!syntheseProduits.length"><td colspan="8" class="hd-vide">Aucun lot trié sur {{ anneeSynth }}.</td></tr>
+            </tbody>
+            <tfoot v-if="syntheseProduits.length">
+              <tr class="q-tot">
+                <td class="q-at">{{ syntheseTotaux.produits }} produit(s)</td>
+                <td class="tnum">{{ fmt(syntheseTotaux.lots) }}</td>
+                <td class="tnum">{{ fmt(syntheseTotaux.lotsTri) }}</td>
+                <td class="tnum">{{ syntheseTotaux.tauxLots }} %</td>
+                <td class="tnum">{{ fmt(syntheseTotaux.boites) }}</td>
+                <td class="tnum">{{ syntheseTotaux.tauxBoites }} %</td>
+                <td class="tnum">{{ fmt(syntheseTotaux.kg) }}</td>
+                <td class="tnum">—</td>
+              </tr>
+            </tfoot>
+          </table>
+          <table v-else class="histo-tbl">
+            <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th>Début</th><th>Fin</th><th class="tnum">Durée</th><th class="tnum" title="Durée attendue d'après les triages passés">Estimée</th><th class="tnum">À trier</th><th class="tnum">Triée</th><th class="tnum">Sacs</th><th></th></tr></thead>
+            <tbody>
+              <template v-for="h in triagesClos" :key="h.id">
+                <tr class="histo-row" :class="{ ouvert: histOuvert === h.id }" @click="toggleHist(h.id)">
+                  <td class="strong">{{ h.lot }}</td>
+                  <td>{{ h.code }}<span v-if="h.desig" class="hdesig"> — {{ h.desig }}</span></td>
+                  <td>{{ h.phase || "—" }}</td>
+                  <td><input v-if="histEdit && histEdit.id === h.id" v-model="histEdit.debut" type="date" class="he-in" @click.stop /><span v-else>{{ h.debut || "—" }}</span></td>
+                  <td class="strong"><input v-if="histEdit && histEdit.id === h.id" v-model="histEdit.fin" type="date" class="he-in" title="Vider ce champ rouvre le triage" @click.stop /><span v-else>{{ h.fin }}</span></td>
+                  <td class="tnum" :class="ecartEstim(h)">{{ h.duree != null ? h.duree + " j" : "—" }}</td>
+                  <td class="tnum est-col" :title="estimerDuree(h) ? sourceEstimation(h) : 'Pas assez de triages mesurés'">{{ estimerDuree(h) ? estimerDuree(h) + " j" : "—" }}</td>
+                  <td class="tnum"><input v-if="histEdit && histEdit.id === h.id" v-model.number="histEdit.aTrier" type="number" step="any" min="0" class="he-num" @click.stop /><span v-else>{{ fmt(h.aTrier) }}</span></td>
+                  <td class="tnum"><input v-if="histEdit && histEdit.id === h.id" v-model.number="histEdit.triee" type="number" step="any" min="0" class="he-num" @click.stop /><template v-else>{{ fmt(h.triee) }} <span class="hpct" :class="{ plein: h.pct >= 100 }" :title="h.sacsOk ? h.sacsOk + ' / ' + h.sacsTot + ' sacs conformes' : 'Taux calculé sur les Kg (pas de sacs enregistrés)'">({{ h.pct }} %)</span></template></td>
+                  <td class="tnum">{{ sacsDuLot(h.id).length || "—" }}<span v-if="sacsDuLot(h.id).length" class="sac-caret">{{ histOuvert === h.id ? "▾" : "▸" }}</span></td>
+                  <td class="he-act" @click.stop>
+                    <template v-if="histEdit && histEdit.id === h.id">
+                      <button type="button" class="he-ok" @click="enregistrerHist">Enregistrer</button>
+                      <button type="button" class="he-no" @click="annulerHist">Annuler</button>
+                    </template>
+                    <button v-else type="button" class="he-mod" @click="modifierHist(h)" title="Corriger les quantités ou les dates">✎</button>
+                  </td>
+                </tr>
+                <tr v-if="histOuvert === h.id" class="histo-detail">
+                  <td colspan="11">
+                    <div v-if="sacsDuLot(h.id).length" class="hd-liste">
+                      <div v-for="x in sacsDuLot(h.id)" :key="x.numero_sac" class="hd-sac">
+                        <span class="hd-num">Sac {{ x.numero_sac }}</span>
+                        <span class="hd-qui">{{ x.coche_par || "auteur inconnu" }}</span>
+                        <span class="hd-quand">{{ dateHeure(x.coche_le) }}</span>
+                      </div>
+                    </div>
+                    <p v-else class="hd-vide">Aucun sac enregistré pour ce lot : le triage a été clos avant la mise en place du suivi par sac.</p>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
         </section>
       </div>
 
@@ -1101,9 +1802,78 @@ onMounted(async () => {
 .atelier-titre { font-size: 10.5px; margin: 0 0 3px; }
 .at-plan { font-size: 9px; }
 .searchbar input[type=text] { padding: 4px 8px; font-size: 10.5px; }
+/* Qualité — triage et déviations */
+.qual-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.qual-h { margin: 0 0 12px; font-size: 15px; font-weight: 800; color: #0f172a; }
+/* 7 colonnes fixes : les deux bandeaux (File de production et Qualité) s'alignent colonne par
+   colonne. En auto-fit, un bandeau de 7 tuiles et un de 11 ne donnaient pas la même largeur. */
+.qual-kpis { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 9px; margin-bottom: 12px; }
+.qual-kpis .kpi { padding: 10px 12px; border-radius: 10px; box-shadow: none; }
+.qual-kpis .kpi-val { font-size: 19px; }
+.qual-kpis .kpi-val-sm { font-size: 13px; }
+.qual-kpis .kpi-lbl { font-size: 10.5px; margin-top: 2px; line-height: 1.25; }
+@media (max-width: 1200px) { .qual-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 900px)  { .qual-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px)  { .qual-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.qual-sub { margin: 0 0 6px; font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: #94a3b8; }
+.qual-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.qual-tbl th { text-align: left; font-size: 11px; color: #64748b; font-weight: 700; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+.qual-tbl td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
+.qual-tbl .qnum { text-align: right; white-space: nowrap; }
+.qual-tbl .q-at { font-weight: 600; }
+.qual-tbl .q-warn { color: #b45309; font-weight: 700; }
+.qual-tbl .q-bad { color: #dc2626; font-weight: 700; }
+.qual-tbl .q-bts { color: #0f766e; font-weight: 700; }
+.qual-tbl .q-bts .unit { font-size: 10px; font-weight: 600; color: #94a3b8; }
+.qual-tbl .q-tot td { border-top: 2px solid #e2e8f0; border-bottom: none; font-weight: 800; background: #f8fafc; }
+.qual-tbl .qcharge-h { min-width: 190px; }
+.q-charge { display: flex; align-items: center; gap: 9px; }
+.qc-bar { flex: 1; min-width: 60px; height: 13px; background: #ecfeff; border-radius: 999px; overflow: hidden; }
+.qc-fill { height: 100%; background: linear-gradient(90deg, #22d3ee, #0891b2); border-radius: 999px; min-width: 2px; transition: width .3s ease; }
+.qc-val { font-size: 12px; font-weight: 800; color: #0891b2; white-space: nowrap; }
+.qc-att { font-weight: 600; color: #94a3b8; font-size: 10px; }
+.qc-enc { font-weight: 600; color: #64748b; font-size: 10px; }
+.qc-tot { font-size: 13px; font-weight: 800; color: #0891b2; white-space: nowrap; }
+.qual-tbl .q-clic { cursor: pointer; user-select: none; }
+.qual-tbl .q-clic:hover { text-decoration: underline; }
+.q-caret { font-size: 9px; margin-left: 4px; color: #94a3b8; }
+.q-detail > td { background: #fff7f7; padding: 8px 10px; }
+.qd-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.qd-tbl th { text-align: left; font-size: 10px; color: #94a3b8; font-weight: 700; padding: 3px 6px; }
+.qd-tbl td { padding: 4px 6px; border-top: 1px solid #fee2e2; color: #1e293b; }
+.qd-tbl tbody tr { cursor: pointer; transition: background .12s; }
+.qd-tbl tbody tr:hover { background: #fee2e2; }
+.qd-lot { font-weight: 700; }
+.qd-tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; margin-right: 4px; }
+.qd-fab { background: #fee2e2; color: #b91c1c; }
+.qd-cond { background: #ffe4e6; color: #9f1239; }
 /* Lots en cours de triage */
 .triage-box { background: #fef3c7; border: 1px solid #fde68a; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
 .triage-h { margin: 0 0 10px; font-size: 15px; font-weight: 800; color: #92400e; }
+/* En-tête de l'encadré : titre et poids par défaut sur UNE seule ligne */
+.triage-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: nowrap; margin-bottom: 10px; }
+.triage-head .triage-h { margin: 0; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sac-poids { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; font-size: 11px; font-weight: 700; color: #92400e; white-space: nowrap; }
+.sac-poids input { width: 62px; padding: 3px 6px; border: 1px solid #fcd34d; border-radius: 6px; font: inherit; font-size: 12px; text-align: right; }
+.sac-pp { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #92400e; white-space: nowrap; }
+.sac-pp input { width: 62px; padding: 3px 6px; border: 1px solid #fcd34d; border-radius: 6px; font: inherit; font-size: 12px; text-align: right; }
+.sac-err { margin: 6px 0 0; font-size: 12px; font-weight: 700; color: #b91c1c; }
+.sac-btn { background: none; border: 1px solid #fcd34d; border-radius: 7px; padding: 2px 8px; font: inherit; font-size: 12px; font-weight: 800; color: #b45309; cursor: pointer; white-space: nowrap; }
+.sac-btn:hover:not(:disabled) { background: #fffbeb; }
+.sac-btn:disabled { opacity: .45; cursor: default; color: #a16207; }
+.sac-btn.ok { color: #15803d; border-color: #86efac; background: #f0fdf4; }
+.sac-caret { font-size: 9px; margin-left: 4px; opacity: .65; }
+.sac-detail > td { background: #fffdf5; padding: 10px 12px; }
+.sac-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.sac-tit { font-size: 11px; font-weight: 700; color: #92400e; }
+.sac-act { background: #fff; border: 1px solid #fcd34d; border-radius: 999px; padding: 2px 10px; font: inherit; font-size: 11px; font-weight: 700; color: #b45309; cursor: pointer; }
+.sac-act:hover { background: #fef3c7; }
+.sac-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.sac-chip { display: inline-flex; align-items: center; gap: 3px; min-width: 46px; justify-content: center; padding: 5px 8px; border: 1px solid #fcd34d; border-radius: 8px; background: #fff; font: inherit; font-size: 12px; font-weight: 700; color: #92400e; cursor: pointer; transition: background .12s, border-color .12s, color .12s; }
+.sac-chip:hover { background: #fffbeb; }
+.sac-chip.on { background: #dcfce7; border-color: #86efac; color: #15803d; }
+.sac-tick { font-size: 11px; }
+.sac-pied { margin-top: 8px; font-size: 11px; font-weight: 700; color: #a16207; }
 .triage-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .triage-tbl th { text-align: left; font-size: 11px; color: #a16207; padding: 4px 8px; border-bottom: 1px solid #fde68a; }
 .triage-tbl td { padding: 5px 8px; border-bottom: 1px solid #fde68a55; color: #451a03; }
@@ -1134,7 +1904,72 @@ onMounted(async () => {
 .lot-row.en-triage-cond { background: #fef3c7; }
 .lot-row.en-triage-cond > td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
 .lot-row.en-triage-cond .pf::after { content: ' 🔍 triage cond.'; color: #b45309; font-size: .78em; font-weight: 700; }
+.tr-resume { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 8px 0 4px; font-size: 11px; color: #92400e; }
+.trr { white-space: nowrap; }
+.trr b { font-size: 13px; font-weight: 800; }
+.trr-bar { display: flex; align-items: center; gap: 7px; }
+.trrb { width: 110px; height: 7px; background: #fde68a; border-radius: 999px; overflow: hidden; }
+.trrf { display: block; height: 100%; background: #b45309; border-radius: 999px; transition: width .3s ease; }
+.trr.ok { color: #15803d; font-weight: 800; }
+.trr.ko { color: #b91c1c; font-weight: 800; }
+.t-prod { line-height: 1.2; }
+.t-code { display: block; font-weight: 700; }
+.t-desig { display: block; font-size: 10px; color: #a16207; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-etape { font-size: 11px; }
+.t-age { font-weight: 700; }
+.t-age.warn { color: #b45309; }
+.t-age.ko { color: #b91c1c; }
+.triage-row.pret { background: rgba(34, 197, 94, .09); }
+.triage-row.vieux td:first-child { box-shadow: inset 3px 0 0 #dc2626; }
+.tp-pct.full { color: #15803d; }
+.t-act { white-space: nowrap; }
+.tq-save.dirty { background: #b45309; color: #fff; border: 0; border-radius: 7px; padding: 3px 10px; font-size: 11px; font-weight: 800; cursor: pointer; }
+.tq-save.dirty:hover { background: #92400e; }
+.tq-clore { background: #dcfce7; color: #15803d; border: 1px solid #86efac; border-radius: 7px; padding: 3px 10px; font-size: 11px; font-weight: 800; cursor: pointer; }
+.tq-clore:hover { background: #bbf7d0; }
+.tq-ok { color: #86efac; font-weight: 800; font-size: 13px; }
 .triage-vide { font-size: 12px; color: #92400e; margin: 0; }
+/* Historique des triages */
+.histo-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; margin: 14px 0 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.histo-h { margin: 0; font-size: 14px; font-weight: 800; color: #0f172a; }
+.histo-res { font-size: 11px; font-weight: 700; color: #64748b; white-space: nowrap; }
+.histo-act { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.histo-an { font-size: 11px; font-weight: 700; padding: 2px 6px; border: 1px solid #e2e8f0; border-radius: 7px; background: #fff; color: #334155; }
+.histo-bascule { border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca; border-radius: 999px; padding: 3px 12px; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.histo-bascule:hover { background: #e0e7ff; }
+.synth-tbl .strong { font-weight: 800; }
+.synth-tbl .ko { color: #b91c1c; font-weight: 800; }
+.synth-rec { margin-left: 4px; font-size: 11px; color: #b45309; }
+.histo-tbl { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+.histo-tbl th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .02em; color: #94a3b8; font-weight: 800; padding: 4px 7px; border-bottom: 1px solid #e2e8f0; }
+.histo-tbl td { padding: 4px 7px; border-bottom: 1px solid #f1f5f9; color: #1e293b; white-space: nowrap; }
+.histo-tbl .tnum { text-align: right; }
+.histo-tbl .strong { font-weight: 700; }
+.hdesig { color: #94a3b8; }
+.hpct { font-size: 10px; color: #94a3b8; font-weight: 600; }
+.hpct.plein { color: #15803d; font-weight: 800; }
+.he-in, .he-num { font: inherit; font-size: 11px; padding: 2px 5px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; }
+.he-num { width: 78px; text-align: right; }
+.he-in { width: 122px; }
+.he-act { white-space: nowrap; text-align: right; }
+.he-mod { border: 0; background: none; cursor: pointer; font-size: 13px; opacity: .55; }
+.he-mod:hover { opacity: 1; }
+.he-ok { background: #0f766e; color: #fff; border: 0; border-radius: 6px; padding: 2px 9px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.he-no { background: #fff; color: #64748b; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 9px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; margin-left: 4px; }
+.he-msg { font-size: 11px; font-weight: 700; color: #0f766e; }
+.est-col { color: #6d28d9; font-weight: 700; }
+.est-long { color: #b91c1c; font-weight: 800; }
+.est-court { color: #15803d; font-weight: 800; }
+.est-base { font-size: 10.5px; font-weight: 700; color: #6d28d9; white-space: nowrap; }
+.histo-row { cursor: pointer; transition: background .12s; }
+.histo-row:hover, .histo-row.ouvert { background: #f8fafc; }
+.histo-detail > td { background: #f8fafc; padding: 8px 10px; }
+.hd-liste { display: flex; flex-wrap: wrap; gap: 6px; }
+.hd-sac { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 9px; font-size: 11px; }
+.hd-num { font-weight: 800; color: #15803d; }
+.hd-qui { color: #475569; font-weight: 600; }
+.hd-quand { color: #94a3b8; }
+.hd-vide { margin: 0; font-size: 11px; color: #94a3b8; font-style: italic; }
 .triage-vide code { background: #fde68a; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
 
 /* ============================================================= *
@@ -1173,15 +2008,6 @@ select:focus, input:focus { outline: none !important; border-color: #06b6d4 !imp
 .searchbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .filtre-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #475569; cursor: pointer; white-space: nowrap; padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; }
 .filtre-chk input { accent-color: #0891b2; width: 15px; height: 15px; }
-.charge-card { margin: 10px 0 0; }
-.charge-list { display: flex; flex-direction: column; gap: 5px; }
-.charge-row { display: grid; grid-template-columns: 160px 1fr auto; align-items: center; gap: 10px; }
-.charge-lbl { font-size: 12px; font-weight: 600; color: #334155; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.charge-bar-wrap { background: #ecfeff; border-radius: 999px; height: 13px; overflow: hidden; }
-.charge-bar { height: 100%; background: linear-gradient(90deg, #22d3ee, #0891b2); border-radius: 999px; min-width: 2px; transition: width .3s ease; }
-.charge-val { font-size: 12px; font-weight: 800; color: #0891b2; white-space: nowrap; min-width: 30px; text-align: right; }
-.charge-att { font-weight: 600; color: #94a3b8; font-size: 10px; }
-@media (max-width: 700px) { .charge-row { grid-template-columns: 100px 1fr auto; } .charge-lbl { font-size: 10px; } }
 
 /* Tuile KPI à valeur texte (ex. atelier le plus chargé) : police réduite */
 .kpi-val.kpi-val-sm { font-size: 12px !important; line-height: 1.2; word-break: break-word; }
