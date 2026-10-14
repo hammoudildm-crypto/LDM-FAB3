@@ -306,9 +306,16 @@ async function chargerBase() {
   if (rp.error) { erreur.value = rp.error.message; return }
   params.value = rp.data || []
   const rpr = await supabase.from('produits').select('id, code_pf, designation').order('code_pf')
-  // On ne garde que les produits ayant au moins une mesure saisie (données remplies)
-  const rids = await supabase.from('pqr_mesures').select('produit_id')
-  const avecData = new Set((rids.data || []).map(x => Number(x.produit_id)))
+  // On ne garde que les produits ayant au moins une mesure saisie (données remplies).
+  // Pagination : l'API plafonne à 1000 lignes ; sans ça, les mesures d'un produit
+  // récent (au-delà des 1000 premières lignes) seraient ignorées → produit absent.
+  const avecData = new Set()
+  for (let from = 0; from < 500000; from += 1000) {
+    const r = await supabase.from('pqr_mesures').select('produit_id').range(from, from + 999)
+    if (r.error || !r.data || !r.data.length) break
+    for (const x of r.data) if (x.produit_id != null) avecData.add(Number(x.produit_id))
+    if (r.data.length < 1000) break
+  }
   if (!rpr.error) produits.value = (rpr.data || []).filter(pr => avecData.has(Number(pr.id)))
 }
 onMounted(chargerBase)
@@ -318,9 +325,15 @@ watch(produitSel, async (pid) => {
   if (!pid) return
   const rs = await supabase.from('pqr_specs_produit').select('*').eq('produit_id', Number(pid))
   if (!rs.error) { const by = {}; for (const s of (rs.data || [])) by[s.parametre_id] = s; specByParam.value = by }
-  const rm = await supabase.from('pqr_mesures').select('*').eq('produit_id', Number(pid))
-  if (rm.error) { erreur.value = rm.error.message; return }
-  mesures.value = rm.data || []
+  const allM = []
+  for (let from = 0; from < 500000; from += 1000) {
+    const rm = await supabase.from('pqr_mesures').select('*').eq('produit_id', Number(pid)).range(from, from + 999)
+    if (rm.error) { erreur.value = rm.error.message; return }
+    const chunk = rm.data || []
+    allM.push(...chunk)
+    if (chunk.length < 1000) break
+  }
+  mesures.value = allM
   paramSel.value = synthese.value.length ? synthese.value[0].id : null
 })
 
