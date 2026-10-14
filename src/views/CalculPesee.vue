@@ -20,7 +20,7 @@
       </label>
       <p v-if="produitSel && configParProduit[produitSel]" class="cfg-note ok-note">✓ Méthode(s) et quantités théoriques chargées depuis la configuration du produit.</p>
       <p v-else-if="produitSel" class="cfg-note">Aucune configuration pour ce produit. <router-link to="/referentiels" class="lnk">Configurer dans Référentiels</router-link></p>
-      <p v-if="nbFracNum > 1 && totalTheoAPIFrac != null" class="frac-note">Lot divisé en <b>{{ nbFracNum }} fractions</b> → pesée d'<b>1 fraction</b> : API <b>{{ fmt(totalTheoAPIFrac) }} {{ unite }}</b><span v-if="theoExcFrac != null">, excipient <b>{{ fmt(theoExcFrac) }} {{ unite }}</b></span>. À répéter {{ nbFracNum }} fois.</p>
+      <p v-if="nbFracNum > 1 && totalTheoAPIFrac != null" class="frac-note">Pesée <b>globale du lot</b> : API <b>{{ fmt(totalTheoAPIFrac) }} {{ unite }}</b><span v-if="theoExcFrac != null">, excipient <b>{{ fmt(theoExcFrac) }} {{ unite }}</b></span> — répartis en <b>{{ nbFracNum }} fractions</b> de <b>{{ fmt(totalTheoAPIFrac / nbFracNum) }} {{ unite }}</b> API<span v-if="theoExcFrac != null"> + {{ fmt(theoExcFrac / nbFracNum) }} {{ unite }} excipient</span> chacune.</p>
     </section>
 
     <section class="card" v-for="(ap, ai) in apis" :key="ai">
@@ -93,11 +93,11 @@
       <div class="recap">
         <div class="recap-row" v-for="(l, i) in recapFraction" :key="i">
           <span class="recap-nom">{{ l.nom }} <span class="recap-type" :class="l.type === 'Excipient' ? 'exc' : 'api'">{{ l.type }}</span></span>
-          <span class="recap-q"><b>{{ fmt(l.reel) }}</b> {{ unite }}</span>
+          <span class="recap-q"><b>{{ fmt(l.reel / nbFracNum) }}</b> {{ unite }}</span>
         </div>
         <div class="recap-row recap-tot">
           <span class="recap-nom">Total fraction</span>
-          <span class="recap-q"><b>{{ fmt(totalReel) }}</b> {{ unite }}</span>
+          <span class="recap-q"><b>{{ fmt(totalReel / nbFracNum) }}</b> {{ unite }}</span>
         </div>
       </div>
     </section>
@@ -110,13 +110,13 @@
           <tbody>
             <tr v-for="f in nbFracNum" :key="f">
               <td>Fraction {{ f }} / {{ nbFracNum }}</td>
-              <td v-for="(c, i) in recapFraction" :key="i" class="r">{{ fmt(c.reel) }}</td>
-              <td class="r b">{{ fmt(totalReel) }}</td>
+              <td v-for="(c, i) in recapFraction" :key="i" class="r">{{ fmt(c.reel / nbFracNum) }}</td>
+              <td class="r b">{{ fmt(totalReel / nbFracNum) }}</td>
             </tr>
             <tr class="tot">
               <td>Lot complet</td>
-              <td v-for="(c, i) in recapFraction" :key="i" class="r">{{ fmt(c.reel * nbFracNum) }}</td>
-              <td class="r b">{{ fmt(totalReel * nbFracNum) }}</td>
+              <td v-for="(c, i) in recapFraction" :key="i" class="r">{{ fmt(c.reel) }}</td>
+              <td class="r b">{{ fmt(totalReel) }}</td>
             </tr>
           </tbody>
         </table>
@@ -125,7 +125,7 @@
 
     <section class="card" v-if="totalReelAPI != null || titreInvalide">
       <h2 class="card-title">Détail par lot</h2>
-      <p v-if="nbFracNum > 1" class="frac-banner">Pesée d'<b>une fraction</b> — à répéter <b>{{ nbFracNum }} fois</b> pour le lot complet.</p>
+      <p v-if="nbFracNum > 1" class="frac-banner">Quantités <b>totales du lot</b> (toutes fractions confondues). La répartition par fraction est indiquée plus haut.</p>
       <p v-if="titreInvalide" class="alert">Un lot a un titre invalide (≤ 0). Vérifie le dosage et la LOD.</p>
       <p v-if="excipientNegatif" class="alert">⚠ Excipient négatif : la quantité réelle totale d'API dépasse la masse théorique. Vérifie les titres et les quantités.</p>
 
@@ -290,7 +290,7 @@ function labelCourt(methode) {
 // Calcul d'une API (quantité d'une fraction = théorique lot ÷ nombre de fractions)
 function calcUneAPI(api) {
   const { conv, plafond, direct } = methodeInfo(api.methode, api.convPerso)
-  const totalFrac = (!vide(api.theoTotal) && Number(api.theoTotal) >= 0) ? Number(api.theoTotal) / nbFracNum.value : null
+  const totalFrac = (!vide(api.theoTotal) && Number(api.theoTotal) >= 0) ? Number(api.theoTotal) : null
   let remaining = totalFrac
   const lots = []
   for (let i = 0; i < api.lots.length; i++) {
@@ -336,7 +336,7 @@ const totalReelAPI = computed(() => {
   return any ? s : null
 })
 const titreInvalide = computed(() => apisCalc.value.some(ap => ap.titreInvalide))
-const theoExcFrac = computed(() => (!vide(theoExc.value) && Number(theoExc.value) >= 0) ? Number(theoExc.value) / nbFracNum.value : null)
+const theoExcFrac = computed(() => (!vide(theoExc.value) && Number(theoExc.value) >= 0) ? Number(theoExc.value) : null)
 const reelExc = computed(() => {
   const tra = totalReelAPI.value, tta = totalTheoAPIFrac.value, te = theoExcFrac.value
   if (te == null) return null
