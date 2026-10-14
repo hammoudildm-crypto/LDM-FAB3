@@ -89,6 +89,7 @@ const hist = ref([])
 const ofs = ref([])
 const histLots = ref([])   // historique des lots par phase (TDB importé)
 const planRows = ref([])    // PDP : quantités planifiées par produit et mois
+const produitsMap = ref({}) // code_pf -> { taille, pcsu } pour boîtes & CA
 const erreur = ref('')
 const chargement = ref(true)
 
@@ -117,11 +118,13 @@ async function charger() {
   if (!rc.error) conds.value = rc.data || []
   const rh = await fetchAllPaged(() => supabase.from('production_historique').select('annee, mois, etape, nb_lots'))
   if (!rh.error) hist.value = rh.data || []
-  const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, date_fin_fabrication, produits(code_pf, designation)').eq('actif', true))
+  const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, date_fin_fabrication, produits(code_pf, designation, taille_lot, pcsu)').eq('actif', true))
   if (!ro.error) ofs.value = ro.data || []
   const rhl = await fetchAllPaged(() => supabase.from('historique_lots_phases')
     .select('numero_lot, code_pf, designation, phase, date_fin'))
   if (!rhl.error) histLots.value = rhl.data || []
+  const rpd = await fetchAllPaged(() => supabase.from('produits').select('code_pf, taille_lot, pcsu'))
+  if (!rpd.error) { const m = {}; for (const p of (rpd.data || [])) m[p.code_pf] = { taille: Number(p.taille_lot || 0), pcsu: Number(p.pcsu || 0) }; produitsMap.value = m }
   const rpl = await fetchAllPaged(() => supabase.from('plan_production')
     .select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot)'))
   if (!rpl.error) planRows.value = rpl.data || []   // table absente -> on reste sur le temps réel
@@ -161,10 +164,60 @@ const histParAn = computed(() => {
   }
   return m
 })
+// Type d'analyse de la comparaison mensuelle : 'lots' | 'boites' | 'ca'
+const metrique = ref('lots')
+const METRIQUES = [
+  { id: 'lots', label: 'Lots', court: 'lots' },
+  { id: 'boites', label: 'Boîtes', court: 'boîtes' },
+  { id: 'ca', label: "Chiffre d'affaires", court: 'CA' }
+]
+const ofValMap = computed(() => { const m = {}; for (const o of ofs.value) { const p = o.produits || {}; m[o.id] = { taille: Number(p.taille_lot || 0), pcsu: Number(p.pcsu || 0) } } return m })
+// Matrices BOÎTES & CA en temps réel (suivi + conditionnement + OF), valeur = taille_lot (boîtes) / taille_lot × pcsu (CA)
+const liveValParAn = computed(() => {
+  const boites = {}, ca = {}, vus = {}
+  const add = (ph, ordreId, d) => {
+    if (/^(granulation|s[ée]chage)$/i.test(String(ph).trim())) ph = 'Granulation et Séchage'
+    if (!d || ordreId == null || !PHASES.includes(ph)) return
+    const v = ofValMap.value[ordreId]; if (!v) return
+    const dt = new Date(d); if (isNaN(dt)) return
+    const y = dt.getFullYear(), mo = dt.getMonth(), cle = ph + '|' + y + '|' + mo
+    if (!vus[cle]) vus[cle] = new Set()
+    if (vus[cle].has(ordreId)) return
+    vus[cle].add(ordreId)
+    if (!boites[ph]) boites[ph] = {}; if (!boites[ph][y]) boites[ph][y] = Array(12).fill(0); boites[ph][y][mo] += v.taille
+    if (!ca[ph]) ca[ph] = {}; if (!ca[ph][y]) ca[ph][y] = Array(12).fill(0); ca[ph][y][mo] += v.taille * v.pcsu
+  }
+  for (const sp of phases.value) if (sp.date_phase) add(sp.phase, sp.ordre_id, sp.date_phase)
+  for (const c of conds.value) add('Conditionnement', c.ordre_id, c.date_fin || c.date_conditionnement)
+  for (const o of ofs.value) add('Livraison Vrac', o.id, o.date_fin_fabrication)
+  return { boites, ca }
+})
+// Matrices BOÎTES & CA historiques (historique_lots_phases a le code_pf -> produit)
+const histValParAn = computed(() => {
+  const boites = {}, ca = {}, vus = {}
+  for (const h of histLots.value) {
+    let ph = h.phase; if (/^(granulation|s[ée]chage)$/i.test(String(ph).trim())) ph = 'Granulation et Séchage'
+    if (!h.date_fin || !PHASES.includes(ph)) continue
+    const prod = produitsMap.value[h.code_pf]; if (!prod) continue
+    const dt = new Date(h.date_fin); if (isNaN(dt)) continue
+    const y = dt.getFullYear(), mo = dt.getMonth(), cle = ph + '|' + y + '|' + mo, key = h.numero_lot || h.code_pf
+    if (!vus[cle]) vus[cle] = new Set()
+    if (vus[cle].has(key)) continue
+    vus[cle].add(key)
+    if (!boites[ph]) boites[ph] = {}; if (!boites[ph][y]) boites[ph][y] = Array(12).fill(0); boites[ph][y][mo] += prod.taille
+    if (!ca[ph]) ca[ph] = {}; if (!ca[ph][y]) ca[ph][y] = Array(12).fill(0); ca[ph][y][mo] += prod.taille * prod.pcsu
+  }
+  return { boites, ca }
+})
 // Valeurs mensuelles d'une étape pour une année : historique si année passée, sinon temps réel
-function valeurs(stage, year) {
-  const h = (histParAn.value[stage] && histParAn.value[stage][year]) ? histParAn.value[stage][year] : null
-  const l = (liveParAn.value[stage] && liveParAn.value[stage][year]) ? liveParAn.value[stage][year] : null
+function valeurs(stage, year, metric) {
+  metric = metric || 'lots'
+  let hSrc, lSrc
+  if (metric === 'boites') { hSrc = histValParAn.value.boites; lSrc = liveValParAn.value.boites }
+  else if (metric === 'ca') { hSrc = histValParAn.value.ca; lSrc = liveValParAn.value.ca }
+  else { hSrc = histParAn.value; lSrc = liveParAn.value }
+  const h = (hSrc[stage] && hSrc[stage][year]) ? hSrc[stage][year] : null
+  const l = (lSrc[stage] && lSrc[stage][year]) ? lSrc[stage][year] : null
   if (year < anneeCourante) return h || Array(12).fill(0)                 // années passées : historique importé
   const hh = h || Array(12).fill(0), ll = l || Array(12).fill(0)
   return hh.map((v, i) => v > 0 ? v : ll[i])                              // année en cours : historique à ce jour, sinon temps réel
@@ -211,6 +264,13 @@ const COULEURS_ANNEES = ['#cbd5e1', '#60a5fa', '#2dd4bf', '#0f766e']
 const matriceMultiAn = computed(() => {
   const m = {}
   for (const ph of PHASES) { m[ph] = {}; for (const y of ANNEES_COMP) m[ph][y] = valeurs(ph, y) }
+  return m
+})
+// Même matrice, mais selon le type d'analyse choisi (lots / boîtes / CA) — pilote le graphe « Comparaison mensuelle par atelier »
+const matriceChart = computed(() => {
+  if (metrique.value === 'lots') return matriceMultiAn.value
+  const m = {}
+  for (const ph of PHASES) { m[ph] = {}; for (const y of ANNEES_COMP) m[ph][y] = valeurs(ph, y, metrique.value) }
   return m
 })
 function seriesAtelier(ph) {
@@ -366,13 +426,13 @@ const seriesChart = computed(() => {
   const ans = ANNEES_COMP.filter(y => anneesActives.value.has(y))
   const base = ans.map(y => ({
     label: String(y), color: COULEURS_ANNEES[ANNEES_COMP.indexOf(y)] || '#0f766e',
-    data: matriceMultiAn.value[atelierSel.value][y]
+    data: matriceChart.value[atelierSel.value][y]
   }))
   if (!montrerTendance.value) return base
   const trends = ans.map(y => ({
     label: y + ' · tendance',
     color: COULEURS_ANNEES[ANNEES_COMP.indexOf(y)] || '#0f766e',
-    data: tendance(matriceMultiAn.value[atelierSel.value][y], y >= anneeCourante ? moisCourant : 12)
+    data: tendance(matriceChart.value[atelierSel.value][y], y >= anneeCourante ? moisCourant : 12)
   }))
   return [...base, ...trends]
 })
@@ -421,7 +481,7 @@ const lotsMoisPA = computed(() => {
 })
 const valeurBarrePA = computed(() => {
   const m = modalPA.value; if (!m) return 0
-  const d = matriceMultiAn.value[atelierSel.value]
+  const d = matriceChart.value[atelierSel.value]
   return d && d[m.annee] ? d[m.annee][m.mois] : 0
 })
 // La valeur affichée vient-elle de l'historique importé (compteurs seuls, sans lots) ?
@@ -433,6 +493,28 @@ const sourceHistPA = computed(() => {
 })
 
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR') }
+// Valeur complète selon le type d'analyse (lots / boîtes = entier ; CA = montant en DA)
+function fmtMetrique(n) {
+  if (n == null) return '—'
+  if (metrique.value === 'ca') return Number(Math.round(n)).toLocaleString('fr-FR') + ' DA'
+  return Number(Math.round(n)).toLocaleString('fr-FR')
+}
+// Valeur compacte pour les étiquettes du graphe (le CA est abrégé en k / M)
+function fmtValChart(n) {
+  if (n == null) return ''
+  if (metrique.value === 'ca') {
+    const v = Number(n)
+    if (v >= 1e6) return (Math.round(v / 1e5) / 10).toLocaleString('fr-FR') + ' M'
+    if (v >= 1e3) return Math.round(v / 1e3).toLocaleString('fr-FR') + ' k'
+    return Math.round(v).toLocaleString('fr-FR')
+  }
+  return Number(Math.round(n)).toLocaleString('fr-FR')
+}
+const sousTitreChart = computed(() => {
+  if (metrique.value === 'boites') return 'boîtes produites par mois (valeur nominale = taille du lot)'
+  if (metrique.value === 'ca') return "chiffre d'affaires nominal par mois (taille du lot × prix de cession)"
+  return 'lots terminés par mois'
+})
 
 // ===== Génération .xlsx intégrée : aucune dépendance, aucun fichier externe =====
 // Écriture d'un vrai fichier .xlsx sans aucune dépendance.
@@ -655,10 +737,15 @@ onMounted(charger)
       </aside>
         <div class="pa-content">
       <section class="card">
-        <div class="card-head"><h2 class="card-title">Comparaison mensuelle par atelier</h2></div>
-        <div class="chart-titre">{{ atelierSel }} — lots terminés par mois</div>
+        <div class="card-head">
+          <h2 class="card-title">Comparaison mensuelle par atelier</h2>
+          <div class="pa-metric-tg" role="group" aria-label="Type d'analyse">
+            <button v-for="m in METRIQUES" :key="m.id" type="button" :class="{ on: metrique === m.id }" @click="metrique = m.id">{{ m.label }}</button>
+          </div>
+        </div>
+        <div class="chart-titre">{{ atelierSel }} — {{ sousTitreChart }}</div>
         <div class="chart-wrap">
-          <MiniChart v-if="seriesChart.length" :series="seriesChart" :labels="MOIS" :show-switch="true" :show-values="true" :current-index="moisCourant" :current-serie="idxSerieAnneeCourante" clickable @pick="ouvrirBarrePA" />
+          <MiniChart v-if="seriesChart.length" :series="seriesChart" :labels="MOIS" :show-switch="true" :show-values="true" :value-format="fmtValChart" :current-index="moisCourant" :current-serie="idxSerieAnneeCourante" clickable @pick="ouvrirBarrePA" />
           <p v-else class="empty">Sélectionne au moins une année pour afficher le graphe.</p>
         </div>
       </section>
@@ -804,7 +891,7 @@ onMounted(charger)
           <h3>{{ atelierSel }} — {{ MOIS_LONG[modalPA.mois] }} {{ modalPA.annee }}</h3>
           <button class="pa-md-x" @click="modalPA = null">✕</button>
         </div>
-        <div class="pa-md-sub">{{ fmt(valeurBarrePA) }} lot(s) terminé(s)<span v-if="lotsMoisPA.length"> · {{ lotsMoisPA.length }} détaillé(s)</span></div>
+        <div class="pa-md-sub"><template v-if="metrique === 'lots'">{{ fmtMetrique(valeurBarrePA) }} lot(s) terminé(s)</template><template v-else-if="metrique === 'boites'">{{ fmtMetrique(valeurBarrePA) }} boîte(s) · valeur nominale</template><template v-else>{{ fmtMetrique(valeurBarrePA) }} · CA nominal</template><span v-if="lotsMoisPA.length"> · {{ lotsMoisPA.length }} lot(s) détaillé(s)</span></div>
         <div class="pa-md-body">
           <p v-if="sourceHistPA && !lotsMoisPA.length" class="pa-note">Valeur issue de l'<strong>historique importé</strong> — le détail des lots n'est pas disponible pour ce mois.</p>
           <div v-else-if="!lotsMoisPA.length" class="empty">Aucun lot pour ce mois.</div>
@@ -866,6 +953,11 @@ onMounted(charger)
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 7px 10px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .card-title { margin: 0; font-size: 13px; }
+.pa-metric-tg { margin-left: auto; display: inline-flex; gap: 0; border: 1px solid #cbd5e1; border-radius: 9px; overflow: hidden; background: #f8fafc; flex-wrap: nowrap; }
+.pa-metric-tg button { font: inherit; font-size: 11px; font-weight: 600; padding: 6px 12px; border: 0; border-left: 1px solid #e2e8f0; background: transparent; color: #64748b; cursor: pointer; white-space: nowrap; transition: all .12s; }
+.pa-metric-tg button:first-child { border-left: 0; }
+.pa-metric-tg button:hover { background: #f0fdfa; color: #0f766e; }
+.pa-metric-tg button.on { background: #0f766e; color: #fff; }
 .btn-exp { margin-left: auto; font-size: 13px; padding: 7px 12px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .btn-exp:hover { background: #ecfdf5; }
 .btn-exp:disabled { opacity: .45; cursor: not-allowed; }
