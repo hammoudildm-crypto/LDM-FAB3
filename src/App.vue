@@ -93,6 +93,7 @@ const LINK_ICONS = {
   '/rendement': '<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
   '/ca': '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
   '/dispo-equipements': '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+  '/temps-reel': '<circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/>',
   '/avancement': '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
   '/production-atelier': '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
   '/suivi-trs': '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
@@ -115,17 +116,20 @@ const LINK_ICONS = {
   '/cadences': '<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M19.1 4.9l-2.8 2.8M7.7 16.3l-2.8 2.8"/>',
 }
 const NAV_GROUPS = [
+  { key: 'suivifab', label: 'Suivi de fabrication', role: null, icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', links: [
+    ['/temps-reel', 'Suivi temps réel'],
+    ['/avancement', 'Suivi du process'],
+    ['/encours', 'En-cours'],
+  ] },
   { key: 'consultation', label: 'Consultation', role: null, icon: '<path d="M3 3v18h18"/><polyline points="7 13 11 9 14 12 20 6"/>', links: [
     ['/realisation-plan', 'Réalisation vs Plan'],
     ['/rendement', 'Rendement'],
     ['/ca', "Chiffre d'affaires"],
     ['/dispo-equipements', 'Disponibilité équipements'],
-    ['/avancement', 'Suivi du process'],
     ['/production-atelier', 'Production par atelier'],
     ['/suivi-trs', 'Suivi TRS'],
     ['/capacite', 'Capacité équipements'],
     ['/qse', 'Indicateurs QSE'],
-    ['/encours', 'En-cours'],
     ['/dossier', 'Dossier de lot'],
     ['/audit', "Journal d'audit"],
   ] },
@@ -155,7 +159,7 @@ function groupVisible(g) {
 const CAT_COULEUR = {
   '/referentiels': '#64748b', '/cadences': '#64748b', '/habilitations': '#64748b', '/effectifs': '#64748b',
   '/ordonnancement': '#6366f1', '/plan': '#6366f1', '/ordres': '#6366f1',
-  '/dispo-equipements': '#0ea5e9', '/avancement': '#0ea5e9', '/production-atelier': '#0ea5e9', '/suivi-trs': '#0ea5e9', '/capacite': '#0ea5e9', '/encours': '#0ea5e9', '/dossier': '#0ea5e9',
+  '/temps-reel': '#0ea5e9', '/dispo-equipements': '#0ea5e9', '/avancement': '#0ea5e9', '/production-atelier': '#0ea5e9', '/suivi-trs': '#0ea5e9', '/capacite': '#0ea5e9', '/encours': '#0ea5e9', '/dossier': '#0ea5e9',
   '/suivi': '#14b8a6', '/conditionnement': '#14b8a6',
   '/verification-ddl': '#f43f5e', '/verification-ddl-aq': '#f43f5e', '/verification-ddl-cond': '#f43f5e', '/audit': '#f43f5e',
   '/tableau-de-bord': '#22c55e', '/realisation-plan': '#22c55e', '/rendement': '#22c55e', '/ca': '#22c55e', '/qse': '#22c55e'
@@ -370,6 +374,8 @@ async function signOut() {
 .app-main > main * { zoom: 1 !important; }
 /* Exception : la page Hub est affichée un cran plus grand -> 0,7 (global) x 8/7 = 0,8 */
 .app-main > main .hub-root { zoom: 1.143 !important; }
+/* Exception : la page Tableau de bord PQR est réduite -> 0,7 (global) x 0,85 ≈ 0,6 */
+.app-main > main .pqr-page { zoom: 0.85 !important; }
 * { box-sizing: border-box; }
 
 :root {
