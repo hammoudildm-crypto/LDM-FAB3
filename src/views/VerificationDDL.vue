@@ -483,7 +483,7 @@ async function devalider(l) {
           <thead><tr><th class="th-verif" style="width:62px"></th><th style="width:58px">Lot</th><th>Produit</th><th style="width:90px">Réserver</th><th class="right" style="width:74px">Fin fab.</th><th class="right" style="width:50px">Attente</th></tr></thead>
           <tbody>
             <template v-for="l in attenteFiltree" :key="l.id">
-              <tr :class="{ 'ddl-triage': triageIds.has(l.id) }">
+              <tr :class="{ 'ddl-triage': triageIds.has(l.id), 'ddl-deviation': enDeviationDdl(l) }">
                 <td class="cell-verif"><button v-if="peutEditer" class="btn-verif" @click="ouvrir(l)">Vérifier</button></td>
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td class="desig">{{ prodNom(l) }}</td>
@@ -536,7 +536,7 @@ async function devalider(l) {
         <thead><tr><th>Lot</th><th>Produit</th><th>Vérificateur</th><th class="right">Date d'envoi</th><th></th></tr></thead>
         <tbody>
           <template v-for="l in verifiesAffiches" :key="l.id">
-            <tr>
+            <tr :class="{ 'ddl-triage': enTriageDdl(l), 'ddl-deviation': enDeviationDdl(l) }">
               <td class="mono">{{ l.numero_lot }}</td>
               <td class="desig">{{ prodNom(l) }}</td>
               <td>{{ l.ddl_verificateur || '—' }}</td>
@@ -584,7 +584,7 @@ async function devalider(l) {
           <table v-else class="mini-vd">
             <thead><tr><th>N° lot</th><th>Produit</th><th class="right">Fin fab.</th></tr></thead>
             <tbody>
-              <tr v-for="l in lotsDuMois" :key="l.id">
+              <tr v-for="l in lotsDuMois" :key="l.id" :class="{ 'ddl-triage': enTriageDdl(l), 'ddl-deviation': enDeviationDdl(l) }">
                 <td class="strong">{{ l.numero_lot }}</td>
                 <td>{{ l.produits ? l.produits.designation : '—' }}</td>
                 <td class="right nowrap">{{ fmtDate(dateDDL(l)) }}</td>
@@ -886,7 +886,15 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .ar-note { font-size: 10px; color: #94a3b8; font-weight: 600; }
 /* Lots en cours de triage (fabrication) */
 tr.ddl-triage td { background: #fef3c7; }
-tr.ddl-triage .mono::after { content: ' 🔍 triage'; color: #b45309; font-size: .6em; font-weight: 700; white-space: nowrap; }
+tr.ddl-triage:not(.ddl-deviation) .mono::after { content: ' 🔍 triage'; color: #b45309; font-size: .6em; font-weight: 700; white-space: nowrap; }
+/* Lot en déviation : rouge clair */
+tr.ddl-deviation:not(.ddl-triage) td { background: #fee2e2; }
+tr.ddl-deviation:not(.ddl-triage) .mono::after { content: ' ⚠ déviation'; color: #b91c1c; font-size: .6em; font-weight: 700; white-space: nowrap; }
+/* Lot en triage ET déviation : ligne coupée en deux (ambre / rouge clair) */
+tr.ddl-triage.ddl-deviation { background: linear-gradient(135deg, #fef3c7 0 50%, #fee2e2 50% 100%); }
+tr.ddl-triage.ddl-deviation td { background: transparent; }
+tr.ddl-triage.ddl-deviation .cell-verif { background: transparent; }
+tr.ddl-triage.ddl-deviation .mono::after { content: ' 🔍 ⚠'; color: #b45309; font-size: .6em; font-weight: 700; white-space: nowrap; }
 
 /* ============================================================= *
  * Refonte moderne — couche de surcharge (cohérence violet)
