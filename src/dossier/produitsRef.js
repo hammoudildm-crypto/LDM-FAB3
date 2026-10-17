@@ -33,7 +33,7 @@ const _coo = (id, label) =>
 const _tab = (id, label, colonnes) =>
   ({ id, label, type: 'tableau', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes })
 const _note = (id, label, contenu) => ({ id, label, type: 'note', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [], contenu })
-const _sec = (id, titre, champs) => ({ id, titre, champs })
+const _sec = (id, titre, champs, cols = 1) => ({ id, titre, cols, champs })
 
 // Texte « Instructions générales » (dossier, pages 3-4) — affiché en pièce jointe.
 const TXT_INSTRUCTIONS_GEN = `Le Superviseur doit procéder aux vérifications suivantes avant le démarrage de chaque opération de fabrication :
@@ -91,7 +91,7 @@ const FORMULAIRE_ROSUSTINE = {
       _oo('pp_sante', 'Aptitude hygiène du personnel vérifiée (selon procédure)'),
       _txt('pp_sup_visa', 'Démarrage autorisé — Superviseur Fabrication (date / heure / visa)'),
       _txt('pp_aq_visa', 'Démarrage autorisé — AQ Process (date / heure / visa)')
-    ]),
+    ], 2),
     _sec('p_net', '2 · Vérification du nettoyage (étiquettes « nettoyé »)', [
       _oo('net_salle', 'Étiquette « nettoyé » — Salle de pesée collée'),
       _oo('net_flux', 'Étiquette « nettoyé » — Flux laminaire collée'),

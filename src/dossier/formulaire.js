@@ -36,7 +36,7 @@ export function champVide (type = 'num') {
   if (type === 'tableau') c.colonnes = [colonneVide('texte')]
   return c
 }
-export function sectionVide () { return { id: uid('s'), titre: '', champs: [] } }
+export function sectionVide () { return { id: uid('s'), titre: '', cols: 1, champs: [] } }
 export function formulaireVide () { return { sections: [] } }
 
 export function parseNum (v) {

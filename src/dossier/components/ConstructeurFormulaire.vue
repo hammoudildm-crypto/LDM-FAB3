@@ -59,6 +59,10 @@ async function sauver () {
         <div v-for="(sec, si) in form.sections" :key="sec.id" class="cf-section">
           <div class="cf-sec-head">
             <input class="cf-sec-titre" v-model="sec.titre" placeholder="Titre de la section (ex. Conditions environnementales)" />
+            <select class="cf-in cf-cols-sel" :value="sec.cols || 1" @change="sec.cols = Number($event.target.value)" title="Nombre de colonnes d'affichage">
+              <option :value="1">1 colonne</option>
+              <option :value="2">2 colonnes</option>
+            </select>
             <div class="cf-sec-act">
               <button class="cf-ib" :disabled="si === 0" @click="moveSec(si, -1)" title="Monter">↑</button>
               <button class="cf-ib" :disabled="si === form.sections.length - 1" @click="moveSec(si, 1)" title="Descendre">↓</button>
@@ -170,6 +174,7 @@ async function sauver () {
 .cf-champs td { padding: 4px 6px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
 .cf-in { font: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #0f172a; width: 100%; }
 .cf-ta { resize: vertical; min-height: 54px; line-height: 1.4; }
+.cf-cols-sel { width: auto; flex: none; max-width: 120px; font-size: 12px; }
 .cf-row { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
 .cf-row .w-u { width: 64px; } .cf-row .w-n { width: 60px; } .w-t { width: 110px; } .w-type { max-width: 220px; }
 .cf-lbl { font-size: 11px; color: #64748b; }

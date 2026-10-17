@@ -99,6 +99,7 @@ function onFile (ch, ev) {
           <span v-if="secCtrl(sec)" class="fd-sec-ct">{{ secCtrl(sec) }} contrôle{{ secCtrl(sec) > 1 ? 's' : '' }}</span>
         </div>
 
+        <div class="fd-fields" :class="{ two: sec.cols === 2 }">
         <div v-for="ch in sec.champs" :key="ch.id" class="fd-champ" :class="{ tab: ch.type === 'tableau' || ch.type === 'note' || ch.type === 'fichier' }">
           <!-- Note / consignes (lecture seule) -->
           <template v-if="ch.type === 'note'">
@@ -176,6 +177,7 @@ function onFile (ch, ev) {
               </table>
             </div>
           </template>
+        </div>
         </div>
       </section>
 
@@ -310,6 +312,16 @@ function onFile (ch, ev) {
 @media (min-width: 680px) {
   .fd-champ:not(.tab) { grid-template-columns: minmax(0, 1fr) minmax(240px, auto); align-items: center; gap: 10px 20px; }
   .fd-champ:not(.tab) .fd-ctrl { justify-content: flex-end; }
+}
+
+/* Mise en page 2 colonnes (option par section) : les champs simples se
+   répartissent sur 2 colonnes (libellé au-dessus) ; notes, tableaux et pièces
+   jointes restent sur toute la largeur. */
+@media (min-width: 680px) {
+  .fd-fields.two { display: grid; grid-template-columns: 1fr 1fr; column-gap: 30px; align-items: start; }
+  .fd-fields.two .fd-champ.tab { grid-column: 1 / -1; }
+  .fd-fields.two .fd-champ:not(.tab) { grid-template-columns: 1fr; align-items: stretch; gap: 6px; }
+  .fd-fields.two .fd-champ:not(.tab) .fd-ctrl { justify-content: flex-start; }
 }
 
 @media print {
