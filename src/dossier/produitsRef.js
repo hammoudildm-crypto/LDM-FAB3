@@ -101,10 +101,12 @@ export const FORMULAIRE_DEFAUT = {
       _txt('pp_aq_visa', 'Démarrage autorisé — AQ Process (date / heure / visa)')
     ], 2),
     _sec('p_net', '2 · Vérification du nettoyage (étiquettes « nettoyé »)', [
-      _oo('net_salle', 'Étiquette « nettoyé » — Salle de pesée collée'),
-      _oo('net_flux', 'Étiquette « nettoyé » — Flux laminaire collée'),
-      _oo('net_bal', 'Étiquettes « nettoyé » — Balances collées'),
-      _oo('net_mat', 'Étiquettes « nettoyé » — Matériels de pesée collées'),
+      _chk('net_chk', 'Étiquettes « nettoyé » collées', 'oui', [
+        'Salle de pesée',
+        'Flux laminaire',
+        'Balances',
+        'Matériels de pesée'
+      ]),
       _txt('net_visa', 'Vérifié par — Date & Visa')
     ], 2),
     _sec('p_ope', '3 · Liste des opérateurs de pesée', [
@@ -118,17 +120,21 @@ export const FORMULAIRE_DEFAUT = {
       ])
     ]),
     _sec('p_equip', '4 · Vérification des équipements de pesée', [
-      _cnc('eq042_vide', 'Balance Mettler Toledo MS 3200LL/01 (PR042) — Fonctionnement à vide'),
-      _cnc('eq042_qual', 'PR042 — Statut qualification / calibration'),
-      _cnc('eq042_vitr', 'PR042 — État des parties vitrées'),
-      _cnc('eq325_vide', 'Balance de pesée Mettler Toledo (PR325) — Fonctionnement à vide'),
-      _cnc('eq325_qual', 'PR325 — Statut qualification / calibration'),
-      _cnc('eq325_vitr', 'PR325 — État des parties vitrées'),
+      _chk('eq_chk', 'Balances — contrôles à vide / qualification / parties vitrées', 'cnc', [
+        'Balance Mettler Toledo MS 3200LL/01 (PR042) — Fonctionnement à vide',
+        'PR042 — Statut qualification / calibration',
+        'PR042 — État des parties vitrées',
+        'Balance de pesée Mettler Toledo (PR325) — Fonctionnement à vide',
+        'PR325 — Statut qualification / calibration',
+        'PR325 — État des parties vitrées'
+      ]),
       _txt('eq_visa', 'Fait par / Vérifié par — Date & Visa')
     ], 2),
     _sec('p_etal', '5 · Vérification de l\'étalonnage des balances', [
-      _oo('etal042', 'Balance PR042 — Calibrage journalier effectué'),
-      _oo('etal325', 'Balance PR325 — Calibrage journalier effectué'),
+      _chk('etal_chk', 'Calibrage journalier effectué', 'oui', [
+        'Balance PR042',
+        'Balance PR325'
+      ]),
       _txt('etal_visa', 'Vérifié par — Date & Visa')
     ], 2),
     _sec('p_cond', '6 · Conditions T° / HR / ΔP au cours du process', [
@@ -191,10 +197,12 @@ export const FORMULAIRE_DEFAUT = {
       ])
     ]),
     _sec('p_bilan', '11 · Bilan de pesée', [
-      _oo('bil_bc', 'Bon de commande joint'),
-      _oo('bil_bri', 'Bon de retours interne joint'),
-      _oo('bil_brf', 'Bon de retour final joint'),
-      _oo('bil_bav', "Bon d'avarie joint"),
+      _chk('bil_docs', 'Documents joints', 'oui', [
+        'Bon de commande',
+        'Bon de retours interne',
+        'Bon de retour final',
+        "Bon d'avarie"
+      ]),
       _tab('bil_tab', 'Bilan matières', [
         _ct('bl_mat', 'Matière'),
         _ct('bl_code', 'Code interne'),
