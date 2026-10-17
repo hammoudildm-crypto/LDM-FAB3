@@ -18,6 +18,7 @@ import Conditionnement from '../views/Conditionnement.vue'
 import SaisieTRS from '../views/SaisieTRS.vue'
 import SaisieProduction from '../views/SaisieProduction.vue'
 import DossierLot from '../views/DossierLot.vue'
+import DossierLotEbmr from '../dossier/views/DossierLot.vue'
 import ChiffreAffaires from '../views/ChiffreAffaires.vue'
 import Effectifs from '../views/Effectifs.vue'
 import Organigramme from '../views/Organigramme.vue'
@@ -69,6 +70,7 @@ const routes = [
   { path: '/saisie-trs', name: 'saisie-trs', component: SaisieTRS },
   { path: '/encours', name: 'encours', component: EnCours },
   { path: '/dossier', name: 'dossier', component: DossierLot },
+  { path: '/dossier-ebmr', name: 'dossier-ebmr', component: DossierLotEbmr },
   { path: '/historique', name: 'historique', component: HistoriquePhases },
   { path: '/pqr-parametres', name: 'pqr-parametres', component: PqrParametres },
   { path: '/pqr-saisie', name: 'pqr-saisie', component: PqrSaisie },
