@@ -54,7 +54,7 @@ function dimsFor (p) {
 /* ============================================================
    Réplique de l'Instruction de Fabrication (IF) — LDM
    Référence AQ-SOP-108-011 · IF PFLDM103 · ROSUSTINE 10 mg
-   Construction page par page. Pages reproduites : 1 et 2.
+   Dossier de lot configurable : les étapes s'assemblent selon la gamme du produit.
    ============================================================ */
 function docVide () {
   return {
@@ -429,7 +429,7 @@ onMounted(() => { lireLocal(); chargerProduitsApp(); chargerProduits(); charger(
     <!-- Barre d'application (écran uniquement) -->
     <div class="noprint">
       <PageHeader title="Instruction de Fabrication"
-        subtitle="Réplique de l'IF LDM (AQ-SOP-108-011 · PFLDM103). Construction page par page — pages 1 et 2.">
+        subtitle="Dossier de lot électronique (eBMR) — les étapes s'adaptent à la gamme du produit : Pesée, Granulation & Séchage, Tamisage & Mélange, Compression, Pelliculage, Mélange crème & pommade. Contrôles, rendements automatiques et dossier imprimable.">
         <span class="statut" :style="{ background: statutCouleur }">{{ d.statut }}</span>
         <button class="btn ghost sm" @click="nouveau">Nouveau</button>
         <button class="btn sm" :disabled="!peutEditer" @click="enregistrer">Enregistrer</button>
