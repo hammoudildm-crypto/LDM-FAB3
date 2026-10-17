@@ -106,6 +106,25 @@ function designer (sec, role) {
     </div>
 
     <template v-else>
+      <!-- En-tête compact du dossier (produit · réf · lot) -->
+      <div v-if="d.entete && d.entete.produit" class="fd-head">
+        <div class="fd-head-l">
+          <div class="fd-head-prod">{{ d.entete.produit }}<span v-if="d.entete.forme" class="fd-head-forme"> · {{ d.entete.forme }}</span></div>
+          <div class="fd-head-ref">
+            <span v-if="d.entete.refIf">Réf IF <b>{{ d.entete.refIf }}</b></span>
+            <span v-if="d.entete.version">Version <b>{{ d.entete.version }}</b></span>
+            <span v-if="d.entete.refSop">{{ d.entete.refSop }}</span>
+            <span v-if="d.entete.taillePoids">Lot <b>{{ d.entete.taillePoids }} kg</b></span>
+            <span v-if="d.entete.uniteDosee"><b>{{ d.entete.uniteDosee }}</b> cp</span>
+          </div>
+        </div>
+        <div class="fd-head-r">
+          <span class="fd-head-step">PESÉE</span>
+          <label class="fd-head-f">N° lot<input v-model="d.lot.numeroLotInterne" placeholder="—" /></label>
+          <label class="fd-head-f">N° OF<input v-model="d.lot.ofN" placeholder="—" /></label>
+        </div>
+      </div>
+
       <!-- Bandeau d'état -->
       <div class="hud" :class="'s-' + statut.c">
         <div class="hud-top">
@@ -273,6 +292,18 @@ function designer (sec, role) {
 <style scoped>
 .fd { color: #1b2733; }
 
+/* En-tête compact du dossier */
+.fd-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; background: #fff; border: 1px solid #e6edf3; border-left: 4px solid #0e7490; border-radius: 12px; padding: 9px 14px; margin-bottom: 10px; }
+.fd-head-prod { font-size: 15px; font-weight: 800; color: #0f2a37; line-height: 1.2; }
+.fd-head-forme { font-weight: 600; color: #64748b; font-size: 13px; }
+.fd-head-ref { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 11.5px; color: #64748b; margin-top: 3px; }
+.fd-head-ref b { color: #334155; }
+.fd-head-r { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.fd-head-step { align-self: center; font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #fff; background: #0e7490; border-radius: 6px; padding: 5px 11px; }
+.fd-head-f { display: flex; flex-direction: column; font-size: 9.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: .3px; gap: 2px; }
+.fd-head-f input { font: inherit; font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0; color: #0f2a37; border: 1px solid #cbd5e1; border-radius: 7px; padding: 5px 8px; width: 118px; }
+.fd-head-f input:focus { outline: 0; border-color: #0891b2; box-shadow: 0 0 0 3px rgba(8,145,178,.15); }
+
 /* État vide */
 .fd-empty { text-align: center; padding: 46px 22px; background: #fff; border: 1px dashed #cbd5e1; border-radius: 16px; }
 .fd-empty-ic { font-size: 34px; margin-bottom: 8px; }
@@ -280,39 +311,39 @@ function designer (sec, role) {
 .fd-empty-s { font-size: 13px; color: #64748b; max-width: 560px; margin: 0 auto; line-height: 1.6; }
 
 /* Bandeau d'état */
-.hud { border-radius: 16px; padding: 16px 20px 12px; margin-bottom: 18px; color: #fff; position: relative; overflow: hidden; box-shadow: 0 10px 24px -14px rgba(2,8,23,.55); }
+.hud { border-radius: 13px; padding: 10px 16px 9px; margin-bottom: 11px; color: #fff; position: relative; overflow: hidden; box-shadow: 0 8px 20px -14px rgba(2,8,23,.5); }
 .hud.s-g { background: linear-gradient(120deg,#475569,#334155); }
 .hud.s-o { background: linear-gradient(120deg,#ea8a0d,#b45309); }
 .hud.s-r { background: linear-gradient(120deg,#ef4444,#9f1239); }
 .hud.s-v { background: linear-gradient(120deg,#10b981,#047857); }
 .hud-top { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.hud-badge { font-size: 19px; font-weight: 800; letter-spacing: .2px; }
+.hud-badge { font-size: 16px; font-weight: 800; letter-spacing: .2px; }
 .hud-sub { font-size: 12px; opacity: .85; text-transform: uppercase; letter-spacing: .6px; }
-.hud-stats { display: flex; gap: 0; margin: 12px 0 14px; flex-wrap: wrap; }
-.ks { display: flex; flex-direction: column; font-size: 11px; opacity: .95; padding: 0 20px; }
+.hud-stats { display: flex; gap: 0; margin: 7px 0 9px; flex-wrap: wrap; }
+.ks { display: flex; flex-direction: column; font-size: 10.5px; opacity: .95; padding: 0 15px; }
 .ks:first-child { padding-left: 0; }
 .ks.sep, .ks + .ks { border-left: 1px solid rgba(255,255,255,.25); }
-.ks b { font-size: 22px; font-weight: 800; line-height: 1.1; }
+.ks b { font-size: 18px; font-weight: 800; line-height: 1.1; }
 .ks span { opacity: .82; margin-top: 2px; }
 .hud-prog { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: rgba(255,255,255,.22); }
 .hud-bar { height: 100%; background: #fff; transition: width .35s ease; }
 
 /* Section */
-.fd-sec { background: #fff; border: 1px solid #e6edf3; border-radius: 14px; padding: 4px 18px 14px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
-.fd-sec-head { display: flex; align-items: center; gap: 10px; padding: 14px 0 12px; margin-bottom: 6px; border-bottom: 2px solid #ecf1f6; }
+.fd-sec { background: #fff; border: 1px solid #e6edf3; border-radius: 12px; padding: 2px 14px 10px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.fd-sec-head { display: flex; align-items: center; gap: 10px; padding: 9px 0 8px; margin-bottom: 4px; border-bottom: 2px solid #ecf1f6; }
 .fd-sec-no { flex: none; width: 26px; height: 26px; border-radius: 8px; background: #0e7490; color: #fff; font-size: 13px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
-.fd-sec-t { margin: 0; font-size: 14.5px; font-weight: 800; color: #0f2a37; flex: 1; }
+.fd-sec-t { margin: 0; font-size: 13.5px; font-weight: 800; color: #0f2a37; flex: 1; }
 .fd-sec-ct { flex: none; font-size: 10.5px; font-weight: 700; color: #0e7490; background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
 
 /* Ligne champ : libellé à gauche, contrôle à droite */
-.fd-champ { display: grid; grid-template-columns: 1fr; gap: 6px; padding: 10px 0; border-bottom: 1px solid #f3f6f9; }
+.fd-champ { display: grid; grid-template-columns: 1fr; gap: 5px; padding: 6px 0; border-bottom: 1px solid #f3f6f9; }
 .fd-champ:last-child { border-bottom: 0; }
 .fd-lbl { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .fd-lbl-t { font-size: 13px; font-weight: 600; color: #263445; line-height: 1.35; }
 .fd-req { color: #e11d48; font-weight: 800; margin-left: 3px; }
 .fd-spec { font-size: 11.5px; color: #64748b; font-weight: 600; }
 .fd-ctrl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.fd-in { font: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; min-width: 150px; background: #fff; transition: border-color .15s, background .15s, box-shadow .15s; }
+.fd-in { font: inherit; font-size: 13px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 8px; min-width: 140px; background: #fff; transition: border-color .15s, background .15s, box-shadow .15s; }
 .fd-in:focus { outline: 0; border-color: #0891b2; box-shadow: 0 0 0 3px rgba(8,145,178,.15); }
 .fd-in.sm { min-width: 0; width: 100%; padding: 6px 8px; }
 .fd-in.ok { border-color: #86efac; background: #f0fdf4; }
@@ -366,10 +397,10 @@ function designer (sec, role) {
 
 /* Note / consignes (bloc pliable) */
 .fd-note { border: 1px solid #fde68a; background: #fffbeb; border-radius: 10px; margin: 2px 0; }
-.fd-note-h { cursor: pointer; font-size: 13px; font-weight: 700; color: #92400e; padding: 10px 14px; list-style: none; display: flex; align-items: center; gap: 8px; }
+.fd-note-h { cursor: pointer; font-size: 13px; font-weight: 700; color: #92400e; padding: 7px 12px; list-style: none; display: flex; align-items: center; gap: 8px; }
 .fd-note-h::-webkit-details-marker { display: none; }
 .fd-note[open] .fd-note-h { border-bottom: 1px solid #fde68a; }
-.fd-note-body { padding: 11px 14px; font-size: 12.5px; color: #4a3514; line-height: 1.6; white-space: pre-line; }
+.fd-note-body { padding: 8px 12px; font-size: 12px; color: #4a3514; line-height: 1.5; white-space: pre-line; }
 
 /* Pièce jointe (fichier) */
 .fd-file-has { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
@@ -384,14 +415,14 @@ function designer (sec, role) {
 /* Check-list */
 .fd-chk-h { margin-bottom: 8px; }
 .fd-chk { list-style: none; margin: 0; padding: 0; border: 1px solid #e6edf3; border-radius: 10px; overflow: hidden; }
-.fd-chk-it { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 13px; border-bottom: 1px solid #f1f5f9; }
+.fd-chk-it { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 6px 12px; border-bottom: 1px solid #f1f5f9; }
 .fd-chk-it:nth-child(even) { background: #fbfcfe; }
 .fd-chk-it:last-child { border-bottom: 0; }
 .fd-chk-lbl { font-size: 13px; color: #334155; font-weight: 500; line-height: 1.35; }
 .fd-chk-ctrl { display: flex; align-items: center; gap: 10px; flex: none; }
 
 /* Signatures par section */
-.fd-sign { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e2e8f0; }
+.fd-sign { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
 .fd-sign-slot { flex: 1 1 220px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 1px solid #e6edf3; border-radius: 9px; padding: 7px 11px; background: #f8fafc; }
 .fd-sign-slot.done { border-color: #a7f3d0; background: #f0fdf4; }
 .fd-sign-role { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: .3px; }
@@ -422,7 +453,7 @@ function designer (sec, role) {
    répartissent sur 2 colonnes (libellé au-dessus) ; notes, tableaux et pièces
    jointes restent sur toute la largeur. */
 @media (min-width: 680px) {
-  .fd-fields.two { display: grid; grid-template-columns: 1fr 1fr; column-gap: 30px; align-items: start; }
+  .fd-fields.two { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; align-items: start; }
   .fd-fields.two .fd-champ.tab { grid-column: 1 / -1; }
   .fd-fields.two .fd-champ:not(.tab) { grid-template-columns: 1fr; align-items: stretch; gap: 6px; }
   .fd-fields.two .fd-champ:not(.tab) .fd-ctrl { justify-content: flex-start; }
