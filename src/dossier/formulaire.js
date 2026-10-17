@@ -38,7 +38,7 @@ export function champVide (type = 'num') {
   if (type === 'checklist') { c.items = [{ id: uid('it'), label: '' }]; c.options = ['C', 'NC']; c.attendu = 'C' }
   return c
 }
-export function sectionVide () { return { id: uid('s'), titre: '', cols: 1, champs: [] } }
+export function sectionVide () { return { id: uid('s'), titre: '', cols: 1, phase: '', champs: [] } }
 export function formulaireVide () { return { sections: [] } }
 
 export function parseNum (v) {

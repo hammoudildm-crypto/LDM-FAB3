@@ -63,6 +63,7 @@ async function sauver () {
         <div v-for="(sec, si) in form.sections" :key="sec.id" class="cf-section">
           <div class="cf-sec-head">
             <input class="cf-sec-titre" v-model="sec.titre" placeholder="Titre de la section (ex. Conditions environnementales)" />
+            <input class="cf-in cf-phase-in" v-model="sec.phase" placeholder="Phase" title="Phase / étape du dossier (ex. Pesée, Tamisage & Mélange)" />
             <select class="cf-in cf-cols-sel" :value="sec.cols || 1" @change="sec.cols = Number($event.target.value)" title="Nombre de colonnes d'affichage">
               <option :value="1">1 colonne</option>
               <option :value="2">2 colonnes</option>
@@ -194,6 +195,7 @@ async function sauver () {
 .cf-in { font: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #0f172a; width: 100%; }
 .cf-ta { resize: vertical; min-height: 54px; line-height: 1.4; }
 .cf-cols-sel { width: auto; flex: none; max-width: 120px; font-size: 12px; }
+.cf-phase-in { width: auto; flex: none; max-width: 150px; font-size: 12px; }
 .cf-row { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
 .cf-row .w-u { width: 64px; } .cf-row .w-n { width: 60px; } .w-t { width: 110px; } .w-type { max-width: 220px; }
 .cf-lbl { font-size: 11px; color: #64748b; }

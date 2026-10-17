@@ -19,7 +19,18 @@ function ensureTables () {
 }
 watch(() => d.formulaire, ensureTables, { deep: true, immediate: true })
 
-const res = computed(() => evaluerFormulaire(d.formulaire, d.saisie))
+// Phases : regroupe les sections par phase, n'affiche que la phase active.
+const phases = computed(() => {
+  const seen = []
+  for (const s of (d.formulaire.sections || [])) { const p = s.phase || 'Dossier'; if (!seen.includes(p)) seen.push(p) }
+  return seen
+})
+const phaseActive = ref(0)
+watch(phases, (ps) => { if (phaseActive.value >= ps.length) phaseActive.value = 0 }, { immediate: true })
+const phaseNom = computed(() => phases.value[phaseActive.value] || '')
+const sectionsPhase = computed(() => (d.formulaire.sections || []).filter(s => (s.phase || 'Dossier') === phaseNom.value))
+
+const res = computed(() => evaluerFormulaire({ sections: sectionsPhase.value }, d.saisie))
 const stats = computed(() => res.value.stats)
 const deviations = computed(() => res.value.deviations)
 const vide = computed(() => !(d.formulaire.sections || []).some(s => (s.champs || []).length))
@@ -119,10 +130,15 @@ function designer (sec, role) {
           </div>
         </div>
         <div class="fd-head-r">
-          <span class="fd-head-step">PESÉE</span>
+          <span class="fd-head-step">{{ (phaseNom || 'Dossier').toUpperCase() }}</span>
           <label class="fd-head-f">N° lot<input v-model="d.lot.numeroLotInterne" placeholder="—" /></label>
           <label class="fd-head-f">N° OF<input v-model="d.lot.ofN" placeholder="—" /></label>
         </div>
+      </div>
+
+      <!-- Sélecteur de phases -->
+      <div v-if="phases.length > 1" class="fd-phases noprint">
+        <button v-for="(p, i) in phases" :key="p" type="button" class="fd-phase" :class="{ on: i === phaseActive }" @click="phaseActive = i">{{ p }}</button>
       </div>
 
       <!-- Bandeau d'état -->
@@ -140,8 +156,8 @@ function designer (sec, role) {
         <div class="hud-prog"><div class="hud-bar" :style="{ width: stats.pct + '%' }"></div></div>
       </div>
 
-      <!-- Sections -->
-      <section v-for="sec in d.formulaire.sections" :key="sec.id" class="fd-sec">
+      <!-- Sections de la phase active -->
+      <section v-for="sec in sectionsPhase" :key="sec.id" class="fd-sec">
         <div class="fd-sec-head">
           <span v-if="secNo(sec.titre)" class="fd-sec-no">{{ secNo(sec.titre) }}</span>
           <h3 class="fd-sec-t">{{ secLabel(sec.titre) }}</h3>
@@ -303,6 +319,12 @@ function designer (sec, role) {
 .fd-head-f { display: flex; flex-direction: column; font-size: 9.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: .3px; gap: 2px; }
 .fd-head-f input { font: inherit; font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0; color: #0f2a37; border: 1px solid #cbd5e1; border-radius: 7px; padding: 5px 8px; width: 118px; }
 .fd-head-f input:focus { outline: 0; border-color: #0891b2; box-shadow: 0 0 0 3px rgba(8,145,178,.15); }
+
+/* Sélecteur de phases */
+.fd-phases { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 11px; }
+.fd-phase { font: inherit; font-size: 12.5px; font-weight: 700; color: #475569; background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; padding: 7px 16px; cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
+.fd-phase:hover { background: #f1f5f9; }
+.fd-phase.on { background: #0e7490; color: #fff; border-color: #0e7490; box-shadow: 0 4px 12px -5px rgba(14,116,144,.6); }
 
 /* État vide */
 .fd-empty { text-align: center; padding: 46px 22px; background: #fff; border: 1px dashed #cbd5e1; border-radius: 16px; }

@@ -37,6 +37,8 @@ const _chk = (id, label, jeu, items) => {
   const J = { cnc: { options: ['C', 'NC'], attendu: 'C' }, oui: { options: ['Oui', 'Non'], attendu: 'Oui' }, conf: { options: ['Conforme', 'Non conforme'], attendu: 'Conforme' } }[jeu] || { options: ['C', 'NC'], attendu: 'C' }
   return { id, label, type: 'checklist', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: J.attendu, options: J.options, colonnes: [], contenu: '', items: items.map((l, i) => ({ id: id + '_' + (i + 1), label: l })) }
 }
+const _ooi = (id, label) => ({ id, label, type: 'oui_non', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: '', options: ['Oui', 'Non'], colonnes: [], contenu: '' })
+const _pj = (id, label) => ({ id, label, type: 'fichier', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [], contenu: '' })
 const _sec = (id, titre, champs, cols = 1) => ({ id, titre, cols, champs })
 
 // Texte « Instructions générales » (dossier, pages 3-4) — affiché en pièce jointe.
@@ -74,8 +76,7 @@ const TXT_PRECAUTIONS = `• La fermeture des portes des ateliers de fabrication
 //  T° 15-25 °C, HR ≤60 %, ΔP ≥1 mmH₂O. Les quantités pesées sont enregistrées.
 //  Les libellés propres à un produit (PA, excipients) se complètent à la saisie.
 // =====================================================================
-export const FORMULAIRE_DEFAUT = {
-  sections: [
+const SECTIONS_PESEE = [
     _sec('p_prelim', '1 · Opérations préliminaires & autorisation de démarrage', [
       _note('pp_instr', 'Instructions générales — vérifications avant démarrage', TXT_INSTRUCTIONS_GEN),
       _note('pp_secu', 'Consignes de sécurité obligatoires', TXT_SECURITE),
@@ -228,6 +229,170 @@ export const FORMULAIRE_DEFAUT = {
         _ct('in_visa', 'Fait par (Visa)')
       ])
     ])
+]
+
+// =====================================================================
+//  Phase TAMISAGE & MÉLANGE (IF PFLDM103, pages 25-41) — mêmes spéc. site
+//  (T° 15-25 °C, HR ≤60 %, ΔP ≥1 mmH₂O ; humidité résiduelle < 3 %).
+// =====================================================================
+const SECTIONS_TM = [
+  _sec('tm_prelim', '1 · Opérations préliminaires & autorisation de démarrage', [
+    _note('tm_instr', 'Opérations préliminaires — vérifications avant démarrage', `• Vide de ligne : machines et locaux libérés des matériaux et documents du produit précédent (selon check-list vide de ligne).
+• Nettoyage des équipements et locaux vérifié ; étiquettes de nettoyage et logs book renseignés.
+• Local et machine identifiés (fiches « utilisation salle » et « utilisation machine »).
+• Nettoyage des pièces mobiles vérifié ; étiquettes « Nettoyé » jointes à l'IF.
+• Vérification journalière des balances effectuée.
+• Propreté et intégrité des contenants MP réceptionnés vérifiées.
+• Conditions d'ambiance du local vérifiées : température (°C), HR (%), ΔP.
+• Attendre l'autorisation AQ avant de procéder au tamisage et mélange.`),
+    _txt('tm_date', 'Date de début', 'date', true),
+    _txt('tm_salle', 'N° de salle'),
+    _txt('tm_heure', 'Heure de début'),
+    _num('tm_temp', 'Température de la salle', '°C', 15, 25, true),
+    _num('tm_hr', 'Humidité relative', '%', null, 60, true),
+    _num('tm_dp', 'Différentiel de pression (ΔP)', 'mmH₂O', 1, null, true),
+    _chk('tm_vl', 'Vide de ligne — autorisation de démarrage', 'cnc', [
+      'Instructions générales', 'Consignes de sécurité', 'Conditions environnementales', 'Nettoyage local & équipements'
+    ]),
+    _chk('tm_prel', 'Vérification préliminaire', 'oui', [
+      "Présence de tous les documents de l'instruction de fabrication",
+      'Habillage spécifique / réglementaire du personnel',
+      'Aptitude hygiène du personnel vérifiée (selon procédure)'
+    ]),
+    _txt('tm_sup', 'Démarrage autorisé — Superviseur Fabrication (date / heure / visa)'),
+    _txt('tm_aq', 'Démarrage autorisé — AQ Process (date / heure / visa)')
+  ], 2),
+  _sec('tm_net', '2 · Vérification du nettoyage (étiquettes « nettoyé »)', [
+    _chk('tmnet_chk', 'Étiquettes « nettoyé » collées', 'oui', ['Salle de mélange', 'Équipements', 'Pièces mobiles']),
+    _pj('tmnet_pj', 'Étiquettes « nettoyé » (scan)'),
+    _txt('tmnet_visa', 'Vérifié par — Date & Visa')
+  ], 2),
+  _sec('tm_ope', '3 · Liste des opérateurs de tamisage & mélange', [
+    _tab('tmope_tab', 'Opérateurs — Shift 01 : 06-14h · 02 : 14-22h · 03 : 22-06h', [
+      _ct('tmop_shift', 'N° Shift'), _ct('tmop_poste', 'Poste'), _ct('tmop_nom', 'Nom & prénom'),
+      _ct('tmop_date', 'Date'), _ct('tmop_visa', 'Visa'), _ct('tmop_verif', 'Vérifié par (Date & Visa)')
+    ])
+  ]),
+  _sec('tm_equip', '4 · Vérification des équipements utilisés', [
+    _chk('tmeq_chk', 'Équipements — qualification/calibration & parties vitrées', 'cnc', [
+      'Mélangeur en V MAKINA 100L (PR210) — Qualification / calibration',
+      'PR210 — État des parties vitrées',
+      'Mélangeur en V MPY 400 (PR032) — Qualification / calibration',
+      'PR032 — État des parties vitrées',
+      'Calibreur CPS Line (PR036/PR097) — Qualification / calibration',
+      'PR036/PR097 — État des parties vitrées',
+      'Kevin super mill (PR310/PR311) — Qualification / calibration',
+      'PR310/PR311 — État des parties vitrées'
+    ]),
+    _txt('tmeq_visa', 'Fait par / Vérifié par — Date & Visa')
+  ], 2),
+  _sec('tm_etal', "5 · Vérification de l'étalonnage des balances", [
+    _tab('tmetal_tab', 'Balances — calibrage', [
+      _ct('tmet_bal', 'Balance'), _ct('tmet_code', 'Code'), _coo('tmet_cal', 'Calibrage effectué'),
+      _ct('tmet_date', 'Date'), _ct('tmet_visa', 'Date & Visa')
+    ])
+  ]),
+  _sec('tm_cond', '6 · Conditions T° / HR / ΔP au cours du process', [
+    _tab('tmcond_tab', 'Relevés — tous les 30 min pendant le mélange', [
+      _ct('tmco_date', 'Date'), _ct('tmco_heure', 'Heure'),
+      _cn('tmco_t', 'Température', '°C', 15, 25), _cn('tmco_hr', 'Humidité', '%', null, 60), _cn('tmco_dp', 'ΔP', 'mmH₂O', 1, null),
+      _ct('tmco_salle', 'N° salle'), _ct('tmco_visa', 'Visa')
+    ])
+  ]),
+  _sec('tm_rec', '7 · Réception des matières', [
+    _note('tmrec_note', 'Réception', "Vérifier l'intégrité des contenants réceptionnés. La vérification doit être effectuée avant le début du processus de mélange."),
+    _tab('tmrec_tab', 'Matières (articles de la formule)', [
+      _ct('tmre_art', 'Matière'), _ct('tmre_code', 'Code interne'), _ct('tmre_lot', 'N° lot interne'),
+      _coo('tmre_int', 'Contenant intègre / scellé / identifié'), _coo('tmre_etiq', 'Étiquette pesée présente'),
+      _cn('tmre_theo', 'Qté théorique', 'kg'), _cn('tmre_liv', 'Qté livrée', 'kg'), _ct('tmre_visa', 'Vérifié par')
+    ]),
+    _num('tmrec_tot', 'Quantité totale', 'kg')
+  ]),
+  _sec('tm_vfonc', "8 · Vérification du fonctionnement de l'équipement avant mélange", [
+    _txt('tmvf_date', 'Date de début', 'date'), _txt('tmvf_heure', 'Heure'),
+    _chk('tmvf_chk', 'Fonctionnement à vide des équipements', 'cnc', [
+      'Mélangeur en V MAKINA 100L (PR210)', 'Mélangeur en V MPY 400 (PR032)',
+      'Calibreur CPS Line (PR036/PR097)', 'Kevin super mill (PR310/PR311)'
+    ]),
+    _txt('tmvf_visa', 'Fait par / Vérifié par — Date & Visa')
+  ], 2),
+  _sec('tm_m01', '9 · Mélange 01 — Mélangeur en V MAKINA 100L (PR210)', [
+    _txt('tmm01_date', 'Date de début', 'date'), _txt('tmm01_heure', 'Heure de début'),
+    _chk('tmm01_mat', 'Matières transférées', 'oui', ['Rosuvastatine calcium', 'Crospovidone (POLYPLASDONE XL)']),
+    _chk('tmm01_op', 'Avant démarrage & mélange', 'oui', [
+      'Fermeture des vannes du mélangeur', 'Fermeture des dispositifs de sécurité', 'Mélangeur actionné 10 min à 10 RPM'
+    ]),
+    _txt('tmm01_deb', 'Début du mélange (heure)'), _txt('tmm01_fin', 'Fin du mélange (heure)'), _num('tmm01_duree', 'Durée réelle du mélange', 'min')
+  ], 2),
+  _sec('tm_tam', '10 · Tamisage (tamis 0,8 mm)', [
+    _note('tmtam_note', 'Tamisage', 'Vérifier visuellement le tamis avant le lancement. Procéder au tamisage du Mélange 01 avec un tamis de 0,8 mm.'),
+    _oo('tmtam_ok', 'Tamisage du Mélange 01 réalisé'),
+    _num('tmtam_maille', 'Ouverture de maille du tamis (consigne 0,8)', 'mm'),
+    _num('tmtam_vit', 'Vitesse du calibreur (consigne 800)', 'RPM'),
+    _txt('tmtam_deb', 'Heure de début'), _txt('tmtam_fin', 'Heure de fin'), _num('tmtam_duree', 'Durée du tamisage', 'min'),
+    _txt('tmtam_visa', 'Date & Visa Opérateur / Superviseur')
+  ], 2),
+  _sec('tm_m02', '11 · Mélange 02 — Mélangeur en V MPY 400 (PR032)', [
+    _txt('tmm02_date', 'Date de début', 'date'), _txt('tmm02_heure', 'Heure de début'),
+    _chk('tmm02_mat', "Matières transférées (dans l'ordre)", 'oui', [
+      'Mélange 01', 'Cellulose microcristalline PH102', 'Lactose monohydrate (Flowlac 100)', 'Calcium phosphate tribasic'
+    ]),
+    _chk('tmm02_op', 'Avant démarrage & mélange', 'oui', [
+      'Fermeture des vannes du mélangeur', 'Fermeture des dispositifs de sécurité', 'Mélangeur actionné 20 min à 10 RPM'
+    ]),
+    _txt('tmm02_deb', 'Début du mélange (heure)'), _txt('tmm02_fin', 'Fin du mélange (heure)'), _num('tmm02_duree', 'Durée réelle du mélange', 'min')
+  ], 2),
+  _sec('tm_mf', '12 · Mélange final — Lubrification (MPY 400 PR032)', [
+    _txt('tmmf_date', 'Date de début', 'date'), _txt('tmmf_heure', 'Heure de début'),
+    _chk('tmmf_mat', 'Matières transférées', 'oui', ['Mélange 02', 'Stéarate de magnésium (LIGAMED MF-2-V)']),
+    _chk('tmmf_op', 'Avant démarrage & mélange', 'oui', [
+      'Fermeture des vannes du mélangeur', 'Fermeture des dispositifs de sécurité', 'Mélangeur actionné 5 min à 10 RPM'
+    ]),
+    _txt('tmmf_deb', 'Début du mélange (heure)'), _txt('tmmf_fin', 'Fin du mélange (heure)'), _num('tmmf_duree', 'Durée réelle du mélange', 'min'),
+    _pj('tmmf_ticket', 'Ticket de pesée du mélange final (scan)')
+  ], 2),
+  _sec('tm_ipc', '13 · Contrôle IPC — humidité résiduelle (fin de mélange)', [
+    _note('tmipc_note', 'Contrôle IPC humidité résiduelle', "Prélever 5 g du granulé. Transférer à l'AQ IPC : dessiccateur IR à 105 °C, mode auto. Attendre le résultat IPC avant de poursuivre. Joindre la Fiche IPC à l'IF."),
+    _num('tmipc_hum', 'Humidité résiduelle du granulé', '%', null, 3),
+    _txt('tmipc_visa', 'Visa AQ IPC — Date et Heure'),
+    _pj('tmipc_pj', 'Fiche IPC humidité (scan)')
+  ], 2),
+  _sec('tm_cq', '14 · Contrôle du mélange (CQ) & fin', [
+    _ooi('tmcq_req', "Contrôle du mélange (CQ) requis ? (si Oui : demande d'échantillonnage réf. CQ-007)"),
+    _ooi('tmcq_bloq', 'Analyse bloquante ? (si Oui : attendre les résultats avant la compression)'),
+    _txt('tmcq_obs', 'Observation'),
+    _txt('tmcq_fin', 'Fin — Date / Heure / Fait par / Vérifié par')
+  ], 2),
+  _sec('tm_fiches', '15 · Fiches utilisation (salle / machine)', [
+    _pj('tmf_salle', 'Fiche utilisation salle (scan)'),
+    _pj('tmf_machine', 'Fiche utilisation machine (scan)'),
+    _txt('tmf_visa', 'Vérifié par — Date & Visa')
+  ], 2),
+  _sec('tm_bilan', '16 · Bilan de la phase tamisage & mélange (rendement)', [
+    _note('tmbil_note', 'Calcul du rendement', 'A₂ = P_th mél − (P_mél + C_mél) ; R2 (%) = (P_mél + C_mél) × 100 / P_th mél. Norme du rendement : 99–100 %.'),
+    _num('tmbil_pth', 'Poids théorique du mélange (P_th)', 'kg'),
+    _num('tmbil_pmel', 'Poids du mélange obtenu (P_mél)', 'kg'),
+    _num('tmbil_cmel', 'Poids échantillon de contrôle (C_mél)', 'kg'),
+    _num('tmbil_av', 'Avarie engendrée (A₂)', 'kg'),
+    _num('tmbil_rdt', 'Rendement R2', '%', 99, 100),
+    _txt('tmbil_just', 'Justification de toute avarie hors normes'),
+    _txt('tmbil_visa', 'Date / Visa Responsable Fabrication')
+  ], 2),
+  _sec('tm_inc', '17 · Suivi des incidents et arrêts', [
+    _tab('tminc_tab', 'Incidents / arrêts', [
+      _ct('tmin_date', 'Date'), _ct('tmin_harr', "Heure d'arrêt"), _ct('tmin_sac', 'N° de sac'),
+      _ct('tmin_motif', 'Motif'), _ct('tmin_action', 'Action corrective'),
+      _ct('tmin_ddem', 'Date de démarrage'), _ct('tmin_hdem', 'Heure de démarrage'), _ct('tmin_visa', 'Fait par (Visa)')
+    ])
+  ])
+]
+
+// Associe une phase à chaque section, puis assemble le modèle complet multi-phases.
+const _phase = (sections, phase) => sections.map(s => ({ ...s, phase }))
+export const FORMULAIRE_DEFAUT = {
+  sections: [
+    ..._phase(SECTIONS_PESEE, 'Pesée'),
+    ..._phase(SECTIONS_TM, 'Tamisage & Mélange')
   ]
 }
 
