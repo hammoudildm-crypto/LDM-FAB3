@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, provide, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { supabase } from './supabase'
+import { MODULES, MODULE_COLOR, moduleDe } from './navigation.js'
 
 const session = ref(null)
 const role = ref(null)
@@ -10,7 +11,7 @@ const navRef = ref(null)
 const themeRef = ref(null)
 const openMenu = ref(null)
 const sidebarOpen = ref(false)
-const sidebarMasquee = ref(true)
+const sidebarMasquee = ref(false)
 watch(sidebarMasquee, v => { try { localStorage.setItem('ldmfab-sidebar-masquee', v ? '1' : '0') } catch (e) { /* ignore */ } })
 const refreshTick = ref(0)
 const presenceOuverte = ref(false)
@@ -115,57 +116,12 @@ const LINK_ICONS = {
   '/qse': '<circle cx="12" cy="8" r="6"/><path d="M15.5 13.5 17 22l-5-3-5 3 1.5-8.5"/>',
   '/cadences': '<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M19.1 4.9l-2.8 2.8M7.7 16.3l-2.8 2.8"/>',
 }
-const NAV_GROUPS = [
-  { key: 'suivifab', label: 'Suivi de fabrication', role: null, icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', links: [
-    ['/temps-reel', 'Suivi temps réel'],
-    ['/avancement', 'Suivi du process'],
-    ['/encours', 'En-cours'],
-  ] },
-  { key: 'consultation', label: 'Consultation', role: null, icon: '<path d="M3 3v18h18"/><polyline points="7 13 11 9 14 12 20 6"/>', links: [
-    ['/realisation-plan', 'Réalisation vs Plan'],
-    ['/rendement', 'Rendement'],
-    ['/ca', "Chiffre d'affaires"],
-    ['/dispo-equipements', 'Disponibilité équipements'],
-    ['/production-atelier', 'Production par atelier'],
-    ['/suivi-trs', 'Suivi TRS'],
-    ['/capacite', 'Capacité équipements'],
-    ['/qse', 'Indicateurs QSE'],
-    ['/dossier', 'Dossier de lot'],
-    ['/audit', "Journal d'audit"],
-  ] },
-  { key: 'production', label: 'Production & saisie', role: 'edit', icon: '<path d="M2 20h20"/><path d="M4 20V9l5 3V9l5 3V5l5 3v12"/>', links: [
-    ['/ordonnancement', 'Ordonnancement'],
-    ['/plan', 'Plan directeur'],
-    ['/ordres', 'Ordres de fabrication'],
-    ['/suivi', 'Suivi fab. & Saisie TRS'],
-    ['/conditionnement', 'Conditionnement'],
-    ['/verification-ddl', 'DDL Fab — Production'],
-    ['/verification-ddl-aq', 'DDL Fab — AQ'],
-    ['/verification-ddl-cond', 'DDL Conditionnement'],
-    ['/effectifs', 'Effectifs'],
-  ] },
-  { key: 'admin', label: 'Administration', role: 'admin', icon: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>', links: [
-    ['/referentiels', 'Référentiels'],
-    ['/cadences', 'Cadences'],
-    ['/habilitations', 'Habilitations'],
-  ] },
-]
-function groupVisible(g) {
-  if (g.role === 'edit') return peutEditer.value
-  if (g.role === 'admin') return estAdmin.value
-  return true
-}
-// Palette du hub généralisée : couleur par catégorie de page
-const CAT_COULEUR = {
-  '/referentiels': '#64748b', '/cadences': '#64748b', '/habilitations': '#64748b', '/effectifs': '#64748b',
-  '/ordonnancement': '#6366f1', '/plan': '#6366f1', '/ordres': '#6366f1',
-  '/temps-reel': '#0ea5e9', '/dispo-equipements': '#0ea5e9', '/avancement': '#0ea5e9', '/production-atelier': '#0ea5e9', '/suivi-trs': '#0ea5e9', '/capacite': '#0ea5e9', '/encours': '#0ea5e9', '/dossier': '#0ea5e9',
-  '/suivi': '#14b8a6', '/conditionnement': '#14b8a6',
-  '/verification-ddl': '#f43f5e', '/verification-ddl-aq': '#f43f5e', '/verification-ddl-cond': '#f43f5e', '/audit': '#f43f5e',
-  '/tableau-de-bord': '#22c55e', '/realisation-plan': '#22c55e', '/rendement': '#22c55e', '/ca': '#22c55e', '/qse': '#22c55e'
-}
-const couleurPage = computed(() => CAT_COULEUR[route.path] || '#5b9bd5')
-const openGroups = ref(new Set())
+const NAV_GROUPS = MODULES
+function groupVisible(g) { return !g.admin || estAdmin.value }
+// Couleur d'accent de la page = couleur de son module (barre + lien actif)
+const couleurPage = computed(() => MODULE_COLOR[route.path] || '#5b9bd5')
+const openGroups = ref(new Set([moduleDe(route.path)].filter(Boolean)))
+watch(() => route.path, (p) => { const k = moduleDe(p); if (k) openGroups.value = new Set([k]) })
 function toggleGroup(key) {
   // Accordéon : un seul groupe ouvert à la fois
   openGroups.value = openGroups.value.has(key) ? new Set() : new Set([key])
@@ -305,7 +261,7 @@ async function signOut() {
                 <span class="grp-caret">▾</span>
               </button>
               <div v-show="openGroups.has(g.key)" class="grp-links">
-                <RouterLink v-for="l in g.links" :key="l[0]" :to="l[0]" class="side-link" @click="sidebarOpen = false"><span class="link-in"><span class="link-ic"><svg viewBox="0 0 24 24" v-html="LINK_ICONS[l[0]]"></svg></span>{{ l[1] }}</span></RouterLink>
+                <RouterLink v-for="l in g.links" :key="l[0]" :to="l[0]" class="side-link" @click="sidebarOpen = false"><span class="link-in">{{ l[1] }}</span></RouterLink>
               </div>
             </div>
           </template>
@@ -426,7 +382,7 @@ body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; -
 .nav-group { border-radius: 10px; transition: background .18s ease; }
 .nav-group.open { background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.02)); padding-bottom: 5px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); }
 .grp-label { display: inline-flex; align-items: center; gap: 9px; }
-.grp-ic { display: inline-flex; width: 16px; height: 16px; flex-shrink: 0; }
+.grp-ic { display: inline-flex; width: 16px; height: 16px; flex-shrink: 0; color: var(--accent-bright); }
 .grp-ic svg { width: 16px; height: 16px; fill: none; stroke: var(--accent-bright); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .link-in { display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
 .link-ic { display: inline-flex; width: 15px; height: 15px; flex-shrink: 0; opacity: .75; }
@@ -662,8 +618,5 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .app-topbar { border-bottom: 3px solid var(--cat, #5b9bd5); transition: border-color .25s ease; }
 .side-link.router-link-active { box-shadow: inset 3px 0 0 var(--cat, #5b9bd5); }
 .side-link.router-link-active .link-ic svg { stroke: var(--cat, #5b9bd5); }
-/* Barre de navigation latérale supprimée */
-.sidebar, .side-reveal { display: none !important; }
-.burger { display: none !important; }
-.app-main { margin-left: 0 !important; }
+/* Barre de navigation latérale réactivée (synchronisée aux modules du hub). */
 </style>
