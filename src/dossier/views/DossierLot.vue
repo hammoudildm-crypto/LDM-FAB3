@@ -107,7 +107,15 @@ function ecrireLocal () {
 const catalogue = computed(() => {
   const keys = new Set([...Object.keys(PRODUITS_REF), ...Object.keys(produitsLocal.value), ...Object.keys(produitsDB.value)])
   const out = {}
-  for (const k of keys) out[k] = { ...(PRODUITS_REF[k] || {}), ...(produitsLocal.value[k] || {}), ...(produitsDB.value[k] || {}) }
+  for (const k of keys) {
+    const merged = { ...(PRODUITS_REF[k] || {}), ...(produitsLocal.value[k] || {}), ...(produitsDB.value[k] || {}) }
+    // Repli : si le formulaire effectif est absent OU vide (fiche enregistrée
+    // sans formulaire, ou un {sections:[]} ancien), on reprend celui intégré.
+    const integre = PRODUITS_REF[k] && PRODUITS_REF[k].formulaire
+    const okForm = merged.formulaire && Array.isArray(merged.formulaire.sections) && merged.formulaire.sections.length
+    if (!okForm && integre) merged.formulaire = integre
+    out[k] = merged
+  }
   return out
 })
 const produitsKeys = computed(() => Object.keys(catalogue.value))
