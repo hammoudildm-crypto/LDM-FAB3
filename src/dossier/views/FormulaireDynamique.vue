@@ -23,6 +23,21 @@ const bInfo = { conforme: { t: 'Conforme', c: 'ok' }, nc: { t: 'Non conforme', c
 const vChamp = (ch) => verdictChamp(ch, d.saisie[ch.id])
 const vCell = (col, row) => verdictCellule(col, row ? row[col.id] : '')
 
+// Décompose « 1 · Titre » en numéro + libellé pour un en-tête soigné.
+const _m = (t) => /^\s*(\d+)\s*[·.\-)]\s*(.*)$/.exec(t || '')
+const secNo = (t) => { const m = _m(t); return m ? m[1] : '' }
+const secLabel = (t) => { const m = _m(t); return m ? m[2] : (t || 'Section') }
+
+// Compte des champs réellement contrôlés dans une section (pour le compteur d'en-tête).
+function secCtrl (sec) {
+  let n = 0
+  for (const ch of (sec.champs || [])) {
+    if (ch.type === 'num' || ch.type === 'oui_non' || ch.obligatoire) n++
+    if (ch.type === 'tableau') n += (ch.colonnes || []).filter(c => c.type === 'num' || c.type === 'oui_non').length
+  }
+  return n
+}
+
 const statut = computed(() => {
   const s = stats.value
   if (!s.total) return { t: 'Formulaire vide', c: 'g' }
@@ -42,18 +57,22 @@ function setOuiCell (row, col, val) { row[col.id] = val }
 <template>
   <div class="fd">
     <div v-if="vide" class="fd-empty noprint">
+      <div class="fd-empty-ic">📋</div>
       <p class="fd-empty-t">Aucun formulaire pour ce produit</p>
-      <p class="fd-empty-s">Ouvrez le <b>Constructeur de formulaire</b> (bouton ✦) pour composer le dossier de ce produit : sections, champs, limites.</p>
+      <p class="fd-empty-s">Ouvrez le <b>Constructeur</b> (bouton ✦) pour composer le dossier de ce produit — sections, champs, limites — ou chargez le <b>Modèle intégré</b> (bouton ↺) s'il en existe un.</p>
     </div>
 
     <template v-else>
       <!-- Bandeau d'état -->
       <div class="hud" :class="'s-' + statut.c">
-        <div class="hud-main"><span class="hud-badge">{{ statut.t }}</span><span class="hud-sub">Dossier configuré — contrôle des paramètres</span></div>
+        <div class="hud-top">
+          <span class="hud-badge">{{ statut.t }}</span>
+          <span class="hud-sub">Contrôle des paramètres · data integrity</span>
+        </div>
         <div class="hud-stats">
           <div class="ks"><b>{{ stats.pct }}%</b><span>complétude</span></div>
-          <div class="ks ok"><b>{{ stats.conformes }}</b><span>conformes</span></div>
-          <div class="ks nc"><b>{{ stats.nc }}</b><span>non conf.</span></div>
+          <div class="ks sep"><b>{{ stats.conformes }}</b><span>conformes</span></div>
+          <div class="ks"><b>{{ stats.nc }}</b><span>non conf.</span></div>
           <div class="ks"><b>{{ stats.manquants }}</b><span>à saisir</span></div>
         </div>
         <div class="hud-prog"><div class="hud-bar" :style="{ width: stats.pct + '%' }"></div></div>
@@ -61,15 +80,22 @@ function setOuiCell (row, col, val) { row[col.id] = val }
 
       <!-- Sections -->
       <section v-for="sec in d.formulaire.sections" :key="sec.id" class="fd-sec">
-        <h3 class="fd-sec-t">{{ sec.titre || 'Section' }}</h3>
+        <div class="fd-sec-head">
+          <span v-if="secNo(sec.titre)" class="fd-sec-no">{{ secNo(sec.titre) }}</span>
+          <h3 class="fd-sec-t">{{ secLabel(sec.titre) }}</h3>
+          <span v-if="secCtrl(sec)" class="fd-sec-ct">{{ secCtrl(sec) }} contrôle{{ secCtrl(sec) > 1 ? 's' : '' }}</span>
+        </div>
 
         <div v-for="ch in sec.champs" :key="ch.id" class="fd-champ" :class="{ tab: ch.type === 'tableau' }">
           <!-- Champs simples -->
           <template v-if="ch.type !== 'tableau'">
-            <div class="fd-lbl">{{ ch.label || '—' }}<span v-if="ch.obligatoire" class="fd-req">*</span><span v-if="specTexte(ch)" class="fd-spec">{{ specTexte(ch) }}</span></div>
+            <div class="fd-lbl">
+              <span class="fd-lbl-t">{{ ch.label || '—' }}<span v-if="ch.obligatoire" class="fd-req">*</span></span>
+              <span v-if="specTexte(ch)" class="fd-spec">{{ specTexte(ch) }}</span>
+            </div>
             <div class="fd-ctrl">
               <template v-if="ch.type === 'num'">
-                <input class="fd-in" :class="{ nc: vChamp(ch) === 'nc' }" v-model="d.saisie[ch.id]" placeholder="valeur" />
+                <input class="fd-in" :class="{ nc: vChamp(ch) === 'nc', ok: vChamp(ch) === 'conforme' }" v-model="d.saisie[ch.id]" placeholder="valeur" inputmode="decimal" />
               </template>
               <template v-else-if="ch.type === 'oui_non'">
                 <div class="fd-onoff">
@@ -82,36 +108,45 @@ function setOuiCell (row, col, val) { row[col.id] = val }
               <template v-else>
                 <input class="fd-in" v-model="d.saisie[ch.id]" placeholder="…" />
               </template>
-              <span class="vb" :class="bInfo[vChamp(ch)].c">{{ bInfo[vChamp(ch)].t }}</span>
+              <span v-if="vChamp(ch) !== 'vide'" class="vb" :class="bInfo[vChamp(ch)].c">{{ bInfo[vChamp(ch)].t }}</span>
             </div>
           </template>
 
           <!-- Tableau -->
           <template v-else>
-            <div class="fd-lbl">{{ ch.label || 'Tableau' }}<span v-if="ch.obligatoire" class="fd-req">*</span></div>
-            <table class="fd-tbl">
-              <thead><tr><th v-for="col in ch.colonnes" :key="col.id">{{ col.label }}<span v-if="specTexte(col)" class="th-spec">{{ specTexte(col) }}</span></th><th></th></tr></thead>
-              <tbody>
-                <tr v-for="(row, ri) in (d.saisie[ch.id] || [])" :key="ri">
-                  <td v-for="col in ch.colonnes" :key="col.id">
-                    <div v-if="col.type === 'oui_non'" class="fd-onoff sm">
-                      <button v-for="o in (col.options || ['Conforme','Non conforme'])" :key="o" type="button" :class="{ on: row[col.id] === o, bad: row[col.id] === o && o !== col.attendu }" @click="setOuiCell(row, col, o)">{{ o }}</button>
-                    </div>
-                    <input v-else class="fd-in sm" :class="{ nc: vCell(col, row) === 'nc' }" v-model="row[col.id]" />
-                  </td>
-                  <td class="ta-c"><button class="fd-del" @click="delLigne(ch, ri)">✕</button></td>
-                </tr>
-                <tr v-if="!(d.saisie[ch.id] || []).length"><td :colspan="ch.colonnes.length + 1" class="fd-tbl-empty">Aucune ligne.</td></tr>
-              </tbody>
-            </table>
-            <button class="fd-addrow noprint" @click="addLigne(ch)">+ ligne</button>
+            <div class="fd-tabhead">
+              <div class="fd-lbl"><span class="fd-lbl-t">{{ ch.label || 'Tableau' }}<span v-if="ch.obligatoire" class="fd-req">*</span></span></div>
+              <button class="fd-addrow noprint" @click="addLigne(ch)">+ ligne</button>
+            </div>
+            <div class="fd-tblwrap">
+              <table class="fd-tbl">
+                <thead><tr><th class="fd-th-n">#</th><th v-for="col in ch.colonnes" :key="col.id">{{ col.label }}<span v-if="specTexte(col)" class="th-spec">{{ specTexte(col) }}</span></th><th class="noprint"></th></tr></thead>
+                <tbody>
+                  <tr v-for="(row, ri) in (d.saisie[ch.id] || [])" :key="ri">
+                    <td class="fd-td-n">{{ ri + 1 }}</td>
+                    <td v-for="col in ch.colonnes" :key="col.id">
+                      <div v-if="col.type === 'oui_non'" class="fd-onoff sm">
+                        <button v-for="o in (col.options || ['Conforme','Non conforme'])" :key="o" type="button" :class="{ on: row[col.id] === o, bad: row[col.id] === o && o !== col.attendu }" @click="setOuiCell(row, col, o)">{{ o }}</button>
+                      </div>
+                      <input v-else class="fd-in sm" :class="{ nc: vCell(col, row) === 'nc', ok: vCell(col, row) === 'conforme' }" v-model="row[col.id]" />
+                    </td>
+                    <td class="ta-c noprint"><button class="fd-del" @click="delLigne(ch, ri)" title="Supprimer la ligne">✕</button></td>
+                  </tr>
+                  <tr v-if="!(d.saisie[ch.id] || []).length"><td :colspan="ch.colonnes.length + 2" class="fd-tbl-empty">Aucune ligne — utilisez « + ligne ».</td></tr>
+                </tbody>
+              </table>
+            </div>
           </template>
         </div>
       </section>
 
       <!-- Déviations -->
       <section class="fd-sec dev" :class="{ empty: !deviations.length }">
-        <h3 class="dev-t">Déviations — paramètres hors spécification <span class="dev-n">{{ deviations.length }}</span></h3>
+        <div class="fd-sec-head">
+          <span class="fd-sec-no dev-no">!</span>
+          <h3 class="fd-sec-t dev-t">Déviations — paramètres hors spécification</h3>
+          <span class="dev-n">{{ deviations.length }}</span>
+        </div>
         <p v-if="!deviations.length" class="dev-ok">✓ Aucune déviation : tous les paramètres contrôlés saisis sont conformes.</p>
         <ul v-else class="dev-list">
           <li v-for="(dv, i) in deviations" :key="i"><span class="vb nc">NC</span> <b>{{ dv.libelle }}</b> — mesuré : {{ dv.valeur || '—' }}<span v-if="dv.spec"> · spéc. : {{ dv.spec }}</span></li>
@@ -123,54 +158,110 @@ function setOuiCell (row, col, val) { row[col.id] = val }
 
 <style scoped>
 .fd { color: #1b2733; }
-.fd-empty { text-align: center; padding: 42px 22px; background: #fff; border: 1px dashed #cbd5e1; border-radius: 14px; }
-.fd-empty-t { font-size: 16px; font-weight: 700; color: #0f172a; margin: 0 0 6px; }
-.fd-empty-s { font-size: 13px; color: #64748b; max-width: 540px; margin: 0 auto; line-height: 1.5; }
-.hud { border-radius: 14px; padding: 16px 18px 10px; margin-bottom: 16px; color: #fff; position: relative; overflow: hidden; }
+
+/* État vide */
+.fd-empty { text-align: center; padding: 46px 22px; background: #fff; border: 1px dashed #cbd5e1; border-radius: 16px; }
+.fd-empty-ic { font-size: 34px; margin-bottom: 8px; }
+.fd-empty-t { font-size: 17px; font-weight: 800; color: #0f172a; margin: 0 0 6px; }
+.fd-empty-s { font-size: 13px; color: #64748b; max-width: 560px; margin: 0 auto; line-height: 1.6; }
+
+/* Bandeau d'état */
+.hud { border-radius: 16px; padding: 16px 20px 12px; margin-bottom: 18px; color: #fff; position: relative; overflow: hidden; box-shadow: 0 10px 24px -14px rgba(2,8,23,.55); }
 .hud.s-g { background: linear-gradient(120deg,#475569,#334155); }
-.hud.s-o { background: linear-gradient(120deg,#d97706,#b45309); }
-.hud.s-r { background: linear-gradient(120deg,#e11d48,#9f1239); }
-.hud.s-v { background: linear-gradient(120deg,#059669,#047857); }
-.hud-main { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.hud-badge { font-size: 18px; font-weight: 800; }
-.hud-sub { font-size: 12.5px; opacity: .9; }
-.hud-stats { display: flex; gap: 22px; margin: 10px 0 12px; flex-wrap: wrap; }
-.ks { display: flex; flex-direction: column; font-size: 11px; opacity: .92; }
-.ks b { font-size: 20px; font-weight: 800; }
-.hud-prog { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: rgba(255,255,255,.25); }
-.hud-bar { height: 100%; background: #fff; transition: width .3s; }
-.fd-sec { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
-.fd-sec-t { margin: 0 0 10px; font-size: 14px; color: #0e7490; }
-.fd-champ { display: grid; grid-template-columns: 1fr; gap: 4px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; }
+.hud.s-o { background: linear-gradient(120deg,#ea8a0d,#b45309); }
+.hud.s-r { background: linear-gradient(120deg,#ef4444,#9f1239); }
+.hud.s-v { background: linear-gradient(120deg,#10b981,#047857); }
+.hud-top { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.hud-badge { font-size: 19px; font-weight: 800; letter-spacing: .2px; }
+.hud-sub { font-size: 12px; opacity: .85; text-transform: uppercase; letter-spacing: .6px; }
+.hud-stats { display: flex; gap: 0; margin: 12px 0 14px; flex-wrap: wrap; }
+.ks { display: flex; flex-direction: column; font-size: 11px; opacity: .95; padding: 0 20px; }
+.ks:first-child { padding-left: 0; }
+.ks.sep, .ks + .ks { border-left: 1px solid rgba(255,255,255,.25); }
+.ks b { font-size: 22px; font-weight: 800; line-height: 1.1; }
+.ks span { opacity: .82; margin-top: 2px; }
+.hud-prog { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: rgba(255,255,255,.22); }
+.hud-bar { height: 100%; background: #fff; transition: width .35s ease; }
+
+/* Section */
+.fd-sec { background: #fff; border: 1px solid #e6edf3; border-radius: 14px; padding: 4px 18px 14px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.fd-sec-head { display: flex; align-items: center; gap: 10px; padding: 14px 0 12px; margin-bottom: 6px; border-bottom: 2px solid #ecf1f6; }
+.fd-sec-no { flex: none; width: 26px; height: 26px; border-radius: 8px; background: #0e7490; color: #fff; font-size: 13px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+.fd-sec-t { margin: 0; font-size: 14.5px; font-weight: 800; color: #0f2a37; flex: 1; }
+.fd-sec-ct { flex: none; font-size: 10.5px; font-weight: 700; color: #0e7490; background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+
+/* Ligne champ : libellé à gauche, contrôle à droite */
+.fd-champ { display: grid; grid-template-columns: 1fr; gap: 6px; padding: 10px 0; border-bottom: 1px solid #f3f6f9; }
 .fd-champ:last-child { border-bottom: 0; }
-.fd-lbl { font-size: 13px; font-weight: 600; color: #334155; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.fd-req { color: #be123c; font-weight: 800; }
-.fd-spec { font-size: 11.5px; color: #64748b; font-weight: 400; }
+.fd-lbl { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fd-lbl-t { font-size: 13px; font-weight: 600; color: #263445; line-height: 1.35; }
+.fd-req { color: #e11d48; font-weight: 800; margin-left: 3px; }
+.fd-spec { font-size: 11.5px; color: #64748b; font-weight: 600; }
 .fd-ctrl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.fd-in { font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 7px; min-width: 130px; }
-.fd-in.sm { min-width: 0; width: 100%; padding: 5px 7px; }
+.fd-in { font: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; min-width: 150px; background: #fff; transition: border-color .15s, background .15s, box-shadow .15s; }
+.fd-in:focus { outline: 0; border-color: #0891b2; box-shadow: 0 0 0 3px rgba(8,145,178,.15); }
+.fd-in.sm { min-width: 0; width: 100%; padding: 6px 8px; }
+.fd-in.ok { border-color: #86efac; background: #f0fdf4; }
 .fd-in.nc { border-color: #fca5a5; background: #fef2f2; }
-.fd-onoff { display: inline-flex; gap: 4px; }
-.fd-onoff button { font: inherit; font-size: 12px; font-weight: 600; padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 7px; cursor: pointer; }
-.fd-onoff.sm button { padding: 4px 8px; font-size: 11px; }
-.fd-onoff button.on { background: #0891b2; color: #fff; border-color: #0891b2; }
-.fd-onoff button.on.bad { background: #e11d48; border-color: #e11d48; }
-.vb { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+
+/* Segmenté Oui/Non · C/NC · Conforme */
+.fd-onoff { display: inline-flex; gap: 0; border: 1px solid #cbd5e1; border-radius: 9px; overflow: hidden; background: #fff; }
+.fd-onoff button { font: inherit; font-size: 12.5px; font-weight: 700; padding: 7px 14px; border: 0; border-left: 1px solid #e2e8f0; background: #fff; color: #475569; cursor: pointer; transition: background .12s, color .12s; }
+.fd-onoff button:first-child { border-left: 0; }
+.fd-onoff.sm button { padding: 5px 10px; font-size: 11.5px; }
+.fd-onoff button:hover { background: #f1f5f9; }
+.fd-onoff button.on { background: #0891b2; color: #fff; }
+.fd-onoff button.on.bad { background: #e11d48; }
+
+/* Badge de verdict */
+.vb { display: inline-flex; align-items: center; font-size: 10.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; white-space: nowrap; letter-spacing: .2px; }
 .vb.ok { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.vb.ok::before { content: '✓ '; }
 .vb.nc { background: #fef2f2; color: #be123c; border: 1px solid #fecaca; }
 .vb.vide { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
-.fd-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
-.fd-tbl th { text-align: left; font-size: 10.5px; color: #64748b; padding: 5px 6px; border-bottom: 1px solid #e2e8f0; }
-.fd-tbl .th-spec { display: block; font-weight: 400; color: #94a3b8; font-size: 10px; }
-.fd-tbl td { padding: 3px 5px; border-bottom: 1px solid #f6f8fa; }
-.fd-tbl-empty { text-align: center; color: #94a3b8; font-style: italic; }
-.fd-del { border: 0; background: #fef2f2; color: #be123c; border-radius: 6px; padding: 3px 7px; cursor: pointer; font-size: 11px; }
-.fd-addrow { font: inherit; font-size: 11px; font-weight: 600; color: #0e7490; background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 6px; padding: 3px 10px; cursor: pointer; margin-top: 6px; }
+
+/* Tableau */
+.fd-champ.tab { display: block; }
+.fd-tabhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.fd-tblwrap { overflow-x: auto; border: 1px solid #e6edf3; border-radius: 10px; }
+.fd-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 520px; }
+.fd-tbl thead th { text-align: left; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; color: #5b6b7d; padding: 8px 8px; background: #f7fafc; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+.fd-tbl .th-spec { display: block; font-weight: 600; color: #94a3b8; font-size: 9.5px; text-transform: none; letter-spacing: 0; }
+.fd-tbl .fd-th-n, .fd-tbl .fd-td-n { width: 30px; text-align: center; color: #94a3b8; font-weight: 700; }
+.fd-tbl tbody td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.fd-tbl tbody tr:nth-child(even) td { background: #fbfcfe; }
+.fd-tbl-empty { text-align: center; color: #94a3b8; font-style: italic; padding: 12px; }
+.fd-del { border: 0; background: #fef2f2; color: #be123c; border-radius: 7px; padding: 4px 8px; cursor: pointer; font-size: 11px; line-height: 1; }
+.fd-del:hover { background: #fee2e2; }
+.fd-addrow { font: inherit; font-size: 11.5px; font-weight: 700; color: #0e7490; background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 8px; padding: 5px 12px; cursor: pointer; white-space: nowrap; }
+.fd-addrow:hover { background: #cffafe; }
 .ta-c { text-align: center; }
-.dev { border-color: #fecaca; } .dev.empty { border-color: #a7f3d0; }
-.dev-t { color: #be123c; font-size: 14px; margin: 0 0 6px; display: flex; align-items: center; gap: 8px; }
-.dev-n { background: #be123c; color: #fff; font-size: 11px; font-weight: 800; min-width: 20px; text-align: center; padding: 1px 7px; border-radius: 999px; }
-.dev-ok { color: #047857; font-size: 13px; margin: 2px 0 0; }
+
+/* Déviations */
+.dev { border-color: #fecaca; }
+.dev.empty { border-color: #bbf7d0; }
+.dev-no { background: #e11d48; }
+.dev.empty .dev-no { background: #16a34a; }
+.dev-t { color: #0f2a37; }
+.dev-n { flex: none; background: #e11d48; color: #fff; font-size: 11px; font-weight: 800; min-width: 22px; text-align: center; padding: 2px 8px; border-radius: 999px; }
+.dev.empty .dev-n { background: #16a34a; }
+.dev-ok { color: #047857; font-size: 13px; font-weight: 600; margin: 8px 0 2px; }
 .dev-list { list-style: none; padding: 0; margin: 6px 0 0; font-size: 12.5px; color: #334155; }
-.dev-list li { padding: 5px 0; border-bottom: 1px dashed #f1f5f9; display: flex; gap: 8px; align-items: baseline; }
+.dev-list li { padding: 7px 0; border-bottom: 1px dashed #f1f5f9; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.dev-list li:last-child { border-bottom: 0; }
+
+/* Large : libellé à gauche, contrôle aligné à droite */
+@media (min-width: 680px) {
+  .fd-champ:not(.tab) { grid-template-columns: minmax(0, 1fr) minmax(240px, auto); align-items: center; gap: 10px 20px; }
+  .fd-champ:not(.tab) .fd-ctrl { justify-content: flex-end; }
+}
+
+@media print {
+  .noprint { display: none !important; }
+  .hud { color: #000; background: none !important; box-shadow: none; border: 1px solid #000; }
+  .ks.sep, .ks + .ks { border-color: #999; }
+  .hud-bar { background: #000; }
+  .fd-sec { box-shadow: none; border-color: #000; break-inside: avoid; }
+  .fd-in, .fd-onoff { border-color: #000; }
+}
 </style>
