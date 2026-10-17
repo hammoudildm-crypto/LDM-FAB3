@@ -110,12 +110,40 @@ function ecrireLocal () {
   try { localStorage.setItem(LS_KEY, JSON.stringify(produitsLocal.value)) } catch (e) { /* ignore */ }
 }
 
-// Catalogue effectif : intégré < localStorage < base.
-// Fusion PAR PRODUIT et par champ : une fiche enregistrée (local/DB) prime,
-// mais hérite des champs qu'elle ne redéfinit pas du produit intégré
-// (ex. le formulaire par défaut reste disponible même sur une fiche ancienne).
+// Amorçage du référentiel : les produits INTÉGRÉS (livrés avec l'app, ex.
+// ROSUSTINE) sont enregistrés UNE FOIS dans le référentiel local, pour que la
+// liste « Produit à fabriquer » provienne uniquement des produits enregistrés
+// et que ces produits soient modifiables/supprimables comme les autres. Le
+// formulaire n'est pas copié : il reste ré-assemblé depuis la gamme (donc mis
+// à jour automatiquement). Un marqueur évite de ré-amorcer un produit supprimé.
+const SEED_KEY = 'ldm_produits_seeded'
+function seedIntegres () {
+  let seeded = []
+  try { seeded = JSON.parse(localStorage.getItem(SEED_KEY) || '[]') || [] } catch (e) { seeded = [] }
+  const loc = { ...produitsLocal.value }
+  let changed = false
+  for (const k of Object.keys(PRODUITS_REF)) {
+    if (seeded.includes(k)) continue                       // déjà amorcé (même si supprimé depuis)
+    if (!loc[k] && !produitsDB.value[k]) {                 // pas encore au référentiel → on l'enregistre
+      const src = JSON.parse(JSON.stringify(PRODUITS_REF[k]))
+      delete src.formulaire                                // formulaire ré-assemblé depuis la gamme
+      loc[k] = src
+    }
+    seeded.push(k); changed = true
+  }
+  if (changed) {
+    produitsLocal.value = loc
+    ecrireLocal()
+    try { localStorage.setItem(SEED_KEY, JSON.stringify(seeded)) } catch (e) { /* ignore */ }
+  }
+}
+
+// Catalogue effectif = PRODUITS ENREGISTRÉS au référentiel (localStorage + base).
+// Les données intégrées ne servent plus qu'au REPLI par champ (gamme, en-tête,
+// formulaire) ; elles ne forcent plus un produit dans la liste, de sorte qu'un
+// produit supprimé du référentiel disparaît réellement de la liste.
 const catalogue = computed(() => {
-  const keys = new Set([...Object.keys(PRODUITS_REF), ...Object.keys(produitsLocal.value), ...Object.keys(produitsDB.value)])
+  const keys = new Set([...Object.keys(produitsLocal.value), ...Object.keys(produitsDB.value)])
   const out = {}
   for (const k of keys) {
     const merged = { ...(PRODUITS_REF[k] || {}), ...(produitsLocal.value[k] || {}), ...(produitsDB.value[k] || {}) }
@@ -130,7 +158,7 @@ const catalogue = computed(() => {
   return out
 })
 const produitsKeys = computed(() => Object.keys(catalogue.value))
-// Noms modifiables/supprimables par l'utilisateur (créés par lui, hors intégrés non surchargés).
+// Tous les produits du référentiel (localStorage + base) sont modifiables/supprimables.
 const produitsPerso = computed(() => new Set([...Object.keys(produitsLocal.value), ...Object.keys(produitsDB.value)]))
 
 async function chargerProduits () {
@@ -318,7 +346,7 @@ function chargerModeleIntegre () {
   message.value = 'Modèle intégré chargé (' + modeleIntegre.value.sections.length + ' sections). Pour le conserver : Constructeur → « Enregistrer dans la fiche produit ».'
 }
 
-onMounted(() => { lireLocal(); chargerProduits(); charger(); chargerUtilisateur() })
+onMounted(() => { lireLocal(); seedIntegres(); chargerProduits(); charger(); chargerUtilisateur() })
 </script>
 
 <template>
