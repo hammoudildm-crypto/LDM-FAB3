@@ -200,6 +200,17 @@ const catalogue = computed(() => {
   return out
 })
 const produitsKeys = computed(() => Object.keys(catalogue.value))
+// Recherche de produit : filtre la liste « Produit à fabriquer » par nom ou code PF.
+const rechercheProduit = ref('')
+const produitsFiltres = computed(() => {
+  const q = rechercheProduit.value.trim().toLowerCase()
+  if (!q) return produitsKeys.value
+  return produitsKeys.value.filter(k => {
+    const c = catalogue.value[k] || {}
+    const code = c.codePf ? String(c.codePf).toLowerCase() : ''
+    return k.toLowerCase().includes(q) || code.includes(q)
+  })
+})
 // Tous les produits du référentiel (localStorage + base) sont modifiables/supprimables.
 const produitsPerso = computed(() => new Set([...Object.keys(produitsLocal.value), ...Object.keys(produitsDB.value)]))
 
@@ -434,12 +445,19 @@ onMounted(() => { lireLocal(); chargerProduitsApp(); chargerProduits(); charger(
         <div class="pb-pick">
           <label class="pb-label" for="prodsel">Produit à fabriquer</label>
           <div class="pb-pickrow">
+            <div class="pb-search">
+              <span class="pb-search-ic">🔎</span>
+              <input class="pb-search-in" v-model="rechercheProduit" type="search" placeholder="Rechercher (nom ou code PF)…" />
+              <button v-if="rechercheProduit" class="pb-search-x" type="button" title="Effacer" @click="rechercheProduit = ''">✕</button>
+            </div>
             <select id="prodsel" class="pb-select" v-model="d.produit" @change="appliquerProduit(d.produit)">
               <option value="" disabled>— Sélectionner un produit —</option>
-              <option v-for="k in produitsKeys" :key="k" :value="k">{{ k }}</option>
+              <option v-for="k in produitsFiltres" :key="k" :value="k">{{ k }}</option>
+              <option v-if="!produitsFiltres.length" value="" disabled>— Aucun produit ne correspond —</option>
             </select>
             <button class="btn ghost sm" @click="gestionOuvert = true" title="Ajouter / modifier des produits">⚙ Gérer les produits</button>
           </div>
+          <div v-if="rechercheProduit" class="pb-search-n">{{ produitsFiltres.length }} produit(s) sur {{ produitsKeys.length }}</div>
         </div>
         <div v-if="d.produit" class="pb-meta">
           <span class="pb-tag">{{ d.entete.refSop }}</span>
@@ -672,6 +690,14 @@ onMounted(() => { lireLocal(); chargerProduitsApp(); chargerProduits(); charger(
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%230891b2' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 14px center; }
 .pb-select:focus { outline: none; border-color: #0891b2; box-shadow: 0 0 0 3px #cffafe; }
+/* Recherche de produit */
+.pb-search { position: relative; display: inline-flex; align-items: center; }
+.pb-search-ic { position: absolute; left: 11px; font-size: 13px; opacity: .6; pointer-events: none; }
+.pb-search-in { font: inherit; font-size: 14px; color: #0f172a; padding: 11px 30px 11px 32px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; min-width: 240px; }
+.pb-search-in:focus { outline: none; border-color: #0891b2; box-shadow: 0 0 0 3px #cffafe; }
+.pb-search-x { position: absolute; right: 8px; border: 0; background: #e2e8f0; color: #475569; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.pb-search-x:hover { background: #cbd5e1; }
+.pb-search-n { font-size: 11.5px; color: #0e7490; font-weight: 600; margin-top: 5px; }
 .pb-meta { display: flex; flex-wrap: wrap; gap: 6px; }
 .pb-tag { font-size: 12px; font-weight: 600; color: #155e75; background: #ecfeff; border: 1px solid #a5f3fc; padding: 4px 9px; border-radius: 999px; }
 .pb-reload { margin-left: auto; display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #475569; }
