@@ -113,6 +113,12 @@ async function sauver () {
                       <button class="cf-mini" @click="addCol(ch)">+ colonne</button>
                     </div>
                   </template>
+                  <template v-else-if="ch.type === 'note'">
+                    <textarea class="cf-in cf-ta" v-model="ch.contenu" rows="3" placeholder="Texte / consignes affiché sur le formulaire (une ligne par point)"></textarea>
+                  </template>
+                  <template v-else-if="ch.type === 'fichier'">
+                    <span class="cf-muted">Zone de dépôt de fichier (scan, étiquette, certificat) à la saisie</span>
+                  </template>
                   <span v-else class="cf-muted">—</span>
                 </td>
                 <td class="ta-c"><input type="checkbox" v-model="ch.obligatoire" /></td>
@@ -163,6 +169,7 @@ async function sauver () {
 .cf-champs th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .3px; color: #64748b; padding: 4px 6px; border-bottom: 1px solid #e2e8f0; }
 .cf-champs td { padding: 4px 6px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
 .cf-in { font: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #0f172a; width: 100%; }
+.cf-ta { resize: vertical; min-height: 54px; line-height: 1.4; }
 .cf-row { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
 .cf-row .w-u { width: 64px; } .cf-row .w-n { width: 60px; } .w-t { width: 110px; } .w-type { max-width: 220px; }
 .cf-lbl { font-size: 11px; color: #64748b; }

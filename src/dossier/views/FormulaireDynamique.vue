@@ -52,6 +52,19 @@ function addLigne (ch) { if (!Array.isArray(d.saisie[ch.id])) d.saisie[ch.id] = 
 function delLigne (ch, i) { d.saisie[ch.id].splice(i, 1) }
 function setOui (ch, val) { d.saisie[ch.id] = val }
 function setOuiCell (row, col, val) { row[col.id] = val }
+
+// Pièces jointes (fichier) — stockées en data-URL dans la saisie.
+function saisieFile (ch) { const v = d.saisie[ch.id]; return v && typeof v === 'object' && v.data ? v : null }
+function isImg (ch) { const f = saisieFile(ch); return !!(f && /^image\//.test(f.type || '')) }
+function fmtSize (n) { n = Number(n) || 0; return n < 1024 ? n + ' o' : n < 1048576 ? (n / 1024).toFixed(0) + ' Ko' : (n / 1048576).toFixed(1) + ' Mo' }
+function removeFile (ch) { d.saisie[ch.id] = null }
+function onFile (ch, ev) {
+  const f = ev.target.files && ev.target.files[0]; if (!f) return
+  if (f.size > 4 * 1048576) { alert('Fichier trop volumineux (max 4 Mo). Réduisez la taille ou scannez en plus basse résolution.'); ev.target.value = ''; return }
+  const r = new FileReader()
+  r.onload = () => { d.saisie[ch.id] = { name: f.name, type: f.type, size: f.size, data: r.result } }
+  r.readAsDataURL(f)
+}
 </script>
 
 <template>
@@ -86,9 +99,35 @@ function setOuiCell (row, col, val) { row[col.id] = val }
           <span v-if="secCtrl(sec)" class="fd-sec-ct">{{ secCtrl(sec) }} contrôle{{ secCtrl(sec) > 1 ? 's' : '' }}</span>
         </div>
 
-        <div v-for="ch in sec.champs" :key="ch.id" class="fd-champ" :class="{ tab: ch.type === 'tableau' }">
+        <div v-for="ch in sec.champs" :key="ch.id" class="fd-champ" :class="{ tab: ch.type === 'tableau' || ch.type === 'note' || ch.type === 'fichier' }">
+          <!-- Note / consignes (lecture seule) -->
+          <template v-if="ch.type === 'note'">
+            <details class="fd-note" open>
+              <summary class="fd-note-h">📄 {{ ch.label || 'Note' }}</summary>
+              <div class="fd-note-body">{{ ch.contenu }}</div>
+            </details>
+          </template>
+
+          <!-- Pièce jointe (fichier) -->
+          <template v-else-if="ch.type === 'fichier'">
+            <div class="fd-file">
+              <div class="fd-lbl"><span class="fd-lbl-t">📎 {{ ch.label || 'Pièce jointe' }}<span v-if="ch.obligatoire" class="fd-req">*</span></span></div>
+              <div v-if="saisieFile(ch)" class="fd-file-has">
+                <img v-if="isImg(ch)" :src="saisieFile(ch).data" class="fd-file-th" alt="aperçu" />
+                <span v-else class="fd-file-ic">📄</span>
+                <a :href="saisieFile(ch).data" :download="saisieFile(ch).name" class="fd-file-link">{{ saisieFile(ch).name }}</a>
+                <span class="fd-file-sz">{{ fmtSize(saisieFile(ch).size) }}</span>
+                <button class="fd-del noprint" @click="removeFile(ch)" title="Retirer le fichier">✕</button>
+              </div>
+              <label v-else class="fd-file-drop noprint">
+                <input type="file" accept="image/*,application/pdf" @change="onFile(ch, $event)" hidden />
+                <span>＋ Joindre un fichier (image ou PDF, max 4 Mo)</span>
+              </label>
+            </div>
+          </template>
+
           <!-- Champs simples -->
-          <template v-if="ch.type !== 'tableau'">
+          <template v-else-if="ch.type !== 'tableau'">
             <div class="fd-lbl">
               <span class="fd-lbl-t">{{ ch.label || '—' }}<span v-if="ch.obligatoire" class="fd-req">*</span></span>
               <span v-if="specTexte(ch)" class="fd-spec">{{ specTexte(ch) }}</span>
@@ -249,6 +288,23 @@ function setOuiCell (row, col, val) { row[col.id] = val }
 .dev-list { list-style: none; padding: 0; margin: 6px 0 0; font-size: 12.5px; color: #334155; }
 .dev-list li { padding: 7px 0; border-bottom: 1px dashed #f1f5f9; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .dev-list li:last-child { border-bottom: 0; }
+
+/* Note / consignes (bloc pliable) */
+.fd-note { border: 1px solid #fde68a; background: #fffbeb; border-radius: 10px; margin: 2px 0; }
+.fd-note-h { cursor: pointer; font-size: 13px; font-weight: 700; color: #92400e; padding: 10px 14px; list-style: none; display: flex; align-items: center; gap: 8px; }
+.fd-note-h::-webkit-details-marker { display: none; }
+.fd-note[open] .fd-note-h { border-bottom: 1px solid #fde68a; }
+.fd-note-body { padding: 11px 14px; font-size: 12.5px; color: #4a3514; line-height: 1.6; white-space: pre-line; }
+
+/* Pièce jointe (fichier) */
+.fd-file-has { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.fd-file-th { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; border: 1px solid #cbd5e1; }
+.fd-file-ic { font-size: 24px; }
+.fd-file-link { font-size: 13px; font-weight: 600; color: #0e7490; text-decoration: none; word-break: break-all; }
+.fd-file-link:hover { text-decoration: underline; }
+.fd-file-sz { font-size: 11px; color: #94a3b8; }
+.fd-file-drop { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12.5px; font-weight: 600; color: #0e7490; background: #ecfeff; border: 1px dashed #67e8f9; border-radius: 9px; padding: 10px 15px; cursor: pointer; }
+.fd-file-drop:hover { background: #cffafe; }
 
 /* Large : libellé à gauche, contrôle aligné à droite */
 @media (min-width: 680px) {

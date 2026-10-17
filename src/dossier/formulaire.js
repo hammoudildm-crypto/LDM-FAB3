@@ -11,7 +11,9 @@ export const TYPES_CHAMP = [
   { k: 'oui_non', label: 'Conforme / Oui-Non' },
   { k: 'texte', label: 'Texte' },
   { k: 'date', label: 'Date / heure' },
-  { k: 'tableau', label: 'Tableau (lignes)' }
+  { k: 'tableau', label: 'Tableau (lignes)' },
+  { k: 'note', label: 'Note / consignes (lecture seule)' },
+  { k: 'fichier', label: 'Pièce jointe (fichier)' }
 ]
 export const TYPES_COLONNE = [
   { k: 'texte', label: 'Texte' },
@@ -30,7 +32,7 @@ export function uid (p = 'x') { _seq++; return p + '_' + Date.now().toString(36)
 
 export function colonneVide (type = 'texte') { return { id: uid('k'), label: '', type, unite: '', min: null, max: null, attendu: 'Conforme', options: ['Conforme', 'Non conforme'] } }
 export function champVide (type = 'num') {
-  const c = { id: uid('c'), label: '', type, unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [] }
+  const c = { id: uid('c'), label: '', type, unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [], contenu: '' }
   if (type === 'tableau') c.colonnes = [colonneVide('texte')]
   return c
 }
@@ -90,6 +92,7 @@ export function evaluerFormulaire (formulaire, saisie) {
   const deviations = []
   for (const sec of S) {
     for (const ch of (sec.champs || [])) {
+      if (ch.type === 'note' || ch.type === 'fichier') continue   // informatif / pièce jointe : hors conformité
       const controlable = ch.type === 'num' || ch.type === 'oui_non' || ch.obligatoire
       if (ch.type === 'tableau') {
         const rows = (saisie && saisie[ch.id]) || []

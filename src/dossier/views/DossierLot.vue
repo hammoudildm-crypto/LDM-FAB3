@@ -4,7 +4,6 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 import IfHeader from '../components/IfHeader.vue'
 import EtapePesee from './EtapePesee.vue'
-import ControleCritique from './ControleCritique.vue'
 import FormulaireDynamique from './FormulaireDynamique.vue'
 import GestionProduits from '../components/GestionProduits.vue'
 import ConstructeurFormulaire from '../components/ConstructeurFormulaire.vue'
@@ -408,9 +407,8 @@ onMounted(() => { lireLocal(); chargerProduits(); charger() })
 
     <!-- Bascule de vue (écran uniquement) -->
     <div v-if="d.produit" class="noprint vtoggle">
-      <button class="vt" :class="{ on: vue === 'form' }" @click="vue = 'form'">① Formulaire du produit</button>
-      <button class="vt" :class="{ on: vue === 'ebmr' }" @click="vue = 'ebmr'">② Pesée guidée (eBMR)</button>
-      <button class="vt" :class="{ on: vue === 'doc' }" @click="vue = 'doc'">③ Dossier imprimable</button>
+      <button class="vt" :class="{ on: vue === 'form' }" @click="vue = 'form'">✎ Saisie du dossier</button>
+      <button class="vt" :class="{ on: vue === 'doc' }" @click="vue = 'doc'">🖨 Dossier imprimable</button>
       <button class="vt build" @click="constructeurOuvert = true" title="Composer le formulaire de ce produit">✦ Constructeur</button>
       <button v-if="modeleIntegre" class="vt" @click="chargerModeleIntegre" title="Recharger le formulaire modèle livré avec ce produit (ex. Pesée ROSUSTINE)">↺ Modèle intégré</button>
       <span class="vt-note">« Imprimer » génère la vue active.</span>
@@ -418,9 +416,6 @@ onMounted(() => { lireLocal(); chargerProduits(); charger() })
 
     <!-- Vue 1 : formulaire configurable du produit -->
     <FormulaireDynamique v-if="d.produit && vue === 'form'" />
-
-    <!-- Vue 2 : pesée guidée (paramètres critiques) -->
-    <ControleCritique v-if="d.produit && vue === 'ebmr'" class="noprint" />
 
     <!-- Constructeur de formulaire (modale) -->
     <ConstructeurFormulaire

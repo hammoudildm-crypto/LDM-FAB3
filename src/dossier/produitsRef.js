@@ -32,7 +32,22 @@ const _coo = (id, label) =>
   ({ id, label, type: 'oui_non', unite: '', min: null, max: null, attendu: 'Oui', options: ['Oui', 'Non'] })
 const _tab = (id, label, colonnes) =>
   ({ id, label, type: 'tableau', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes })
+const _note = (id, label, contenu) => ({ id, label, type: 'note', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [], contenu })
 const _sec = (id, titre, champs) => ({ id, titre, champs })
+
+// Texte « Instructions générales » (dossier, pages 3-4) — affiché en pièce jointe.
+const TXT_INSTRUCTIONS_GEN = `Le Superviseur doit procéder aux vérifications suivantes avant le démarrage de chaque opération de fabrication :
+• Vide de ligne : machines et locaux libérés des matériaux et documents du produit précédent.
+• Nettoyage : nettoyage des salles et équipements selon la procédure en vigueur ; étiquettes de nettoyage jointes à l'IF.
+• Identification : locaux et machines identifiés (nom du produit et N° de lot sur la fiche d'identification).
+• Calibrage des balances (si applicable) : calibrage effectué et renseigné selon la procédure en vigueur.
+• Paramètre du milieu : température (°C), humidité (%) et pression différentielle (mmH₂O) documentées sur la page correspondante.
+• Personnel : nom et prénom des intervenants notés sur la fiche de suivi du personnel.
+• Matières : propreté et intégrité des MP réceptionnées vérifiées ; page de réception renseignée.
+• Machines : paramètres machine dans l'intervalle correspondant.
+• Ordre de fabrication : validité de l'OF vérifiée.
+• Attendre l'approbation AQ avant de procéder à l'opération de fabrication concernée.
+• En cas d'anomalies : stopper l'opération, alerter le responsable hiérarchique, mentionner l'incident sur la page correspondante.`
 
 // =====================================================================
 //  Formulaire ROSUSTINE ® 10 mg — PARTIE PESÉE (IF PFLDM103, pages 9-24,
@@ -44,6 +59,7 @@ const _sec = (id, titre, champs) => ({ id, titre, champs })
 const FORMULAIRE_ROSUSTINE = {
   sections: [
     _sec('p_prelim', '1 · Opérations préliminaires & autorisation de démarrage', [
+      _note('pp_instr', 'Instructions générales — vérifications avant démarrage', TXT_INSTRUCTIONS_GEN),
       _txt('pp_date', 'Date de début de pesée', 'date', true),
       _txt('pp_salle', 'N° de salle de pesée'),
       _txt('pp_heure', 'Heure de début'),
