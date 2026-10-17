@@ -136,10 +136,17 @@ const GAMME_APP_DOSSIER = {
   'Remplissage Gélules': 'remplissage_gelules',
   'Pelliculage': 'pelliculage'
 }
-function mapGammeApp (g) {
+function mapGammeApp (g, forme) {
+  // Produit semi-solide (crème / pommade / gel) : l'étape « Mélange » correspond
+  // au mélange & homogénéisation semi-solide, pas au tamisage/mélange solide.
+  const semi = /cr[eè]me|pommade|gel\b/i.test(String(forme || ''))
   const arr = Array.isArray(g) ? g : (g ? [g] : [])
   const out = []
-  for (const ph of arr) { const k = GAMME_APP_DOSSIER[String(ph).trim()]; if (k && !out.includes(k)) out.push(k) }
+  for (const ph of arr) {
+    let k = GAMME_APP_DOSSIER[String(ph).trim()]
+    if (k === 'tamisage_melange' && semi) k = 'melange_creme_pommade'
+    if (k && !out.includes(k)) out.push(k)
+  }
   return out
 }
 // Normalise un nom de produit pour la correspondance (majuscules, sans ®, espaces réduits).
@@ -171,7 +178,7 @@ const catalogue = computed(() => {
         uniteDosee: (boites && uPar) ? String(boites * uPar) : (re.uniteDosee || ''),
         uniteVente: boites ? String(boites) : (re.uniteVente || '')
       }
-      const gamme = mapGammeApp(p.gamme)
+      const gamme = mapGammeApp(p.gamme, p.forme)
       out[nom] = {
         ...rich,                                   // amm, signataires, formule, mats, exc, equip, diagramme (si connus)
         entete,

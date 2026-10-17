@@ -1120,6 +1120,183 @@ Contrôle visuel du CPS-line après chaque matière.`),
 ]
 
 // =====================================================================
+//  Phase MÉLANGE & HOMOGÉNÉISATION (crème / pommade / gel) — IF MEBO 15 g
+//  Pommade (PFJUL01, pages 22-38) — modélisée à l'identique. Produit semi-solide
+//  mélangé à chaud dans une cuve double paroi CUISINOX (PR296). Le prémélange
+//  (PREMIX) est reçu pré-pesé en fûts ; le rendement se calcule à partir du poids
+//  brut reçu moins les fûts vides. Bilan de rendement AUTOMATIQUE (norme ≥ 98 %).
+// =====================================================================
+const SECTIONS_CREME = [
+  _sec('cr_prelim', '1 · Opérations préliminaires & autorisation de démarrage', [
+    _note('crp_instr', 'Opérations préliminaires — vérifications avant démarrage', `• Vide de ligne : machines et locaux libérés des matériaux et documents du produit précédent (selon check-list vide de ligne).
+• Nettoyage des équipements et locaux vérifié ; étiquettes de nettoyage et logs book renseignés.
+• Local et machine identifiés (fiches « utilisation salle » et « utilisation machine ») ; étiquettes « Nettoyé » et « Utilisation salle » collées.
+• Nettoyage des pièces mobiles vérifié ; étiquettes « Nettoyé » jointes au dossier de lot.
+• Vérification journalière des balances effectuée.
+• Propreté et intégrité des contenants MP réceptionnés vérifiées.
+• Conditions d'ambiance du local vérifiées : température (°C), HR (%), ΔP.
+• En cas d'anomalies : stopper l'opération, alerter le responsable, reporter l'évènement sur la fiche incidents.
+• Attendre l'autorisation AQ avant de procéder à cette étape.`),
+    _note('crp_secu', 'Consignes de sécurité obligatoires', TXT_SECURITE),
+    _note('crp_prec', 'Précautions de production', TXT_PRECAUTIONS),
+    _txt('crp_date', 'Date de début', 'date', true),
+    _txt('crp_salle', 'N° de salle de mélange'),
+    _txt('crp_heure', 'Heure de début'),
+    _num('crp_temp', 'Température de la salle', '°C', 15, 25, true),
+    _num('crp_hr', 'Humidité relative', '%', null, 60, true),
+    _num('crp_dp', 'Différentiel de pression (ΔP)', 'mmH₂O', 1, null, true)
+  ], 2),
+  _sec('cr_net', '2 · Vérification du nettoyage des équipements et locaux', [
+    _note('crnet_note', 'Étiquettes de nettoyage', 'Remplacer les étiquettes « Nettoyé » salle et machine par les fiches « utilisation salle » et « utilisation machine ». Coller les étiquettes « Nettoyée » dans le dossier de lot.'),
+    _chk('crnet_chk', 'Étiquettes « nettoyé » collées', 'oui', ['Salle de mélange', 'Équipements', 'Pièces mobiles']),
+    _pj('crnet_pjsalle', 'Étiquette nettoyée de la salle (scan)'),
+    _pj('crnet_pjequip', 'Étiquettes nettoyée des équipements (scan)'),
+    _pj('crnet_pjmob', 'Étiquettes nettoyée des pièces mobiles (scan)'),
+    _txt('crnet_visa', 'Vérifié par — Date & Visa')
+  ], 2),
+  _sec('cr_env', '3 · Conditions environnementales avant démarrage', [
+    _note('crenv_note', 'Contrôle T° / HR / ΔP', 'Relever les données avant démarrage.'),
+    _tab('crenv_tab', 'Contrôle de la température, de l\'humidité relative et de la différence de pression', [
+      _ct('crev_etape', 'Étape'), _ct('crev_salle', 'N° salle'), _ct('crev_heure', 'Heure'),
+      _cn('crev_t', 'T°C [15-25]', '°C', 15, 25), _cn('crev_hr', 'HR% ≤ 60', '%', null, 60), _cn('crev_dp', 'ΔP ≥ 1', 'mmH₂O', 1, null),
+      _ct('crev_vop', 'Date/Visa Opérateur'), _ct('crev_vverif', 'Date/Visa Vérificateur')
+    ])
+  ]),
+  _sec('cr_cuve', '4 · Vérification préliminaire de la cuve de mélange CUISINOX après nettoyage', [
+    _note('crcuv_note', 'Vérification de la cuve double paroi CUISINOX', `• Vérifier l'état général de la paroi interne de la cuve en précisant l'absence de phénomène de noircissement.
+• Maintenir un espace d'environ 1 mm entre les raclettes en polyamide et la surface interne de l'équipement (éviter le phénomène de polymérisation).
+• Avant lancement, joindre le bon d'intervention MTC clôturé.`),
+    _chk('crcuv_chk', 'Vérifications préliminaires de l\'équipement', 'oui', [
+      'État général de la paroi interne — absence de noircissement',
+      'Espace ~1 mm entre raclettes polyamide et surface interne',
+      'Présence de la demande d\'intervention MTC clôturée'
+    ]),
+    _txt('crcuv_mtc', 'N° de la demande d\'intervention MTC'),
+    _pj('crcuv_pj', 'Bon d\'intervention MTC clôturé (scan)')
+  ], 2),
+  _sec('cr_autor', '5 · Autorisation de démarrage', [
+    _chk('craut_vl', 'Vide de ligne — conformité (joindre la checklist vide de ligne au dossier de lot)', 'cnc', [
+      'Instructions générales', 'Consignes de sécurité', 'Conditions environnementales', 'Nettoyage local et équipements'
+    ]),
+    _txt('craut_sup', 'Démarrage mélange & homogénéisation autorisé — Superviseur Fabrication (date / heure / visa)'),
+    _txt('craut_aq', 'Démarrage autorisé — AQ Process (date / heure / visa)')
+  ], 2),
+  _sec('cr_vprel', '6 · Vérification préliminaire', [
+    _chk('crvp_chk', 'Vérifications à effectuer', 'oui', [
+      'Présence de tous les documents du dossier de lot',
+      'Habillage spécifique / réglementaire du personnel',
+      'Absence de plaies ouvertes ou maladies contagieuses chez le personnel'
+    ]),
+    _txt('crvp_visa', 'Date / Visa')
+  ], 2),
+  _sec('cr_ope', '7 · Liste des opérateurs de mélange et homogénéisation', [
+    _tab('crope_tab', 'Opérateurs — Shift 01 : 06-14h · 02 : 14-22h · 03 : 22-06h', [
+      _ct('cro_shift', 'N° Shift'), _ct('cro_poste', 'Poste'), _ct('cro_nom', 'Nom & prénom'),
+      _ct('cro_date', 'Date'), _ct('cro_visa', 'Visa'), _ct('cro_verif', 'Vérifier par (Date & Visa)')
+    ])
+  ]),
+  _sec('cr_equip', '8 · Vérification des équipements utilisés', [
+    _note('creqp_note', 'Équipement de mélange', 'Cuve de mélange double paroi CUISINOX (PR296). Statuts : C / NC / NA.'),
+    _tab('creqp_tab', 'Équipements — qualification/calibration & parties vitrées', [
+      _ct('crq_nom', 'Équipement'), _ct('crq_code', 'Code'),
+      _ccnc('crq_qual', 'Statut qualification / calibration'), _ccnc('crq_vitr', 'État des parties vitrées'),
+      _ct('crq_fait', 'Fait par / Date & Visa'), _ct('crq_verif', 'Vérifié par / Date & Visa'), _ct('crq_obs', 'Observation')
+    ])
+  ]),
+  _sec('cr_etal', '9 · Vérification de l\'étalonnage des balances', [
+    _note('cretl_note', 'Balance', 'Balance 150 kg 2M industries (PR087).'),
+    _tab('cretl_tab', 'Balances — calibrage / étalonnage', [
+      _ct('cret_bal', 'Balance'), _ct('cret_code', 'Code'), _coo('cret_cal', 'Calibrage effectué'),
+      _ct('cret_date', 'Date'), _ct('cret_vop', 'Date/Visa Opérateur'), _ct('cret_vverif', 'Date/Visa Vérificateur'), _ct('cret_obs', 'Observation')
+    ])
+  ]),
+  _sec('cr_cond', '10 · Conditions T°C / ΔP / HR% au cours du process', [
+    _note('crcnd_note', 'Fréquence', 'Relever les données toutes les 30 min pendant le process.'),
+    _tab('crcnd_tab', 'Relevés en cours de process', [
+      _ct('crc_date', 'Date'), _ct('crc_heure', 'Heure'),
+      _cn('crc_t', 'Température 15≤T≤25', '°C', 15, 25), _cn('crc_hr', 'Humidité ≤60', '%', null, 60), _cn('crc_dp', 'ΔP ≥1', 'mmH₂O', 1, null),
+      _ct('crc_salle', 'N° salle'), _ct('crc_fait', 'Fait par / Visa'), _ct('crc_verif', 'Vérifié par / Date & Visa')
+    ])
+  ]),
+  _sec('cr_rec', '11 · Réception des matières & bilan des fûts vides', [
+    _note('crrec_note', 'Réception', 'Vérifier l\'intégrité des contenants réceptionnés, avant le début du processus. Le prémélange (PREMIX) est reçu pré-pesé en plusieurs fûts.'),
+    _tab('crrec_tab', 'Matières réceptionnées (PREMIX — une ligne par fût)', [
+      _ct('crr_mat', 'Matière / Code interne'), _ct('crr_lot', 'N° lot interne'),
+      _coo('crr_int', 'Contenant intègre scellé et identifié'), _coo('crr_etiq', 'Présence étiquette pesée'),
+      _cn('crr_theo', 'Qté théorique', 'kg'), _cn('crr_liv', 'Quantité livrée', 'kg'),
+      _ct('crr_fait', 'Fait par / Date & Visa'), _ct('crr_verif', 'Vérifié par / Date & Visa')
+    ]),
+    _num('crm_pbrute', 'Quantité totale reçue — poids brut (P_brute)', 'kg'),
+    _note('crfut_note', 'Bilan des fûts vides', 'Récupérer le contenu de chaque fût, puis peser les fûts vides.'),
+    _tab('crfut_tab', 'Fûts vides', [
+      _ct('crf_fut', 'Fût N°'), _cn('crf_poids', 'Poids du fût vide', 'kg'),
+      _ct('crf_fait', 'Fait par'), _ct('crf_verif', 'Vérifié par')
+    ]),
+    _num('crm_ptv', 'Poids total des fûts vides (P_tv)', 'kg'),
+    _pj('crrec_pj', 'Tickets de pesée des fûts vides (scan)')
+  ]),
+  _sec('cr_vfonc', '12 · Vérification du fonctionnement de l\'équipement avant mélange', [
+    _txt('crvfc_date', 'Début — Date', 'date'), _txt('crvfc_heure', 'Heure'),
+    _tab('crvfc_tab', 'Fonctionnement à vide', [
+      _ct('crvfc_nom', 'Équipement'), _ct('crvfc_code', 'Code'), _ccnc('crvfc_fonc', 'Fonctionnement à vide'),
+      _ct('crvfc_fait', 'Fait par / Date'), _ct('crvfc_verif', 'Vérifié par / Date'), _ct('crvfc_obs', 'Observation')
+    ]),
+    _note('crvfc_note', 'Équipement à contrôler', 'Cuve de mélange double parois CUISINOX (PR296).')
+  ]),
+  _sec('cr_mel', '13 · Mélange et homogénéisation', [
+    _note('crml_note', 'Mélange', 'Transférer le PREMIX dans la cuve de mélange, chauffer et mélanger selon les paramètres ci-dessous, puis vérifier l\'homogénéité de la pommade.'),
+    _chk('crml_op', 'Opérations avant mélange', 'oui', [
+      'Transfert du PREMIX dans la cuve de mélange',
+      'Transfert complet vérifié',
+      'Fermeture du réacteur et des dispositifs de sécurité vérifiée'
+    ]),
+    _txt('crml_debut', 'Heure de début'),
+    _num('crml_vit', 'Vitesse d\'agitation (consigne 30)', 'RPM'),
+    _num('crml_temp', 'Température de chauffage (consigne 65)', '°C'),
+    _num('crml_temps', 'Temps d\'agitation', 'min', 200, 240),
+    _txt('crml_fin', 'Heure de fin'),
+    _oo('crml_homog', 'Homogénéité de la pommade MEBO vérifiée'),
+    _txt('crml_visa', 'Date & Visa Opérateur / Superviseur')
+  ], 2),
+  _sec('cr_ipc', '14 · Contrôle IPC de l\'aspect à la fin du mélange', [
+    _note('crip_note', 'Contrôle IPC aspect', 'Prélever 5 g × 3 points (Haut, Milieu, Bas) du mélange final. Transférer à l\'AQ IPC pour contrôle de l\'aspect. Attendre les résultats IPC avant de poursuivre. Joindre la Fiche IPC au dossier de lot.'),
+    _oc('crip_aspect', 'Aspect : pommade jaune brunâtre, lisse et homogène, sans particule granuleuse, odeur huileuse d\'herbes'),
+    _txt('crip_visa', 'Visa AQ IPC — Date et Heure'),
+    _pj('crip_pj', 'Fiche IPC aspect (scan)')
+  ], 2),
+  _sec('cr_cq', '15 · Réception du mélange (CQ) & fiches', [
+    _note('crcq_rem', 'Remarque', 'Procéder au nettoyage immédiat des équipements et de la salle à la fin du process.'),
+    _ooi('crcq_req', 'Contrôle du mélange requis CQ ? (si Oui : demande d\'échantillonnage réf. CQ-SOP-007)'),
+    _ooi('crcq_bloq', 'Analyse bloquante ? (si Oui : attendre les résultats avant l\'étape de remplissage)'),
+    _txt('crcq_obs', 'Observation'),
+    _txt('crcq_fin', 'Fin — Date / Heure / Fait par / Vérifié par'),
+    _pj('crcq_fsalle', 'Fiche utilisation salle (scan)'),
+    _pj('crcq_fmachine', 'Fiche utilisation machine (scan)')
+  ], 2),
+  _sec('cr_bil', '16 · Bilan de la phase (rendement)', [
+    _note('crm_note', 'Rendement (automatique depuis les données enregistrées)', `P_brute (poids brut reçu, section 11) et P_tv (poids total des fûts vides, section 11) sont repris automatiquement. Saisir P_mél (masse du mélange obtenu) et C_mél (échantillon de contrôle). Poids théorique du mélange P_th mél = P_brute − P_tv ; Avarie A = P_th mél − (P_mél + C_mél) ; Rendement R = P_mél × 100 / P_th mél. Norme : ≥ 98 %.`),
+    _calc('crm_pbrute_e', 'P_brute — poids brut reçu (rappel section 11)', '{crm_pbrute}', 'kg'),
+    _calc('crm_ptv_e', 'P_tv — poids total des fûts vides (rappel section 11)', '{crm_ptv}', 'kg'),
+    _calc('crm_pthmel', 'P_th mél = P_brute − P_tv', '{crm_pbrute} - {crm_ptv}', 'kg'),
+    _num('crm_pmel', 'P_mél — masse du mélange obtenu', 'kg'),
+    _num('crm_cmel', 'C_mél — masse totale échantillon de contrôle', 'kg'),
+    _calc('crm_ai', 'Avarie A = P_th mél − (P_mél + C_mél)', '{crm_pthmel} - ({crm_pmel} + {crm_cmel})', 'kg'),
+    _calc('crm_ri', 'Rendement R = P_mél × 100 / P_th mél', '{crm_pmel} * 100 / {crm_pthmel}', '%', 98, null),
+    _chk('crm_docs', 'Documents à joindre', 'oui', ['Bon d\'avarie', 'Bon de prélèvement']),
+    _txt('crm_just', 'Justification de toute avarie hors normes'),
+    _txt('crm_visa', 'Superviseur Production / Responsable Fabrication — Date / Heure / Visa')
+  ], 2),
+  _sec('cr_inc', '17 · Suivi des incidents et des arrêts', [
+    _tab('crinc_tab', 'Incidents / arrêts', [
+      _ct('cri_date', 'Date'), _ct('cri_harr', 'Heure d\'arrêt'), _ct('cri_sac', 'N° de sac'),
+      _ct('cri_motif', 'Motif'), _ct('cri_action', 'Action corrective'),
+      _ct('cri_ddem', 'Date de démarrage'), _ct('cri_hdem', 'Heure de démarrage'), _ct('cri_visa', 'Fait par / Visa')
+    ]),
+    _txt('crinc_visa', 'Vérifié par / Visa — Date')
+  ])
+]
+
+// =====================================================================
 //  Squelette générique d'une étape de fabrication (prélim, nettoyage,
 //  opérateurs, équipements, conditions, opération, IPC, bilan, incidents).
 //  Sert à pré-structurer les étapes dont le dossier n'est pas encore
@@ -1199,7 +1376,7 @@ const PHASES_STANDARD = {
   compression:           { nom: 'Compression', sections: SECTIONS_COMPRESSION },
   remplissage_gelules:   { nom: 'Remplissage des gélules', sections: phaseSkel('ge', 'Opération de remplissage des gélules') },
   pelliculage:           { nom: 'Pelliculage', sections: SECTIONS_PELLICULAGE },
-  melange_creme_pommade: { nom: 'Mélange crème & pommade', sections: phaseSkel('cr', 'Opération de mélange crème/pommade') }
+  melange_creme_pommade: { nom: 'Mélange crème & pommade', sections: SECTIONS_CREME }
 }
 
 // Liste ordonnée des étapes (pour l'éditeur de gamme).
