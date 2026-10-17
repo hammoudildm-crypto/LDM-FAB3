@@ -633,6 +633,238 @@ Masse moyenne statistique MMS = (M₁ + M₂ + … + Mᵢ) / n  (n = nombre de c
 ]
 
 // =====================================================================
+//  Phase PELLICULAGE (IF PFLDM103, pages 72-92) — modélisée à l'identique.
+//  Pelliculeuse LABORTECNIC (PR024). Prémélange d'enrobage Aquapolish P pink
+//  041.47 (MPEX0255) + eau purifiée. Comprimé pelliculé cible 154,50 mg,
+//  gain de poids ~4,5 mg. Section 20 : rendement AUTOMATIQUE (P_cp réception,
+//  P_cpl bilan, MMCP, C_ép) — norme 98-100 %.
+// =====================================================================
+const SECTIONS_PELLICULAGE = [
+  _sec('pl_prelim', '1 · Opérations préliminaires & autorisation de démarrage', [
+    _note('plp_instr', 'Opérations préliminaires — vérifications avant démarrage', `• Vide de ligne : machines et locaux libérés des matériaux et documents du produit précédent (selon check-list vide de ligne).
+• Nettoyage des équipements et locaux vérifié ; étiquettes de nettoyage et logs book renseignés.
+• Local et machine identifiés (fiches « utilisation salle » et « utilisation machine ») ; étiquettes « Nettoyé » et « Utilisation salle » collées.
+• Nettoyage des pièces mobiles vérifié ; étiquettes « Nettoyé » jointes à l'IF.
+• Vérification journalière des balances effectuée.
+• Propreté et intégrité des contenants MP réceptionnés vérifiées.
+• Conditions d'ambiance du local vérifiées : température (°C), HR (%), ΔP.
+• En cas d'anomalies : stopper l'opération, alerter le responsable, reporter l'évènement sur la fiche incidents.
+• Attendre l'autorisation AQ avant de procéder à l'étape de pelliculage.`),
+    _note('plp_secu', 'Consignes de sécurité obligatoires', TXT_SECURITE),
+    _note('plp_prec', 'Précautions de production', TXT_PRECAUTIONS),
+    _txt('plp_date', 'Date de début de pelliculage', 'date', true),
+    _txt('plp_salle', 'N° de salle de pelliculage'),
+    _txt('plp_heure', 'Heure de début'),
+    _num('plp_temp', 'Température de la salle', '°C', 15, 25, true),
+    _num('plp_hr', 'Humidité relative', '%', null, 60, true),
+    _num('plp_dp', 'Différentiel de pression (ΔP)', 'mmH₂O', 1, null, true)
+  ], 2),
+  _sec('pl_net', '2 · Vérification du nettoyage des équipements et locaux', [
+    _note('plnet_note', 'Étiquettes de nettoyage', 'Remplacer les étiquettes « Nettoyé » salle et machine par les fiches « utilisation salle » et « utilisation machine ». Coller les étiquettes « Nettoyée » dans l\'instruction de fabrication.'),
+    _chk('plnet_chk', 'Étiquettes « nettoyé » collées', 'oui', ['Salle de pelliculage', 'Équipements', 'Pièces mobiles']),
+    _pj('plnet_pjsalle', 'Étiquette nettoyée de la salle de pelliculage (scan)'),
+    _pj('plnet_pjequip', 'Étiquettes nettoyée des équipements (scan)'),
+    _pj('plnet_pjmob', 'Étiquettes nettoyée des pièces mobiles (scan)'),
+    _txt('plnet_visa', 'Vérifié par — Date & Visa')
+  ], 2),
+  _sec('pl_env', '3 · Conditions environnementales avant démarrage', [
+    _note('plenv_note', 'Contrôle T° / HR / ΔP', 'Relever les données avant démarrage du pelliculage.'),
+    _tab('plenv_tab', 'Contrôle de la température, de l\'humidité relative et de la différence de pression', [
+      _ct('plen_etape', 'Étape'), _ct('plen_salle', 'N° salle'), _ct('plen_heure', 'Heure'),
+      _cn('plen_t', 'T°C [15-25]', '°C', 15, 25), _cn('plen_hr', 'HR% ≤ 60', '%', null, 60), _cn('plen_dp', 'ΔP ≥ 1', 'mmH₂O', 1, null),
+      _ct('plen_vop', 'Date/Visa Opérateur'), _ct('plen_vverif', 'Date/Visa Vérificateur')
+    ])
+  ]),
+  _sec('pl_autor', '4 · Autorisation de démarrage de pelliculage', [
+    _chk('plaut_chk', 'Vide de ligne — conformité (joindre la checklist vide de ligne à l\'IF)', 'cnc', [
+      'Instructions générales', 'Consignes de sécurité', 'Conditions environnementales', 'Nettoyage local et équipements'
+    ]),
+    _txt('plaut_sup', 'Démarrage autorisé — Superviseur Fabrication (date / heure / visa)'),
+    _txt('plaut_aq', 'Démarrage autorisé — AQ Process (date / heure / visa)')
+  ], 2),
+  _sec('pl_vprel', '5 · Vérification préliminaire', [
+    _chk('plvp_chk', 'Vérifications à effectuer', 'oui', [
+      'Présence de tous les documents de l\'instruction de fabrication',
+      'Habillage spécifique / réglementaire du personnel',
+      'Absence de plaies ouvertes ou maladies contagieuses chez le personnel'
+    ]),
+    _txt('plvp_visa', 'Date / Visa')
+  ], 2),
+  _sec('pl_ope', '6 · Liste des opérateurs de pelliculage', [
+    _tab('plope_tab', 'Opérateurs — Shift 01 : 06-14h · 02 : 14-22h · 03 : 22-06h', [
+      _ct('plop_shift', 'N° Shift'), _ct('plop_poste', 'Poste'), _ct('plop_nom', 'Nom & prénom'),
+      _ct('plop_date', 'Date'), _ct('plop_visa', 'Visa'), _ct('plop_verif', 'Vérifier par (Date & Visa)')
+    ])
+  ]),
+  _sec('pl_equip', '7 · Vérification des équipements utilisés', [
+    _note('pleq_note', 'Équipement de pelliculage', 'Pelliculeuse LABORTECNIC (PR024). Statuts : C / NC / NA.'),
+    _tab('pleq_tab', 'Équipements — qualification/calibration & parties vitrées', [
+      _ct('ple_nom', 'Équipement'), _ct('ple_code', 'Code'),
+      _ccnc('ple_qual', 'Statut qualification / calibration'), _ccnc('ple_vitr', 'État des parties vitrées'),
+      _ct('ple_fait', 'Fait par / Date & Visa'), _ct('ple_verif', 'Vérifié par / Date & Visa'), _ct('ple_obs', 'Observation')
+    ])
+  ]),
+  _sec('pl_etal', '8 · Vérification de l\'étalonnage des balances', [
+    _tab('pletal_tab', 'Balances — calibrage', [
+      _ct('plet_bal', 'Balance'), _ct('plet_code', 'Code'), _coo('plet_cal', 'Calibrage effectué'),
+      _ct('plet_date', 'Date'), _ct('plet_vop', 'Date/Visa Opérateur'), _ct('plet_vverif', 'Date/Visa Vérificateur'), _ct('plet_obs', 'Observation')
+    ])
+  ]),
+  _sec('pl_cond', '9 · Conditions T°C / ΔP / HR% au cours du process', [
+    _note('plcond_note', 'Fréquence', 'Relever les données toutes les 30 min pendant le process de pelliculage.'),
+    _tab('plcond_tab', 'Relevés en cours de pelliculage', [
+      _ct('plco_date', 'Date'), _ct('plco_heure', 'Heure'),
+      _cn('plco_t', 'Température 15≤T≤25', '°C', 15, 25), _cn('plco_hr', 'Humidité ≤60', '%', null, 60), _cn('plco_dp', 'ΔP ≥1', 'mmH₂O', 1, null),
+      _ct('plco_salle', 'N° salle'), _ct('plco_fait', 'Fait par / Visa'), _ct('plco_verif', 'Vérifié par / Date & Visa')
+    ])
+  ]),
+  _sec('pl_rec', '10 · Réception des matières (comprimés nus & excipient de pelliculage)', [
+    _note('plrec_note', 'Réception', 'Vérifier l\'intégrité des contenants réceptionnés, avant le début du processus de pelliculage.'),
+    _tab('plrec_tab', 'Matières réceptionnées', [
+      _ct('plre_mat', 'Matière / Code interne'), _ct('plre_lot', 'N° lot produit fini'),
+      _coo('plre_int', 'Contenant intègre scellé et identifié'), _ct('plre_frac', 'N° de fraction'),
+      _coo('plre_etiq', 'Présence étiquette pesée'), _cn('plre_theo', 'Qté théorique', 'kg'),
+      _cn('plre_liv', 'Quantité livrée', 'kg'), _ct('plre_fait', 'Fait par / Date & Visa'), _ct('plre_verif', 'Vérifié par / Date & Visa')
+    ]),
+    _num('pelrec_pcp', 'Comprimés nus reçus (P_cp)', 'kg'),
+    _num('pelrec_total', 'Quantité totale reçue', 'kg')
+  ]),
+  _sec('pl_vfonc', '11 · Vérification du fonctionnement de l\'équipement avant pelliculage', [
+    _txt('plvf_date', 'Début — Date', 'date'), _txt('plvf_heure', 'Heure'),
+    _tab('plvf_tab', 'Fonctionnement à vide', [
+      _ct('plvf_nom', 'Équipement'), _ct('plvf_code', 'Code'), _ccnc('plvf_fonc', 'Fonctionnement à vide'),
+      _ct('plvf_fait', 'Fait par / Date'), _ct('plvf_verif', 'Vérifié par / Date'), _ct('plvf_obs', 'Observation')
+    ]),
+    _note('plvf_note', 'Équipements à contrôler', 'Pelliculeuse LABORTECNIC (PR024) · Buses d\'ouverture 1,2 mm · Réacteur solution de pelliculage.')
+  ]),
+  _sec('pl_eau', '12 · Pesée de l\'eau purifiée', [
+    _txt('pleau_debut', 'Début — Date / Heure'),
+    _tab('pleau_tab', 'Pesée (G : Globale · B : Brute · T : Tare · N : Net)', [
+      _ct('plea_mat', 'Matière'), _ct('plea_pt', 'Point de prélèvement'),
+      _cn('plea_apeser', 'Quantité à peser', 'kg'), _ct('plea_bal', 'Code balance'),
+      _cn('plea_pesee', 'Quantité pesée (N)', 'kg'), _ct('plea_fait', 'Fait par'), _ct('plea_verif', 'Vérifié par')
+    ]),
+    _num('pleau_qte', 'Eau purifiée pesée (consigne 25,90)', 'kg'),
+    _txt('pleau_fin', 'Fin — Heure'),
+    _pj('pleau_ticket', 'Ticket de pesée de l\'eau purifiée (scan)'),
+    _txt('pleau_visa', 'Vérifié par — Date & Visa')
+  ], 2),
+  _sec('pl_sol', '13 · Préparation de la solution de pelliculage', [
+    _note('plsol_note', 'Mode opératoire', 'Vérifier la fermeture de la vanne du réacteur. Introduire l\'eau purifiée dans la cuve, puis ajouter progressivement l\'Aquapolish P pink 041.47 sous agitation constante. Un excès de 30 % est prévu dans la formule pour compenser les pertes du process. Mélanger jusqu\'à dispersion complète.'),
+    _txt('plsol_debut', 'Début — Date / Heure'),
+    _tab('plsol_tab', 'Matières de la solution', [
+      _ct('plso_mat', 'Matière / Code interne'), _cn('plso_theo', 'Qté théorique / turbine', 'kg'),
+      _cn('plso_lue', 'Qté lue sur étiquettes de pesée', 'kg'), _cn('plso_duree', 'Durée', 'min'),
+      _ct('plso_deb', 'Début'), _ct('plso_fin', 'Fin'), _ct('plso_fait', 'Fait par'), _ct('plso_verif', 'Vérifié par')
+    ]),
+    _txt('plsol_mdeb', 'Heure début mélange'), _txt('plsol_mfin', 'Heure fin mélange'), _num('plsol_mduree', 'Durée réelle du mélange', 'min'),
+    _oc('plsol_disp', 'Dispersion homogène'),
+    _oo('plsol_tamis', 'Suspension filtrée à travers un tamis de 250 µm')
+  ], 2),
+  _sec('pl_prech', '14.1 · Dépoussiérage & préchauffage des comprimés', [
+    _note('plprech_note', 'Préchauffage', 'Introduire dans la turbine de pelliculage les comprimés nus et préchauffer selon les consignes ci-dessous.'),
+    _num('plprech_vit', 'Vitesse de la turbine', 'tr/min', 2, 3),
+    _num('plprech_tent', 'Température d\'entrée (consigne 60 ± 5)', '°C', 55, 65),
+    _num('plprech_tsort', 'Température de sortie', '°C', 45, 50),
+    _num('plprech_souf', 'Soufflage (consigne 45)', '%'),
+    _num('plprech_asp', 'Aspiration (consigne 55)', '%'),
+    _num('plprech_debit', 'Débit d\'air d\'entrée', 'm³/h', 2000, 2500),
+    _num('plprech_duree', 'Durée préchauffage (consigne 10)', 'min'),
+    _txt('plprech_hdeb', 'Heure début préchauffage'), _txt('plprech_hfin', 'Heure fin préchauffage'),
+    _num('plprech_b1', 'Masse moyenne après préchauffage B1 (30 cp) — 150 mg ± 3 %', 'mg', 145.5, 154.5),
+    _txt('plprech_visa', 'Date & Visa Opérateur / Superviseur')
+  ], 2),
+  _sec('pl_pulv', '14.2 · Pulvérisation de la suspension de pelliculage', [
+    _note('plpulv_note', 'Pulvérisation', 'Poursuivre le pelliculage avec la solution jusqu\'à l\'obtention d\'un gain de poids de 4,5 mg, en s\'assurant de la conformité de l\'aspect des comprimés. Reporter la masse en fin de pulvérisation dans l\'annexe IPC.'),
+    _num('plpulv_vit', 'Vitesse de la turbine', 'tr/min', 4, 5),
+    _num('plpulv_debit', 'Débit d\'air d\'entrée', 'm³/h', 2000, 2500),
+    _num('plpulv_tent', 'Température d\'entrée', '°C', 48, 60),
+    _num('plpulv_tsort', 'Température de sortie', '°C', 38, 45),
+    _num('plpulv_depr', 'Dépression dans la turbine', 'mbar', -5, -0.1),
+    _num('plpulv_souf', 'Soufflage', '%', 40, 45),
+    _num('plpulv_asp', 'Aspiration', '%', 50, 55),
+    _num('plpulv_pa', 'Pression atomisation A', 'bar', 1.5, 2.5),
+    _num('plpulv_pp', 'Pression pattern P', 'bar', 2.0, 3.0),
+    _num('plpulv_pc', 'Pression contrôle C', 'bar', 1.5, 3.5),
+    _num('plpulv_dist', 'Distance pistolet / lit des comprimés (consigne 20)', 'cm'),
+    _num('plpulv_pompe', 'Vitesse pompe de pulvérisation', '%', 40, 50),
+    _num('plpulv_masse', 'Masse moyenne (30 cp) — 154,50 mg ± 3 %', 'mg', 149.86, 159.13),
+    _num('plpulv_gain', 'Gain de poids obtenu (consigne 4,5)', 'mg'),
+    _txt('plpulv_hdeb', 'Heure début pulvérisation'), _txt('plpulv_hfin', 'Heure fin pulvérisation'),
+    _num('plpulv_duree', 'Durée de pulvérisation', 'min', 120, 180),
+    _txt('plpulv_visa', 'Nom / Date & Visa Superviseur Fabrication')
+  ], 2),
+  _sec('pl_sechref', '15 · Séchage & refroidissement des comprimés pelliculés', [
+    _note('plsr_sech', 'Séchage', 'Paramètres de séchage des comprimés pelliculés (consignes ci-dessous).'),
+    _num('plsech_vit', 'Séchage — Vitesse turbine (consigne 3)', 'tr/min'),
+    _num('plsech_souf', 'Séchage — Soufflage (consigne 45)', '%'),
+    _num('plsech_asp', 'Séchage — Aspiration (consigne 55)', '%'),
+    _num('plsech_debit', 'Séchage — Débit d\'air d\'entrée', 'm³/h', 2000, 2500),
+    _num('plsech_tent', 'Séchage — Température d\'air à l\'entrée', '°C', 34, 41),
+    _num('plsech_tsort', 'Séchage — Température d\'air à la sortie', '°C', 34, 42),
+    _num('plsech_depr', 'Séchage — Dépression turbine', 'mbar', -5, -0.1),
+    _txt('plsech_hdeb', 'Séchage — Heure début'), _txt('plsech_hfin', 'Séchage — Heure fin'), _num('plsech_duree', 'Séchage — Durée (consigne 15)', 'min'),
+    _note('plsr_ref', 'Refroidissement', 'Paramètres de refroidissement des comprimés pelliculés (consignes ci-dessous).'),
+    _num('plref_vit', 'Refroidissement — Vitesse turbine (consigne 3)', 'tr/min'),
+    _num('plref_souf', 'Refroidissement — Soufflage (consigne 45)', '%'),
+    _num('plref_asp', 'Refroidissement — Aspiration (consigne 55)', '%'),
+    _num('plref_debit', 'Refroidissement — Débit d\'air d\'entrée', 'm³/h', 2000, 2500),
+    _num('plref_depr', 'Refroidissement — Dépression turbine', 'mbar', -5, -0.1),
+    _num('plref_tent', 'Refroidissement — Température d\'air entrée', '°C', 15, 25),
+    _num('plref_tsort', 'Refroidissement — Température d\'air sortie', '°C', null, 30),
+    _txt('plref_hdeb', 'Refroidissement — Heure début'), _txt('plref_hfin', 'Refroidissement — Heure fin'), _num('plref_duree', 'Refroidissement — Durée (consigne 15)', 'min'),
+    _num('plref_mmcp', 'Masse moyenne comprimés pelliculés fin refroidissement M.M.C.P (30 cp)', 'mg', 149.86, 159.13),
+    _txt('plsr_visa', 'Date & Visa Opérateur / Superviseur')
+  ], 2),
+  _sec('pl_cq', '16 · Réception des comprimés pelliculés (CQ) & fiches', [
+    _ooi('plcq_req', 'Contrôle des comprimés pelliculés requis CQ ? (si Oui : demande d\'échantillonnage réf. CQ-SOP-007)'),
+    _ooi('plcq_bloq', 'Analyse bloquante ? (si Oui : attendre les résultats avant le conditionnement)'),
+    _txt('plcq_obs', 'Observation'),
+    _txt('plcq_fin', 'Fin — Date / Heure / Fait par / Vérifié par'),
+    _pj('plcq_pjpesee', 'Étiquette « pesée » des produits intermédiaires (scan)'),
+    _pj('plcq_pjid', 'Étiquette « identification in process » (scan)'),
+    _pj('plcq_fsalle', 'Fiche utilisation salle (scan)'),
+    _pj('plcq_fmachine', 'Fiche utilisation machine (scan)'),
+    _txt('plcq_fvisa', 'Fiches utilisation — Vérifié par Date & Visa')
+  ], 2),
+  _sec('pl_inc', '17 · Suivi des incidents et des arrêts de pelliculage', [
+    _tab('plinc_tab', 'Incidents / arrêts', [
+      _ct('plin_date', 'Date'), _ct('plin_harr', 'Heure d\'arrêt'), _ct('plin_sac', 'N° de sac'),
+      _ct('plin_motif', 'Motif'), _ct('plin_action', 'Action corrective'),
+      _ct('plin_ddem', 'Date de démarrage'), _ct('plin_hdem', 'Heure de démarrage'), _ct('plin_visa', 'Fait par / Visa')
+    ]),
+    _txt('plinc_visa', 'Vérifié par / Visa — Date')
+  ]),
+  _sec('pl_bil', '18 · Bilan de pelliculage', [
+    _note('plbil_note', 'Bilan', 'Tarer le poids des sacs. Récupérer les comprimés dans des sacs PE propres (identifier chaque sac). Peser le sac + comprimés (poids brut). Poids net = brut − tare. Transférer chaque sac dans un fût propre identifié.'),
+    _tab('plbil_tab', 'Bilan par fût', [
+      _ct('plbi_fut', 'Fût N°'), _ct('plbi_sac', 'Sac N°'),
+      _cn('plbi_tare', 'Tare', 'kg'), _cn('plbi_brute', 'Brute', 'kg'), _cn('plbi_net', 'Net', 'kg'),
+      _ct('plbi_fait', 'Fait par'), _ct('plbi_verif', 'Vérifié par')
+    ]),
+    _num('pelbil_pcpl', 'P_cpl — Total Net des comprimés pelliculés obtenus', 'kg')
+  ]),
+  _sec('pl_rdt', '19 · Calcul du rendement de pelliculage', [
+    _note('plr_note', 'Rendement (automatique depuis les données enregistrées)', `Les poids sont repris automatiquement : P_cp (comprimés nus, section 10) et P_cpl (section 18 · bilan). Masse moyenne théorique MMTCP = 154,50 mg ; masse moyenne comprimé nu = 150,00 mg. Saisir MMCP (mesurée) et C_ép (nombre et poids prélevés par le CQ). Norme de rendement : 98–100 %.`),
+    _calc('plr_pcp', 'P_cp — comprimés nus reçus (rappel section 10)', '{pelrec_pcp}', 'kg'),
+    _calc('plr_pcpl', 'P_cpl — comprimés pelliculés obtenus (rappel section 18)', '{pelbil_pcpl}', 'kg'),
+    _num('plr_mmcp', 'MMCP — masse moyenne des comprimés pelliculés (mesurée)', 'mg'),
+    _num('plr_cepcp', 'C_ép — nombre de comprimés pelliculés prélevés par le CQ', 'cp'),
+    _num('plr_cepkg', 'C_ép — poids des comprimés pelliculés prélevés par le CQ', 'kg'),
+    _calc('plr_ncp', 'N_CP = P_cp × 10⁶ / 150 (nombre théorique)', '{pelrec_pcp} * 1000000 / 150', 'cp'),
+    _calc('plr_pth', 'Poids théorique pelliculés = N_CP × MMTCP(154,50) × 10⁻⁶', '{plr_ncp} * 154.50 / 1000000', 'kg'),
+    _calc('plr_npl', 'N_PL = P_cpl × 10⁶ / MMCP (nombre obtenu)', '{pelbil_pcpl} * 1000000 / {plr_mmcp}', 'cp'),
+    _calc('plr_film', 'Masse du film utilisé = P_cpl − P_cp', '{pelbil_pcpl} - {pelrec_pcp}', 'kg'),
+    _calc('plr_apl_cp', 'A_PL (avarie) = N_CP − N_PL − C_ép', '{plr_ncp} - {plr_npl} - {plr_cepcp}', 'cp'),
+    _calc('plr_apl_kg', 'A_PL (avarie) = A_PL(cp) × MMCP × 10⁻⁶', '{plr_apl_cp} * {plr_mmcp} / 1000000', 'kg'),
+    _calc('plr_rcp', 'Rendement (cp/cp) = (N_PL + C_ép) × 100 / N_CP', '({plr_npl} + {plr_cepcp}) * 100 / {plr_ncp}', '%', 98, 100),
+    _calc('plr_rkg', 'Rendement (kg/kg) = (P_cpl + C_ép × MMCP × 10⁻⁶) × 100 / Poids théorique', '({pelbil_pcpl} + {plr_cepkg}) * 100 / {plr_pth}', '%', 98, 100),
+    _chk('plr_docs', 'Documents à joindre', 'oui', ['Bon d\'avarie', 'Bon de prélèvement']),
+    _txt('plr_visa', 'Superviseur Production — Date / Heure / Visa')
+  ], 2)
+]
+
+// =====================================================================
 //  Squelette générique d'une étape de fabrication (prélim, nettoyage,
 //  opérateurs, équipements, conditions, opération, IPC, bilan, incidents).
 //  Sert à pré-structurer les étapes dont le dossier n'est pas encore
@@ -711,7 +943,7 @@ const PHASES_STANDARD = {
   tamisage_melange:      { nom: 'Tamisage & Mélange', sections: SECTIONS_TM },
   compression:           { nom: 'Compression', sections: SECTIONS_COMPRESSION },
   remplissage_gelules:   { nom: 'Remplissage des gélules', sections: phaseSkel('ge', 'Opération de remplissage des gélules') },
-  pelliculage:           { nom: 'Pelliculage', sections: phaseSkel('pl', 'Opération de pelliculage') },
+  pelliculage:           { nom: 'Pelliculage', sections: SECTIONS_PELLICULAGE },
   melange_creme_pommade: { nom: 'Mélange crème & pommade', sections: phaseSkel('cr', 'Opération de mélange crème/pommade') }
 }
 
