@@ -151,7 +151,10 @@ function appliquerProduit (key) {
   d.exc = c.exc || []
   d.equip = c.equip || []
   d.diagramme = c.diagramme || { flux: [], ipc: [], equipements: [] }
-  d.formulaire = c.formulaire || { sections: [] }
+  // Mode saisie = TOUJOURS le modèle intégré (celui du produit s'il existe,
+  // sinon le modèle Pesée par défaut), sans dépendre d'une fiche enregistrée.
+  const integ = (PRODUITS_REF[key] && PRODUITS_REF[key].formulaire) || FORMULAIRE_DEFAUT
+  d.formulaire = JSON.parse(JSON.stringify(integ))
   d.saisie = {}                      // nouveau produit → saisie vierge
   d.pesee = peseeVide(dimsFor(c))   // redimensionne la pesée au produit
 }
