@@ -7,12 +7,15 @@
 
 // --- Fabriques pour composer un formulaire par défaut (ids STABLES, pour
 //     que le rechargement d'un dossier enregistré retrouve bien ses saisies).
-//     num(limites) · oc(Conforme/Non conforme) · oo(Oui/Non) · txt/date ·
-//     colonnes de tableau cn/ct/coc · tab(tableau) · sec(section).           ---
+//     Champs : num(limites) · oc(Conforme/Non conforme) · cnc(C/NC) ·
+//     oo(Oui/Non) · txt/date. Colonnes de tableau : cn(num) · ct(texte) ·
+//     coc(Conforme/NC) · ccnc(C/NC) · coo(Oui/Non). tab(tableau) · sec(section). ---
 const _num = (id, label, unite = '', min = null, max = null, obligatoire = false) =>
   ({ id, label, type: 'num', unite, min, cible: null, max, obligatoire, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [] })
 const _oc = (id, label, obligatoire = false) =>
   ({ id, label, type: 'oui_non', unite: '', min: null, cible: null, max: null, obligatoire, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [] })
+const _cnc = (id, label, obligatoire = false) =>
+  ({ id, label, type: 'oui_non', unite: '', min: null, cible: null, max: null, obligatoire, attendu: 'C', options: ['C', 'NC'], colonnes: [] })
 const _oo = (id, label, obligatoire = false) =>
   ({ id, label, type: 'oui_non', unite: '', min: null, cible: null, max: null, obligatoire, attendu: 'Oui', options: ['Oui', 'Non'], colonnes: [] })
 const _txt = (id, label, type = 'texte', obligatoire = false) =>
@@ -23,82 +26,158 @@ const _ct = (id, label) =>
   ({ id, label, type: 'texte', unite: '', min: null, max: null, attendu: 'Conforme', options: ['Conforme', 'Non conforme'] })
 const _coc = (id, label) =>
   ({ id, label, type: 'oui_non', unite: '', min: null, max: null, attendu: 'Conforme', options: ['Conforme', 'Non conforme'] })
+const _ccnc = (id, label) =>
+  ({ id, label, type: 'oui_non', unite: '', min: null, max: null, attendu: 'C', options: ['C', 'NC'] })
+const _coo = (id, label) =>
+  ({ id, label, type: 'oui_non', unite: '', min: null, max: null, attendu: 'Oui', options: ['Oui', 'Non'] })
 const _tab = (id, label, colonnes) =>
   ({ id, label, type: 'tableau', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes })
 const _sec = (id, titre, champs) => ({ id, titre, champs })
 
-// Formulaire de conduite du lot ROSUSTINE ® 10 mg (comprimé pelliculé),
-// calqué sur les étapes du dossier de lot : conditions de ligne, les 6
-// opérations du procédé (mélange 01, tamisage, mélange 02, lubrification,
-// compression, pelliculage), contrôles IPC et rendement.
-// Limites renseignées = spéc. site (T°, HR, ΔP) + pharmacopée (friabilité,
-// désagrégation) + masse déduite de la formule (108 mg/cp ± 5 %).
-// Limites laissées vides (« à définir ») = valeurs produit à confirmer sur
-// l'AMM / dossier (dureté, LOD, temps, vitesses, rendements) : à compléter
-// dans le Constructeur. Les champs sans limite sont enregistrés sans alerte.
+// =====================================================================
+//  Formulaire ROSUSTINE ® 10 mg — PARTIE PESÉE (IF PFLDM103, pages 9-24,
+//  sections 1 à 14). Calqué page par page sur le dossier de lot papier.
+//  Limites = spéc. dossier : T° 15-25 °C, HR ≤60 %, ΔP ≥1 mmH₂O.
+//  Conformité pesée (quantité pesée vs théorique ± tolérance) = vue
+//  « ② Pesée guidée (eBMR) » ; ici les quantités pesées sont enregistrées.
+// =====================================================================
 const FORMULAIRE_ROSUSTINE = {
   sections: [
-    _sec('s_init', 'Démarrage & conditions de ligne', [
-      _txt('f_date', 'Date de début de fabrication', 'date', true),
-      _txt('f_equipe', 'Équipe / poste'),
-      _txt('f_chef', 'Chef de ligne'),
-      _oc('f_vide', 'Vide de ligne & propreté vérifiés', true),
-      _num('f_temp', 'Température de la salle', '°C', 15, 25, true),
-      _num('f_hr', 'Humidité relative', '%', null, 60, true),
-      _num('f_dp', 'Différentiel de pression', 'Pa', 1, null)
+    _sec('p_prelim', '1 · Opérations préliminaires & autorisation de démarrage', [
+      _txt('pp_date', 'Date de début de pesée', 'date', true),
+      _txt('pp_salle', 'N° de salle de pesée'),
+      _txt('pp_heure', 'Heure de début'),
+      _num('pp_temp', 'Température de la salle', '°C', 15, 25, true),
+      _num('pp_hr', 'Humidité relative', '%', null, 60, true),
+      _num('pp_dp', 'Différentiel de pression (ΔP)', 'mmH₂O', 1, null, true),
+      _cnc('pp_vl_instr', 'Vide de ligne — Instructions générales'),
+      _cnc('pp_vl_secu', 'Vide de ligne — Consignes de sécurité'),
+      _cnc('pp_vl_env', 'Vide de ligne — Conditions environnementales'),
+      _cnc('pp_vl_net', 'Vide de ligne — Nettoyage local & équipements'),
+      _oo('pp_doc', "Présence de tous les documents de l'instruction de fabrication"),
+      _oo('pp_habil', 'Habillage spécifique / réglementaire du personnel'),
+      _oo('pp_sante', 'Aptitude hygiène du personnel vérifiée (selon procédure)'),
+      _txt('pp_sup_visa', 'Démarrage autorisé — Superviseur Fabrication (date / heure / visa)'),
+      _txt('pp_aq_visa', 'Démarrage autorisé — AQ Process (date / heure / visa)')
     ]),
-    _sec('s_m01', 'Mélange 01 — Rosuvastatine calcium + Crospovidone', [
-      _oc('m01_eq', 'Équipement conforme — Mélangeur en V MAKINA 100L (PR210)'),
-      _num('m01_t', 'Temps de mélange', 'min'),
-      _num('m01_v', 'Vitesse / nombre de tours'),
-      _txt('m01_visa', 'Visa opérateur')
+    _sec('p_net', '2 · Vérification du nettoyage (étiquettes « nettoyé »)', [
+      _oo('net_salle', 'Étiquette « nettoyé » — Salle de pesée collée'),
+      _oo('net_flux', 'Étiquette « nettoyé » — Flux laminaire collée'),
+      _oo('net_bal', 'Étiquettes « nettoyé » — Balances collées'),
+      _oo('net_mat', 'Étiquettes « nettoyé » — Matériels de pesée collées'),
+      _txt('net_visa', 'Vérifié par — Date & Visa')
     ]),
-    _sec('s_tam', 'Tamisage — tamis 0,8 mm', [
-      _oc('tam_eq', 'Équipement conforme — Calibreur CPS (PR036/PR097) / Kevin super mill (PR03/PR311)'),
-      _oo('tam_grille', 'Tamis 0,8 mm en place'),
-      _txt('tam_visa', 'Visa opérateur')
-    ]),
-    _sec('s_m02', 'Mélange 02 — + Lactose, Cellulose MC, Phosphate de calcium', [
-      _oc('m02_eq', 'Équipement conforme — Mélangeur en V MPY 400 (PR032)'),
-      _num('m02_t', 'Temps de mélange', 'min'),
-      _num('m02_lod', 'LOD / perte à la dessiccation (à définir)', '%'),
-      _oc('m02_unif', 'Uniformité de mélange conforme'),
-      _txt('m02_visa', 'Visa opérateur')
-    ]),
-    _sec('s_lub', 'Lubrification — Stéarate de magnésium', [
-      _num('lub_t', 'Temps de lubrification', 'min'),
-      _txt('lub_visa', 'Visa opérateur')
-    ]),
-    _sec('s_comp', 'Compression — Fette 1200i (PR012/PR097/PR205)', [
-      _oc('comp_eq', 'Équipement conforme'),
-      _num('comp_masse', 'Masse moyenne comprimé nu', 'mg', 102.6, 113.4, true),
-      _num('comp_dur', 'Dureté moyenne (à définir)', 'N'),
-      _num('comp_ep', 'Épaisseur', 'mm'),
-      _num('comp_fria', 'Friabilité', '%', null, 1.0),
-      _num('comp_desa', 'Désagrégation comprimé nu', 'min', null, 15),
-      _oc('comp_aspect', 'Aspect conforme'),
-      _tab('comp_ipc', 'Contrôles périodiques en cours de compression', [
-        _ct('ci_h', 'Heure'),
-        _cn('ci_m', 'Masse moy. 20 cp', 'mg', 102.6, 113.4),
-        _cn('ci_d', 'Dureté', 'N'),
-        _cn('ci_des', 'Désagrégation', 'min', null, 15),
-        _coc('ci_asp', 'Aspect')
+    _sec('p_ope', '3 · Liste des opérateurs de pesée', [
+      _tab('ope_tab', 'Opérateurs — Shift 01 : 06-14h · 02 : 14-22h · 03 : 22-06h', [
+        _ct('op_shift', 'N° Shift'),
+        _ct('op_poste', 'Poste'),
+        _ct('op_nom', 'Nom & prénom'),
+        _ct('op_date', 'Date'),
+        _ct('op_visa', 'Visa'),
+        _ct('op_verif', 'Vérifié par (Date & Visa)')
       ])
     ]),
-    _sec('s_pell', 'Pelliculage — Pelliculeuse LABORTECNIC (PR024)', [
-      _oc('pell_eq', 'Équipement conforme'),
-      _num('pell_masse', 'Masse moyenne comprimé pelliculé (cible ≈ 112,2)', 'mg'),
-      _num('pell_gain', 'Prise de masse au pelliculage (cible ≈ 3,9)', '%'),
-      _oc('pell_aspect', 'Aspect / couleur rose homogène conforme'),
-      _num('pell_desa', 'Désagrégation comprimé pelliculé', 'min', null, 30),
-      _txt('pell_visa', 'Visa opérateur')
+    _sec('p_equip', '4 · Vérification des équipements de pesée', [
+      _cnc('eq042_vide', 'Balance Mettler Toledo MS 3200LL/01 (PR042) — Fonctionnement à vide'),
+      _cnc('eq042_qual', 'PR042 — Statut qualification / calibration'),
+      _cnc('eq042_vitr', 'PR042 — État des parties vitrées'),
+      _cnc('eq325_vide', 'Balance de pesée Mettler Toledo (PR325) — Fonctionnement à vide'),
+      _cnc('eq325_qual', 'PR325 — Statut qualification / calibration'),
+      _cnc('eq325_vitr', 'PR325 — État des parties vitrées'),
+      _txt('eq_visa', 'Fait par / Vérifié par — Date & Visa')
     ]),
-    _sec('s_rdt', 'Rendement & bilan', [
-      _num('rdt_qnu', 'Quantité de comprimés nus obtenue', 'cp'),
-      _num('rdt_rcomp', 'Rendement compression (à définir)', '%'),
-      _num('rdt_qpell', 'Quantité de comprimés pelliculés', 'cp'),
-      _num('rdt_global', 'Rendement global (à définir)', '%'),
-      _txt('rdt_rem', 'Remarques / déviations')
+    _sec('p_etal', '5 · Vérification de l\'étalonnage des balances', [
+      _oo('etal042', 'Balance PR042 — Calibrage journalier effectué'),
+      _oo('etal325', 'Balance PR325 — Calibrage journalier effectué'),
+      _txt('etal_visa', 'Vérifié par — Date & Visa')
+    ]),
+    _sec('p_cond', '6 · Conditions T° / HR / ΔP au cours du process', [
+      _tab('cond_tab', 'Relevés — début / milieu / fin de chaque shift (ΔP systématique)', [
+        _ct('co_date', 'Date'),
+        _ct('co_moment', 'Moment (Début/Milieu/Fin)'),
+        _ct('co_heure', 'Heure'),
+        _cn('co_t', 'Température', '°C', 15, 25),
+        _cn('co_hr', 'Humidité', '%', null, 60),
+        _cn('co_dp', 'ΔP', 'mmH₂O', 1, null),
+        _ct('co_salle', 'N° salle'),
+        _ct('co_visa', 'Visa')
+      ])
+    ]),
+    _sec('p_recint', '7 · Réception des matières premières — retour interne', [
+      _tab('recint_tab', 'Matières (retour interne) — 7 articles de la formule', [
+        _ct('ri_art', 'Article'),
+        _ct('ri_code', 'Code interne'),
+        _ct('ri_lot', 'N° lot interne'),
+        _cn('ri_qte', 'Quantité de retour', 'kg'),
+        _coo('ri_etiq', 'Étiquette retour présente'),
+        _ct('ri_visa', 'Vérifié par (Date & Visa)')
+      ])
+    ]),
+    _sec('p_recext', '8 · Réception des matières premières — externe', [
+      _tab('recext_tab', 'Matières (réception externe)', [
+        _ct('re_art', 'Article'),
+        _ct('re_code', 'Code interne'),
+        _ct('re_lot', 'N° lot interne'),
+        _coo('re_int', 'Contenant intègre / scellé / identifié'),
+        _coo('re_etiq', 'Étiquette « accepté » présente'),
+        _cn('re_cmd', 'Quantité commandée', 'kg'),
+        _cn('re_liv', 'Quantité livrée', 'kg'),
+        _ct('re_visa', 'Vérifié par (Date & Visa)')
+      ])
+    ]),
+    _sec('p_pa', '9 · Pesée des principes actifs — Rosuvastatine calcium (MPPA0070)', [
+      _txt('pa_hdeb', 'Heure de début de pesée'),
+      _txt('pa_lot', 'N° de lot interne du PA'),
+      _txt('pa_bal', 'Code balance utilisée'),
+      _num('pa_theo', 'Quantité théorique corrigée A (à peser)', 'kg'),
+      _num('pa_g', 'Pesée globale G', 'kg'),
+      _num('pa_t', 'Tare T', 'kg'),
+      _num('pa_n', 'Pesée nette N', 'kg'),
+      _num('pa_b', 'Double pesée B (contrôle)', 'kg'),
+      _txt('pa_visa', 'Fait par / Vérifié par — Date & Visa'),
+      _txt('pa_hfin', 'Heure de fin de pesée'),
+      _oo('pa_stock', 'Stockage API conforme (double sac PE + gel de silice, fût inox fermé)')
+    ]),
+    _sec('p_exc', '10 · Pesée des excipients', [
+      _tab('exc_tab', 'Excipients — théoriques (kg/lot) : Lactose 64,44 · Crospovidone 5,40 · Phosphate Ca 7,85 · Stéarate Mg 1,35 · Aquapolish 4,21 ; Cellulose MC = quantité d\'ajustage B', [
+        _ct('ex_des', 'Désignation'),
+        _ct('ex_code', 'Code interne'),
+        _ct('ex_lot', 'N° lot'),
+        _cn('ex_theo', 'Qté théorique / lot', 'kg'),
+        _cn('ex_net', 'Qté pesée nette N', 'kg'),
+        _cn('ex_double', 'Double pesée B', 'kg'),
+        _ct('ex_visa', 'Fait par / Vérifié par')
+      ])
+    ]),
+    _sec('p_bilan', '11 · Bilan de pesée', [
+      _oo('bil_bc', 'Bon de commande joint'),
+      _oo('bil_bri', 'Bon de retours interne joint'),
+      _oo('bil_brf', 'Bon de retour final joint'),
+      _oo('bil_bav', "Bon d'avarie joint"),
+      _tab('bil_tab', 'Bilan matières', [
+        _ct('bl_mat', 'Matière'),
+        _ct('bl_code', 'Code interne'),
+        _ct('bl_lot', 'N° lot interne'),
+        _cn('bl_liv', 'Qté totale livrée', 'kg'),
+        _cn('bl_pes', 'Qté pesée', 'kg'),
+        _cn('bl_reti', 'Qté retournée interne', 'kg'),
+        _cn('bl_retf', 'Qté retournée final', 'kg'),
+        _cn('bl_av', 'Qté avariée', 'kg'),
+        _ct('bl_visa', 'Date & Visa Superviseur')
+      ]),
+      _txt('bil_visa', 'Date / Visa Responsable Fabrication')
+    ]),
+    _sec('p_inc', '12 · Suivi des incidents et arrêts', [
+      _tab('inc_tab', 'Incidents / arrêts', [
+        _ct('in_date', 'Date'),
+        _ct('in_harr', "Heure d'arrêt"),
+        _ct('in_sac', 'N° de sac'),
+        _ct('in_motif', 'Motif'),
+        _ct('in_action', 'Action corrective'),
+        _ct('in_ddem', 'Date de démarrage'),
+        _ct('in_hdem', 'Heure de démarrage'),
+        _ct('in_visa', 'Fait par (Visa)')
+      ])
     ])
   ]
 }
@@ -190,7 +269,7 @@ export const PRODUITS_REF = {
         'Pelliculeuse LABORTECNIC, code : PR024'
       ]
     },
-    // Formulaire de conduite du lot (configurable par produit — voir ci-dessus)
+    // Formulaire de conduite du lot — PARTIE PESÉE (voir FORMULAIRE_ROSUSTINE ci-dessus)
     formulaire: FORMULAIRE_ROSUSTINE
   }
 }
