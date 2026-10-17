@@ -143,6 +143,14 @@ async function sauver () {
                       <button class="cf-mini" @click="addItem(ch)">+ point</button>
                     </div>
                   </template>
+                  <template v-else-if="ch.type === 'calcul'">
+                    <input class="cf-in" v-model="ch.formule" placeholder="Formule, ex. {id1} - ({id2} + {id3})" />
+                    <div class="cf-row" style="margin-top:4px">
+                      <input class="cf-in w-u" v-model="ch.unite" placeholder="unité" />
+                      <input class="cf-in w-n" v-model="ch.min" placeholder="min" />
+                      <input class="cf-in w-n" v-model="ch.max" placeholder="max" />
+                    </div>
+                  </template>
                   <span v-else class="cf-muted">—</span>
                 </td>
                 <td class="ta-c"><input type="checkbox" v-model="ch.obligatoire" /></td>

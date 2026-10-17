@@ -14,7 +14,8 @@ export const TYPES_CHAMP = [
   { k: 'tableau', label: 'Tableau (lignes)' },
   { k: 'note', label: 'Note / consignes (lecture seule)' },
   { k: 'fichier', label: 'Pièce jointe (fichier)' },
-  { k: 'checklist', label: 'Check-list (liste de points)' }
+  { k: 'checklist', label: 'Check-list (liste de points)' },
+  { k: 'calcul', label: 'Calcul automatique (formule)' }
 ]
 export const TYPES_COLONNE = [
   { k: 'texte', label: 'Texte' },
@@ -33,10 +34,25 @@ export function uid (p = 'x') { _seq++; return p + '_' + Date.now().toString(36)
 
 export function colonneVide (type = 'texte') { return { id: uid('k'), label: '', type, unite: '', min: null, max: null, attendu: 'Conforme', options: ['Conforme', 'Non conforme'] } }
 export function champVide (type = 'num') {
-  const c = { id: uid('c'), label: '', type, unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [], items: [], contenu: '' }
+  const c = { id: uid('c'), label: '', type, unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [], items: [], contenu: '', formule: '' }
   if (type === 'tableau') c.colonnes = [colonneVide('texte')]
   if (type === 'checklist') { c.items = [{ id: uid('it'), label: '' }]; c.options = ['C', 'NC']; c.attendu = 'C' }
   return c
+}
+
+// Évalue une formule « {idChamp} + {autre}*2 » depuis la saisie. Renvoie un
+// nombre, ou null si une référence est vide ou si la formule est invalide.
+export function evalFormule (formule, saisie) {
+  if (!formule) return null
+  let ok = true
+  const expr = String(formule).replace(/\{([^}]+)\}/g, (m, id) => {
+    const n = parseNum(saisie ? saisie[id.trim()] : null)
+    if (n === null) ok = false
+    return '(' + n + ')'
+  })
+  if (!ok) return null
+  if (!/^[\d\s+\-*/().]+$/.test(expr)) return null
+  try { const v = Function('"use strict";return (' + expr + ')')(); return (typeof v === 'number' && isFinite(v)) ? v : null } catch (e) { return null }
 }
 export function sectionVide () { return { id: uid('s'), titre: '', cols: 1, phase: '', champs: [] } }
 export function formulaireVide () { return { sections: [] } }
@@ -76,7 +92,7 @@ export function verdictCellule (col, valeur) {
 
 // Texte des limites/spéc d'un champ (pour affichage).
 export function specTexte (c) {
-  if (c.type === 'num') {
+  if (c.type === 'num' || c.type === 'calcul') {
     const u = c.unite ? ' ' + c.unite : ''
     if (c.min != null && c.min !== '' && c.max != null && c.max !== '') return `${c.min} à ${c.max}${u}`
     if (c.max != null && c.max !== '') return `≤ ${c.max}${u}`
@@ -104,6 +120,17 @@ export function evaluerFormulaire (formulaire, saisie) {
           if (v !== 'vide') saisis++
           if (v === 'conforme') conformes++
           if (v === 'nc') { nc++; deviations.push({ libelle: `${sec.titre} — ${ch.label} : ${it.label}`, valeur: String(val || ''), spec: 'Attendu : ' + ch.attendu }) }
+        }
+        continue
+      }
+      if (ch.type === 'calcul') {
+        total++
+        const n = evalFormule(ch.formule, saisie)
+        if (n !== null) {
+          saisis++
+          const v = verdictNum(n, ch.min, ch.max)
+          if (v === 'conforme') conformes++
+          if (v === 'nc') { nc++; deviations.push({ libelle: `${sec.titre} — ${ch.label}`, valeur: String(Math.round(n * 1000) / 1000), spec: specTexte(ch) }) }
         }
         continue
       }

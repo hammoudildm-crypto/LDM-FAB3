@@ -39,6 +39,7 @@ const _chk = (id, label, jeu, items) => {
 }
 const _ooi = (id, label) => ({ id, label, type: 'oui_non', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: '', options: ['Oui', 'Non'], colonnes: [], contenu: '' })
 const _pj = (id, label) => ({ id, label, type: 'fichier', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [], contenu: '' })
+const _calc = (id, label, formule, unite = '', min = null, max = null) => ({ id, label, type: 'calcul', unite, min, cible: null, max, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [], contenu: '', formule })
 const _sec = (id, titre, champs, cols = 1) => ({ id, titre, cols, champs })
 
 // Texte « Instructions générales » (dossier, pages 3-4) — affiché en pièce jointe.
@@ -369,12 +370,12 @@ const SECTIONS_TM = [
     _txt('tmf_visa', 'Vérifié par — Date & Visa')
   ], 2),
   _sec('tm_bilan', '16 · Bilan de la phase tamisage & mélange (rendement)', [
-    _note('tmbil_note', 'Calcul du rendement', 'A₂ = P_th mél − (P_mél + C_mél) ; R2 (%) = (P_mél + C_mél) × 100 / P_th mél. Norme du rendement : 99–100 %.'),
+    _note('tmbil_note', 'Calcul du rendement (automatique)', 'Saisir P_th, P_mél et C_mél : l\'avarie A₂ et le rendement R2 se calculent automatiquement.\nA₂ = P_th − (P_mél + C_mél) ; R2 (%) = (P_mél + C_mél) × 100 / P_th. Norme du rendement : 99–100 %.'),
     _num('tmbil_pth', 'Poids théorique du mélange (P_th)', 'kg'),
     _num('tmbil_pmel', 'Poids du mélange obtenu (P_mél)', 'kg'),
     _num('tmbil_cmel', 'Poids échantillon de contrôle (C_mél)', 'kg'),
-    _num('tmbil_av', 'Avarie engendrée (A₂)', 'kg'),
-    _num('tmbil_rdt', 'Rendement R2', '%', 99, 100),
+    _calc('tmbil_av', 'Avarie engendrée (A₂) = P_th − (P_mél + C_mél)', '{tmbil_pth} - ({tmbil_pmel} + {tmbil_cmel})', 'kg'),
+    _calc('tmbil_rdt', 'Rendement R2 = (P_mél + C_mél) × 100 / P_th', '({tmbil_pmel} + {tmbil_cmel}) * 100 / {tmbil_pth}', '%', 99, 100),
     _txt('tmbil_just', 'Justification de toute avarie hors normes'),
     _txt('tmbil_visa', 'Date / Visa Responsable Fabrication')
   ], 2),

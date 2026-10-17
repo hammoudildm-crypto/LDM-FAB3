@@ -1,6 +1,6 @@
 <script setup>
 import { inject, ref, computed, watch } from 'vue'
-import { evaluerFormulaire, verdictChamp, verdictCellule, verdictOuiNon, specTexte } from '../formulaire.js'
+import { evaluerFormulaire, verdictChamp, verdictCellule, verdictOuiNon, verdictNum, evalFormule, specTexte } from '../formulaire.js'
 
 const d = inject('doc')
 if (!d.saisie || typeof d.saisie !== 'object') d.saisie = {}
@@ -51,6 +51,7 @@ function secCtrl (sec) {
     if (ch.type === 'num' || ch.type === 'oui_non' || ch.obligatoire) n++
     if (ch.type === 'tableau') n += (ch.colonnes || []).filter(c => c.type === 'num' || c.type === 'oui_non').length
     if (ch.type === 'checklist') n += (ch.items || []).length
+    if (ch.type === 'calcul') n++
   }
   return n
 }
@@ -87,6 +88,11 @@ function onFile (ch, ev) {
 function chkVal (ch, it) { const m = d.saisie[ch.id]; return (m && typeof m === 'object' && !Array.isArray(m)) ? (m[it.id] || '') : '' }
 function setChk (ch, it, val) { let m = d.saisie[ch.id]; if (!m || typeof m !== 'object' || Array.isArray(m)) { m = {}; d.saisie[ch.id] = m }; m[it.id] = val }
 function vChk (ch, it) { return verdictOuiNon(chkVal(ch, it), ch.attendu) }
+
+// Calcul automatique (champ dérivé d'une formule).
+function calcVal (ch) { return evalFormule(ch.formule, d.saisie) }
+function calcAffiche (ch) { const n = calcVal(ch); if (n === null) return '—'; const r = Math.round(n * 1000) / 1000; return ch.unite ? (r + ' ' + ch.unite) : String(r) }
+function vCalc (ch) { const n = calcVal(ch); return n === null ? 'vide' : verdictNum(n, ch.min, ch.max) }
 
 // Signatures par section (opérateur / vérificateur) + journal d'audit.
 const ROLES = { op: 'Opérateur', verif: 'Vérificateur' }
@@ -206,6 +212,18 @@ function designer (sec, role) {
                 </div>
               </li>
             </ul>
+          </template>
+
+          <!-- Calcul automatique (lecture seule) -->
+          <template v-else-if="ch.type === 'calcul'">
+            <div class="fd-lbl">
+              <span class="fd-lbl-t">∑ {{ ch.label || '—' }}</span>
+              <span v-if="specTexte(ch)" class="fd-spec">{{ specTexte(ch) }}</span>
+            </div>
+            <div class="fd-ctrl">
+              <span class="fd-calc" :class="{ nc: vCalc(ch) === 'nc', ok: vCalc(ch) === 'conforme' }">{{ calcAffiche(ch) }}</span>
+              <span v-if="vCalc(ch) !== 'vide'" class="vb" :class="bInfo[vCalc(ch)].c">{{ bInfo[vCalc(ch)].t }}</span>
+            </div>
           </template>
 
           <!-- Champs simples -->
@@ -370,6 +388,9 @@ function designer (sec, role) {
 .fd-in.sm { min-width: 0; width: 100%; padding: 6px 8px; }
 .fd-in.ok { border-color: #86efac; background: #f0fdf4; }
 .fd-in.nc { border-color: #fca5a5; background: #fef2f2; }
+.fd-calc { font-size: 15px; font-weight: 800; color: #0f2a37; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 14px; min-width: 110px; text-align: right; font-variant-numeric: tabular-nums; }
+.fd-calc.ok { background: #f0fdf4; border-color: #86efac; color: #047857; }
+.fd-calc.nc { background: #fef2f2; border-color: #fca5a5; color: #be123c; }
 
 /* Segmenté Oui/Non · C/NC · Conforme */
 .fd-onoff { display: inline-flex; gap: 0; border: 1px solid #cbd5e1; border-radius: 9px; overflow: hidden; background: #fff; }
