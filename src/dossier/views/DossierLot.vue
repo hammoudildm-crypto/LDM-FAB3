@@ -84,6 +84,17 @@ const d = reactive(docVide())
 provide('doc', d)
 const dossierId = ref(null)
 
+// Utilisateur courant (pré-remplit les signatures du formulaire).
+const utilisateur = ref('')
+provide('utilisateur', utilisateur)
+async function chargerUtilisateur () {
+  try {
+    const s = await supabase.auth.getSession()
+    const u = s.data && s.data.session ? s.data.session.user : null
+    if (u) utilisateur.value = u.email || ''
+  } catch (e) { /* ignore */ }
+}
+
 /* ---------------- Catalogue des produits ----------------
    Fusion : produits intégrés (ROSUSTINE) + produits créés par l'utilisateur
    (enregistrés dans Supabase, avec cache localStorage pour le hors-ligne). */
@@ -156,6 +167,7 @@ function appliquerProduit (key) {
   const integ = (PRODUITS_REF[key] && PRODUITS_REF[key].formulaire) || FORMULAIRE_DEFAUT
   d.formulaire = JSON.parse(JSON.stringify(integ))
   d.saisie = {}                      // nouveau produit → saisie vierge
+  d.execution.signatures = {}; d.execution.audit = []   // signatures/audit réinitialisés
   d.pesee = peseeVide(dimsFor(c))   // redimensionne la pesée au produit
 }
 
@@ -304,7 +316,7 @@ function chargerModeleIntegre () {
   message.value = 'Modèle intégré chargé (' + modeleIntegre.value.sections.length + ' sections). Pour le conserver : Constructeur → « Enregistrer dans la fiche produit ».'
 }
 
-onMounted(() => { lireLocal(); chargerProduits(); charger() })
+onMounted(() => { lireLocal(); chargerProduits(); charger(); chargerUtilisateur() })
 </script>
 
 <template>

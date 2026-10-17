@@ -1,10 +1,14 @@
 <script setup>
-import { inject, computed, watch } from 'vue'
+import { inject, ref, computed, watch } from 'vue'
 import { evaluerFormulaire, verdictChamp, verdictCellule, verdictOuiNon, specTexte } from '../formulaire.js'
 
 const d = inject('doc')
 if (!d.saisie || typeof d.saisie !== 'object') d.saisie = {}
 if (!d.formulaire || !Array.isArray(d.formulaire.sections)) d.formulaire = { sections: [] }
+if (!d.execution || typeof d.execution !== 'object') d.execution = {}
+if (!d.execution.signatures || typeof d.execution.signatures !== 'object') d.execution.signatures = {}
+if (!Array.isArray(d.execution.audit)) d.execution.audit = []
+const utilisateur = inject('utilisateur', ref(''))
 
 // Garantit un tableau pour chaque champ « tableau ».
 function ensureTables () {
@@ -72,6 +76,25 @@ function onFile (ch, ev) {
 function chkVal (ch, it) { const m = d.saisie[ch.id]; return (m && typeof m === 'object' && !Array.isArray(m)) ? (m[it.id] || '') : '' }
 function setChk (ch, it, val) { let m = d.saisie[ch.id]; if (!m || typeof m !== 'object' || Array.isArray(m)) { m = {}; d.saisie[ch.id] = m }; m[it.id] = val }
 function vChk (ch, it) { return verdictOuiNon(chkVal(ch, it), ch.attendu) }
+
+// Signatures par section (opérateur / vérificateur) + journal d'audit.
+const ROLES = { op: 'Opérateur', verif: 'Vérificateur' }
+function sig (sec, role) { const s = d.execution.signatures[sec.id]; return (s && s[role]) ? s[role] : null }
+function fmtTs (iso) { try { return new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch (e) { return iso } }
+function signer (sec, role) {
+  const nom = (window.prompt('Signature — ' + ROLES[role] + '\nNom du signataire :', utilisateur.value || '') || '').trim()
+  if (!nom) return
+  if (!d.execution.signatures[sec.id]) d.execution.signatures[sec.id] = {}
+  const ts = new Date().toISOString()
+  d.execution.signatures[sec.id][role] = { nom, ts }
+  d.execution.audit.unshift({ ts, user: nom, action: 'Signature ' + ROLES[role] + ' — ' + secLabel(sec.titre) })
+}
+function designer (sec, role) {
+  const s = sig(sec, role); if (!s) return
+  if (!window.confirm('Annuler la signature ' + ROLES[role] + ' de cette section ?')) return
+  delete d.execution.signatures[sec.id][role]
+  d.execution.audit.unshift({ ts: new Date().toISOString(), user: utilisateur.value || s.nom, action: 'Annulation signature ' + ROLES[role] + ' — ' + secLabel(sec.titre) })
+}
 </script>
 
 <template>
@@ -202,6 +225,17 @@ function vChk (ch, it) { return verdictOuiNon(chkVal(ch, it), ch.attendu) }
           </template>
         </div>
         </div>
+        <div class="fd-sign">
+          <div v-for="role in ['op', 'verif']" :key="role" class="fd-sign-slot" :class="{ done: sig(sec, role) }">
+            <span class="fd-sign-role">{{ role === 'op' ? '✍ Opérateur' : '✔ Vérificateur' }}</span>
+            <template v-if="sig(sec, role)">
+              <span class="fd-sign-nom">{{ sig(sec, role).nom }}</span>
+              <span class="fd-sign-ts">{{ fmtTs(sig(sec, role).ts) }}</span>
+              <button class="fd-sign-x noprint" @click="designer(sec, role)" title="Annuler la signature">annuler</button>
+            </template>
+            <button v-else class="fd-sign-btn noprint" @click="signer(sec, role)">Signer</button>
+          </div>
+        </div>
       </section>
 
       <!-- Déviations -->
@@ -214,6 +248,22 @@ function vChk (ch, it) { return verdictOuiNon(chkVal(ch, it), ch.attendu) }
         <p v-if="!deviations.length" class="dev-ok">✓ Aucune déviation : tous les paramètres contrôlés saisis sont conformes.</p>
         <ul v-else class="dev-list">
           <li v-for="(dv, i) in deviations" :key="i"><span class="vb nc">NC</span> <b>{{ dv.libelle }}</b> — mesuré : {{ dv.valeur || '—' }}<span v-if="dv.spec"> · spéc. : {{ dv.spec }}</span></li>
+        </ul>
+      </section>
+
+      <!-- Journal d'audit -->
+      <section v-if="d.execution.audit && d.execution.audit.length" class="fd-sec">
+        <div class="fd-sec-head">
+          <span class="fd-sec-no fd-audit-no">⎙</span>
+          <h3 class="fd-sec-t">Journal d'audit</h3>
+          <span class="fd-sec-ct">{{ d.execution.audit.length }} événement(s)</span>
+        </div>
+        <ul class="fd-audit">
+          <li v-for="(a, i) in d.execution.audit" :key="i">
+            <span class="fd-audit-ts">{{ fmtTs(a.ts) }}</span>
+            <span class="fd-audit-u">{{ a.user }}</span>
+            <span class="fd-audit-a">{{ a.action }}</span>
+          </li>
         </ul>
       </section>
     </template>
@@ -339,6 +389,28 @@ function vChk (ch, it) { return verdictOuiNon(chkVal(ch, it), ch.attendu) }
 .fd-chk-it:last-child { border-bottom: 0; }
 .fd-chk-lbl { font-size: 13px; color: #334155; font-weight: 500; line-height: 1.35; }
 .fd-chk-ctrl { display: flex; align-items: center; gap: 10px; flex: none; }
+
+/* Signatures par section */
+.fd-sign { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e2e8f0; }
+.fd-sign-slot { flex: 1 1 220px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 1px solid #e6edf3; border-radius: 9px; padding: 7px 11px; background: #f8fafc; }
+.fd-sign-slot.done { border-color: #a7f3d0; background: #f0fdf4; }
+.fd-sign-role { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: .3px; }
+.fd-sign-slot.done .fd-sign-role { color: #047857; }
+.fd-sign-nom { font-size: 13px; font-weight: 700; color: #0f2a37; }
+.fd-sign-ts { font-size: 11px; color: #64748b; }
+.fd-sign-btn { margin-left: auto; font: inherit; font-size: 12px; font-weight: 700; color: #0e7490; background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 7px; padding: 5px 13px; cursor: pointer; }
+.fd-sign-btn:hover { background: #cffafe; }
+.fd-sign-x { margin-left: auto; font: inherit; font-size: 11px; color: #be123c; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+
+/* Journal d'audit */
+.fd-audit-no { background: #334155; }
+.fd-audit { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.fd-audit li { display: grid; grid-template-columns: 130px 150px 1fr; gap: 10px; padding: 6px 2px; border-bottom: 1px dashed #f1f5f9; align-items: baseline; }
+.fd-audit li:last-child { border-bottom: 0; }
+.fd-audit-ts { color: #64748b; font-variant-numeric: tabular-nums; }
+.fd-audit-u { font-weight: 700; color: #0f2a37; }
+.fd-audit-a { color: #334155; }
+@media (max-width: 560px) { .fd-audit li { grid-template-columns: 1fr; gap: 2px; } }
 
 /* Large : libellé à gauche, contrôle aligné à droite */
 @media (min-width: 680px) {
