@@ -284,6 +284,21 @@ const statutCouleur = computed(() => ({
   'Brouillon': '#64748b', 'En cours': '#b45309', 'Terminé': '#0e7490', 'Libéré': '#047857', 'Refusé': '#be123c'
 }[d.statut] || '#64748b'))
 
+// Modèle intégré (formulaire par défaut livré avec le produit). Permet de le
+// recharger si une fiche enregistrée l'a remplacé par un autre formulaire.
+const modeleIntegre = computed(() => {
+  const r = PRODUITS_REF[d.produit]
+  return r && r.formulaire && Array.isArray(r.formulaire.sections) && r.formulaire.sections.length ? r.formulaire : null
+})
+function chargerModeleIntegre () {
+  if (!modeleIntegre.value) return
+  if (!confirm('Charger le formulaire modèle intégré de ce produit ? Le formulaire actuellement affiché sera remplacé (vous pourrez l\'enregistrer ensuite via le Constructeur).')) return
+  d.formulaire = JSON.parse(JSON.stringify(modeleIntegre.value))
+  d.saisie = {}
+  vue.value = 'form'
+  message.value = 'Modèle intégré chargé (' + modeleIntegre.value.sections.length + ' sections). Pour le conserver : Constructeur → « Enregistrer dans la fiche produit ».'
+}
+
 onMounted(() => { lireLocal(); chargerProduits(); charger() })
 </script>
 
@@ -397,6 +412,7 @@ onMounted(() => { lireLocal(); chargerProduits(); charger() })
       <button class="vt" :class="{ on: vue === 'ebmr' }" @click="vue = 'ebmr'">② Pesée guidée (eBMR)</button>
       <button class="vt" :class="{ on: vue === 'doc' }" @click="vue = 'doc'">③ Dossier imprimable</button>
       <button class="vt build" @click="constructeurOuvert = true" title="Composer le formulaire de ce produit">✦ Constructeur</button>
+      <button v-if="modeleIntegre" class="vt" @click="chargerModeleIntegre" title="Recharger le formulaire modèle livré avec ce produit (ex. Pesée ROSUSTINE)">↺ Modèle intégré</button>
       <span class="vt-note">« Imprimer » génère la vue active.</span>
     </div>
 
