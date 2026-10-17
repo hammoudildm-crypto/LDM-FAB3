@@ -96,11 +96,16 @@ async function chargerUtilisateur () {
 }
 
 /* ---------------- Catalogue des produits ----------------
-   Fusion : produits intégrés (ROSUSTINE) + produits créés par l'utilisateur
-   (enregistrés dans Supabase, avec cache localStorage pour le hors-ligne). */
+   SOURCE PRINCIPALE = la table « produits » de l'application (les produits
+   enregistrés dans les Référentiels, actifs) : la liste « Produit à fabriquer »
+   est donc la MÊME que celle de l'application. Les données IF riches (AMM,
+   signataires, formule, matières…) sont superposées depuis le référentiel
+   dossier (intégré + enregistré) par correspondance de nom. Repli hors-ligne
+   sur le référentiel dossier si la table « produits » est indisponible. */
 const LS_KEY = 'ldm_produits_ref'
-const produitsDB = ref({})      // depuis Supabase (prioritaire)
-const produitsLocal = ref({})   // cache navigateur (localStorage)
+const produitsApp = ref([])     // table « produits » de l'app (source de la liste)
+const produitsDB = ref({})      // référentiel dossier (Supabase) — données IF riches
+const produitsLocal = ref({})   // référentiel dossier (localStorage) — données IF riches
 const produitsTableAbsente = ref(false)
 
 function lireLocal () {
@@ -110,46 +115,74 @@ function ecrireLocal () {
   try { localStorage.setItem(LS_KEY, JSON.stringify(produitsLocal.value)) } catch (e) { /* ignore */ }
 }
 
-// Amorçage du référentiel : les produits INTÉGRÉS (livrés avec l'app, ex.
-// ROSUSTINE) sont enregistrés UNE FOIS dans le référentiel local, pour que la
-// liste « Produit à fabriquer » provienne uniquement des produits enregistrés
-// et que ces produits soient modifiables/supprimables comme les autres. Le
-// formulaire n'est pas copié : il reste ré-assemblé depuis la gamme (donc mis
-// à jour automatiquement). Un marqueur évite de ré-amorcer un produit supprimé.
-const SEED_KEY = 'ldm_produits_seeded'
-function seedIntegres () {
-  let seeded = []
-  try { seeded = JSON.parse(localStorage.getItem(SEED_KEY) || '[]') || [] } catch (e) { seeded = [] }
-  const loc = { ...produitsLocal.value }
-  let changed = false
-  for (const k of Object.keys(PRODUITS_REF)) {
-    if (seeded.includes(k)) continue                       // déjà amorcé (même si supprimé depuis)
-    if (!loc[k] && !produitsDB.value[k]) {                 // pas encore au référentiel → on l'enregistre
-      const src = JSON.parse(JSON.stringify(PRODUITS_REF[k]))
-      delete src.formulaire                                // formulaire ré-assemblé depuis la gamme
-      loc[k] = src
-    }
-    seeded.push(k); changed = true
-  }
-  if (changed) {
-    produitsLocal.value = loc
-    ecrireLocal()
-    try { localStorage.setItem(SEED_KEY, JSON.stringify(seeded)) } catch (e) { /* ignore */ }
-  }
+// Charge les produits enregistrés de l'application (table « produits »).
+async function chargerProduitsApp () {
+  try {
+    const r = await supabase.from('produits')
+      .select('id, code_pf, designation, forme, taille_lot, poids_lot_kg, unites_par_boite, poids_unitaire_mg, pcsu, gamme')
+      .eq('actif', true).order('code_pf')
+    if (!r.error && Array.isArray(r.data)) produitsApp.value = r.data
+  } catch (e) { /* hors-ligne : repli sur le référentiel dossier */ }
 }
 
-// Catalogue effectif = PRODUITS ENREGISTRÉS au référentiel (localStorage + base).
-// Les données intégrées ne servent plus qu'au REPLI par champ (gamme, en-tête,
-// formulaire) ; elles ne forcent plus un produit dans la liste, de sorte qu'un
-// produit supprimé du référentiel disparaît réellement de la liste.
+// Correspondance gamme APP (libellés) → étapes du dossier (clés).
+const GAMME_APP_DOSSIER = {
+  'Pesée': 'pesee',
+  'Granulation et Séchage': 'granulation_sechage',
+  'Mélange': 'tamisage_melange',
+  'Compression': 'compression',
+  'Remplissage Gélules': 'remplissage_gelules',
+  'Pelliculage': 'pelliculage'
+}
+function mapGammeApp (g) {
+  const arr = Array.isArray(g) ? g : (g ? [g] : [])
+  const out = []
+  for (const ph of arr) { const k = GAMME_APP_DOSSIER[String(ph).trim()]; if (k && !out.includes(k)) out.push(k) }
+  return out
+}
+// Normalise un nom de produit pour la correspondance (majuscules, sans ®, espaces réduits).
+function normNom (s) { return String(s || '').toUpperCase().replace(/[®™©]/g, '').replace(/\s+/g, ' ').trim() }
+// Index du référentiel dossier (données IF riches) par nom normalisé.
+const refDossierIndex = computed(() => {
+  const idx = {}
+  const add = (src) => { for (const k of Object.keys(src || {})) idx[normNom(k)] = { ...(idx[normNom(k)] || {}), ...src[k] } }
+  add(PRODUITS_REF); add(produitsLocal.value); add(produitsDB.value)
+  return idx
+})
+
+// Catalogue effectif : clé = nom du produit (désignation de l'app).
 const catalogue = computed(() => {
-  const keys = new Set([...Object.keys(produitsLocal.value), ...Object.keys(produitsDB.value)])
   const out = {}
+  const apps = produitsApp.value || []
+  if (apps.length) {
+    for (const p of apps) {
+      const nom = String(p.designation || p.code_pf || '').trim()
+      if (!nom) continue
+      const rich = refDossierIndex.value[normNom(nom)] || {}
+      const re = rich.entete || {}
+      const boites = Number(p.taille_lot) || 0
+      const uPar = Number(p.unites_par_boite) || 0
+      const entete = {
+        refSop: re.refSop || '', refIf: re.refIf || '', version: re.version || '', totalPages: re.totalPages || 92,
+        produit: nom, dci2: re.dci2 || '', forme: p.forme || re.forme || '',
+        taillePoids: (p.poids_lot_kg != null && p.poids_lot_kg !== '') ? String(p.poids_lot_kg) : (re.taillePoids || ''),
+        uniteDosee: (boites && uPar) ? String(boites * uPar) : (re.uniteDosee || ''),
+        uniteVente: boites ? String(boites) : (re.uniteVente || '')
+      }
+      const gamme = mapGammeApp(p.gamme)
+      out[nom] = {
+        ...rich,                                   // amm, signataires, formule, mats, exc, equip, diagramme (si connus)
+        entete,
+        gamme: gamme.length ? gamme : (rich.gamme || undefined),
+        codePf: p.code_pf || ''
+      }
+    }
+    return out
+  }
+  // ---- Repli hors-ligne : référentiel dossier (intégré + enregistré) ----
+  const keys = new Set([...Object.keys(PRODUITS_REF), ...Object.keys(produitsLocal.value), ...Object.keys(produitsDB.value)])
   for (const k of keys) {
     const merged = { ...(PRODUITS_REF[k] || {}), ...(produitsLocal.value[k] || {}), ...(produitsDB.value[k] || {}) }
-    // Repli : si le formulaire effectif est absent OU vide (fiche enregistrée
-    // sans formulaire, ou un {sections:[]} ancien), on reprend celui intégré.
-    // Repli : produit intégré > modèle Pesée par défaut (commun à TOUS les produits).
     const integre = (PRODUITS_REF[k] && PRODUITS_REF[k].formulaire) || FORMULAIRE_DEFAUT
     const okForm = merged.formulaire && Array.isArray(merged.formulaire.sections) && merged.formulaire.sections.length
     if (!okForm && integre) merged.formulaire = integre
@@ -346,7 +379,7 @@ function chargerModeleIntegre () {
   message.value = 'Modèle intégré chargé (' + modeleIntegre.value.sections.length + ' sections). Pour le conserver : Constructeur → « Enregistrer dans la fiche produit ».'
 }
 
-onMounted(() => { lireLocal(); seedIntegres(); chargerProduits(); charger(); chargerUtilisateur() })
+onMounted(() => { lireLocal(); chargerProduitsApp(); chargerProduits(); charger(); chargerUtilisateur() })
 </script>
 
 <template>
@@ -403,7 +436,7 @@ onMounted(() => { lireLocal(); seedIntegres(); chargerProduits(); charger(); cha
       <section v-if="paramsOuverts && d.produit" class="card params">
         <h3>En-tête IF</h3>
         <div class="grid3">
-          <label class="fld">Produit à fabriquer<input :value="d.produit" readonly class="ro" title="Défini dans le référentiel — pour le modifier, ouvrez ⚙ Gérer les produits" /><small class="ro-hint">Source : référentiel (⚙ Gérer les produits)</small></label>
+          <label class="fld">Produit à fabriquer<input :value="d.produit" readonly class="ro" title="Produit sélectionné dans la liste (référentiel produits de l'application)" /><small class="ro-hint">Source : produits enregistrés de l'application</small></label>
           <label class="fld">DCI (bandeau)<input v-model="d.entete.dci2" /></label>
           <label class="fld">Forme<input v-model="d.entete.forme" /></label>
           <label class="fld">Référence SOP<input v-model="d.entete.refSop" /></label>
@@ -449,8 +482,8 @@ onMounted(() => { lireLocal(); seedIntegres(); chargerProduits(); charger(); cha
     <div v-if="!d.produit" class="empty-state noprint">
       <div class="es-ico">⌄</div>
       <p class="es-title">Sélectionnez un produit dans la liste déroulante ci-dessus</p>
-      <p class="es-sub">Les données de référence de l'IF (formule, matières, paramètres, signataires) se chargent automatiquement. Vous n'avez plus qu'à saisir les valeurs réelles du lot, puis imprimer.</p>
-      <button class="btn ghost sm" style="margin-top:14px" @click="gestionOuvert = true">⚙ Votre produit n'est pas dans la liste ? Gérer les produits</button>
+      <p class="es-sub">La liste reprend les produits enregistrés dans l'application (Référentiels). Les étapes de fabrication se chargent selon la gamme du produit ; vous n'avez plus qu'à saisir les valeurs réelles du lot, puis imprimer. Un produit manquant s'ajoute dans les Référentiels de l'application.</p>
+      <button class="btn ghost sm" style="margin-top:14px" @click="gestionOuvert = true">⚙ Compléter les données IF (AMM, signataires, formule)</button>
     </div>
 
     <!-- Bascule de vue (écran uniquement) -->
