@@ -49,6 +49,20 @@ const TXT_INSTRUCTIONS_GEN = `Le Superviseur doit procéder aux vérifications s
 • Attendre l'approbation AQ avant de procéder à l'opération de fabrication concernée.
 • En cas d'anomalies : stopper l'opération, alerter le responsable hiérarchique, mentionner l'incident sur la page correspondante.`
 
+// Texte « Consignes de sécurité obligatoires » (dossier, page 4).
+const TXT_SECURITE = `• Le port de la tenue pharmaceutique adaptée à la zone est obligatoire (procédure d'habillage en vigueur).
+• Le port du casque antibruit est obligatoire lors des opérations de compression.
+• Interdiction formelle d'intervenir sur les machines en marche : attendre l'arrêt complet de l'équipement.
+• Interdiction formelle de bipasser les consignes de sécurité de l'équipement.
+• Interdiction formelle de désactiver les carters de sécurité de l'équipement.
+• Le personnel est tenu de déclarer à sa hiérarchie toute plaie ou maladie contagieuse avant d'accéder à la zone de production.
+• Éviter tout contact des produits manipulés avec la peau.`
+
+// Texte « Précautions de production » (dossier, page 4).
+const TXT_PRECAUTIONS = `• La fermeture des portes des ateliers de fabrication est obligatoire tout au long du process.
+• En cours de fabrication, éviter un contact prolongé du produit avec l'air (ex. heures de pause, produit hygroscopique).
+• Retirer le produit de l'équipement lorsqu'un arrêt prolongé est prévu.`
+
 // =====================================================================
 //  Formulaire ROSUSTINE ® 10 mg — PARTIE PESÉE (IF PFLDM103, pages 9-24,
 //  sections 1 à 14). Calqué page par page sur le dossier de lot papier.
@@ -60,6 +74,8 @@ const FORMULAIRE_ROSUSTINE = {
   sections: [
     _sec('p_prelim', '1 · Opérations préliminaires & autorisation de démarrage', [
       _note('pp_instr', 'Instructions générales — vérifications avant démarrage', TXT_INSTRUCTIONS_GEN),
+      _note('pp_secu', 'Consignes de sécurité obligatoires', TXT_SECURITE),
+      _note('pp_prec', 'Précautions de production', TXT_PRECAUTIONS),
       _txt('pp_date', 'Date de début de pesée', 'date', true),
       _txt('pp_salle', 'N° de salle de pesée'),
       _txt('pp_heure', 'Heure de début'),
