@@ -961,16 +961,47 @@ export const ETAPES_FAB = [
 // Gamme par défaut (comprimé pelliculé) si le produit n'en définit pas.
 const GAMME_DEFAUT = ['pesee', 'tamisage_melange', 'compression', 'pelliculage']
 
+// Suffixe tous les identifiants (section, champs, colonnes, items) ET les
+// références de formule {id} d'un lot de sections cloné — pour dupliquer une
+// phase en plusieurs FRACTIONS sans collision d'identifiants. Les références de
+// formule internes à la phase sont ré-aiguillées vers les ids suffixés.
+function suffixerSections (sections, sfx) {
+  const ids = new Set()
+  for (const s of sections) for (const ch of (s.champs || [])) ids.add(ch.id)
+  for (const s of sections) {
+    s.id = s.id + sfx
+    for (const ch of (s.champs || [])) {
+      if (ch.type === 'calcul' && ch.formule) {
+        ch.formule = String(ch.formule).replace(/\{([^}]+)\}/g, (m, id) => { id = id.trim(); return ids.has(id) ? '{' + id + sfx + '}' : m })
+      }
+      ch.id = ch.id + sfx
+      for (const col of (ch.colonnes || [])) col.id = col.id + sfx
+      for (const it of (ch.items || [])) it.id = it.id + sfx
+    }
+  }
+  return sections
+}
+
 // Assemble le formulaire d'un produit à partir de sa gamme (liste d'étapes),
 // en conservant l'ordre officiel des étapes et en clonant chaque section.
-export function assembleGamme (gamme) {
+// `fractions` (optionnel) = map { cléÉtape: nombre } : une étape avec N>1
+// fractions est répétée N fois (ex. granulation en 2 fractions), chaque
+// fraction formant sa propre phase « Nom — Fraction k » avec ses propres ids.
+export function assembleGamme (gamme, fractions) {
   const choisies = (Array.isArray(gamme) && gamme.length) ? gamme : GAMME_DEFAUT
+  const fr = (fractions && typeof fractions === 'object') ? fractions : {}
   const sections = []
   for (const e of ETAPES_FAB) {
     if (!choisies.includes(e.k)) continue
     const ph = PHASES_STANDARD[e.k]
     if (!ph) continue
-    for (const s of ph.sections) sections.push({ ...JSON.parse(JSON.stringify(s)), phase: ph.nom })
+    const n = Math.max(1, Math.min(20, parseInt(fr[e.k], 10) || 1))
+    for (let k = 1; k <= n; k++) {
+      const nom = n > 1 ? (ph.nom + ' — Fraction ' + k) : ph.nom
+      let clone = ph.sections.map(s => JSON.parse(JSON.stringify(s)))
+      if (k > 1) clone = suffixerSections(clone, '_f' + k)   // fraction 1 = ids d'origine (rétro-compatible)
+      for (const s of clone) sections.push({ ...s, phase: nom })
+    }
   }
   return { sections }
 }

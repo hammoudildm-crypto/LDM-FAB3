@@ -7,7 +7,7 @@ import EtapePesee from './EtapePesee.vue'
 import FormulaireDynamique from './FormulaireDynamique.vue'
 import GestionProduits from '../components/GestionProduits.vue'
 import ConstructeurFormulaire from '../components/ConstructeurFormulaire.vue'
-import { PRODUITS_REF, FORMULAIRE_DEFAUT, assembleGamme } from '../produitsRef.js'
+import { PRODUITS_REF, FORMULAIRE_DEFAUT, assembleGamme, ETAPES_FAB } from '../produitsRef.js'
 import '../dossier.css'   // styles du document (non scopés), intégration ProdTrack
 
 const peutEditer = inject('peutEditer', ref(true))
@@ -66,6 +66,8 @@ function docVide () {
     formule: [], formuleP: [], mats: [], exc: [], equip: [],
     diagramme: { flux: [], ipc: [], equipements: [] },
     formulaire: { sections: [] },    // formulaire configurable du produit (constructeur)
+    gammeCourante: null,             // gamme (clés d'étapes) du produit sélectionné
+    fractions: {},                   // nombre de fractions par étape (ex. { granulation_sechage: 2 })
     // --- Contenu PROPRE AU LOT (rempli à chaque fabrication) ---
     lot: {
       numeroLotInterne: '', ddf: '', ddp: '', ofN: '',
@@ -225,8 +227,10 @@ function appliquerProduit (key) {
   d.equip = c.equip || []
   d.diagramme = c.diagramme || { flux: [], ipc: [], equipements: [] }
   // Mode saisie = formulaire ASSEMBLÉ selon la GAMME du produit (ses étapes
-  // de fabrication), sans dépendre d'une fiche enregistrée.
-  d.formulaire = assembleGamme(c.gamme)
+  // de fabrication) et le nombre de fractions par étape.
+  d.fractions = {}                   // nouveau produit → 1 fraction par étape
+  d.gammeCourante = Array.isArray(c.gamme) ? c.gamme.slice() : null
+  d.formulaire = assembleGamme(c.gamme, d.fractions)
   d.saisie = {}                      // nouveau produit → saisie vierge
   d.execution.signatures = {}; d.execution.audit = []   // signatures/audit réinitialisés
   d.pesee = peseeVide(dimsFor(c))   // redimensionne la pesée au produit
@@ -363,12 +367,32 @@ const statutCouleur = computed(() => ({
   'Brouillon': '#64748b', 'En cours': '#b45309', 'Terminé': '#0e7490', 'Libéré': '#047857', 'Refusé': '#be123c'
 }[d.statut] || '#64748b'))
 
+// Gamme effective du produit sélectionné (mémorisée dans le dossier, sinon
+// reprise du catalogue de l'application).
+const gammeActuelle = computed(() => {
+  if (Array.isArray(d.gammeCourante) && d.gammeCourante.length) return d.gammeCourante
+  const r = catalogue.value[d.produit]
+  return (r && r.gamme) || null
+})
+// Étapes du produit (clé + nom), pour régler les fractions par étape.
+const etapesProduit = computed(() => {
+  const g = gammeActuelle.value || []
+  return ETAPES_FAB.filter(e => g.includes(e.k))
+})
+// Réassemble le formulaire en tenant compte des fractions choisies. La saisie
+// de la Fraction 1 est préservée (ids inchangés) ; les fractions ajoutées sont
+// vierges, les fractions retirées laissent des données orphelines sans effet.
+function majFractions (k, val) {
+  const n = Math.max(1, Math.min(20, parseInt(val, 10) || 1))
+  d.fractions = { ...d.fractions, [k]: n }
+  d.formulaire = assembleGamme(gammeActuelle.value, d.fractions)
+}
+
 // Modèle intégré (formulaire par défaut livré avec le produit). Permet de le
 // recharger si une fiche enregistrée l'a remplacé par un autre formulaire.
 const modeleIntegre = computed(() => {
   if (!d.produit) return null
-  const r = catalogue.value[d.produit]
-  return assembleGamme(r && r.gamme)
+  return assembleGamme(gammeActuelle.value, d.fractions)
 })
 function chargerModeleIntegre () {
   if (!modeleIntegre.value) return
@@ -422,6 +446,25 @@ onMounted(() => { lireLocal(); chargerProduitsApp(); chargerProduits(); charger(
             <option v-for="x in liste" :key="x.id" :value="x.id">{{ x.numero_lot }} · {{ x.code_pf || '—' }} · {{ x.statut }}</option>
           </select>
         </label>
+      </section>
+
+      <!-- Fractions par étape : répète une étape (ex. granulation) autant de fois que de fractions -->
+      <section v-if="d.produit && etapesProduit.length" class="card frbar">
+        <div class="fr-head">
+          <span class="fr-title">Fractions par étape</span>
+          <span class="fr-hint">Un lot traité en plusieurs fractions (ex. granulation) : l'étape est répétée pour couvrir chaque fraction.</span>
+        </div>
+        <div class="fr-steps">
+          <label v-for="e in etapesProduit" :key="e.k" class="fr-step">
+            <span class="fr-step-nom">{{ e.nom }}</span>
+            <span class="fr-step-ctrl">
+              <button type="button" class="fr-btn" :disabled="(d.fractions[e.k] || 1) <= 1" @click="majFractions(e.k, (d.fractions[e.k] || 1) - 1)">−</button>
+              <input class="fr-num" type="number" min="1" max="20" :value="d.fractions[e.k] || 1" @change="majFractions(e.k, $event.target.value)" />
+              <button type="button" class="fr-btn" @click="majFractions(e.k, (d.fractions[e.k] || 1) + 1)">+</button>
+              <span class="fr-unit">fraction{{ (d.fractions[e.k] || 1) > 1 ? 's' : '' }}</span>
+            </span>
+          </label>
+        </div>
       </section>
 
       <section v-if="d.produit" class="card slim">
@@ -626,6 +669,20 @@ onMounted(() => { lireLocal(); chargerProduitsApp(); chargerProduits(); charger(
 .pb-tag { font-size: 12px; font-weight: 600; color: #155e75; background: #ecfeff; border: 1px solid #a5f3fc; padding: 4px 9px; border-radius: 999px; }
 .pb-reload { margin-left: auto; display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #475569; }
 .pb-reload select { font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; }
+/* Fractions par étape */
+.frbar { padding: 14px 18px; }
+.fr-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.fr-title { font-size: 13px; font-weight: 800; color: #0e7490; text-transform: uppercase; letter-spacing: .4px; }
+.fr-hint { font-size: 12px; color: #64748b; }
+.fr-steps { display: flex; flex-wrap: wrap; gap: 10px; }
+.fr-step { display: flex; flex-direction: column; gap: 6px; border: 1px solid #e6edf3; border-radius: 10px; padding: 9px 12px; background: #f8fafc; min-width: 180px; }
+.fr-step-nom { font-size: 12.5px; font-weight: 700; color: #263445; }
+.fr-step-ctrl { display: flex; align-items: center; gap: 6px; }
+.fr-btn { font: inherit; font-size: 15px; font-weight: 800; line-height: 1; width: 28px; height: 28px; border: 1px solid #cbd5e1; background: #fff; color: #0e7490; border-radius: 7px; cursor: pointer; }
+.fr-btn:hover:not(:disabled) { background: #ecfeff; border-color: #a5f3fc; }
+.fr-btn:disabled { opacity: .4; cursor: default; }
+.fr-num { font: inherit; font-size: 14px; font-weight: 700; text-align: center; width: 48px; padding: 5px 4px; border: 1px solid #cbd5e1; border-radius: 7px; color: #0f2a37; }
+.fr-unit { font-size: 11.5px; color: #64748b; font-weight: 600; }
 /* Bascule de vue */
 .vtoggle { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 .vt { font: inherit; font-size: 13px; font-weight: 600; color: #475569; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 14px; cursor: pointer; }
