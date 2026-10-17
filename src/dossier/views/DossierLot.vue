@@ -3,7 +3,7 @@ import { ref, reactive, computed, onMounted, inject, provide } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 import IfHeader from '../components/IfHeader.vue'
-import EtapePesee from './EtapePesee.vue'
+import DossierImprimable from './DossierImprimable.vue'
 import FormulaireDynamique from './FormulaireDynamique.vue'
 import GestionProduits from '../components/GestionProduits.vue'
 import ConstructeurFormulaire from '../components/ConstructeurFormulaire.vue'
@@ -639,8 +639,8 @@ onMounted(() => { lireLocal(); chargerProduitsApp(); chargerProduits(); charger(
       </table>
     </div>
 
-    <!-- ========== ÉTAPE PESÉE (pages 3 à 24) ========== -->
-    <EtapePesee />
+    <!-- ===== Phases du dossier, générées à partir de la saisie (toutes étapes/fractions) ===== -->
+    <DossierImprimable />
     </div>
   </div>
 </template>
