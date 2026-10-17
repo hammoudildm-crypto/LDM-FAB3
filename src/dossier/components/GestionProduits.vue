@@ -19,6 +19,18 @@ const busy = ref(false)
 
 const noms = computed(() => Object.keys(props.catalogue).sort((a, b) => a.localeCompare(b)))
 const estPerso = (nom) => props.perso && props.perso.has && props.perso.has(nom)
+// Recherche : filtre la liste par nom, forme ou référence IF.
+const recherche = ref('')
+const nomsFiltres = computed(() => {
+  const q = recherche.value.trim().toLowerCase()
+  if (!q) return noms.value
+  return noms.value.filter(nom => {
+    const e = (props.catalogue[nom] && props.catalogue[nom].entete) || {}
+    return nom.toLowerCase().includes(q) ||
+      String(e.forme || '').toLowerCase().includes(q) ||
+      String(e.refIf || '').toLowerCase().includes(q)
+  })
+})
 
 /* ---------- Modèle de formulaire ---------- */
 function produitVide () {
@@ -122,12 +134,18 @@ function choisir (nom) { emit('selectionner', nom); emit('close') }
       <div v-if="mode === 'list'" class="gp-body">
         <div class="gp-toolbar">
           <button class="gp-btn primary" @click="ouvrirNouveau">+ Nouveau produit</button>
-          <span class="gp-count">{{ noms.length }} produit(s)</span>
+          <div class="gp-search">
+            <span class="gp-search-ic">🔎</span>
+            <input class="gp-search-in" v-model="recherche" type="search" placeholder="Rechercher (nom, forme, réf. IF)…" />
+            <button v-if="recherche" class="gp-search-x" type="button" title="Effacer" @click="recherche = ''">✕</button>
+          </div>
+          <span class="gp-count">{{ recherche ? nomsFiltres.length + ' / ' + noms.length : noms.length }} produit(s)</span>
         </div>
         <table class="gp-list">
           <thead><tr><th>Produit</th><th>Forme</th><th>Réf. IF</th><th>Origine</th><th class="ta-r">Actions</th></tr></thead>
           <tbody>
-            <tr v-for="nom in noms" :key="nom">
+            <tr v-if="!nomsFiltres.length"><td colspan="5" class="gp-empty">Aucun produit ne correspond à « {{ recherche }} ».</td></tr>
+            <tr v-for="nom in nomsFiltres" :key="nom">
               <td><b>{{ nom }}</b></td>
               <td>{{ catalogue[nom]?.entete?.forme || '—' }}</td>
               <td>{{ catalogue[nom]?.entete?.refIf || '—' }}</td>
@@ -305,8 +323,15 @@ function choisir (nom) { emit('selectionner', nom); emit('close') }
 .gp-warn code, .gp-hint code { background: #eef2ff; padding: 1px 5px; border-radius: 4px; }
 .gp-ok { margin: 12px 20px 0; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; padding: 9px 13px; border-radius: 8px; font-size: 13px; }
 .gp-err { margin: 12px 20px 0; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 9px 13px; border-radius: 8px; font-size: 13px; }
-.gp-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.gp-count { font-size: 12px; color: #64748b; }
+.gp-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.gp-count { font-size: 12px; color: #64748b; white-space: nowrap; }
+.gp-search { position: relative; display: inline-flex; align-items: center; flex: 1 1 220px; max-width: 360px; }
+.gp-search-ic { position: absolute; left: 10px; font-size: 13px; opacity: .6; pointer-events: none; }
+.gp-search-in { font: inherit; font-size: 13px; color: #0f172a; width: 100%; padding: 8px 28px 8px 30px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
+.gp-search-in:focus { outline: none; border-color: #0891b2; box-shadow: 0 0 0 3px #cffafe; }
+.gp-search-x { position: absolute; right: 7px; border: 0; background: #e2e8f0; color: #475569; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.gp-search-x:hover { background: #cbd5e1; }
+.gp-empty { text-align: center; color: #94a3b8; font-style: italic; padding: 16px; }
 .gp-hint { font-size: 12.5px; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; margin: 0 0 14px; }
 .gp-hint2 { font-size: 12px; color: #64748b; margin: 0 0 8px; }
 .gp-gamme { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
