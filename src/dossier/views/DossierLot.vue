@@ -152,6 +152,7 @@ function appliquerProduit (key) {
   const c = JSON.parse(JSON.stringify(r))
   d.produit = key
   Object.assign(d.entete, c.entete || {})
+  d.entete.produit = key   // « Produit à fabriquer » = clé du référentiel (source unique)
   Object.assign(d.amm, c.amm || {})
   d.redacteurs = c.redacteurs || []
   d.verificateurs = c.verificateurs || []
@@ -280,6 +281,9 @@ async function chargerDossier (id) {
   const r = await supabase.from('dossiers_lot').select('*').eq('id', id).single()
   if (r.error) { erreur.value = 'Impossible de charger : ' + r.error.message; return }
   Object.assign(d, docVide(), r.data.contenu || {})
+  // Source unique : le « Produit à fabriquer » reste aligné sur le produit
+  // sélectionné (clé du référentiel), même pour un dossier enregistré.
+  if (d.produit) d.entete.produit = d.produit
   dossierId.value = r.data.id
   message.value = 'Dossier « ' + (d.lot.numeroLotInterne || id) + ' » chargé.'
 }
@@ -371,7 +375,7 @@ onMounted(() => { lireLocal(); chargerProduits(); charger(); chargerUtilisateur(
       <section v-if="paramsOuverts && d.produit" class="card params">
         <h3>En-tête IF</h3>
         <div class="grid3">
-          <label class="fld">Produit<input v-model="d.entete.produit" /></label>
+          <label class="fld">Produit à fabriquer<input :value="d.produit" readonly class="ro" title="Défini dans le référentiel — pour le modifier, ouvrez ⚙ Gérer les produits" /><small class="ro-hint">Source : référentiel (⚙ Gérer les produits)</small></label>
           <label class="fld">DCI (bandeau)<input v-model="d.entete.dci2" /></label>
           <label class="fld">Forme<input v-model="d.entete.forme" /></label>
           <label class="fld">Référence SOP<input v-model="d.entete.refSop" /></label>
@@ -583,6 +587,8 @@ onMounted(() => { lireLocal(); chargerProduits(); charger(); chargerUtilisateur(
 .fld { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 4px; }
 .fld.inline { flex-direction: row; align-items: center; gap: 10px; }
 .fld input, .fld select { font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #1b2733; width: 100%; }
+.fld input.ro { background: #f1f5f9; color: #0f2a37; font-weight: 700; border-style: dashed; cursor: default; }
+.ro-hint { font-size: 10.5px; font-weight: 600; color: #0e7490; }
 .sig-edit { margin-bottom: 10px; }
 .sig-t { font-size: 12px; font-weight: 700; color: #155e75; margin-bottom: 4px; }
 .sig-row { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-bottom: 5px; }

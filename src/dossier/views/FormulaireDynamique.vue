@@ -128,7 +128,7 @@ function designer (sec, role) {
       <!-- En-tête compact du dossier (produit · réf · lot) -->
       <div v-if="d.entete && d.entete.produit" class="fd-head">
         <div class="fd-head-l">
-          <div class="fd-head-prod">{{ d.entete.produit }}<span v-if="d.entete.forme" class="fd-head-forme"> · {{ d.entete.forme }}</span></div>
+          <div class="fd-head-prod">{{ d.produit || d.entete.produit }}<span v-if="d.entete.forme" class="fd-head-forme"> · {{ d.entete.forme }}</span></div>
           <div class="fd-head-ref">
             <span v-if="d.entete.refIf">Réf IF <b>{{ d.entete.refIf }}</b></span>
             <span v-if="d.entete.version">Version <b>{{ d.entete.version }}</b></span>
