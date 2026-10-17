@@ -42,17 +42,35 @@ export function champVide (type = 'num') {
 
 // Évalue une formule « {idChamp} + {autre}*2 » depuis la saisie. Renvoie un
 // nombre, ou null si une référence est vide ou si la formule est invalide.
-export function evalFormule (formule, saisie) {
+// `champsCalc` (optionnel) = map { id: formule } des champs de type calcul :
+// permet à une formule de référencer un autre champ calculé (ex. le rendement
+// qui dépend de N_théo et N_CP eux-mêmes calculés). La résolution est récursive.
+export function evalFormule (formule, saisie, champsCalc, _depth) {
   if (!formule) return null
+  _depth = _depth || 0
+  if (_depth > 24) return null // garde-fou anti-boucle (référence circulaire)
   let ok = true
   const expr = String(formule).replace(/\{([^}]+)\}/g, (m, id) => {
-    const n = parseNum(saisie ? saisie[id.trim()] : null)
+    id = id.trim()
+    let n = parseNum(saisie ? saisie[id] : null)
+    if (n === null && champsCalc && Object.prototype.hasOwnProperty.call(champsCalc, id)) {
+      n = evalFormule(champsCalc[id], saisie, champsCalc, _depth + 1)
+    }
     if (n === null) ok = false
     return '(' + n + ')'
   })
   if (!ok) return null
-  if (!/^[\d\s+\-*/().]+$/.test(expr)) return null
+  if (!/^[\d\s+\-*/().eE]+$/.test(expr)) return null
   try { const v = Function('"use strict";return (' + expr + ')')(); return (typeof v === 'number' && isFinite(v)) ? v : null } catch (e) { return null }
+}
+
+// Construit la map { id: formule } de tous les champs calcul d'un formulaire.
+export function mapCalculs (formulaire) {
+  const m = {}
+  for (const sec of ((formulaire && formulaire.sections) || [])) {
+    for (const ch of (sec.champs || [])) if (ch.type === 'calcul') m[ch.id] = ch.formule
+  }
+  return m
 }
 export function sectionVide () { return { id: uid('s'), titre: '', cols: 1, phase: '', champs: [] } }
 export function formulaireVide () { return { sections: [] } }
@@ -106,6 +124,7 @@ export function specTexte (c) {
 // Évalue tout le formulaire rempli → stats + déviations (points 'nc').
 export function evaluerFormulaire (formulaire, saisie) {
   const S = (formulaire && formulaire.sections) || []
+  const champsCalc = mapCalculs(formulaire) // pour les calculs chaînés (formule → formule)
   let total = 0, saisis = 0, conformes = 0, nc = 0
   const deviations = []
   for (const sec of S) {
@@ -125,7 +144,7 @@ export function evaluerFormulaire (formulaire, saisie) {
       }
       if (ch.type === 'calcul') {
         total++
-        const n = evalFormule(ch.formule, saisie)
+        const n = evalFormule(ch.formule, saisie, champsCalc)
         if (n !== null) {
           saisis++
           const v = verdictNum(n, ch.min, ch.max)

@@ -1,6 +1,6 @@
 <script setup>
 import { inject, ref, computed, watch } from 'vue'
-import { evaluerFormulaire, verdictChamp, verdictCellule, verdictOuiNon, verdictNum, evalFormule, specTexte } from '../formulaire.js'
+import { evaluerFormulaire, verdictChamp, verdictCellule, verdictOuiNon, verdictNum, evalFormule, specTexte, mapCalculs } from '../formulaire.js'
 
 const d = inject('doc')
 if (!d.saisie || typeof d.saisie !== 'object') d.saisie = {}
@@ -89,8 +89,10 @@ function chkVal (ch, it) { const m = d.saisie[ch.id]; return (m && typeof m === 
 function setChk (ch, it, val) { let m = d.saisie[ch.id]; if (!m || typeof m !== 'object' || Array.isArray(m)) { m = {}; d.saisie[ch.id] = m }; m[it.id] = val }
 function vChk (ch, it) { return verdictOuiNon(chkVal(ch, it), ch.attendu) }
 
-// Calcul automatique (champ dérivé d'une formule).
-function calcVal (ch) { return evalFormule(ch.formule, d.saisie) }
+// Calcul automatique (champ dérivé d'une formule). La map des formules permet
+// aux calculs de se référencer entre eux (ex. rendement ← N_théo, N_CP).
+const calcMap = computed(() => mapCalculs(d.formulaire))
+function calcVal (ch) { return evalFormule(ch.formule, d.saisie, calcMap.value) }
 function calcAffiche (ch) { const n = calcVal(ch); if (n === null) return '—'; const r = Math.round(n * 1000) / 1000; return ch.unite ? (r + ' ' + ch.unite) : String(r) }
 function vCalc (ch) { const n = calcVal(ch); return n === null ? 'vide' : verdictNum(n, ch.min, ch.max) }
 

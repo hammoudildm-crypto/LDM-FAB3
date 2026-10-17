@@ -216,6 +216,11 @@ const SECTIONS_PESEE = [
         _cn('bl_av', 'Qté avariée', 'kg'),
         _ct('bl_visa', 'Date & Visa Superviseur')
       ]),
+      _note('bil_rnote', 'Rendement de la pesée (automatique)', 'Saisir le poids théorique total à peser (P_th) et le poids total réellement pesé (P_pesé) : l\'avarie et le rendement se calculent automatiquement. La norme de rendement est indicative (modifiable via le Constructeur).'),
+      _num('bil_pth', 'Poids théorique total à peser (P_th)', 'kg'),
+      _num('bil_ppes', 'Poids total pesé (P_pesé)', 'kg'),
+      _calc('bil_av', 'Avarie engendrée = P_th − P_pesé', '{bil_pth} - {bil_ppes}', 'kg'),
+      _calc('bil_rdt', 'Rendement de la pesée = P_pesé × 100 / P_th', '{bil_ppes} * 100 / {bil_pth}', '%', 99, 100),
       _txt('bil_visa', 'Date / Visa Responsable Fabrication')
     ], 2),
     _sec('p_inc', '12 · Suivi des incidents et arrêts', [
@@ -389,6 +394,245 @@ const SECTIONS_TM = [
 ]
 
 // =====================================================================
+//  Phase COMPRESSION (IF PFLDM103, pages 42-71) — modélisée à l'identique.
+//  Spéc. site : T° 15-25 °C, HR ≤60 %, ΔP ≥1 mmH₂O. Comprimeuse FETTE 1200i.
+//  Comprimé cible 150,00 mg · masse moyenne 145,50-154,50 mg · dureté 4-15 Kp.
+//  Section 24 : rendement AUTOMATIQUE (P_mél sec.10, P_CP sec.23, MMS sec.18).
+// =====================================================================
+const SECTIONS_COMPRESSION = [
+  _sec('cp_prelim', '1 · Opérations préliminaires & autorisation de démarrage', [
+    _note('cpp_instr', 'Opérations préliminaires — vérifications avant démarrage', `• Vide de ligne : machines et locaux libérés des matériaux et documents du produit précédent (selon check-list vide de ligne).
+• Nettoyage des équipements et locaux vérifié ; étiquettes de nettoyage et logs book renseignés.
+• Local et machine identifiés (fiches « utilisation salle » et « utilisation machine ») ; étiquettes « Nettoyé » et « Utilisation salle » collées.
+• Nettoyage des pièces mobiles vérifié ; étiquettes « Nettoyé » jointes à l'IF.
+• Vérification journalière des balances effectuée.
+• Propreté et intégrité des contenants MP réceptionnés vérifiées.
+• Conditions d'ambiance du local vérifiées : température (°C), HR (%), ΔP.
+• En cas d'anomalies : stopper l'opération, alerter le responsable, reporter l'évènement sur la fiche incidents.
+• Attendre l'autorisation AQ avant de procéder à la compression.`),
+    _note('cpp_secu', 'Consignes de sécurité obligatoires', TXT_SECURITE),
+    _note('cpp_prec', 'Précautions de production', TXT_PRECAUTIONS),
+    _txt('cpp_date', 'Date de début de compression', 'date', true),
+    _txt('cpp_salle', 'N° de salle de compression'),
+    _txt('cpp_heure', 'Heure de début'),
+    _num('cpp_temp', 'Température de la salle', '°C', 15, 25, true),
+    _num('cpp_hr', 'Humidité relative', '%', null, 60, true),
+    _num('cpp_dp', 'Différentiel de pression (ΔP)', 'mmH₂O', 1, null, true)
+  ], 2),
+  _sec('cp_net', '2 · Vérification du nettoyage des équipements et locaux', [
+    _note('cnet_note', 'Étiquettes de nettoyage', 'Remplacer les étiquettes « Nettoyé » salle et machine par les fiches « utilisation salle » et « utilisation machine ». Coller les étiquettes « Nettoyée » dans l\'instruction de fabrication.'),
+    _chk('cnet_chk', 'Étiquettes « nettoyé » collées', 'oui', ['Salle de compression', 'Équipements', 'Pièces mobiles']),
+    _pj('cnet_pjsalle', 'Étiquette nettoyée de la salle de compression (scan)'),
+    _pj('cnet_pjequip', 'Étiquettes nettoyée des équipements (scan)'),
+    _pj('cnet_pjmob', 'Étiquettes nettoyée des pièces mobiles (scan)'),
+    _txt('cnet_visa', 'Vérifié par — Date & Visa')
+  ], 2),
+  _sec('cp_env', '3 · Conditions environnementales avant démarrage', [
+    _note('cenv_note', 'Contrôle T° / HR / ΔP', 'Relever les données avant démarrage de la compression.'),
+    _tab('cenv_tab', 'Contrôle de la température, de l\'humidité relative et de la différence de pression', [
+      _ct('cen_etape', 'Étape'), _ct('cen_salle', 'N° salle'), _ct('cen_heure', 'Heure'),
+      _cn('cen_t', 'T°C [15-25]', '°C', 15, 25), _cn('cen_hr', 'HR% ≤ 60', '%', null, 60), _cn('cen_dp', 'ΔP ≥ 1', 'mmH₂O', 1, null),
+      _ct('cen_vop', 'Date/Visa Opérateur'), _ct('cen_vverif', 'Date/Visa Vérificateur')
+    ])
+  ]),
+  _sec('cp_autor', '4 · Autorisation de démarrage de la compression', [
+    _chk('caut_chk', 'Vide de ligne — conformité (joindre la checklist vide de ligne à l\'IF)', 'cnc', [
+      'Instructions générales', 'Consignes de sécurité', 'Conditions environnementales', 'Nettoyage local et équipements'
+    ]),
+    _txt('caut_sup', 'Démarrage autorisé — Superviseur Fabrication (date / heure / visa)'),
+    _txt('caut_aq', 'Démarrage autorisé — AQ Process (date / heure / visa)')
+  ], 2),
+  _sec('cp_vprel', '5 · Vérification préliminaire', [
+    _chk('cvpr_chk', 'Vérifications à effectuer', 'oui', [
+      'Présence de tous les documents de l\'instruction de fabrication',
+      'Habillage spécifique / réglementaire du personnel',
+      'Absence de plaies ouvertes ou maladies contagieuses chez le personnel'
+    ]),
+    _txt('cvpr_visa', 'Date / Visa')
+  ], 2),
+  _sec('cp_ope', '6 · Liste des opérateurs de compression', [
+    _tab('cope_tab', 'Opérateurs — Shift 01 : 06-14h · 02 : 14-22h · 03 : 22-06h', [
+      _ct('cop_shift', 'N° Shift'), _ct('cop_poste', 'Poste'), _ct('cop_nom', 'Nom & prénom'),
+      _ct('cop_date', 'Date'), _ct('cop_visa', 'Visa'), _ct('cop_verif', 'Vérifier par (Date & Visa)')
+    ])
+  ]),
+  _sec('cp_equip', '7 · Vérification des équipements utilisés', [
+    _note('cequ_note', 'Équipements de compression', 'Comprimeuse FETTE 1200i (PR057 / PR012 / PR205) · Dépoussiéreur (PR013/01 · PR013/02 · PR301) · Détecteur de métaux (PR301-a · PR057-a · PR205-a) · Chaîne élévatrice (PR010 · PR231 · PR232). Statuts : C / NC / NA.'),
+    _tab('cequ_tab', 'Équipements — qualification/calibration & parties vitrées', [
+      _ct('ceq_nom', 'Équipement'), _ct('ceq_code', 'Code'),
+      _ccnc('ceq_qual', 'Statut qualification / calibration'), _ccnc('ceq_vitr', 'État des parties vitrées'),
+      _ct('ceq_fait', 'Fait par / Date & Visa'), _ct('ceq_verif', 'Vérifié par / Date & Visa'), _ct('ceq_obs', 'Observation')
+    ])
+  ]),
+  _sec('cp_etal', '8 · Vérification de l\'étalonnage des balances', [
+    _tab('cetal_tab', 'Balances — calibrage', [
+      _ct('cet_bal', 'Balance'), _ct('cet_code', 'Code'), _coo('cet_cal', 'Calibrage effectué'),
+      _ct('cet_date', 'Date'), _ct('cet_vop', 'Date/Visa Opérateur'), _ct('cet_vverif', 'Date/Visa Vérificateur'), _ct('cet_obs', 'Observation')
+    ])
+  ]),
+  _sec('cp_cond', '9 · Conditions T°C / ΔP / HR% au cours du process', [
+    _note('ccond_note', 'Fréquence', 'Relever les données toutes les 30 min pendant la compression.'),
+    _tab('ccond_tab', 'Relevés en cours de compression', [
+      _ct('cco_date', 'Date'), _ct('cco_heure', 'Heure'),
+      _cn('cco_t', 'Température 15≤T≤25', '°C', 15, 25), _cn('cco_hr', 'Humidité ≤60', '%', null, 60), _cn('cco_dp', 'ΔP ≥1', 'mmH₂O', 1, null),
+      _ct('cco_salle', 'N° salle'), _ct('cco_fait', 'Fait par / Visa'), _ct('cco_verif', 'Vérifié par / Date & Visa')
+    ])
+  ]),
+  _sec('cp_recmel', '10 · Réception du mélange finale', [
+    _note('crec_note', 'Réception', 'Vérifier l\'intégrité des contenants réceptionnés. La vérification doit être effectuée avant le début du processus de compression.'),
+    _tab('crec_tab', 'Mélange final réceptionné', [
+      _ct('cre_mat', 'Matière'), _ct('cre_lot', 'N° lot Produit Fini'),
+      _coo('cre_int', 'Contenant intègre scellé et identifié'), _coo('cre_etiq', 'Présence étiquette pesée'),
+      _cn('cre_qte', 'Quantité livrée', 'kg'), _ct('cre_fait', 'Fait par / Date & Visa'), _ct('cre_verif', 'Vérifié par / Date & Visa')
+    ]),
+    _num('crec_pmel', 'Quantité Totale reçue (P_mél)', 'kg')
+  ]),
+  _sec('cp_vfonc', '11 · Vérification du fonctionnement de l\'équipement avant compression', [
+    _txt('cvf_date', 'Début — Date', 'date'), _txt('cvf_heure', 'Heure'),
+    _note('cvf_note', 'Fonctionnement à vide', 'Comprimeuse FETTE 1200i · Dépoussiéreur · Détecteur de métaux · Chaîne élévatrice (codes section 7).'),
+    _tab('cvf_tab', 'Fonctionnement à vide des équipements', [
+      _ct('cvf_nom', 'Équipement'), _ct('cvf_code', 'Code'), _ccnc('cvf_fonc', 'Fonctionnement à vide'),
+      _ct('cvf_fait', 'Fait par / Date'), _ct('cvf_verif', 'Vérifié par / Date'), _ct('cvf_obs', 'Observation')
+    ])
+  ]),
+  _sec('cp_detmet', '12 · Vérification de la sensibilité du détecteur de métaux', [
+    _note('cdet_note', 'Mode opératoire', `Fréquence : à chaque démarrage de compression.
+Faire passer une par une les 3 billes tests dans le détecteur de métaux :
+1- NFE 0,5 mm : métaux non ferreux
+2- FE 0,3 mm : métaux ferreux
+3- SS 304 0,5 mm : inox (stainless steel)
+Norme : rejet des billes par le détecteur. En cas de non-rejet d'une bille, noter NC dans « Résultat » et prévenir l'agent de maîtrise.`),
+    _tab('cdet_tab', 'Résultat du test (bille éjectée par le détecteur)', [
+      _ct('cde_test', 'Test (NFE / FE / SS 304)'), _coo('cde_res', 'Bille éjectée'), _ct('cde_fait', 'Fait par')
+    ]),
+    _txt('cdet_sup', 'Superviseur Fabrication — Date / Heure / Visa')
+  ]),
+  _sec('cp_poincon', '13 · Poinçons avant montage & sensibilité du système d\'éjection', [
+    _tab('cpoi_tab', 'Vérification des poinçons avant montage', [
+      _ct('cpo_param', 'Paramètre'), _ct('cpo_spec', 'Spécification'), _ccnc('cpo_conf', 'Conformité'),
+      _ct('cpo_fait', 'Fait par'), _ct('cpo_verif', 'Vérifié par')
+    ]),
+    _note('cpoi_note', 'Spécifications poinçons', 'Dimensions : Diamètre 7 mm · Aspect : rond concave sans trait de sécabilité sur les deux faces · Came de sur-remplissage : 8 mm.'),
+    _note('cpoi_ej', 'Sensibilité du système d\'éjection de la comprimeuse', `Fréquence : à chaque démarrage de la compression du 1er lot de campagne ; après intervention maintenance ou réglage ayant une répercussion sur la barrette d'éjection.
+Critère d'acceptabilité : la machine affiche un surpassement de force de compression durant tout le test sur le poste modifié ; tous les comprimés non conformes du poste modifié doivent être éjectés.
+Vérifier à chaque démarrage de campagne que le nombre de postes actifs sur le panel correspond au nombre de poinçons présents sur tourelle.`),
+    _num('cpoi_postes', 'Nombre de postes actifs', ''),
+    _tab('cpoi_ejtab', 'Test d\'éjection', [
+      _ct('cpe_dh', 'Date et heure'), _ct('cpe_motif', 'Motif du test'), _ct('cpe_poste', 'N° du poste utilisé'),
+      _ct('cpe_vit', 'Vitesse tourelle au test'), _ccnc('cpe_res', 'Résultats'), _ct('cpe_fait', 'Fait par')
+    ]),
+    _txt('cpoi_sup', 'Superviseur Fabrication — Date / Heure / Visa')
+  ]),
+  _sec('cp_demarr', '14 · Démarrage du processus — réglage des paramètres de compression', [
+    _num('cdm_fc', 'Force de compression', 'kN', 5.0, 6.0),
+    _num('cdm_fpc', 'Force de pré-compression', 'kN', 1.5, 3.0),
+    _num('cdm_vit', 'Vitesse fill-o-matic', 'RPM', 30, 50),
+    _num('cdm_htc', 'Hauteur tranche compression', 'mm', 1.8, 2.9),
+    _num('cdm_htpc', 'Hauteur tranche pré-compression', 'mm', 1.5, 4.0),
+    _num('cdm_vol', 'Volume de remplissage', 'mm', 6.0, 8.0),
+    _num('cdm_cad', 'Cadence', 'x1000 cps/h', 50, 70),
+    _num('cdm_srel', 'S-rel', '%', null, 10),
+    _txt('cdm_fait', 'Fait par / Vérifié par — Date & Visa')
+  ], 2),
+  _sec('cp_physiq', '15 · Paramètres physiques du comprimé & montage des poinçons', [
+    _note('cph_spec', 'Spécifications du comprimé', 'Masse cible : 150,00 mg · Forme : comprimé blanc rond biconvexe sans trait de sécabilité sur les deux faces · Épaisseur : 3,5–3,8 mm · Couleur : blanc · Dureté : 4–15 Kp · Diamètre : 7 mm · Friabilité : ≤ 1 % de perte de masse, pas de comprimé cassé · Désagrégation : ≤ 15 min · Configuration des pales : hélice carrée.'),
+    _note('cph_lanc', 'Lancement de la compression', 'Vérifier le montage et l\'intégrité des poinçons en prélevant la production de 10 tours successifs de la machine. Contrôler l\'absence de défauts de forme dus à un poinçon défectueux. Faire les contrôles physiques des comprimés au lancement.'),
+    _chk('cph_chk', 'Contrôle au montage', 'cnc', ['Montage des poinçons', 'Intégrité des poinçons', 'Absence de défauts de forme']),
+    _txt('cph_fait', 'Fait par / Vérifié par — Date & Visa')
+  ]),
+  _sec('cp_lanc', '16 · Contrôle des comprimés au lancement', [
+    _note('cla_note', 'Échantillonnage', 'Prélever 71 comprimés : aspect (21), épaisseur Min–Max (21), masse moyenne (20), masse individuelle/uniformité (20), dureté (21), friabilité (44), désagrégation (06). Reporter les résultats ci-dessous et attendre l\'autorisation de démarrage. Toute non-conformité impose un réglage machine et un nouveau lancement.'),
+    _oc('cla_aspect', 'Aspect (blanc, rond, biconvexe ; sans points noirs, marbrures, bavures, collage, clivage)'),
+    _num('cla_mm', 'Masse moyenne (20 cp)', 'mg', 145.5, 154.5),
+    _num('cla_miMin', 'Masse individuelle — minimale observée', 'mg', 142.5, null),
+    _num('cla_miMax', 'Masse individuelle — maximale observée', 'mg', null, 157.5),
+    _num('cla_epMin', 'Épaisseur — minimale', 'mm', 3.5, null),
+    _num('cla_epMax', 'Épaisseur — maximale', 'mm', null, 3.8),
+    _num('cla_dur', 'Dureté', 'Kp', 4, 15),
+    _num('cla_fm1', 'Friabilité — masse avant test M1', 'g'),
+    _num('cla_fm2', 'Friabilité — masse après test M2', 'g'),
+    _calc('cla_fri', 'Friabilité = (M1 − M2) × 100 / M1', '({cla_fm1} - {cla_fm2}) * 100 / {cla_fm1}', '%', null, 1),
+    _num('cla_desag', 'Désagrégation', 'min', null, 15),
+    _txt('cla_fait', 'Fait par / Vérifié par — Date & Visa')
+  ], 2),
+  _sec('cp_autor2', '17 · Autorisation de démarrage de la compression', [
+    _note('cau2_note', 'Démarrage de la compression autorisé', 'Après contrôles de lancement conformes, le démarrage de la compression est autorisé.'),
+    _txt('cau2_sup', 'Superviseur Fabrication — Date / Heure / Visa'),
+    _txt('cau2_aq', 'AQ Process — Date / Heure / Visa'),
+    _pj('cau2_pj', 'Étiquettes « identification » du produit vrac (scan)')
+  ], 2),
+  _sec('cp_ipcmm', '18 · Contrôle en cours de process — masse moyenne & aspect', [
+    _note('cim_note', 'Masse moyenne — zones & MMS', `Contrôles toutes les 15 min (masse moyenne & aspect).
+Zone de travail : 145,50 – 154,50 mg (cible 150,00 mg ± 3 %).
+Zone de réglage : 142,50 mg (−5 %) à 157,50 mg (+5 %).
+Zone d'arrêt : < 142,50 mg ou > 157,50 mg.
+Masse moyenne statistique MMS = (M₁ + M₂ + … + Mᵢ) / n  (n = nombre de contrôles).`),
+    _tab('cim_tab', 'Suivi masse moyenne & aspect (chaque 15 min)', [
+      _ct('cim_heure', 'Heure'), _cn('cim_mm', 'Masse moyenne', 'mg', 145.5, 154.5), _coc('cim_aspect', 'Aspect'),
+      _ct('cim_cont', 'Contenant N°'), _cn('cim_cad', 'Cadence (x1000 cp/h)', '', 50, 70),
+      _ct('cim_fait', 'Fait par'), _ct('cim_verif', 'Vérifié par')
+    ]),
+    _num('cim_mms', 'Masse moyenne statistique MMS (fin de compression)', 'mg', 145.5, 154.5),
+    _txt('cim_visa', 'Visa AQ Process')
+  ]),
+  _sec('cp_ipcep', '19 · Contrôle en cours de process — épaisseur', [
+    _note('cie_note', 'Fréquence', 'Contrôles à chaque lancement, toutes les 30 min. Valeur unitaire : 3,5–3,8 mm (21 comprimés).'),
+    _tab('cie_tab', 'Suivi épaisseur (chaque 30 min)', [
+      _ct('cie_date', 'Date'), _ct('cie_heure', 'Heure'),
+      _cn('cie_min', 'Épaisseur Min', 'mm', 3.5, null), _cn('cie_max', 'Épaisseur Max', 'mm', null, 3.8),
+      _ct('cie_cont', 'Contenant N°'), _ct('cie_fait', 'Fait par')
+    ]),
+    _txt('cie_visa', 'Vérifié par — Date & Visa')
+  ]),
+  _sec('cp_nus', '20 · Réception des comprimés nus (CQ)', [
+    _ooi('cnus_req', 'Contrôle des comprimés nus requis CQ ? (si Oui : demande d\'échantillonnage réf. CQ-SOP-007)'),
+    _ooi('cnus_bloq', 'Analyse bloquante ? (si Oui : attendre les résultats avant le conditionnement)'),
+    _txt('cnus_obs', 'Observation'),
+    _txt('cnus_fin', 'Fin — Date / Heure / Fait par / Vérifié par')
+  ], 2),
+  _sec('cp_chall', '21 · Suivi des challenge test détecteur de métaux', [
+    _note('cch_note', 'Fréquence', 'Contrôles en début, milieu et fin de compression. Billes : NFE 0,5 mm · FE 0,3 mm · SS 304 0,5 mm.'),
+    _tab('cch_tab', 'Challenge test (début / milieu / fin)', [
+      _ct('cch_moment', 'Moment (Début/Milieu/Fin)'), _ct('cch_dh', 'Date / Heure'), _ct('cch_test', 'Test (NFE/FE/SS)'),
+      _coo('cch_res', 'Bille éjectée'), _ct('cch_fait', 'Fait par'), _ct('cch_verif', 'Vérifié par')
+    ])
+  ]),
+  _sec('cp_inc', '22 · Suivi des incidents et des arrêts de la comprimeuse', [
+    _tab('cinc_tab', 'Incidents / arrêts', [
+      _ct('cin_date', 'Date'), _ct('cin_harr', 'Heure d\'arrêt'), _ct('cin_sac', 'N° saccueuse / contenant'),
+      _ct('cin_motif', 'Motif'), _ct('cin_action', 'Action corrective'),
+      _ct('cin_ddem', 'Date de démarrage'), _ct('cin_hdem', 'Heure de démarrage'), _ct('cin_visa', 'Fait par / Visa')
+    ]),
+    _txt('cinc_visa', 'Vérifié par / Visa — Date')
+  ]),
+  _sec('cp_bilan', '23 · Bilan de la compression', [
+    _note('cbil_note', 'Bilan', 'Tarer le poids des sacs. Récupérer les comprimés dans des sacs PE propres (identifier chaque sac). Peser le sac + comprimés (poids brut). Poids net = brut − tare. Transférer chaque sac dans un fût propre identifié.'),
+    _tab('cbil_tab', 'Bilan par fût', [
+      _ct('cbi_fut', 'Fût N°'), _ct('cbi_sac', 'Sac N°'),
+      _cn('cbi_tare', 'Tare', 'kg'), _cn('cbi_brute', 'Brute', 'kg'), _cn('cbi_net', 'Net', 'kg'),
+      _ct('cbi_fait', 'Fait par'), _ct('cbi_verif', 'Vérifié par')
+    ]),
+    _num('cbil_pcp', 'P_CP — Total Net des comprimés obtenus', 'kg'),
+    _pj('cbil_pj', 'Étiquette « identification in process » des produits intermédiaires (scan)')
+  ]),
+  _sec('cp_rdt', '24 · Calcul du rendement de la compression', [
+    _note('crd_note', 'Rendement (automatique depuis les données enregistrées)', `Les poids sont repris automatiquement : P_mél (section 10 · réception), P_CP (section 23 · bilan) et MMS (section 18 · masse moyenne statistique). Masse moyenne théorique MM = 150,00 mg. Saisir uniquement C_ép (nombre de comprimés prélevés par le CQ). Norme de rendement : 95–100 %.`),
+    _calc('crd_pmel', 'P_mél — poids du mélange reçu (rappel section 10)', '{crec_pmel}', 'kg'),
+    _calc('crd_pcp', 'P_CP — poids des comprimés obtenus (rappel section 23)', '{cbil_pcp}', 'kg'),
+    _calc('crd_mms', 'MMS — masse moyenne statistique (rappel section 18)', '{cim_mms}', 'mg'),
+    _num('crd_ceap', 'C_ép — nombre de comprimés prélevés par le CQ', 'cp'),
+    _calc('crd_ntheo', 'N_théo = P_mél × 10⁶ / MM (150 mg)', '{crec_pmel} * 1000000 / 150', 'cp'),
+    _calc('crd_ncp', 'N_CP = P_CP × 10⁶ / MMS', '{cbil_pcp} * 1000000 / {cim_mms}', 'cp'),
+    _calc('crd_a1', 'A₁ (avarie) = P_mél − P_CP − (C_ép × MMS × 10⁻⁶)', '{crec_pmel} - {cbil_pcp} - ({crd_ceap} * {cim_mms} / 1000000)', 'kg'),
+    _calc('crd_a2', 'A₂ (avarie) = N_théo − N_CP − C_ép', '{crd_ntheo} - {crd_ncp} - {crd_ceap}', 'cp'),
+    _calc('crd_rkg', 'Rendement (kg/kg) = (P_CP + C_ép × MMS × 10⁻⁶) × 100 / P_mél', '({cbil_pcp} + {crd_ceap} * {cim_mms} / 1000000) * 100 / {crec_pmel}', '%', 95, 100),
+    _calc('crd_rcp', 'Rendement (CP/CP) = (N_CP + C_ép) × 100 / N_théo', '({crd_ncp} + {crd_ceap}) * 100 / {crd_ntheo}', '%', 95, 100),
+    _chk('crd_docs', 'Documents à joindre', 'oui', ['Bon d\'avarie', 'Bon de prélèvement']),
+    _txt('crd_visa', 'Date / Visa Responsable Fabrication')
+  ], 2)
+]
+
+// =====================================================================
 //  Squelette générique d'une étape de fabrication (prélim, nettoyage,
 //  opérateurs, équipements, conditions, opération, IPC, bilan, incidents).
 //  Sert à pré-structurer les étapes dont le dossier n'est pas encore
@@ -440,9 +684,11 @@ function phaseSkel (px, labelOp) {
       _pj(px + '_ipcpj', 'Fiche IPC / ticket (scan)')
     ], 2),
     _sec(px + '_bilan', '8 · Bilan / rendement', [
+      _note(px + '_bnote', 'Rendement (automatique)', 'Saisir la quantité théorique et la quantité obtenue : l\'avarie et le rendement se calculent automatiquement. La norme (min/max) de rendement propre à l\'étape se définit via le Constructeur.'),
       _num(px + '_pth', 'Quantité théorique', 'kg'),
       _num(px + '_pobt', 'Quantité obtenue', 'kg'),
-      _num(px + '_rdt', 'Rendement', '%'),
+      _calc(px + '_av', 'Avarie = théorique − obtenue', '{' + px + '_pth} - {' + px + '_pobt}', 'kg'),
+      _calc(px + '_rdt', 'Rendement = obtenue × 100 / théorique', '{' + px + '_pobt} * 100 / {' + px + '_pth}', '%'),
       _txt(px + '_bjust', 'Justification des écarts'),
       _txt(px + '_bvisa', 'Date / Visa Responsable Fabrication')
     ], 2),
@@ -463,7 +709,7 @@ const PHASES_STANDARD = {
   pesee:                 { nom: 'Pesée', sections: SECTIONS_PESEE },
   granulation_sechage:   { nom: 'Granulation & Séchage', sections: phaseSkel('gr', 'Opération de granulation & séchage') },
   tamisage_melange:      { nom: 'Tamisage & Mélange', sections: SECTIONS_TM },
-  compression:           { nom: 'Compression', sections: phaseSkel('cp', 'Opération de compression') },
+  compression:           { nom: 'Compression', sections: SECTIONS_COMPRESSION },
   remplissage_gelules:   { nom: 'Remplissage des gélules', sections: phaseSkel('ge', 'Opération de remplissage des gélules') },
   pelliculage:           { nom: 'Pelliculage', sections: phaseSkel('pl', 'Opération de pelliculage') },
   melange_creme_pommade: { nom: 'Mélange crème & pommade', sections: phaseSkel('cr', 'Opération de mélange crème/pommade') }
