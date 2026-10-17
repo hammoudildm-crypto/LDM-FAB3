@@ -1,6 +1,6 @@
 <script setup>
 import { inject, computed, watch } from 'vue'
-import { evaluerFormulaire, verdictChamp, verdictCellule, specTexte } from '../formulaire.js'
+import { evaluerFormulaire, verdictChamp, verdictCellule, verdictOuiNon, specTexte } from '../formulaire.js'
 
 const d = inject('doc')
 if (!d.saisie || typeof d.saisie !== 'object') d.saisie = {}
@@ -10,6 +10,7 @@ if (!d.formulaire || !Array.isArray(d.formulaire.sections)) d.formulaire = { sec
 function ensureTables () {
   for (const s of (d.formulaire.sections || [])) for (const ch of (s.champs || [])) {
     if (ch.type === 'tableau' && !Array.isArray(d.saisie[ch.id])) d.saisie[ch.id] = []
+    if (ch.type === 'checklist' && (d.saisie[ch.id] === null || typeof d.saisie[ch.id] !== 'object' || Array.isArray(d.saisie[ch.id]))) d.saisie[ch.id] = {}
   }
 }
 watch(() => d.formulaire, ensureTables, { deep: true, immediate: true })
@@ -34,6 +35,7 @@ function secCtrl (sec) {
   for (const ch of (sec.champs || [])) {
     if (ch.type === 'num' || ch.type === 'oui_non' || ch.obligatoire) n++
     if (ch.type === 'tableau') n += (ch.colonnes || []).filter(c => c.type === 'num' || c.type === 'oui_non').length
+    if (ch.type === 'checklist') n += (ch.items || []).length
   }
   return n
 }
@@ -65,6 +67,11 @@ function onFile (ch, ev) {
   r.onload = () => { d.saisie[ch.id] = { name: f.name, type: f.type, size: f.size, data: r.result } }
   r.readAsDataURL(f)
 }
+
+// Check-list : valeurs par point dans une map saisie[ch.id][item.id].
+function chkVal (ch, it) { const m = d.saisie[ch.id]; return (m && typeof m === 'object' && !Array.isArray(m)) ? (m[it.id] || '') : '' }
+function setChk (ch, it, val) { let m = d.saisie[ch.id]; if (!m || typeof m !== 'object' || Array.isArray(m)) { m = {}; d.saisie[ch.id] = m }; m[it.id] = val }
+function vChk (ch, it) { return verdictOuiNon(chkVal(ch, it), ch.attendu) }
 </script>
 
 <template>
@@ -100,7 +107,7 @@ function onFile (ch, ev) {
         </div>
 
         <div class="fd-fields" :class="{ two: sec.cols === 2 }">
-        <div v-for="ch in sec.champs" :key="ch.id" class="fd-champ" :class="{ tab: ch.type === 'tableau' || ch.type === 'note' || ch.type === 'fichier' }">
+        <div v-for="ch in sec.champs" :key="ch.id" class="fd-champ" :class="{ tab: ch.type === 'tableau' || ch.type === 'note' || ch.type === 'fichier' || ch.type === 'checklist' }">
           <!-- Note / consignes (lecture seule) -->
           <template v-if="ch.type === 'note'">
             <details class="fd-note" open>
@@ -125,6 +132,22 @@ function onFile (ch, ev) {
                 <span>＋ Joindre un fichier (image ou PDF, max 4 Mo)</span>
               </label>
             </div>
+          </template>
+
+          <!-- Check-list (liste de points avec C/NC ou Oui/Non) -->
+          <template v-else-if="ch.type === 'checklist'">
+            <div class="fd-lbl fd-chk-h"><span class="fd-lbl-t">☑ {{ ch.label || 'Check-list' }}</span><span class="fd-spec">Attendu : {{ ch.attendu }}</span></div>
+            <ul class="fd-chk">
+              <li v-for="it in ch.items" :key="it.id" class="fd-chk-it">
+                <span class="fd-chk-lbl">{{ it.label || '—' }}</span>
+                <div class="fd-chk-ctrl">
+                  <div class="fd-onoff sm">
+                    <button v-for="o in ch.options" :key="o" type="button" :class="{ on: chkVal(ch, it) === o, bad: chkVal(ch, it) === o && o !== ch.attendu }" @click="setChk(ch, it, o)">{{ o }}</button>
+                  </div>
+                  <span v-if="vChk(ch, it) !== 'vide'" class="vb" :class="bInfo[vChk(ch, it)].c">{{ bInfo[vChk(ch, it)].t }}</span>
+                </div>
+              </li>
+            </ul>
           </template>
 
           <!-- Champs simples -->
@@ -307,6 +330,15 @@ function onFile (ch, ev) {
 .fd-file-sz { font-size: 11px; color: #94a3b8; }
 .fd-file-drop { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12.5px; font-weight: 600; color: #0e7490; background: #ecfeff; border: 1px dashed #67e8f9; border-radius: 9px; padding: 10px 15px; cursor: pointer; }
 .fd-file-drop:hover { background: #cffafe; }
+
+/* Check-list */
+.fd-chk-h { margin-bottom: 8px; }
+.fd-chk { list-style: none; margin: 0; padding: 0; border: 1px solid #e6edf3; border-radius: 10px; overflow: hidden; }
+.fd-chk-it { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 13px; border-bottom: 1px solid #f1f5f9; }
+.fd-chk-it:nth-child(even) { background: #fbfcfe; }
+.fd-chk-it:last-child { border-bottom: 0; }
+.fd-chk-lbl { font-size: 13px; color: #334155; font-weight: 500; line-height: 1.35; }
+.fd-chk-ctrl { display: flex; align-items: center; gap: 10px; flex: none; }
 
 /* Large : libellé à gauche, contrôle aligné à droite */
 @media (min-width: 680px) {

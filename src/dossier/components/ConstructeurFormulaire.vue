@@ -1,6 +1,6 @@
 <script setup>
 import { inject, ref, reactive } from 'vue'
-import { TYPES_CHAMP, TYPES_COLONNE, JEUX_OUI_NON, champVide, sectionVide, colonneVide, compteChamps } from '../formulaire.js'
+import { TYPES_CHAMP, TYPES_COLONNE, JEUX_OUI_NON, champVide, sectionVide, colonneVide, compteChamps, uid } from '../formulaire.js'
 
 const props = defineProps({
   sauver: { type: Function, required: true },   // async () => {ok, local, err}
@@ -34,6 +34,10 @@ function setJeu (ch, k) { const j = JEUX_OUI_NON.find(j => j.k === k); if (j) { 
 const toggleCols = (ch) => { colsOuvert.value = colsOuvert.value === ch.id ? null : ch.id }
 const addCol = (ch) => ch.colonnes.push(colonneVide('texte'))
 const delCol = (ch, i) => ch.colonnes.splice(i, 1)
+
+/* ---- check-list : points ---- */
+const addItem = (ch) => { if (!Array.isArray(ch.items)) ch.items = []; ch.items.push({ id: uid('it'), label: '' }) }
+const delItem = (ch, i) => ch.items.splice(i, 1)
 
 async function sauver () {
   // nettoie : retire sections sans titre ET sans champ
@@ -122,6 +126,21 @@ async function sauver () {
                   </template>
                   <template v-else-if="ch.type === 'fichier'">
                     <span class="cf-muted">Zone de dépôt de fichier (scan, étiquette, certificat) à la saisie</span>
+                  </template>
+                  <template v-else-if="ch.type === 'checklist'">
+                    <div class="cf-row">
+                      <select class="cf-in" :value="jeuDe(ch)" @change="setJeu(ch, $event.target.value)">
+                        <option v-for="j in JEUX_OUI_NON" :key="j.k" :value="j.k">{{ j.options.join(' / ') }}</option>
+                      </select>
+                      <button class="cf-mini" @click="toggleCols(ch)">{{ colsOuvert === ch.id ? 'Fermer' : 'Points' }} ({{ (ch.items || []).length }})</button>
+                    </div>
+                    <div v-if="colsOuvert === ch.id" class="cf-cols">
+                      <div v-for="(it, ii) in ch.items" :key="it.id" class="cf-col-row">
+                        <input class="cf-in" v-model="it.label" placeholder="Point à vérifier" />
+                        <button class="cf-ib danger" @click="delItem(ch, ii)">✕</button>
+                      </div>
+                      <button class="cf-mini" @click="addItem(ch)">+ point</button>
+                    </div>
                   </template>
                   <span v-else class="cf-muted">—</span>
                 </td>

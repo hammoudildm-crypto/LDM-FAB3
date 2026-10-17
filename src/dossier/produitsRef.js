@@ -33,6 +33,10 @@ const _coo = (id, label) =>
 const _tab = (id, label, colonnes) =>
   ({ id, label, type: 'tableau', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes })
 const _note = (id, label, contenu) => ({ id, label, type: 'note', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [], contenu })
+const _chk = (id, label, jeu, items) => {
+  const J = { cnc: { options: ['C', 'NC'], attendu: 'C' }, oui: { options: ['Oui', 'Non'], attendu: 'Oui' }, conf: { options: ['Conforme', 'Non conforme'], attendu: 'Conforme' } }[jeu] || { options: ['C', 'NC'], attendu: 'C' }
+  return { id, label, type: 'checklist', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: J.attendu, options: J.options, colonnes: [], contenu: '', items: items.map((l, i) => ({ id: id + '_' + (i + 1), label: l })) }
+}
 const _sec = (id, titre, champs, cols = 1) => ({ id, titre, cols, champs })
 
 // Texte « Instructions générales » (dossier, pages 3-4) — affiché en pièce jointe.
@@ -82,13 +86,17 @@ export const FORMULAIRE_DEFAUT = {
       _num('pp_temp', 'Température de la salle', '°C', 15, 25, true),
       _num('pp_hr', 'Humidité relative', '%', null, 60, true),
       _num('pp_dp', 'Différentiel de pression (ΔP)', 'mmH₂O', 1, null, true),
-      _cnc('pp_vl_instr', 'Vide de ligne — Instructions générales'),
-      _cnc('pp_vl_secu', 'Vide de ligne — Consignes de sécurité'),
-      _cnc('pp_vl_env', 'Vide de ligne — Conditions environnementales'),
-      _cnc('pp_vl_net', 'Vide de ligne — Nettoyage local & équipements'),
-      _oo('pp_doc', "Présence de tous les documents de l'instruction de fabrication"),
-      _oo('pp_habil', 'Habillage spécifique / réglementaire du personnel'),
-      _oo('pp_sante', 'Aptitude hygiène du personnel vérifiée (selon procédure)'),
+      _chk('pp_vl', 'Vide de ligne — autorisation de démarrage', 'cnc', [
+        'Instructions générales',
+        'Consignes de sécurité',
+        'Conditions environnementales',
+        'Nettoyage local & équipements'
+      ]),
+      _chk('pp_prelim', 'Vérification préliminaire', 'oui', [
+        "Présence de tous les documents de l'instruction de fabrication",
+        'Habillage spécifique / réglementaire du personnel',
+        'Aptitude hygiène du personnel vérifiée (selon procédure)'
+      ]),
       _txt('pp_sup_visa', 'Démarrage autorisé — Superviseur Fabrication (date / heure / visa)'),
       _txt('pp_aq_visa', 'Démarrage autorisé — AQ Process (date / heure / visa)')
     ], 2),

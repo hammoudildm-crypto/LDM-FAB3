@@ -13,7 +13,8 @@ export const TYPES_CHAMP = [
   { k: 'date', label: 'Date / heure' },
   { k: 'tableau', label: 'Tableau (lignes)' },
   { k: 'note', label: 'Note / consignes (lecture seule)' },
-  { k: 'fichier', label: 'Pièce jointe (fichier)' }
+  { k: 'fichier', label: 'Pièce jointe (fichier)' },
+  { k: 'checklist', label: 'Check-list (liste de points)' }
 ]
 export const TYPES_COLONNE = [
   { k: 'texte', label: 'Texte' },
@@ -32,8 +33,9 @@ export function uid (p = 'x') { _seq++; return p + '_' + Date.now().toString(36)
 
 export function colonneVide (type = 'texte') { return { id: uid('k'), label: '', type, unite: '', min: null, max: null, attendu: 'Conforme', options: ['Conforme', 'Non conforme'] } }
 export function champVide (type = 'num') {
-  const c = { id: uid('c'), label: '', type, unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [], contenu: '' }
+  const c = { id: uid('c'), label: '', type, unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [], items: [], contenu: '' }
   if (type === 'tableau') c.colonnes = [colonneVide('texte')]
+  if (type === 'checklist') { c.items = [{ id: uid('it'), label: '' }]; c.options = ['C', 'NC']; c.attendu = 'C' }
   return c
 }
 export function sectionVide () { return { id: uid('s'), titre: '', cols: 1, champs: [] } }
@@ -93,6 +95,18 @@ export function evaluerFormulaire (formulaire, saisie) {
   for (const sec of S) {
     for (const ch of (sec.champs || [])) {
       if (ch.type === 'note' || ch.type === 'fichier') continue   // informatif / pièce jointe : hors conformité
+      if (ch.type === 'checklist') {
+        const map = (saisie && saisie[ch.id]) || {}
+        for (const it of (ch.items || [])) {
+          total++
+          const val = map[it.id]
+          const v = verdictOuiNon(val, ch.attendu)
+          if (v !== 'vide') saisis++
+          if (v === 'conforme') conformes++
+          if (v === 'nc') { nc++; deviations.push({ libelle: `${sec.titre} — ${ch.label} : ${it.label}`, valeur: String(val || ''), spec: 'Attendu : ' + ch.attendu }) }
+        }
+        continue
+      }
       const controlable = ch.type === 'num' || ch.type === 'oui_non' || ch.obligatoire
       if (ch.type === 'tableau') {
         const rows = (saisie && saisie[ch.id]) || []
