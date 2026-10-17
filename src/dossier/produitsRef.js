@@ -387,17 +387,121 @@ const SECTIONS_TM = [
   ])
 ]
 
-// Associe une phase à chaque section, puis assemble le modèle complet multi-phases.
-const _phase = (sections, phase) => sections.map(s => ({ ...s, phase }))
-export const FORMULAIRE_DEFAUT = {
-  sections: [
-    ..._phase(SECTIONS_PESEE, 'Pesée'),
-    ..._phase(SECTIONS_TM, 'Tamisage & Mélange')
+// =====================================================================
+//  Squelette générique d'une étape de fabrication (prélim, nettoyage,
+//  opérateurs, équipements, conditions, opération, IPC, bilan, incidents).
+//  Sert à pré-structurer les étapes dont le dossier n'est pas encore
+//  modélisé ; à compléter via le Constructeur ou au partage des pages.
+// =====================================================================
+function phaseSkel (px, labelOp) {
+  return [
+    _sec(px + '_prelim', '1 · Opérations préliminaires & autorisation de démarrage', [
+      _txt(px + '_date', 'Date de début', 'date', true),
+      _txt(px + '_salle', 'N° de salle'),
+      _txt(px + '_heure', 'Heure de début'),
+      _num(px + '_temp', 'Température de la salle', '°C', 15, 25, true),
+      _num(px + '_hr', 'Humidité relative', '%', null, 60, true),
+      _num(px + '_dp', 'Différentiel de pression (ΔP)', 'mmH₂O', 1, null),
+      _chk(px + '_vl', 'Vide de ligne — autorisation de démarrage', 'cnc', ['Instructions générales', 'Consignes de sécurité', 'Conditions environnementales', 'Nettoyage local & équipements']),
+      _chk(px + '_prel', 'Vérification préliminaire', 'oui', ["Présence de tous les documents de l'instruction de fabrication", 'Habillage spécifique / réglementaire du personnel', 'Aptitude hygiène du personnel vérifiée (selon procédure)']),
+      _txt(px + '_sup', 'Démarrage autorisé — Superviseur Fabrication (date / heure / visa)'),
+      _txt(px + '_aq', 'Démarrage autorisé — AQ Process (date / heure / visa)')
+    ], 2),
+    _sec(px + '_net', '2 · Vérification du nettoyage (étiquettes « nettoyé »)', [
+      _chk(px + '_netchk', 'Étiquettes « nettoyé » collées', 'oui', ['Salle', 'Équipements', 'Pièces mobiles']),
+      _pj(px + '_netpj', 'Étiquettes « nettoyé » (scan)'),
+      _txt(px + '_netvisa', 'Vérifié par — Date & Visa')
+    ], 2),
+    _sec(px + '_ope', '3 · Liste des opérateurs', [
+      _tab(px + '_opetab', 'Opérateurs — Shift 01 : 06-14h · 02 : 14-22h · 03 : 22-06h', [
+        _ct(px + '_opshift', 'N° Shift'), _ct(px + '_oppos', 'Poste'), _ct(px + '_opnom', 'Nom & prénom'), _ct(px + '_opdate', 'Date'), _ct(px + '_opvisa', 'Visa'), _ct(px + '_opver', 'Vérifié par')
+      ])
+    ]),
+    _sec(px + '_equip', '4 · Vérification des équipements', [
+      _tab(px + '_eqtab', 'Équipements', [
+        _ct(px + '_eqnom', 'Équipement'), _ct(px + '_eqcode', 'Code'), _coc(px + '_eqqual', 'Qualification / calibration'), _coc(px + '_eqetat', 'État / fonctionnement à vide'), _ct(px + '_eqvisa', 'Visa')
+      ])
+    ]),
+    _sec(px + '_cond', '5 · Conditions T° / HR / ΔP au cours du process', [
+      _tab(px + '_condtab', 'Relevés', [
+        _ct(px + '_cddate', 'Date'), _ct(px + '_cdheure', 'Heure'), _cn(px + '_cdt', 'Température', '°C', 15, 25), _cn(px + '_cdhr', 'Humidité', '%', null, 60), _cn(px + '_cddp', 'ΔP', 'mmH₂O', 1, null), _ct(px + '_cdsalle', 'N° salle'), _ct(px + '_cdvisa', 'Visa')
+      ])
+    ]),
+    _sec(px + '_op', '6 · ' + labelOp, [
+      _note(px + '_opnote', labelOp, "Section à compléter selon le dossier de lot de cette étape (paramètres machine, contrôles IPC, visas). Partagez les pages et je la modélise à l'identique, ou composez-la via le Constructeur."),
+      _txt(px + '_opdeb', 'Date / heure de début'),
+      _txt(px + '_opfin', 'Date / heure de fin'),
+      _num(px + '_opduree', 'Durée', 'min'),
+      _txt(px + '_opsig', 'Fait par / Vérifié par — Date & Visa')
+    ], 2),
+    _sec(px + '_ipc', '7 · Contrôles IPC', [
+      _note(px + '_ipcnote', 'Contrôles en cours de process (IPC)', 'À définir selon l\'étape : aspect, masse, dureté, friabilité, désagrégation, humidité résiduelle…'),
+      _pj(px + '_ipcpj', 'Fiche IPC / ticket (scan)')
+    ], 2),
+    _sec(px + '_bilan', '8 · Bilan / rendement', [
+      _num(px + '_pth', 'Quantité théorique', 'kg'),
+      _num(px + '_pobt', 'Quantité obtenue', 'kg'),
+      _num(px + '_rdt', 'Rendement', '%'),
+      _txt(px + '_bjust', 'Justification des écarts'),
+      _txt(px + '_bvisa', 'Date / Visa Responsable Fabrication')
+    ], 2),
+    _sec(px + '_inc', '9 · Suivi des incidents et arrêts', [
+      _tab(px + '_inctab', 'Incidents / arrêts', [
+        _ct(px + '_indate', 'Date'), _ct(px + '_inharr', "Heure d'arrêt"), _ct(px + '_insac', 'N° de sac'), _ct(px + '_inmotif', 'Motif'), _ct(px + '_inact', 'Action corrective'), _ct(px + '_inddem', 'Date démarrage'), _ct(px + '_inhdem', 'Heure démarrage'), _ct(px + '_invisa', 'Visa')
+      ])
+    ])
   ]
 }
 
+// =====================================================================
+//  Bibliothèque des ÉTAPES DE FABRICATION standard (modèle unique).
+//  Pesée et Tamisage & Mélange : modélisés à l'identique du dossier.
+//  Les autres : squelette standard à compléter.
+// =====================================================================
+const PHASES_STANDARD = {
+  pesee:                 { nom: 'Pesée', sections: SECTIONS_PESEE },
+  granulation_sechage:   { nom: 'Granulation & Séchage', sections: phaseSkel('gr', 'Opération de granulation & séchage') },
+  tamisage_melange:      { nom: 'Tamisage & Mélange', sections: SECTIONS_TM },
+  compression:           { nom: 'Compression', sections: phaseSkel('cp', 'Opération de compression') },
+  remplissage_gelules:   { nom: 'Remplissage des gélules', sections: phaseSkel('ge', 'Opération de remplissage des gélules') },
+  pelliculage:           { nom: 'Pelliculage', sections: phaseSkel('pl', 'Opération de pelliculage') },
+  melange_creme_pommade: { nom: 'Mélange crème & pommade', sections: phaseSkel('cr', 'Opération de mélange crème/pommade') }
+}
+
+// Liste ordonnée des étapes (pour l'éditeur de gamme).
+export const ETAPES_FAB = [
+  { k: 'pesee', nom: 'Pesée' },
+  { k: 'granulation_sechage', nom: 'Granulation & Séchage' },
+  { k: 'tamisage_melange', nom: 'Tamisage & Mélange' },
+  { k: 'compression', nom: 'Compression' },
+  { k: 'remplissage_gelules', nom: 'Remplissage des gélules' },
+  { k: 'pelliculage', nom: 'Pelliculage' },
+  { k: 'melange_creme_pommade', nom: 'Mélange crème & pommade' }
+]
+
+// Gamme par défaut (comprimé pelliculé) si le produit n'en définit pas.
+const GAMME_DEFAUT = ['pesee', 'tamisage_melange', 'compression', 'pelliculage']
+
+// Assemble le formulaire d'un produit à partir de sa gamme (liste d'étapes),
+// en conservant l'ordre officiel des étapes et en clonant chaque section.
+export function assembleGamme (gamme) {
+  const choisies = (Array.isArray(gamme) && gamme.length) ? gamme : GAMME_DEFAUT
+  const sections = []
+  for (const e of ETAPES_FAB) {
+    if (!choisies.includes(e.k)) continue
+    const ph = PHASES_STANDARD[e.k]
+    if (!ph) continue
+    for (const s of ph.sections) sections.push({ ...JSON.parse(JSON.stringify(s)), phase: ph.nom })
+  }
+  return { sections }
+}
+
+// Modèle par défaut (gamme comprimé pelliculé).
+export const FORMULAIRE_DEFAUT = assembleGamme(GAMME_DEFAUT)
+
 export const PRODUITS_REF = {
   'ROSUSTINE ® 10 mg': {
+    gamme: ['pesee', 'tamisage_melange', 'compression', 'pelliculage'],
     entete: {
       refSop: 'AQ-SOP-108-011', refIf: 'PFLDM103', version: '05', totalPages: 92,
       produit: 'ROSUSTINE ® 10 mg', dci2: 'Rosuvastatine calcium', forme: 'Comprimé pelliculé',

@@ -7,7 +7,7 @@ import EtapePesee from './EtapePesee.vue'
 import FormulaireDynamique from './FormulaireDynamique.vue'
 import GestionProduits from '../components/GestionProduits.vue'
 import ConstructeurFormulaire from '../components/ConstructeurFormulaire.vue'
-import { PRODUITS_REF, FORMULAIRE_DEFAUT } from '../produitsRef.js'
+import { PRODUITS_REF, FORMULAIRE_DEFAUT, assembleGamme } from '../produitsRef.js'
 import '../dossier.css'   // styles du document (non scopés), intégration ProdTrack
 
 const peutEditer = inject('peutEditer', ref(true))
@@ -162,10 +162,9 @@ function appliquerProduit (key) {
   d.exc = c.exc || []
   d.equip = c.equip || []
   d.diagramme = c.diagramme || { flux: [], ipc: [], equipements: [] }
-  // Mode saisie = TOUJOURS le modèle intégré (celui du produit s'il existe,
-  // sinon le modèle Pesée par défaut), sans dépendre d'une fiche enregistrée.
-  const integ = (PRODUITS_REF[key] && PRODUITS_REF[key].formulaire) || FORMULAIRE_DEFAUT
-  d.formulaire = JSON.parse(JSON.stringify(integ))
+  // Mode saisie = formulaire ASSEMBLÉ selon la GAMME du produit (ses étapes
+  // de fabrication), sans dépendre d'une fiche enregistrée.
+  d.formulaire = assembleGamme(c.gamme)
   d.saisie = {}                      // nouveau produit → saisie vierge
   d.execution.signatures = {}; d.execution.audit = []   // signatures/audit réinitialisés
   d.pesee = peseeVide(dimsFor(c))   // redimensionne la pesée au produit
@@ -303,9 +302,8 @@ const statutCouleur = computed(() => ({
 // recharger si une fiche enregistrée l'a remplacé par un autre formulaire.
 const modeleIntegre = computed(() => {
   if (!d.produit) return null
-  const r = PRODUITS_REF[d.produit]
-  const f = r && r.formulaire
-  return (f && Array.isArray(f.sections) && f.sections.length) ? f : FORMULAIRE_DEFAUT
+  const r = catalogue.value[d.produit]
+  return assembleGamme(r && r.gamme)
 })
 function chargerModeleIntegre () {
   if (!modeleIntegre.value) return

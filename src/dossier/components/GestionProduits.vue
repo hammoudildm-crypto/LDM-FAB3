@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
+import { ETAPES_FAB } from '../produitsRef.js'
 
 const props = defineProps({
   catalogue: { type: Object, default: () => ({}) },
@@ -33,8 +34,14 @@ function produitVide () {
     exc: [['', '', '']],
     equip: [['', '']],
     diagramme: { flux: [], ipc: [], equipements: [] },
-    formulaire: { sections: [] }
+    formulaire: { sections: [] },
+    gamme: ['pesee', 'tamisage_melange', 'compression', 'pelliculage']   // étapes de fabrication du produit
   }
+}
+function toggleEtape (k) {
+  if (!Array.isArray(f.gamme)) f.gamme = []
+  const i = f.gamme.indexOf(k)
+  if (i >= 0) f.gamme.splice(i, 1); else f.gamme.push(k)
 }
 const f = reactive(produitVide())
 function chargerForm (src) {
@@ -42,6 +49,7 @@ function chargerForm (src) {
   Object.assign(f, produitVide(), c)
   // garantir les tableaux
   for (const k of ['redacteurs', 'verificateurs', 'approbateurs', 'formule', 'formuleP', 'mats', 'exc', 'equip']) if (!Array.isArray(f[k])) f[k] = []
+  if (!Array.isArray(f.gamme) || !f.gamme.length) f.gamme = produitVide().gamme
   if (!f.diagramme || typeof f.diagramme !== 'object') f.diagramme = { flux: [], ipc: [], equipements: [] }
   for (const k of ['flux', 'ipc', 'equipements']) if (!Array.isArray(f.diagramme[k])) f.diagramme[k] = []
 }
@@ -138,6 +146,15 @@ function choisir (nom) { emit('selectionner', nom); emit('close') }
       <!-- ========================= ÉDITION ========================= -->
       <div v-else class="gp-body">
         <p class="gp-hint">Astuce : les codes des <b>principes actifs</b> commencent par <code>MPPA</code>, ceux des <b>excipients</b> par <code>MPEX</code> — l'application s'en sert pour remplir la page « Pesée des principes actifs » et dimensionner les tableaux.</p>
+
+        <h3>Gamme de fabrication (étapes du dossier)</h3>
+        <p class="gp-hint2">Cochez les étapes par lesquelles ce produit passe. Le formulaire du dossier n'affichera que ces étapes (onglets de phases).</p>
+        <div class="gp-gamme">
+          <label v-for="e in ETAPES_FAB" :key="e.k" class="gp-etape" :class="{ on: (f.gamme || []).includes(e.k) }">
+            <input type="checkbox" :checked="(f.gamme || []).includes(e.k)" @change="toggleEtape(e.k)" />
+            <span>{{ e.nom }}</span>
+          </label>
+        </div>
 
         <h3>En-tête de l'IF</h3>
         <div class="gp-grid3">
@@ -291,6 +308,11 @@ function choisir (nom) { emit('selectionner', nom); emit('close') }
 .gp-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .gp-count { font-size: 12px; color: #64748b; }
 .gp-hint { font-size: 12.5px; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px; margin: 0 0 14px; }
+.gp-hint2 { font-size: 12px; color: #64748b; margin: 0 0 8px; }
+.gp-gamme { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.gp-etape { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #cbd5e1; border-radius: 9px; padding: 7px 12px; font-size: 13px; cursor: pointer; background: #fff; color: #334155; }
+.gp-etape.on { border-color: #0e7490; background: #ecfeff; color: #0e7490; font-weight: 600; }
+.gp-etape input { margin: 0; cursor: pointer; }
 .gp-list, .gp-edit { width: 100%; border-collapse: collapse; font-size: 13px; }
 .gp-list th, .gp-list td { border-bottom: 1px solid #eef2f6; padding: 8px 8px; text-align: left; vertical-align: middle; }
 .gp-list th { font-size: 11px; text-transform: uppercase; letter-spacing: .3px; color: #64748b; }
