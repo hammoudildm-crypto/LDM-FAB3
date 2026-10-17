@@ -98,7 +98,7 @@ const FORMULAIRE_ROSUSTINE = {
       _oo('net_bal', 'Étiquettes « nettoyé » — Balances collées'),
       _oo('net_mat', 'Étiquettes « nettoyé » — Matériels de pesée collées'),
       _txt('net_visa', 'Vérifié par — Date & Visa')
-    ]),
+    ], 2),
     _sec('p_ope', '3 · Liste des opérateurs de pesée', [
       _tab('ope_tab', 'Opérateurs — Shift 01 : 06-14h · 02 : 14-22h · 03 : 22-06h', [
         _ct('op_shift', 'N° Shift'),
@@ -117,12 +117,12 @@ const FORMULAIRE_ROSUSTINE = {
       _cnc('eq325_qual', 'PR325 — Statut qualification / calibration'),
       _cnc('eq325_vitr', 'PR325 — État des parties vitrées'),
       _txt('eq_visa', 'Fait par / Vérifié par — Date & Visa')
-    ]),
+    ], 2),
     _sec('p_etal', '5 · Vérification de l\'étalonnage des balances', [
       _oo('etal042', 'Balance PR042 — Calibrage journalier effectué'),
       _oo('etal325', 'Balance PR325 — Calibrage journalier effectué'),
       _txt('etal_visa', 'Vérifié par — Date & Visa')
-    ]),
+    ], 2),
     _sec('p_cond', '6 · Conditions T° / HR / ΔP au cours du process', [
       _tab('cond_tab', 'Relevés — début / milieu / fin de chaque shift (ΔP systématique)', [
         _ct('co_date', 'Date'),
@@ -169,7 +169,7 @@ const FORMULAIRE_ROSUSTINE = {
       _txt('pa_visa', 'Fait par / Vérifié par — Date & Visa'),
       _txt('pa_hfin', 'Heure de fin de pesée'),
       _oo('pa_stock', 'Stockage API conforme (double sac PE + gel de silice, fût inox fermé)')
-    ]),
+    ], 2),
     _sec('p_exc', '10 · Pesée des excipients', [
       _tab('exc_tab', 'Excipients — théoriques (kg/lot) : Lactose 64,44 · Crospovidone 5,40 · Phosphate Ca 7,85 · Stéarate Mg 1,35 · Aquapolish 4,21 ; Cellulose MC = quantité d\'ajustage B', [
         _ct('ex_des', 'Désignation'),
@@ -198,7 +198,7 @@ const FORMULAIRE_ROSUSTINE = {
         _ct('bl_visa', 'Date & Visa Superviseur')
       ]),
       _txt('bil_visa', 'Date / Visa Responsable Fabrication')
-    ]),
+    ], 2),
     _sec('p_inc', '12 · Suivi des incidents et arrêts', [
       _tab('inc_tab', 'Incidents / arrêts', [
         _ct('in_date', 'Date'),
