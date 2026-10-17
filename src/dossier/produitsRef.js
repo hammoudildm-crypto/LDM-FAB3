@@ -865,6 +865,261 @@ const SECTIONS_PELLICULAGE = [
 ]
 
 // =====================================================================
+//  Phase GRANULATION & SÉCHAGE — « Tamisage, Granulation, Séchage et
+//  Calibrage » (IF FLUDEX LP PFSER01, pages 26-48) — modélisée à l'identique.
+//  Granulation humide : mélangeur-granulateur COMASA P200 (PR034), lit d'air
+//  fluidisé COMASA ESSICA 215 (PR035), calibreur CPS line / Kevin super mill.
+//  Fractions matière (lactose F1/F2/F3) gérées en lignes de tableau.
+//  Bilan de rendement AUTOMATIQUE (P_th gr réception, P bilan granulé).
+// =====================================================================
+const SECTIONS_GRANULATION = [
+  _sec('gr_prelim', '1 · Opérations préliminaires & autorisation de démarrage', [
+    _note('grp_instr', 'Opérations préliminaires — vérifications avant démarrage', `• Vide de ligne : machines et locaux libérés des matériaux et documents du produit précédent (selon check-list vide de ligne).
+• Nettoyage des équipements et locaux vérifié ; étiquettes de nettoyage et logs book renseignés.
+• Local et machine identifiés (fiches « utilisation salle » et « utilisation machine ») ; étiquettes « Nettoyé » et « Utilisation salle » collées.
+• Nettoyage des pièces mobiles vérifié ; étiquettes « Nettoyé » jointes à l'IF.
+• Vérification journalière des balances effectuée.
+• Propreté et intégrité des contenants MP réceptionnés vérifiées.
+• Conditions d'ambiance du local vérifiées : température (°C), HR (%), ΔP.
+• En cas d'anomalies : stopper l'opération, alerter le responsable, reporter l'évènement sur la fiche incidents.
+• Attendre l'autorisation AQ avant de procéder à cette étape.`),
+    _note('grp_secu', 'Consignes de sécurité obligatoires', TXT_SECURITE),
+    _note('grp_prec', 'Précautions de production', TXT_PRECAUTIONS),
+    _txt('grp_date', 'Date de début', 'date', true),
+    _txt('grp_salle', 'N° de salle de granulation'),
+    _txt('grp_heure', 'Heure de début'),
+    _num('grp_temp', 'Température de la salle', '°C', 15, 25, true),
+    _num('grp_hr', 'Humidité relative', '%', null, 60, true),
+    _num('grp_dp', 'Différentiel de pression (ΔP)', 'mmH₂O', 1, null, true)
+  ], 2),
+  _sec('gr_net', '2 · Vérification du nettoyage des équipements et locaux', [
+    _note('grnet_note', 'Étiquettes de nettoyage', 'Remplacer les étiquettes « Nettoyé » salle et machine par les fiches « utilisation salle » et « utilisation machine ». Coller les étiquettes « Nettoyée » dans l\'instruction de fabrication.'),
+    _chk('grnet_chk', 'Étiquettes « nettoyé » collées', 'oui', ['Salle de granulation', 'Équipements', 'Pièces mobiles']),
+    _pj('grnet_pjsalle', 'Étiquette nettoyée de la salle (scan)'),
+    _pj('grnet_pjequip', 'Étiquettes nettoyée des équipements (scan)'),
+    _pj('grnet_pjmob', 'Étiquettes nettoyée des pièces mobiles (scan)'),
+    _txt('grnet_visa', 'Vérifié par — Date & Visa')
+  ], 2),
+  _sec('gr_env', '3 · Conditions environnementales avant démarrage', [
+    _note('grenv_note', 'Contrôle T° / HR / ΔP', 'Relever les données avant démarrage.'),
+    _tab('grenv_tab', 'Contrôle de la température, de l\'humidité relative et de la différence de pression', [
+      _ct('gren_etape', 'Étape'), _ct('gren_salle', 'N° salle'), _ct('gren_heure', 'Heure'),
+      _cn('gren_t', 'T°C [15-25]', '°C', 15, 25), _cn('gren_hr', 'HR% ≤ 60', '%', null, 60), _cn('gren_dp', 'ΔP ≥ 1', 'mmH₂O', 1, null),
+      _ct('gren_vop', 'Date/Visa Opérateur'), _ct('gren_vverif', 'Date/Visa Vérificateur')
+    ])
+  ]),
+  _sec('gr_autor', '4 · Autorisation de démarrage', [
+    _chk('graut_chk', 'Vide de ligne — conformité (joindre la checklist vide de ligne à l\'IF)', 'cnc', [
+      'Instructions générales', 'Consignes de sécurité', 'Conditions environnementales', 'Nettoyage local et équipements'
+    ]),
+    _txt('graut_sup', 'Démarrage autorisé — Superviseur Fabrication (date / heure / visa)'),
+    _txt('graut_aq', 'Démarrage autorisé — AQ Process (date / heure / visa)')
+  ], 2),
+  _sec('gr_vprel', '5 · Vérification préliminaire', [
+    _chk('grvp_chk', 'Vérifications à effectuer', 'oui', [
+      'Présence de tous les documents de l\'instruction de fabrication',
+      'Habillage spécifique / réglementaire du personnel',
+      'Absence de plaies ouvertes ou maladies contagieuses chez le personnel'
+    ]),
+    _txt('grvp_visa', 'Date / Visa')
+  ], 2),
+  _sec('gr_ope', '6 · Liste des opérateurs', [
+    _tab('grope_tab', 'Opérateurs — Shift 01 : 06-14h · 02 : 14-22h · 03 : 22-06h', [
+      _ct('grop_shift', 'N° Shift'), _ct('grop_poste', 'Poste'), _ct('grop_nom', 'Nom & prénom'),
+      _ct('grop_date', 'Date'), _ct('grop_visa', 'Visa'), _ct('grop_verif', 'Vérifier par (Date & Visa)')
+    ])
+  ]),
+  _sec('gr_equip', '7 · Vérification des équipements utilisés', [
+    _note('greq_note', 'Équipements de granulation', 'Mélangeur granulateur COMASA P200 (PR034) · Lit d\'air fluidisé COMASA ESSICA 215 (PR035) · Calibreur CPS line (PR036/PR097) · Kevin super mill (PR310/PR311). Statuts : C / NC / NA.'),
+    _tab('greq_tab', 'Équipements — qualification/calibration & parties vitrées', [
+      _ct('gre_nom', 'Équipement'), _ct('gre_code', 'Code'),
+      _ccnc('gre_qual', 'Statut qualification / calibration'), _ccnc('gre_vitr', 'État des parties vitrées'),
+      _ct('gre_fait', 'Fait par / Date & Visa'), _ct('gre_verif', 'Vérifié par / Date & Visa'), _ct('gre_obs', 'Observation')
+    ])
+  ]),
+  _sec('gr_etal', '8 · Vérification de l\'étalonnage des balances', [
+    _tab('gretal_tab', 'Balances — calibrage', [
+      _ct('gret_bal', 'Balance'), _ct('gret_code', 'Code'), _coo('gret_cal', 'Calibrage effectué'),
+      _ct('gret_date', 'Date'), _ct('gret_vop', 'Date/Visa Opérateur'), _ct('gret_vverif', 'Date/Visa Vérificateur'), _ct('gret_obs', 'Observation')
+    ])
+  ]),
+  _sec('gr_cond', '9 · Conditions T°C / ΔP / HR% au cours du process', [
+    _note('grcond_note', 'Fréquence', 'Relever les données toutes les 30 min pendant le process.'),
+    _tab('grcond_tab', 'Relevés en cours de process', [
+      _ct('grco_date', 'Date'), _ct('grco_heure', 'Heure'),
+      _cn('grco_t', 'Température 15≤T≤25', '°C', 15, 25), _cn('grco_hr', 'Humidité ≤60', '%', null, 60), _cn('grco_dp', 'ΔP ≥1', 'mmH₂O', 1, null),
+      _ct('grco_salle', 'N° salle'), _ct('grco_fait', 'Fait par / Visa'), _ct('grco_verif', 'Vérifié par / Date & Visa')
+    ])
+  ]),
+  _sec('gr_rec', '10 · Réception des matières', [
+    _note('grrec_note', 'Réception', 'Vérifier l\'intégrité des contenants réceptionnés, avant le début du processus. Le lactose monohydraté est reçu en fractions (F1, F2, F3).'),
+    _tab('grrec_tab', 'Matières réceptionnées (une ligne par fraction)', [
+      _ct('grre_mat', 'Matière / Code interne'), _ct('grre_lot', 'N° lot interne'),
+      _coo('grre_int', 'Contenant intègre scellé et identifié'), _ct('grre_frac', 'N° de fraction'),
+      _coo('grre_etiq', 'Présence étiquette pesée'), _cn('grre_theo', 'Qté théorique', 'kg'),
+      _cn('grre_liv', 'Quantité livrée', 'kg'), _ct('grre_fait', 'Fait par / Date & Visa'), _ct('grre_verif', 'Vérifié par / Date & Visa')
+    ]),
+    _num('gran_pthgr', 'Quantité totale — poids théorique du granulé (P_th gr)', 'kg')
+  ]),
+  _sec('gr_vfonc', '11 · Vérification du fonctionnement de l\'équipement avant opération', [
+    _txt('grvf_date', 'Début — Date', 'date'), _txt('grvf_heure', 'Heure'),
+    _tab('grvf_tab', 'Fonctionnement à vide', [
+      _ct('grvf_nom', 'Équipement'), _ct('grvf_code', 'Code'), _ccnc('grvf_fonc', 'Fonctionnement à vide'),
+      _ct('grvf_fait', 'Fait par / Date'), _ct('grvf_verif', 'Vérifié par / Date'), _ct('grvf_obs', 'Observation')
+    ]),
+    _note('grvf_note', 'Équipements à contrôler', 'Mélangeur granulateur COMASA P200 (PR034) · Lit d\'air fluidisé COMASA ESSICA 215 (PR035) · Calibreur CPS line (PR036/PR097/PR311).')
+  ]),
+  _sec('gr_eau', '12 · Pesée de l\'eau purifiée', [
+    _txt('greau_debut', 'Début — Date / Heure'),
+    _tab('greau_tab', 'Pesée (B : Brute · T : Tare · N : Net)', [
+      _ct('grea_mat', 'Matière'), _ct('grea_pt', 'Point de prélèvement'),
+      _cn('grea_apeser', 'Qté à peser', 'kg'), _ct('grea_bal', 'Code balance'),
+      _cn('grea_pesee', 'Qté pesée (N)', 'kg'), _ct('grea_vop', 'Date/Visa opérateur'), _ct('grea_vsup', 'Date/Visa Superviseur')
+    ]),
+    _num('greau_qte', 'Eau purifiée pesée (consigne 3,40)', 'kg'),
+    _txt('greau_fin', 'Fin — Heure'),
+    _pj('greau_ticket', 'Ticket de pesée de l\'eau purifiée (scan)')
+  ], 2),
+  _sec('gr_pes', '13 · Pesée de l\'Indapamide et des excipients réceptionnés', [
+    _note('grpes_note', 'Pesée', 'Refaire la pesée de l\'Indapamide, du Lactose monohydraté (F1/F2/F3) et du Povidone K30 (B : Brute).'),
+    _txt('grpes_debut', 'Début de pesée — Date / Heure'),
+    _tab('grpes_tab', 'Pesée API & excipients', [
+      _ct('grpe_mat', 'Désignation / Code interne'), _ct('grpe_bal', 'Code balance'),
+      _cn('grpe_glob', 'Qté globale réceptionnée / lot', 'kg'), _cn('grpe_pes', 'Qté après pesée / lot', 'kg'),
+      _ct('grpe_fait', 'Fait par / Date & Visa'), _ct('grpe_verif', 'Vérifié par / Date & Visa')
+    ]),
+    _txt('grpes_fin', 'Fin de pesée — Date / Heure'),
+    _pj('grpes_pjapi', 'Ticket de principe actif après pesée (scan)'),
+    _pj('grpes_pjexc', 'Tickets des excipients après pesée (scan)')
+  ], 2),
+  _sec('gr_tam', '14 · Tamisage (tamis 1,25 mm) & autorisation', [
+    _note('grtam_note', 'Mode opératoire', `Le tamisage de l'API et des excipients est effectué dans la même salle de granulation (tamis 1,25 mm, CPS line) dans l'ordre :
+1- Tamiser l'Indapamide dans un sac en PE.
+2- Tamiser 03 kg (F1) de Lactose monohydraté ; rincer le sac ayant contenu l'Indapamide avec cette quantité ; mélanger manuellement ~1 min ; verser le rinçage dans le sac de l'Indapamide tamisé.
+3- Tamiser le lactose F2, puis F3, puis le Povidone K30.
+Contrôle visuel du CPS-line après chaque matière.`),
+    _chk('grtam_etapes', 'Étapes de tamisage (réalisées)', 'oui', [
+      'Tamisage de l\'Indapamide',
+      'Tamisage du Lactose monohydraté 03 kg (F1)',
+      'Rinçage du sac Indapamide avec le F1 tamisé',
+      'Mélange manuel du contenu ~1 min',
+      'Versement du rinçage dans le sac Indapamide tamisé'
+    ]),
+    _num('grtam_maille', 'Ouverture de maille du tamis (consigne 1,25)', 'mm'),
+    _num('grtam_vit', 'Vitesse du calibreur (consigne 500 ± 100)', 'RPM', 400, 600),
+    _txt('grtam_hdeb', 'Heure de début tamisage'), _num('grtam_duree', 'Durée du tamisage', 'min'),
+    _num('grtam_dmel', 'Durée du mélange manuel (consigne 1)', 'min'),
+    _txt('grtam_sup', 'Démarrage tamisage & dilution autorisé — Superviseur / AQ (date / heure / visa)')
+  ], 2),
+  _sec('gr_tamr', '15 · Tamisage des excipients restants', [
+    _chk('grtamr_chk', 'Matières tamisées', 'oui', ['Lactose monohydraté (F2)', 'Lactose monohydraté (F3)', 'Povidone K30']),
+    _num('grtamr_maille', 'Ouverture de maille du tamis (consigne 1,25)', 'mm'),
+    _num('grtamr_vit', 'Vitesse du calibreur (consigne 500 ± 100)', 'RPM', 400, 600),
+    _txt('grtamr_hdeb', 'Heure de début'), _txt('grtamr_hfin', 'Heure de fin'),
+    _txt('grtamr_visa', 'Date & Visa Opérateur / Superviseur')
+  ], 2),
+  _sec('gr_dil', '16 · Dilution — prémélange 1', [
+    _note('grdil_note', 'Dilution', 'Mélange manuel de l\'Indapamide et des 03 kg de Lactose monohydraté tamisés jusqu\'à homogénéisation (prémélange 1). Fermer le sac en PE par un serre-sac avant le mélange.'),
+    _txt('grdil_debut', 'Début — Date / Heure'),
+    _chk('grdil_op', 'Opérations', 'oui', ['Fermeture du sac en PE vérifiée', 'Mélange manuel 02 à 03 min réalisé']),
+    _txt('grdil_mdeb', 'Début du mélange'), _txt('grdil_mfin', 'Fin du mélange'), _num('grdil_duree', 'Durée réelle du mélange', 'min')
+  ], 2),
+  _sec('gr_sec', '17 · Mélange à sec (mélangeur-granulateur PR034)', [
+    _note('grsec_note', 'Méthode sandwich', 'Introduire le prémélange 1 dans le mélangeur-granulateur (PR034) en sandwich avec les fractions de lactose et le povidone, dans l\'ordre : Lactose (F2) → Povidone K30 → Prémélange 1 → Lactose (F3).'),
+    _txt('grsec_debut', 'Début — Date / Heure'),
+    _chk('grsec_mat', 'Matières introduites (ordre sandwich)', 'oui', ['Lactose monohydraté (F2)', 'Povidone K30', 'Prémélange 1 (Indapamide + 03 kg lactose)', 'Lactose monohydraté (F3)']),
+    _oo('grsec_ferm', 'Fermeture du granulateur-mélangeur vérifiée avant démarrage'),
+    _num('grsec_vit', 'Vitesse impulseur (consigne 80)', 'RPM'),
+    _txt('grsec_hach', 'Hachoir (consigne OFF)'),
+    _txt('grsec_mdeb', 'Début du mélange'), _txt('grsec_mfin', 'Fin du mélange'), _num('grsec_duree', 'Durée du mélange (consigne 15)', 'min'),
+    _txt('grsec_visa', 'Date & Visa Opérateur / Superviseur')
+  ], 2),
+  _sec('gr_mou', '18 · Mouillage', [
+    _note('grmou_note', 'Mouillage', 'Ajouter 3,4 kg d\'eau purifiée au mélange par la pompe doseuse pendant environ 2 min 15 s.'),
+    _num('grmou_vit', 'Vitesse impulseur (consigne 80)', 'tr/min'),
+    _txt('grmou_hach', 'Hachoir (consigne ON)'),
+    _num('grmou_pompe', 'Vitesse de la pompe de pulvérisation (consigne 10)', 'RPM'),
+    _num('grmou_eau', 'Quantité d\'eau purifiée ajoutée (consigne 3,4)', 'kg'),
+    _num('grmou_duree', 'Durée d\'introduction de l\'eau (consigne ≈2 min 15 s)', 'min'),
+    _txt('grmou_visa', 'Date & Visa Opérateur / Superviseur')
+  ], 2),
+  _sec('gr_gra', '19 · Granulation', [
+    _note('grgra_note', 'Granulation', 'Granuler avec les paramètres indiqués ci-dessous.'),
+    _num('grgra_vit', 'Vitesse impulseur (consigne 80)', 'tr/min'),
+    _txt('grgra_hach', 'Hachoir (consigne ON)'),
+    _num('grgra_duree', 'Durée de granulation (consigne ≈2 min 15 s)', 'min'),
+    _txt('grgra_visa', 'Date & Visa Opérateur / Superviseur / AQ')
+  ], 2),
+  _sec('gr_calh', '20 · Calibrage humide', [
+    _num('grcalh_maille', 'Ouverture de maille du tamis (consigne 6)', 'mm'),
+    _num('grcalh_vit', 'Vitesse de rotation', 'RPM', 600, 800),
+    _num('grcalh_imp', 'Vitesse impulseur', 'tr/min', 5, 10),
+    _num('grcalh_duree', 'Durée', 'min', 5, 30),
+    _txt('grcalh_visa', 'Date & Visa Opérateur / Superviseur / AQ')
+  ], 2),
+  _sec('gr_sech', '21 · Séchage (lit d\'air fluidisé COMASA ESSICA)', [
+    _note('grsech_prech', 'Préchauffage', 'Régler les paramètres de préchauffage du LAF Essica, puis transférer le granulé humide vers le sécheur à lit d\'air fluidisé.'),
+    _num('grsech_ptemp', 'Préchauffage — Température (consigne 60)', '°C'),
+    _num('grsech_pdebit', 'Préchauffage — Débit de soufflage (consigne 3500)', 'm³/h'),
+    _oo('grsech_transf', 'Granulé humide transféré vers le sécheur à lit d\'air fluidisé'),
+    _oo('grsech_ferm', 'Fermeture du lit d\'air fluidisé vérifiée'),
+    _note('grsech_note', 'Séchage — consignes', 'Relever les résultats toutes les 15 min. T° soufflage 50-60 °C ; T° produit 30-33 °C (fin de séchage) ; T° sortie 26-30 °C (fin de séchage) ; débit 1500 puis diminution progressive jusqu\'à 700 m³/h ; secouage du filtre toutes les 30 min.'),
+    _num('grsech_tsouf', 'Température de soufflage', '°C', 50, 60),
+    _num('grsech_tprod', 'Température produit (fin de séchage)', '°C', 30, 33),
+    _num('grsech_tsort', 'Température de sortie (fin de séchage)', '°C', 26, 30),
+    _oo('grsech_filtre', 'Nettoyage du filtre effectué'),
+    _txt('grsech_hdeb', 'Heure début séchage'), _txt('grsech_hfin', 'Heure fin séchage'), _num('grsech_duree', 'Durée de séchage', 'min'),
+    _txt('grsech_visa', 'Date & Visa Opérateur / Superviseur')
+  ], 2),
+  _sec('gr_ipc', '22 · Contrôle IPC — humidité résiduelle (fin de séchage)', [
+    _note('gript_note', 'Contrôle IPC', 'Prélever 5 g du granulé séché. Transférer à l\'AQ IPC : dessiccateur IR à 90 °C pendant 10 min (C_gr). Attendre le résultat IPC avant de poursuivre. Joindre la Fiche IPC à l\'IF.'),
+    _num('gript_hum', 'Humidité résiduelle du granulé séché', '%', 0.5, 2.0),
+    _txt('gript_visa', 'Visa AQ IPC — Date et Heure'),
+    _pj('gript_pj', 'Fiche IPC humidité (scan)')
+  ], 2),
+  _sec('gr_calf', '23 · Calibrage (à sec, après séchage)', [
+    _note('grcalf_note', 'Calibrage', 'Laisser le granulé séché se refroidir, puis tamiser soigneusement pelle par pelle (CPS-line ou Kevin super mill, tamis 1,25 mm). Contrôle visuel de l\'équipement après calibrage.'),
+    _num('grcalf_maille', 'Ouverture de maille du tamis (consigne 1,25)', 'mm'),
+    _num('grcalf_vit', 'Vitesse calibreur', 'RPM', 600, 650),
+    _txt('grcalf_hdeb', 'Début de calibrage'), _txt('grcalf_hfin', 'Fin de calibrage'), _num('grcalf_duree', 'Durée de calibrage', 'min'),
+    _oo('grcalf_visu', 'Contrôle visuel équipement — absence de poudre'),
+    _txt('grcalf_visa', 'Date & Visa Opérateur / Superviseur')
+  ], 2),
+  _sec('gr_bil', '24 · Pesée du granulé après calibrage', [
+    _note('grbil_note', 'Pesée du granulé', 'Préparer sacs PE et fûts PP propres. Tarer le sac vide, transférer le granulé calibré, peser le sac rempli (poids net = brut − tare), identifier chaque sac et fût. Répéter jusqu\'à complétion du granulé.'),
+    _tab('grbil_tab', 'Bilan par fût', [
+      _ct('grbi_fut', 'Fût N°'), _ct('grbi_sac', 'Sac N°'),
+      _cn('grbi_tare', 'Tare (sac PE vide)', 'kg'), _cn('grbi_brute', 'Brute (sac + granulé)', 'kg'), _cn('grbi_net', 'Net (brute − tare)', 'kg'),
+      _ct('grbi_fait', 'Fait par / Visa'), _ct('grbi_verif', 'Vérifié par / Visa')
+    ]),
+    _num('gran_p', 'P — Net Total du granulé calibré obtenu', 'kg'),
+    _pj('grbil_pj', 'Ticket de pesée du granulé calibré (scan)')
+  ]),
+  _sec('gr_rdt', '25 · Bilan de la phase (rendement)', [
+    _note('grrdt_note', 'Rendement (automatique depuis les données enregistrées)', `P_th gr (poids théorique du granulé, section 10) et P (granulé calibré obtenu, section 24) sont repris automatiquement. Saisir C_gr (masse de l'échantillon de contrôle HR%). Avarie A = P_th gr − P ; Rendement R1 = P × 100 / P_th gr. Norme : 98–100 %. Si R1 < 98 % : réajuster la pesée de la matière de la phase externe.`),
+    _calc('grrdt_pthgr', 'P_th gr — poids théorique du granulé (rappel section 10)', '{gran_pthgr}', 'kg'),
+    _calc('grrdt_p', 'P — granulé calibré obtenu (rappel section 24)', '{gran_p}', 'kg'),
+    _num('gran_cgr', 'C_gr — masse totale échantillon de contrôle HR%', 'kg'),
+    _calc('grrdt_a', 'Avarie A = P_th gr − P', '{gran_pthgr} - {gran_p}', 'kg'),
+    _calc('grrdt_r1', 'Rendement R1 = P × 100 / P_th gr', '{gran_p} * 100 / {gran_pthgr}', '%', 98, 100),
+    _ooi('grrdt_reaj', 'Réajustement de la pesée phase externe requis ? (si R1 < 98 %)'),
+    _chk('grrdt_docs', 'Documents à joindre', 'oui', ['Bon d\'avarie', 'Bon de prélèvement']),
+    _txt('grrdt_just', 'Justification de toute avarie hors normes'),
+    _txt('grrdt_visa', 'Date / Visa Responsable Fabrication')
+  ], 2),
+  _sec('gr_inc', '26 · Suivi des incidents, arrêts & fiches', [
+    _tab('grinc_tab', 'Incidents / arrêts', [
+      _ct('grin_date', 'Date'), _ct('grin_harr', 'Heure d\'arrêt'), _ct('grin_sac', 'N° de sac'),
+      _ct('grin_motif', 'Motif'), _ct('grin_action', 'Action corrective'),
+      _ct('grin_ddem', 'Date de démarrage'), _ct('grin_hdem', 'Heure de démarrage'), _ct('grin_visa', 'Fait par / Visa')
+    ]),
+    _pj('grinc_fsalle', 'Fiche utilisation salle (scan)'),
+    _pj('grinc_fmachine', 'Fiche utilisation machine (scan)'),
+    _txt('grinc_visa', 'Vérifié par / Visa — Date')
+  ])
+]
+
+// =====================================================================
 //  Squelette générique d'une étape de fabrication (prélim, nettoyage,
 //  opérateurs, équipements, conditions, opération, IPC, bilan, incidents).
 //  Sert à pré-structurer les étapes dont le dossier n'est pas encore
@@ -939,7 +1194,7 @@ function phaseSkel (px, labelOp) {
 // =====================================================================
 const PHASES_STANDARD = {
   pesee:                 { nom: 'Pesée', sections: SECTIONS_PESEE },
-  granulation_sechage:   { nom: 'Granulation & Séchage', sections: phaseSkel('gr', 'Opération de granulation & séchage') },
+  granulation_sechage:   { nom: 'Granulation & Séchage', sections: SECTIONS_GRANULATION },
   tamisage_melange:      { nom: 'Tamisage & Mélange', sections: SECTIONS_TM },
   compression:           { nom: 'Compression', sections: SECTIONS_COMPRESSION },
   remplissage_gelules:   { nom: 'Remplissage des gélules', sections: phaseSkel('ge', 'Opération de remplissage des gélules') },
