@@ -101,7 +101,15 @@ function ecrireLocal () {
 }
 
 // Catalogue effectif : intégré < localStorage < base.
-const catalogue = computed(() => ({ ...PRODUITS_REF, ...produitsLocal.value, ...produitsDB.value }))
+// Fusion PAR PRODUIT et par champ : une fiche enregistrée (local/DB) prime,
+// mais hérite des champs qu'elle ne redéfinit pas du produit intégré
+// (ex. le formulaire par défaut reste disponible même sur une fiche ancienne).
+const catalogue = computed(() => {
+  const keys = new Set([...Object.keys(PRODUITS_REF), ...Object.keys(produitsLocal.value), ...Object.keys(produitsDB.value)])
+  const out = {}
+  for (const k of keys) out[k] = { ...(PRODUITS_REF[k] || {}), ...(produitsLocal.value[k] || {}), ...(produitsDB.value[k] || {}) }
+  return out
+})
 const produitsKeys = computed(() => Object.keys(catalogue.value))
 // Noms modifiables/supprimables par l'utilisateur (créés par lui, hors intégrés non surchargés).
 const produitsPerso = computed(() => new Set([...Object.keys(produitsLocal.value), ...Object.keys(produitsDB.value)]))

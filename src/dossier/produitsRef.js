@@ -4,6 +4,105 @@
 //  l'opérateur ne saisit ensuite que les valeurs réelles du lot.
 //  Pour ajouter un produit : copier ce bloc et adapter les valeurs.
 // =====================================================================
+
+// --- Fabriques pour composer un formulaire par défaut (ids STABLES, pour
+//     que le rechargement d'un dossier enregistré retrouve bien ses saisies).
+//     num(limites) · oc(Conforme/Non conforme) · oo(Oui/Non) · txt/date ·
+//     colonnes de tableau cn/ct/coc · tab(tableau) · sec(section).           ---
+const _num = (id, label, unite = '', min = null, max = null, obligatoire = false) =>
+  ({ id, label, type: 'num', unite, min, cible: null, max, obligatoire, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [] })
+const _oc = (id, label, obligatoire = false) =>
+  ({ id, label, type: 'oui_non', unite: '', min: null, cible: null, max: null, obligatoire, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [] })
+const _oo = (id, label, obligatoire = false) =>
+  ({ id, label, type: 'oui_non', unite: '', min: null, cible: null, max: null, obligatoire, attendu: 'Oui', options: ['Oui', 'Non'], colonnes: [] })
+const _txt = (id, label, type = 'texte', obligatoire = false) =>
+  ({ id, label, type, unite: '', min: null, cible: null, max: null, obligatoire, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes: [] })
+const _cn = (id, label, unite = '', min = null, max = null) =>
+  ({ id, label, type: 'num', unite, min, max, attendu: 'Conforme', options: ['Conforme', 'Non conforme'] })
+const _ct = (id, label) =>
+  ({ id, label, type: 'texte', unite: '', min: null, max: null, attendu: 'Conforme', options: ['Conforme', 'Non conforme'] })
+const _coc = (id, label) =>
+  ({ id, label, type: 'oui_non', unite: '', min: null, max: null, attendu: 'Conforme', options: ['Conforme', 'Non conforme'] })
+const _tab = (id, label, colonnes) =>
+  ({ id, label, type: 'tableau', unite: '', min: null, cible: null, max: null, obligatoire: false, attendu: 'Conforme', options: ['Conforme', 'Non conforme'], colonnes })
+const _sec = (id, titre, champs) => ({ id, titre, champs })
+
+// Formulaire de conduite du lot ROSUSTINE ® 10 mg (comprimé pelliculé),
+// calqué sur les étapes du dossier de lot : conditions de ligne, les 6
+// opérations du procédé (mélange 01, tamisage, mélange 02, lubrification,
+// compression, pelliculage), contrôles IPC et rendement.
+// Limites renseignées = spéc. site (T°, HR, ΔP) + pharmacopée (friabilité,
+// désagrégation) + masse déduite de la formule (108 mg/cp ± 5 %).
+// Limites laissées vides (« à définir ») = valeurs produit à confirmer sur
+// l'AMM / dossier (dureté, LOD, temps, vitesses, rendements) : à compléter
+// dans le Constructeur. Les champs sans limite sont enregistrés sans alerte.
+const FORMULAIRE_ROSUSTINE = {
+  sections: [
+    _sec('s_init', 'Démarrage & conditions de ligne', [
+      _txt('f_date', 'Date de début de fabrication', 'date', true),
+      _txt('f_equipe', 'Équipe / poste'),
+      _txt('f_chef', 'Chef de ligne'),
+      _oc('f_vide', 'Vide de ligne & propreté vérifiés', true),
+      _num('f_temp', 'Température de la salle', '°C', 15, 25, true),
+      _num('f_hr', 'Humidité relative', '%', null, 60, true),
+      _num('f_dp', 'Différentiel de pression', 'Pa', 1, null)
+    ]),
+    _sec('s_m01', 'Mélange 01 — Rosuvastatine calcium + Crospovidone', [
+      _oc('m01_eq', 'Équipement conforme — Mélangeur en V MAKINA 100L (PR210)'),
+      _num('m01_t', 'Temps de mélange', 'min'),
+      _num('m01_v', 'Vitesse / nombre de tours'),
+      _txt('m01_visa', 'Visa opérateur')
+    ]),
+    _sec('s_tam', 'Tamisage — tamis 0,8 mm', [
+      _oc('tam_eq', 'Équipement conforme — Calibreur CPS (PR036/PR097) / Kevin super mill (PR03/PR311)'),
+      _oo('tam_grille', 'Tamis 0,8 mm en place'),
+      _txt('tam_visa', 'Visa opérateur')
+    ]),
+    _sec('s_m02', 'Mélange 02 — + Lactose, Cellulose MC, Phosphate de calcium', [
+      _oc('m02_eq', 'Équipement conforme — Mélangeur en V MPY 400 (PR032)'),
+      _num('m02_t', 'Temps de mélange', 'min'),
+      _num('m02_lod', 'LOD / perte à la dessiccation (à définir)', '%'),
+      _oc('m02_unif', 'Uniformité de mélange conforme'),
+      _txt('m02_visa', 'Visa opérateur')
+    ]),
+    _sec('s_lub', 'Lubrification — Stéarate de magnésium', [
+      _num('lub_t', 'Temps de lubrification', 'min'),
+      _txt('lub_visa', 'Visa opérateur')
+    ]),
+    _sec('s_comp', 'Compression — Fette 1200i (PR012/PR097/PR205)', [
+      _oc('comp_eq', 'Équipement conforme'),
+      _num('comp_masse', 'Masse moyenne comprimé nu', 'mg', 102.6, 113.4, true),
+      _num('comp_dur', 'Dureté moyenne (à définir)', 'N'),
+      _num('comp_ep', 'Épaisseur', 'mm'),
+      _num('comp_fria', 'Friabilité', '%', null, 1.0),
+      _num('comp_desa', 'Désagrégation comprimé nu', 'min', null, 15),
+      _oc('comp_aspect', 'Aspect conforme'),
+      _tab('comp_ipc', 'Contrôles périodiques en cours de compression', [
+        _ct('ci_h', 'Heure'),
+        _cn('ci_m', 'Masse moy. 20 cp', 'mg', 102.6, 113.4),
+        _cn('ci_d', 'Dureté', 'N'),
+        _cn('ci_des', 'Désagrégation', 'min', null, 15),
+        _coc('ci_asp', 'Aspect')
+      ])
+    ]),
+    _sec('s_pell', 'Pelliculage — Pelliculeuse LABORTECNIC (PR024)', [
+      _oc('pell_eq', 'Équipement conforme'),
+      _num('pell_masse', 'Masse moyenne comprimé pelliculé (cible ≈ 112,2)', 'mg'),
+      _num('pell_gain', 'Prise de masse au pelliculage (cible ≈ 3,9)', '%'),
+      _oc('pell_aspect', 'Aspect / couleur rose homogène conforme'),
+      _num('pell_desa', 'Désagrégation comprimé pelliculé', 'min', null, 30),
+      _txt('pell_visa', 'Visa opérateur')
+    ]),
+    _sec('s_rdt', 'Rendement & bilan', [
+      _num('rdt_qnu', 'Quantité de comprimés nus obtenue', 'cp'),
+      _num('rdt_rcomp', 'Rendement compression (à définir)', '%'),
+      _num('rdt_qpell', 'Quantité de comprimés pelliculés', 'cp'),
+      _num('rdt_global', 'Rendement global (à définir)', '%'),
+      _txt('rdt_rem', 'Remarques / déviations')
+    ])
+  ]
+}
+
 export const PRODUITS_REF = {
   'ROSUSTINE ® 10 mg': {
     entete: {
@@ -90,6 +189,8 @@ export const PRODUITS_REF = {
         'Comprimeuse Fette 1200i, codes : PR012/PR097/PR205',
         'Pelliculeuse LABORTECNIC, code : PR024'
       ]
-    }
+    },
+    // Formulaire de conduite du lot (configurable par produit — voir ci-dessus)
+    formulaire: FORMULAIRE_ROSUSTINE
   }
 }
