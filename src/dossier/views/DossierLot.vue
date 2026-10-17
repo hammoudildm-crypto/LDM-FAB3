@@ -7,7 +7,7 @@ import EtapePesee from './EtapePesee.vue'
 import FormulaireDynamique from './FormulaireDynamique.vue'
 import GestionProduits from '../components/GestionProduits.vue'
 import ConstructeurFormulaire from '../components/ConstructeurFormulaire.vue'
-import { PRODUITS_REF } from '../produitsRef.js'
+import { PRODUITS_REF, FORMULAIRE_DEFAUT } from '../produitsRef.js'
 import '../dossier.css'   // styles du document (non scopés), intégration ProdTrack
 
 const peutEditer = inject('peutEditer', ref(true))
@@ -110,7 +110,8 @@ const catalogue = computed(() => {
     const merged = { ...(PRODUITS_REF[k] || {}), ...(produitsLocal.value[k] || {}), ...(produitsDB.value[k] || {}) }
     // Repli : si le formulaire effectif est absent OU vide (fiche enregistrée
     // sans formulaire, ou un {sections:[]} ancien), on reprend celui intégré.
-    const integre = PRODUITS_REF[k] && PRODUITS_REF[k].formulaire
+    // Repli : produit intégré > modèle Pesée par défaut (commun à TOUS les produits).
+    const integre = (PRODUITS_REF[k] && PRODUITS_REF[k].formulaire) || FORMULAIRE_DEFAUT
     const okForm = merged.formulaire && Array.isArray(merged.formulaire.sections) && merged.formulaire.sections.length
     if (!okForm && integre) merged.formulaire = integre
     out[k] = merged
@@ -286,8 +287,10 @@ const statutCouleur = computed(() => ({
 // Modèle intégré (formulaire par défaut livré avec le produit). Permet de le
 // recharger si une fiche enregistrée l'a remplacé par un autre formulaire.
 const modeleIntegre = computed(() => {
+  if (!d.produit) return null
   const r = PRODUITS_REF[d.produit]
-  return r && r.formulaire && Array.isArray(r.formulaire.sections) && r.formulaire.sections.length ? r.formulaire : null
+  const f = r && r.formulaire
+  return (f && Array.isArray(f.sections) && f.sections.length) ? f : FORMULAIRE_DEFAUT
 })
 function chargerModeleIntegre () {
   if (!modeleIntegre.value) return

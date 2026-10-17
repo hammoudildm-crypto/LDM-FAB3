@@ -64,13 +64,13 @@ const TXT_PRECAUTIONS = `• La fermeture des portes des ateliers de fabrication
 • Retirer le produit de l'équipement lorsqu'un arrêt prolongé est prévu.`
 
 // =====================================================================
-//  Formulaire ROSUSTINE ® 10 mg — PARTIE PESÉE (IF PFLDM103, pages 9-24,
-//  sections 1 à 14). Calqué page par page sur le dossier de lot papier.
-//  Limites = spéc. dossier : T° 15-25 °C, HR ≤60 %, ΔP ≥1 mmH₂O.
-//  Conformité pesée (quantité pesée vs théorique ± tolérance) = vue
-//  « ② Pesée guidée (eBMR) » ; ici les quantités pesées sont enregistrées.
+//  Formulaire PESÉE PAR DÉFAUT (modèle intégré) — utilisé par TOUS les produits
+//  tant qu'ils n'ont pas leur propre formulaire. Calqué sur le dossier de lot
+//  (IF PFLDM103, pages 9-24, sections 1 à 14). Limites = spéc. dossier du site :
+//  T° 15-25 °C, HR ≤60 %, ΔP ≥1 mmH₂O. Les quantités pesées sont enregistrées.
+//  Les libellés propres à un produit (PA, excipients) se complètent à la saisie.
 // =====================================================================
-const FORMULAIRE_ROSUSTINE = {
+export const FORMULAIRE_DEFAUT = {
   sections: [
     _sec('p_prelim', '1 · Opérations préliminaires & autorisation de démarrage', [
       _note('pp_instr', 'Instructions générales — vérifications avant démarrage', TXT_INSTRUCTIONS_GEN),
@@ -157,8 +157,9 @@ const FORMULAIRE_ROSUSTINE = {
         _ct('re_visa', 'Vérifié par (Date & Visa)')
       ])
     ]),
-    _sec('p_pa', '9 · Pesée des principes actifs — Rosuvastatine calcium (MPPA0070)', [
+    _sec('p_pa', '9 · Pesée des principes actifs', [
       _txt('pa_hdeb', 'Heure de début de pesée'),
+      _txt('pa_des', 'Désignation du principe actif'),
       _txt('pa_lot', 'N° de lot interne du PA'),
       _txt('pa_bal', 'Code balance utilisée'),
       _num('pa_theo', 'Quantité théorique corrigée A (à peser)', 'kg'),
@@ -171,7 +172,7 @@ const FORMULAIRE_ROSUSTINE = {
       _oo('pa_stock', 'Stockage API conforme (double sac PE + gel de silice, fût inox fermé)')
     ], 2),
     _sec('p_exc', '10 · Pesée des excipients', [
-      _tab('exc_tab', 'Excipients — théoriques (kg/lot) : Lactose 64,44 · Crospovidone 5,40 · Phosphate Ca 7,85 · Stéarate Mg 1,35 · Aquapolish 4,21 ; Cellulose MC = quantité d\'ajustage B', [
+      _tab('exc_tab', 'Excipients — une ligne par excipient ; renseigner la quantité théorique (kg/lot) selon la formule du produit', [
         _ct('ex_des', 'Désignation'),
         _ct('ex_code', 'Code interne'),
         _ct('ex_lot', 'N° lot'),
@@ -301,7 +302,7 @@ export const PRODUITS_REF = {
         'Pelliculeuse LABORTECNIC, code : PR024'
       ]
     },
-    // Formulaire de conduite du lot — PARTIE PESÉE (voir FORMULAIRE_ROSUSTINE ci-dessus)
-    formulaire: FORMULAIRE_ROSUSTINE
+    // Formulaire de conduite du lot — modèle Pesée par défaut (partagé)
+    formulaire: FORMULAIRE_DEFAUT
   }
 }
