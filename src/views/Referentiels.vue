@@ -66,6 +66,11 @@ const erreur = ref('')
 
 const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet', 'blister', 'seringue']
 const GAMME_PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+// Libellé d'étape de gamme -> clé canonique (alignée avec DisponibiliteEquipements.vue)
+const GAMME_KEY = { 'Pesée': 'pesee', 'Granulation et Séchage': 'granulation', 'Mélange': 'melange', 'Compression': 'compression', 'Remplissage Gélules': 'remplissage', 'Pelliculage': 'pelliculage' }
+function phaseKeyR(label) { return GAMME_KEY[label] || null }
+const KEY_LABEL = { pesee: 'Pesée', granulation: 'Granulation & séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage gélules', pelliculage: 'Pelliculage' }
+function htResume(map) { if (!map || typeof map !== 'object') return ''; return Object.keys(map).map(k => (KEY_LABEL[k] || k) + ' : ' + map[k] + ' j').join(' · ') }
 // Fusionne les anciennes étapes « Granulation » + « Séchage » en une seule « Granulation et Séchage »
 // Poids théorique du lot, en kg. ATTENTION : taille_lot est un nombre de BOÎTES, pas d'unités.
 // Formule commune à PlanningEquipements, SuiviCapacite et EquipementDetail :
@@ -116,12 +121,12 @@ function resetDO() { Object.assign(formDO, { id: null, code: '', nom: '', activi
 // --- Produit ---
 const formP = reactive({
   id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-  unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', aql: '', pcsu: '', gamme: []
+  unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, aql: '', pcsu: '', gamme: []
 })
 function resetP() {
   Object.assign(formP, {
     id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-    unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', aql: '', pcsu: '', gamme: []
+    unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, aql: '', pcsu: '', gamme: []
   })
 }
 
@@ -433,6 +438,9 @@ async function desactiverDO(d) {
 async function enregistrerP() {
   erreur.value = ''
   if (!formP.code_pf.trim() || !formP.designation.trim()) { erreur.value = 'Code PF et désignation obligatoires.'; return }
+  // Holding time par étape : on ne garde que les phases de la gamme avec une valeur
+  const htMap = {}
+  for (const ph of (formP.gamme || [])) { const k = phaseKeyR(ph); const v = toNum(formP.holding_times ? formP.holding_times[k] : null); if (k && v != null) htMap[k] = v }
   const payload = {
     code_pf: formP.code_pf.trim(),
     designation: formP.designation.trim(),
@@ -444,6 +452,7 @@ async function enregistrerP() {
     taille_lot: toNum(formP.taille_lot),
     duree_vie_mois: toNum(formP.duree_vie_mois),
     holding_time_jours: toNum(formP.holding_time_jours),
+    holding_times: htMap,
     aql: formP.aql.trim() || null,
     pcsu: toNum(formP.pcsu),
     gamme: normGammeR(formP.gamme)
@@ -453,12 +462,12 @@ async function enregistrerP() {
     : await supabase.from('produits').insert(payload)
   // Repli : si la colonne holding_time_jours n'existe pas encore dans la table produits,
   // on enregistre quand même le reste et on signale qu'il faut ajouter la colonne.
-  if (res.error && /holding_time_jours/.test(res.error.message || '')) {
-    const { holding_time_jours, ...sansHolding } = payload
+  if (res.error && /holding_time/.test(res.error.message || '')) {
+    const { holding_time_jours, holding_times, ...sansHolding } = payload
     res = formP.id
       ? await supabase.from('produits').update(sansHolding).eq('id', formP.id)
       : await supabase.from('produits').insert(sansHolding)
-    if (!res.error) { erreur.value = 'Produit enregistré. Le holding time n\'a pas pu être sauvegardé : ajoutez la colonne « holding_time_jours » (numeric) à la table produits dans Supabase.'; resetP(); await chargerTout(); return }
+    if (!res.error) { erreur.value = 'Produit enregistré. Les holding times n\'ont pas pu être sauvegardés : ajoutez les colonnes « holding_time_jours » (numeric) et « holding_times » (jsonb) à la table produits dans Supabase.'; resetP(); await chargerTout(); return }
   }
   if (res.error) { erreur.value = res.error.message; return }
   resetP()
@@ -469,7 +478,9 @@ function modifierP(p) {
     id: p.id, code_pf: p.code_pf, designation: p.designation, forme: p.forme || '',
     donneur_ordre_id: p.donneur_ordre_id || '',
     unites_par_boite: p.unites_par_boite ?? '', poids_unitaire_mg: p.poids_unitaire_mg ?? '', poids_lot_kg: p.poids_lot_kg ?? '', taille_lot: p.taille_lot ?? '',
-    duree_vie_mois: p.duree_vie_mois ?? '', holding_time_jours: p.holding_time_jours ?? '', aql: p.aql || '', pcsu: p.pcsu ?? '',
+    duree_vie_mois: p.duree_vie_mois ?? '', holding_time_jours: p.holding_time_jours ?? '',
+    holding_times: (p.holding_times && typeof p.holding_times === 'object') ? { ...p.holding_times } : {},
+    aql: p.aql || '', pcsu: p.pcsu ?? '',
     gamme: normGammeR(p.gamme)
   })
 }
@@ -723,7 +734,7 @@ onMounted(async () => {
           <input v-model="formP.poids_lot_kg" type="number" step="any" placeholder="175" />
         </label>
         <label>Durée de vie (mois)<input v-model="formP.duree_vie_mois" type="number" placeholder="36" /></label>
-        <label>Holding time de stockage (jours)<input v-model="formP.holding_time_jours" type="number" step="any" placeholder="30" title="Temps maximal de stockage/rétention entre deux étapes (vrac, comprimés nus…) avant la phase suivante" /></label>
+        <label>Holding time par défaut (jours)<input v-model="formP.holding_time_jours" type="number" step="any" placeholder="30" title="Valeur de repli utilisée quand aucun holding time n'est défini pour l'étape concernée" /></label>
         <label>AQL<input v-model="formP.aql" placeholder="0.65" /></label>
         <label>PCSU<input v-model="formP.pcsu" type="number" step="any" placeholder="12.50" /></label>
         <label class="gamme-field">Gamme de process
@@ -733,6 +744,17 @@ onMounted(async () => {
             </label>
           </div>
           <span class="gamme-hint">Coche les phases réellement effectuées. La dernière cochée = fin de fabrication.</span>
+        </label>
+        <label class="gamme-field ht-field">Holding time de stockage par étape (jours)
+          <div v-if="formP.gamme.length" class="ht-grid">
+            <div v-for="ph in formP.gamme" :key="ph" class="ht-row">
+              <span class="ht-ph">{{ ph }}</span>
+              <input type="number" step="any" min="0" v-model="formP.holding_times[phaseKeyR(ph)]" placeholder="—" />
+              <span class="ht-u">j</span>
+            </div>
+          </div>
+          <span v-else class="gamme-hint">Coche d'abord les phases de la gamme ci-dessus pour saisir un temps par étape.</span>
+          <span class="gamme-hint">Temps maximal de stockage de l'intermédiaire produit par chaque étape, avant l'étape suivante. Laisse vide pour utiliser le holding time par défaut.</span>
         </label>
         <div class="form-actions">
           <button class="btn" @click="enregistrerP">{{ formP.id ? 'Mettre à jour' : 'Ajouter' }}</button>
@@ -757,7 +779,7 @@ onMounted(async () => {
             <tr>
               <th>Code PF</th><th>Désignation</th><th>Forme</th><th>Donneur d'ordre</th>
               <th class="right">U/boîte</th><th class="right">Poids (mg)</th><th class="right">Poids lot (kg)</th><th class="right">Taille lot</th><th class="right">PCSU</th>
-              <th class="right">Holding time (j)</th>
+              <th class="right">Holding time</th>
               <th>Phase finale</th>
               <th class="right">Actions</th>
             </tr>
@@ -773,7 +795,10 @@ onMounted(async () => {
               <td class="right">{{ p.poids_lot_kg ?? '—' }}</td>
               <td class="right">{{ p.taille_lot ?? '—' }}</td>
               <td class="right">{{ p.pcsu ?? '—' }}</td>
-              <td class="right">{{ p.holding_time_jours != null && p.holding_time_jours !== '' ? p.holding_time_jours + ' j' : '—' }}</td>
+              <td class="right nowrap">
+                <span v-if="p.holding_time_jours != null && p.holding_time_jours !== ''">{{ p.holding_time_jours }} j</span><span v-else>—</span>
+                <span v-if="p.holding_times && Object.keys(p.holding_times).length" class="ht-badge" :title="htResume(p.holding_times)">· {{ Object.keys(p.holding_times).length }} ét.</span>
+              </td>
               <td><span v-if="phaseFinaleP(p.gamme)" class="gamme-badge">{{ phaseFinaleP(p.gamme) }}</span><span v-else class="gamme-none">non définie</span></td>
               <td class="right nowrap">
                 <template v-if="peutEditer">
@@ -1082,6 +1107,13 @@ button.link.danger { color: #b91c1c; }
 .gamme-chk { display: inline-flex; align-items: center; gap: 5px; font-weight: 400; font-size: 12px; color: #334155; }
 .gamme-chk input { width: auto; margin: 0; }
 .gamme-hint { display: block; font-size: 11px; color: #94a3b8; margin-top: 5px; }
+.ht-field { margin-top: 2px; }
+.ht-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 14px; margin-top: 4px; }
+.ht-row { display: flex; align-items: center; gap: 8px; }
+.ht-ph { flex: 1; font-size: 12px; color: #334155; }
+.ht-row input { width: 80px; }
+.ht-u { font-size: 12px; color: #64748b; }
+.ht-badge { font-size: 10.5px; color: #0e7490; font-weight: 700; margin-left: 4px; cursor: help; }
 .gamme-badge { background: #ccfbf1; color: #0f766e; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .gamme-none { color: #cbd5e1; font-size: 12px; }
 .sv-add { display: flex; gap: 8px; margin-bottom: 9px; }

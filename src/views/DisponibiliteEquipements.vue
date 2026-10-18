@@ -13,9 +13,10 @@ const ofs = ref([])
 const conds = ref([])
 const suivi = ref([])
 const planRows = ref([])
-// Holding time de stockage par produit (jours). Chargé à part : si la colonne
-// n'existe pas encore côté base, la map reste vide et aucune alerte ne s'affiche.
-const holdTimes = ref({})
+// Holding time de stockage par produit (jours). Chargé à part : si les colonnes
+// n'existent pas encore côté base, les maps restent vides et aucune alerte ne s'affiche.
+const holdTimes = ref({})   // produit_id -> holding time par défaut (nombre)
+const holdSteps = ref({})   // produit_id -> { cléPhase: jours } (holding time par étape)
 const ongletDispo = ref('file')
 const erreur = ref('')
 const chargement = ref(true)
@@ -83,11 +84,15 @@ async function charger() {
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
 
-  // Holding time par produit (requête tolérante : si la colonne manque, on continue sans alerte)
-  const rht = await supabase.from('produits').select('id, holding_time_jours')
+  // Holding time par produit (requêtes tolérantes : si une colonne manque, on continue sans elle)
+  const rhj = await supabase.from('produits').select('id, holding_time_jours')
   const hm = {}
-  if (!rht.error && rht.data) for (const p of rht.data) if (p.holding_time_jours != null) hm[p.id] = Number(p.holding_time_jours)
+  if (!rhj.error && rhj.data) for (const p of rhj.data) if (p.holding_time_jours != null) hm[p.id] = Number(p.holding_time_jours)
   holdTimes.value = hm
+  const rhs = await supabase.from('produits').select('id, holding_times')
+  const hs = {}
+  if (!rhs.error && rhs.data) for (const p of rhs.data) if (p.holding_times && typeof p.holding_times === 'object') hs[p.id] = p.holding_times
+  holdSteps.value = hs
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
     .select('ordre_id, equipement_id, statut, quantite_conditionnee').eq('actif', true))
@@ -290,6 +295,13 @@ const queuePhase = computed(() => {
   for (const ph of PHASES) q[ph.key] = { attente: [], cours: [] }
   const condFini = condComplet.value
   const condAny = ordresConditionnes.value
+  // Holding time applicable à un lot : temps de l'ÉTAPE PRÉCÉDENTE (celle qui a produit
+  // l'intermédiaire stocké) ; repli sur le holding time par défaut du produit.
+  const holdFor = (pid, prevKey) => {
+    const steps = holdSteps.value[pid]
+    if (steps && prevKey && steps[prevKey] != null) return Number(steps[prevKey])
+    return holdTimes.value[pid] != null ? holdTimes.value[pid] : null
+  }
   for (const o of ofs.value) {
     const directCond = estDirectCond(o.produits)
     if (condFini.has(o.id)) continue
@@ -305,21 +317,21 @@ const queuePhase = computed(() => {
     // Fabrication finie = dernière phase de la gamme du produit terminée (critère fiable, pas la date).
     const kDern = gamme.length ? phaseKey(gamme[gamme.length - 1]) : null
     const fabTerminee = !!o.date_fin_fabrication || !!(kDern && pl[kDern] && pl[kDern].statut === 'Terminé')
-    const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), deviation: deviationIds.value.has(o.id), deviationCond: deviationCondIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null, holdJ: holdTimes.value[o.produit_id] ?? null,
+    const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), deviation: deviationIds.value.has(o.id), deviationCond: deviationCondIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !fabTerminee) ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
     if (directCond) {
-      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, datePrec: o.date_reception || o.date_lancement, date: o.date_lancement || o.date_reception || o.date_fin_fabrication })
+      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, datePrec: o.date_reception || o.date_lancement, date: o.date_lancement || o.date_reception || o.date_fin_fabrication, holdJ: holdFor(o.produit_id, null) })
       continue
     }
     // Règle : le lot est à sa PREMIÈRE phase de gamme NON terminée.
     //   Conditionnement uniquement si TOUTES les phases de la gamme sont terminées.
     if (Object.keys(pl).length === 0) {
       if (o.date_fin_fabrication) {
-        (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_fin_fabrication })
+        (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, datePrec: o.date_fin_fabrication, date: o.date_fin_fabrication, holdJ: holdFor(o.produit_id, kDern) })
       } else {
         const k0 = phaseKey(gamme[0])
-        if (k0 && q[k0]) q[k0].attente.push({ ...base, datePrec: o.date_lancement || o.date_reception, date: o.date_lancement })
+        if (k0 && q[k0]) q[k0].attente.push({ ...base, datePrec: o.date_lancement || o.date_reception, date: o.date_lancement, holdJ: holdFor(o.produit_id, 'pesee') })
       }
       continue
     }
@@ -329,14 +341,15 @@ const queuePhase = computed(() => {
       if (!rr || rr.statut !== 'Terminé') { curIdx = i; break }
     }
     if (curIdx < 0) {
-      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, datePrec: o.date_fin_fabrication || o.date_lancement, date: o.date_fin_fabrication || o.date_lancement })
+      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, datePrec: o.date_fin_fabrication || o.date_lancement, date: o.date_fin_fabrication || o.date_lancement, holdJ: holdFor(o.produit_id, kDern) })
     } else {
       const kCur = phaseKey(gamme[curIdx]); const rCur = kCur ? pl[kCur] : null
       const kPrev = curIdx > 0 ? phaseKey(gamme[curIdx - 1]) : null
       const datePrec = (kPrev && pl[kPrev] && pl[kPrev].date) || o.date_lancement
+      const hj = holdFor(o.produit_id, kPrev || 'pesee')
       if (kCur && q[kCur]) {
-        if (rCur && rCur.statut === 'En cours') q[kCur].cours.push({ ...base, datePrec, date: (rCur && rCur.date) || o.date_lancement })
-        else q[kCur].attente.push({ ...base, datePrec, date: (rCur && rCur.date) || o.date_lancement })
+        if (rCur && rCur.statut === 'En cours') q[kCur].cours.push({ ...base, datePrec, date: (rCur && rCur.date) || o.date_lancement, holdJ: hj })
+        else q[kCur].attente.push({ ...base, datePrec, date: (rCur && rCur.date) || o.date_lancement, holdJ: hj })
       }
     }
   }
