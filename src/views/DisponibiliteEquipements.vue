@@ -300,7 +300,7 @@ const queuePhase = computed(() => {
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !fabTerminee) ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
     if (directCond) {
-      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_lancement || o.date_reception || o.date_fin_fabrication })
+      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, datePrec: o.date_reception || o.date_lancement, date: o.date_lancement || o.date_reception || o.date_fin_fabrication })
       continue
     }
     // Règle : le lot est à sa PREMIÈRE phase de gamme NON terminée.
@@ -310,7 +310,7 @@ const queuePhase = computed(() => {
         (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_fin_fabrication })
       } else {
         const k0 = phaseKey(gamme[0])
-        if (k0 && q[k0]) q[k0].attente.push({ ...base, date: o.date_lancement })
+        if (k0 && q[k0]) q[k0].attente.push({ ...base, datePrec: o.date_lancement || o.date_reception, date: o.date_lancement })
       }
       continue
     }
@@ -320,12 +320,14 @@ const queuePhase = computed(() => {
       if (!rr || rr.statut !== 'Terminé') { curIdx = i; break }
     }
     if (curIdx < 0) {
-      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, date: o.date_fin_fabrication || o.date_lancement })
+      (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, datePrec: o.date_fin_fabrication || o.date_lancement, date: o.date_fin_fabrication || o.date_lancement })
     } else {
       const kCur = phaseKey(gamme[curIdx]); const rCur = kCur ? pl[kCur] : null
+      const kPrev = curIdx > 0 ? phaseKey(gamme[curIdx - 1]) : null
+      const datePrec = (kPrev && pl[kPrev] && pl[kPrev].date) || o.date_lancement
       if (kCur && q[kCur]) {
-        if (rCur && rCur.statut === 'En cours') q[kCur].cours.push({ ...base, date: (rCur && rCur.date) || o.date_lancement })
-        else q[kCur].attente.push({ ...base, date: (rCur && rCur.date) || o.date_lancement })
+        if (rCur && rCur.statut === 'En cours') q[kCur].cours.push({ ...base, datePrec, date: (rCur && rCur.date) || o.date_lancement })
+        else q[kCur].attente.push({ ...base, datePrec, date: (rCur && rCur.date) || o.date_lancement })
       }
     }
   }
@@ -483,7 +485,7 @@ const qualiteParAtelier = computed(() => {
   const lotMini = (l, statut, pk) => ({
     id: l.id, lot: l.lot, code: l.code, desig: l.desig, boites: l.boites, statut, pk,
     triage: !!(l.triage || l.triageCond), deviation: !!l.deviation, deviationCond: !!l.deviationCond,
-    perime: !!l.perime, validite: l.validite, date: l.date
+    perime: !!l.perime, validite: l.validite, date: l.date, datePrec: l.datePrec || l.date || null
   })
   const compte = (attente, cours, pk) => {
     let tri = 0
@@ -501,6 +503,7 @@ const qualiteParAtelier = computed(() => {
   const rows = []
   const pes = attentePeseeList.value.map(l => ({
     id: l.id, lot: l.lot, code: l.code, desig: l.desig, boites: l.boites,
+    date: l.date, datePrec: l.date, validite: l.validite, perime: l.perime,
     triage: triageIds.value.has(l.id), triageCond: triageCondIds.value.has(l.id),
     deviation: deviationIds.value.has(l.id), deviationCond: deviationCondIds.value.has(l.id)
   }))
@@ -1186,20 +1189,22 @@ onMounted(async () => {
                     <td colspan="6">
                       <div class="qd-head">Lots de l'atelier « {{ r.label }} » — {{ r.allLots.length }} lot(s)</div>
                       <table class="qd-tbl">
-                        <thead><tr><th>N° lot</th><th>Produit</th><th>Statut</th><th class="qnum">Boîtes</th><th>État</th></tr></thead>
+                        <thead><tr><th>N° lot</th><th>Produit</th><th>Statut</th><th class="qnum">Boîtes</th><th>Fin étape préc.</th><th class="qnum">Durée stockage</th><th>État</th></tr></thead>
                         <tbody>
                           <tr v-for="l in r.allLots" :key="l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de fabrication de ce lot">
                             <td class="qd-lot">{{ l.lot }}<span v-if="l.perime" class="perime-tag">OF périmé</span></td>
                             <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
                             <td><span class="qd-st" :class="l.statut === 'en cours' ? 'st-enc' : 'st-att'">{{ l.statut }}</span></td>
                             <td class="qnum">{{ fmt(l.boites) }}</td>
+                            <td class="qd-date" :title="l.datePrec ? 'Étape précédente terminée le ' + fmtDate(l.datePrec) : 'Date non renseignée'">{{ fmtDate(l.datePrec) }}</td>
+                            <td class="qnum qd-dur" :class="ageClass(l.datePrec)" :title="l.datePrec ? 'En stock depuis le ' + fmtDate(l.datePrec) : ''">{{ joursDepuis(l.datePrec) }}</td>
                             <td>
                               <span v-if="l.triage" class="qd-tag qd-tri">Triage</span>
                               <span v-if="l.deviation" class="qd-tag qd-fab">Déviation fab.</span>
                               <span v-if="l.deviationCond" class="qd-tag qd-cond">Déviation cond.</span>
                             </td>
                           </tr>
-                          <tr v-if="!r.allLots.length"><td colspan="5" class="qd-empty">Aucun lot dans cet atelier.</td></tr>
+                          <tr v-if="!r.allLots.length"><td colspan="7" class="qd-empty">Aucun lot dans cet atelier.</td></tr>
                         </tbody>
                       </table>
                     </td>
@@ -1886,6 +1891,10 @@ onMounted(async () => {
 .qual-tbl tbody tr.q-row-clic:hover > td { background: #ecfeff; }
 .q-row-open > td { background: #ecfeff; }
 .q-row-open .q-at { color: #0e7490; font-weight: 700; }
+.q-detail-at .qd-tbl .qd-date { white-space: nowrap; color: #334155; font-variant-numeric: tabular-nums; }
+.q-detail-at .qd-tbl .qd-dur { white-space: nowrap; color: #64748b; font-variant-numeric: tabular-nums; }
+.q-detail-at .qd-tbl .qd-dur.age-warn { color: #b45309; font-weight: 700; }
+.q-detail-at .qd-tbl .qd-dur.age-danger { color: #b91c1c; font-weight: 700; }
 .q-detail-at > td { background: #f0f9ff; }
 .q-detail-at .qd-tbl td { border-top-color: #bae6fd; }
 .q-detail-at .qd-tbl tbody tr:hover { background: #e0f2fe; }
