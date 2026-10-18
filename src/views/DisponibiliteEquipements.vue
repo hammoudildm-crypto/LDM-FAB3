@@ -13,6 +13,9 @@ const ofs = ref([])
 const conds = ref([])
 const suivi = ref([])
 const planRows = ref([])
+// Holding time de stockage par produit (jours). Chargé à part : si la colonne
+// n'existe pas encore côté base, la map reste vide et aucune alerte ne s'affiche.
+const holdTimes = ref({})
 const ongletDispo = ref('file')
 const erreur = ref('')
 const chargement = ref(true)
@@ -79,6 +82,12 @@ async function charger() {
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
+
+  // Holding time par produit (requête tolérante : si la colonne manque, on continue sans alerte)
+  const rht = await supabase.from('produits').select('id, holding_time_jours')
+  const hm = {}
+  if (!rht.error && rht.data) for (const p of rht.data) if (p.holding_time_jours != null) hm[p.id] = Number(p.holding_time_jours)
+  holdTimes.value = hm
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
     .select('ordre_id, equipement_id, statut, quantite_conditionnee').eq('actif', true))
@@ -296,7 +305,7 @@ const queuePhase = computed(() => {
     // Fabrication finie = dernière phase de la gamme du produit terminée (critère fiable, pas la date).
     const kDern = gamme.length ? phaseKey(gamme[gamme.length - 1]) : null
     const fabTerminee = !!o.date_fin_fabrication || !!(kDern && pl[kDern] && pl[kDern].statut === 'Terminé')
-    const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), deviation: deviationIds.value.has(o.id), deviationCond: deviationCondIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
+    const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), deviation: deviationIds.value.has(o.id), deviationCond: deviationCondIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null, holdJ: holdTimes.value[o.produit_id] ?? null,
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !fabTerminee) ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
     if (directCond) {
@@ -485,7 +494,7 @@ const qualiteParAtelier = computed(() => {
   const lotMini = (l, statut, pk) => ({
     id: l.id, lot: l.lot, code: l.code, desig: l.desig, boites: l.boites, statut, pk,
     triage: !!(l.triage || l.triageCond), deviation: !!l.deviation, deviationCond: !!l.deviationCond,
-    perime: !!l.perime, validite: l.validite, date: l.date, datePrec: l.datePrec || l.date || null
+    perime: !!l.perime, validite: l.validite, date: l.date, datePrec: l.datePrec || l.date || null, holdJ: l.holdJ ?? null
   })
   const compte = (attente, cours, pk) => {
     let tri = 0
@@ -495,15 +504,16 @@ const qualiteParAtelier = computed(() => {
       if (l.deviation || l.deviationCond) devLots.push({ id: l.id, lot: l.lot, code: l.code, desig: l.desig, deviation: !!l.deviation, deviationCond: !!l.deviationCond, pk })
     }
     const allLots = [...attente.map(l => lotMini(l, 'attente', pk)), ...cours.map(l => lotMini(l, 'en cours', pk))]
+    const holdOver = allLots.filter(l => { const j = joursNum(l.datePrec); return l.holdJ && j != null && j > l.holdJ }).length
     const bts = (arr) => arr.reduce((n, l) => n + (Number(l.boites) || 0), 0)
     return { tot: attente.length + cours.length, att: attente.length, enc: cours.length,
       bts: bts(attente) + bts(cours), btsAtt: bts(attente), btsEnc: bts(cours),
-      tri, dev: devLots.length, devLots, allLots }
+      tri, dev: devLots.length, devLots, allLots, holdOver }
   }
   const rows = []
   const pes = attentePeseeList.value.map(l => ({
     id: l.id, lot: l.lot, code: l.code, desig: l.desig, boites: l.boites,
-    date: l.date, datePrec: l.date, validite: l.validite, perime: l.perime,
+    date: l.date, datePrec: l.date, validite: l.validite, perime: l.perime, holdJ: l.holdJ ?? null,
     triage: triageIds.value.has(l.id), triageCond: triageCondIds.value.has(l.id),
     deviation: deviationIds.value.has(l.id), deviationCond: deviationCondIds.value.has(l.id)
   }))
@@ -575,7 +585,7 @@ const attentePeseeList = computed(() => {
     const p = o.produits || {}
     res.push({
       id: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '',
-      boites: Number(o.quantite_theorique || 0), date: o.date_reception || o.date_lancement,
+      boites: Number(o.quantite_theorique || 0), date: o.date_reception || o.date_lancement, holdJ: holdTimes.value[o.produit_id] ?? null,
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !o.date_fin_fabrication) ? (new Date(o.date_fin_validite) < now) : false
     })
   }
@@ -600,6 +610,9 @@ const attenteReceptionList = computed(() => {
 })
 
 function joursDepuis(d) { if (!d) return '—'; const j = Math.floor((Date.now() - new Date(d)) / 86400000); return j <= 0 ? 'auj.' : j + ' j' }
+function joursNum(d) { if (!d) return null; const j = Math.floor((Date.now() - new Date(d)) / 86400000); return j < 0 ? 0 : j }
+// Lot dont la durée de stockage dépasse le holding time du produit
+function depasseHold(l) { if (!l || !l.holdJ) return false; const j = joursNum(l.datePrec); return j != null && j > l.holdJ }
 function ageClass(d) {
   if (!d) return ''
   const j = Math.floor((Date.now() - new Date(d)) / 86400000)
@@ -1170,7 +1183,7 @@ onMounted(async () => {
                 <template v-for="r in qualiteParAtelier" :key="r.label">
                   <tr :class="{ 'q-row-open': atelierOuvert === r.label, 'q-row-clic': r.tot > 0 }" @click="toggleAtelier(r.label, r.tot)" :title="r.tot ? 'Voir les lots de cet atelier' : ''">
                     <td class="q-at">
-                      <span v-if="r.tot" class="q-caret">{{ atelierOuvert === r.label ? '▾' : '▸' }}</span>{{ r.label }}
+                      <span v-if="r.tot" class="q-caret">{{ atelierOuvert === r.label ? '▾' : '▸' }}</span>{{ r.label }}<span v-if="r.holdOver" class="hold-pill" title="Lots dépassant le holding time de stockage">⚠ {{ r.holdOver }} dépass.</span>
                     </td>
                     <td>
                       <div class="q-charge">
@@ -1197,7 +1210,7 @@ onMounted(async () => {
                             <td><span class="qd-st" :class="l.statut === 'en cours' ? 'st-enc' : 'st-att'">{{ l.statut }}</span></td>
                             <td class="qnum">{{ fmt(l.boites) }}</td>
                             <td class="qd-date" :title="l.datePrec ? 'Étape précédente terminée le ' + fmtDate(l.datePrec) : 'Date non renseignée'">{{ fmtDate(l.datePrec) }}</td>
-                            <td class="qnum qd-dur" :class="ageClass(l.datePrec)" :title="l.datePrec ? 'En stock depuis le ' + fmtDate(l.datePrec) : ''">{{ joursDepuis(l.datePrec) }}</td>
+                            <td class="qnum qd-dur" :class="[ageClass(l.datePrec), { 'hold-over': depasseHold(l) }]" :title="l.holdJ ? ('Holding time : ' + l.holdJ + ' j' + (depasseHold(l) ? ' — DÉPASSÉ' : '')) : (l.datePrec ? 'En stock depuis le ' + fmtDate(l.datePrec) : '')">{{ joursDepuis(l.datePrec) }}<span v-if="l.holdJ" class="hold-lim"> / {{ l.holdJ }} j</span><span v-if="depasseHold(l)" class="hold-tag">⚠ dépassé</span></td>
                             <td>
                               <span v-if="l.triage" class="qd-tag qd-tri">Triage</span>
                               <span v-if="l.deviation" class="qd-tag qd-fab">Déviation fab.</span>
@@ -1895,6 +1908,10 @@ onMounted(async () => {
 .q-detail-at .qd-tbl .qd-dur { white-space: nowrap; color: #64748b; font-variant-numeric: tabular-nums; }
 .q-detail-at .qd-tbl .qd-dur.age-warn { color: #b45309; font-weight: 700; }
 .q-detail-at .qd-tbl .qd-dur.age-danger { color: #b91c1c; font-weight: 700; }
+.q-detail-at .qd-tbl .qd-dur .hold-lim { color: #94a3b8; font-weight: 500; }
+.q-detail-at .qd-tbl .qd-dur.hold-over { color: #b91c1c; font-weight: 800; background: #fef2f2; }
+.q-detail-at .qd-tbl .qd-dur .hold-tag { display: inline-block; margin-left: 6px; font-size: 9px; font-weight: 800; color: #991b1b; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 3px; padding: 1px 5px; }
+.hold-pill { display: inline-block; margin-left: 8px; font-size: 9.5px; font-weight: 800; color: #991b1b; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 10px; padding: 1px 7px; vertical-align: middle; }
 .q-detail-at > td { background: #f0f9ff; }
 .q-detail-at .qd-tbl td { border-top-color: #bae6fd; }
 .q-detail-at .qd-tbl tbody tr:hover { background: #e0f2fe; }
