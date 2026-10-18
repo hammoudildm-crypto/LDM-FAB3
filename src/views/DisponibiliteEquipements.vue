@@ -1165,11 +1165,11 @@ onMounted(async () => {
               <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">Boîtes</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th></tr></thead>
               <tbody>
                 <template v-for="r in qualiteParAtelier" :key="r.label">
-                  <tr :class="{ 'q-row-open': atelierOuvert === r.label }">
-                    <td class="q-at" :class="{ 'q-clic': r.tot > 0 }" @click="toggleAtelier(r.label, r.tot)" :title="r.tot ? 'Voir les lots de cet atelier' : ''">
+                  <tr :class="{ 'q-row-open': atelierOuvert === r.label, 'q-row-clic': r.tot > 0 }" @click="toggleAtelier(r.label, r.tot)" :title="r.tot ? 'Voir les lots de cet atelier' : ''">
+                    <td class="q-at">
                       <span v-if="r.tot" class="q-caret">{{ atelierOuvert === r.label ? '▾' : '▸' }}</span>{{ r.label }}
                     </td>
-                    <td :class="{ 'q-clic': r.tot > 0 }" @click="toggleAtelier(r.label, r.tot)">
+                    <td>
                       <div class="q-charge">
                         <div class="qc-bar"><div class="qc-fill" :style="{ width: r.pct + '%' }"></div></div>
                         <span class="qc-val">{{ fmt(r.tot) }}<span v-if="r.att" class="qc-att"> · {{ r.att }} att.</span><span v-if="r.enc" class="qc-enc"> · {{ r.enc }} en cours</span></span>
@@ -1177,7 +1177,7 @@ onMounted(async () => {
                     </td>
                     <td class="qnum q-bts" :title="fmt(r.btsAtt) + ' bts en attente · ' + fmt(r.btsEnc) + ' bts en cours'">{{ fmt(r.bts) }} <span class="unit">bts</span></td>
                     <td class="qnum" :class="{ 'q-warn': r.tri > 0 }">{{ r.tri || '—' }}</td>
-                    <td class="qnum" :class="{ 'q-bad': r.dev > 0, 'q-clic': r.dev > 0 }" @click="toggleDev(r.label, r.dev)" :title="r.dev ? 'Voir les lots en déviation' : ''">
+                    <td class="qnum" :class="{ 'q-bad': r.dev > 0, 'q-clic': r.dev > 0 }" @click.stop="toggleDev(r.label, r.dev)" :title="r.dev ? 'Voir les lots en déviation' : ''">
                       {{ r.dev || '—' }}<span v-if="r.dev" class="q-caret">{{ devOuvert === r.label ? '▾' : '▸' }}</span>
                     </td>
                     <td class="qnum" :class="{ 'q-bad': r.pctDev >= 20 }">{{ r.pctDev }}%</td>
@@ -1882,7 +1882,10 @@ onMounted(async () => {
 .qd-cond { background: #ffe4e6; color: #9f1239; }
 .qd-tri { background: #fef3c7; color: #92400e; }
 /* Drill-down « lots de l'atelier » (teinte cyan, distincte des déviations) */
-.q-row-open .q-at { color: #0e7490; }
+.qual-tbl tbody tr.q-row-clic { cursor: pointer; }
+.qual-tbl tbody tr.q-row-clic:hover > td { background: #ecfeff; }
+.q-row-open > td { background: #ecfeff; }
+.q-row-open .q-at { color: #0e7490; font-weight: 700; }
 .q-detail-at > td { background: #f0f9ff; }
 .q-detail-at .qd-tbl td { border-top-color: #bae6fd; }
 .q-detail-at .qd-tbl tbody tr:hover { background: #e0f2fe; }
