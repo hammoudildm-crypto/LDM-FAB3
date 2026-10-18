@@ -10,6 +10,7 @@ const tab = ref('dev')
 
 const MOIS_COURT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
 const CRITICITES = ['Mineure', 'Majeure', 'Critique']
+const TYPES_DEV = ['Produit', 'Non produit']
 const STATUTS_DEV = ['Ouverte', 'En cours', 'Clôturée']
 const ORIGINES_CAPA = ['Déviation', 'Changement', 'Audit', 'Réclamation', 'Autre']
 const TYPES_CAPA = ['Corrective', 'Préventive']
@@ -331,7 +332,7 @@ function appliquerIA() {
           <label class="of-col"><span class="of-lbl">Produit / Lot</span><input v-model="devForm.produit_lot" placeholder="Produit ou n° lot" /></label>
           <label class="of-col"><span class="of-lbl">Zone / Atelier</span><input v-model="devForm.zone" placeholder="Zone de production" /></label>
           <label class="of-col"><span class="of-lbl">Criticité</span><select v-model="devForm.criticite"><option value="">—</option><option v-for="c in CRITICITES" :key="c" :value="c">{{ c }}</option></select></label>
-          <label class="of-col"><span class="of-lbl">Type</span><input v-model="devForm.type" placeholder="Type de déviation" /></label>
+          <label class="of-col"><span class="of-lbl">Type</span><select v-model="devForm.type"><option value="">—</option><option v-for="t in TYPES_DEV" :key="t" :value="t">{{ t }}</option></select></label>
           <label class="of-col"><span class="of-lbl">Origine</span><input v-model="devForm.origine" placeholder="Origine / cause" /></label>
           <label class="of-col"><span class="of-lbl">Responsable</span><input v-model="devForm.responsable" placeholder="Responsable" /></label>
           <label class="of-col"><span class="of-lbl">Statut</span><select v-model="devForm.statut"><option v-for="s in STATUTS_DEV" :key="s" :value="s">{{ s }}</option></select></label>
