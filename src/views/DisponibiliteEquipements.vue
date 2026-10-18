@@ -100,7 +100,7 @@ async function charger() {
   conds.value = rc.data || []
 
   const rs = await fetchAllPaged(() => supabase.from('suivi_phases')
-    .select('ordre_id, phase, statut, date_phase, date_debut, en_triage, triage_debut, triage_fin').eq('actif', true))
+    .select('ordre_id, phase, statut, date_phase, date_debut, equipement_id, en_triage, triage_debut, triage_fin').eq('actif', true))
   if (rs.error) { erreur.value = rs.error.message; chargement.value = false; return }
   suivi.value = rs.data || []
 
@@ -181,6 +181,18 @@ const condEquipIds = computed(() => {
   for (const c of conds.value) if (c.equipement_id) s.add(c.equipement_id)
   return s
 })
+// Code d'un équipement par son id
+const equipCodeMap = computed(() => { const m = {}; for (const e of equipements.value) m[e.id] = e.code || e.nom || ('#' + e.id); return m })
+// Équipements actuellement OCCUPÉS : au moins une phase « En cours » dessus, ou un
+// conditionnement en cours (enregistrement non Terminé/Libéré) sur la ligne.
+const equipOccupeSet = computed(() => {
+  const s = new Set()
+  for (const sp of suivi.value) if (sp.statut === 'En cours' && sp.equipement_id != null) s.add(sp.equipement_id)
+  for (const c of conds.value) if (c.equipement_id != null && c.statut !== 'Terminé' && c.statut !== 'Libéré') s.add(c.equipement_id)
+  return s
+})
+function equipCode(id) { return id != null ? (equipCodeMap.value[id] || ('#' + id)) : '' }
+function equipEtat(id) { return id == null ? null : (equipOccupeSet.value.has(id) ? 'occupé' : 'libre') }
 // Phase d'un équipement : par son type, sinon 'conditionnement' s'il sert au conditionnement
 function phaseEquip(e) {
   const k = phaseDeType(e.type)
@@ -210,7 +222,7 @@ const phasesLot = computed(() => {
     const id = sp.ordre_id, k = phaseKey(sp.phase)
     if (!k) continue
     if (!m[id]) m[id] = {}
-    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut || null }
+    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut || null, equip: sp.equipement_id ?? null }
     const cur = m[id][k]
     if (!cur || sp.statut === 'Terminé') m[id][k] = rec
     const nl = String(sp.phase || '').toLowerCase()
@@ -226,7 +238,7 @@ const phasesLot = computed(() => {
     if (g && g.statut === 'Terminé') {
       const se = sechEtat[id]
       const apres = m[id].compression || m[id].remplissage || m[id].pelliculage || m[id].conditionnement
-      if (se && se.present && !se.termine && !apres) m[id].granulation = { statut: 'En cours', date: g.date }
+      if (se && se.present && !se.termine && !apres) m[id].granulation = { statut: 'En cours', date: g.date, equip: g.equip }
     }
   }
   return m
@@ -319,7 +331,7 @@ const queuePhase = computed(() => {
     const fabTerminee = !!o.date_fin_fabrication || !!(kDern && pl[kDern] && pl[kDern].statut === 'Terminé')
     const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), deviation: deviationIds.value.has(o.id), deviationCond: deviationCondIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !fabTerminee) ? (new Date(o.date_fin_validite) < new Date()) : false,
-      reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null }
+      reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null, equipId: o.equipement_id || null }
     if (directCond) {
       (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, datePrec: o.date_reception || o.date_lancement, date: o.date_lancement || o.date_reception || o.date_fin_fabrication, holdJ: holdFor(o.produit_id, null) })
       continue
@@ -347,9 +359,10 @@ const queuePhase = computed(() => {
       const kPrev = curIdx > 0 ? phaseKey(gamme[curIdx - 1]) : null
       const datePrec = (kPrev && pl[kPrev] && pl[kPrev].date) || o.date_lancement
       const hj = holdFor(o.produit_id, kPrev || 'pesee')
+      const eqCur = (rCur && rCur.equip) || o.equipement_id || null
       if (kCur && q[kCur]) {
-        if (rCur && rCur.statut === 'En cours') q[kCur].cours.push({ ...base, datePrec, date: (rCur && rCur.date) || o.date_lancement, holdJ: hj })
-        else q[kCur].attente.push({ ...base, datePrec, date: (rCur && rCur.date) || o.date_lancement, holdJ: hj })
+        if (rCur && rCur.statut === 'En cours') q[kCur].cours.push({ ...base, datePrec, date: (rCur && rCur.date) || o.date_lancement, holdJ: hj, equipId: eqCur })
+        else q[kCur].attente.push({ ...base, datePrec, date: (rCur && rCur.date) || o.date_lancement, holdJ: hj, equipId: eqCur })
       }
     }
   }
@@ -507,7 +520,7 @@ const qualiteParAtelier = computed(() => {
   const lotMini = (l, statut, pk) => ({
     id: l.id, lot: l.lot, code: l.code, desig: l.desig, boites: l.boites, statut, pk,
     triage: !!(l.triage || l.triageCond), deviation: !!l.deviation, deviationCond: !!l.deviationCond,
-    perime: !!l.perime, validite: l.validite, date: l.date, datePrec: l.datePrec || l.date || null, holdJ: l.holdJ ?? null
+    perime: !!l.perime, validite: l.validite, date: l.date, datePrec: l.datePrec || l.date || null, holdJ: l.holdJ ?? null, equipId: l.equipId ?? null
   })
   const compte = (attente, cours, pk) => {
     let tri = 0
@@ -1215,7 +1228,7 @@ onMounted(async () => {
                     <td colspan="6">
                       <div class="qd-head">Lots de l'atelier « {{ r.label }} » — {{ r.allLots.length }} lot(s)</div>
                       <table class="qd-tbl">
-                        <thead><tr><th>N° lot</th><th>Produit</th><th>Statut</th><th class="qnum">Boîtes</th><th>Fin étape préc.</th><th class="qnum">Durée stockage</th><th class="qnum">Holding time</th><th>État</th></tr></thead>
+                        <thead><tr><th>N° lot</th><th>Produit</th><th>Statut</th><th class="qnum">Boîtes</th><th>Fin étape préc.</th><th class="qnum">Durée stockage</th><th class="qnum">Holding time</th><th>État</th><th>Équipement</th></tr></thead>
                         <tbody>
                           <tr v-for="l in r.allLots" :key="l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de fabrication de ce lot">
                             <td class="qd-lot">{{ l.lot }}<span v-if="l.perime" class="perime-tag">OF périmé</span></td>
@@ -1230,8 +1243,15 @@ onMounted(async () => {
                               <span v-if="l.deviation" class="qd-tag qd-fab">Déviation fab.</span>
                               <span v-if="l.deviationCond" class="qd-tag qd-cond">Déviation cond.</span>
                             </td>
+                            <td class="qd-eq">
+                              <template v-if="l.equipId">
+                                <span class="qd-eqcode">{{ equipCode(l.equipId) }}</span>
+                                <span class="qd-eqet" :class="equipEtat(l.equipId) === 'occupé' ? 'eq-occ' : 'eq-lib'">{{ equipEtat(l.equipId) }}</span>
+                              </template>
+                              <span v-else class="qd-eqnone">—</span>
+                            </td>
                           </tr>
-                          <tr v-if="!r.allLots.length"><td colspan="8" class="qd-empty">Aucun lot dans cet atelier.</td></tr>
+                          <tr v-if="!r.allLots.length"><td colspan="9" class="qd-empty">Aucun lot dans cet atelier.</td></tr>
                         </tbody>
                       </table>
                     </td>
@@ -1926,6 +1946,12 @@ onMounted(async () => {
 .q-detail-at .qd-tbl .qd-dur.hold-over, .q-detail-at .qd-tbl .qd-hold.hold-over { color: #b91c1c; font-weight: 800; background: #fef2f2; }
 .q-detail-at .qd-tbl .qd-dur .hold-tag { display: inline-block; margin-left: 6px; font-size: 9px; font-weight: 800; color: #991b1b; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 3px; padding: 1px 5px; }
 .hold-pill { display: inline-block; margin-left: 8px; font-size: 9.5px; font-weight: 800; color: #991b1b; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 10px; padding: 1px 7px; vertical-align: middle; }
+.q-detail-at .qd-tbl .qd-eq { white-space: nowrap; }
+.q-detail-at .qd-tbl .qd-eqcode { font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
+.q-detail-at .qd-tbl .qd-eqet { display: inline-block; margin-left: 6px; font-size: 9px; font-weight: 800; border-radius: 3px; padding: 1px 5px; }
+.q-detail-at .qd-tbl .qd-eqet.eq-occ { color: #9a3412; background: #ffedd5; border: 1px solid #fdba74; }
+.q-detail-at .qd-tbl .qd-eqet.eq-lib { color: #166534; background: #dcfce7; border: 1px solid #86efac; }
+.q-detail-at .qd-tbl .qd-eqnone { color: #94a3b8; }
 .q-detail-at > td { background: #f0f9ff; }
 .q-detail-at .qd-tbl td { border-top-color: #bae6fd; }
 .q-detail-at .qd-tbl tbody tr:hover { background: #e0f2fe; }
