@@ -75,7 +75,14 @@ async function devEnregistrer() {
   erreur.value = ''; message.value = ''
   if (!devForm.description.trim()) { erreur.value = 'La description est obligatoire.'; return }
   const payload = { numero: (devForm.numero || prochainDev.value).trim(), date_dev: devForm.date_dev || null, produit_lot: devForm.produit_lot || null, zone: devForm.zone || null, criticite: devForm.criticite || null, type: devForm.type || null, description: devForm.description.trim(), origine: devForm.origine || null, responsable: devForm.responsable || null, statut: devForm.statut || 'Ouverte', capa_liee: devForm.capa_liee || null, ishikawa: devForm.ishikawa, cinq_pourquoi: devForm.cinq_pourquoi, cause_racine: devForm.cause_racine || null }
-  const r = devForm.id ? await supabase.from('deviations').update(payload).eq('id', devForm.id) : await supabase.from('deviations').insert(payload)
+  let r = devForm.id ? await supabase.from('deviations').update(payload).eq('id', devForm.id) : await supabase.from('deviations').insert(payload)
+  // Repli non bloquant : si les colonnes d'analyse des causes racines n'existent pas
+  // encore dans la table deviations, on enregistre la déviation sans ces champs.
+  if (r.error && /ishikawa|cinq_pourquoi|cause_racine/.test(r.error.message || '')) {
+    const { ishikawa, cinq_pourquoi, cause_racine, ...base } = payload
+    r = devForm.id ? await supabase.from('deviations').update(base).eq('id', devForm.id) : await supabase.from('deviations').insert(base)
+    if (!r.error) { erreur.value = 'Déviation enregistrée, mais l\'analyse des causes racines (Ishikawa, 5 Pourquoi, cause racine) n\'a pas pu être sauvegardée : ajoutez les colonnes ishikawa (jsonb), cinq_pourquoi (jsonb) et cause_racine (text) à la table deviations dans Supabase.'; devReset(); await charger(); return }
+  }
   if (r.error) { erreur.value = r.error.message; return }
   message.value = devForm.id ? 'Déviation mise à jour.' : 'Déviation enregistrée.'; devReset(); await charger()
 }
