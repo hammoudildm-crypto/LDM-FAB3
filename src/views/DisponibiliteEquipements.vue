@@ -1202,7 +1202,7 @@ onMounted(async () => {
                     <td colspan="6">
                       <div class="qd-head">Lots de l'atelier « {{ r.label }} » — {{ r.allLots.length }} lot(s)</div>
                       <table class="qd-tbl">
-                        <thead><tr><th>N° lot</th><th>Produit</th><th>Statut</th><th class="qnum">Boîtes</th><th>Fin étape préc.</th><th class="qnum">Durée stockage</th><th>État</th></tr></thead>
+                        <thead><tr><th>N° lot</th><th>Produit</th><th>Statut</th><th class="qnum">Boîtes</th><th>Fin étape préc.</th><th class="qnum">Durée stockage</th><th class="qnum">Holding time</th><th>État</th></tr></thead>
                         <tbody>
                           <tr v-for="l in r.allLots" :key="l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de fabrication de ce lot">
                             <td class="qd-lot">{{ l.lot }}<span v-if="l.perime" class="perime-tag">OF périmé</span></td>
@@ -1210,14 +1210,15 @@ onMounted(async () => {
                             <td><span class="qd-st" :class="l.statut === 'en cours' ? 'st-enc' : 'st-att'">{{ l.statut }}</span></td>
                             <td class="qnum">{{ fmt(l.boites) }}</td>
                             <td class="qd-date" :title="l.datePrec ? 'Étape précédente terminée le ' + fmtDate(l.datePrec) : 'Date non renseignée'">{{ fmtDate(l.datePrec) }}</td>
-                            <td class="qnum qd-dur" :class="[ageClass(l.datePrec), { 'hold-over': depasseHold(l) }]" :title="l.holdJ ? ('Holding time : ' + l.holdJ + ' j' + (depasseHold(l) ? ' — DÉPASSÉ' : '')) : (l.datePrec ? 'En stock depuis le ' + fmtDate(l.datePrec) : '')">{{ joursDepuis(l.datePrec) }}<span v-if="l.holdJ" class="hold-lim"> / {{ l.holdJ }} j</span><span v-if="depasseHold(l)" class="hold-tag">⚠ dépassé</span></td>
+                            <td class="qnum qd-dur" :class="[ageClass(l.datePrec), { 'hold-over': depasseHold(l) }]" :title="l.datePrec ? 'En stock depuis le ' + fmtDate(l.datePrec) : ''">{{ joursDepuis(l.datePrec) }}<span v-if="depasseHold(l)" class="hold-tag">⚠ dépassé</span></td>
+                            <td class="qnum qd-hold" :class="{ 'hold-over': depasseHold(l) }" :title="l.holdJ ? 'Holding time de stockage du produit : ' + l.holdJ + ' j' : 'Holding time non renseigné pour ce produit'">{{ l.holdJ ? l.holdJ + ' j' : '—' }}</td>
                             <td>
                               <span v-if="l.triage" class="qd-tag qd-tri">Triage</span>
                               <span v-if="l.deviation" class="qd-tag qd-fab">Déviation fab.</span>
                               <span v-if="l.deviationCond" class="qd-tag qd-cond">Déviation cond.</span>
                             </td>
                           </tr>
-                          <tr v-if="!r.allLots.length"><td colspan="7" class="qd-empty">Aucun lot dans cet atelier.</td></tr>
+                          <tr v-if="!r.allLots.length"><td colspan="8" class="qd-empty">Aucun lot dans cet atelier.</td></tr>
                         </tbody>
                       </table>
                     </td>
@@ -1908,8 +1909,8 @@ onMounted(async () => {
 .q-detail-at .qd-tbl .qd-dur { white-space: nowrap; color: #64748b; font-variant-numeric: tabular-nums; }
 .q-detail-at .qd-tbl .qd-dur.age-warn { color: #b45309; font-weight: 700; }
 .q-detail-at .qd-tbl .qd-dur.age-danger { color: #b91c1c; font-weight: 700; }
-.q-detail-at .qd-tbl .qd-dur .hold-lim { color: #94a3b8; font-weight: 500; }
-.q-detail-at .qd-tbl .qd-dur.hold-over { color: #b91c1c; font-weight: 800; background: #fef2f2; }
+.q-detail-at .qd-tbl .qd-hold { white-space: nowrap; color: #475569; font-variant-numeric: tabular-nums; }
+.q-detail-at .qd-tbl .qd-dur.hold-over, .q-detail-at .qd-tbl .qd-hold.hold-over { color: #b91c1c; font-weight: 800; background: #fef2f2; }
 .q-detail-at .qd-tbl .qd-dur .hold-tag { display: inline-block; margin-left: 6px; font-size: 9px; font-weight: 800; color: #991b1b; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 3px; padding: 1px 5px; }
 .hold-pill { display: inline-block; margin-left: 8px; font-size: 9.5px; font-weight: 800; color: #991b1b; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 10px; padding: 1px 7px; vertical-align: middle; }
 .q-detail-at > td { background: #f0f9ff; }
