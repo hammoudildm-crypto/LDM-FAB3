@@ -181,8 +181,9 @@ const condEquipIds = computed(() => {
   for (const c of conds.value) if (c.equipement_id) s.add(c.equipement_id)
   return s
 })
-// Code d'un équipement par son id
+// Code et désignation d'un équipement par son id
 const equipCodeMap = computed(() => { const m = {}; for (const e of equipements.value) m[e.id] = e.code || e.nom || ('#' + e.id); return m })
+const equipNomMap = computed(() => { const m = {}; for (const e of equipements.value) m[e.id] = e.nom || ''; return m })
 // Équipements actuellement OCCUPÉS : au moins une phase « En cours » dessus, ou un
 // conditionnement en cours (enregistrement non Terminé/Libéré) sur la ligne.
 const equipOccupeSet = computed(() => {
@@ -192,6 +193,7 @@ const equipOccupeSet = computed(() => {
   return s
 })
 function equipCode(id) { return id != null ? (equipCodeMap.value[id] || ('#' + id)) : '' }
+function equipNom(id) { return id != null ? (equipNomMap.value[id] || '') : '' }
 function equipEtat(id) { return id == null ? null : (equipOccupeSet.value.has(id) ? 'occupé' : 'libre') }
 // Phase d'un équipement : par son type, sinon 'conditionnement' s'il sert au conditionnement
 function phaseEquip(e) {
@@ -359,7 +361,7 @@ const queuePhase = computed(() => {
       const kPrev = curIdx > 0 ? phaseKey(gamme[curIdx - 1]) : null
       const datePrec = (kPrev && pl[kPrev] && pl[kPrev].date) || o.date_lancement
       const hj = holdFor(o.produit_id, kPrev || 'pesee')
-      const eqCur = (rCur && rCur.equip) || o.equipement_id || null
+      const eqCur = (rCur && rCur.equip) || null   // strictement l'équipement de la phase en cours
       if (kCur && q[kCur]) {
         if (rCur && rCur.statut === 'En cours') q[kCur].cours.push({ ...base, datePrec, date: (rCur && rCur.date) || o.date_lancement, holdJ: hj, equipId: eqCur })
         else q[kCur].attente.push({ ...base, datePrec, date: (rCur && rCur.date) || o.date_lancement, holdJ: hj, equipId: eqCur })
@@ -1245,8 +1247,8 @@ onMounted(async () => {
                             </td>
                             <td class="qd-eq">
                               <template v-if="l.equipId">
-                                <span class="qd-eqcode">{{ equipCode(l.equipId) }}</span>
-                                <span class="qd-eqet" :class="equipEtat(l.equipId) === 'occupé' ? 'eq-occ' : 'eq-lib'">{{ equipEtat(l.equipId) }}</span>
+                                <div class="qd-eqline"><span class="qd-eqcode">{{ equipCode(l.equipId) }}</span><span class="qd-eqet" :class="equipEtat(l.equipId) === 'occupé' ? 'eq-occ' : 'eq-lib'">{{ equipEtat(l.equipId) }}</span></div>
+                                <div v-if="equipNom(l.equipId)" class="qd-eqnom">{{ equipNom(l.equipId) }}</div>
                               </template>
                               <span v-else class="qd-eqnone">—</span>
                             </td>
@@ -1947,6 +1949,8 @@ onMounted(async () => {
 .q-detail-at .qd-tbl .qd-dur .hold-tag { display: inline-block; margin-left: 6px; font-size: 9px; font-weight: 800; color: #991b1b; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 3px; padding: 1px 5px; }
 .hold-pill { display: inline-block; margin-left: 8px; font-size: 9.5px; font-weight: 800; color: #991b1b; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 10px; padding: 1px 7px; vertical-align: middle; }
 .q-detail-at .qd-tbl .qd-eq { white-space: nowrap; }
+.q-detail-at .qd-tbl .qd-eqline { display: flex; align-items: center; gap: 6px; }
+.q-detail-at .qd-tbl .qd-eqnom { font-size: 10px; color: #64748b; margin-top: 1px; }
 .q-detail-at .qd-tbl .qd-eqcode { font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
 .q-detail-at .qd-tbl .qd-eqet { display: inline-block; margin-left: 6px; font-size: 9px; font-weight: 800; border-radius: 3px; padding: 1px 5px; }
 .q-detail-at .qd-tbl .qd-eqet.eq-occ { color: #9a3412; background: #ffedd5; border: 1px solid #fdba74; }
