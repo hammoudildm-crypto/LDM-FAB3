@@ -480,6 +480,11 @@ const qualiteAnnee = computed(() => {
 })
 // Répartition par atelier sur les lots actuellement en file (attente + en cours)
 const qualiteParAtelier = computed(() => {
+  const lotMini = (l, statut, pk) => ({
+    id: l.id, lot: l.lot, code: l.code, desig: l.desig, boites: l.boites, statut, pk,
+    triage: !!(l.triage || l.triageCond), deviation: !!l.deviation, deviationCond: !!l.deviationCond,
+    perime: !!l.perime, validite: l.validite, date: l.date
+  })
   const compte = (attente, cours, pk) => {
     let tri = 0
     const devLots = []
@@ -487,10 +492,11 @@ const qualiteParAtelier = computed(() => {
       if (l.triage || l.triageCond) tri++
       if (l.deviation || l.deviationCond) devLots.push({ id: l.id, lot: l.lot, code: l.code, desig: l.desig, deviation: !!l.deviation, deviationCond: !!l.deviationCond, pk })
     }
+    const allLots = [...attente.map(l => lotMini(l, 'attente', pk)), ...cours.map(l => lotMini(l, 'en cours', pk))]
     const bts = (arr) => arr.reduce((n, l) => n + (Number(l.boites) || 0), 0)
     return { tot: attente.length + cours.length, att: attente.length, enc: cours.length,
       bts: bts(attente) + bts(cours), btsAtt: bts(attente), btsEnc: bts(cours),
-      tri, dev: devLots.length, devLots }
+      tri, dev: devLots.length, devLots, allLots }
   }
   const rows = []
   const pes = attentePeseeList.value.map(l => ({
@@ -511,7 +517,10 @@ const qualiteParAtelier = computed(() => {
 })
 // Dépliage du détail des lots en déviation (clic sur la colonne « Avec déviation »)
 const devOuvert = ref(null)
-function toggleDev(label, n) { if (!n) return; devOuvert.value = devOuvert.value === label ? null : label }
+function toggleDev(label, n) { if (!n) return; atelierOuvert.value = null; devOuvert.value = devOuvert.value === label ? null : label }
+// Dépliage de TOUS les lots d'un atelier (clic sur la ligne de l'atelier)
+const atelierOuvert = ref(null)
+function toggleAtelier(label, n) { if (!n) return; devOuvert.value = null; atelierOuvert.value = atelierOuvert.value === label ? null : label }
 const devLotsTous = computed(() => {
   const out = []
   for (const r of qualiteParAtelier.value) for (const l of r.devLots) out.push({ ...l, atelier: r.label })
@@ -1156,9 +1165,11 @@ onMounted(async () => {
               <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">Boîtes</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th></tr></thead>
               <tbody>
                 <template v-for="r in qualiteParAtelier" :key="r.label">
-                  <tr>
-                    <td class="q-at">{{ r.label }}</td>
-                    <td>
+                  <tr :class="{ 'q-row-open': atelierOuvert === r.label }">
+                    <td class="q-at" :class="{ 'q-clic': r.tot > 0 }" @click="toggleAtelier(r.label, r.tot)" :title="r.tot ? 'Voir les lots de cet atelier' : ''">
+                      <span v-if="r.tot" class="q-caret">{{ atelierOuvert === r.label ? '▾' : '▸' }}</span>{{ r.label }}
+                    </td>
+                    <td :class="{ 'q-clic': r.tot > 0 }" @click="toggleAtelier(r.label, r.tot)">
                       <div class="q-charge">
                         <div class="qc-bar"><div class="qc-fill" :style="{ width: r.pct + '%' }"></div></div>
                         <span class="qc-val">{{ fmt(r.tot) }}<span v-if="r.att" class="qc-att"> · {{ r.att }} att.</span><span v-if="r.enc" class="qc-enc"> · {{ r.enc }} en cours</span></span>
@@ -1170,6 +1181,28 @@ onMounted(async () => {
                       {{ r.dev || '—' }}<span v-if="r.dev" class="q-caret">{{ devOuvert === r.label ? '▾' : '▸' }}</span>
                     </td>
                     <td class="qnum" :class="{ 'q-bad': r.pctDev >= 20 }">{{ r.pctDev }}%</td>
+                  </tr>
+                  <tr v-if="atelierOuvert === r.label" class="q-detail q-detail-at">
+                    <td colspan="6">
+                      <div class="qd-head">Lots de l'atelier « {{ r.label }} » — {{ r.allLots.length }} lot(s)</div>
+                      <table class="qd-tbl">
+                        <thead><tr><th>N° lot</th><th>Produit</th><th>Statut</th><th class="qnum">Boîtes</th><th>État</th></tr></thead>
+                        <tbody>
+                          <tr v-for="l in r.allLots" :key="l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de fabrication de ce lot">
+                            <td class="qd-lot">{{ l.lot }}<span v-if="l.perime" class="perime-tag">OF périmé</span></td>
+                            <td>{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></td>
+                            <td><span class="qd-st" :class="l.statut === 'en cours' ? 'st-enc' : 'st-att'">{{ l.statut }}</span></td>
+                            <td class="qnum">{{ fmt(l.boites) }}</td>
+                            <td>
+                              <span v-if="l.triage" class="qd-tag qd-tri">Triage</span>
+                              <span v-if="l.deviation" class="qd-tag qd-fab">Déviation fab.</span>
+                              <span v-if="l.deviationCond" class="qd-tag qd-cond">Déviation cond.</span>
+                            </td>
+                          </tr>
+                          <tr v-if="!r.allLots.length"><td colspan="5" class="qd-empty">Aucun lot dans cet atelier.</td></tr>
+                        </tbody>
+                      </table>
+                    </td>
                   </tr>
                   <tr v-if="devOuvert === r.label" class="q-detail">
                     <td colspan="6">
@@ -1847,6 +1880,18 @@ onMounted(async () => {
 .qd-tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; margin-right: 4px; }
 .qd-fab { background: #fee2e2; color: #b91c1c; }
 .qd-cond { background: #ffe4e6; color: #9f1239; }
+.qd-tri { background: #fef3c7; color: #92400e; }
+/* Drill-down « lots de l'atelier » (teinte cyan, distincte des déviations) */
+.q-row-open .q-at { color: #0e7490; }
+.q-detail-at > td { background: #f0f9ff; }
+.q-detail-at .qd-tbl td { border-top-color: #bae6fd; }
+.q-detail-at .qd-tbl tbody tr:hover { background: #e0f2fe; }
+.q-detail-at .qd-tbl .qnum { text-align: right; }
+.qd-head { font-size: 11px; font-weight: 700; color: #0e7490; margin-bottom: 6px; }
+.qd-st { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
+.st-enc { background: #dcfce7; color: #166534; }
+.st-att { background: #e2e8f0; color: #475569; }
+.qd-empty { text-align: center; color: #94a3b8; font-style: italic; }
 /* Lots en cours de triage */
 .triage-box { background: #fef3c7; border: 1px solid #fde68a; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
 .triage-h { margin: 0 0 10px; font-size: 15px; font-weight: 800; color: #92400e; }
