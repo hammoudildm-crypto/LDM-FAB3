@@ -291,6 +291,24 @@ const evoEffectif = computed(() => {
   return pts
 })
 const evoMax = computed(() => Math.max(1, ...evoEffectif.value.map(p => p.n)))
+// Entrées / sorties par mois de l'année sélectionnée (pour préciser l'évolution)
+const mouvParMois = computed(() => {
+  const list = orgPerimRaw.value, y = mouvAnnee.value
+  const m = Array.from({ length: 12 }, (_, i) => ({ mois: i, entrees: 0, sorties: 0 }))
+  for (const n of list) {
+    if (n.date_recrutement) { const r = new Date(n.date_recrutement); if (!isNaN(r) && r.getFullYear() === y) m[r.getMonth()].entrees++ }
+    if (n.date_sortie) { const sd = new Date(n.date_sortie); if (!isNaN(sd) && sd.getFullYear() === y) m[sd.getMonth()].sorties++ }
+  }
+  return m
+})
+// Entrées nominatives de l'année (symétrique à « partis » pour les sorties)
+const entreesAnnee = computed(() => {
+  const y = mouvAnnee.value
+  return orgPerimRaw.value
+    .filter(n => { if (!n.date_recrutement) return false; const r = new Date(n.date_recrutement); return !isNaN(r) && r.getFullYear() === y })
+    .map(n => ({ id: n.id, nom: n.nom, fonction: n.fonction, contrat: n.contrat, date: n.date_recrutement }))
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+})
 
 function exportPDF() {
   const now = new Date().toLocaleString('fr-FR')
@@ -771,6 +789,26 @@ onMounted(chargerTout)
               <div class="evo-b-val">{{ p.n }}</div>
               <div class="evo-b-bar" :style="{ height: Math.max(3, p.n / evoMax * 72) + 'px' }"></div>
               <div class="evo-b-lbl">{{ MOIS_COURT[p.mois] }}</div>
+              <div class="evo-b-mv">
+                <span v-if="mouvParMois[p.mois].entrees" class="evo-in" :title="mouvParMois[p.mois].entrees + ' entrée(s) en ' + MOIS_COURT[p.mois]">+{{ mouvParMois[p.mois].entrees }}</span>
+                <span v-if="mouvParMois[p.mois].sorties" class="evo-out" :title="mouvParMois[p.mois].sorties + ' sortie(s) en ' + MOIS_COURT[p.mois]">−{{ mouvParMois[p.mois].sorties }}</span>
+                <span v-if="!mouvParMois[p.mois].entrees && !mouvParMois[p.mois].sorties" class="evo-nil">·</span>
+              </div>
+            </div>
+          </div>
+          <div class="evo-legende"><span class="evo-in">+ entrées</span> · <span class="evo-out">− sorties</span> par mois</div>
+        </div>
+        <div v-if="entreesAnnee.length" class="partis-wrap">
+          <div class="evo-title">Entrées enregistrées · {{ mouvAnnee }} <span class="count">{{ entreesAnnee.length }}</span></div>
+          <div class="ret-list">
+            <div v-for="n in entreesAnnee" :key="n.id" class="parti-row">
+              <span class="rr-nom">{{ n.nom }}</span>
+              <span class="rr-fct" v-if="n.fonction">· {{ n.fonction }}</span>
+              <span class="parti-right">
+                <span class="rr-motif" v-if="n.contrat">{{ n.contrat }}</span>
+                <span class="parti-date entree-date">{{ fmtD(n.date) }}</span>
+                <button v-if="peutEditer" class="lien-edit" @click="orgModifier(orgPerimRaw.find(x => x.id === n.id))">Modifier</button>
+              </span>
             </div>
           </div>
         </div>
@@ -1052,11 +1090,17 @@ onMounted(chargerTout)
 .mk-out .mk-v { color: #dc2626; }
 .evo-wrap, .partis-wrap { margin-top: 20px; }
 .evo-title { font-size: 12px; font-weight: 800; color: #475569; margin-bottom: 12px; }
-.evo-bars { display: flex; align-items: flex-end; gap: 6px; height: 104px; }
+.evo-bars { display: flex; align-items: flex-end; gap: 6px; min-height: 116px; }
 .evo-b { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; }
 .evo-b-val { font-size: 10px; font-weight: 800; color: #475569; }
 .evo-b-bar { width: 100%; max-width: 34px; background: linear-gradient(180deg, #14b8a6, #0d9488); border-radius: 4px 4px 0 0; transition: height .3s ease; }
 .evo-b-lbl { font-size: 9.5px; color: #94a3b8; font-weight: 700; }
+.evo-b-mv { display: flex; gap: 4px; align-items: center; min-height: 13px; font-size: 9px; font-weight: 800; }
+.evo-in { color: #15803d; }
+.evo-out { color: #dc2626; }
+.evo-nil { color: #d1d5db; font-weight: 700; }
+.evo-legende { margin-top: 10px; font-size: 10px; color: #94a3b8; font-weight: 700; }
+.entree-date { color: #15803d; font-weight: 700; }
 .parti-row { display: flex; align-items: center; gap: 6px; padding: 7px 2px; border-top: 1px solid #f1f5f9; font-size: 13px; }
 .parti-right { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .parti-date { color: #64748b; font-size: 11.5px; }
