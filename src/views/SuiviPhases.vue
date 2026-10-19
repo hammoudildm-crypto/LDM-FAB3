@@ -393,6 +393,23 @@ const aqlParPhase = computed(() => {
   return m
 })
 function estEligibleAql(ph) { return phasesEligibles.value.includes(ph) }
+// Diagnostic : lot marqué « en déviation » au niveau du lot, alors qu'aucune étape
+// active ne porte de déviation (indicateur resté actif / ancienne donnée).
+const devOrpheline = computed(() => {
+  const lot = lotSelectionne.value
+  if (!lot || !lot.deviation) return false
+  return !(phases.value || []).some(p => !!p.deviation)
+})
+async function resyncDeviation() {
+  if (!lotId.value) return
+  erreur.value = ''; message.value = ''
+  await majDatesLot(lotId.value)
+  await chargerBase()
+  await chargerPhases()
+  message.value = devOrpheline.value
+    ? 'Resynchronisation effectuée, mais le lot reste marqué en déviation (vérifie une éventuelle déviation de conditionnement sur « Ordres de fabrication »).'
+    : 'Statut de déviation du lot resynchronisé depuis les étapes : plus aucune déviation active.'
+}
 async function enregistrerAql() {
   erreur.value = ''; message.value = ''
   const p = planAql.value
@@ -513,6 +530,10 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
       </section>
 
       <template v-if="lotId">
+        <p v-if="devOrpheline" class="dev-orph">
+          ⚠ Ce lot est marqué <strong>en déviation</strong> au niveau du lot, mais aucune étape active ne porte de déviation. C'est probablement un indicateur resté actif (ancienne donnée) ou une déviation de conditionnement déclarée sur « Ordres de fabrication ».
+          <button v-if="peutEditer" class="dev-orph-btn" @click="resyncDeviation">Resynchroniser le statut</button>
+        </p>
         <section class="card" v-if="peutEditer">
           <h2 class="card-title">{{ form.id ? 'Modifier la phase' : 'Ajouter une phase' }}</h2>
           <div class="form-grid">
@@ -747,6 +768,9 @@ button.link.danger { color: #b91c1c; }
 .aql-attente { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; border-radius: 11px; padding: 2px 7px; }
 .aql-na { color: #cbd5e1; }
 .aql-fin-dot { color: #0ea5e9; font-size: 10px; }
+.dev-orph { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 8px; padding: 9px 12px; font-size: 12.5px; margin: 0 0 12px; }
+.dev-orph-btn { border: 1px solid #d97706; background: #fff; color: #92400e; font-weight: 700; font-size: 12px; border-radius: 6px; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+.dev-orph-btn:hover { background: #fef3c7; }
 .aql-pied { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
 .aql-com { flex: 1; min-width: 220px; padding: 7px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
 .aql-verdict { font-size: 14px; }
