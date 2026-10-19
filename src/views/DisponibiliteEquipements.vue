@@ -331,9 +331,11 @@ const queuePhase = computed(() => {
     // Fabrication finie = dernière phase de la gamme du produit terminée (critère fiable, pas la date).
     const kDern = gamme.length ? phaseKey(gamme[gamme.length - 1]) : null
     const fabTerminee = !!o.date_fin_fabrication || !!(kDern && pl[kDern] && pl[kDern].statut === 'Terminé')
+    // Statut AQL du vrac = verdict du contrôle AQL sur la dernière étape de fabrication
+    const aqlVrac = (kDern && aqlParOrdrePhase.value[o.id]) ? (aqlParOrdrePhase.value[o.id][kDern] ?? null) : null
     const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), deviation: deviationIds.value.has(o.id), deviationCond: deviationCondIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !fabTerminee) ? (new Date(o.date_fin_validite) < new Date()) : false,
-      reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null, equipId: o.equipement_id || null }
+      reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null, equipId: o.equipement_id || null, aqlVrac }
     if (directCond) {
       (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, datePrec: o.date_reception || o.date_lancement, date: o.date_lancement || o.date_reception || o.date_fin_fabrication, holdJ: holdFor(o.produit_id, null) })
       continue
@@ -522,7 +524,7 @@ const qualiteParAtelier = computed(() => {
   const lotMini = (l, statut, pk) => ({
     id: l.id, lot: l.lot, code: l.code, desig: l.desig, boites: l.boites, statut, pk,
     triage: !!(l.triage || l.triageCond), deviation: !!l.deviation, deviationCond: !!l.deviationCond,
-    perime: !!l.perime, validite: l.validite, date: l.date, datePrec: l.datePrec || l.date || null, holdJ: l.holdJ ?? null, equipId: l.equipId ?? null
+    perime: !!l.perime, validite: l.validite, date: l.date, datePrec: l.datePrec || l.date || null, holdJ: l.holdJ ?? null, equipId: l.equipId ?? null, aqlVrac: l.aqlVrac ?? null
   })
   const compte = (attente, cours, pk) => {
     let tri = 0
@@ -672,6 +674,13 @@ async function chargerControlesAql() {
   // Table absente (migration 006 non passée) : on n'affiche rien plutôt que de casser la page.
   controlesAql.value = r.error || !Array.isArray(r.data) ? [] : r.data
 }
+// Verdict AQL le plus récent par (ordre, clé de phase) — sert au « statut AQL vrac »
+const aqlParOrdrePhase = computed(() => {
+  const rows = [...controlesAql.value].sort((a, b) => String(b.controle_le || '').localeCompare(String(a.controle_le || '')))
+  const m = {}
+  for (const c of rows) { const k = phaseKey(c.phase); if (!k) continue; if (!m[c.ordre_id]) m[c.ordre_id] = {}; if (!(k in m[c.ordre_id])) m[c.ordre_id][k] = c.verdict }
+  return m
+})
 const aqlStats = computed(() => {
   const liste = Array.isArray(controlesAql.value) ? controlesAql.value : []
   const annee = liste.filter(x => x.controle_le && new Date(x.controle_le).getFullYear() === anneeCourante)
@@ -1230,7 +1239,7 @@ onMounted(async () => {
                     <td colspan="6">
                       <div class="qd-head">Lots de l'atelier « {{ r.label }} » — {{ r.allLots.length }} lot(s)</div>
                       <table class="qd-tbl">
-                        <thead><tr><th>N° lot</th><th>Produit</th><th>Statut</th><th class="qnum">Boîtes</th><th>Fin étape préc.</th><th class="qnum">Durée stockage</th><th class="qnum">Holding time</th><th>État</th><th>Équipement</th></tr></thead>
+                        <thead><tr><th>N° lot</th><th>Produit</th><th>Statut</th><th class="qnum">Boîtes</th><th>Fin étape préc.</th><th class="qnum">Durée stockage</th><th class="qnum">Holding time</th><th>État</th><th>Équipement</th><th v-if="r.label === 'Conditionnement'">Statut AQL vrac</th></tr></thead>
                         <tbody>
                           <tr v-for="l in r.allLots" :key="l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de fabrication de ce lot">
                             <td class="qd-lot">{{ l.lot }}<span v-if="l.perime" class="perime-tag">OF périmé</span></td>
@@ -1252,8 +1261,12 @@ onMounted(async () => {
                               </template>
                               <span v-else class="qd-eqnone">—</span>
                             </td>
+                            <td v-if="r.label === 'Conditionnement'" class="qd-aqlv">
+                              <span v-if="l.aqlVrac" class="qd-aqlv-badge" :class="l.aqlVrac === 'Refusé' ? 'av-ko' : 'av-ok'">{{ l.aqlVrac }}</span>
+                              <span v-else class="qd-aqlv-none" title="Aucun contrôle AQL sur la dernière étape de fabrication">non contrôlé</span>
+                            </td>
                           </tr>
-                          <tr v-if="!r.allLots.length"><td colspan="9" class="qd-empty">Aucun lot dans cet atelier.</td></tr>
+                          <tr v-if="!r.allLots.length"><td :colspan="r.label === 'Conditionnement' ? 10 : 9" class="qd-empty">Aucun lot dans cet atelier.</td></tr>
                         </tbody>
                       </table>
                     </td>
@@ -1956,6 +1969,11 @@ onMounted(async () => {
 .q-detail-at .qd-tbl .qd-eqet.eq-occ { color: #9a3412; background: #ffedd5; border: 1px solid #fdba74; }
 .q-detail-at .qd-tbl .qd-eqet.eq-lib { color: #166534; background: #dcfce7; border: 1px solid #86efac; }
 .q-detail-at .qd-tbl .qd-eqnone { color: #94a3b8; }
+.q-detail-at .qd-tbl .qd-aqlv { white-space: nowrap; }
+.q-detail-at .qd-tbl .qd-aqlv-badge { display: inline-block; font-size: 9px; font-weight: 800; border-radius: 11px; padding: 2px 8px; }
+.q-detail-at .qd-tbl .qd-aqlv-badge.av-ok { color: #15803d; background: #dcfce7; border: 1px solid #86efac; }
+.q-detail-at .qd-tbl .qd-aqlv-badge.av-ko { color: #b91c1c; background: #fee2e2; border: 1px solid #fca5a5; }
+.q-detail-at .qd-tbl .qd-aqlv-none { font-size: 10px; color: #94a3b8; font-style: italic; }
 .q-detail-at > td { background: #f0f9ff; }
 .q-detail-at .qd-tbl td { border-top-color: #bae6fd; }
 .q-detail-at .qd-tbl tbody tr:hover { background: #e0f2fe; }

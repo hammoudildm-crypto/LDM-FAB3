@@ -436,7 +436,7 @@ async function enregistrerAql() {
     aql: aqlForm.aql, ac: p.ac, re: p.re, defauts: Number(aqlForm.defauts) || 0,
     verdict: verdictAql.value, commentaire: aqlForm.commentaire.trim() || null, controle_par: email
   })
-  if (r.error) { erreur.value = r.error.message; return }
+  if (r.error) { erreur.value = /controles_aql/.test(r.error.message || '') ? 'La table « controles_aql » n\'existe pas encore dans la base : crée-la dans Supabase pour activer l\'enregistrement des contrôles AQL.' : r.error.message; return }
   message.value = 'Contrôle AQL enregistré : ' + verdictAql.value + '.'
   aqlForm.defauts = 0; aqlForm.commentaire = ''
   await chargerAql()
