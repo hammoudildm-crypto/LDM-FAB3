@@ -347,7 +347,7 @@ const repartContrat = computed(() => {
 // Effectif par atelier / périmètre
 const repartAtelier = computed(() => {
   const m = {}
-  for (const n of orgNodesAffiches.value) { const k = n.atelier_id || '—'; m[k] = (m[k] || 0) + 1 }
+  for (const n of orgNodesAffiches.value) { const k = n.atelier_id || 'Non renseigné'; m[k] = (m[k] || 0) + 1 }
   return Object.entries(m).map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n).slice(0, 12)
 })
 const repartAtelierMax = computed(() => Math.max(1, ...repartAtelier.value.map(b => b.n)))
@@ -1175,8 +1175,8 @@ onMounted(chargerTout)
 .leg-row b { color: #0f172a; }
 .leg-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
 .hbars { display: flex; flex-direction: column; gap: 7px; }
-.hbar-row { display: grid; grid-template-columns: 130px 1fr 34px; align-items: center; gap: 8px; font-size: 12px; }
-.hbar-lbl { color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hbar-row { display: grid; grid-template-columns: 160px 1fr 34px; align-items: center; gap: 8px; font-size: 12px; }
+.hbar-lbl { color: #334155; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
 .hbar-track { background: #eef2f6; border-radius: 6px; height: 14px; overflow: hidden; }
 .hbar-fill { display: block; height: 100%; background: linear-gradient(90deg, #14b8a6, #0d9488); border-radius: 6px; }
 .hbar-val { text-align: right; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
