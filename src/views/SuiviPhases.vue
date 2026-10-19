@@ -120,7 +120,7 @@ async function fetchAllPaged(make) {
 async function chargerBase() {
   erreur.value = ''
   const rl = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, produit_id, quantite_theorique, statut, produits(code_pf, designation, gamme, poids_unitaire_mg, unites_par_boite)')
+    .select('id, numero_lot, produit_id, quantite_theorique, statut, deviation, deviation_cond, produits(code_pf, designation, gamme, poids_unitaire_mg, unites_par_boite)')
     .eq('actif', true).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
@@ -393,13 +393,15 @@ const aqlParPhase = computed(() => {
   return m
 })
 function estEligibleAql(ph) { return phasesEligibles.value.includes(ph) }
-// Diagnostic : lot marqué « en déviation » au niveau du lot, alors qu'aucune étape
-// active ne porte de déviation (indicateur resté actif / ancienne donnée).
+// Diagnostic : déviation FABRICATION marquée au niveau du lot alors qu'aucune étape
+// active ne la porte (indicateur resté actif / ancienne donnée).
 const devOrpheline = computed(() => {
   const lot = lotSelectionne.value
   if (!lot || !lot.deviation) return false
   return !(phases.value || []).some(p => !!p.deviation)
 })
+// Déviation CONDITIONNEMENT marquée sur le lot (indépendante des étapes de fabrication).
+const devCondActive = computed(() => !!(lotSelectionne.value && lotSelectionne.value.deviation_cond))
 async function resyncDeviation() {
   if (!lotId.value) return
   erreur.value = ''; message.value = ''
@@ -407,8 +409,17 @@ async function resyncDeviation() {
   await chargerBase()
   await chargerPhases()
   message.value = devOrpheline.value
-    ? 'Resynchronisation effectuée, mais le lot reste marqué en déviation (vérifie une éventuelle déviation de conditionnement sur « Ordres de fabrication »).'
-    : 'Statut de déviation du lot resynchronisé depuis les étapes : plus aucune déviation active.'
+    ? 'Resynchronisation effectuée, mais le lot reste marqué en déviation (vérifie la déviation de conditionnement ci-dessous).'
+    : 'Statut de déviation de fabrication resynchronisé depuis les étapes : plus aucune déviation active.'
+}
+async function leverDeviationCond() {
+  if (!lotId.value) return
+  if (!confirm('Lever la déviation de conditionnement de ce lot ?')) return
+  erreur.value = ''; message.value = ''
+  const r = await supabase.from('ordres_fabrication').update({ deviation_cond: false }).eq('id', lotId.value)
+  if (r.error) { erreur.value = r.error.message; return }
+  await chargerBase()
+  message.value = 'Déviation de conditionnement levée.'
 }
 async function enregistrerAql() {
   erreur.value = ''; message.value = ''
@@ -531,8 +542,12 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
 
       <template v-if="lotId">
         <p v-if="devOrpheline" class="dev-orph">
-          ⚠ Ce lot est marqué <strong>en déviation</strong> au niveau du lot, mais aucune étape active ne porte de déviation. C'est probablement un indicateur resté actif (ancienne donnée) ou une déviation de conditionnement déclarée sur « Ordres de fabrication ».
-          <button v-if="peutEditer" class="dev-orph-btn" @click="resyncDeviation">Resynchroniser le statut</button>
+          ⚠ Ce lot est marqué <strong>en déviation de fabrication</strong>, mais aucune étape active ne porte de déviation (indicateur resté actif / ancienne donnée).
+          <button v-if="peutEditer" class="dev-orph-btn" @click="resyncDeviation">Resynchroniser depuis les étapes</button>
+        </p>
+        <p v-if="devCondActive" class="dev-orph">
+          ⚠ Ce lot porte une <strong>déviation de conditionnement</strong> (déclarée sur « Ordres de fabrication »), indépendante des étapes de fabrication.
+          <button v-if="peutEditer" class="dev-orph-btn" @click="leverDeviationCond">Lever la déviation conditionnement</button>
         </p>
         <section class="card" v-if="peutEditer">
           <h2 class="card-title">{{ form.id ? 'Modifier la phase' : 'Ajouter une phase' }}</h2>
