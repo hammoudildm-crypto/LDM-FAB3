@@ -384,6 +384,15 @@ async function chargerAql() {
   if (r.error) { controlesAql.value = []; return }
   controlesAql.value = Array.isArray(r.data) ? r.data : []
 }
+// Dernière étape de fabrication selon la gamme du produit
+const phaseFinale = computed(() => { const g = gammeLot.value; return g.length ? g[g.length - 1] : null })
+// Dernier contrôle AQL par étape (controlesAql est trié du plus récent au plus ancien)
+const aqlParPhase = computed(() => {
+  const m = {}
+  for (const x of controlesAql.value) if (!m[x.phase]) m[x.phase] = x
+  return m
+})
+function estEligibleAql(ph) { return phasesEligibles.value.includes(ph) }
 async function enregistrerAql() {
   erreur.value = ''; message.value = ''
   const p = planAql.value
@@ -548,7 +557,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
               <thead>
                 <tr>
                   <th>Phase</th><th>Ligne</th><th class="right">Entrée (kg)</th><th class="right">Sortie (kg)</th>
-                  <th class="right">Rendement</th><th>Début</th><th>Fin</th><th>Statut</th><th class="right">Actions</th>
+                  <th class="right">Rendement</th><th>Début</th><th>Fin</th><th>Statut</th><th>AQL</th><th class="right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -561,6 +570,11 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
                   <td>{{ fmtDate(p.date_debut) }}</td>
                   <td>{{ fmtDate(p.date_phase) }}</td>
                   <td><span class="badge" :class="classeStatut(p.statut)">{{ p.statut }}</span></td>
+                  <td class="aql-cell">
+                    <span v-if="aqlParPhase[p.phase]" class="aql-badge" :class="aqlParPhase[p.phase].verdict === 'Refusé' ? 'av-ko' : 'av-ok'" :title="'AQL ' + aqlParPhase[p.phase].verdict + ' — ' + aqlParPhase[p.phase].defauts + ' défaut(s) · Ac ' + aqlParPhase[p.phase].ac + ' / Re ' + aqlParPhase[p.phase].re + (p.phase === phaseFinale ? ' · dernière étape de fabrication' : '')">{{ aqlParPhase[p.phase].verdict }}<span v-if="p.phase === phaseFinale" class="aql-fin-dot" title="Dernière étape de fabrication">★</span></span>
+                    <span v-else-if="estEligibleAql(p.phase)" class="aql-attente" title="Contrôle AQL attendu sur cette étape (non encore saisi)">à saisir<span v-if="p.phase === phaseFinale" class="aql-fin-dot" title="Dernière étape de fabrication">★</span></span>
+                    <span v-else class="aql-na">—</span>
+                  </td>
                   <td class="right nowrap">
                     <template v-if="peutEditer">
                       <button class="link" @click="modifier(p)">Modifier</button>
@@ -568,7 +582,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
                     </template>
                   </td>
                 </tr>
-                <tr v-if="!phases.length"><td colspan="8" class="empty">Aucune phase. Ajoute-en une ci-dessus.</td></tr>
+                <tr v-if="!phases.length"><td colspan="10" class="empty">Aucune phase. Ajoute-en une ci-dessus.</td></tr>
               </tbody>
             </table>
           </div>
@@ -726,6 +740,13 @@ button.link.danger { color: #b91c1c; }
 .adef { width: 74px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 12px; text-align: right; }
 .av-ok { color: #15803d; font-weight: 800; }
 .av-ko { color: #dc2626; font-weight: 800; }
+.aql-cell { white-space: nowrap; }
+.aql-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 11px; }
+.aql-badge.av-ok { background: #dcfce7; border: 1px solid #86efac; }
+.aql-badge.av-ko { background: #fee2e2; border: 1px solid #fca5a5; }
+.aql-attente { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; border-radius: 11px; padding: 2px 7px; }
+.aql-na { color: #cbd5e1; }
+.aql-fin-dot { color: #0ea5e9; font-size: 10px; }
 .aql-pied { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
 .aql-com { flex: 1; min-width: 220px; padding: 7px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
 .aql-verdict { font-size: 14px; }
