@@ -69,6 +69,9 @@ const GAMME_PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compress
 // Libellé d'étape de gamme -> clé canonique (alignée avec DisponibiliteEquipements.vue)
 const GAMME_KEY = { 'Pesée': 'pesee', 'Granulation et Séchage': 'granulation', 'Mélange': 'melange', 'Compression': 'compression', 'Remplissage Gélules': 'remplissage', 'Pelliculage': 'pelliculage' }
 function phaseKeyR(label) { return GAMME_KEY[label] || null }
+// Étapes éligibles au holding time de stockage : toutes sauf la Pesée
+// (la pesée relève de la gestion des OF, sans intermédiaire stocké).
+const phasesHolding = computed(() => (formP.gamme || []).filter(ph => ph !== 'Pesée'))
 const KEY_LABEL = { pesee: 'Pesée', granulation: 'Granulation & séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage gélules', pelliculage: 'Pelliculage' }
 function htResume(map) { if (!map || typeof map !== 'object') return ''; return Object.keys(map).map(k => (KEY_LABEL[k] || k) + ' : ' + map[k] + ' j').join(' · ') }
 // Fusionne les anciennes étapes « Granulation » + « Séchage » en une seule « Granulation et Séchage »
@@ -440,7 +443,7 @@ async function enregistrerP() {
   if (!formP.code_pf.trim() || !formP.designation.trim()) { erreur.value = 'Code PF et désignation obligatoires.'; return }
   // Holding time par étape : on ne garde que les phases de la gamme avec une valeur
   const htMap = {}
-  for (const ph of (formP.gamme || [])) { const k = phaseKeyR(ph); const v = toNum(formP.holding_times ? formP.holding_times[k] : null); if (k && v != null) htMap[k] = v }
+  for (const ph of (formP.gamme || [])) { if (ph === 'Pesée') continue; const k = phaseKeyR(ph); const v = toNum(formP.holding_times ? formP.holding_times[k] : null); if (k && v != null) htMap[k] = v }
   const payload = {
     code_pf: formP.code_pf.trim(),
     designation: formP.designation.trim(),
@@ -746,15 +749,15 @@ onMounted(async () => {
           <span class="gamme-hint">Coche les phases réellement effectuées. La dernière cochée = fin de fabrication.</span>
         </label>
         <label class="gamme-field ht-field">Holding time de stockage par étape (jours)
-          <div v-if="formP.gamme.length" class="ht-grid">
-            <div v-for="ph in formP.gamme" :key="ph" class="ht-row">
+          <div v-if="phasesHolding.length" class="ht-grid">
+            <div v-for="ph in phasesHolding" :key="ph" class="ht-row">
               <span class="ht-ph">{{ ph }}</span>
               <input type="number" step="any" min="0" v-model="formP.holding_times[phaseKeyR(ph)]" placeholder="—" />
               <span class="ht-u">j</span>
             </div>
           </div>
-          <span v-else class="gamme-hint">Coche d'abord les phases de la gamme ci-dessus pour saisir un temps par étape.</span>
-          <span class="gamme-hint">Temps maximal de stockage de l'intermédiaire produit par chaque étape, avant l'étape suivante. Laisse vide pour utiliser le holding time par défaut.</span>
+          <span v-else class="gamme-hint">Coche d'abord les phases de la gamme ci-dessus (hors Pesée) pour saisir un temps par étape.</span>
+          <span class="gamme-hint">Temps maximal de stockage de l'intermédiaire produit par chaque étape, avant l'étape suivante. La Pesée n'en a pas (gestion des OF, sans produit stocké). Laisse vide pour utiliser le holding time par défaut.</span>
         </label>
         <div class="form-actions">
           <button class="btn" @click="enregistrerP">{{ formP.id ? 'Mettre à jour' : 'Ajouter' }}</button>

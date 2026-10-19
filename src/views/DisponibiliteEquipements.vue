@@ -541,7 +541,7 @@ const qualiteParAtelier = computed(() => {
   const rows = []
   const pes = attentePeseeList.value.map(l => ({
     id: l.id, lot: l.lot, code: l.code, desig: l.desig, boites: l.boites,
-    date: l.date, datePrec: l.date, validite: l.validite, perime: l.perime, holdJ: l.holdJ ?? null,
+    date: l.date, datePrec: l.date, validite: l.validite, perime: l.perime, holdJ: null, // pesée = gestion des OF, pas de produit stocké → pas de holding time
     triage: triageIds.value.has(l.id), triageCond: triageCondIds.value.has(l.id),
     deviation: deviationIds.value.has(l.id), deviationCond: deviationCondIds.value.has(l.id)
   }))
