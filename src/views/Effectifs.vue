@@ -310,6 +310,62 @@ const entreesAnnee = computed(() => {
     .sort((a, b) => new Date(b.date) - new Date(a.date))
 })
 
+// ===== Présentations graphiques (Tableau de bord RH) =====
+const CHART_PALETTE = ['#0d9488', '#6366f1', '#f59e0b', '#e11d48', '#3b82f6', '#8b5cf6', '#16a34a', '#64748b', '#0ea5e9', '#d946ef']
+// Donut : offset cumulé (cercle calibré pour une circonférence de 100)
+function donutSegs(items) {
+  let acc = 0
+  return items.filter(x => x.n > 0).map(x => { const s = { ...x, before: acc }; acc += x.pct; return s })
+}
+// Mixité H / F
+const chartMixite = computed(() => {
+  const h = kpiOrg.value.h, f = kpiOrg.value.f, t = h + f || 1
+  return donutSegs([
+    { label: 'Hommes', n: h, pct: Math.round(h / t * 100), color: '#3b82f6' },
+    { label: 'Femmes', n: f, pct: Math.round(f / t * 100), color: '#e11d48' }
+  ])
+})
+// Répartition par type de contrat
+const repartContrat = computed(() => {
+  const m = {}
+  for (const n of orgNodesAffiches.value) {
+    const c = (n.contrat || '').toUpperCase()
+    let k = 'Non renseigné'
+    if (c.indexOf('CDI') >= 0) k = 'CDI'
+    else if (c.indexOf('CDD') >= 0) k = 'CDD'
+    else if (c.indexOf('STAG') >= 0 || c.indexOf('ANAPEC') >= 0) k = 'Stage'
+    else if (c.indexOf('INTER') >= 0) k = 'Intérim'
+    else if (n.contrat) k = n.contrat
+    m[k] = (m[k] || 0) + 1
+  }
+  const tot = orgNodesAffiches.value.length || 1
+  return donutSegs(Object.entries(m)
+    .map(([label, n]) => ({ label, n, pct: Math.round(n / tot * 100) }))
+    .sort((a, b) => b.n - a.n)
+    .map((x, i) => ({ ...x, color: CHART_PALETTE[i % CHART_PALETTE.length] })))
+})
+// Effectif par atelier / périmètre
+const repartAtelier = computed(() => {
+  const m = {}
+  for (const n of orgNodesAffiches.value) { const k = n.atelier_id || '—'; m[k] = (m[k] || 0) + 1 }
+  return Object.entries(m).map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n).slice(0, 12)
+})
+const repartAtelierMax = computed(() => Math.max(1, ...repartAtelier.value.map(b => b.n)))
+// Entrées / sorties par an (3 dernières années)
+const mouvParAn = computed(() => {
+  const list = orgPerimRaw.value
+  return anneesMouv.value.map(y => {
+    let e = 0, s = 0
+    for (const n of list) {
+      if (n.date_recrutement) { const r = new Date(n.date_recrutement); if (!isNaN(r) && r.getFullYear() === y) e++ }
+      if (n.date_sortie) { const sd = new Date(n.date_sortie); if (!isNaN(sd) && sd.getFullYear() === y) s++ }
+    }
+    return { annee: y, entrees: e, sorties: s }
+  })
+})
+const mouvAnMax = computed(() => Math.max(1, ...mouvParAn.value.flatMap(x => [x.entrees, x.sorties])))
+const pyrTotalMax = computed(() => Math.max(1, ...pyramide.value.map(b => b.h + b.f)))
+
 function exportPDF() {
   const now = new Date().toLocaleString('fr-FR')
   const filt = orgPerimFiltre.value || 'Tout le personnel'
@@ -668,6 +724,72 @@ onMounted(chargerTout)
           <div class="dc-sub">Voir le taux de formation</div>
         </a>
       </div>
+
+      <section class="card charts-card">
+        <h2 class="card-title">Présentations graphiques</h2>
+        <div class="charts-grid">
+          <div class="chart-box">
+            <div class="chart-t">Mixité H / F</div>
+            <div class="chart-donut-wrap">
+              <svg viewBox="0 0 42 42" class="donut" role="img" aria-label="Répartition hommes / femmes">
+                <circle class="donut-bg" cx="21" cy="21" r="15.915" fill="none" stroke-width="5"></circle>
+                <g transform="rotate(-90 21 21)">
+                  <circle v-for="(s, i) in chartMixite" :key="i" cx="21" cy="21" r="15.915" fill="none" stroke-width="5" :stroke="s.color" :stroke-dasharray="s.pct + ' ' + (100 - s.pct)" :stroke-dashoffset="-s.before"></circle>
+                </g>
+                <text x="21" y="20.5" class="donut-c">{{ kpiOrg.total }}</text>
+                <text x="21" y="26" class="donut-s">pers.</text>
+              </svg>
+              <div class="chart-leg">
+                <div v-for="(s, i) in chartMixite" :key="i" class="leg-row"><span class="leg-dot" :style="{ background: s.color }"></span>{{ s.label }} · <b>{{ s.n }}</b> ({{ s.pct }}%)</div>
+                <div v-if="!chartMixite.length" class="empty-sm">Genre non renseigné.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="chart-box">
+            <div class="chart-t">Répartition par contrat</div>
+            <div class="chart-donut-wrap">
+              <svg viewBox="0 0 42 42" class="donut" role="img" aria-label="Répartition par type de contrat">
+                <circle class="donut-bg" cx="21" cy="21" r="15.915" fill="none" stroke-width="5"></circle>
+                <g transform="rotate(-90 21 21)">
+                  <circle v-for="(s, i) in repartContrat" :key="i" cx="21" cy="21" r="15.915" fill="none" stroke-width="5" :stroke="s.color" :stroke-dasharray="s.pct + ' ' + (100 - s.pct)" :stroke-dashoffset="-s.before"></circle>
+                </g>
+                <text x="21" y="20.5" class="donut-c">{{ kpiOrg.total }}</text>
+                <text x="21" y="26" class="donut-s">pers.</text>
+              </svg>
+              <div class="chart-leg">
+                <div v-for="(s, i) in repartContrat" :key="i" class="leg-row"><span class="leg-dot" :style="{ background: s.color }"></span>{{ s.label }} · <b>{{ s.n }}</b> ({{ s.pct }}%)</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="chart-box wide">
+            <div class="chart-t">Effectif par atelier</div>
+            <div class="hbars">
+              <div v-for="b in repartAtelier" :key="b.label" class="hbar-row">
+                <span class="hbar-lbl" :title="b.label">{{ b.label }}</span>
+                <span class="hbar-track"><span class="hbar-fill" :style="{ width: (b.n / repartAtelierMax * 100) + '%' }"></span></span>
+                <span class="hbar-val">{{ b.n }}</span>
+              </div>
+              <div v-if="!repartAtelier.length" class="empty-sm">Renseigne l'atelier / périmètre du personnel.</div>
+            </div>
+          </div>
+
+          <div class="chart-box">
+            <div class="chart-t">Entrées / sorties par an</div>
+            <div class="grp-bars">
+              <div v-for="a in mouvParAn" :key="a.annee" class="grp-col">
+                <div class="grp-pair">
+                  <div class="grp-b in" :style="{ height: Math.max(2, a.entrees / mouvAnMax * 72) + 'px' }" :title="a.entrees + ' entrées'"><span class="grp-v">{{ a.entrees }}</span></div>
+                  <div class="grp-b out" :style="{ height: Math.max(2, a.sorties / mouvAnMax * 72) + 'px' }" :title="a.sorties + ' sorties'"><span class="grp-v">{{ a.sorties }}</span></div>
+                </div>
+                <div class="grp-lbl">{{ a.annee }}</div>
+              </div>
+            </div>
+            <div class="chart-leg-row"><span class="leg-dot" style="background:#16a34a"></span>Entrées<span class="leg-dot" style="background:#dc2626;margin-left:10px"></span>Sorties</div>
+          </div>
+        </div>
+      </section>
       </div>
 
       <div v-if="tab === 'contrats'">
@@ -1037,6 +1159,37 @@ onMounted(chargerTout)
 .dc-seg.h { background: #3b82f6; }
 .dc-seg.f { background: #ec4899; }
 .dc-link .dc-big { color: #0d9488; }
+/* Présentations graphiques */
+.charts-card { margin-top: 16px; }
+.charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
+.chart-box { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; background: #fff; }
+.chart-box.wide { grid-column: span 2; }
+.chart-t { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 12px; }
+.chart-donut-wrap { display: flex; align-items: center; gap: 14px; }
+.donut { width: 104px; height: 104px; flex: none; }
+.donut-bg { stroke: #eef2f6; }
+.donut-c { font-size: 9px; font-weight: 800; fill: #0f172a; text-anchor: middle; }
+.donut-s { font-size: 3.4px; fill: #94a3b8; text-anchor: middle; font-weight: 700; }
+.chart-leg { display: flex; flex-direction: column; gap: 5px; font-size: 11.5px; color: #475569; }
+.leg-row { display: flex; align-items: center; gap: 6px; }
+.leg-row b { color: #0f172a; }
+.leg-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
+.hbars { display: flex; flex-direction: column; gap: 7px; }
+.hbar-row { display: grid; grid-template-columns: 130px 1fr 34px; align-items: center; gap: 8px; font-size: 12px; }
+.hbar-lbl { color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hbar-track { background: #eef2f6; border-radius: 6px; height: 14px; overflow: hidden; }
+.hbar-fill { display: block; height: 100%; background: linear-gradient(90deg, #14b8a6, #0d9488); border-radius: 6px; }
+.hbar-val { text-align: right; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
+.grp-bars { display: flex; align-items: flex-end; justify-content: space-around; gap: 14px; min-height: 104px; }
+.grp-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.grp-pair { display: flex; align-items: flex-end; gap: 4px; height: 84px; }
+.grp-b { width: 20px; border-radius: 4px 4px 0 0; display: flex; justify-content: center; align-items: flex-start; }
+.grp-b.in { background: #16a34a; }
+.grp-b.out { background: #dc2626; }
+.grp-v { font-size: 9px; font-weight: 800; color: #fff; margin-top: 2px; }
+.grp-lbl { font-size: 10.5px; font-weight: 700; color: #64748b; }
+.chart-leg-row { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #64748b; font-weight: 700; margin-top: 8px; justify-content: center; }
+@media (max-width: 640px) { .chart-box.wide { grid-column: span 1; } }
 .alert-contrats { border-left: 4px solid #f59e0b; }
 .alert-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px; margin-top: 12px; }
 .alert-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #92400e; margin-bottom: 7px; }
