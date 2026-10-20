@@ -13,6 +13,8 @@ const vracFabParLot = ref({})  // ordre_id -> sortie (kg) de la dernière phase 
 const records = ref([])
 const aCompleterC = ref([])
 const ouvertACompleterC = ref(false)
+const supprimes = ref([])
+const ouvertSupprimes = ref(false)
 const lots = ref([])
 const equipements = ref([])
 const filtreStatut = ref('')
@@ -88,6 +90,7 @@ async function chargerTout() {
     .eq('actif', true).order('date_conditionnement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (rc.error) { erreur.value = rc.error.message; return }
   records.value = rc.data
+  await chargerSupprimes()
 
   const rs = await fetchAllPaged(() => supabase.from('suivi_phases')
     .select('ordre_id, phase, quantite_sortie').eq('actif', true))
@@ -242,6 +245,23 @@ async function desactiver(r) {
   erreur.value = ''
   const res = await supabase.from('conditionnement').update({ actif: false }).eq('id', r.id)
   if (res.error) { erreur.value = res.error.message; return }
+  await chargerTout()
+  await majStatutLot(r.ordre_id)
+}
+// Conditionnements supprimés (actif=false) — récupérables via « Restaurer »
+async function chargerSupprimes() {
+  const r = await fetchAllPaged(() => supabase.from('conditionnement')
+    .select('*, ordres_fabrication(numero_lot, produits(code_pf, designation, unites_par_boite, poids_unitaire_mg, boites_theoriques)), equipements(code, nom)')
+    .eq('actif', false).order('id', { ascending: false }))
+  supprimes.value = r.error ? [] : (r.data || [])
+}
+async function restaurer(r) {
+  const lot = r.ordres_fabrication ? r.ordres_fabrication.numero_lot : r.ordre_id
+  if (!confirm('Restaurer le conditionnement du lot ' + lot + ' ?')) return
+  erreur.value = ''; message.value = ''
+  const res = await supabase.from('conditionnement').update({ actif: true }).eq('id', r.id)
+  if (res.error) { erreur.value = res.error.message; return }
+  message.value = 'Conditionnement restauré.'
   await chargerTout()
   await majStatutLot(r.ordre_id)
 }
@@ -411,6 +431,34 @@ onMounted(async () => {
         <p v-if="!showList" class="masque-hint">{{ recordsFiltres.length }} conditionnement(s) — clique sur « Afficher les lignes » pour voir le détail.</p>
       </section>
 
+      <section v-if="peutEditer" class="card">
+        <div class="card-head cbl-head" @click="ouvertSupprimes = !ouvertSupprimes">
+          <h2 class="card-title">🗑 Corbeille — conditionnements supprimés</h2>
+          <span class="count">{{ supprimes.length }}</span>
+          <span class="cbl-ch">{{ ouvertSupprimes ? '▲' : '▼' }}</span>
+        </div>
+        <div v-if="ouvertSupprimes">
+          <p class="hint">Lignes supprimées : masquées de la liste mais conservées en base. Clique « Restaurer » pour reprendre une ligne supprimée par erreur.</p>
+          <div class="table-scroll">
+            <table class="grid">
+              <thead><tr><th>Lot</th><th>Produit</th><th>Date</th><th>Ligne</th><th class="right">Boîtes</th><th>Statut</th><th class="right">Actions</th></tr></thead>
+              <tbody>
+                <tr v-for="r in supprimes" :key="r.id">
+                  <td class="mono">{{ r.ordres_fabrication ? r.ordres_fabrication.numero_lot : '—' }}</td>
+                  <td class="desig">{{ r.ordres_fabrication && r.ordres_fabrication.produits ? r.ordres_fabrication.produits.designation : '—' }}</td>
+                  <td>{{ fmtDate(r.date_conditionnement) }}</td>
+                  <td>{{ r.equipements ? r.equipements.code : '—' }}</td>
+                  <td class="right strong">{{ fmt(boites(r)) }}</td>
+                  <td><span class="badge" :class="classeStatut(r.statut)">{{ r.statut }}</span></td>
+                  <td class="right nowrap"><button class="link" @click="restaurer(r)">↩ Restaurer</button></td>
+                </tr>
+                <tr v-if="!supprimes.length"><td colspan="7" class="empty">Aucune ligne supprimée.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <p class="hint"><strong>Rendement</strong> = boîtes obtenues ÷ équivalent du vrac reçu (poids du comprimé). <strong>Rendement global</strong> = boîtes obtenues ÷ boîtes théoriques du produit (TTL). La <strong>quantité reçue (kg)</strong> alimente le stock de vrac (page En-cours).</p>
     </template>
   </div>
@@ -431,6 +479,8 @@ onMounted(async () => {
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .card-head .card-title { margin: 0; }
 .count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+.cbl-head { cursor: pointer; margin-bottom: 0; }
+.cbl-head .cbl-ch { margin-left: auto; color: #94a3b8; font-size: 12px; }
 .filtre { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
 .head-tools { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .recherche { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; min-width: 200px; }
