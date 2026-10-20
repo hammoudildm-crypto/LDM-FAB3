@@ -359,6 +359,36 @@ const repartContrat = computed(() => {
     .sort((a, b) => b.n - a.n)
     .map((x, i) => ({ ...x, color: CHART_PALETTE[i % CHART_PALETTE.length] })))
 })
+// Catégorie de contrat normalisée + couleurs fixes
+const CONTRAT_COULEUR = { 'CDI': '#16a34a', 'CDD': '#f59e0b', 'Stage': '#3b82f6', 'Intérim': '#8b5cf6', 'Non renseigné': '#94a3b8' }
+function catContrat(contrat) {
+  const c = (contrat || '').toUpperCase()
+  if (c.indexOf('CDI') >= 0) return 'CDI'
+  if (c.indexOf('CDD') >= 0) return 'CDD'
+  if (c.indexOf('STAG') >= 0 || c.indexOf('ANAPEC') >= 0) return 'Stage'
+  if (c.indexOf('INTER') >= 0) return 'Intérim'
+  return contrat ? contrat : 'Non renseigné'
+}
+const contratCategories = computed(() => {
+  const order = ['CDI', 'CDD', 'Stage', 'Intérim']
+  const seen = []
+  for (const n of orgNodesAffiches.value) { const k = catContrat(n.contrat); if (!seen.includes(k)) seen.push(k) }
+  seen.sort((a, b) => { const ia = order.indexOf(a), ib = order.indexOf(b); return (ia < 0 ? 50 : ia) - (ib < 0 ? 50 : ib) || (a === 'Non renseigné' ? 1 : (b === 'Non renseigné' ? -1 : a.localeCompare(b))) })
+  let pi = 0
+  return seen.map(k => ({ label: k, color: CONTRAT_COULEUR[k] || CHART_PALETTE[(pi++) % CHART_PALETTE.length] }))
+})
+// Répartition par contrat, par périmètre (barres empilées)
+const contratParPerim = computed(() => {
+  const cats = contratCategories.value
+  const m = {}
+  const ensure = (p) => { if (!m[p]) { m[p] = { perim: p, total: 0, counts: {} } } return m[p] }
+  for (const n of orgNodesAffiches.value) { const row = ensure(n.atelier_id || 'Non renseigné'); const k = catContrat(n.contrat); row.counts[k] = (row.counts[k] || 0) + 1; row.total++ }
+  const order = [...PERIMETRES]
+  return Object.values(m)
+    .filter(x => x.total > 0)
+    .map(x => ({ perim: x.perim, total: x.total, segs: cats.map(c => ({ label: c.label, color: c.color, n: x.counts[c.label] || 0 })).filter(s => s.n > 0) }))
+    .sort((a, b) => { const ia = order.indexOf(a.perim), ib = order.indexOf(b.perim); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.perim.localeCompare(b.perim) })
+})
 // Effectif par atelier / périmètre
 const repartAtelier = computed(() => {
   const m = {}
@@ -778,19 +808,21 @@ onMounted(chargerTout)
           </div>
 
           <div class="chart-box">
-            <div class="chart-t">Répartition par contrat</div>
-            <div class="chart-donut-wrap">
-              <svg viewBox="0 0 42 42" class="donut" role="img" aria-label="Répartition par type de contrat">
-                <circle class="donut-bg" cx="21" cy="21" r="15.915" fill="none" stroke-width="5"></circle>
-                <g transform="rotate(-90 21 21)">
-                  <circle v-for="(s, i) in repartContrat" :key="i" cx="21" cy="21" r="15.915" fill="none" stroke-width="5" :stroke="s.color" :stroke-dasharray="s.pct + ' ' + (100 - s.pct)" :stroke-dashoffset="-s.before"></circle>
-                </g>
-                <text x="21" y="20.5" class="donut-c">{{ kpiOrg.total }}</text>
-                <text x="21" y="26" class="donut-s">pers.</text>
-              </svg>
-              <div class="chart-leg">
-                <div v-for="(s, i) in repartContrat" :key="i" class="leg-row"><span class="leg-dot" :style="{ background: s.color }"></span>{{ s.label }} · <b>{{ s.n }}</b> ({{ s.pct }}%)</div>
+            <div class="chart-t">Répartition par contrat par périmètre</div>
+            <div class="mixp-list">
+              <div v-for="p in contratParPerim" :key="p.perim" class="mixp-row">
+                <div class="mixp-top">
+                  <span class="mixp-lbl" :title="p.perim">{{ p.perim }}</span>
+                  <span class="mixp-cnt">{{ p.total }} pers.</span>
+                </div>
+                <div class="mixp-bar">
+                  <div v-for="s in p.segs" :key="s.label" :style="{ width: (s.n / p.total * 100) + '%', background: s.color }" :title="s.label + ' : ' + s.n"></div>
+                </div>
               </div>
+              <div v-if="!contratParPerim.length" class="empty-sm">Type de contrat non renseigné.</div>
+            </div>
+            <div class="chart-leg-row cat-leg">
+              <span v-for="c in contratCategories" :key="c.label" class="leg-inline"><span class="leg-dot" :style="{ background: c.color }"></span>{{ c.label }}</span>
             </div>
           </div>
 
@@ -1259,6 +1291,8 @@ onMounted(chargerTout)
 .mixp-bar { display: flex; height: 20px; border-radius: 6px; overflow: hidden; background: #eef2f6; }
 .mixp-h { background: #3b82f6; }
 .mixp-f { background: #e11d48; }
+.cat-leg { flex-wrap: wrap; gap: 4px 12px; }
+.leg-inline { display: inline-flex; align-items: center; gap: 5px; }
 @media (max-width: 760px) { .charts-grid { grid-template-columns: 1fr; } .mouv-row { grid-template-columns: 1fr; } }
 .alert-contrats { border-left: 4px solid #f59e0b; }
 .alert-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px; margin-top: 12px; }
