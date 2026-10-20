@@ -325,6 +325,21 @@ const chartMixite = computed(() => {
     { label: 'Femmes', n: f, pct: Math.round(f / t * 100), color: '#e11d48' }
   ])
 })
+// Mixité H / F par périmètre (barres empilées)
+const mixiteParPerim = computed(() => {
+  const m = {}
+  const ensure = (p) => { if (!m[p]) m[p] = { perim: p, h: 0, f: 0 }; return m[p] }
+  for (const n of orgNodesAffiches.value) {
+    const g = (n.genre || '').toLowerCase()
+    if (g[0] === 'f') ensure(n.atelier_id || 'Non renseigné').f++
+    else if (g[0] === 'h' || g[0] === 'm') ensure(n.atelier_id || 'Non renseigné').h++
+  }
+  const order = [...PERIMETRES]
+  return Object.values(m)
+    .map(x => ({ ...x, total: x.h + x.f }))
+    .filter(x => x.total > 0)
+    .sort((a, b) => { const ia = order.indexOf(a.perim), ib = order.indexOf(b.perim); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.perim.localeCompare(b.perim) })
+})
 // Répartition par type de contrat
 const repartContrat = computed(() => {
   const m = {}
@@ -745,21 +760,21 @@ onMounted(chargerTout)
         <h2 class="card-title">Présentations graphiques</h2>
         <div class="charts-grid">
           <div class="chart-box">
-            <div class="chart-t">Mixité H / F</div>
-            <div class="chart-donut-wrap">
-              <svg viewBox="0 0 42 42" class="donut" role="img" aria-label="Répartition hommes / femmes">
-                <circle class="donut-bg" cx="21" cy="21" r="15.915" fill="none" stroke-width="5"></circle>
-                <g transform="rotate(-90 21 21)">
-                  <circle v-for="(s, i) in chartMixite" :key="i" cx="21" cy="21" r="15.915" fill="none" stroke-width="5" :stroke="s.color" :stroke-dasharray="s.pct + ' ' + (100 - s.pct)" :stroke-dashoffset="-s.before"></circle>
-                </g>
-                <text x="21" y="20.5" class="donut-c">{{ kpiOrg.total }}</text>
-                <text x="21" y="26" class="donut-s">pers.</text>
-              </svg>
-              <div class="chart-leg">
-                <div v-for="(s, i) in chartMixite" :key="i" class="leg-row"><span class="leg-dot" :style="{ background: s.color }"></span>{{ s.label }} · <b>{{ s.n }}</b> ({{ s.pct }}%)</div>
-                <div v-if="!chartMixite.length" class="empty-sm">Genre non renseigné.</div>
+            <div class="chart-t">Mixité H / F par périmètre</div>
+            <div class="mixp-list">
+              <div v-for="p in mixiteParPerim" :key="p.perim" class="mixp-row">
+                <div class="mixp-top">
+                  <span class="mixp-lbl" :title="p.perim">{{ p.perim }}</span>
+                  <span class="mixp-cnt"><b class="mx-h">{{ p.h }} H</b> · <b class="mx-f">{{ p.f }} F</b></span>
+                </div>
+                <div class="mixp-bar">
+                  <div class="mixp-h" :style="{ width: (p.h / p.total * 100) + '%' }" :title="p.h + ' hommes'"></div>
+                  <div class="mixp-f" :style="{ width: (p.f / p.total * 100) + '%' }" :title="p.f + ' femmes'"></div>
+                </div>
               </div>
+              <div v-if="!mixiteParPerim.length" class="empty-sm">Genre non renseigné sur le personnel.</div>
             </div>
+            <div class="chart-leg-row"><span class="leg-dot" style="background:#3b82f6"></span>Hommes<span class="leg-dot" style="background:#e11d48;margin-left:10px"></span>Femmes</div>
           </div>
 
           <div class="chart-box">
@@ -1235,6 +1250,15 @@ onMounted(chargerTout)
 .grp-bars.sm .grp-b { width: 24px; }
 .mouv-row { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(260px, 320px) 1fr; gap: 18px; align-items: start; }
 .mouv-global .grp-bars { gap: 26px; }
+.mixp-list { display: flex; flex-direction: column; gap: 12px; }
+.mixp-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12.5px; margin-bottom: 5px; }
+.mixp-lbl { color: #334155; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mixp-cnt { white-space: nowrap; font-size: 12px; color: #64748b; }
+.mixp-cnt .mx-h { color: #3b82f6; }
+.mixp-cnt .mx-f { color: #e11d48; }
+.mixp-bar { display: flex; height: 20px; border-radius: 6px; overflow: hidden; background: #eef2f6; }
+.mixp-h { background: #3b82f6; }
+.mixp-f { background: #e11d48; }
 @media (max-width: 760px) { .charts-grid { grid-template-columns: 1fr; } .mouv-row { grid-template-columns: 1fr; } }
 .alert-contrats { border-left: 4px solid #f59e0b; }
 .alert-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px; margin-top: 12px; }
