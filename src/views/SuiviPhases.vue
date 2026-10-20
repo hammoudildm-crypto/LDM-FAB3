@@ -6,6 +6,7 @@ import { planPourLot, AQLS, NIVEAUX, verdictClasse } from '../aql'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
+const peutSupprimer = inject('peutSupprimer', ref(true))
 const lotPartage = inject('lotPartage', null)
 
 const PHASES = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
@@ -614,7 +615,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
                   <td class="right nowrap">
                     <template v-if="peutEditer">
                       <button class="link" @click="modifier(p)">Modifier</button>
-                      <button class="link danger" @click="desactiver(p)">Supprimer</button>
+                      <button v-if="peutSupprimer" class="link danger" @click="desactiver(p)">Supprimer</button>
                     </template>
                   </td>
                 </tr>
@@ -661,7 +662,7 @@ watch(lotId, async () => { await chargerPhases(); remplirQuantites() })
                 <td class="anum">{{ x.defauts }}</td>
                 <td :class="x.verdict === 'Refusé' ? 'av-ko' : 'av-ok'">{{ x.verdict }}</td>
                 <td class="apar">{{ x.controle_par || "—" }}</td>
-                <td><button v-if="peutEditer" class="asup" @click="supprimerAql(x)" title="Supprimer">🗑</button></td>
+                <td><button v-if="peutSupprimer" class="asup" @click="supprimerAql(x)" title="Supprimer">🗑</button></td>
               </tr>
             </tbody>
           </table>

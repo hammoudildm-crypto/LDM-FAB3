@@ -38,7 +38,7 @@
               <td><span v-if="f.validite_mois" class="val">{{ f.validite_mois }} mois</span><span v-else class="perm">Permanent</span></td>
               <td v-if="peutEditer" class="act">
                 <button @click="modifier(f)" title="Modifier">✎</button>
-                <button @click="supprimer(f)" title="Supprimer">🗑</button>
+                <button v-if="peutSupprimer" @click="supprimer(f)" title="Supprimer">🗑</button>
               </td>
             </tr>
           </tbody>
@@ -54,6 +54,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
+const peutSupprimer = inject('peutSupprimer', ref(true))
 const CATS = ['BPF', 'Hygiène', 'Sécurité', 'Procédé', 'Documentation', 'Équipement']
 const STANDARD = [
   ['Bonnes Pratiques de Fabrication (BPF)', 'BPF', 12],

@@ -6,6 +6,7 @@ import PageHeader from '../components/PageHeader.vue'
 import { ICONS, TINTS } from '../icons.js'
 
 const peutEditer = inject('peutEditer', ref(true))
+const peutSupprimer = inject('peutSupprimer', ref(true))
 
 const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const anneeCourante = new Date().getFullYear()
@@ -1138,7 +1139,7 @@ onMounted(chargerTout)
                   <td>{{ n.telephone || '—' }}</td>
                   <td>{{ fmtD(n.date_sortie) || '—' }}</td>
                   <td>{{ n.motif_sortie || '—' }}</td>
-                  <td class="pt-act"><button v-if="peutEditer" @click="orgModifier(n)" title="Modifier">✎</button><button v-if="peutEditer" @click="orgSupprimer(n)" title="Supprimer">🗑</button></td>
+                  <td class="pt-act"><button v-if="peutEditer" @click="orgModifier(n)" title="Modifier">✎</button><button v-if="peutSupprimer" @click="orgSupprimer(n)" title="Supprimer">🗑</button></td>
                 </tr>
               </tbody>
             </table>

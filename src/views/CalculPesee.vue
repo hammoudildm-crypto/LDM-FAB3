@@ -214,7 +214,7 @@
               <td class="row-act">
                 <button class="mini" @click="chargerPesee(p)" title="Recharger">Charger</button>
                 <button class="mini" @click="exporterPeseePDF(p)" title="Fiche PDF">PDF</button>
-                <button v-if="peutEditer" class="mini del" @click="supprimerPesee(p)" title="Supprimer">✕</button>
+                <button v-if="peutSupprimer" class="mini del" @click="supprimerPesee(p)" title="Supprimer">✕</button>
               </td>
             </tr>
           </tbody>
@@ -230,6 +230,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
+const peutSupprimer = inject('peutSupprimer', ref(true))
 const unite = ref('kg')
 
 const vide = (x) => x === null || x === '' || x === undefined

@@ -4,6 +4,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(false))
+const peutSupprimer = inject('peutSupprimer', ref(false))
 const erreur = ref('')
 const message = ref('')
 const tab = ref('dev')
@@ -409,7 +410,7 @@ function appliquerIA() {
                 <td><span v-if="d.criticite" class="q-crit" :class="'crit-' + d.criticite.toLowerCase()">{{ d.criticite }}</span><span v-else>—</span></td>
                 <td class="qt-desc" :title="d.description">{{ d.description || '—' }}</td><td>{{ d.responsable || '—' }}</td><td class="qt-desc" :title="d.cause_racine">{{ d.cause_racine || '—' }}</td><td>{{ d.capa_liee || '—' }}</td>
                 <td><span class="q-stat" :class="'st-' + statutKey(d.statut)">{{ d.statut }}</span></td>
-                <td class="qt-act"><button v-if="peutEditer && !d.capa_liee" class="lnk" @click="creerCapaDepuisDev(d)" title="Créer une CAPA">→ CAPA</button><button v-if="peutEditer" @click="devModifier(d)" title="Modifier">✎</button><button v-if="peutEditer" @click="devSupprimer(d)" title="Supprimer">🗑</button></td>
+                <td class="qt-act"><button v-if="peutEditer && !d.capa_liee" class="lnk" @click="creerCapaDepuisDev(d)" title="Créer une CAPA">→ CAPA</button><button v-if="peutEditer" @click="devModifier(d)" title="Modifier">✎</button><button v-if="peutSupprimer" @click="devSupprimer(d)" title="Supprimer">🗑</button></td>
               </tr>
             </tbody>
           </table>
@@ -463,7 +464,7 @@ function appliquerIA() {
                 <td class="qt-desc" :title="c.action">{{ c.action || '—' }}</td><td>{{ c.responsable || '—' }}</td>
                 <td><span :class="{ 'q-retard': estEnRetard(c) }">{{ fmtD(c.echeance) }}</span></td>
                 <td><span class="q-stat" :class="'st-' + statutKey(c.statut)">{{ c.statut }}</span></td>
-                <td class="qt-act"><button v-if="peutEditer" @click="capaModifier(c)" title="Modifier">✎</button><button v-if="peutEditer" @click="capaSupprimer(c)" title="Supprimer">🗑</button></td>
+                <td class="qt-act"><button v-if="peutEditer" @click="capaModifier(c)" title="Modifier">✎</button><button v-if="peutSupprimer" @click="capaSupprimer(c)" title="Supprimer">🗑</button></td>
               </tr>
             </tbody>
           </table>
@@ -513,7 +514,7 @@ function appliquerIA() {
                 <td><span v-if="c.type" class="q-type" :class="c.type === 'Majeur' ? 'ty-corr' : 'ty-prev'">{{ c.type }}</span><span v-else>—</span></td>
                 <td>{{ c.responsable || '—' }}</td><td>{{ c.capa_liee || '—' }}</td><td>{{ fmtD(c.date_cloture) }}</td>
                 <td><span class="q-stat" :class="'st-' + statutKey(c.statut)">{{ c.statut }}</span></td>
-                <td class="qt-act"><button v-if="peutEditer && !c.capa_liee" class="lnk" @click="creerCapaDepuisChg(c)" title="Créer une CAPA">→ CAPA</button><button v-if="peutEditer" @click="chgModifier(c)" title="Modifier">✎</button><button v-if="peutEditer" @click="chgSupprimer(c)" title="Supprimer">🗑</button></td>
+                <td class="qt-act"><button v-if="peutEditer && !c.capa_liee" class="lnk" @click="creerCapaDepuisChg(c)" title="Créer une CAPA">→ CAPA</button><button v-if="peutEditer" @click="chgModifier(c)" title="Modifier">✎</button><button v-if="peutSupprimer" @click="chgSupprimer(c)" title="Supprimer">🗑</button></td>
               </tr>
             </tbody>
           </table>

@@ -38,7 +38,7 @@
             <td><span :class="e.resultat === 'acquis' ? 'c-ok' : 'c-ko'">{{ e.resultat === 'acquis' ? '✓ Acquis' : '✗ Non acquis' }}</span></td>
             <td>{{ e.expiration || 'Permanent' }}</td>
             <td><span class="etat" :class="'e-' + e.statut">{{ statutTxt(e) }}</span></td>
-            <td v-if="peutEditer" class="act"><button @click="modifier(e)" title="Modifier">✎</button><button @click="supprimer(e)" title="Supprimer">🗑</button></td>
+            <td v-if="peutEditer" class="act"><button @click="modifier(e)" title="Modifier">✎</button><button v-if="peutSupprimer" @click="supprimer(e)" title="Supprimer">🗑</button></td>
           </tr>
         </tbody>
       </table>
@@ -52,6 +52,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
+const peutSupprimer = inject('peutSupprimer', ref(true))
 const personnes = ref([])
 const formations = ref([])
 const enregistrements = ref([])

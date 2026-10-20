@@ -5,6 +5,7 @@ import PageHeader from '../components/PageHeader.vue'
 import { ICONS, TINTS } from '../icons'
 
 const peutEditer = inject('peutEditer', ref(true))
+const peutSupprimer = inject('peutSupprimer', ref(true))
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 const anneeCourante = new Date().getFullYear()
@@ -233,7 +234,7 @@ watch(annee, chargerPlan)
           Importer un fichier
         </button>
         <input ref="fichierInput" type="file" accept=".xlsx,.xls,.csv" style="display:none" @change="importerFichier" />
-        <button v-if="peutEditer" class="btn ghost danger" :disabled="enCours || !produits.length" @click="viderTout">
+        <button v-if="peutSupprimer" class="btn ghost danger" :disabled="enCours || !produits.length" @click="viderTout">
           Vider la grille
         </button>
         <button v-if="peutEditer" class="btn" :disabled="enCours || !produits.length" @click="enregistrer">

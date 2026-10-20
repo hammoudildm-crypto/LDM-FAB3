@@ -63,7 +63,7 @@
           <button v-if="s.statut === 'realise'" class="btn ghost sm" @click="setStatut(s, 'planifie')">↩ Rouvrir</button>
           <button v-if="s.statut !== 'annule'" class="btn ghost sm" @click="setStatut(s, 'annule')">Annuler</button>
           <button class="btn ghost sm" @click="modifier(s)">✎ Modifier</button>
-          <button class="btn ghost sm" @click="supprimer(s)">🗑</button>
+          <button v-if="peutSupprimer" class="btn ghost sm" @click="supprimer(s)">🗑</button>
         </div>
       </div>
     </section>
@@ -77,6 +77,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
+const peutSupprimer = inject('peutSupprimer', ref(true))
 const route = useRoute()
 const formations = ref([])
 const personnes = ref([])

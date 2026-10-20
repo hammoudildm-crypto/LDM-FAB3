@@ -5,6 +5,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
+const peutSupprimer = inject('peutSupprimer', ref(true))
 
 const donneurs = ref([])
 const produits = ref([])
@@ -610,7 +611,7 @@ onMounted(async () => {
               <td class="right nowrap">
                 <template v-if="peutEditer">
                   <button class="link" @click="modifierDO(d)">Modifier</button>
-                  <button class="link danger" @click="desactiverDO(d)">Désactiver</button>
+                  <button v-if="peutSupprimer" class="link danger" @click="desactiverDO(d)">Désactiver</button>
                 </template>
               </td>
             </tr>
@@ -646,7 +647,7 @@ onMounted(async () => {
               <td class="right nowrap">
                 <template v-if="peutEditer">
                   <button class="link" @click="modifierA(a)">Modifier</button>
-                  <button class="link danger" @click="desactiverA(a)">Désactiver</button>
+                  <button v-if="peutSupprimer" class="link danger" @click="desactiverA(a)">Désactiver</button>
                 </template>
               </td>
             </tr>
@@ -692,8 +693,8 @@ onMounted(async () => {
               <td class="right nowrap">
                 <template v-if="peutEditer">
                   <button class="link" @click="modifierE(e)">Modifier</button>
-                  <button class="link danger" @click="desactiverE(e)">Désactiver</button>
-                  <button class="link danger" @click="supprimerE(e)">Supprimer</button>
+                  <button v-if="peutSupprimer" class="link danger" @click="desactiverE(e)">Désactiver</button>
+                  <button v-if="peutSupprimer" class="link danger" @click="supprimerE(e)">Supprimer</button>
                 </template>
               </td>
             </tr>
@@ -806,7 +807,7 @@ onMounted(async () => {
               <td class="right nowrap">
                 <template v-if="peutEditer">
                   <button class="link" @click="modifierP(p)">Modifier</button>
-                  <button class="link danger" @click="desactiverP(p)">Désactiver</button>
+                  <button v-if="peutSupprimer" class="link danger" @click="desactiverP(p)">Désactiver</button>
                 </template>
               </td>
             </tr>
@@ -841,7 +842,7 @@ onMounted(async () => {
             <template v-if="peutEditer">
               <button class="link" @click="ouvrirEditSup(sv)">Renommer</button>
               <button class="link warn" @click="reinitialiserPin(sv)">Réinit. PIN</button>
-              <button class="link danger" @click="supprimerSup(sv)">Supprimer</button>
+              <button v-if="peutSupprimer" class="link danger" @click="supprimerSup(sv)">Supprimer</button>
             </template>
           </template>
         </div>
@@ -870,7 +871,7 @@ onMounted(async () => {
             <span class="sv-nom">{{ po.nom }}</span>
             <template v-if="peutEditer">
               <button class="link" @click="ouvrirEditPoste(po)">Renommer</button>
-              <button class="link danger" @click="supprimerPoste(po)">Supprimer</button>
+              <button v-if="peutSupprimer" class="link danger" @click="supprimerPoste(po)">Supprimer</button>
             </template>
           </template>
         </div>
@@ -887,7 +888,7 @@ onMounted(async () => {
         <div class="ct-grid">
           <div v-for="b in BRANCHES_ISH" :key="b.k" class="ct-card">
             <div class="ct-m">{{ b.nom }}</div>
-            <div v-for="c in causesList.filter(x => x.branche === b.k)" :key="c.id" class="ct-row"><span>{{ c.libelle }}</span><button v-if="peutEditer" class="ct-del" @click="supprimerCause(c)">×</button></div>
+            <div v-for="c in causesList.filter(x => x.branche === b.k)" :key="c.id" class="ct-row"><span>{{ c.libelle }}</span><button v-if="peutSupprimer" class="ct-del" @click="supprimerCause(c)">×</button></div>
             <input v-if="peutEditer" v-model="nouvelleCause[b.k]" class="ct-input" placeholder="+ cause…" @keyup.enter="ajouterCause(b.k)" />
           </div>
         </div>
@@ -916,7 +917,7 @@ onMounted(async () => {
             <span class="sv-nom">{{ v.nom }}</span>
             <template v-if="peutEditer">
               <button class="link" @click="ouvrirEditCond(v)">Renommer</button>
-              <button class="link danger" @click="supprimerCond(v)">Supprimer</button>
+              <button v-if="peutSupprimer" class="link danger" @click="supprimerCond(v)">Supprimer</button>
             </template>
           </template>
         </div>
@@ -976,7 +977,7 @@ onMounted(async () => {
                 <template v-else>
                   <td class="right strong">{{ c.cadence_nominale != null ? Number(c.cadence_nominale).toLocaleString('fr-FR') : '—' }}</td>
                   <td>{{ c.unite_cadence }}</td>
-                  <td class="right nowrap"><button v-if="peutEditer" class="link" @click="ouvrirEditCad(c)">Modifier</button> <button v-if="peutEditer" class="link danger" @click="supprimerCad(c)">Supprimer</button></td>
+                  <td class="right nowrap"><button v-if="peutEditer" class="link" @click="ouvrirEditCad(c)">Modifier</button> <button v-if="peutSupprimer" class="link danger" @click="supprimerCad(c)">Supprimer</button></td>
                 </template>
               </tr>
             </tbody>
@@ -1034,7 +1035,7 @@ onMounted(async () => {
                 <td class="right nowrap">
                   <template v-if="peutEditer">
                     <button class="link" @click="editerPC(c)">Modifier</button>
-                    <button class="link danger" @click="supprimerPC(c)">Supprimer</button>
+                    <button v-if="peutSupprimer" class="link danger" @click="supprimerPC(c)">Supprimer</button>
                   </template>
                 </td>
               </tr>

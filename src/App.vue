@@ -60,8 +60,11 @@ function onDbChange() {
 
 const estAdmin = computed(() => role.value === 'admin')
 const peutEditer = computed(() => role.value === 'admin' || role.value === 'operateur')
+// Suppression réservée à l'admin : les opérateurs peuvent créer/modifier mais pas supprimer.
+const peutSupprimer = computed(() => role.value === 'admin')
 provide('role', role)
 provide('peutEditer', peutEditer)
+provide('peutSupprimer', peutSupprimer)
 
 const roleLabel = computed(() => ({ admin: 'Admin', operateur: 'Opérateur', lecteur: 'Lecteur' }[role.value] || ''))
 // --- Présence temps réel : qui est en ligne ---

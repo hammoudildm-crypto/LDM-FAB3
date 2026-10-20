@@ -5,6 +5,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
+const peutSupprimer = inject('peutSupprimer', ref(true))
 
 const STATUTS = ['En cours', 'Terminé', 'Libéré']
 const PHASES_FAB = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
@@ -420,7 +421,7 @@ onMounted(async () => {
                 <td class="right nowrap">
                   <template v-if="peutEditer">
                     <button class="link" @click="modifier(r)">Modifier</button>
-                    <button class="link danger" @click="desactiver(r)">Supprimer</button>
+                    <button v-if="peutSupprimer" class="link danger" @click="desactiver(r)">Supprimer</button>
                   </template>
                 </td>
               </tr>

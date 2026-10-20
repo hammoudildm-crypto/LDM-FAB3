@@ -66,7 +66,7 @@
                 <span class="statut" :class="statut(ind)">{{ statutLabel(ind) }}</span>
               </td>
               <td v-if="peutEditer" class="center">
-                <button class="del" title="Supprimer" @click="supprimerIndicateur(ind)">✕</button>
+                <button v-if="peutSupprimer" class="del" title="Supprimer" @click="supprimerIndicateur(ind)">✕</button>
               </td>
             </tr>
             <tr v-if="!indicateursDomaine(dom.cle).length">
@@ -105,6 +105,7 @@ const anneeCourante = new Date().getFullYear()
 const ANNEES = [anneeCourante - 2, anneeCourante - 1, anneeCourante, anneeCourante + 1]
 
 const peutEditer = inject('peutEditer', ref(true))
+const peutSupprimer = inject('peutSupprimer', ref(true))
 const annee = ref(anneeCourante)
 const indicateurs = ref([])
 const cellules = reactive({})

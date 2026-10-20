@@ -67,7 +67,7 @@
                 <td class="r">{{ p.type === 'bool' ? '—' : fmt(p.limite_max) }}</td>
                 <td v-if="peutEditer" class="act">
                   <button @click="modifier(p)" title="Modifier">✎</button>
-                  <button @click="supprimer(p)" title="Supprimer">🗑</button>
+                  <button v-if="peutSupprimer" @click="supprimer(p)" title="Supprimer">🗑</button>
                 </td>
               </tr>
               </template>
@@ -123,6 +123,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
+const peutSupprimer = inject('peutSupprimer', ref(true))
 const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Contrôle Qualité']
 const UNITES = ['N', 'Kp', 'mg', 'g', 'kg', '°C', '%', 'min', 'mm', 'tr/min', 'bar']
 const ETAPES = ['Mélange sec', 'Mouillage', 'Granulation', 'Séchage', 'Refroidissement', 'Calibrage', 'Tamisage', 'Lubrification', 'Réglage', 'Démarrage', 'Milieu', 'Fin']
