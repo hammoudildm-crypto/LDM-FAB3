@@ -202,6 +202,18 @@ const pyramide = computed(() => AGE_BRACKETS.map(([lo, hi, label]) => {
 }))
 const pyrMax = computed(() => Math.max(1, ...pyramide.value.map(b => Math.max(b.h, b.f))))
 const ageMoyTxt = computed(() => { let s = 0, n = 0; for (const x of orgNodesAffiches.value) { const a = ageDe(x.date_naissance); if (a != null) { s += a; n++ } } return n ? (Math.round(s / n) + ' ans') : '—' })
+// Pyramide des âges par périmètre (sélecteur propre à la carte, sans impacter le reste)
+const pyrPerim = ref('')
+const perimListePyr = computed(() => [...new Set(orgNodesAffiches.value.map(n => n.atelier_id).filter(Boolean))].sort())
+const basePyr = computed(() => pyrPerim.value ? orgNodesAffiches.value.filter(n => n.atelier_id === pyrPerim.value) : orgNodesAffiches.value)
+const pyramidePerim = computed(() => AGE_BRACKETS.map(([lo, hi, label]) => {
+  let h = 0, f = 0
+  for (const n of basePyr.value) { const a = ageDe(n.date_naissance); if (a == null || a < lo || a > hi) continue; const g = (n.genre || '').toLowerCase(); if (g[0] === 'f') f++; else if (g[0] === 'h' || g[0] === 'm') h++ }
+  return { label, h, f }
+}))
+const pyrMaxPerim = computed(() => Math.max(1, ...pyramidePerim.value.map(b => Math.max(b.h, b.f))))
+const nbAvecAgePerim = computed(() => basePyr.value.filter(n => ageDe(n.date_naissance) != null).length)
+const ageMoyTxtPerim = computed(() => { let s = 0, n = 0; for (const x of basePyr.value) { const a = ageDe(x.date_naissance); if (a != null) { s += a; n++ } } return n ? (Math.round(s / n) + ' ans') : '—' })
 const ageRetraite = ref(60)
 const horizonRetraite = 5
 const retraites = computed(() => {
@@ -907,15 +919,24 @@ onMounted(chargerTout)
 
       <div v-if="tab === 'demo'">
       <section class="card" v-if="nbAvecAge">
-        <div class="card-head"><h2 class="card-title">Pyramide des âges</h2><span class="count">Âge moyen · {{ ageMoyTxt }}</span></div>
-        <div class="pyr">
-          <div v-for="b in pyramide" :key="b.label" class="pyr-row">
-            <div class="pyr-h"><span class="pyr-n">{{ b.h || '' }}</span><div class="pyr-bar hb" :style="{ width: (b.h / pyrMax * 100) + '%' }"></div></div>
-            <div class="pyr-lbl">{{ b.label }}</div>
-            <div class="pyr-f"><div class="pyr-bar fb" :style="{ width: (b.f / pyrMax * 100) + '%' }"></div><span class="pyr-n">{{ b.f || '' }}</span></div>
-          </div>
+        <div class="card-head">
+          <h2 class="card-title">Pyramide des âges</h2>
+          <span class="count">Âge moyen · {{ ageMoyTxtPerim }}</span>
+          <label class="ret-age pyr-perim">Périmètre
+            <select v-model="pyrPerim"><option value="">Tous</option><option v-for="p in perimListePyr" :key="p" :value="p">{{ p }}</option></select>
+          </label>
         </div>
-        <div class="pyr-leg"><span class="pl-h">♂ Hommes</span><span class="pl-f">♀ Femmes</span></div>
+        <div v-if="!nbAvecAgePerim" class="empty-sm">Aucune date de naissance renseignée pour ce périmètre.</div>
+        <template v-else>
+          <div class="pyr">
+            <div v-for="b in pyramidePerim" :key="b.label" class="pyr-row">
+              <div class="pyr-h"><span class="pyr-n">{{ b.h || '' }}</span><div class="pyr-bar hb" :style="{ width: (b.h / pyrMaxPerim * 100) + '%' }"></div></div>
+              <div class="pyr-lbl">{{ b.label }}</div>
+              <div class="pyr-f"><div class="pyr-bar fb" :style="{ width: (b.f / pyrMaxPerim * 100) + '%' }"></div><span class="pyr-n">{{ b.f || '' }}</span></div>
+            </div>
+          </div>
+          <div class="pyr-leg"><span class="pl-h">♂ Hommes</span><span class="pl-f">♀ Femmes</span><span v-if="pyrPerim" class="pl-p">· {{ pyrPerim }} ({{ nbAvecAgePerim }} pers.)</span></div>
+        </template>
       </section>
 
       <section class="card" v-if="nbAvecAge">
@@ -1322,6 +1343,8 @@ onMounted(chargerTout)
 .pl-f { color: #ec4899; }
 .ret-age { margin-left: auto; font-size: 11px; font-weight: 700; color: #64748b; display: inline-flex; align-items: center; gap: 6px; }
 .ret-age input { width: 56px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; }
+.pyr-perim select { padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; font-weight: 600; }
+.pl-p { color: #64748b; }
 .ret-list { display: flex; flex-direction: column; margin-top: 6px; }
 .ret-row { display: flex; align-items: center; gap: 6px; padding: 7px 2px; border-top: 1px solid #f1f5f9; font-size: 13px; }
 .rr-nom { font-weight: 700; color: #0f172a; }
