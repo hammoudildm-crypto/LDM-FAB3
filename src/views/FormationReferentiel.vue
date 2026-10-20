@@ -92,6 +92,10 @@ function formationsDe(cat) { return formationsVues.value.filter(f => (f.categori
 async function enregistrer() {
   erreur.value = ''; message.value = ''
   if (!form.nom.trim()) { erreur.value = 'Le nom de la formation est requis.'; return }
+  // Anti-doublon : une procédure/formation déjà enregistrée sous le même nom
+  const nomNorm = normR(form.nom.trim())
+  const doublon = formations.value.find(f => normR(f.nom) === nomNorm && f.id !== form.id)
+  if (doublon) { erreur.value = 'Cette formation existe déjà : « ' + doublon.nom + ' ». Aucun doublon n\'a été enregistré.'; return }
   const payload = { nom: form.nom.trim(), categorie: form.categorie || null, validite_mois: (form.validite_mois === '' || form.validite_mois == null) ? null : Number(form.validite_mois) }
   let r
   if (form.id) r = await supabase.from('formations').update(payload).eq('id', form.id)
