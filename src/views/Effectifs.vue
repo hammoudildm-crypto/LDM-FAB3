@@ -796,8 +796,8 @@ onMounted(chargerTout)
             <div class="grp-bars">
               <div v-for="a in mouvParAn" :key="a.annee" class="grp-col">
                 <div class="grp-pair">
-                  <div class="grp-b in" :style="{ height: Math.max(2, a.entrees / mouvAnMax * 72) + 'px' }" :title="a.entrees + ' entrées'"><span class="grp-v">{{ a.entrees }}</span></div>
-                  <div class="grp-b out" :style="{ height: Math.max(2, a.sorties / mouvAnMax * 72) + 'px' }" :title="a.sorties + ' sorties'"><span class="grp-v">{{ a.sorties }}</span></div>
+                  <div class="grp-b in" :style="{ height: Math.max(2, a.entrees / mouvAnMax * 108) + 'px' }" :title="a.entrees + ' entrées'"><span class="grp-v">{{ a.entrees }}</span></div>
+                  <div class="grp-b out" :style="{ height: Math.max(2, a.sorties / mouvAnMax * 108) + 'px' }" :title="a.sorties + ' sorties'"><span class="grp-v">{{ a.sorties }}</span></div>
                 </div>
                 <div class="grp-lbl">{{ a.annee }}</div>
               </div>
@@ -813,8 +813,8 @@ onMounted(chargerTout)
                 <div class="grp-bars sm">
                   <div v-for="a in p.data" :key="a.annee" class="grp-col">
                     <div class="grp-pair">
-                      <div class="grp-b in" :style="{ height: Math.max(2, a.entrees / mouvPerimMax * 56) + 'px' }" :title="a.entrees + ' entrées en ' + a.annee"><span class="grp-v">{{ a.entrees }}</span></div>
-                      <div class="grp-b out" :style="{ height: Math.max(2, a.sorties / mouvPerimMax * 56) + 'px' }" :title="a.sorties + ' sorties en ' + a.annee"><span class="grp-v">{{ a.sorties }}</span></div>
+                      <div class="grp-b in" :style="{ height: Math.max(2, a.entrees / mouvPerimMax * 76) + 'px' }" :title="a.entrees + ' entrées en ' + a.annee"><span class="grp-v">{{ a.entrees }}</span></div>
+                      <div class="grp-b out" :style="{ height: Math.max(2, a.sorties / mouvPerimMax * 76) + 'px' }" :title="a.sorties + ' sorties en ' + a.annee"><span class="grp-v">{{ a.sorties }}</span></div>
                     </div>
                     <div class="grp-lbl">{{ a.annee }}</div>
                   </div>
@@ -1197,41 +1197,41 @@ onMounted(chargerTout)
 .dc-link .dc-big { color: #0d9488; }
 /* Présentations graphiques */
 .charts-card { margin-top: 16px; }
-.charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
-.chart-box { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; background: #fff; }
-.chart-box.wide { grid-column: span 2; }
-.chart-t { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 12px; }
-.chart-donut-wrap { display: flex; align-items: center; gap: 14px; }
-.donut { width: 104px; height: 104px; flex: none; }
+.charts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.chart-box { border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 18px; background: #fff; display: flex; flex-direction: column; }
+.chart-box.wide { grid-column: 1 / -1; }
+.chart-t { font-size: 13px; font-weight: 800; color: #334155; margin-bottom: 14px; }
+.chart-donut-wrap { display: flex; align-items: center; justify-content: center; gap: 28px; flex: 1; flex-wrap: wrap; }
+.donut { width: 168px; height: 168px; flex: none; }
 .donut-bg { stroke: #eef2f6; }
-.donut-c { font-size: 9px; font-weight: 800; fill: #0f172a; text-anchor: middle; }
-.donut-s { font-size: 3.4px; fill: #94a3b8; text-anchor: middle; font-weight: 700; }
-.chart-leg { display: flex; flex-direction: column; gap: 5px; font-size: 11.5px; color: #475569; }
-.leg-row { display: flex; align-items: center; gap: 6px; }
+.donut-c { font-size: 8.5px; font-weight: 800; fill: #0f172a; text-anchor: middle; }
+.donut-s { font-size: 3.2px; fill: #94a3b8; text-anchor: middle; font-weight: 700; }
+.chart-leg { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: #475569; }
+.leg-row { display: flex; align-items: center; gap: 8px; }
 .leg-row b { color: #0f172a; }
-.leg-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
-.hbars { display: flex; flex-direction: column; gap: 7px; }
-.hbar-row { display: grid; grid-template-columns: 160px 1fr 34px; align-items: center; gap: 8px; font-size: 12px; }
+.leg-dot { width: 12px; height: 12px; border-radius: 3px; flex: none; display: inline-block; }
+.hbars { display: flex; flex-direction: column; gap: 9px; }
+.hbar-row { display: grid; grid-template-columns: 190px 1fr 40px; align-items: center; gap: 10px; font-size: 13px; }
 .hbar-lbl { color: #334155; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
-.hbar-track { background: #eef2f6; border-radius: 6px; height: 14px; overflow: hidden; }
-.hbar-fill { display: block; height: 100%; background: linear-gradient(90deg, #14b8a6, #0d9488); border-radius: 6px; }
-.hbar-val { text-align: right; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
-.grp-bars { display: flex; align-items: flex-end; justify-content: space-around; gap: 14px; min-height: 104px; }
-.grp-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.grp-pair { display: flex; align-items: flex-end; gap: 4px; height: 84px; }
-.grp-b { width: 20px; border-radius: 4px 4px 0 0; display: flex; justify-content: center; align-items: flex-start; }
+.hbar-track { background: #eef2f6; border-radius: 7px; height: 20px; overflow: hidden; }
+.hbar-fill { display: block; height: 100%; background: linear-gradient(90deg, #14b8a6, #0d9488); border-radius: 7px; }
+.hbar-val { text-align: right; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; font-size: 13.5px; }
+.grp-bars { display: flex; align-items: flex-end; justify-content: center; gap: 48px; min-height: 160px; padding-top: 6px; }
+.grp-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.grp-pair { display: flex; align-items: flex-end; gap: 7px; height: 128px; }
+.grp-b { width: 34px; border-radius: 5px 5px 0 0; display: flex; justify-content: center; align-items: flex-start; }
 .grp-b.in { background: #16a34a; }
 .grp-b.out { background: #dc2626; }
-.grp-v { font-size: 9px; font-weight: 800; color: #fff; margin-top: 2px; }
-.grp-lbl { font-size: 10.5px; font-weight: 700; color: #64748b; }
-.chart-leg-row { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #64748b; font-weight: 700; margin-top: 8px; justify-content: center; }
-.sm-mult { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
-.sm-box { border: 1px solid #eef2f6; border-radius: 10px; padding: 10px 10px 6px; }
-.sm-title { font-size: 11px; font-weight: 800; color: #475569; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.grp-bars.sm { min-height: 84px; gap: 12px; }
-.grp-bars.sm .grp-pair { height: 60px; }
-.grp-bars.sm .grp-b { width: 16px; }
-@media (max-width: 640px) { .chart-box.wide { grid-column: span 1; } }
+.grp-v { font-size: 11px; font-weight: 800; color: #fff; margin-top: 3px; }
+.grp-lbl { font-size: 12.5px; font-weight: 800; color: #475569; }
+.chart-leg-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; font-weight: 700; margin-top: 12px; justify-content: center; }
+.sm-mult { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.sm-box { border: 1px solid #eef2f6; border-radius: 10px; padding: 12px 12px 8px; background: #fbfdfe; }
+.sm-title { font-size: 12px; font-weight: 800; color: #475569; margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grp-bars.sm { min-height: 118px; gap: 20px; }
+.grp-bars.sm .grp-pair { height: 92px; }
+.grp-bars.sm .grp-b { width: 24px; }
+@media (max-width: 760px) { .charts-grid { grid-template-columns: 1fr; } }
 .alert-contrats { border-left: 4px solid #f59e0b; }
 .alert-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px; margin-top: 12px; }
 .alert-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #92400e; margin-bottom: 7px; }
