@@ -1371,13 +1371,13 @@ onMounted(chargerTout)
 .pers-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .pers-search { flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
 .pers-count { font-size: 12px; color: #94a3b8; font-weight: 700; }
-.pers-tablewrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
+.pers-tablewrap { overflow: auto; max-height: calc(100vh - 280px); min-height: 300px; border: 1px solid #e2e8f0; border-radius: 10px; }
 .pers-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
-.pers-table th { background: #f8fafc; color: #475569; padding: 9px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+.pers-table th { background: #f8fafc; color: #475569; padding: 9px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; position: sticky; top: 0; z-index: 3; box-shadow: 0 1px 0 #e2e8f0; }
 .pers-table td { padding: 9px 12px; border-top: 1px solid #f1f5f9; white-space: nowrap; }
 .pt-nom { font-weight: 700; color: #0f172a; }
 .pers-table th:first-child, .pers-table td:first-child { position: sticky; left: 0; z-index: 1; }
-.pers-table thead th:first-child { background: #e0e7ff; z-index: 2; }
+.pers-table thead th:first-child { background: #e0e7ff; z-index: 4; }
 .pers-table tbody td:first-child { background: #eef2ff; box-shadow: 1px 0 0 #e2e8f0; }
 .pers-table tbody tr:hover td { background: #eff6ff; }
 .pers-table tbody tr:hover td:first-child { background: #c7d2fe; }
