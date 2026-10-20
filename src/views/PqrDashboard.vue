@@ -378,26 +378,42 @@ const mesuresZone = computed(() => {
   return mesuresFiltrees.value.filter(m => { const k = lotKeyOf(m); return !k || keep.has(k) })
 })
 
+const baseParById = computed(() => { const m = {}; for (const p of params.value) m[p.id] = p; return m })
+// Identité logique : un paramètre « par API » est scindé par principe actif (id::api)
+function lidOf(pid, api) { const b = baseParById.value[pid]; return (b && b.par_api && api) ? (pid + '::' + api) : String(pid) }
+// Paramètres logiques : un paramètre « par API » devient un paramètre virtuel par API présent dans les mesures
+const paramsLog = computed(() => {
+  const present = {}
+  for (const m of mesuresZone.value) { if (m.api) (present[m.parametre_id] = present[m.parametre_id] || new Set()).add(m.api) }
+  const out = []
+  for (const p of params.value) {
+    const apis = present[p.id] ? [...present[p.id]] : []
+    if (p.par_api && apis.length) { for (const a of apis) out.push({ ...p, id: p.id + '::' + a, baseId: p.id, api: a, nom: p.nom + ' – ' + a }) }
+    else out.push({ ...p, id: String(p.id), baseId: p.id, api: '' })
+  }
+  return out
+})
 const mesuresPlat = computed(() => {
   const out = []
   for (const m of mesuresZone.value) {
     const vals = Array.isArray(m.valeurs) && m.valeurs.length ? m.valeurs : (m.valeur != null ? [m.valeur] : [])
-    vals.forEach((v, k) => out.push({ parametre_id: m.parametre_id, valeur: v, numero_lot: m.numero_lot, of_id: m.of_id, date_mesure: m.date_mesure, rang: k }))
+    const lid = lidOf(m.parametre_id, m.api)
+    vals.forEach((v, k) => out.push({ parametre_id: lid, valeur: v, numero_lot: m.numero_lot, of_id: m.of_id, date_mesure: m.date_mesure, rang: k }))
   }
   return out
 })
 
-function effMin(p) { const s = specByParam.value[p.id]; return s && s.limite_min != null ? s.limite_min : p.limite_min }
-function uniteEff(p) { const s = specByParam.value[p.id]; return (s && s.unite) ? s.unite : (p.unite || '') }
-function effMax(p) { const s = specByParam.value[p.id]; return s && s.limite_max != null ? s.limite_max : p.limite_max }
-function effCible(p) { const s = specByParam.value[p.id]; return s && s.cible != null ? s.cible : p.cible }
+function effMin(p) { const s = specByParam.value[p.baseId != null ? p.baseId : p.id]; return s && s.limite_min != null ? s.limite_min : p.limite_min }
+function uniteEff(p) { const s = specByParam.value[p.baseId != null ? p.baseId : p.id]; return (s && s.unite) ? s.unite : (p.unite || '') }
+function effMax(p) { const s = specByParam.value[p.baseId != null ? p.baseId : p.id]; return s && s.limite_max != null ? s.limite_max : p.limite_max }
+function effCible(p) { const s = specByParam.value[p.baseId != null ? p.baseId : p.id]; return s && s.cible != null ? s.cible : p.cible }
 function horsSpecVal(v, mn, mx) { return (mn != null && v < mn) || (mx != null && v > mx) }
 function limTxt(mn, mx) { if (mn == null && mx == null) return '—'; return (mn != null ? mn : '…') + ' – ' + (mx != null ? mx : '…') }
 const fmtNum = (v) => (v == null || v === '' || Number.isNaN(Number(v))) ? '—' : parseFloat(Number(v).toFixed(6)).toString()
 function stats(vals) { const n = vals.length; const mean = vals.reduce((a, b) => a + b, 0) / n; const variance = n > 1 ? vals.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1) : 0; return { n, mean, std: Math.sqrt(variance), min: Math.min(...vals), max: Math.max(...vals) } }
 function cpkCalc(mean, std, lsl, usl) { if (std <= 0 || (lsl == null && usl == null)) return { cp: null, cpk: null }; const cp = (lsl != null && usl != null) ? (usl - lsl) / (6 * std) : null; const cpu = usl != null ? (usl - mean) / (3 * std) : Infinity; const cpl = lsl != null ? (mean - lsl) / (3 * std) : Infinity; const cpk = Math.min(cpu, cpl); return { cp, cpk: cpk === Infinity ? null : cpk } }
 
-const paramById = computed(() => { const m = {}; for (const p of params.value) m[p.id] = p; return m })
+const paramById = computed(() => { const m = {}; for (const p of paramsLog.value) m[p.id] = p; return m })
 
 // ---- Analyse d'impact entre paramètres (corrélation par lot) ----
 // valeurs moyennes par lot pour chaque paramètre numérique (réutilisé par le nuage et la matrice)
@@ -433,10 +449,10 @@ function pearsonEntre(xid, yid) {
 }
 const paramsNumDispo = computed(() => {
   const avecData = new Set(mesuresPlat.value.map(m => m.parametre_id))
-  return params.value.filter(p => p.type !== 'bool' && avecData.has(p.id))
+  return paramsLog.value.filter(p => p.type !== 'bool' && avecData.has(p.id))
 })
 const corrData = computed(() => {
-  const xid = Number(corrX.value), yid = Number(corrY.value)
+  const xid = corrX.value, yid = corrY.value
   if (!xid || !yid || xid === yid) return null
   const c = pearsonEntre(xid, yid)
   if (!c) return null
@@ -455,15 +471,15 @@ const corrData = computed(() => {
   const line = { x1: xx(xmin), y1: yy(slope * xmin + intercept), x2: xx(xmax), y2: yy(slope * xmax + intercept) }
   return { insuffisant: false, n, r, r2: r * r, slope, intercept, W, H, mL, mR, mT, mB, xmin, xmax, ymin, ymax, pts, line }
 })
-const corrXnom = computed(() => { const p = paramById.value[Number(corrX.value)]; return p ? p.nom + (uniteEff(p) ? ' (' + uniteEff(p) + ')' : '') : '' })
-const corrYnom = computed(() => { const p = paramById.value[Number(corrY.value)]; return p ? p.nom + (uniteEff(p) ? ' (' + uniteEff(p) + ')' : '') : '' })
+const corrXnom = computed(() => { const p = paramById.value[corrX.value]; return p ? p.nom + (uniteEff(p) ? ' (' + uniteEff(p) + ')' : '') : '' })
+const corrYnom = computed(() => { const p = paramById.value[corrY.value]; return p ? p.nom + (uniteEff(p) ? ' (' + uniteEff(p) + ')' : '') : '' })
 const corrForceCls = computed(() => { const d = corrData.value; if (!d || d.insuffisant) return ''; const ar = Math.abs(d.r); return ar < 0.4 ? 'cv-weak' : ar < 0.6 ? 'cv-mod' : 'cv-strong' })
 const corrTexte = computed(() => {
   const d = corrData.value
   if (!d || d.insuffisant) return ''
   const ar = Math.abs(d.r)
   const force = ar < 0.2 ? 'négligeable' : ar < 0.4 ? 'faible' : ar < 0.6 ? 'modérée' : ar < 0.8 ? 'forte' : 'très forte'
-  const px = paramById.value[Number(corrX.value)], py = paramById.value[Number(corrY.value)]
+  const px = paramById.value[corrX.value], py = paramById.value[corrY.value]
   const nx = px ? px.nom : 'X', ny = py ? py.nom : 'Y'
   if (ar < 0.2) return 'Corrélation ' + force + ' (r = ' + d.r.toFixed(2) + ') : aucune relation nette entre ' + nx + ' et ' + ny + ' sur les lots mesurés.'
   const sens = d.r > 0 ? 'augmenter' : 'diminuer'
@@ -501,7 +517,7 @@ const synthese = computed(() => {
   const byParam = {}
   for (const m of mesuresPlat.value) { const v = Number(m.valeur); if (!Number.isNaN(v)) (byParam[m.parametre_id] = byParam[m.parametre_id] || []).push(v) }
   const out = []
-  for (const p of params.value) {
+  for (const p of paramsLog.value) {
     const vals = byParam[p.id]; if (!vals || !vals.length) continue
     if (p.type === 'bool') {
       const nOn = vals.filter(v => v > 0).length; const attendu = p.etat_attendu || null
@@ -555,7 +571,7 @@ const chartData = computed(() => {
 // ---- Comparaison multi-paramètres (courbes superposées, normalisées 0–100 %) ----
 const SERIES_COLORS = ['#6366f1', '#0d9488', '#e11d48', '#f59e0b', '#2563eb', '#9333ea', '#16a34a', '#0891b2']
 const multiChartData = computed(() => {
-  const ids = comparIds.value.map(Number).filter(id => { const p = paramById.value[id]; return p && p.type !== 'bool' })
+  const ids = comparIds.value.filter(id => { const p = paramById.value[id]; return p && p.type !== 'bool' })
   if (!ids.length) return null
   const acc = {}, lotMeta = {}
   for (const id of ids) acc[id] = {}

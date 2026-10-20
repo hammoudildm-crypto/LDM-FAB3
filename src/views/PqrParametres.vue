@@ -42,6 +42,7 @@
           <input v-model.number="form.limite_min" type="number" step="any" placeholder="Min" class="n" />
           <input v-model.number="form.cible" type="number" step="any" placeholder="Cible" class="n" />
           <input v-model.number="form.limite_max" type="number" step="any" placeholder="Max" class="n" />
+          <label class="par-api-chk" title="Mesuré une fois par principe actif (produits à 2 API)"><input type="checkbox" v-model="form.par_api" /> par API</label>
           </template>
           <select v-else v-model="form.etat_attendu" class="t"><option value="">État attendu —</option><option value="ON">Doit être ON</option><option value="OFF">Doit être OFF</option></select>
           <div class="pqr-actions">
@@ -60,7 +61,7 @@
               <template v-for="et in etapesDe(ph)" :key="ph + '|' + et">
               <tr v-if="et" class="etape-row"><td :colspan="peutEditer ? 6 : 5">{{ et }}</td></tr>
               <tr v-for="p in paramsDeEtape(ph, et)" :key="p.id">
-                <td class="nom">{{ p.nom }} <span v-if="p.type === 'bool'" class="tag-bool">ON/OFF</span></td>
+                <td class="nom">{{ p.nom }} <span v-if="p.type === 'bool'" class="tag-bool">ON/OFF</span><span v-if="p.par_api" class="tag-api">par API</span></td>
                 <td>{{ p.type === 'bool' ? '—' : (p.unite || '—') }}</td>
                 <td class="r">{{ p.type === 'bool' ? '—' : fmt(p.limite_min) }}</td>
                 <td class="r cible">{{ p.type === 'bool' ? (p.etat_attendu ? 'Attendu : ' + p.etat_attendu : 'ON/OFF') : fmt(p.cible) }}</td>
@@ -90,7 +91,7 @@
               <template v-for="et in etapesDe(ph)" :key="ph + '|' + et">
               <tr v-if="et" class="etape-row"><td colspan="5">{{ et }}</td></tr>
               <tr v-for="p in paramsDeEtape(ph, et)" :key="p.id">
-                <td class="nom">{{ p.nom }} <span v-if="p.type === 'bool'" class="tag-bool">ON/OFF</span></td>
+                <td class="nom">{{ p.nom }} <span v-if="p.type === 'bool'" class="tag-bool">ON/OFF</span><span v-if="p.par_api" class="tag-api">par API</span></td>
                 <td><input v-if="p.type !== 'bool'" class="unite-in" v-model="specsEdit[p.id].unite" list="unitesListe" :placeholder="p.unite || '—'" :disabled="!peutEditer" /><span v-else>—</span></td>
                 <template v-if="p.type === 'bool'">
                   <td class="r bool-na" colspan="3">Pas de spec par produit (défini au référentiel)</td>
@@ -161,8 +162,8 @@ const erreur = ref('')
 const message = ref('')
 const recherche = ref('')
 const phaseFiltre = ref('')
-const form = reactive({ id: null, phase: '', nom: '', unite: '', etape: '', type: 'num', etat_attendu: '', limite_min: null, cible: null, limite_max: null })
-function reset() { Object.assign(form, { id: null, phase: '', nom: '', unite: '', etape: '', type: 'num', etat_attendu: '', limite_min: null, cible: null, limite_max: null }) }
+const form = reactive({ id: null, phase: '', nom: '', unite: '', etape: '', type: 'num', etat_attendu: '', limite_min: null, cible: null, limite_max: null, par_api: false })
+function reset() { Object.assign(form, { id: null, phase: '', nom: '', unite: '', etape: '', type: 'num', etat_attendu: '', limite_min: null, cible: null, limite_max: null, par_api: false }) }
 
 async function charger() {
   const r = await supabase.from('pqr_parametres').select('*').eq('actif', true).order('ordre')
@@ -220,15 +221,22 @@ async function enregistrer() {
   if (!form.phase) { erreur.value = 'Choisis une phase.'; return }
   if (!form.nom.trim()) { erreur.value = 'Le nom du paramètre est requis.'; return }
   const bool = form.type === 'bool'
-  const payload = { phase: form.phase, nom: form.nom.trim(), etape: form.etape || null, unite: bool ? null : (form.unite || null), type: form.type, etat_attendu: bool ? (form.etat_attendu || null) : null, limite_min: bool ? null : form.limite_min, cible: bool ? null : form.cible, limite_max: bool ? null : form.limite_max }
+  const payload = { phase: form.phase, nom: form.nom.trim(), etape: form.etape || null, unite: bool ? null : (form.unite || null), type: form.type, etat_attendu: bool ? (form.etat_attendu || null) : null, limite_min: bool ? null : form.limite_min, cible: bool ? null : form.cible, limite_max: bool ? null : form.limite_max, par_api: bool ? false : !!form.par_api }
   let r
   if (form.id) r = await supabase.from('pqr_parametres').update(payload).eq('id', form.id)
   else r = await supabase.from('pqr_parametres').insert({ ...payload, ordre: params.value.length })
+  // Repli si la colonne par_api n'existe pas encore
+  if (r.error && /par_api/.test(r.error.message || '')) {
+    const { par_api, ...sansApi } = payload
+    if (form.id) r = await supabase.from('pqr_parametres').update(sansApi).eq('id', form.id)
+    else r = await supabase.from('pqr_parametres').insert({ ...sansApi, ordre: params.value.length })
+    if (!r.error) { erreur.value = 'Paramètre enregistré, mais « par API » n\'a pas pu être sauvegardé : ajoutez la colonne par_api (boolean) à pqr_parametres dans Supabase.'; reset(); await charger(); return }
+  }
   if (r.error) { erreur.value = r.error.message; return }
   message.value = form.id ? 'Paramètre mis à jour.' : 'Paramètre ajouté.'
   reset(); await charger()
 }
-function modifier(p) { Object.assign(form, { id: p.id, phase: p.phase, nom: p.nom, unite: p.unite || '', etape: p.etape || '', type: p.type || 'num', etat_attendu: p.etat_attendu || '', limite_min: p.limite_min, cible: p.cible, limite_max: p.limite_max }) }
+function modifier(p) { Object.assign(form, { id: p.id, phase: p.phase, nom: p.nom, unite: p.unite || '', etape: p.etape || '', type: p.type || 'num', etat_attendu: p.etat_attendu || '', limite_min: p.limite_min, cible: p.cible, limite_max: p.limite_max, par_api: !!p.par_api }) }
 async function supprimer(p) {
   if (!confirm('Supprimer le paramètre « ' + p.nom + ' » ?')) return
   const r = await supabase.from('pqr_parametres').update({ actif: false }).eq('id', p.id)
@@ -237,8 +245,13 @@ async function supprimer(p) {
 }
 async function chargerStandard() {
   erreur.value = ''; message.value = ''
-  const rows = STANDARD.map((s, i) => ({ phase: s[0], nom: s[1], unite: s[2] || null, ordre: i }))
-  const r = await supabase.from('pqr_parametres').insert(rows)
+  const perApi = new Set(['CQ Dosage', 'CQ Dissolution', 'CQ Uniformité de teneur'])
+  const rows = STANDARD.map((s, i) => ({ phase: s[0], nom: s[1], unite: s[2] || null, ordre: i, par_api: perApi.has(s[1]) }))
+  let r = await supabase.from('pqr_parametres').insert(rows)
+  if (r.error && /par_api/.test(r.error.message || '')) {
+    r = await supabase.from('pqr_parametres').insert(rows.map(({ par_api, ...x }) => x))
+    if (!r.error) { message.value = 'Référentiel standard chargé (' + rows.length + ' paramètres). Ajoutez la colonne par_api (boolean) à pqr_parametres pour activer le suivi par API.'; await charger(); return }
+  }
   if (r.error) { erreur.value = r.error.message; return }
   message.value = 'Référentiel standard chargé (' + rows.length + ' paramètres).'; await charger()
 }
@@ -298,6 +311,9 @@ async function enregistrerSpecs() {
 .pqr-form .e { width: 130px; }
 .pqr-form .t { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
 .tag-bool { font-size: 9px; font-weight: 800; background: #ecfeff; color: #0891b2; padding: 1px 6px; border-radius: 999px; vertical-align: middle; }
+.tag-api { font-size: 9px; font-weight: 800; background: #faf5ff; color: #7c3aed; padding: 1px 6px; border-radius: 999px; vertical-align: middle; margin-left: 4px; }
+.par-api-chk { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: #7c3aed; white-space: nowrap; }
+.par-api-chk input { width: auto; }
 .bool-na { color: #94a3b8; font-style: italic; text-align: left !important; }
 .pqr-actions { display: flex; gap: 8px; }
 
