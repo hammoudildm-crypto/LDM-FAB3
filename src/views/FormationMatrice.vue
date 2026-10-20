@@ -58,11 +58,13 @@
       <h3 class="sec-titre">Taux de formation par personne</h3>
       <p class="hint">Basé sur les formations <b>requises</b> de chaque fonction (définies dans « Exigences par fonction »). Trié des plus à risque en premier.</p>
       <p class="hint">Clique sur une personne pour voir le détail : formations acquises, à renouveler, expirées et manquantes.</p>
+      <div class="pers-srch"><input v-model="recherchePers" type="search" placeholder="Rechercher une personne (nom, fonction)…" /><span v-if="recherchePers" class="pers-srch-n">{{ tauxParPersonneRech.length }} / {{ tauxParPersonne.length }}</span></div>
       <div v-if="!tauxParPersonne.length" class="empty-sm">Aucune personne pour ce filtre.</div>
+      <div v-else-if="!tauxParPersonneRech.length" class="empty-sm">Aucune personne ne correspond à « {{ recherchePers }} ».</div>
       <table v-else class="form-tbl">
         <thead><tr><th>Personne</th><th>Fonction</th><th class="r">Validées / Requises</th><th class="c">Formé</th><th class="c">À renouveler</th><th class="c">Expiré</th><th class="c">Manquant</th><th class="tx">Taux</th></tr></thead>
         <tbody>
-          <template v-for="t in tauxParPersonne" :key="t.id">
+          <template v-for="t in tauxParPersonneRech" :key="t.id">
             <tr class="pp-row" :class="{ open: persOuvert === t.id }" @click="persOuvert = persOuvert === t.id ? null : t.id" title="Voir le détail des qualifications">
               <td class="nom"><span class="pp-caret">{{ persOuvert === t.id ? '▾' : '▸' }}</span>{{ t.nom }}</td>
               <td>{{ t.fonction || '—' }}</td>
@@ -206,6 +208,8 @@ const filtreFonction = ref('')
 const filtrePhase = ref('')
 const filtreMachine = ref('')
 const vue = ref('matrice')
+const recherchePers = ref('')
+const normP = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 const erreur = ref('')
 const router = useRouter()
 
@@ -299,6 +303,11 @@ const tauxParPersonne = computed(() => personnesFiltrees.value.map(p => {
   for (const fid of req) { const st = cellStatut(p.id, fid); if (st === 'valide') valides++; else if (st === 'bientot') bientot++; else if (st === 'expire') expireN++; else if (st === 'manquant') manquant++ }
   return { id: p.id, nom: p.nom, fonction: p.fonction, requises: req.size, valides, bientot, expireN, manquant, taux: valides / req.size * 100 }
 }).sort((a, b) => (a.taux == null ? 1000 : a.taux) - (b.taux == null ? 1000 : b.taux) || (a.nom || '').localeCompare(b.nom || '')))
+const tauxParPersonneRech = computed(() => {
+  const q = normP(recherchePers.value.trim())
+  if (!q) return tauxParPersonne.value
+  return tauxParPersonne.value.filter(t => normP(t.nom).includes(q) || normP(t.fonction).includes(q))
+})
 // Détail des formations d'une personne (requises + supplémentaires), classé écarts d'abord
 const persOuvert = ref(null)
 function detailPersonne(p) {
@@ -481,6 +490,9 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .pp-req { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 5px; }
 .pp-req.req { background: #eef2ff; color: #4338ca; }
 .pp-req.sup { background: #f1f5f9; color: #64748b; }
+.pers-srch { display: flex; align-items: center; gap: 10px; margin: 2px 0 12px; }
+.pers-srch input { flex: 1; max-width: 420px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; }
+.pers-srch-n { font-size: 12px; color: #94a3b8; font-weight: 700; }
 .bar-txt { position: absolute; top: 0; right: 7px; line-height: 18px; font-size: 11px; font-weight: 800; color: #0f172a; }
 .no-req { font-size: 11px; color: #94a3b8; font-style: italic; }
 .repart { margin-bottom: 4px; }
