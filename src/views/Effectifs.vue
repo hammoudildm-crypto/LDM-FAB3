@@ -1039,7 +1039,7 @@ onMounted(chargerTout)
 
       <div v-if="tab === 'org'">
       <section class="card">
-        <div class="card-head"><h2 class="card-title">Personnel</h2><span class="count">{{ orgNodesAffiches.length }}</span></div>
+        <div class="card-head pers-head"><h2 class="card-title">Personnel</h2><span class="count">{{ orgNodesAffiches.length }}</span></div>
         <div v-if="peutEditer" class="org-import">
           <button class="imp-toggle" @click="impOuvert = !impOuvert">📋 Importer / coller une liste <span class="imp-ch">{{ impOuvert ? '▲' : '▼' }}</span></button>
           <div v-if="impOuvert" class="imp-body">
@@ -1173,6 +1173,7 @@ onMounted(chargerTout)
 .count { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
 .filtre { font-size: 13px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
 .card-head .filtre:first-of-type { margin-left: auto; }
+.pers-head { position: sticky; top: 0; z-index: 6; background: #fff; margin: -18px -18px 10px; padding: 14px 18px; border-bottom: 1px solid #e2e8f0; border-radius: 12px 12px 0 0; box-shadow: 0 2px 6px rgba(16,24,40,.05); }
 .btn-exp { font-size: 13px; padding: 7px 12px; border: 1px solid #0f766e; border-radius: 8px; background: #fff; color: #0f766e; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .btn-exp:hover { background: #ecfdf5; }
 .btn-exp:disabled { opacity: .45; cursor: not-allowed; }
