@@ -364,7 +364,23 @@ const mouvParAn = computed(() => {
   })
 })
 const mouvAnMax = computed(() => Math.max(1, ...mouvParAn.value.flatMap(x => [x.entrees, x.sorties])))
-const pyrTotalMax = computed(() => Math.max(1, ...pyramide.value.map(b => b.h + b.f)))
+// Entrées / sorties par an ET par périmètre (petits multiples) — sur tout le personnel
+const mouvParAnPerim = computed(() => {
+  const years = anneesMouv.value
+  const perims = {}
+  const ensure = (p) => { if (!perims[p]) perims[p] = years.map(y => ({ annee: y, entrees: 0, sorties: 0 })); return perims[p] }
+  for (const n of orgNodes.value) {
+    const p = n.atelier_id || 'Non renseigné'
+    if (n.date_recrutement) { const r = new Date(n.date_recrutement); const yi = years.indexOf(r.getFullYear()); if (!isNaN(r) && yi >= 0) ensure(p)[yi].entrees++ }
+    if (n.date_sortie) { const sd = new Date(n.date_sortie); const yi = years.indexOf(sd.getFullYear()); if (!isNaN(sd) && yi >= 0) ensure(p)[yi].sorties++ }
+  }
+  const order = [...PERIMETRES]
+  return Object.keys(perims)
+    .map(p => ({ perim: p, data: perims[p], total: perims[p].reduce((s, x) => s + x.entrees + x.sorties, 0) }))
+    .filter(x => x.total > 0)
+    .sort((a, b) => { const ia = order.indexOf(a.perim), ib = order.indexOf(b.perim); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.perim.localeCompare(b.perim) })
+})
+const mouvPerimMax = computed(() => Math.max(1, ...mouvParAnPerim.value.flatMap(p => p.data.flatMap(d => [d.entrees, d.sorties]))))
 
 function exportPDF() {
   const now = new Date().toLocaleString('fr-FR')
@@ -788,6 +804,26 @@ onMounted(chargerTout)
             </div>
             <div class="chart-leg-row"><span class="leg-dot" style="background:#16a34a"></span>Entrées<span class="leg-dot" style="background:#dc2626;margin-left:10px"></span>Sorties</div>
           </div>
+
+          <div class="chart-box wide">
+            <div class="chart-t">Entrées / sorties par an, par périmètre</div>
+            <div class="sm-mult">
+              <div v-for="p in mouvParAnPerim" :key="p.perim" class="sm-box">
+                <div class="sm-title" :title="p.perim">{{ p.perim }}</div>
+                <div class="grp-bars sm">
+                  <div v-for="a in p.data" :key="a.annee" class="grp-col">
+                    <div class="grp-pair">
+                      <div class="grp-b in" :style="{ height: Math.max(2, a.entrees / mouvPerimMax * 56) + 'px' }" :title="a.entrees + ' entrées en ' + a.annee"><span class="grp-v">{{ a.entrees }}</span></div>
+                      <div class="grp-b out" :style="{ height: Math.max(2, a.sorties / mouvPerimMax * 56) + 'px' }" :title="a.sorties + ' sorties en ' + a.annee"><span class="grp-v">{{ a.sorties }}</span></div>
+                    </div>
+                    <div class="grp-lbl">{{ a.annee }}</div>
+                  </div>
+                </div>
+              </div>
+              <div v-if="!mouvParAnPerim.length" class="empty-sm">Renseigne le périmètre et les dates de recrutement / sortie du personnel.</div>
+            </div>
+            <div class="chart-leg-row"><span class="leg-dot" style="background:#16a34a"></span>Entrées<span class="leg-dot" style="background:#dc2626;margin-left:10px"></span>Sorties</div>
+          </div>
         </div>
       </section>
       </div>
@@ -1189,6 +1225,12 @@ onMounted(chargerTout)
 .grp-v { font-size: 9px; font-weight: 800; color: #fff; margin-top: 2px; }
 .grp-lbl { font-size: 10.5px; font-weight: 700; color: #64748b; }
 .chart-leg-row { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #64748b; font-weight: 700; margin-top: 8px; justify-content: center; }
+.sm-mult { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.sm-box { border: 1px solid #eef2f6; border-radius: 10px; padding: 10px 10px 6px; }
+.sm-title { font-size: 11px; font-weight: 800; color: #475569; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grp-bars.sm { min-height: 84px; gap: 12px; }
+.grp-bars.sm .grp-pair { height: 60px; }
+.grp-bars.sm .grp-b { width: 16px; }
 @media (max-width: 640px) { .chart-box.wide { grid-column: span 1; } }
 .alert-contrats { border-left: 4px solid #f59e0b; }
 .alert-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px; margin-top: 12px; }
