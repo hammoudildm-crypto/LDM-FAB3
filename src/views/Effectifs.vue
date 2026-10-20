@@ -791,7 +791,8 @@ onMounted(chargerTout)
             </div>
           </div>
 
-          <div class="chart-box">
+          <div class="mouv-row">
+          <div class="chart-box mouv-global">
             <div class="chart-t">Entrées / sorties par an</div>
             <div class="grp-bars">
               <div v-for="a in mouvParAn" :key="a.annee" class="grp-col">
@@ -805,7 +806,7 @@ onMounted(chargerTout)
             <div class="chart-leg-row"><span class="leg-dot" style="background:#16a34a"></span>Entrées<span class="leg-dot" style="background:#dc2626;margin-left:10px"></span>Sorties</div>
           </div>
 
-          <div class="chart-box wide">
+          <div class="chart-box mouv-perim">
             <div class="chart-t">Entrées / sorties par an, par périmètre</div>
             <div class="sm-mult">
               <div v-for="p in mouvParAnPerim" :key="p.perim" class="sm-box">
@@ -823,6 +824,7 @@ onMounted(chargerTout)
               <div v-if="!mouvParAnPerim.length" class="empty-sm">Renseigne le périmètre et les dates de recrutement / sortie du personnel.</div>
             </div>
             <div class="chart-leg-row"><span class="leg-dot" style="background:#16a34a"></span>Entrées<span class="leg-dot" style="background:#dc2626;margin-left:10px"></span>Sorties</div>
+          </div>
           </div>
         </div>
       </section>
@@ -1231,7 +1233,9 @@ onMounted(chargerTout)
 .grp-bars.sm { min-height: 118px; gap: 20px; }
 .grp-bars.sm .grp-pair { height: 92px; }
 .grp-bars.sm .grp-b { width: 24px; }
-@media (max-width: 760px) { .charts-grid { grid-template-columns: 1fr; } }
+.mouv-row { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(260px, 320px) 1fr; gap: 18px; align-items: start; }
+.mouv-global .grp-bars { gap: 26px; }
+@media (max-width: 760px) { .charts-grid { grid-template-columns: 1fr; } .mouv-row { grid-template-columns: 1fr; } }
 .alert-contrats { border-left: 4px solid #f59e0b; }
 .alert-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px; margin-top: 12px; }
 .alert-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #92400e; margin-bottom: 7px; }
