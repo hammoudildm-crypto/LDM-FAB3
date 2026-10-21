@@ -747,10 +747,19 @@ const triageJournalier = computed(() => {
   for (const x of (Array.isArray(sacs.value) ? sacs.value : [])) {
     if (!x.coche_le) continue
     const d = String(x.coche_le).slice(0, 10)
-    if (!m[d]) m[d] = { date: d, sacs: 0, kg: 0 }
-    m[d].sacs++; m[d].kg += poidsOrdre(x.ordre_id)
+    const o = ofById[x.ordre_id]
+    const kg = poidsOrdre(x.ordre_id)
+    if (!m[d]) m[d] = { date: d, sacs: 0, kg: 0, prods: {} }
+    m[d].sacs++; m[d].kg += kg
+    const code = (o && o.produits && o.produits.code_pf) ? o.produits.code_pf : '—'
+    const desig = (o && o.produits && o.produits.designation) ? o.produits.designation : ''
+    if (!m[d].prods[code]) m[d].prods[code] = { code, desig, sacs: 0, kg: 0 }
+    m[d].prods[code].sacs++; m[d].prods[code].kg += kg
   }
-  return Object.values(m).map(r => ({ ...r, kg: Math.round(r.kg * 100) / 100 })).sort((a, b) => b.date.localeCompare(a.date))
+  return Object.values(m).map(r => ({
+    date: r.date, sacs: r.sacs, kg: Math.round(r.kg * 100) / 100,
+    prods: Object.values(r.prods).map(p => ({ ...p, kg: Math.round(p.kg * 100) / 100 })).sort((a, b) => b.kg - a.kg)
+  })).sort((a, b) => b.date.localeCompare(a.date))
 })
 const triageJourMax = computed(() => Math.max(1, ...triageJournalier.value.map(r => r.kg)))
 const triageJourTotal = computed(() => triageJournalier.value.reduce((s, r) => ({ sacs: s.sacs + r.sacs, kg: Math.round((s.kg + r.kg) * 100) / 100 }), { sacs: 0, kg: 0 }))
@@ -1607,10 +1616,15 @@ onMounted(async () => {
           <p class="hint-tj">Somme des sacs cochés conformes chaque jour × poids du sac du produit (triage par sac).</p>
           <div class="table-scroll tj-scroll">
             <table class="triage-tbl tj-tbl">
-              <thead><tr><th>Jour</th><th class="tnum">Sacs triés</th><th class="tnum">Quantité (Kg)</th><th>Volume</th></tr></thead>
+              <thead><tr><th>Jour</th><th>Produit</th><th class="tnum">Sacs triés</th><th class="tnum">Quantité (Kg)</th><th>Volume</th></tr></thead>
               <tbody>
                 <tr v-for="r in triageJournalier.slice(0, 60)" :key="r.date">
                   <td class="t-lot">{{ fmtDate(r.date) }}</td>
+                  <td class="tj-prod">
+                    <div v-for="p in r.prods" :key="p.code" class="tj-prod-row">
+                      <span class="tj-prod-code">{{ p.code }}</span><span v-if="p.desig" class="tj-prod-desig"> — {{ p.desig }}</span><span v-if="r.prods.length > 1" class="tj-prod-kg">{{ fmt(p.kg) }} Kg</span>
+                    </div>
+                  </td>
                   <td class="tnum">{{ r.sacs }}</td>
                   <td class="tnum"><b>{{ fmt(r.kg) }}</b></td>
                   <td class="tj-vol"><span class="tj-bar"><span class="tj-fill" :style="{ width: (r.kg / triageJourMax * 100) + '%' }"></span></span></td>
@@ -2082,7 +2096,11 @@ onMounted(async () => {
 .tj-evo-bar.z { background: #eef2f6; }
 .tj-evo-axis { display: flex; justify-content: space-between; font-size: 10.5px; color: #94a3b8; font-weight: 700; margin-top: 6px; }
 .tj-scroll { max-height: 360px; overflow: auto; }
-.tj-tbl .tj-vol { width: 40%; min-width: 120px; }
+.tj-tbl .tj-vol { width: 30%; min-width: 120px; }
+.tj-prod-row { white-space: nowrap; }
+.tj-prod-code { font-weight: 700; color: #0f172a; }
+.tj-prod-desig { color: #475569; }
+.tj-prod-kg { color: #94a3b8; font-weight: 700; margin-left: 6px; font-size: 11px; }
 .tj-bar { display: block; height: 12px; background: #eef2f6; border-radius: 999px; overflow: hidden; }
 .tj-fill { display: block; height: 100%; background: linear-gradient(90deg, #f59e0b, #d97706); border-radius: 999px; }
 /* En-tête de l'encadré : titre et poids par défaut sur UNE seule ligne */
