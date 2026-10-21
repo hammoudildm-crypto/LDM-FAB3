@@ -976,6 +976,7 @@ onMounted(chargerTout)
         <div class="kpi" v-if="recrue"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.rose"><svg viewBox="0 0 24 24" v-html="ICONS.clock"></svg></span><div class="kpi-val" style="font-size:15px">{{ ancFmt(recrue.mois) }}</div></div><div class="kpi-lbl">Dernière recrue · {{ recrue.n.nom }}</div></div>
       </div>
 
+      <div class="anc-2col">
       <section class="card">
         <div class="card-head"><h2 class="card-title">Répartition par tranche d'ancienneté</h2><span class="count">{{ nbAvecAnc }} pers.</span></div>
         <div class="anc-dist">
@@ -997,6 +998,7 @@ onMounted(chargerTout)
           </div>
         </div>
       </section>
+      </div>
 
       <section class="card">
         <div class="card-head"><h2 class="card-title">Les plus anciens</h2><span class="count">Top {{ doyens.length }}</span></div>
@@ -1357,6 +1359,8 @@ onMounted(chargerTout)
 .ret-age input { width: 56px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; }
 .pyr-perim select { padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; font-weight: 600; }
 .pl-p { color: #64748b; }
+.anc-2col { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 22px; align-items: start; margin-bottom: 22px; }
+.anc-2col > .card { margin-bottom: 0; }
 .ret-list { display: flex; flex-direction: column; margin-top: 6px; }
 .ret-row { display: flex; align-items: center; gap: 6px; padding: 7px 2px; border-top: 1px solid #f1f5f9; font-size: 13px; }
 .rr-nom { font-weight: 700; color: #0f172a; }
