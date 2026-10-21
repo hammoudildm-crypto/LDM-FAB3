@@ -656,6 +656,7 @@ function ageClass(d) {
   return ''
 }
 function fmtDate(d) { if (!d) return '—'; const x = new Date(d); if (isNaN(x)) return String(d); return (/[T ]\\d{2}:/.test(String(d)) ? x.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' ' : '') + x.toLocaleDateString('fr-FR') }
+function moisAnCourt(d) { const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' }) }
 function ouvrirLot(l, phaseKey) {
   if (phaseKey === 'conditionnement') router.push({ path: '/conditionnement', query: { lot: l.id } })
   else router.push({ path: '/suivi', query: { lot: l.id } })
@@ -1626,7 +1627,10 @@ onMounted(async () => {
                 <div class="tj-evo-bar" :class="{ z: d.kg === 0 }" :style="{ height: Math.max(2, d.kg / triageEvoMax * 80) + 'px' }"></div>
               </div>
             </div>
-            <div class="tj-evo-axis"><span>{{ fmtDate(triageEvo[0].date) }}</span><span>{{ fmtDate(triageEvo[triageEvo.length - 1].date) }}</span></div>
+            <div class="tj-evo-days">
+              <div v-for="d in triageEvo" :key="d.date" class="tj-evo-day" :title="fmtDate(d.date)">{{ d.jour }}</div>
+            </div>
+            <div class="tj-evo-axis"><span>{{ moisAnCourt(triageEvo[0].date) }}</span><span>{{ moisAnCourt(triageEvo[triageEvo.length - 1].date) }}</span></div>
           </div>
           <p class="hint-tj">Somme des sacs cochés conformes chaque jour × poids du sac du produit (triage par sac).</p>
           <div class="table-scroll tj-scroll">
@@ -2109,7 +2113,9 @@ onMounted(async () => {
 .tj-evo-v { font-size: 8.5px; font-weight: 800; color: #b45309; writing-mode: vertical-rl; transform: rotate(180deg); margin-bottom: 2px; line-height: 1; font-variant-numeric: tabular-nums; }
 .tj-evo-bar { width: 100%; max-width: 16px; background: linear-gradient(180deg, #f59e0b, #d97706); border-radius: 3px 3px 0 0; transition: height .2s; }
 .tj-evo-bar.z { background: #eef2f6; }
-.tj-evo-axis { display: flex; justify-content: space-between; font-size: 10.5px; color: #94a3b8; font-weight: 700; margin-top: 6px; }
+.tj-evo-days { display: flex; gap: 3px; margin-top: 4px; }
+.tj-evo-day { flex: 1; text-align: center; font-size: 8.5px; color: #94a3b8; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tj-evo-axis { display: flex; justify-content: space-between; font-size: 10.5px; color: #94a3b8; font-weight: 700; margin-top: 4px; }
 .tj-scroll { max-height: 360px; overflow: auto; }
 .tj-tbl .tj-vol { width: 30%; min-width: 120px; }
 .tj-prod-row { white-space: nowrap; }
