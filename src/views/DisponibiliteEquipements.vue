@@ -98,6 +98,10 @@ async function charger() {
   const nt = {}
   if (!rnt.error && rnt.data) for (const p of rnt.data) if (p.nb_turbines != null) nt[p.id] = Number(p.nb_turbines)
   nbTurbinesMap.value = nt
+  const rtt = await supabase.from('ordres_fabrication').select('id, turbines_a_trier').eq('en_triage', true)
+  const ttm = {}
+  if (!rtt.error && rtt.data) for (const o of rtt.data) if (Array.isArray(o.turbines_a_trier)) ttm[o.id] = o.turbines_a_trier
+  turbinesChargees.value = ttm
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
     .select('ordre_id, equipement_id, statut, quantite_conditionnee').eq('actif', true))
@@ -1087,6 +1091,8 @@ const histoTotaux = computed(() => {
   }
 })
 const qteEdit = reactive({})
+const turbinesSel = reactive({})        // ordre_id -> [n° de turbines à trier]
+const turbinesChargees = ref({})        // ordre_id -> [n°] chargés depuis la base
 // Verrou anti-rechargement : tant qu'une saisie n'est pas enregistrée, App.vue ne recharge pas.
 const verrouEdition = inject('verrouEdition', null)
 let verrouPose = false
@@ -1105,12 +1111,27 @@ watch(aDesModifs, (v) => {
   else if (!v && verrouPose) { verrouEdition.liberer(); verrouPose = false }
 })
 onUnmounted(() => { if (verrouEdition && verrouPose) { verrouEdition.liberer(); verrouPose = false } })
-watch(lotsTriage, (lots) => { for (const l of lots) if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: l.qteATrier || 0, triee: l.qteTriee || 0 } }, { immediate: true })
+watch(lotsTriage, (lots) => {
+  for (const l of lots) {
+    if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: l.qteATrier || 0, triee: l.qteTriee || 0 }
+    if (turbinesSel[l.id] === undefined) {
+      const loaded = turbinesChargees.value[l.id]
+      if (Array.isArray(loaded) && loaded.length) turbinesSel[l.id] = loaded.map(Number)
+      else { const pt = perTurbine(l); const k = pt > 0 ? Math.min(l.nbTurbines, Math.max(0, Math.round((l.qteATrier || 0) / pt))) : 0; const a = []; for (let i = 1; i <= k; i++) a.push(i); turbinesSel[l.id] = a }
+    }
+  }
+}, { immediate: true })
 function pctTriage(id) { const q = qteEdit[id] || {}; const t = Number(q.aTrier) || 0; return t > 0 ? Math.min(100, Math.round((Number(q.triee) || 0) / t * 100)) : 0 }
 // Triage par turbine : quantité d'une turbine = taille de lot ÷ nb turbines
 function perTurbine(l) { const n = l.nbTurbines || 1; return n > 0 ? Math.round((l.kgLot || 0) / n * 100) / 100 : 0 }
-function turbinesATrier(l) { const pt = perTurbine(l); if (pt <= 0) return 0; const q = Number((qteEdit[l.id] || {}).aTrier) || 0; return Math.min(l.nbTurbines, Math.max(0, Math.round(q / pt))) }
-function setTurbines(l, n) { if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: 0, triee: 0 }; const nn = Math.min(l.nbTurbines, Math.max(0, n)); qteEdit[l.id].aTrier = Math.round(perTurbine(l) * nn * 100) / 100 }
+function turbineOn(l, n) { const s = turbinesSel[l.id]; return Array.isArray(s) && s.includes(n) }
+function nbTurbinesATrier(l) { const s = turbinesSel[l.id]; return Array.isArray(s) ? s.length : 0 }
+function basculerTurbine(l, n) {
+  let s = turbinesSel[l.id]; if (!Array.isArray(s)) s = turbinesSel[l.id] = []
+  const i = s.indexOf(n); if (i >= 0) s.splice(i, 1); else s.push(n)
+  if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: 0, triee: 0 }
+  qteEdit[l.id].aTrier = Math.round(perTurbine(l) * s.length * 100) / 100
+}
 // Une ligne est « à enregistrer » tant que la saisie diffère de ce qui est en base.
 function estModifie(l) {
   const q = qteEdit[l.id]
@@ -1133,7 +1154,10 @@ const resumeTriage = computed(() => {
 })
 async function sauverTriage(l) {
   const q = qteEdit[l.id] || {}
-  const r = await supabase.from('ordres_fabrication').update({ qte_a_trier: Number(q.aTrier) || 0, qte_triee: Number(q.triee) || 0 }).eq('id', l.id)
+  const base = { qte_a_trier: Number(q.aTrier) || 0, qte_triee: Number(q.triee) || 0 }
+  const sel = Array.isArray(turbinesSel[l.id]) ? [...turbinesSel[l.id]].sort((a, b) => a - b) : []
+  let r = await supabase.from('ordres_fabrication').update({ ...base, turbines_a_trier: sel }).eq('id', l.id)
+  if (r.error && /turbines_a_trier/.test(r.error.message || '')) r = await supabase.from('ordres_fabrication').update(base).eq('id', l.id)
   if (r.error) { alert('Enregistrement échoué : ' + r.error.message + ' — as-tu ajouté les colonnes qte_a_trier / qte_triee ?'); return }
   await charger()
 }
@@ -1561,8 +1585,10 @@ onMounted(async () => {
                 <td class="tnum">
                   <input type="number" min="0" step="any" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop />
                   <div v-if="l.nbTurbines > 1" class="turb-sel" @click.stop>
-                    <div class="turb-ctrl"><button type="button" @click="setTurbines(l, turbinesATrier(l) - 1)">−</button><span class="turb-n">{{ turbinesATrier(l) }}/{{ l.nbTurbines }} turb.</span><button type="button" @click="setTurbines(l, turbinesATrier(l) + 1)">+</button></div>
-                    <span class="turb-info">{{ fmt(perTurbine(l)) }} Kg/turb. · {{ l.nbTurbines - turbinesATrier(l) }} conforme(s)</span>
+                    <div class="turb-chips">
+                      <button v-for="n in l.nbTurbines" :key="n" type="button" class="turb-chip" :class="{ on: turbineOn(l, n) }" @click="basculerTurbine(l, n)" :title="'Turbine ' + n + (turbineOn(l, n) ? ' — à trier' : ' — conforme')">T{{ n }}</button>
+                    </div>
+                    <span class="turb-info">{{ nbTurbinesATrier(l) }} à trier · {{ l.nbTurbines - nbTurbinesATrier(l) }} conforme(s) · {{ fmt(perTurbine(l)) }} Kg/turb.</span>
                   </div>
                 </td>
                 <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].triee" class="tq" @click.stop /></td>
@@ -2122,11 +2148,11 @@ onMounted(async () => {
 .tj-prod-code { font-weight: 700; color: #0f172a; }
 .tj-prod-desig { color: #475569; }
 .tj-prod-kg { color: #94a3b8; font-weight: 700; margin-left: 6px; font-size: 11px; }
-.turb-sel { margin-top: 5px; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-.turb-ctrl { display: inline-flex; align-items: center; gap: 4px; }
-.turb-ctrl button { width: 20px; height: 20px; border: 1px solid #cbd5e1; background: #fff; border-radius: 5px; font-weight: 800; cursor: pointer; color: #334155; line-height: 1; }
-.turb-ctrl button:hover { background: #f1f5f9; }
-.turb-n { font-size: 11px; font-weight: 800; color: #92400e; min-width: 58px; text-align: center; }
+.turb-sel { margin-top: 5px; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.turb-chips { display: flex; flex-wrap: wrap; gap: 3px; justify-content: flex-end; }
+.turb-chip { border: 1px solid #cbd5e1; background: #f1f5f9; color: #64748b; border-radius: 6px; padding: 2px 7px; font-size: 10.5px; font-weight: 800; cursor: pointer; line-height: 1.3; }
+.turb-chip:hover { border-color: #f59e0b; }
+.turb-chip.on { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
 .turb-info { font-size: 9.5px; color: #94a3b8; font-weight: 600; white-space: nowrap; }
 .tj-bar { display: block; height: 12px; background: #eef2f6; border-radius: 999px; overflow: hidden; }
 .tj-fill { display: block; height: 100%; background: linear-gradient(90deg, #f59e0b, #d97706); border-radius: 999px; }
