@@ -261,6 +261,16 @@ const ancDistribution = computed(() => ANC_BRACKETS.map(([lo, hi, label]) => {
   return { label, c, pct: nbAvecAnc.value ? Math.round(c / nbAvecAnc.value * 100) : 0 }
 }))
 const ancDistMax = computed(() => Math.max(1, ...ancDistribution.value.map(b => b.c)))
+// Répartition par tranche d'ancienneté filtrable par périmètre
+const ancPerim = ref('')
+const perimListeAnc = computed(() => [...new Set(ancData.value.map(x => x.n.atelier_id).filter(Boolean))].sort())
+const ancDataPerim = computed(() => ancPerim.value ? ancData.value.filter(x => x.n.atelier_id === ancPerim.value) : ancData.value)
+const nbAvecAncPerim = computed(() => ancDataPerim.value.length)
+const ancDistributionPerim = computed(() => ANC_BRACKETS.map(([lo, hi, label]) => {
+  const c = ancDataPerim.value.filter(x => x.mois >= lo && x.mois <= hi).length
+  return { label, c, pct: nbAvecAncPerim.value ? Math.round(c / nbAvecAncPerim.value * 100) : 0 }
+}))
+const ancDistMaxPerim = computed(() => Math.max(1, ...ancDistributionPerim.value.map(b => b.c)))
 const ancParPerim = computed(() => {
   const map = {}
   for (const x of ancData.value) {
@@ -978,11 +988,18 @@ onMounted(chargerTout)
 
       <div class="anc-2col">
       <section class="card">
-        <div class="card-head"><h2 class="card-title">Répartition par tranche d'ancienneté</h2><span class="count">{{ nbAvecAnc }} pers.</span></div>
-        <div class="anc-dist">
-          <div v-for="b in ancDistribution" :key="b.label" class="anc-row">
+        <div class="card-head">
+          <h2 class="card-title">Répartition par tranche d'ancienneté</h2>
+          <span class="count">{{ nbAvecAncPerim }} pers.</span>
+          <label class="ret-age pyr-perim">Périmètre
+            <select v-model="ancPerim"><option value="">Tous</option><option v-for="p in perimListeAnc" :key="p" :value="p">{{ p }}</option></select>
+          </label>
+        </div>
+        <div v-if="!nbAvecAncPerim" class="empty-sm">Aucune ancienneté renseignée pour ce périmètre.</div>
+        <div v-else class="anc-dist">
+          <div v-for="b in ancDistributionPerim" :key="b.label" class="anc-row">
             <div class="anc-lbl">{{ b.label }}</div>
-            <div class="anc-track"><div class="anc-fill" :style="{ width: (b.c / ancDistMax * 100) + '%' }"></div></div>
+            <div class="anc-track"><div class="anc-fill" :style="{ width: (b.c / ancDistMaxPerim * 100) + '%' }"></div></div>
             <div class="anc-val">{{ b.c }} <span class="anc-pct">· {{ b.pct }}%</span></div>
           </div>
         </div>
