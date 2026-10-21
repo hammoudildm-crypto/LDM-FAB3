@@ -1598,7 +1598,8 @@ onMounted(async () => {
             <div class="tj-evo-top"><span class="tj-evo-h">Évolution du triage · 30 jours</span><span class="tj-evo-tot">{{ fmt(triageEvo30Total) }} Kg sur la période · max {{ fmt(triageEvoMax) }} Kg/j</span></div>
             <div class="tj-evo-bars">
               <div v-for="d in triageEvo" :key="d.date" class="tj-evo-col" :title="fmtDate(d.date) + ' · ' + fmt(d.kg) + ' Kg'">
-                <div class="tj-evo-bar" :class="{ z: d.kg === 0 }" :style="{ height: Math.max(2, d.kg / triageEvoMax * 96) + 'px' }"></div>
+                <span v-if="d.kg" class="tj-evo-v">{{ fmt(d.kg) }}</span>
+                <div class="tj-evo-bar" :class="{ z: d.kg === 0 }" :style="{ height: Math.max(2, d.kg / triageEvoMax * 80) + 'px' }"></div>
               </div>
             </div>
             <div class="tj-evo-axis"><span>{{ fmtDate(triageEvo[0].date) }}</span><span>{{ fmtDate(triageEvo[triageEvo.length - 1].date) }}</span></div>
@@ -2074,8 +2075,9 @@ onMounted(async () => {
 .tj-evo-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .tj-evo-h { font-size: 12.5px; font-weight: 800; color: #334155; }
 .tj-evo-tot { font-size: 11.5px; color: #94a3b8; font-weight: 700; }
-.tj-evo-bars { display: flex; align-items: flex-end; gap: 3px; height: 104px; }
-.tj-evo-col { flex: 1; display: flex; align-items: flex-end; justify-content: center; height: 100%; }
+.tj-evo-bars { display: flex; align-items: flex-end; gap: 3px; height: 128px; }
+.tj-evo-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.tj-evo-v { font-size: 8.5px; font-weight: 800; color: #b45309; writing-mode: vertical-rl; transform: rotate(180deg); margin-bottom: 2px; line-height: 1; font-variant-numeric: tabular-nums; }
 .tj-evo-bar { width: 100%; max-width: 16px; background: linear-gradient(180deg, #f59e0b, #d97706); border-radius: 3px 3px 0 0; transition: height .2s; }
 .tj-evo-bar.z { background: #eef2f6; }
 .tj-evo-axis { display: flex; justify-content: space-between; font-size: 10.5px; color: #94a3b8; font-weight: 700; margin-top: 6px; }
