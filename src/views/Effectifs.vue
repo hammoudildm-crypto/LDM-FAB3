@@ -80,9 +80,9 @@ const equipementsFiltres = computed(() => {
   const nums = new Set(orgForm.phases.map(ph => ordreGammeType(ph)))
   return equipementsListe.value.filter(eq => nums.has(ordreGammeType(eq.type)))
 })
-const orgForm = reactive({ id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', date_sortie: '', motif_sortie: '', phases: [], machines: [] })
+const orgForm = reactive({ id: null, nom: '', fonction: '', diplome: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', date_sortie: '', motif_sortie: '', phases: [], machines: [] })
 const plusChamps = ref(false)
-function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', date_sortie: '', motif_sortie: '', phases: [], machines: [] }) }
+function orgReset() { Object.assign(orgForm, { id: null, nom: '', fonction: '', diplome: '', atelier_id: '', equipe: '', note: '', parent_id: '', matricule: '', telephone: '', photo_url: '', date_naissance: '', date_recrutement: '', genre: '', contrat: '', fin_cdd: '', fin_essai: '', date_sortie: '', motif_sortie: '', phases: [], machines: [] }) }
 function orgAddPhase(e) { const v = e.target.value; if (v && !orgForm.phases.includes(v)) orgForm.phases.push(v); e.target.value = '' }
 function orgAddMachine(e) { const v = e.target.value; if (v && !orgForm.machines.includes(v)) orgForm.machines.push(v); e.target.value = '' }
 function atelierOrg(id) { const a = ateliers.value.find(x => String(x.id) === String(id)); return a ? a.code : '' }
@@ -487,10 +487,15 @@ td{padding:4px 6px;border:1px solid #f1f5f9}
 async function orgEnregistrer() {
   erreur.value = ''
   if (!orgForm.nom.trim()) { erreur.value = 'Le nom du poste est requis.'; return }
-  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_naissance: orgForm.date_naissance || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, contrat: orgForm.contrat || null, fin_cdd: orgForm.fin_cdd || null, fin_essai: orgForm.fin_essai || null, date_sortie: orgForm.date_sortie || null, motif_sortie: orgForm.motif_sortie || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
-  let r
-  if (orgForm.id) r = await supabase.from('organigramme').update(payload).eq('id', orgForm.id)
-  else r = await supabase.from('organigramme').insert(payload)
+  const payload = { nom: orgForm.nom.trim(), fonction: orgForm.fonction || null, diplome: orgForm.diplome || null, atelier_id: orgForm.atelier_id || null, equipe: orgForm.equipe || null, note: orgForm.note || null, parent_id: orgForm.parent_id || null, matricule: orgForm.matricule || null, telephone: orgForm.telephone || null, photo_url: orgForm.photo_url || null, date_naissance: orgForm.date_naissance || null, date_recrutement: orgForm.date_recrutement || null, genre: orgForm.genre || null, contrat: orgForm.contrat || null, fin_cdd: orgForm.fin_cdd || null, fin_essai: orgForm.fin_essai || null, date_sortie: orgForm.date_sortie || null, motif_sortie: orgForm.motif_sortie || null, equipement: orgForm.phases.length ? orgForm.phases.join(', ') : null, machine: orgForm.machines.length ? orgForm.machines.join(', ') : null }
+  const faireMaj = (pl) => orgForm.id ? supabase.from('organigramme').update(pl).eq('id', orgForm.id) : supabase.from('organigramme').insert(pl)
+  let r = await faireMaj(payload)
+  // Repli si la colonne diplome n'existe pas encore dans la table organigramme
+  if (r.error && /diplome/.test(r.error.message || '')) {
+    const { diplome, ...sansDiplome } = payload
+    r = await faireMaj(sansDiplome)
+    if (!r.error) { erreur.value = 'Enregistré, mais le diplôme n\'a pas pu être sauvegardé : ajoutez la colonne « diplome » (text) à la table organigramme dans Supabase.'; orgReset(); await chargerTout(); return }
+  }
   if (r.error) { erreur.value = r.error.message; return }
   message.value = orgForm.id ? 'Poste mis a jour.' : 'Poste ajoute.'
   orgReset(); await chargerTout()
@@ -525,6 +530,7 @@ function impParse() {
     nom: impColonne(h, 'nom prenom', 'nom et prenom', 'nom', 'name'),
     superieur: impColonne(h, 'responsable 1', 'responsable', 'superieur', 'manager', 'n+1', 'responsable hierarchique'),
     fonction: impColonne(h, 'fonction', 'poste', 'intitule poste', 'emploi'),
+    diplome: impColonne(h, 'diplome', 'diplôme', 'niveau', 'niveau etude', 'niveau d etude', 'formation initiale', 'qualification'),
     perimetre: impColonne(h, 'departement', 'pole', 'perimetre', 'atelier', 'service', 'unite'),
     equipe: impColonne(h, 'equipe', 'shift'),
     matricule: impColonne(h, 'matricule', 'mle', 'num matricule'),
@@ -563,7 +569,7 @@ function impParse() {
     const ctRaw = val(r, ci.contrat).toUpperCase()
     const contrat = ctRaw.indexOf('CDI') >= 0 ? 'CDI' : (ctRaw.indexOf('CDD') >= 0 ? 'CDD' : '')
     lignes.push({
-      nom, fonction: val(r, ci.fonction), superieur: val(r, ci.superieur),
+      nom, fonction: val(r, ci.fonction), diplome: ci.diplome >= 0 ? val(r, ci.diplome) : '', superieur: val(r, ci.superieur),
       perimetre: val(r, ci.perimetre), equipe: val(r, ci.equipe),
       matricule: val(r, ci.matricule), contrat, genre, telephone: val(r, ci.telephone),
       date_recrutement: impDate(val(r, ci.recrutement)), date_naissance: impDate(val(r, ci.naissance)),
@@ -597,7 +603,7 @@ async function impImporter() {
       if (rd.error) { erreur.value = rd.error.message; impBusy.value = false; return }
     }
     const payloads = ap.lignes.map((l, i) => ({
-      nom: l.nom, fonction: l.fonction || null,
+      nom: l.nom, fonction: l.fonction || null, diplome: l.diplome || null,
       atelier_id: (PERIMETRES.find(pe => normOrg(pe) === normOrg(l.perimetre)) || l.perimetre) || null,
       equipe: l.equipe || null, matricule: l.matricule || null, telephone: l.telephone || null,
       contrat: l.contrat || null, genre: l.genre || null,
@@ -605,7 +611,11 @@ async function impImporter() {
       fin_essai: l.fin_essai || null, date_sortie: l.date_sortie || null, motif_sortie: l.motif_sortie || null,
       ordre: i
     }))
-    const ins = await supabase.from('organigramme').insert(payloads).select('id, nom')
+    let ins = await supabase.from('organigramme').insert(payloads).select('id, nom')
+    // Repli si la colonne diplome n'existe pas encore : on importe sans le diplôme
+    if (ins.error && /diplome/.test(ins.error.message || '')) {
+      ins = await supabase.from('organigramme').insert(payloads.map(({ diplome, ...p }) => p)).select('id, nom')
+    }
     if (ins.error) { erreur.value = ins.error.message; impBusy.value = false; return }
     const inseres = (ins.data || []).slice().sort((a, b) => a.id - b.id)
     const nomId = new Map()
@@ -664,7 +674,7 @@ async function impFichier(e) {
   e.target.value = ''
 }
 
-function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', date_naissance: n.date_naissance || '', date_recrutement: n.date_recrutement || '', genre: n.genre || '', contrat: n.contrat || '', fin_cdd: n.fin_cdd || '', fin_essai: n.fin_essai || '', date_sortie: n.date_sortie || '', motif_sortie: n.motif_sortie || '', phases: (n.equipement || '').split(',').map(x => x.trim()).filter(Boolean), machines: (n.machine || '').split(',').map(x => x.trim()).filter(Boolean) }) }
+function orgModifier(n) { Object.assign(orgForm, { id: n.id, nom: n.nom, fonction: n.fonction || '', diplome: n.diplome || '', atelier_id: n.atelier_id || '', equipe: n.equipe || '', note: n.note || '', parent_id: n.parent_id || '', matricule: n.matricule || '', telephone: n.telephone || '', photo_url: n.photo_url || '', date_naissance: n.date_naissance || '', date_recrutement: n.date_recrutement || '', genre: n.genre || '', contrat: n.contrat || '', fin_cdd: n.fin_cdd || '', fin_essai: n.fin_essai || '', date_sortie: n.date_sortie || '', motif_sortie: n.motif_sortie || '', phases: (n.equipement || '').split(',').map(x => x.trim()).filter(Boolean), machines: (n.machine || '').split(',').map(x => x.trim()).filter(Boolean) }) }
 async function orgSupprimer(n) {
   if (!confirm('Supprimer le poste ' + n.nom + ' ? Ses subordonnes remonteront d un niveau.')) return
   await supabase.from('organigramme').update({ parent_id: n.parent_id || null }).eq('parent_id', n.id)
@@ -1098,6 +1108,7 @@ onMounted(chargerTout)
           <div class="of-grid">
             <label class="of-col"><span class="of-lbl">Nom *</span><input v-model="orgForm.nom" placeholder="Nom & prénom" /></label>
             <label class="of-col"><span class="of-lbl">Fonction</span><select v-model="orgForm.fonction"><option value="">—</option><option v-for="po in postesNoms" :key="po" :value="po">{{ po }}</option><option v-if="orgForm.fonction && !postesNoms.includes(orgForm.fonction)" :value="orgForm.fonction">{{ orgForm.fonction }} (hors référentiel)</option></select></label>
+            <label class="of-col"><span class="of-lbl">Diplôme</span><input v-model="orgForm.diplome" placeholder="Ex. Ingénieur, Licence, BTS…" /></label>
             <label class="of-col"><span class="of-lbl">Supérieur</span><select v-model="orgForm.parent_id"><option value="">— (sommet)</option><option v-for="n in responsablesPossibles" :key="n.id" :value="n.id">{{ n.nom }}</option></select></label>
             <label class="of-col"><span class="of-lbl">Contrat</span><select v-model="orgForm.contrat"><option value="">—</option><option value="CDI">CDI</option><option value="CDD">CDD</option></select></label>
             <label class="of-col"><span class="of-lbl">Recrutement</span><input v-model="orgForm.date_recrutement" type="date" /></label>
@@ -1139,7 +1150,7 @@ onMounted(chargerTout)
           <div v-else class="pers-tablewrap">
             <table class="pers-table">
               <thead><tr>
-                <th>Nom</th><th>Statut</th><th>Matricule</th><th>Fonction</th><th>Supérieur</th><th>Périmètre</th><th>Équipe</th><th>Phase</th><th>Équipement</th><th>Contrat</th><th>Recrutement</th><th>Fin essai</th><th>Naissance</th><th>Genre</th><th>Téléphone</th><th>Sortie</th><th>Motif</th><th></th>
+                <th>Nom</th><th>Statut</th><th>Matricule</th><th>Fonction</th><th>Diplôme</th><th>Supérieur</th><th>Périmètre</th><th>Équipe</th><th>Phase</th><th>Équipement</th><th>Contrat</th><th>Recrutement</th><th>Fin essai</th><th>Naissance</th><th>Genre</th><th>Téléphone</th><th>Sortie</th><th>Motif</th><th></th>
               </tr></thead>
               <tbody>
                 <tr v-for="n in persListe" :key="n.id">
@@ -1147,6 +1158,7 @@ onMounted(chargerTout)
                   <td><span class="pt-st" :class="estParti(n) ? 'st-off' : 'st-on'" :title="n.date_sortie ? ((estParti(n) ? 'Parti le ' : 'Départ prévu le ') + fmtD(n.date_sortie) + (n.motif_sortie ? ' — ' + n.motif_sortie : '')) : ''">{{ estParti(n) ? 'Non actif' : 'Actif' }}</span></td>
                   <td>{{ n.matricule || '—' }}</td>
                   <td>{{ n.fonction || '—' }}</td>
+                  <td>{{ n.diplome || '—' }}</td>
                   <td>{{ nomParent(n) || '—' }}</td>
                   <td>{{ n.atelier_id || '—' }}</td>
                   <td>{{ n.equipe || '—' }}</td>
