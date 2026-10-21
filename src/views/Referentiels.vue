@@ -125,12 +125,12 @@ function resetDO() { Object.assign(formDO, { id: null, code: '', nom: '', activi
 // --- Produit ---
 const formP = reactive({
   id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-  unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', aql: '', pcsu: '', gamme: []
+  unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', gamme: []
 })
 function resetP() {
   Object.assign(formP, {
     id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-    unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', aql: '', pcsu: '', gamme: []
+    unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', gamme: []
   })
 }
 
@@ -459,6 +459,7 @@ async function enregistrerP() {
     holding_time_jours: toNum(formP.holding_time_jours),
     holding_times: htMap,
     apis: apisArr,
+    nb_turbines: toNum(formP.nb_turbines),
     aql: formP.aql.trim() || null,
     pcsu: toNum(formP.pcsu),
     gamme: normGammeR(formP.gamme)
@@ -471,7 +472,7 @@ async function enregistrerP() {
   let res = await doSave(pl)
   while (res.error && res.error.message) {
     const m = res.error.message
-    const col = ['holding_time_jours', 'holding_times', 'apis'].find(c => (c in pl) && m.includes("'" + c + "'"))
+    const col = ['holding_time_jours', 'holding_times', 'apis', 'nb_turbines'].find(c => (c in pl) && m.includes("'" + c + "'"))
     if (!col) break
     delete pl[col]; stripped.push(col); res = await doSave(pl)
   }
@@ -488,6 +489,7 @@ function modifierP(p) {
     duree_vie_mois: p.duree_vie_mois ?? '', holding_time_jours: p.holding_time_jours ?? '',
     holding_times: (p.holding_times && typeof p.holding_times === 'object') ? { ...p.holding_times } : {},
     apis_txt: Array.isArray(p.apis) ? p.apis.join(', ') : '',
+    nb_turbines: p.nb_turbines ?? '',
     aql: p.aql || '', pcsu: p.pcsu ?? '',
     gamme: normGammeR(p.gamme)
   })
@@ -746,6 +748,7 @@ onMounted(async () => {
         <label>AQL<input v-model="formP.aql" placeholder="0.65" /></label>
         <label>PCSU<input v-model="formP.pcsu" type="number" step="any" placeholder="12.50" /></label>
         <label class="gamme-field">API (principes actifs)<input v-model="formP.apis_txt" placeholder="ex. Métformine, Glibenclamide — séparés par des virgules" /><span class="gamme-hint">Pour les produits à 2 API ou plus, le CQ (dosage, dissolution, uniformité de teneur) se saisit par API dans la revue qualité (PQR).</span></label>
+        <label>Nombre de turbines<input v-model="formP.nb_turbines" type="number" min="1" step="1" placeholder="1" title="Nombre de turbines de pelliculage sur lesquelles le lot est réparti (pour le triage par turbine)" /></label>
         <label class="gamme-field">Gamme de process
           <div class="gamme-checks">
             <label v-for="ph in GAMME_PHASES" :key="ph" class="gamme-chk">

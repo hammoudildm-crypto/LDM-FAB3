@@ -17,6 +17,7 @@ const planRows = ref([])
 // n'existent pas encore côté base, les maps restent vides et aucune alerte ne s'affiche.
 const holdTimes = ref({})   // produit_id -> holding time par défaut (nombre)
 const holdSteps = ref({})   // produit_id -> { cléPhase: jours } (holding time par étape)
+const nbTurbinesMap = ref({})   // produit_id -> nombre de turbines (pelliculage)
 const ongletDispo = ref('file')
 const erreur = ref('')
 const chargement = ref(true)
@@ -93,6 +94,10 @@ async function charger() {
   const hs = {}
   if (!rhs.error && rhs.data) for (const p of rhs.data) if (p.holding_times && typeof p.holding_times === 'object') hs[p.id] = p.holding_times
   holdSteps.value = hs
+  const rnt = await supabase.from('produits').select('id, nb_turbines')
+  const nt = {}
+  if (!rnt.error && rnt.data) for (const p of rnt.data) if (p.nb_turbines != null) nt[p.id] = Number(p.nb_turbines)
+  nbTurbinesMap.value = nt
 
   const rc = await fetchAllPaged(() => supabase.from('conditionnement')
     .select('ordre_id, equipement_id, statut, quantite_conditionnee').eq('actif', true))
@@ -265,7 +270,7 @@ const lotsTriage = computed(() => {
     const boitesT = Number(o.boites_fabriquees) || Number(prod.taille_lot) || 0
     const kgLot = Math.round((boitesT * upbT * pmgT) / 1e6 * 100) / 100
     const aTrierDef = o.qte_a_trier != null ? o.qte_a_trier : kgLot
-    return { id: o.id, produitId: o.produit_id, poidsSacProd: prod.poids_sac_kg, jours: joursOuvertTriage(o.triage_debut), lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin || '', qteATrier: aTrierDef, qteTriee: o.qte_triee != null ? o.qte_triee : 0 }
+    return { id: o.id, produitId: o.produit_id, poidsSacProd: prod.poids_sac_kg, jours: joursOuvertTriage(o.triage_debut), lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', equip: eq.nom || eq.code || '', phase: phaseAct, debut: o.triage_debut || '', fin: o.triage_fin || '', qteATrier: aTrierDef, qteTriee: o.qte_triee != null ? o.qte_triee : 0, nbTurbines: Math.max(1, Number(nbTurbinesMap.value[o.produit_id]) || 1), kgLot }
   }).sort((a, b) => (b.jours == null ? -1 : b.jours) - (a.jours == null ? -1 : a.jours))   // les plus anciens en tête
 })
 
@@ -1101,6 +1106,10 @@ watch(aDesModifs, (v) => {
 onUnmounted(() => { if (verrouEdition && verrouPose) { verrouEdition.liberer(); verrouPose = false } })
 watch(lotsTriage, (lots) => { for (const l of lots) if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: l.qteATrier || 0, triee: l.qteTriee || 0 } }, { immediate: true })
 function pctTriage(id) { const q = qteEdit[id] || {}; const t = Number(q.aTrier) || 0; return t > 0 ? Math.min(100, Math.round((Number(q.triee) || 0) / t * 100)) : 0 }
+// Triage par turbine : quantité d'une turbine = taille de lot ÷ nb turbines
+function perTurbine(l) { const n = l.nbTurbines || 1; return n > 0 ? Math.round((l.kgLot || 0) / n * 100) / 100 : 0 }
+function turbinesATrier(l) { const pt = perTurbine(l); if (pt <= 0) return 0; const q = Number((qteEdit[l.id] || {}).aTrier) || 0; return Math.min(l.nbTurbines, Math.max(0, Math.round(q / pt))) }
+function setTurbines(l, n) { if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: 0, triee: 0 }; const nn = Math.min(l.nbTurbines, Math.max(0, n)); qteEdit[l.id].aTrier = Math.round(perTurbine(l) * nn * 100) / 100 }
 // Une ligne est « à enregistrer » tant que la saisie diffère de ce qui est en base.
 function estModifie(l) {
   const q = qteEdit[l.id]
@@ -1548,7 +1557,13 @@ onMounted(async () => {
                 <td class="t-prod" @click="ouvrirTriageFin(l.id)"><span class="t-code">{{ l.code }}</span><span v-if="l.desig" class="t-desig">{{ l.desig }}</span></td>
                 <td class="t-etape">{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
                 <td class="tnum t-age" :class="l.jours == null ? '' : (l.jours > 14 ? 'ko' : (l.jours > 7 ? 'warn' : ''))" :title="l.debut ? 'Triage ouvert le ' + l.debut : 'Date de début non renseignée'">{{ l.jours == null ? "—" : l.jours + " j" }}</td>
-                <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop /></td>
+                <td class="tnum">
+                  <input type="number" min="0" step="any" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop />
+                  <div v-if="l.nbTurbines > 1" class="turb-sel" @click.stop>
+                    <div class="turb-ctrl"><button type="button" @click="setTurbines(l, turbinesATrier(l) - 1)">−</button><span class="turb-n">{{ turbinesATrier(l) }}/{{ l.nbTurbines }} turb.</span><button type="button" @click="setTurbines(l, turbinesATrier(l) + 1)">+</button></div>
+                    <span class="turb-info">{{ fmt(perTurbine(l)) }} Kg/turb. · {{ l.nbTurbines - turbinesATrier(l) }} conforme(s)</span>
+                  </div>
+                </td>
                 <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].triee" class="tq" @click.stop /></td>
                 <td class="tnum">
                   <button type="button" class="sac-btn" :class="{ ok: nbSacs(l) > 0 && nbSacsCoches(l) >= nbSacs(l) }" :disabled="!nbSacs(l)" @click.stop="toggleSacs(l)" :title="nbSacs(l) ? 'Détail des sacs' : 'Renseigne les Kg à trier et le poids du sac'">
@@ -2101,6 +2116,12 @@ onMounted(async () => {
 .tj-prod-code { font-weight: 700; color: #0f172a; }
 .tj-prod-desig { color: #475569; }
 .tj-prod-kg { color: #94a3b8; font-weight: 700; margin-left: 6px; font-size: 11px; }
+.turb-sel { margin-top: 5px; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.turb-ctrl { display: inline-flex; align-items: center; gap: 4px; }
+.turb-ctrl button { width: 20px; height: 20px; border: 1px solid #cbd5e1; background: #fff; border-radius: 5px; font-weight: 800; cursor: pointer; color: #334155; line-height: 1; }
+.turb-ctrl button:hover { background: #f1f5f9; }
+.turb-n { font-size: 11px; font-weight: 800; color: #92400e; min-width: 58px; text-align: center; }
+.turb-info { font-size: 9.5px; color: #94a3b8; font-weight: 600; white-space: nowrap; }
 .tj-bar { display: block; height: 12px; background: #eef2f6; border-radius: 999px; overflow: hidden; }
 .tj-fill { display: block; height: 100%; background: linear-gradient(90deg, #f59e0b, #d97706); border-radius: 999px; }
 /* En-tête de l'encadré : titre et poids par défaut sur UNE seule ligne */
