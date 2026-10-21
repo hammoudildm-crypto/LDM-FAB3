@@ -757,6 +757,15 @@ const triageJourTotal = computed(() => triageJournalier.value.reduce((s, r) => (
 const ymdLocal = (dt) => { const y = dt.getFullYear(); const m = String(dt.getMonth() + 1).padStart(2, '0'); const d = String(dt.getDate()).padStart(2, '0'); return y + '-' + m + '-' + d }
 const triageAujourdhui = computed(() => { const k = ymdLocal(new Date()); return triageJournalier.value.find(r => r.date === k) || { date: k, sacs: 0, kg: 0 } })
 const triageHier = computed(() => { const k = ymdLocal(new Date(Date.now() - 86400000)); return triageJournalier.value.find(r => r.date === k) || { date: k, sacs: 0, kg: 0 } })
+// Évolution du triage sur 30 jours (du plus ancien au plus récent, zéros compris)
+const triageEvo = computed(() => {
+  const m = {}; for (const r of triageJournalier.value) m[r.date] = r.kg
+  const out = []
+  for (let i = 29; i >= 0; i--) { const dt = new Date(Date.now() - i * 86400000); const k = ymdLocal(dt); out.push({ date: k, kg: m[k] || 0, jour: dt.getDate() }) }
+  return out
+})
+const triageEvoMax = computed(() => Math.max(1, ...triageEvo.value.map(d => d.kg)))
+const triageEvo30Total = computed(() => Math.round(triageEvo.value.reduce((s, d) => s + d.kg, 0) * 100) / 100)
 function sacCoche(l, n) { const s = sacsParLot.value[l.id]; return !!(s && s.has(n)) }
 function nbSacsCoches(l) {
   const s = sacsParLot.value[l.id]; if (!s) return 0
@@ -1585,6 +1594,15 @@ onMounted(async () => {
               <div class="tj-tile-sacs">{{ triageHier.sacs }} sac(s)</div>
             </div>
           </div>
+          <div class="tj-evo">
+            <div class="tj-evo-top"><span class="tj-evo-h">Évolution du triage · 30 jours</span><span class="tj-evo-tot">{{ fmt(triageEvo30Total) }} Kg sur la période · max {{ fmt(triageEvoMax) }} Kg/j</span></div>
+            <div class="tj-evo-bars">
+              <div v-for="d in triageEvo" :key="d.date" class="tj-evo-col" :title="fmtDate(d.date) + ' · ' + fmt(d.kg) + ' Kg'">
+                <div class="tj-evo-bar" :class="{ z: d.kg === 0 }" :style="{ height: Math.max(2, d.kg / triageEvoMax * 96) + 'px' }"></div>
+              </div>
+            </div>
+            <div class="tj-evo-axis"><span>{{ fmtDate(triageEvo[0].date) }}</span><span>{{ fmtDate(triageEvo[triageEvo.length - 1].date) }}</span></div>
+          </div>
           <p class="hint-tj">Somme des sacs cochés conformes chaque jour × poids du sac du produit (triage par sac).</p>
           <div class="table-scroll tj-scroll">
             <table class="triage-tbl tj-tbl">
@@ -2052,6 +2070,15 @@ onMounted(async () => {
 .tj-tile-kg { font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1.1; margin-top: 4px; }
 .tj-tile-kg .tj-u { font-size: 13px; font-weight: 700; color: #94a3b8; }
 .tj-tile-sacs { font-size: 12px; font-weight: 700; color: #64748b; margin-top: 2px; }
+.tj-evo { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; background: #fff; }
+.tj-evo-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.tj-evo-h { font-size: 12.5px; font-weight: 800; color: #334155; }
+.tj-evo-tot { font-size: 11.5px; color: #94a3b8; font-weight: 700; }
+.tj-evo-bars { display: flex; align-items: flex-end; gap: 3px; height: 104px; }
+.tj-evo-col { flex: 1; display: flex; align-items: flex-end; justify-content: center; height: 100%; }
+.tj-evo-bar { width: 100%; max-width: 16px; background: linear-gradient(180deg, #f59e0b, #d97706); border-radius: 3px 3px 0 0; transition: height .2s; }
+.tj-evo-bar.z { background: #eef2f6; }
+.tj-evo-axis { display: flex; justify-content: space-between; font-size: 10.5px; color: #94a3b8; font-weight: 700; margin-top: 6px; }
 .tj-scroll { max-height: 360px; overflow: auto; }
 .tj-tbl .tj-vol { width: 40%; min-width: 120px; }
 .tj-bar { display: block; height: 12px; background: #eef2f6; border-radius: 999px; overflow: hidden; }
