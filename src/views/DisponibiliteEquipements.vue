@@ -347,7 +347,7 @@ const queuePhase = computed(() => {
         (condAny.has(o.id) ? q.conditionnement.cours : q.conditionnement.attente).push({ ...base, datePrec: o.date_fin_fabrication, date: o.date_fin_fabrication, holdJ: holdFor(o.produit_id, kDern) })
       } else {
         const k0 = phaseKey(gamme[0])
-        if (k0 && q[k0]) q[k0].attente.push({ ...base, datePrec: o.date_lancement || o.date_reception, date: o.date_lancement, holdJ: holdFor(o.produit_id, 'pesee') })
+        if (k0 && q[k0]) q[k0].attente.push({ ...base, datePrec: o.date_lancement || o.date_reception, date: o.date_lancement, holdJ: holdFor(o.produit_id, k0) })
       }
       continue
     }
@@ -362,7 +362,7 @@ const queuePhase = computed(() => {
       const kCur = phaseKey(gamme[curIdx]); const rCur = kCur ? pl[kCur] : null
       const kPrev = curIdx > 0 ? phaseKey(gamme[curIdx - 1]) : null
       const datePrec = (kPrev && pl[kPrev] && pl[kPrev].date) || o.date_lancement
-      const hj = holdFor(o.produit_id, kPrev || 'pesee')
+      const hj = holdFor(o.produit_id, kCur)   // HT de l'étape de l'atelier lui-même (ex. granulation → HT granulation)
       const eqCur = (rCur && rCur.equip) || null   // strictement l'équipement de la phase en cours
       if (kCur && q[kCur]) {
         if (rCur && rCur.statut === 'En cours') q[kCur].cours.push({ ...base, datePrec, date: (rCur && rCur.date) || o.date_lancement, holdJ: hj, equipId: eqCur })
