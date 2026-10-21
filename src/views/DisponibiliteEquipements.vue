@@ -754,6 +754,9 @@ const triageJournalier = computed(() => {
 })
 const triageJourMax = computed(() => Math.max(1, ...triageJournalier.value.map(r => r.kg)))
 const triageJourTotal = computed(() => triageJournalier.value.reduce((s, r) => ({ sacs: s.sacs + r.sacs, kg: Math.round((s.kg + r.kg) * 100) / 100 }), { sacs: 0, kg: 0 }))
+const ymdLocal = (dt) => { const y = dt.getFullYear(); const m = String(dt.getMonth() + 1).padStart(2, '0'); const d = String(dt.getDate()).padStart(2, '0'); return y + '-' + m + '-' + d }
+const triageAujourdhui = computed(() => { const k = ymdLocal(new Date()); return triageJournalier.value.find(r => r.date === k) || { date: k, sacs: 0, kg: 0 } })
+const triageHier = computed(() => { const k = ymdLocal(new Date(Date.now() - 86400000)); return triageJournalier.value.find(r => r.date === k) || { date: k, sacs: 0, kg: 0 } })
 function sacCoche(l, n) { const s = sacsParLot.value[l.id]; return !!(s && s.has(n)) }
 function nbSacsCoches(l) {
   const s = sacsParLot.value[l.id]; if (!s) return 0
@@ -1570,6 +1573,18 @@ onMounted(async () => {
             <h3 class="histo-h">📅 Quantité triée journalière</h3>
             <span class="histo-res">{{ fmt(triageJourTotal.kg) }} Kg · {{ triageJourTotal.sacs }} sac(s) au total</span>
           </div>
+          <div class="tj-today">
+            <div class="tj-tile today">
+              <div class="tj-tile-lbl">Aujourd'hui · {{ fmtDate(triageAujourdhui.date) }}</div>
+              <div class="tj-tile-kg">{{ fmt(triageAujourdhui.kg) }} <span class="tj-u">Kg</span></div>
+              <div class="tj-tile-sacs">{{ triageAujourdhui.sacs }} sac(s)</div>
+            </div>
+            <div class="tj-tile hier">
+              <div class="tj-tile-lbl">Hier · {{ fmtDate(triageHier.date) }}</div>
+              <div class="tj-tile-kg">{{ fmt(triageHier.kg) }} <span class="tj-u">Kg</span></div>
+              <div class="tj-tile-sacs">{{ triageHier.sacs }} sac(s)</div>
+            </div>
+          </div>
           <p class="hint-tj">Somme des sacs cochés conformes chaque jour × poids du sac du produit (triage par sac).</p>
           <div class="table-scroll tj-scroll">
             <table class="triage-tbl tj-tbl">
@@ -2028,6 +2043,15 @@ onMounted(async () => {
 .triage-box { background: #fef3c7; border: 1px solid #fde68a; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
 .triage-h { margin: 0 0 10px; font-size: 15px; font-weight: 800; color: #92400e; }
 .hint-tj { font-size: 12px; color: #64748b; margin: 0 0 10px; }
+.tj-today { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; position: sticky; top: 0; z-index: 2; }
+.tj-tile { border-radius: 10px; padding: 12px 14px; border: 1px solid #e2e8f0; }
+.tj-tile.today { background: #fffbeb; border-color: #fcd34d; }
+.tj-tile.hier { background: #f8fafc; }
+.tj-tile-lbl { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #92400e; }
+.tj-tile.hier .tj-tile-lbl { color: #64748b; }
+.tj-tile-kg { font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1.1; margin-top: 4px; }
+.tj-tile-kg .tj-u { font-size: 13px; font-weight: 700; color: #94a3b8; }
+.tj-tile-sacs { font-size: 12px; font-weight: 700; color: #64748b; margin-top: 2px; }
 .tj-scroll { max-height: 360px; overflow: auto; }
 .tj-tbl .tj-vol { width: 40%; min-width: 120px; }
 .tj-bar { display: block; height: 12px; background: #eef2f6; border-radius: 999px; overflow: hidden; }
