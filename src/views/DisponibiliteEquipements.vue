@@ -733,6 +733,27 @@ function nbSacs(l) {
   const ps = poidsSacDe(l)
   return ps > 0 ? Math.ceil(q / ps) : 0
 }
+// Quantité triée par jour : chaque sac coché (triage_sacs.coche_le) pèse le poids de sac du produit
+const triageJournalier = computed(() => {
+  const ofById = {}; for (const o of ofs.value) ofById[o.id] = o
+  const poidsOrdre = (ordreId) => {
+    const o = ofById[ordreId]; const pid = o ? o.produit_id : null
+    const loc = pid != null ? poidsProd[pid] : undefined
+    const base = (o && o.produits && o.produits.poids_sac_kg != null) ? o.produits.poids_sac_kg : null
+    const v = Number(loc !== undefined ? loc : base) || 0
+    return v > 0 ? v : (Number(poidsSac.value) || 0)
+  }
+  const m = {}
+  for (const x of (Array.isArray(sacs.value) ? sacs.value : [])) {
+    if (!x.coche_le) continue
+    const d = String(x.coche_le).slice(0, 10)
+    if (!m[d]) m[d] = { date: d, sacs: 0, kg: 0 }
+    m[d].sacs++; m[d].kg += poidsOrdre(x.ordre_id)
+  }
+  return Object.values(m).map(r => ({ ...r, kg: Math.round(r.kg * 100) / 100 })).sort((a, b) => b.date.localeCompare(a.date))
+})
+const triageJourMax = computed(() => Math.max(1, ...triageJournalier.value.map(r => r.kg)))
+const triageJourTotal = computed(() => triageJournalier.value.reduce((s, r) => ({ sacs: s.sacs + r.sacs, kg: Math.round((s.kg + r.kg) * 100) / 100 }), { sacs: 0, kg: 0 }))
 function sacCoche(l, n) { const s = sacsParLot.value[l.id]; return !!(s && s.has(n)) }
 function nbSacsCoches(l) {
   const s = sacsParLot.value[l.id]; if (!s) return 0
@@ -1544,6 +1565,26 @@ onMounted(async () => {
           </table>
           <p v-else class="triage-vide">Aucun lot coché « En triage fabrication » pour l'instant (case à cocher sur la page Ordres de fabrication).</p>
         </section>
+        <section v-if="triageJournalier.length" class="histo-box">
+          <div class="triage-head">
+            <h3 class="histo-h">📅 Quantité triée journalière</h3>
+            <span class="histo-res">{{ fmt(triageJourTotal.kg) }} Kg · {{ triageJourTotal.sacs }} sac(s) au total</span>
+          </div>
+          <p class="hint-tj">Somme des sacs cochés conformes chaque jour × poids du sac du produit (triage par sac).</p>
+          <div class="table-scroll tj-scroll">
+            <table class="triage-tbl tj-tbl">
+              <thead><tr><th>Jour</th><th class="tnum">Sacs triés</th><th class="tnum">Quantité (Kg)</th><th>Volume</th></tr></thead>
+              <tbody>
+                <tr v-for="r in triageJournalier.slice(0, 60)" :key="r.date">
+                  <td class="t-lot">{{ fmtDate(r.date) }}</td>
+                  <td class="tnum">{{ r.sacs }}</td>
+                  <td class="tnum"><b>{{ fmt(r.kg) }}</b></td>
+                  <td class="tj-vol"><span class="tj-bar"><span class="tj-fill" :style="{ width: (r.kg / triageJourMax * 100) + '%' }"></span></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
         <section v-if="triagesClos.length" class="histo-box">
           <div class="triage-head">
             <h3 class="histo-h">📜 Historique des triages ({{ histoTotaux.n }})</h3>
@@ -1986,6 +2027,11 @@ onMounted(async () => {
 /* Lots en cours de triage */
 .triage-box { background: #fef3c7; border: 1px solid #fde68a; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
 .triage-h { margin: 0 0 10px; font-size: 15px; font-weight: 800; color: #92400e; }
+.hint-tj { font-size: 12px; color: #64748b; margin: 0 0 10px; }
+.tj-scroll { max-height: 360px; overflow: auto; }
+.tj-tbl .tj-vol { width: 40%; min-width: 120px; }
+.tj-bar { display: block; height: 12px; background: #eef2f6; border-radius: 999px; overflow: hidden; }
+.tj-fill { display: block; height: 100%; background: linear-gradient(90deg, #f59e0b, #d97706); border-radius: 999px; }
 /* En-tête de l'encadré : titre et poids par défaut sur UNE seule ligne */
 .triage-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: nowrap; margin-bottom: 10px; }
 .triage-head .triage-h { margin: 0; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
