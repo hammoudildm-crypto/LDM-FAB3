@@ -176,10 +176,11 @@
       <h3 class="sec-titre">Taux par formation</h3>
       <div v-if="!tauxParFormation.length" class="empty-sm">Aucune formation requise.</div>
       <table v-else class="form-tbl">
-        <thead><tr><th>Formation</th><th class="r">Validées / Requises</th><th class="tx">Taux</th></tr></thead>
+        <thead><tr><th>Formation</th><th>Code SOP</th><th class="r">Validées / Requises</th><th class="tx">Taux</th></tr></thead>
         <tbody>
           <tr v-for="f in tauxParFormation" :key="f.id">
             <td class="nom">{{ f.nom }}</td>
+            <td><span v-if="f.code_sop" class="sop">{{ f.code_sop }}</span><span v-else class="pp-z">—</span></td>
             <td class="r">{{ f.val }} / {{ f.req }}</td>
             <td class="tx"><div class="bar"><div class="bar-fill" :class="barCls(f.taux)" :style="{ width: f.taux + '%' }"></div><span class="bar-txt">{{ f.taux.toFixed(0) }}%</span></div></td>
           </tr>
@@ -273,7 +274,7 @@ const router = useRouter()
 async function charger() {
   const rp = await supabase.from('organigramme').select('id, nom, matricule, fonction, atelier_id, equipe, equipement, machine, date_recrutement').eq('actif', true).order('nom')
   if (!rp.error) personnes.value = rp.data || []
-  const rf = await supabase.from('formations').select('id, nom, validite_mois').eq('actif', true).order('ordre')
+  const rf = await supabase.from('formations').select('*').eq('actif', true).order('ordre')
   if (!rf.error) formations.value = rf.data || []
   const re = await supabase.from('formation_enregistrements').select('*')
   if (re.error) { erreur.value = re.error.message; return }
@@ -421,7 +422,7 @@ const tauxDonut = computed(() => {
 const tauxParFormation = computed(() => formations.value.map(f => {
   let req = 0, val = 0
   for (const p of personnesFiltrees.value) { const r = requisParFonction.value[p.fonction]; if (r && r.has(f.id)) { req++; if (cellStatut(p.id, f.id) === 'valide') val++ } }
-  return { id: f.id, nom: f.nom, req, val, taux: req ? val / req * 100 : null }
+  return { id: f.id, nom: f.nom, code_sop: f.code_sop || '', req, val, taux: req ? val / req * 100 : null }
 }).filter(f => f.req > 0).sort((a, b) => a.taux - b.taux))
 const tauxParPerimetre = computed(() => {
   const g = {}
@@ -595,6 +596,7 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .pers-srch-n { font-size: 12px; color: #94a3b8; font-weight: 700; }
 .bar-txt { position: absolute; top: 0; right: 7px; line-height: 18px; font-size: 11px; font-weight: 800; color: #0f172a; }
 .no-req { font-size: 11px; color: #94a3b8; font-style: italic; }
+.sop { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 600; color: #475569; background: #f1f5f9; padding: 1px 7px; border-radius: 5px; }
 .repart { margin-bottom: 4px; }
 .rp-bar { display: flex; height: 26px; border-radius: 8px; overflow: hidden; background: #f1f5f9; }
 .rp-seg { height: 100%; }
