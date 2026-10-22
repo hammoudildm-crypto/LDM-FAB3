@@ -11,7 +11,8 @@
       <div v-if="peutEditer" class="pl-form">
         <div class="row1">
           <input v-model="rechercheF" class="f-search" placeholder="🔍 Formation" />
-          <select v-model="form.formation_id" class="grow"><option value="">Formation —</option><option v-for="f in formationsFiltrees" :key="f.id" :value="String(f.id)">{{ f.nom }}</option></select>
+          <input v-model="rechercheSop" class="f-search" placeholder="🔍 Code SOP" />
+          <select v-model="form.formation_id" class="grow"><option value="">Formation —</option><option v-for="f in formationsFiltrees" :key="f.id" :value="String(f.id)">{{ f.nom }}{{ f.code_sop ? ' · ' + f.code_sop : '' }}</option></select>
           <input type="date" v-model="form.date_prevue" />
           <input v-model="form.formateur" placeholder="Formateur" class="c" />
         </div>
@@ -46,6 +47,7 @@
       <div v-for="s in sessionsFiltrees" :key="s.id" class="sess" :class="'b-' + s.etat">
         <div class="sess-head">
           <span class="sess-form">{{ s.formationNom }}</span>
+          <span v-if="s.codeSop" class="sop">{{ s.codeSop }}</span>
           <span class="meta">📅 {{ s.date_prevue }}</span>
           <span v-if="s.formateur" class="meta">👤 {{ s.formateur }}</span>
           <span class="etat" :class="'e-' + s.etat">{{ etatTxt(s) }}</span>
@@ -85,6 +87,7 @@ const sessions = ref([])
 const filtreEtat = ref('')
 const rechercheP = ref('')
 const rechercheF = ref('')
+const rechercheSop = ref('')
 const erreur = ref('')
 const message = ref('')
 const today = new Date().toISOString().slice(0, 10)
@@ -92,7 +95,7 @@ const form = reactive({ id: null, formation_id: '', date_prevue: today, formateu
 function reset() { Object.assign(form, { id: null, formation_id: '', date_prevue: today, formateur: '', personnes: [] }) }
 
 async function charger() {
-  const rf = await supabase.from('formations').select('id, nom').eq('actif', true).order('ordre')
+  const rf = await supabase.from('formations').select('*').eq('actif', true).order('ordre')
   if (!rf.error) formations.value = rf.data || []
   const rp = await supabase.from('organigramme').select('id, nom, fonction').eq('actif', true).order('nom')
   if (!rp.error) personnes.value = rp.data || []
@@ -112,7 +115,15 @@ onMounted(async () => {
 })
 
 const formationById = computed(() => { const m = {}; for (const f of formations.value) m[f.id] = f; return m })
-const formationsFiltrees = computed(() => { const q = (rechercheF.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); if (!q) return formations.value; return formations.value.filter(f => (f.nom || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q)) })
+const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+const formationsFiltrees = computed(() => {
+  const qn = normR(rechercheF.value).trim(), qs = normR(rechercheSop.value).trim()
+  return formations.value.filter(f => {
+    if (qn && !normR(f.nom).includes(qn) && !normR(f.code_sop).includes(qn)) return false
+    if (qs && !normR(f.code_sop).includes(qs)) return false
+    return true
+  })
+})
 const personneById = computed(() => { const m = {}; for (const p of personnes.value) m[p.id] = p; return m })
 const personnesFiltrees = computed(() => { const q = (rechercheP.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); if (!q) return personnes.value; return personnes.value.filter(p => ((p.nom || '') + ' ' + (p.fonction || '')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q)) })
 function personneNom(pid) { const p = personneById.value[pid]; return p ? p.nom : '(supprimé)' }
@@ -120,7 +131,7 @@ function personneNom(pid) { const p = personneById.value[pid]; return p ? p.nom 
 const sessionsEnr = computed(() => sessions.value.map(s => {
   const f = formationById.value[s.formation_id]
   let etat = s.statut === 'realise' ? 'realise' : s.statut === 'annule' ? 'annule' : (s.date_prevue < today ? 'retard' : 'avenir')
-  return { ...s, formationNom: f ? f.nom : '(formation supprimée)', etat, personnes: s.personnes || [], faits: s.faits || [] }
+  return { ...s, formationNom: f ? f.nom : '(formation supprimée)', codeSop: f ? (f.code_sop || '') : '', etat, personnes: s.personnes || [], faits: s.faits || [] }
 }))
 const sessionsFiltrees = computed(() => filtreEtat.value ? sessionsEnr.value.filter(s => s.etat === filtreEtat.value) : sessionsEnr.value)
 const nbAvenir = computed(() => sessionsEnr.value.filter(s => s.etat === 'avenir').length)
@@ -208,6 +219,7 @@ async function toggleFait(s, pid) {
 .sess.b-annule { border-left-color: #cbd5e1; opacity: .7; }
 .sess-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .sess-form { font-weight: 800; color: #0f172a; font-size: 14px; }
+.sess-head .sop { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 600; color: #475569; background: #f1f5f9; padding: 1px 7px; border-radius: 5px; }
 .sess-head .meta { font-size: 12px; color: #64748b; font-weight: 600; }
 .sess-head .prog { margin-left: auto; font-size: 12px; font-weight: 700; color: #475569; background: #f1f5f9; border-radius: 999px; padding: 2px 10px; }
 .etat { font-size: 11px; font-weight: 800; padding: 2px 9px; border-radius: 999px; }
