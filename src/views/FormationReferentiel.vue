@@ -18,6 +18,7 @@
 
       <div v-if="peutEditer" class="form-row">
         <input v-model="form.nom" placeholder="Formation *" class="grow" />
+        <input v-model="form.code_sop" placeholder="Code SOP" class="s" />
         <input v-model="form.categorie" list="catsListe" placeholder="Catégorie" class="c" />
         <input v-model.number="form.validite_mois" type="number" min="0" placeholder="Validité (mois)" class="v" />
         <div class="acts">
@@ -31,10 +32,11 @@
       <div v-for="cat in categories" :key="cat || '—'" class="form-cat">
         <h3 class="form-cat-titre">{{ cat || 'Sans catégorie' }}</h3>
         <table class="form-tbl">
-          <thead><tr><th>Formation</th><th>Validité</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
+          <thead><tr><th>Formation</th><th>Code SOP</th><th>Validité</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
           <tbody>
             <tr v-for="f in formationsDe(cat)" :key="f.id">
               <td class="nom">{{ f.nom }}</td>
+              <td><span v-if="f.code_sop" class="sop">{{ f.code_sop }}</span><span v-else class="perm">—</span></td>
               <td><span v-if="f.validite_mois" class="val">{{ f.validite_mois }} mois</span><span v-else class="perm">Permanent</span></td>
               <td v-if="peutEditer" class="act">
                 <button @click="modifier(f)" title="Modifier">✎</button>
@@ -74,8 +76,8 @@ const formations = ref([])
 const erreur = ref('')
 const message = ref('')
 const recherche = ref('')
-const form = reactive({ id: null, nom: '', categorie: '', validite_mois: null })
-function reset() { Object.assign(form, { id: null, nom: '', categorie: '', validite_mois: null }) }
+const form = reactive({ id: null, nom: '', code_sop: '', categorie: '', validite_mois: null })
+function reset() { Object.assign(form, { id: null, nom: '', code_sop: '', categorie: '', validite_mois: null }) }
 
 async function charger() {
   const r = await supabase.from('formations').select('*').eq('actif', true).order('ordre')
@@ -86,7 +88,7 @@ onMounted(charger)
 
 const catIndex = (c) => { const i = CATS.indexOf(c); return i >= 0 ? i : 999 }
 const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-const formationsVues = computed(() => { const q = normR(recherche.value).trim(); if (!q) return formations.value; return formations.value.filter(f => normR(f.nom).includes(q) || normR(f.categorie).includes(q)) })
+const formationsVues = computed(() => { const q = normR(recherche.value).trim(); if (!q) return formations.value; return formations.value.filter(f => normR(f.nom).includes(q) || normR(f.categorie).includes(q) || normR(f.code_sop).includes(q)) })
 const categories = computed(() => [...new Set(formationsVues.value.map(f => f.categorie || ''))].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : (catIndex(a) - catIndex(b)) || a.localeCompare(b))))
 function formationsDe(cat) { return formationsVues.value.filter(f => (f.categorie || '') === cat).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
 
@@ -97,15 +99,22 @@ async function enregistrer() {
   const nomNorm = normR(form.nom.trim())
   const doublon = formations.value.find(f => normR(f.nom) === nomNorm && f.id !== form.id)
   if (doublon) { erreur.value = 'Cette formation existe déjà : « ' + doublon.nom + ' ». Aucun doublon n\'a été enregistré.'; return }
-  const payload = { nom: form.nom.trim(), categorie: form.categorie || null, validite_mois: (form.validite_mois === '' || form.validite_mois == null) ? null : Number(form.validite_mois) }
-  let r
-  if (form.id) r = await supabase.from('formations').update(payload).eq('id', form.id)
-  else r = await supabase.from('formations').insert({ ...payload, ordre: formations.value.length })
+  const payload = { nom: form.nom.trim(), categorie: form.categorie || null, validite_mois: (form.validite_mois === '' || form.validite_mois == null) ? null : Number(form.validite_mois), code_sop: (form.code_sop || '').trim() || null }
+  const envoyer = (pl) => form.id
+    ? supabase.from('formations').update(pl).eq('id', form.id)
+    : supabase.from('formations').insert({ ...pl, ordre: formations.value.length })
+  let avert = ''
+  let r = await envoyer(payload)
+  if (r.error && /code_sop/i.test(r.error.message)) {
+    const { code_sop, ...sans } = payload
+    avert = ' (⚠ colonne « code_sop » absente en base — code SOP non enregistré. Exécute : alter table formations add column code_sop text;)'
+    r = await envoyer(sans)
+  }
   if (r.error) { erreur.value = r.error.message; return }
-  message.value = form.id ? 'Formation mise à jour.' : 'Formation ajoutée.'
+  message.value = (form.id ? 'Formation mise à jour.' : 'Formation ajoutée.') + avert
   reset(); await charger()
 }
-function modifier(f) { Object.assign(form, { id: f.id, nom: f.nom, categorie: f.categorie || '', validite_mois: f.validite_mois }) }
+function modifier(f) { Object.assign(form, { id: f.id, nom: f.nom, code_sop: f.code_sop || '', categorie: f.categorie || '', validite_mois: f.validite_mois }) }
 async function supprimer(f) {
   if (!confirm('Supprimer la formation « ' + f.nom + ' » ?')) return
   const r = await supabase.from('formations').update({ actif: false }).eq('id', f.id)
@@ -138,6 +147,7 @@ async function chargerStandard() {
 .form-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; align-items: center; }
 .form-row input { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; }
 .form-row input.grow { flex: 1; min-width: 200px; }
+.form-row input.s { width: 140px; }
 .form-row input.c { width: 150px; }
 .form-row input.v { width: 120px; }
 .form-row input:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
@@ -154,6 +164,7 @@ async function chargerStandard() {
 .form-tbl td.act button { border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; padding: 3px 7px; cursor: pointer; font-size: 12px; margin-left: 4px; }
 .form-tbl td.act button:hover { background: #f8fafc; border-color: #cbd5e1; }
 .form-tbl tbody tr:hover { background: #f0fdfa; }
+.sop { font-weight: 600; color: #475569; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: #f1f5f9; padding: 1px 8px; border-radius: 5px; }
 .val { font-weight: 600; color: #0f766e; }
 .perm { color: #94a3b8; font-size: 12px; }
 </style>
