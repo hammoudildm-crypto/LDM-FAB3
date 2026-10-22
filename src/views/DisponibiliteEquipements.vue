@@ -1124,17 +1124,43 @@ watch(lotsTriage, (lots) => {
     }
   }
 }, { immediate: true })
+// La sélection enregistrée arrive après les lots (requête séparée) : l'appliquer
+// par-dessus le défaut calculé, sauf pour un lot en cours de modification.
+watch(turbinesChargees, (ttm) => {
+  for (const id in ttm) {
+    if (triageTouche[id]) continue
+    const loaded = ttm[id]
+    if (Array.isArray(loaded) && loaded.length) turbinesSel[id] = loaded.map(Number)
+  }
+})
 function pctTriage(id) { const q = qteEdit[id] || {}; const t = Number(q.aTrier) || 0; return t > 0 ? Math.min(100, Math.round((Number(q.triee) || 0) / t * 100)) : 0 }
 // Triage par turbine : quantité d'une turbine = taille de lot ÷ nb turbines
 function perTurbine(l) { const n = l.nbTurbines || 1; return n > 0 ? Math.round((l.kgLot || 0) / n * 100) / 100 : 0 }
 function turbineOn(l, n) { const s = turbinesSel[l.id]; return Array.isArray(s) && s.includes(n) }
 function nbTurbinesATrier(l) { const s = turbinesSel[l.id]; return Array.isArray(s) ? s.length : 0 }
-function basculerTurbine(l, n) {
+async function basculerTurbine(l, n) {
   let s = turbinesSel[l.id]; if (!Array.isArray(s)) s = turbinesSel[l.id] = []
   const i = s.indexOf(n); if (i >= 0) s.splice(i, 1); else s.push(n)
   if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: 0, triee: 0 }
   qteEdit[l.id].aTrier = Math.round(perTurbine(l) * s.length * 100) / 100
   triageTouche[l.id] = true
+  await persistTurbines(l)
+}
+// Enregistrement immédiat de la sélection de turbines (sans recharger toute la page)
+async function persistTurbines(l) {
+  const sel = Array.isArray(turbinesSel[l.id]) ? [...turbinesSel[l.id]].sort((a, b) => a - b) : []
+  const aTrier = Number((qteEdit[l.id] || {}).aTrier) || 0
+  let r = await supabase.from('ordres_fabrication').update({ qte_a_trier: aTrier, turbines_a_trier: sel }).eq('id', l.id)
+  if (r.error && /turbines_a_trier/.test(r.error.message || '')) {
+    colTurbineManquante.value = true
+    r = await supabase.from('ordres_fabrication').update({ qte_a_trier: aTrier }).eq('id', l.id)
+  } else if (!r.error) {
+    colTurbineManquante.value = false
+    turbinesChargees.value = { ...turbinesChargees.value, [l.id]: sel }
+  }
+  if (r.error) return
+  const o = ofs.value.find(x => x.id === l.id); if (o) o.qte_a_trier = aTrier
+  delete triageTouche[l.id]
 }
 // Une ligne est « à enregistrer » tant que la saisie diffère de ce qui est en base.
 function estModifie(l) {
