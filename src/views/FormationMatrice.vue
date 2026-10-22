@@ -12,8 +12,18 @@
     </div>
 
     <section class="card">
+      <div class="perim-cards">
+        <button type="button" class="pc" :class="{ on: filtreAtelier === '' }" @click="filtreAtelier = ''">
+          <span class="pc-n">{{ personnes.length }}</span>
+          <span class="pc-l">Tous les périmètres</span>
+        </button>
+        <button type="button" v-for="a in ateliersListe" :key="a" class="pc" :class="{ on: filtreAtelier === a }" @click="filtreAtelier = a">
+          <span class="pc-n">{{ perimCount[a] || 0 }}</span>
+          <span class="pc-l">{{ a }}</span>
+        </button>
+      </div>
+
       <div class="mat-bar">
-        <div class="f"><label>Périmètre</label><select v-model="filtreAtelier"><option value="">Tous</option><option v-for="a in ateliersListe" :key="a" :value="a">{{ a }}</option></select></div>
         <div class="f"><label>Équipe</label><select v-model="filtreEquipe"><option value="">Toutes</option><option v-for="e in equipesListe" :key="e" :value="e">{{ e }}</option></select></div>
         <div class="f"><label>Fonction</label><select v-model="filtreFonction"><option value="">Toutes</option><option v-for="fn in fonctionsListe" :key="fn" :value="fn">{{ fn }}</option></select></div>
         <div class="f"><label>Phase</label><select v-model="filtrePhase"><option value="">Toutes</option><option v-for="ph in phasesListe" :key="ph" :value="ph">{{ ph }}</option></select></div>
@@ -274,6 +284,7 @@ async function charger() {
 onMounted(charger)
 
 const ateliersListe = computed(() => [...new Set(personnes.value.map(p => p.atelier_id).filter(Boolean))].sort())
+const perimCount = computed(() => { const m = {}; for (const p of personnes.value) { const k = p.atelier_id; if (k) m[k] = (m[k] || 0) + 1 } return m })
 const equipesListe = computed(() => [...new Set(personnes.value.map(p => p.equipe).filter(Boolean))].sort())
 const fonctionsListe = computed(() => [...new Set(personnes.value.map(p => p.fonction).filter(Boolean))].sort())
 const phasesListe = computed(() => [...new Set(personnes.value.flatMap(p => (p.equipement || '').split(',').map(x => x.trim()).filter(Boolean)))].sort())
@@ -518,6 +529,13 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .mat-bar label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; }
 .mat-bar select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; font-weight: 600; min-width: 160px; }
 
+.perim-cards { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.pc { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 120px; max-width: 210px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 12px; padding: 11px 14px; cursor: pointer; text-align: left; transition: border-color .12s, background .12s, box-shadow .12s; }
+.pc:hover { border-color: #99f6e4; background: #f0fdfa; }
+.pc.on { border-color: #0d9488; background: #f0fdfa; box-shadow: 0 0 0 2px rgba(13,148,136,.2); }
+.pc-n { font-size: 22px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; line-height: 1; }
+.pc.on .pc-n { color: #0d9488; }
+.pc-l { font-size: 12px; font-weight: 700; color: #475569; line-height: 1.25; }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px; }
 .kpi { background: #f8fafc; border: 1px solid #eef2f6; border-radius: 12px; padding: 14px; text-align: center; }
 .kpi .kv { font-size: 24px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
