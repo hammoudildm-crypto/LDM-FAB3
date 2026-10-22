@@ -33,6 +33,36 @@
           <div class="kpi" :class="{ bad: nbHors > 0 }"><div class="kv">{{ nbHors }}</div><div class="kl">Hors spec</div></div>
         </div>
 
+        <div v-if="capabilite.n" class="cap-wrap">
+          <div class="cap-head">
+            <h3 class="cap-titre">Capabilité du procédé — Cp / Cpk</h3>
+            <span class="cap-sub">{{ capabilite.n }} paramètre(s) numérique(s) évalué(s) · guide : Cpk ≥ 1,33 capable · ≥ 1,67 excellent</span>
+          </div>
+          <div class="cap-cards">
+            <div class="cap-card">
+              <div class="cap-v" :style="{ color: capCol(capabilite.cpkMoy) }">{{ capabilite.cpkMoy != null ? capabilite.cpkMoy.toFixed(2) : '—' }}</div>
+              <div class="cap-l">Cpk moyen</div>
+              <span class="cap-badge" :style="{ background: capCol(capabilite.cpkMoy) }">{{ capLabel(capabilite.cpkMoy) }}</span>
+            </div>
+            <div class="cap-card">
+              <div class="cap-v" :style="{ color: capCol(capabilite.cpMoy) }">{{ capabilite.cpMoy != null ? capabilite.cpMoy.toFixed(2) : '—' }}</div>
+              <div class="cap-l">Cp moyen</div>
+              <div class="cap-note">Potentiel (procédé centré)</div>
+            </div>
+            <div class="cap-card">
+              <div class="cap-v" :style="{ color: capCol(capabilite.pire ? capabilite.pire.cpk : null) }">{{ capabilite.pire ? capabilite.pire.cpk.toFixed(2) : '—' }}</div>
+              <div class="cap-l">Cpk le plus faible</div>
+              <div class="cap-note" :title="capabilite.pire ? capabilite.pire.nom : ''">{{ capabilite.pire ? capabilite.pire.nom : '—' }}</div>
+            </div>
+          </div>
+          <div class="cap-bar">
+            <template v-for="t in capTiers" :key="'b' + t.key"><div v-if="capabilite.counts[t.key]" class="cap-seg" :style="{ width: (capabilite.counts[t.key] / capabilite.n * 100) + '%', background: t.col }" :title="t.label + ' : ' + capabilite.counts[t.key]"></div></template>
+          </div>
+          <div class="cap-leg">
+            <span v-for="t in capTiers" :key="'l' + t.key" class="cap-lg"><i :style="{ background: t.col }"></i>{{ t.label }} <b>{{ capabilite.counts[t.key] }}</b> <span class="cap-lh">{{ t.hint }}</span></span>
+          </div>
+        </div>
+
         <h3 class="sec-titre">Synthèse par paramètre</h3>
         <p class="hint">Clique une ligne pour voir ses graphiques. Cpk ≥ 1,33 : capable · 1,00–1,33 : acceptable · &lt; 1,00 : insuffisant.</p>
         <div class="syn-layout">
@@ -548,6 +578,30 @@ const tauxGlobal = computed(() => mesuresPlat.value.length ? (mesuresPlat.value.
 function verdictCls(cpk) { if (cpk == null) return 'v-na'; if (cpk >= 1.33) return 'v-ok'; if (cpk >= 1.0) return 'v-mid'; return 'v-ko' }
 function verdictTxt(cpk) { if (cpk == null) return '—'; if (cpk >= 1.33) return 'Capable'; if (cpk >= 1.0) return 'Acceptable'; return 'Insuffisant' }
 
+// --- Capabilité : synthèse graphique inspirée du guide Cp/Cpk (4 niveaux) ---
+const capTiers = [
+  { key: 'exc', label: 'Excellent', hint: 'Cpk ≥ 1,67', col: '#15803d' },
+  { key: 'cap', label: 'Capable', hint: '1,33 – 1,67', col: '#16a34a' },
+  { key: 'acc', label: 'Acceptable', hint: '1,00 – 1,33', col: '#d97706' },
+  { key: 'ko', label: 'Insuffisant', hint: '< 1,00', col: '#dc2626' }
+]
+function capTier(v) { if (v == null) return null; if (v >= 1.67) return 'exc'; if (v >= 1.33) return 'cap'; if (v >= 1.0) return 'acc'; return 'ko' }
+function capCol(v) { const t = capTier(v); return t ? capTiers.find(x => x.key === t).col : '#94a3b8' }
+function capLabel(v) { const t = capTier(v); return t ? capTiers.find(x => x.key === t).label : '—' }
+const capabilite = computed(() => {
+  const rows = synthese.value.filter(r => !r.bool && r.cpk != null)
+  const counts = { exc: 0, cap: 0, acc: 0, ko: 0 }
+  let sCpk = 0, sCp = 0, nCp = 0, pire = null
+  for (const r of rows) {
+    const t = capTier(r.cpk); if (t) counts[t]++
+    sCpk += r.cpk
+    if (r.cp != null) { sCp += r.cp; nCp++ }
+    if (!pire || r.cpk < pire.cpk) pire = r
+  }
+  const n = rows.length
+  return { n, counts, cpkMoy: n ? sCpk / n : null, cpMoy: nCp ? sCp / nCp : null, pire }
+})
+
 const paramSelObj = computed(() => paramById.value[paramSel.value] || null)
 const paramBool = computed(() => { const p = paramSelObj.value; return !!(p && p.type === 'bool') })
 const byDate = (a, b) => String(a.date_mesure || '').localeCompare(String(b.date_mesure || '')) || ((a.of_id || 0) - (b.of_id || 0)) || ((a.rang || 0) - (b.rang || 0))
@@ -822,6 +876,24 @@ ${matHtml}
 .kpi .kv { font-size: 24px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
 .kpi .kl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; font-weight: 700; margin-top: 2px; }
 .kpi.good .kv { color: #16a34a; } .kpi.warn .kv { color: #d97706; } .kpi.bad .kv { color: #dc2626; }
+
+.cap-wrap { background: #f8fafc; border: 1px solid #eef2f6; border-radius: 12px; padding: 14px 16px; margin-bottom: 20px; }
+.cap-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.cap-titre { margin: 0; font-size: 15px; font-weight: 800; color: #0f172a; border-left: 4px solid #a855f7; padding-left: 9px; }
+.cap-sub { font-size: 12px; color: #94a3b8; font-weight: 600; }
+.cap-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.cap-card { background: #fff; border: 1px solid #eef2f6; border-radius: 10px; padding: 12px 14px; text-align: center; }
+.cap-v { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.cap-l { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; font-weight: 700; margin-top: 3px; }
+.cap-badge { display: inline-block; margin-top: 7px; font-size: 11px; font-weight: 800; color: #fff; padding: 1px 11px; border-radius: 999px; }
+.cap-note { font-size: 12px; color: #475569; font-weight: 600; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-bar { display: flex; height: 22px; border-radius: 8px; overflow: hidden; background: #eef2f6; }
+.cap-seg { height: 100%; }
+.cap-leg { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; }
+.cap-lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #475569; font-weight: 600; }
+.cap-lg i { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+.cap-lg b { color: #0f172a; }
+.cap-lh { color: #94a3b8; font-weight: 600; font-size: 11px; }
 @media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
 
 .sec-titre { margin: 22px 0 6px; font-size: 15px; font-weight: 800; color: #0f172a; border-left: 4px solid #a855f7; padding-left: 9px; }
