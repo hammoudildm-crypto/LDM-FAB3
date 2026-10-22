@@ -1138,6 +1138,9 @@ function pctTriage(id) { const q = qteEdit[id] || {}; const t = Number(q.aTrier)
 function perTurbine(l) { const n = l.nbTurbines || 1; return n > 0 ? Math.round((l.kgLot || 0) / n * 100) / 100 : 0 }
 function turbineOn(l, n) { const s = turbinesSel[l.id]; return Array.isArray(s) && s.includes(n) }
 function nbTurbinesATrier(l) { const s = turbinesSel[l.id]; return Array.isArray(s) ? s.length : 0 }
+function turbinesSelListe(l) { const s = turbinesSel[l.id]; return Array.isArray(s) ? [...s].sort((a, b) => a - b) : [] }
+function turbinesDispo(l) { const s = new Set(Array.isArray(turbinesSel[l.id]) ? turbinesSel[l.id] : []); const out = []; for (let n = 1; n <= l.nbTurbines; n++) if (!s.has(n)) out.push(n); return out }
+function ajouterTurbine(l, e) { const n = Number(e.target.value); e.target.value = ''; if (n) basculerTurbine(l, n) }
 async function basculerTurbine(l, n) {
   let s = turbinesSel[l.id]; if (!Array.isArray(s)) s = turbinesSel[l.id] = []
   const i = s.indexOf(n); if (i >= 0) s.splice(i, 1); else s.push(n)
@@ -1624,7 +1627,12 @@ onMounted(async () => {
                   <input type="number" min="0" step="any" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop />
                   <div v-if="l.nbTurbines > 1" class="turb-sel" @click.stop>
                     <div class="turb-chips">
-                      <button v-for="n in l.nbTurbines" :key="n" type="button" class="turb-chip" :class="{ on: turbineOn(l, n) }" @click="basculerTurbine(l, n)" :title="'Turbine ' + n + (turbineOn(l, n) ? ' — à trier' : ' — conforme')">T{{ n }}</button>
+                      <span v-for="n in turbinesSelListe(l)" :key="n" class="turb-chip on" title="Turbine à trier — cliquer × pour retirer">T{{ n }}<button type="button" class="turb-x" @click="basculerTurbine(l, n)" title="Retirer du triage">×</button></span>
+                      <select v-if="turbinesDispo(l).length" class="turb-add" @change="ajouterTurbine(l, $event)">
+                        <option value="">+ Turbine à trier</option>
+                        <option v-for="n in turbinesDispo(l)" :key="n" :value="n">T{{ n }}</option>
+                      </select>
+                      <span v-if="!turbinesSelListe(l).length" class="turb-empty">Aucune turbine à trier</span>
                     </div>
                     <span class="turb-info">{{ nbTurbinesATrier(l) }} à trier · {{ l.nbTurbines - nbTurbinesATrier(l) }} conforme(s) · {{ fmt(perTurbine(l)) }} Kg/turb.</span>
                   </div>
@@ -2190,7 +2198,12 @@ onMounted(async () => {
 .turb-chips { display: flex; flex-wrap: wrap; gap: 3px; justify-content: flex-end; }
 .turb-chip { border: 1px solid #cbd5e1; background: #f1f5f9; color: #64748b; border-radius: 6px; padding: 2px 7px; font-size: 10.5px; font-weight: 800; cursor: pointer; line-height: 1.3; }
 .turb-chip:hover { border-color: #f59e0b; }
-.turb-chip.on { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+.turb-chip.on { background: #fef3c7; border-color: #f59e0b; color: #92400e; display: inline-flex; align-items: center; gap: 2px; cursor: default; }
+.turb-x { border: 0; background: transparent; color: #b45309; font-size: 13px; line-height: 1; cursor: pointer; padding: 0 0 0 1px; font-weight: 800; }
+.turb-x:hover { color: #92400e; }
+.turb-add { border: 1px dashed #cbd5e1; background: #fff; color: #64748b; border-radius: 6px; padding: 2px 5px; font-size: 10.5px; font-weight: 700; cursor: pointer; }
+.turb-add:hover { border-color: #f59e0b; }
+.turb-empty { font-size: 10px; color: #cbd5e1; font-style: italic; }
 .turb-info { font-size: 9.5px; color: #94a3b8; font-weight: 600; white-space: nowrap; }
 .tj-bar { display: block; height: 12px; background: #eef2f6; border-radius: 999px; overflow: hidden; }
 .tj-fill { display: block; height: 100%; background: linear-gradient(90deg, #f59e0b, #d97706); border-radius: 999px; }
