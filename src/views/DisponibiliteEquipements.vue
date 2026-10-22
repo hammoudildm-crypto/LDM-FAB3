@@ -98,7 +98,7 @@ async function charger() {
   const nt = {}
   if (!rnt.error && rnt.data) for (const p of rnt.data) if (p.nb_turbines != null) nt[p.id] = Number(p.nb_turbines)
   nbTurbinesMap.value = nt
-  const rtt = await supabase.from('ordres_fabrication').select('id, turbines_a_trier').eq('en_triage', true)
+  const rtt = await supabase.from('ordres_fabrication').select('id, turbines_a_trier').not('turbines_a_trier', 'is', null)
   const ttm = {}
   if (!rtt.error && rtt.data) for (const o of rtt.data) if (Array.isArray(o.turbines_a_trier)) ttm[o.id] = o.turbines_a_trier
   turbinesChargees.value = ttm
@@ -1093,6 +1093,8 @@ const histoTotaux = computed(() => {
 const qteEdit = reactive({})
 const turbinesSel = reactive({})        // ordre_id -> [n° de turbines à trier]
 const turbinesChargees = ref({})        // ordre_id -> [n°] chargés depuis la base
+const triageTouche = reactive({})       // ordre_id -> true si la sélection de turbines a été modifiée
+const colTurbineManquante = ref(false)  // true si la colonne turbines_a_trier n'existe pas encore en base
 // Verrou anti-rechargement : tant qu'une saisie n'est pas enregistrée, App.vue ne recharge pas.
 const verrouEdition = inject('verrouEdition', null)
 let verrouPose = false
@@ -1102,6 +1104,7 @@ const aDesModifs = computed(() => {
     if (!q) continue
     if ((Number(q.aTrier) || 0) !== (Number(l.qteATrier) || 0)) return true
     if ((Number(q.triee) || 0) !== (Number(l.qteTriee) || 0)) return true
+    if (triageTouche[l.id]) return true
   }
   return sacsOuvert.value != null || devOuvert.value != null || histOuvert.value != null
 })
@@ -1131,11 +1134,13 @@ function basculerTurbine(l, n) {
   const i = s.indexOf(n); if (i >= 0) s.splice(i, 1); else s.push(n)
   if (!qteEdit[l.id]) qteEdit[l.id] = { aTrier: 0, triee: 0 }
   qteEdit[l.id].aTrier = Math.round(perTurbine(l) * s.length * 100) / 100
+  triageTouche[l.id] = true
 }
 // Une ligne est « à enregistrer » tant que la saisie diffère de ce qui est en base.
 function estModifie(l) {
   const q = qteEdit[l.id]
   if (!q) return false
+  if (triageTouche[l.id]) return true
   return (Number(q.aTrier) || 0) !== (Number(l.qteATrier) || 0) || (Number(q.triee) || 0) !== (Number(l.qteTriee) || 0)
 }
 const resumeTriage = computed(() => {
@@ -1157,8 +1162,14 @@ async function sauverTriage(l) {
   const base = { qte_a_trier: Number(q.aTrier) || 0, qte_triee: Number(q.triee) || 0 }
   const sel = Array.isArray(turbinesSel[l.id]) ? [...turbinesSel[l.id]].sort((a, b) => a - b) : []
   let r = await supabase.from('ordres_fabrication').update({ ...base, turbines_a_trier: sel }).eq('id', l.id)
-  if (r.error && /turbines_a_trier/.test(r.error.message || '')) r = await supabase.from('ordres_fabrication').update(base).eq('id', l.id)
+  if (r.error && /turbines_a_trier/.test(r.error.message || '')) {
+    colTurbineManquante.value = true
+    r = await supabase.from('ordres_fabrication').update(base).eq('id', l.id)
+  } else if (!r.error) {
+    colTurbineManquante.value = false
+  }
   if (r.error) { alert('Enregistrement échoué : ' + r.error.message + ' — as-tu ajouté les colonnes qte_a_trier / qte_triee ?'); return }
+  delete triageTouche[l.id]
   await charger()
 }
 
@@ -1566,6 +1577,7 @@ onMounted(async () => {
             <label class="sac-poids" title="Utilisé pour les produits dont le poids de sac n'est pas renseigné">Poids de sac par défaut<input type="number" min="0.1" step="any" v-model.number="poidsSac" /> Kg</label>
           </div>
           <p v-if="majSac" class="sac-err">{{ majSac }}</p>
+          <p v-if="colTurbineManquante" class="sac-err">⚠ Les quantités sont enregistrées, mais la sélection des turbines n'a pas pu être sauvegardée : la colonne <code>turbines_a_trier</code> n'existe pas encore. Exécute une fois dans Supabase : <code>alter table ordres_fabrication add column turbines_a_trier jsonb;</code></p>
           <div v-if="lotsTriage.length" class="tr-resume">
             <span class="trr"><b>{{ fmt(resumeTriage.aTrier) }}</b> Kg à trier</span>
             <span class="trr"><b>{{ fmt(resumeTriage.triee) }}</b> Kg triés</span>
