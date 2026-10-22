@@ -40,12 +40,20 @@
           </div>
           <div class="cap-cards">
             <div class="cap-card">
-              <div class="cap-v" :style="{ color: capCol(capabilite.cpkMoy) }">{{ capabilite.cpkMoy != null ? capabilite.cpkMoy.toFixed(2) : '—' }}</div>
+              <svg viewBox="0 0 42 42" class="cap-donut">
+                <circle class="cd-bg" cx="21" cy="21" r="15.915" />
+                <g transform="rotate(-90 21 21)"><circle v-if="capabilite.cpkMoy != null" class="cd-seg" cx="21" cy="21" r="15.915" :stroke="capCol(capabilite.cpkMoy)" :stroke-dasharray="gaugeDash(capabilite.cpkMoy)" stroke-dashoffset="0" /></g>
+                <text x="21" y="23" class="cd-val" :style="{ fill: capCol(capabilite.cpkMoy) }">{{ capabilite.cpkMoy != null ? capabilite.cpkMoy.toFixed(2) : '—' }}</text>
+              </svg>
               <div class="cap-l">Cpk moyen</div>
               <span class="cap-badge" :style="{ background: capCol(capabilite.cpkMoy) }">{{ capLabel(capabilite.cpkMoy) }}</span>
             </div>
             <div class="cap-card">
-              <div class="cap-v" :style="{ color: capCol(capabilite.cpMoy) }">{{ capabilite.cpMoy != null ? capabilite.cpMoy.toFixed(2) : '—' }}</div>
+              <svg viewBox="0 0 42 42" class="cap-donut">
+                <circle class="cd-bg" cx="21" cy="21" r="15.915" />
+                <g transform="rotate(-90 21 21)"><circle v-if="capabilite.cpMoy != null" class="cd-seg" cx="21" cy="21" r="15.915" :stroke="capCol(capabilite.cpMoy)" :stroke-dasharray="gaugeDash(capabilite.cpMoy)" stroke-dashoffset="0" /></g>
+                <text x="21" y="23" class="cd-val" :style="{ fill: capCol(capabilite.cpMoy) }">{{ capabilite.cpMoy != null ? capabilite.cpMoy.toFixed(2) : '—' }}</text>
+              </svg>
               <div class="cap-l">Cp moyen</div>
               <div class="cap-note">Potentiel (procédé centré)</div>
             </div>
@@ -102,6 +110,7 @@
           <div class="tabs">
             <button :class="{ on: chartMode === 'trend' }" @click="chartMode = 'trend'">Tendance vs specs</button>
             <button :class="{ on: chartMode === 'control' }" @click="chartMode = 'control'">Carte de contrôle</button>
+            <button :class="{ on: chartMode === 'capab' }" @click="chartMode = 'capab'">Courbe de capabilité</button>
             <button :class="{ on: chartMode === 'compare' }" @click="chartMode = 'compare'">Comparer ({{ comparIds.length }})</button>
           </div>
         </div>
@@ -191,6 +200,33 @@
           </div>
           <div v-else-if="paramBool" class="empty-sm">Carte de contrôle non applicable à un paramètre ON/OFF.</div>
           <div v-else class="empty-sm">Au moins 2 mesures sont nécessaires pour construire la carte de contrôle.</div>
+        </div>
+
+        <!-- Courbe de capabilité (distribution vs specs) -->
+        <div v-else-if="chartMode === 'capab'">
+          <div v-if="capabCourbe" class="chart-wrap">
+            <svg :viewBox="'0 0 ' + capabCourbe.W + ' ' + capabCourbe.H" class="trend" preserveAspectRatio="xMidYMid meet">
+              <line :x1="capabCourbe.mL" :y1="capabCourbe.y0" :x2="capabCourbe.W - capabCourbe.mR" :y2="capabCourbe.y0" class="axis" />
+              <path :d="capabCourbe.area" class="bell-area" :style="{ fill: capCol(capabCourbe.cpk) }" />
+              <path :d="capabCourbe.line" class="bell-line" />
+              <template v-if="capabCourbe.xLsl != null"><line :x1="capabCourbe.xLsl" :y1="capabCourbe.mT" :x2="capabCourbe.xLsl" :y2="capabCourbe.y0" class="bell-spec" /><text :x="capabCourbe.xLsl" :y="capabCourbe.mT - 5" class="bell-lbl spec">LSL {{ fmtNum(capabCourbe.lsl) }}</text></template>
+              <template v-if="capabCourbe.xUsl != null"><line :x1="capabCourbe.xUsl" :y1="capabCourbe.mT" :x2="capabCourbe.xUsl" :y2="capabCourbe.y0" class="bell-spec" /><text :x="capabCourbe.xUsl" :y="capabCourbe.mT - 5" class="bell-lbl spec">USL {{ fmtNum(capabCourbe.usl) }}</text></template>
+              <line :x1="capabCourbe.xMean" :y1="capabCourbe.yMeanTop" :x2="capabCourbe.xMean" :y2="capabCourbe.y0" class="bell-mean" />
+              <text :x="capabCourbe.xMean" :y="capabCourbe.yMeanTop - 4" class="bell-lbl mean">μ {{ fmtNum(capabCourbe.mean) }}</text>
+              <template v-if="capabCourbe.xCible != null"><line :x1="capabCourbe.xCible" :y1="capabCourbe.mT + 6" :x2="capabCourbe.xCible" :y2="capabCourbe.y0" class="bell-cible" /><text :x="capabCourbe.xCible" :y="capabCourbe.y0 + 24" class="bell-lbl cible">Cible {{ fmtNum(capabCourbe.cible) }}</text></template>
+            </svg>
+            <div class="cap-readrow">
+              <span class="crr"><b :style="{ color: capCol(capabCourbe.cp) }">{{ capabCourbe.cp != null ? capabCourbe.cp.toFixed(2) : '—' }}</b> Cp</span>
+              <span class="crr"><b :style="{ color: capCol(capabCourbe.cpk) }">{{ capabCourbe.cpk != null ? capabCourbe.cpk.toFixed(2) : '—' }}</b> Cpk</span>
+              <span class="crr"><b>{{ fmtNum(capabCourbe.mean) }}</b> μ</span>
+              <span class="crr"><b>{{ capabCourbe.std.toFixed(3) }}</b> σ</span>
+              <span class="crr"><b>{{ capabCourbe.n }}</b> mesures</span>
+              <span class="verdict" :class="verdictCls(capabCourbe.cpk)" style="margin-left:auto">{{ verdictTxt(capabCourbe.cpk) }}</span>
+            </div>
+            <p class="hint">Courbe normale estimée N(μ, σ) du paramètre, comparée aux limites de spécification. Un procédé capable et centré place toute la cloche entre LSL et USL, centrée sur la cible.</p>
+          </div>
+          <div v-else-if="paramBool" class="empty-sm">Courbe de capabilité non applicable à un paramètre ON/OFF.</div>
+          <div v-else class="empty-sm">Il faut au moins 2 mesures et une limite de spécification (min ou max) pour tracer la courbe.</div>
         </div>
 
         <!-- Comparaison multi-paramètres -->
@@ -601,6 +637,35 @@ const capabilite = computed(() => {
   const n = rows.length
   return { n, counts, cpkMoy: n ? sCpk / n : null, cpMoy: nCp ? sCp / nCp : null, pire }
 })
+// Jauge donut : indice (0 → 2) en pourcentage d'arc
+function gaugeDash(v) { if (v == null) return '0 100'; const pct = Math.max(0, Math.min(100, v / 2 * 100)); return pct.toFixed(1) + ' ' + (100 - pct).toFixed(1) }
+// Courbe de capabilité (cloche normale vs limites) pour le paramètre sélectionné
+const capabCourbe = computed(() => {
+  const p = paramSelObj.value
+  if (!p || p.type === 'bool') return null
+  const row = synthese.value.find(r => r.id === paramSel.value)
+  if (!row || row.std == null || row.std <= 0) return null
+  const mean = row.mean, std = row.std, lsl = row.lsl, usl = row.usl, cible = effCible(p)
+  if (lsl == null && usl == null) return null
+  const xs = [mean - 4 * std, mean + 4 * std]
+  if (lsl != null) xs.push(lsl); if (usl != null) xs.push(usl); if (cible != null) xs.push(cible)
+  let xmin = Math.min(...xs), xmax = Math.max(...xs)
+  const pad = (xmax - xmin) * 0.06 || 1; xmin -= pad; xmax += pad
+  const W = 760, H = 260, mL = 20, mR = 20, mT = 26, mB = 40
+  const xx = (x) => mL + (x - xmin) / (xmax - xmin) * (W - mL - mR)
+  const yy = (yn) => mT + (1 - yn) * (H - mT - mB)
+  const y0 = yy(0)
+  const N = 80, pts = []
+  for (let i = 0; i <= N; i++) { const x = xmin + (xmax - xmin) * i / N; const z = (x - mean) / std; pts.push({ x: xx(x), y: yy(Math.exp(-0.5 * z * z)) }) }
+  const line = pts.map((q, i) => (i ? 'L' : 'M') + q.x.toFixed(1) + ' ' + q.y.toFixed(1)).join(' ')
+  const area = 'M' + pts[0].x.toFixed(1) + ' ' + y0.toFixed(1) + ' ' + pts.map(q => 'L' + q.x.toFixed(1) + ' ' + q.y.toFixed(1)).join(' ') + ' L' + pts[pts.length - 1].x.toFixed(1) + ' ' + y0.toFixed(1) + ' Z'
+  return {
+    W, H, mL, mR, mT, mB, line, area, y0,
+    xLsl: lsl != null ? xx(lsl) : null, xUsl: usl != null ? xx(usl) : null,
+    xMean: xx(mean), xCible: cible != null ? xx(cible) : null, yMeanTop: yy(1),
+    lsl, usl, cible, mean, std, cp: row.cp, cpk: row.cpk, n: row.n
+  }
+})
 
 const paramSelObj = computed(() => paramById.value[paramSel.value] || null)
 const paramBool = computed(() => { const p = paramSelObj.value; return !!(p && p.type === 'bool') })
@@ -894,6 +959,22 @@ ${matHtml}
 .cap-lg i { width: 11px; height: 11px; border-radius: 3px; flex: none; }
 .cap-lg b { color: #0f172a; }
 .cap-lh { color: #94a3b8; font-weight: 600; font-size: 11px; }
+.cap-donut { width: 86px; height: 86px; display: block; margin: 0 auto 3px; }
+.cap-donut .cd-bg { fill: none; stroke: #eef2f6; stroke-width: 5; }
+.cap-donut .cd-seg { fill: none; stroke-width: 5; stroke-linecap: round; }
+.cap-donut .cd-val { font-size: 10px; font-weight: 800; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.bell-area { opacity: .16; }
+.bell-line { fill: none; stroke: #0f172a; stroke-width: 2; }
+.bell-mean { stroke: #2563eb; stroke-width: 1.5; }
+.bell-spec { stroke: #dc2626; stroke-width: 1.5; stroke-dasharray: 4 3; }
+.bell-cible { stroke: #16a34a; stroke-width: 1.5; stroke-dasharray: 2 3; }
+.bell-lbl { font-size: 10px; font-weight: 800; text-anchor: middle; }
+.bell-lbl.spec { fill: #dc2626; }
+.bell-lbl.mean { fill: #2563eb; }
+.bell-lbl.cible { fill: #16a34a; }
+.cap-readrow { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 8px; padding: 9px 2px 2px; border-top: 1px solid #eef2f6; }
+.crr { font-size: 12px; color: #64748b; font-weight: 600; }
+.crr b { font-size: 16px; color: #0f172a; font-variant-numeric: tabular-nums; margin-right: 3px; }
 @media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
 
 .sec-titre { margin: 22px 0 6px; font-size: 15px; font-weight: 800; color: #0f172a; border-left: 4px solid #a855f7; padding-left: 9px; }
