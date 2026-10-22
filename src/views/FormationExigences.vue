@@ -26,6 +26,7 @@
           <label v-for="f in formationsDe(cat)" :key="f.id" class="exi-item" :class="{ on: requisSet[f.id] }">
             <input type="checkbox" v-model="requisSet[f.id]" :disabled="!peutEditer" />
             <span class="nom">{{ f.nom }}</span>
+            <span v-if="f.code_sop" class="sop">{{ f.code_sop }}</span>
             <span v-if="f.validite_mois" class="val">{{ f.validite_mois }} mois</span>
             <span v-else class="perm">permanent</span>
           </label>
@@ -56,7 +57,7 @@ const erreur = ref('')
 const message = ref('')
 
 async function charger() {
-  const rf = await supabase.from('formations').select('id, nom, categorie, validite_mois').eq('actif', true).order('ordre')
+  const rf = await supabase.from('formations').select('*').eq('actif', true).order('ordre')
   if (!rf.error) formations.value = rf.data || []
   const rp = await supabase.from('postes').select('nom').order('nom')
   if (!rp.error) postes.value = (rp.data || []).map(r => (r.nom || '').trim()).filter(Boolean)
@@ -115,6 +116,7 @@ async function enregistrer() {
 .exi-item.on { background: #f0fdfa; border-color: #99f6e4; }
 .exi-item input { width: 16px; height: 16px; accent-color: #0d9488; cursor: pointer; }
 .exi-item .nom { flex: 1; font-weight: 600; color: #0f172a; }
+.exi-item .sop { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 600; color: #475569; background: #f1f5f9; padding: 1px 7px; border-radius: 5px; }
 .exi-item .val { font-size: 11px; color: #0f766e; font-weight: 600; }
 .exi-item .perm { font-size: 11px; color: #94a3b8; }
 </style>
