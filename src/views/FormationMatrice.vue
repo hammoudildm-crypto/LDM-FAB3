@@ -31,6 +31,52 @@
         <div class="kpi bad"><div class="kv">{{ nbEcarts }}</div><div class="kl">Écarts critiques</div></div>
       </div>
 
+      <div v-if="personnesFiltrees.length" class="kpi-charts">
+        <div class="kc">
+          <div class="kc-t">Taux de formation global</div>
+          <svg viewBox="0 0 42 42" class="donut" role="img">
+            <circle class="d-bg" cx="21" cy="21" r="15.915" />
+            <g transform="rotate(-90 21 21)">
+              <circle v-if="tauxDonut" class="d-seg" cx="21" cy="21" r="15.915" :stroke="tauxDonut.col" :stroke-dasharray="tauxDonut.dash" stroke-dashoffset="0" />
+            </g>
+            <text x="21" y="22" class="d-val" :style="{ fill: tauxDonut ? tauxDonut.col : '#94a3b8' }">{{ tauxDonut ? tauxDonut.pct.toFixed(0) + '%' : '—' }}</text>
+            <text x="21" y="27" class="d-sub">formé</text>
+          </svg>
+          <div class="kc-leg"><span class="lg"><i style="background:#16a34a"></i>≥ 90 %</span><span class="lg"><i style="background:#d97706"></i>60–90 %</span><span class="lg"><i style="background:#dc2626"></i>&lt; 60 %</span></div>
+        </div>
+
+        <div class="kc">
+          <div class="kc-t">Personnel qualifié</div>
+          <svg viewBox="0 0 42 42" class="donut" role="img">
+            <circle class="d-bg" cx="21" cy="21" r="15.915" />
+            <g transform="rotate(-90 21 21)">
+              <circle class="d-seg" cx="21" cy="21" r="15.915" stroke="#0d9488" :stroke-dasharray="qualifDonut.dash" stroke-dashoffset="0" />
+            </g>
+            <text x="21" y="21.5" class="d-val">{{ qualifDonut.q }}</text>
+            <text x="21" y="27" class="d-sub">/ {{ qualifDonut.tot }} pers.</text>
+          </svg>
+          <div class="kc-leg"><span class="lg"><i style="background:#0d9488"></i>Qualifiés {{ qualifDonut.q }}</span><span class="lg"><i style="background:#e2e8f0"></i>Reste {{ qualifDonut.nonQ }}</span></div>
+        </div>
+
+        <div class="kc">
+          <div class="kc-t">Répartition des qualifications</div>
+          <svg viewBox="0 0 42 42" class="donut" role="img">
+            <circle class="d-bg" cx="21" cy="21" r="15.915" />
+            <g transform="rotate(-90 21 21)">
+              <circle v-for="s in repDonut" :key="s.k" class="d-seg" cx="21" cy="21" r="15.915" :stroke="s.col" :stroke-dasharray="s.dash" :stroke-dashoffset="s.off" />
+            </g>
+            <text x="21" y="21.5" class="d-val">{{ repTotal }}</text>
+            <text x="21" y="27" class="d-sub">requises</text>
+          </svg>
+          <div class="kc-leg">
+            <span class="lg"><i style="background:#16a34a"></i>Valides {{ repartition.valide }}</span>
+            <span class="lg"><i style="background:#d97706"></i>À recycler {{ repartition.bientot }}</span>
+            <span class="lg"><i style="background:#dc2626"></i>Expirées {{ repartition.expire }}</span>
+            <span class="lg"><i style="background:#991b1b"></i>Manquantes {{ repartition.manquant }}</span>
+          </div>
+        </div>
+      </div>
+
       <div class="tabs2">
         <button :class="{ on: vue === 'matrice' }" @click="vue = 'matrice'">Matrice</button>
         <button :class="{ on: vue === 'planifier' }" @click="vue = 'planifier'">À planifier<span v-if="aPlanifier.length" class="tb">{{ aPlanifier.length }}</span></button>
@@ -337,6 +383,28 @@ const repartition = computed(() => {
   return r
 })
 const repTotal = computed(() => { const r = repartition.value; return r.valide + r.bientot + r.expire + r.manquant })
+// --- Graphiques KPI (donuts) ---
+const repDonut = computed(() => {
+  const r = repartition.value, tot = repTotal.value
+  const cols = { valide: '#16a34a', bientot: '#d97706', expire: '#dc2626', manquant: '#991b1b' }
+  const segs = []; let acc = 0
+  for (const k of ['valide', 'bientot', 'expire', 'manquant']) {
+    const v = r[k]; if (!tot || !v) continue
+    const pct = v / tot * 100
+    segs.push({ k, v, col: cols[k], dash: pct.toFixed(2) + ' ' + (100 - pct).toFixed(2), off: (-acc).toFixed(2) })
+    acc += pct
+  }
+  return segs
+})
+const qualifDonut = computed(() => {
+  const tot = personnesFiltrees.value.length, q = nbQualifies.value
+  const pct = tot ? q / tot * 100 : 0
+  return { tot, q, nonQ: tot - q, dash: pct.toFixed(2) + ' ' + (100 - pct).toFixed(2) }
+})
+const tauxDonut = computed(() => {
+  const t = tauxFormationGlobal.value; if (t == null) return null
+  return { pct: t, col: t >= 90 ? '#16a34a' : (t < 60 ? '#dc2626' : '#d97706'), dash: t.toFixed(2) + ' ' + (100 - t).toFixed(2) }
+})
 const tauxParFormation = computed(() => formations.value.map(f => {
   let req = 0, val = 0
   for (const p of personnesFiltrees.value) { const r = requisParFonction.value[p.fonction]; if (r && r.has(f.id)) { req++; if (cellStatut(p.id, f.id) === 'valide') val++ } }
@@ -454,6 +522,18 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .kpi .kl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; font-weight: 700; margin-top: 2px; }
 .kpi.good .kv { color: #16a34a; } .kpi.warn .kv { color: #d97706; } .kpi.bad .kv { color: #dc2626; }
 @media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+
+.kpi-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.kc { background: #fcfcfd; border: 1px solid #eef2f6; border-radius: 12px; padding: 14px 14px 12px; display: flex; flex-direction: column; align-items: center; }
+.kc-t { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #64748b; text-align: center; margin-bottom: 8px; min-height: 30px; display: flex; align-items: center; }
+.donut { width: 140px; height: 140px; display: block; }
+.donut .d-bg { fill: none; stroke: #eef2f6; stroke-width: 5; }
+.donut .d-seg { fill: none; stroke-width: 5; stroke-linecap: butt; transition: stroke-dasharray .4s ease; }
+.donut .d-val { fill: #0f172a; font-size: 9px; font-weight: 800; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.donut .d-sub { fill: #94a3b8; font-size: 3.3px; font-weight: 700; text-anchor: middle; text-transform: uppercase; letter-spacing: .05em; }
+.kc-leg { display: flex; flex-wrap: wrap; gap: 6px 12px; justify-content: center; margin-top: 10px; }
+.kc-leg .lg { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #64748b; font-weight: 600; }
+.kc-leg .lg i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 
 .sec-titre { margin: 22px 0 8px; font-size: 15px; font-weight: 800; color: #0f172a; border-left: 4px solid #0d9488; padding-left: 9px; }
 .form-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
