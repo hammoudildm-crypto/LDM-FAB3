@@ -108,12 +108,13 @@
       <div v-if="!tauxParPersonne.length" class="empty-sm">Aucune personne pour ce filtre.</div>
       <div v-else-if="!tauxParPersonneRech.length" class="empty-sm">Aucune personne ne correspond à « {{ recherchePers }} ».</div>
       <table v-else class="form-tbl">
-        <thead><tr><th>Personne</th><th>Fonction</th><th class="r">Validées / Requises</th><th class="c">Formé</th><th class="c">À renouveler</th><th class="c">Expiré</th><th class="c">Manquant</th><th class="tx">Taux</th></tr></thead>
+        <thead><tr><th>Personne</th><th>Fonction</th><th class="c">Recrutement</th><th class="r">Validées / Requises</th><th class="c">Formé</th><th class="c">À renouveler</th><th class="c">Expiré</th><th class="c">Manquant</th><th class="tx">Taux</th></tr></thead>
         <tbody>
           <template v-for="t in tauxParPersonneRech" :key="t.id">
             <tr class="pp-row" :class="{ open: persOuvert === t.id }" @click="persOuvert = persOuvert === t.id ? null : t.id" title="Voir le détail des qualifications">
               <td class="nom"><span class="pp-caret">{{ persOuvert === t.id ? '▾' : '▸' }}</span>{{ t.nom }}</td>
               <td>{{ t.fonction || '—' }}</td>
+              <td class="c">{{ fmtDate(t.date_recrutement) }}</td>
               <td class="r">{{ t.requises ? t.valides + ' / ' + t.requises : '—' }}</td>
               <td class="c"><span class="pp-n ok">{{ t.valides }}</span></td>
               <td class="c"><span v-if="t.bientot" class="pp-n warn">{{ t.bientot }}</span><span v-else class="pp-z">—</span></td>
@@ -122,7 +123,7 @@
               <td class="tx"><div v-if="t.taux != null" class="bar"><div class="bar-fill" :class="barCls(t.taux)" :style="{ width: t.taux + '%' }"></div><span class="bar-txt">{{ t.taux.toFixed(0) }}%</span></div><span v-else class="no-req">pas d'exigence</span></td>
             </tr>
             <tr v-if="persOuvert === t.id" class="pp-detail">
-              <td colspan="8">
+              <td colspan="9">
                 <div v-if="!detailPersonne(personneById[t.id]).length" class="empty-sm">Aucune formation requise ni enregistrée pour cette personne.</div>
                 <table v-else class="pp-dtbl">
                   <thead><tr><th>Formation</th><th>Statut</th><th>Dernière formation</th><th>Expiration</th><th>Exigence</th></tr></thead>
@@ -260,7 +261,7 @@ const erreur = ref('')
 const router = useRouter()
 
 async function charger() {
-  const rp = await supabase.from('organigramme').select('id, nom, matricule, fonction, atelier_id, equipe, equipement, machine').eq('actif', true).order('nom')
+  const rp = await supabase.from('organigramme').select('id, nom, matricule, fonction, atelier_id, equipe, equipement, machine, date_recrutement').eq('actif', true).order('nom')
   if (!rp.error) personnes.value = rp.data || []
   const rf = await supabase.from('formations').select('id, nom, validite_mois').eq('actif', true).order('ordre')
   if (!rf.error) formations.value = rf.data || []
@@ -291,6 +292,7 @@ const formationById = computed(() => { const m = {}; for (const f of formations.
 const personneById = computed(() => { const m = {}; for (const p of personnes.value) m[p.id] = p; return m })
 const requisParFonction = computed(() => { const m = {}; for (const r of requises.value) { (m[r.fonction] = m[r.fonction] || new Set()).add(r.formation_id) } return m })
 function addMonths(dateStr, m) { const d = new Date(dateStr + 'T00:00:00'); d.setMonth(d.getMonth() + m); return d.toISOString().slice(0, 10) }
+function fmtDate(d) { if (!d) return '—'; const t = new Date(String(d).slice(0, 10) + 'T00:00:00'); return isNaN(t) ? String(d) : t.toLocaleDateString('fr-FR') }
 const today = new Date().toISOString().slice(0, 10)
 const dans60 = (() => { const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() + 60); return d.toISOString().slice(0, 10) })()
 
@@ -344,10 +346,10 @@ const aPlanifier = computed(() => {
 
 const tauxParPersonne = computed(() => personnesFiltrees.value.map(p => {
   const req = requisParFonction.value[p.fonction]
-  if (!req || !req.size) return { id: p.id, nom: p.nom, fonction: p.fonction, requises: 0, valides: 0, bientot: 0, expireN: 0, manquant: 0, taux: null }
+  if (!req || !req.size) return { id: p.id, nom: p.nom, fonction: p.fonction, date_recrutement: p.date_recrutement, requises: 0, valides: 0, bientot: 0, expireN: 0, manquant: 0, taux: null }
   let valides = 0, bientot = 0, expireN = 0, manquant = 0
   for (const fid of req) { const st = cellStatut(p.id, fid); if (st === 'valide') valides++; else if (st === 'bientot') bientot++; else if (st === 'expire') expireN++; else if (st === 'manquant') manquant++ }
-  return { id: p.id, nom: p.nom, fonction: p.fonction, requises: req.size, valides, bientot, expireN, manquant, taux: valides / req.size * 100 }
+  return { id: p.id, nom: p.nom, fonction: p.fonction, date_recrutement: p.date_recrutement, requises: req.size, valides, bientot, expireN, manquant, taux: valides / req.size * 100 }
 }).sort((a, b) => (a.taux == null ? 1000 : a.taux) - (b.taux == null ? 1000 : b.taux) || (a.nom || '').localeCompare(b.nom || '')))
 const tauxParPersonneRech = computed(() => {
   const q = normP(recherchePers.value.trim())
