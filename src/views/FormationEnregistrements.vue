@@ -24,7 +24,8 @@
       <div class="card-head">
         <h2 class="card-title">Enregistrements</h2>
         <span class="count">{{ enrFiltres.length }}</span>
-        <select v-model="filtrePersonne" class="filtre" style="margin-left:auto"><option value="">Toutes les personnes</option><option v-for="p in personnes" :key="p.id" :value="String(p.id)">{{ p.nom }}</option></select>
+        <input v-model="rechercheSop" class="filtre" style="margin-left:auto" placeholder="🔍 Code SOP" />
+        <select v-model="filtrePersonne" class="filtre"><option value="">Toutes les personnes</option><option v-for="p in personnes" :key="p.id" :value="String(p.id)">{{ p.nom }}</option></select>
       </div>
       <div v-if="!enrFiltres.length" class="empty-card">Aucun enregistrement. Ajoute une formation suivie ci-dessus.</div>
       <table v-else class="form-tbl">
@@ -32,7 +33,7 @@
         <tbody>
           <tr v-for="e in enrFiltres" :key="e.id" :class="{ 'row-ko': e.statut === 'expire' || e.resultat === 'non acquis' }">
             <td class="nom">{{ e.personneNom }}</td>
-            <td>{{ e.formationNom }}</td>
+            <td>{{ e.formationNom }}<span v-if="e.codeSop" class="sop">{{ e.codeSop }}</span></td>
             <td>{{ e.date_formation }}</td>
             <td>{{ e.formateur || '—' }}</td>
             <td><span :class="e.resultat === 'acquis' ? 'c-ok' : 'c-ko'">{{ e.resultat === 'acquis' ? '✓ Acquis' : '✗ Non acquis' }}</span></td>
@@ -59,6 +60,7 @@ const enregistrements = ref([])
 const filtrePersonne = ref('')
 const rechercheP = ref('')
 const rechercheF = ref('')
+const rechercheSop = ref('')
 const erreur = ref('')
 const message = ref('')
 const form = reactive({ id: null, personne_id: '', formation_id: '', date_formation: new Date().toISOString().slice(0, 10), formateur: '', resultat: 'acquis' })
@@ -67,7 +69,7 @@ function reset() { Object.assign(form, { id: null, personne_id: '', formation_id
 async function charger() {
   const rp = await supabase.from('organigramme').select('id, nom, matricule, fonction').eq('actif', true).order('nom')
   if (!rp.error) personnes.value = rp.data || []
-  const rf = await supabase.from('formations').select('id, nom, categorie, validite_mois').eq('actif', true).order('ordre')
+  const rf = await supabase.from('formations').select('*').eq('actif', true).order('ordre')
   if (!rf.error) formations.value = rf.data || []
   const re = await supabase.from('formation_enregistrements').select('*').order('date_formation', { ascending: false })
   if (re.error) { erreur.value = re.error.message; return }
@@ -78,7 +80,7 @@ onMounted(charger)
 const personneById = computed(() => { const m = {}; for (const p of personnes.value) m[p.id] = p; return m })
 const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 const personnesFiltrees = computed(() => { const q = normR(rechercheP.value).trim(); if (!q) return personnes.value; return personnes.value.filter(p => normR((p.nom || '') + ' ' + (p.fonction || '') + ' ' + (p.matricule || '')).includes(q)) })
-const formationsFiltrees = computed(() => { const q = normR(rechercheF.value).trim(); if (!q) return formations.value; return formations.value.filter(f => normR(f.nom).includes(q)) })
+const formationsFiltrees = computed(() => { const q = normR(rechercheF.value).trim(); if (!q) return formations.value; return formations.value.filter(f => normR(f.nom).includes(q) || normR(f.code_sop).includes(q)) })
 const formationById = computed(() => { const m = {}; for (const f of formations.value) m[f.id] = f; return m })
 
 function addMonths(dateStr, m) { const d = new Date(dateStr + 'T00:00:00'); d.setMonth(d.getMonth() + m); return d.toISOString().slice(0, 10) }
@@ -91,9 +93,16 @@ const enrEnrichis = computed(() => enregistrements.value.map(e => {
   const exp = (f && f.validite_mois && e.date_formation) ? addMonths(e.date_formation, f.validite_mois) : null
   let statut = 'permanent'
   if (exp) statut = exp < today ? 'expire' : (exp <= dans60 ? 'bientot' : 'valide')
-  return { ...e, personneNom: p ? p.nom : '(personne supprimée)', formationNom: f ? f.nom : '(formation supprimée)', expiration: exp, statut }
+  return { ...e, personneNom: p ? p.nom : '(personne supprimée)', formationNom: f ? f.nom : '(formation supprimée)', codeSop: f ? (f.code_sop || '') : '', expiration: exp, statut }
 }))
-const enrFiltres = computed(() => filtrePersonne.value ? enrEnrichis.value.filter(e => String(e.personne_id) === filtrePersonne.value) : enrEnrichis.value)
+const enrFiltres = computed(() => {
+  const q = normR(rechercheSop.value).trim()
+  return enrEnrichis.value.filter(e => {
+    if (filtrePersonne.value && String(e.personne_id) !== filtrePersonne.value) return false
+    if (q && !normR(e.codeSop).includes(q)) return false
+    return true
+  })
+})
 
 function statutTxt(e) { if (e.resultat === 'non acquis') return '✗ Non acquis'; if (e.statut === 'valide') return '✓ Valide'; if (e.statut === 'bientot') return '⚠ Expire bientôt'; if (e.statut === 'expire') return '✗ Expiré'; return 'Permanent' }
 
@@ -153,6 +162,7 @@ async function supprimer(e) {
 .form-tbl tbody tr:hover { background: #f0fdfa; }
 .form-tbl tr.row-ko { background: #fef2f2; }
 .form-tbl tr.row-ko:hover { background: #fee2e2; }
+.sop { display: inline-block; margin-left: 8px; font-weight: 600; color: #475569; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: #f1f5f9; padding: 1px 7px; border-radius: 5px; }
 .c-ok { color: #16a34a; font-weight: 700; }
 .c-ko { color: #dc2626; font-weight: 700; }
 .etat { font-size: 11px; font-weight: 800; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
