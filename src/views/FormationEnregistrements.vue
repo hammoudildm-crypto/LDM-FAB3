@@ -12,7 +12,8 @@
         <input v-model="rechercheP" class="s-in" placeholder="🔍 Personne" />
         <select v-model="form.personne_id" class="grow"><option value="">Personne —</option><option v-for="p in personnesFiltrees" :key="p.id" :value="String(p.id)">{{ p.nom }}{{ p.matricule ? ' · #' + p.matricule : '' }}{{ p.fonction ? ' — ' + p.fonction : '' }}</option></select>
         <input v-model="rechercheF" class="s-in" placeholder="🔍 Formation" />
-        <select v-model="form.formation_id" class="grow"><option value="">Formation —</option><option v-for="f in formationsFiltrees" :key="f.id" :value="String(f.id)">{{ f.nom }}</option></select>
+        <input v-model="rechercheSop" class="s-in" placeholder="🔍 Code SOP" />
+        <select v-model="form.formation_id" class="grow"><option value="">Formation —</option><option v-for="f in formationsFiltrees" :key="f.id" :value="String(f.id)">{{ f.nom }}{{ f.code_sop ? ' · ' + f.code_sop : '' }}</option></select>
         <input type="date" v-model="form.date_formation" />
         <input v-model="form.formateur" placeholder="Formateur" class="c" />
         <select v-model="form.resultat" class="res"><option value="acquis">Acquis</option><option value="non acquis">Non acquis</option></select>
@@ -24,8 +25,7 @@
       <div class="card-head">
         <h2 class="card-title">Enregistrements</h2>
         <span class="count">{{ enrFiltres.length }}</span>
-        <input v-model="rechercheSop" class="filtre" style="margin-left:auto" placeholder="🔍 Code SOP" />
-        <select v-model="filtrePersonne" class="filtre"><option value="">Toutes les personnes</option><option v-for="p in personnes" :key="p.id" :value="String(p.id)">{{ p.nom }}</option></select>
+        <select v-model="filtrePersonne" class="filtre" style="margin-left:auto"><option value="">Toutes les personnes</option><option v-for="p in personnes" :key="p.id" :value="String(p.id)">{{ p.nom }}</option></select>
       </div>
       <div v-if="!enrFiltres.length" class="empty-card">Aucun enregistrement. Ajoute une formation suivie ci-dessus.</div>
       <table v-else class="form-tbl">
@@ -80,7 +80,14 @@ onMounted(charger)
 const personneById = computed(() => { const m = {}; for (const p of personnes.value) m[p.id] = p; return m })
 const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 const personnesFiltrees = computed(() => { const q = normR(rechercheP.value).trim(); if (!q) return personnes.value; return personnes.value.filter(p => normR((p.nom || '') + ' ' + (p.fonction || '') + ' ' + (p.matricule || '')).includes(q)) })
-const formationsFiltrees = computed(() => { const q = normR(rechercheF.value).trim(); if (!q) return formations.value; return formations.value.filter(f => normR(f.nom).includes(q) || normR(f.code_sop).includes(q)) })
+const formationsFiltrees = computed(() => {
+  const qn = normR(rechercheF.value).trim(), qs = normR(rechercheSop.value).trim()
+  return formations.value.filter(f => {
+    if (qn && !normR(f.nom).includes(qn) && !normR(f.code_sop).includes(qn)) return false
+    if (qs && !normR(f.code_sop).includes(qs)) return false
+    return true
+  })
+})
 const formationById = computed(() => { const m = {}; for (const f of formations.value) m[f.id] = f; return m })
 
 function addMonths(dateStr, m) { const d = new Date(dateStr + 'T00:00:00'); d.setMonth(d.getMonth() + m); return d.toISOString().slice(0, 10) }
@@ -95,14 +102,7 @@ const enrEnrichis = computed(() => enregistrements.value.map(e => {
   if (exp) statut = exp < today ? 'expire' : (exp <= dans60 ? 'bientot' : 'valide')
   return { ...e, personneNom: p ? p.nom : '(personne supprimée)', formationNom: f ? f.nom : '(formation supprimée)', codeSop: f ? (f.code_sop || '') : '', expiration: exp, statut }
 }))
-const enrFiltres = computed(() => {
-  const q = normR(rechercheSop.value).trim()
-  return enrEnrichis.value.filter(e => {
-    if (filtrePersonne.value && String(e.personne_id) !== filtrePersonne.value) return false
-    if (q && !normR(e.codeSop).includes(q)) return false
-    return true
-  })
-})
+const enrFiltres = computed(() => filtrePersonne.value ? enrEnrichis.value.filter(e => String(e.personne_id) === filtrePersonne.value) : enrEnrichis.value)
 
 function statutTxt(e) { if (e.resultat === 'non acquis') return '✗ Non acquis'; if (e.statut === 'valide') return '✓ Valide'; if (e.statut === 'bientot') return '⚠ Expire bientôt'; if (e.statut === 'expire') return '✗ Expiré'; return 'Permanent' }
 
