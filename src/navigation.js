@@ -18,7 +18,7 @@ export const MODULES = [
     links: [['/temps-reel', 'Suivi temps réel'], ['/avancement', 'Suivi du process'], ['/encours', 'En-cours']] },
   { key: 'suiviprod', label: 'Suivi de production', c: '#0ea5e9',
     icon: `<g ${S}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></g>`,
-    links: [['/dispo-equipements', 'Disponibilité équipements'], ['/production-atelier', 'Production par atelier'], ['/suivi-trs', 'Suivi TRS'], ['/capacite', 'Capacité équipements'], ['/dossier', 'Dossier de lot'], ['/historique', 'Historique des opérations']] },
+    links: [['/dispo-equipements', 'Disponibilité équipements'], ['/suivi-triage', 'Suivi triage'], ['/production-atelier', 'Production par atelier'], ['/suivi-trs', 'Suivi TRS'], ['/capacite', 'Capacité équipements'], ['/dossier', 'Dossier de lot'], ['/historique', 'Historique des opérations']] },
   { key: 'saisie', label: 'Saisie & exécution', c: '#14b8a6',
     icon: `<g ${S}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></g>`,
     links: [['/suivi', 'Suivi fab. & Saisie TRS'], ['/conditionnement', 'Conditionnement'], ['/calcul-pesee', 'Calcul de pesée (API / excipient)'], ['/dossier-ebmr', 'Dossier de lot (eBMR)'], ['/passation', 'Passation de consigne']] },
