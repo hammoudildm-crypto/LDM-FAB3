@@ -1614,7 +1614,8 @@ onMounted(async () => {
             <span v-if="resumeTriage.prets" class="trr ok">{{ resumeTriage.prets }} lot(s) à 100 % — à clore</span>
             <span v-if="resumeTriage.vieux" class="trr ko">{{ resumeTriage.vieux }} lot(s) ouverts depuis plus de 14 j</span>
           </div>
-          <table v-if="lotsTriage.length" class="triage-tbl">
+          <div v-if="lotsTriage.length" class="triage-scroll">
+          <table class="triage-tbl">
             <thead><tr><th>N° lot</th><th>Produit</th><th>Étape</th><th class="tnum">Ouvert</th><th class="tnum">À trier (Kg)</th><th class="tnum">Triée (Kg)</th><th class="tnum">Sacs conformes</th><th>Avancement</th><th></th></tr></thead>
             <tbody>
               <template v-for="l in lotsTriage" :key="l.id">
@@ -1624,17 +1625,17 @@ onMounted(async () => {
                 <td class="t-etape">{{ l.equip }}<span v-if="l.phase"> · {{ l.phase }}</span></td>
                 <td class="tnum t-age" :class="l.jours == null ? '' : (l.jours > 14 ? 'ko' : (l.jours > 7 ? 'warn' : ''))" :title="l.debut ? 'Triage ouvert le ' + l.debut : 'Date de début non renseignée'">{{ l.jours == null ? "—" : l.jours + " j" }}</td>
                 <td class="tnum">
-                  <input type="number" min="0" step="any" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop />
-                  <div v-if="l.nbTurbines > 1" class="turb-sel" @click.stop>
-                    <div class="turb-chips">
+                  <div class="tq-line">
+                    <input type="number" min="0" step="any" v-model.number="qteEdit[l.id].aTrier" class="tq" @click.stop />
+                    <div v-if="l.nbTurbines > 1" class="turb-sel" @click.stop>
                       <span v-for="n in turbinesSelListe(l)" :key="n" class="turb-chip on" title="Turbine à trier — cliquer × pour retirer">T{{ n }}<button type="button" class="turb-x" @click="basculerTurbine(l, n)" title="Retirer du triage">×</button></span>
                       <select v-if="turbinesDispo(l).length" class="turb-add" @change="ajouterTurbine(l, $event)">
-                        <option value="">+ Turbine à trier</option>
+                        <option value="">+ Turbine</option>
                         <option v-for="n in turbinesDispo(l)" :key="n" :value="n">T{{ n }}</option>
                       </select>
-                      <span v-if="!turbinesSelListe(l).length" class="turb-empty">Aucune turbine à trier</span>
+                      <span v-if="!turbinesSelListe(l).length" class="turb-empty">Aucune</span>
+                      <span class="turb-info">{{ nbTurbinesATrier(l) }} à trier · {{ l.nbTurbines - nbTurbinesATrier(l) }} conf. · {{ fmt(perTurbine(l)) }} Kg/turb.</span>
                     </div>
-                    <span class="turb-info">{{ nbTurbinesATrier(l) }} à trier · {{ l.nbTurbines - nbTurbinesATrier(l) }} conforme(s) · {{ fmt(perTurbine(l)) }} Kg/turb.</span>
                   </div>
                 </td>
                 <td class="tnum"><input type="number" min="0" step="any" v-model.number="qteEdit[l.id].triee" class="tq" @click.stop /></td>
@@ -1672,6 +1673,7 @@ onMounted(async () => {
               </template>
             </tbody>
           </table>
+          </div>
           <p v-else class="triage-vide">Aucun lot coché « En triage fabrication » pour l'instant (case à cocher sur la page Ordres de fabrication).</p>
         </section>
         <section v-if="triageJournalier.length" class="histo-box">
@@ -2194,7 +2196,8 @@ onMounted(async () => {
 .tj-prod-code { font-weight: 700; color: #0f172a; }
 .tj-prod-desig { color: #475569; }
 .tj-prod-kg { color: #94a3b8; font-weight: 700; margin-left: 6px; font-size: 11px; }
-.turb-sel { margin-top: 5px; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.tq-line { display: inline-flex; align-items: center; gap: 8px; flex-wrap: nowrap; justify-content: flex-end; }
+.turb-sel { display: inline-flex; flex-direction: row; align-items: center; gap: 5px; flex-wrap: nowrap; }
 .turb-chips { display: flex; flex-wrap: wrap; gap: 3px; justify-content: flex-end; }
 .turb-chip { border: 1px solid #cbd5e1; background: #f1f5f9; color: #64748b; border-radius: 6px; padding: 2px 7px; font-size: 10.5px; font-weight: 800; cursor: pointer; line-height: 1.3; }
 .turb-chip:hover { border-color: #f59e0b; }
@@ -2231,6 +2234,7 @@ onMounted(async () => {
 .sac-chip.on { background: #dcfce7; border-color: #86efac; color: #15803d; }
 .sac-tick { font-size: 11px; }
 .sac-pied { margin-top: 8px; font-size: 11px; font-weight: 700; color: #a16207; }
+.triage-scroll { overflow-x: auto; }
 .triage-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .triage-tbl th { text-align: left; font-size: 11px; color: #a16207; padding: 4px 8px; border-bottom: 1px solid #fde68a; }
 .triage-tbl td { padding: 5px 8px; border-bottom: 1px solid #fde68a55; color: #451a03; }
