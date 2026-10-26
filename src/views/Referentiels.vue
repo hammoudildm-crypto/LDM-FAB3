@@ -125,12 +125,12 @@ function resetDO() { Object.assign(formDO, { id: null, code: '', nom: '', activi
 // --- Produit ---
 const formP = reactive({
   id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-  unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', gamme: []
+  unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', hormonal: false, gamme: []
 })
 function resetP() {
   Object.assign(formP, {
     id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-    unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', gamme: []
+    unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', hormonal: false, gamme: []
   })
 }
 
@@ -462,6 +462,7 @@ async function enregistrerP() {
     nb_turbines: toNum(formP.nb_turbines),
     aql: formP.aql.trim() || null,
     pcsu: toNum(formP.pcsu),
+    hormonal: !!formP.hormonal,
     gamme: normGammeR(formP.gamme)
   }
   // Enregistrement tolérant : si une colonne optionnelle manque encore côté base
@@ -472,7 +473,7 @@ async function enregistrerP() {
   let res = await doSave(pl)
   while (res.error && res.error.message) {
     const m = res.error.message
-    const col = ['holding_time_jours', 'holding_times', 'apis', 'nb_turbines'].find(c => (c in pl) && m.includes("'" + c + "'"))
+    const col = ['holding_time_jours', 'holding_times', 'apis', 'nb_turbines', 'hormonal'].find(c => (c in pl) && m.includes("'" + c + "'"))
     if (!col) break
     delete pl[col]; stripped.push(col); res = await doSave(pl)
   }
@@ -490,7 +491,7 @@ function modifierP(p) {
     holding_times: (p.holding_times && typeof p.holding_times === 'object') ? { ...p.holding_times } : {},
     apis_txt: Array.isArray(p.apis) ? p.apis.join(', ') : '',
     nb_turbines: p.nb_turbines ?? '',
-    aql: p.aql || '', pcsu: p.pcsu ?? '',
+    aql: p.aql || '', pcsu: p.pcsu ?? '', hormonal: !!p.hormonal,
     gamme: normGammeR(p.gamme)
   })
 }
@@ -727,6 +728,7 @@ onMounted(async () => {
             <option v-for="f in FORMES" :key="f" :value="f">{{ f }}</option>
           </select>
         </label>
+        <label class="chk-hormonal" title="Produit du périmètre hormonal (site Hormones) — utilisé par le filtre de zone"><input type="checkbox" v-model="formP.hormonal" /> Hormonal (site Hormones)</label>
         <label>Donneur d'ordre
           <select v-model="formP.donneur_ordre_id">
             <option value="">—</option>
@@ -1075,6 +1077,8 @@ onMounted(async () => {
 .form-grid label { display: flex; flex-direction: column; font-size: 11px; font-weight: 600; color: #475569; gap: 3px; min-width: 0; }
 .form-grid input, .form-grid select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 400; }
 .form-grid input:focus, .form-grid select:focus { outline: 2px solid #0f766e; outline-offset: 0; border-color: #0f766e; }
+.form-grid label.chk-hormonal { flex-direction: row; align-items: center; gap: 7px; font-size: 13px; }
+.form-grid label.chk-hormonal input { width: 16px; height: 16px; accent-color: #0d9488; padding: 0; }
 .form-actions { display: flex; gap: 8px; align-items: end; }
 
 .btn { background: #0f766e; color: #fff; border: 0; padding: 6px 13px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }

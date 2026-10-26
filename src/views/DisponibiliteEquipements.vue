@@ -18,6 +18,7 @@ const planRows = ref([])
 const holdTimes = ref({})   // produit_id -> holding time par défaut (nombre)
 const holdSteps = ref({})   // produit_id -> { cléPhase: jours } (holding time par étape)
 const nbTurbinesMap = ref({})   // produit_id -> nombre de turbines (pelliculage)
+const hormonalMap = ref({})     // produit_id -> true si produit du périmètre hormonal
 const ongletDispo = ref('file')
 const erreur = ref('')
 const chargement = ref(true)
@@ -98,6 +99,10 @@ async function charger() {
   const nt = {}
   if (!rnt.error && rnt.data) for (const p of rnt.data) if (p.nb_turbines != null) nt[p.id] = Number(p.nb_turbines)
   nbTurbinesMap.value = nt
+  const rhm = await supabase.from('produits').select('id, hormonal')
+  const hmm = {}
+  if (!rhm.error && rhm.data) for (const p of rhm.data) if (p.hormonal) hmm[p.id] = true
+  hormonalMap.value = hmm
   const rtt = await supabase.from('ordres_fabrication').select('id, turbines_a_trier').not('turbines_a_trier', 'is', null)
   const ttm = {}
   if (!rtt.error && rtt.data) for (const o of rtt.data) if (Array.isArray(o.turbines_a_trier)) ttm[o.id] = o.turbines_a_trier
@@ -342,7 +347,7 @@ const queuePhase = computed(() => {
     const fabTerminee = !!o.date_fin_fabrication || !!(kDern && pl[kDern] && pl[kDern].statut === 'Terminé')
     // Statut AQL du vrac = verdict du contrôle AQL sur la dernière étape de fabrication
     const aqlVrac = (kDern && aqlParOrdrePhase.value[o.id]) ? (aqlParOrdrePhase.value[o.id][kDern] ?? null) : null
-    const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), deviation: deviationIds.value.has(o.id), deviationCond: deviationCondIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
+    const base = { id: o.id, triage: triageIds.value.has(o.id), triageCond: triageCondIds.value.has(o.id), deviation: deviationIds.value.has(o.id), deviationCond: deviationCondIds.value.has(o.id), lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', forme: p.forme || '', hormonal: estHormonal(p, o.produit_id), boites: Number(o.quantite_theorique || 0), lancement: o.date_lancement || null,
       validite: o.date_fin_validite || null, perime: (o.date_fin_validite && !fabTerminee) ? (new Date(o.date_fin_validite) < new Date()) : false,
       reserveId: o.equipement_id || null, reserveLabel: o.equipements ? (o.equipements.code + (o.equipements.nom ? ' — ' + o.equipements.nom : '')) : null, equipId: o.equipement_id || null, aqlVrac }
     if (directCond) {
@@ -399,7 +404,15 @@ const SEUIL_URGENT = 15
 const perimSel = ref([])
 function toggleZone(k) { const i = perimSel.value.indexOf(k); if (i >= 0) perimSel.value.splice(i, 1); else perimSel.value.push(k) }
 function zoneSel(k) { return perimSel.value.includes(k) }
-const ZONES = [{ key: 'seche', label: 'Forme sèche' }, { key: 'semi', label: 'Forme semi solide' }, { key: 'seringue', label: 'Seringue' }, { key: 'autre', label: 'Autre' }]
+const ZONES = [{ key: 'seche', label: 'Forme sèche' }, { key: 'seche_hormonale', label: 'Forme sèche hormonale' }, { key: 'semi', label: 'Forme semi solide' }, { key: 'seringue', label: 'Seringue' }, { key: 'autre', label: 'Autre' }]
+// Produits hormonaux reconnus par mot-clé (en plus du drapeau « hormonal » du référentiel)
+const HORMONAUX_KW = ['levothyrox', 'levothyroxine']
+function estHormonal(p, pid) {
+  if (pid != null && hormonalMap.value[pid]) return true
+  if (!p) return false
+  const s = ((p.designation || '') + ' ' + (p.code_pf || '')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  return HORMONAUX_KW.some(k => s.includes(k))
+}
 function zoneForme(forme) {
   const f = (forme || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   if (!f) return 'autre'
@@ -408,9 +421,10 @@ function zoneForme(forme) {
   if (/seringue|injectable/.test(f)) return 'seringue'
   return 'autre'
 }
+function zoneDeLot(forme, hormonal) { const z = zoneForme(forme); return (hormonal && z === 'seche') ? 'seche_hormonale' : z }
 const zonesDispo = computed(() => {
   const s = new Set()
-  for (const o of ofs.value) { const z = zoneForme(o.produits && o.produits.forme); if (z) s.add(z) }
+  for (const o of ofs.value) { const z = zoneDeLot(o.produits && o.produits.forme, estHormonal(o.produits, o.produit_id)); if (z) s.add(z) }
   return ZONES.filter(z => s.has(z.key))
 })
 function estUrgent(l) {
@@ -423,7 +437,7 @@ function lotMatch(l) {
   if (rq && !((l.lot || "").toLowerCase().includes(rq) || (l.code || "").toLowerCase().includes(rq) || (l.desig || "").toLowerCase().includes(rq))) return false
   if (filtrePerime.value && !l.perime) return false
   if (filtreUrgent.value && !estUrgent(l)) return false
-  if (perimSel.value.length && !perimSel.value.includes(zoneForme(l.forme))) return false
+  if (perimSel.value.length && !perimSel.value.includes(zoneDeLot(l.forme, l.hormonal))) return false
   return true
 }
 
