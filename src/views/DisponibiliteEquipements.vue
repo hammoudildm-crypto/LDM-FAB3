@@ -395,6 +395,22 @@ const phasesParAtelier = computed(() => {
 const filtrePerime = ref(false)
 const filtreUrgent = ref(false)
 const SEUIL_URGENT = 15
+// Filtre par périmètre / zone (déduit de la forme du produit)
+const perimSel = ref('')
+const ZONES = [{ key: 'seche', label: 'Forme sèche' }, { key: 'semi', label: 'Forme semi solide' }, { key: 'seringue', label: 'Seringue' }, { key: 'autre', label: 'Autre' }]
+function zoneForme(forme) {
+  const f = (forme || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  if (!f) return 'autre'
+  if (/comprim|gelul|sachet|blister/.test(f)) return 'seche'
+  if (/pommade|crem|gel/.test(f)) return 'semi'
+  if (/seringue|injectable/.test(f)) return 'seringue'
+  return 'autre'
+}
+const zonesDispo = computed(() => {
+  const s = new Set()
+  for (const o of ofs.value) { const z = zoneForme(o.produits && o.produits.forme); if (z) s.add(z) }
+  return ZONES.filter(z => s.has(z.key))
+})
 function estUrgent(l) {
   if (l && l.perime) return true
   if (!l || !l.date) return false
@@ -405,6 +421,7 @@ function lotMatch(l) {
   if (rq && !((l.lot || "").toLowerCase().includes(rq) || (l.code || "").toLowerCase().includes(rq) || (l.desig || "").toLowerCase().includes(rq))) return false
   if (filtrePerime.value && !l.perime) return false
   if (filtreUrgent.value && !estUrgent(l)) return false
+  if (perimSel.value && zoneForme(l.forme) !== perimSel.value) return false
   return true
 }
 
@@ -1440,6 +1457,10 @@ onMounted(async () => {
         </section>
         <div class="searchbar">
           <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
+          <select v-if="zonesDispo.length > 1" v-model="perimSel" class="perim-filtre" title="Filtrer par périmètre / zone (forme du produit)">
+            <option value="">Toutes les zones</option>
+            <option v-for="z in zonesDispo" :key="z.key" :value="z.key">{{ z.label }}</option>
+          </select>
           <label class="filtre-chk"><input type="checkbox" v-model="filtreUrgent" /> Urgents (&gt;{{ SEUIL_URGENT }} j)</label>
           <label class="filtre-chk"><input type="checkbox" v-model="filtrePerime" /> OF périmés</label>
         </div>
@@ -2163,6 +2184,8 @@ select:focus, input:focus { outline: none !important; border-color: #06b6d4 !imp
 /* Développements : KPI auto-fit + filtres + graphe de charge + urgence */
 .kpi-grid.k3 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important; }
 .searchbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.perim-filtre { padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: #fff; color: #1b2733; cursor: pointer; }
+.perim-filtre:focus { outline: none; border-color: #0891b2; box-shadow: 0 0 0 3px rgba(8,145,178,.15); }
 .filtre-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #475569; cursor: pointer; white-space: nowrap; padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; }
 .filtre-chk input { accent-color: #0891b2; width: 15px; height: 15px; }
 
