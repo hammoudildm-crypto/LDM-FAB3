@@ -159,7 +159,9 @@ async function enregistrer() {
   message.value = rows.length ? ('Plan ' + annee.value + ' enregistré (' + rows.length + ' valeurs).') : ('Plan ' + annee.value + ' vidé — aucune valeur enregistrée.')
 }
 
-// --- Import d'un plan depuis un fichier Excel/CSV (colonne 1 = Code PF, colonnes 2 a 13 = Jan..Dec) ---
+// --- Import d'un plan depuis un fichier Excel/CSV : colonne 1 = Code PF ou désignation produit ;
+//     mois reconnus par l'en-tête de colonnes (noms FR ou 1..12), sinon colonnes 2..13 = Jan..Déc.
+//     Les lignes d'en-tête/total d'un tableau croisé dynamique (Somme de…, Étiquettes de…, Total) sont ignorées. ---
 let xlsxPromise = null
 function chargerXLSX() {
   if (window.XLSX) return Promise.resolve(window.XLSX)
@@ -185,25 +187,52 @@ async function importerFichier(e) {
     const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
     const ws = wb.Sheets[wb.SheetNames[0]]
     const lignes = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false })
-    const parCode = {}
-    for (const p of produits.value) parCode[String(p.code_pf).trim().toLowerCase()] = p.id
+    // Normalisation : minuscules, sans accents, sans ®™, espaces compactés
+    const norm = (s) => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[®™©]/g, '').replace(/\s+/g, ' ').trim()
+    const compact = (s) => norm(s).replace(/[^a-z0-9]/g, '')   // tolère espaces/ponctuation ("10 mg" = "10mg", "B/30" = "b30")
+    const parCode = {}, parDesig = {}, parDesigCompact = {}
+    for (const p of produits.value) {
+      if (p.code_pf) parCode[String(p.code_pf).trim().toLowerCase()] = p.id
+      if (p.designation) { parDesig[norm(p.designation)] = p.id; const ck = compact(p.designation); if (ck) parDesigCompact[ck] = p.id }
+    }
+    // Reconnaissance des mois (en-tête de colonnes) — noms FR ou numéros 1..12
+    const MOIS = {}
+    ;[['janvier', 'jan'], ['fevrier', 'fev'], ['mars', 'mar'], ['avril', 'avr'], ['mai'], ['juin'], ['juillet', 'juil', 'jul'], ['aout', 'aou'], ['septembre', 'sept', 'sep'], ['octobre', 'oct'], ['novembre', 'nov'], ['decembre', 'dec']]
+      .forEach((kk, i) => kk.forEach(k => { MOIS[k] = i + 1 }))
+    const moisDeCellule = (v) => {
+      const n = norm(v); if (!n) return null
+      if (/^\d{1,2}$/.test(n)) { const x = parseInt(n, 10); return (x >= 1 && x <= 12) ? x : null }
+      const p4 = n.slice(0, 4)
+      for (const k in MOIS) if (p4.startsWith(k) || k.startsWith(p4)) return MOIS[k]
+      return null
+    }
+    // Lignes d'en-tête ou de total d'un tableau croisé dynamique : à ignorer
+    const estEntete = (lab) => { const n = norm(lab); return !n || n === '(vide)' || n === 'vide' || n.startsWith('somme de') || n.startsWith('etiquettes de') || n.startsWith('total') || n.startsWith('grand total') }
+    const nombre = (cell) => { if (cell === undefined || cell === null || cell === '') return null; const x = Number(String(cell).replace(/\s/g, '').replace(/ /g, '').replace(',', '.')); return isNaN(x) ? null : x }
+    // Repérer la ligne d'en-tête qui nomme les mois, pour mapper les colonnes
+    let colMois = null
+    for (const row of lignes) {
+      if (!row) continue
+      const map = {}; let found = 0
+      for (let c = 1; c < row.length; c++) { const mm = moisDeCellule(row[c]); if (mm && !Object.values(map).includes(mm)) { map[c] = mm; found++ } }
+      if (found >= 3) { colMois = map; break }
+    }
     let maj = 0, ignores = 0
     const inconnus = []
     for (const row of lignes) {
       if (!row || !row.length) continue
-      const code = String(row[0] == null ? '' : row[0]).trim()
-      if (!code) continue
-      const pid = parCode[code.toLowerCase()]
-      if (!pid) { ignores++; if (inconnus.length < 6) inconnus.push(code); continue }
-      for (let m = 1; m <= 12; m++) {
-        const cell = row[m]
-        if (cell === undefined || cell === null || cell === '') continue
-        const n = Number(String(cell).replace(/\s/g, '').replace(',', '.'))
-        if (!isNaN(n)) { cellules[pid][m] = n; maj++ }
+      const lab = String(row[0] == null ? '' : row[0]).trim()
+      if (!lab || estEntete(lab)) continue
+      const pid = parCode[lab.toLowerCase()] || parDesig[norm(lab)] || parDesigCompact[compact(lab)]
+      if (!pid) { ignores++; if (inconnus.length < 6) inconnus.push(lab); continue }
+      if (colMois) {
+        for (const c in colMois) { const n = nombre(row[c]); if (n != null) { cellules[pid][colMois[c]] = n; maj++ } }
+      } else {
+        for (let m = 1; m <= 12; m++) { const n = nombre(row[m]); if (n != null) { cellules[pid][m] = n; maj++ } }
       }
     }
-    if (!maj) erreur.value = 'Aucune donnee reconnue. Attendu : colonne 1 = Code PF, colonnes 2 a 13 = Jan..Dec.' + (inconnus.length ? ' Codes non trouves : ' + inconnus.join(', ') : '')
-    else message.value = maj + ' valeur(s) importee(s) dans la grille ' + annee.value + '. Verifie puis clique Enregistrer le plan.' + (ignores ? ' — ' + ignores + ' ligne(s) ignoree(s)' + (inconnus.length ? ' (codes inconnus : ' + inconnus.join(', ') + ')' : '') : '')
+    if (!maj) erreur.value = 'Aucune donnee reconnue. Attendu : colonne 1 = Code PF ou designation produit, puis les mois (Jan..Dec) en colonnes.' + (inconnus.length ? ' Produits non trouves : ' + inconnus.join(', ') : '')
+    else message.value = maj + ' valeur(s) importee(s) dans la grille ' + annee.value + '. Verifie puis clique Enregistrer le plan.' + (ignores ? ' — ' + ignores + ' ligne(s) ignoree(s)' + (inconnus.length ? ' (non reconnus : ' + inconnus.join(', ') + ')' : '') : '')
   } catch (err) {
     erreur.value = 'Import impossible : ' + (err && err.message ? err.message : err)
   } finally {
@@ -302,7 +331,7 @@ watch(annee, chargerPlan)
       </table>
     </div>
 
-    <details class="hint"><summary>Aide à la saisie et à l'import</summary><p>Astuce : laisse une case vide ou mets <strong>0</strong> s'il n'y a pas de production planifiée. Clique <strong>Enregistrer le plan</strong> pour sauvegarder toute la grille. La valeur est calculée à partir du PCSU de chaque produit.<br><strong>Importer un fichier</strong> : Excel/CSV avec <strong>Code PF</strong> en colonne 1 et les mois <strong>Jan → Déc</strong> en colonnes 2 à 13 ; les valeurs remplissent la grille de l'année choisie (clique ensuite Enregistrer).</p></details>
+    <details class="hint"><summary>Aide à la saisie et à l'import</summary><p>Astuce : laisse une case vide ou mets <strong>0</strong> s'il n'y a pas de production planifiée. Clique <strong>Enregistrer le plan</strong> pour sauvegarder toute la grille. La valeur est calculée à partir du PCSU de chaque produit.<br><strong>Importer un fichier</strong> : Excel/CSV avec en colonne 1 le <strong>Code PF</strong> ou la <strong>désignation</strong> du produit, et les mois <strong>Jan → Déc</strong> en colonnes (reconnus par l'en-tête : noms de mois ou numéros 1→12, sinon colonnes 2 à 13). Les tableaux croisés dynamiques sont acceptés : les lignes « Somme de… », « Étiquettes de… » et « Total » sont ignorées. Les valeurs remplissent la grille de l'année choisie (clique ensuite Enregistrer).</p></details>
   </div>
 </template>
 
