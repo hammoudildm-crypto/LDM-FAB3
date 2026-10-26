@@ -395,8 +395,10 @@ const phasesParAtelier = computed(() => {
 const filtrePerime = ref(false)
 const filtreUrgent = ref(false)
 const SEUIL_URGENT = 15
-// Filtre par périmètre / zone (déduit de la forme du produit)
-const perimSel = ref('')
+// Filtre par périmètre / zone (déduit de la forme du produit) — sélection multiple
+const perimSel = ref([])
+function toggleZone(k) { const i = perimSel.value.indexOf(k); if (i >= 0) perimSel.value.splice(i, 1); else perimSel.value.push(k) }
+function zoneSel(k) { return perimSel.value.includes(k) }
 const ZONES = [{ key: 'seche', label: 'Forme sèche' }, { key: 'semi', label: 'Forme semi solide' }, { key: 'seringue', label: 'Seringue' }, { key: 'autre', label: 'Autre' }]
 function zoneForme(forme) {
   const f = (forme || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -421,7 +423,7 @@ function lotMatch(l) {
   if (rq && !((l.lot || "").toLowerCase().includes(rq) || (l.code || "").toLowerCase().includes(rq) || (l.desig || "").toLowerCase().includes(rq))) return false
   if (filtrePerime.value && !l.perime) return false
   if (filtreUrgent.value && !estUrgent(l)) return false
-  if (perimSel.value && zoneForme(l.forme) !== perimSel.value) return false
+  if (perimSel.value.length && !perimSel.value.includes(zoneForme(l.forme))) return false
   return true
 }
 
@@ -1457,10 +1459,11 @@ onMounted(async () => {
         </section>
         <div class="searchbar">
           <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
-          <select v-if="zonesDispo.length > 1" v-model="perimSel" class="perim-filtre" title="Filtrer par périmètre / zone (forme du produit)">
-            <option value="">Toutes les zones</option>
-            <option v-for="z in zonesDispo" :key="z.key" :value="z.key">{{ z.label }}</option>
-          </select>
+          <div v-if="zonesDispo.length > 1" class="zone-filtre" title="Filtrer par périmètre / zone (plusieurs choix possibles)">
+            <span class="zone-lbl">Zones :</span>
+            <button v-for="z in zonesDispo" :key="z.key" type="button" class="zone-chip" :class="{ on: zoneSel(z.key) }" @click="toggleZone(z.key)">{{ z.label }}</button>
+            <button v-if="perimSel.length" type="button" class="zone-reset" @click="perimSel = []">Toutes</button>
+          </div>
           <label class="filtre-chk"><input type="checkbox" v-model="filtreUrgent" /> Urgents (&gt;{{ SEUIL_URGENT }} j)</label>
           <label class="filtre-chk"><input type="checkbox" v-model="filtrePerime" /> OF périmés</label>
         </div>
@@ -2184,8 +2187,12 @@ select:focus, input:focus { outline: none !important; border-color: #06b6d4 !imp
 /* Développements : KPI auto-fit + filtres + graphe de charge + urgence */
 .kpi-grid.k3 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important; }
 .searchbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.perim-filtre { padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: #fff; color: #1b2733; cursor: pointer; }
-.perim-filtre:focus { outline: none; border-color: #0891b2; box-shadow: 0 0 0 3px rgba(8,145,178,.15); }
+.zone-filtre { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.zone-lbl { font-size: 12px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .03em; }
+.zone-chip { border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.zone-chip:hover { border-color: #0891b2; }
+.zone-chip.on { background: #ecfeff; border-color: #0891b2; color: #0e7490; }
+.zone-reset { border: 0; background: transparent; color: #0891b2; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: underline; }
 .filtre-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #475569; cursor: pointer; white-space: nowrap; padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; }
 .filtre-chk input { accent-color: #0891b2; width: 15px; height: 15px; }
 
