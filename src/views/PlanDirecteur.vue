@@ -50,6 +50,8 @@ const message = ref('')
 const enCours = ref(false)
 const fichierInput = ref(null)
 const recherche = ref('')
+const snapshotPrecedent = ref(null)   // {c, e} capturé avant un import/vidage, pour revenir en arrière
+const labelSnap = ref('')
 const produitsAffiches = computed(() => {
   const q = recherche.value.trim().toLowerCase()
   if (!q) return produits.value
@@ -64,8 +66,33 @@ function initCellules() {
   }
 }
 
+// Capture / restauration de la grille (annulation d'un import ou d'un vidage)
+function snapGrille() {
+  const c = {}
+  for (const pid in cellules) { c[pid] = {}; for (let m = 1; m <= 12; m++) c[pid][m] = cellules[pid][m] }
+  const e = {}
+  for (const pid in condEquip) e[pid] = condEquip[pid]
+  return { c, e }
+}
+function capturerSnap(label) { snapshotPrecedent.value = snapGrille(); labelSnap.value = label || '' }
+function revenirPrecedent() {
+  if (!snapshotPrecedent.value) return
+  if (!confirm('Revenir à la version précédente ? Les valeurs actuelles non enregistrées de la grille ' + annee.value + ' seront remplacées.')) return
+  const { c, e } = snapshotPrecedent.value
+  for (const p of produits.value) {
+    if (!cellules[p.id]) cellules[p.id] = {}
+    for (let m = 1; m <= 12; m++) cellules[p.id][m] = (c[p.id] && c[p.id][m] != null) ? c[p.id][m] : ''
+  }
+  Object.keys(condEquip).forEach(k => delete condEquip[k])
+  for (const pid in e) condEquip[pid] = e[pid]
+  snapshotPrecedent.value = null; labelSnap.value = ''
+  erreur.value = ''
+  message.value = 'Version précédente restaurée. Clique Enregistrer le plan pour l\'appliquer, ou change d\'année pour annuler.'
+}
+
 function viderTout() {
   if (!confirm('Vider toutes les cases de la grille ' + annee.value + ' ? (rien n\'est supprimé tant que tu ne cliques pas sur Enregistrer le plan)')) return
+  capturerSnap('grille remplie')
   initCellules()
   erreur.value = ''
   message.value = 'Grille vidée. Clique Enregistrer le plan pour appliquer, ou change d\'année pour annuler.'
@@ -86,6 +113,7 @@ async function chargerProduits() {
 async function chargerPlan() {
   erreur.value = ''
   message.value = ''
+  snapshotPrecedent.value = null; labelSnap.value = ''
   initCellules()
   const r = await supabase.from('plan_production')
     .select('produit_id, mois, quantite_planifiee, equipement_id').eq('annee', annee.value)
@@ -217,6 +245,7 @@ async function importerFichier(e) {
       for (let c = 1; c < row.length; c++) { const mm = moisDeCellule(row[c]); if (mm && !Object.values(map).includes(mm)) { map[c] = mm; found++ } }
       if (found >= 3) { colMois = map; break }
     }
+    capturerSnap('avant import')   // pour pouvoir annuler l'import
     let maj = 0, ignores = 0
     const inconnus = []
     for (const row of lignes) {
@@ -231,7 +260,7 @@ async function importerFichier(e) {
         for (let m = 1; m <= 12; m++) { const n = nombre(row[m]); if (n != null) { cellules[pid][m] = n; maj++ } }
       }
     }
-    if (!maj) erreur.value = 'Aucune donnee reconnue. Attendu : colonne 1 = Code PF ou designation produit, puis les mois (Jan..Dec) en colonnes.' + (inconnus.length ? ' Produits non trouves : ' + inconnus.join(', ') : '')
+    if (!maj) { snapshotPrecedent.value = null; labelSnap.value = ''; erreur.value = 'Aucune donnee reconnue. Attendu : colonne 1 = Code PF ou designation produit, puis les mois (Jan..Dec) en colonnes.' + (inconnus.length ? ' Produits non trouves : ' + inconnus.join(', ') : '') }
     else message.value = maj + ' valeur(s) importee(s) dans la grille ' + annee.value + '. Verifie puis clique Enregistrer le plan.' + (ignores ? ' — ' + ignores + ' ligne(s) ignoree(s)' + (inconnus.length ? ' (non reconnus : ' + inconnus.join(', ') + ')' : '') : '')
   } catch (err) {
     erreur.value = 'Import impossible : ' + (err && err.message ? err.message : err)
@@ -263,6 +292,9 @@ watch(annee, chargerPlan)
           Importer un fichier
         </button>
         <input ref="fichierInput" type="file" accept=".xlsx,.xls,.csv" style="display:none" @change="importerFichier" />
+        <button v-if="peutEditer && snapshotPrecedent" type="button" class="btn ghost" :disabled="enCours" title="Annuler le dernier import / vidage et revenir aux valeurs précédentes de la grille (non enregistrées)" @click="revenirPrecedent">
+          ↩ Version précédente
+        </button>
         <button v-if="peutSupprimer" class="btn ghost danger" :disabled="enCours || !produits.length" @click="viderTout">
           Vider la grille
         </button>
