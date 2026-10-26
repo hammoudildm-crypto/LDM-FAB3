@@ -307,6 +307,40 @@ const mouvStats = computed(() => {
   return { entrees, sorties, eDebut, eFin, turnover: eMoy > 0 ? (sorties / eMoy * 100) : null }
 })
 const fmtTurnover = computed(() => mouvStats.value.turnover == null ? '—' : (mouvStats.value.turnover.toFixed(1).replace('.', ',') + '%'))
+
+// ===== Synthèse RH filtrable par périmètre (n'impacte ni l'export PDF ni les autres cartes) =====
+const synthPerim = ref('')
+const perimListeSynth = computed(() => [...new Set(orgNodesAffiches.value.map(n => n.atelier_id).filter(Boolean))].sort())
+const synthRH = computed(() => {
+  const list = synthPerim.value ? orgNodesAffiches.value.filter(n => n.atelier_id === synthPerim.value) : orgNodesAffiches.value
+  const raw = synthPerim.value ? orgPerimRaw.value.filter(n => n.atelier_id === synthPerim.value) : orgPerimRaw.value
+  let h = 0, f = 0, cdi = 0, cdd = 0
+  for (const n of list) {
+    const g = (n.genre || '').toLowerCase()
+    if (g[0] === 'f') f++; else if (g[0] === 'h' || g[0] === 'm') h++
+    const c = (n.contrat || '').toUpperCase()
+    if (c.indexOf('CDI') >= 0) cdi++; else if (c.indexOf('CDD') >= 0) cdd++
+  }
+  let aS = 0, aN = 0
+  for (const x of list) { const a = ageDe(x.date_naissance); if (a != null) { aS += a; aN++ } }
+  const retr = list.filter(n => { const a = ageDe(n.date_naissance); return a != null && (ageRetraite.value - a) <= horizonRetraite }).length
+  const cddAl = list.filter(n => { const c = (n.contrat || '').toUpperCase(); if (c.indexOf('CDD') < 0 || !n.fin_cdd) return false; const j = joursAvant(n.fin_cdd); return j != null && j <= 60 }).length
+  const ancArr = list.map(n => ancMoisDe(n.date_recrutement)).filter(m => m != null).sort((a, b) => a - b)
+  let ancMoy = null, ancMed = null
+  if (ancArr.length) { ancMoy = ancArr.reduce((s, v) => s + v, 0) / ancArr.length; const mid = Math.floor(ancArr.length / 2); ancMed = ancArr.length % 2 ? ancArr[mid] : (ancArr[mid - 1] + ancArr[mid]) / 2 }
+  const y = mouvAnnee.value
+  const jan1 = new Date(y, 0, 1), dec31 = new Date(y, 11, 31, 23, 59, 59)
+  const finRef = (y === new Date().getFullYear()) ? new Date() : dec31
+  let entrees = 0, sorties = 0
+  for (const n of raw) {
+    if (n.date_recrutement) { const r = new Date(n.date_recrutement); if (!isNaN(r) && r.getFullYear() === y) entrees++ }
+    if (n.date_sortie) { const sd = new Date(n.date_sortie); if (!isNaN(sd) && sd.getFullYear() === y) sorties++ }
+  }
+  const eMoy = (effectifA(jan1, raw) + effectifA(finRef, raw)) / 2
+  return { total: list.length, h, f, cdi, cdd, ageMoy: aN ? Math.round(aS / aN) + ' ans' : '—', retr, cddAl, ancMoy, ancMed, entrees, sorties, turnover: eMoy > 0 ? (sorties / eMoy * 100) : null }
+})
+const synthPct = (n) => synthRH.value.total ? Math.round(n / synthRH.value.total * 100) + '%' : '—'
+const synthTurnoverTxt = computed(() => synthRH.value.turnover == null ? '—' : (synthRH.value.turnover.toFixed(1).replace('.', ',') + '%'))
 const evoEffectif = computed(() => {
   const list = orgPerimRaw.value, y = mouvAnnee.value, now = new Date()
   const pts = []
@@ -784,33 +818,40 @@ onMounted(chargerTout)
 
       <div class="dash-head">
         <h2 class="card-title">Synthèse RH</h2>
-        <button class="btn-pdf" @click="exportPDF">⬇ Export PDF</button>
+        <div class="dash-head-r">
+          <select v-model="synthPerim" class="synth-perim" title="Filtrer la synthèse par périmètre">
+            <option value="">Tous les périmètres</option>
+            <option v-for="p in perimListeSynth" :key="p" :value="p">{{ p }}</option>
+          </select>
+          <button class="btn-pdf" @click="exportPDF">⬇ Export PDF</button>
+        </div>
       </div>
+      <p v-if="synthPerim" class="synth-filtre-note">Synthèse filtrée · <b>{{ synthPerim }}</b> · {{ synthRH.total }} personne(s)</p>
       <div class="dash-grid">
         <div class="dash-card" @click="tab = 'demo'">
           <div class="dc-t">Mixité</div>
-          <div class="dc-bar"><div class="dc-seg h" :style="{ width: (kpiOrg.total ? kpiOrg.h / kpiOrg.total * 100 : 0) + '%' }"></div><div class="dc-seg f" :style="{ width: (kpiOrg.total ? kpiOrg.f / kpiOrg.total * 100 : 0) + '%' }"></div></div>
-          <div class="dc-sub">{{ kpiOrg.h }} H · {{ kpiOrg.f }} F</div>
+          <div class="dc-bar"><div class="dc-seg h" :style="{ width: (synthRH.total ? synthRH.h / synthRH.total * 100 : 0) + '%' }"></div><div class="dc-seg f" :style="{ width: (synthRH.total ? synthRH.f / synthRH.total * 100 : 0) + '%' }"></div></div>
+          <div class="dc-sub">{{ synthRH.h }} H · {{ synthRH.f }} F</div>
         </div>
         <div class="dash-card" @click="tab = 'contrats'">
           <div class="dc-t">Contrats</div>
-          <div class="dc-big">{{ pct(kpiOrg.cdi) }} CDI</div>
-          <div class="dc-sub"><span v-if="alertesCdd.length" class="dc-warn">⚠ {{ alertesCdd.length }} CDD à échéance</span><span v-else>{{ kpiOrg.cdd }} CDD · aucune alerte</span></div>
+          <div class="dc-big">{{ synthPct(synthRH.cdi) }} CDI</div>
+          <div class="dc-sub"><span v-if="synthRH.cddAl" class="dc-warn">⚠ {{ synthRH.cddAl }} CDD à échéance</span><span v-else>{{ synthRH.cdd }} CDD · aucune alerte</span></div>
         </div>
         <div class="dash-card" @click="tab = 'demo'">
           <div class="dc-t">Âge</div>
-          <div class="dc-big">{{ ageMoyTxt }}</div>
-          <div class="dc-sub">{{ retraites.length }} départ(s) retraite &lt; 5 ans</div>
+          <div class="dc-big">{{ synthRH.ageMoy }}</div>
+          <div class="dc-sub">{{ synthRH.retr }} départ(s) retraite &lt; 5 ans</div>
         </div>
         <div class="dash-card" @click="tab = 'anc'">
           <div class="dc-t">Ancienneté</div>
-          <div class="dc-big">{{ ancStats.moy != null ? ancFmt(Math.round(ancStats.moy)) : '—' }}</div>
-          <div class="dc-sub">médiane {{ ancStats.med != null ? ancFmt(Math.round(ancStats.med)) : '—' }}</div>
+          <div class="dc-big">{{ synthRH.ancMoy != null ? ancFmt(Math.round(synthRH.ancMoy)) : '—' }}</div>
+          <div class="dc-sub">médiane {{ synthRH.ancMed != null ? ancFmt(Math.round(synthRH.ancMed)) : '—' }}</div>
         </div>
         <div class="dash-card" @click="tab = 'mouv'">
           <div class="dc-t">Turnover {{ mouvAnnee }}</div>
-          <div class="dc-big">{{ fmtTurnover }}</div>
-          <div class="dc-sub">{{ mouvStats.entrees }} entrées · {{ mouvStats.sorties }} sorties</div>
+          <div class="dc-big">{{ synthTurnoverTxt }}</div>
+          <div class="dc-sub">{{ synthRH.entrees }} entrées · {{ synthRH.sorties }} sorties</div>
         </div>
         <a class="dash-card dc-link" href="#/formations-matrice">
           <div class="dc-t">Formation</div>
@@ -1284,6 +1325,11 @@ onMounted(chargerTout)
 .rh-tabs .tb { background: #dc2626; color: #fff; border-radius: 999px; font-size: 10px; padding: 1px 6px; font-weight: 800; }
 .dash-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 14px; }
 .dash-head .card-title { margin: 0; }
+.dash-head-r { display: flex; align-items: center; gap: 10px; }
+.synth-perim { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: #fff; color: #1b2733; cursor: pointer; }
+.synth-perim:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
+.synth-filtre-note { margin: -8px 0 12px; font-size: 12px; color: #64748b; font-weight: 600; }
+.synth-filtre-note b { color: #0d9488; }
 .btn-pdf { background: #0d9488; color: #fff; border: 0; padding: 8px 15px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .btn-pdf:hover { background: #0f766e; }
 .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
