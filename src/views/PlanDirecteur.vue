@@ -245,6 +245,23 @@ async function importerFichier(e) {
       for (let c = 1; c < row.length; c++) { const mm = moisDeCellule(row[c]); if (mm && !Object.values(map).includes(mm)) { map[c] = mm; found++ } }
       if (found >= 3) { colMois = map; break }
     }
+    // Détecter un tableau croisé dont les colonnes sont des ANNÉES (et non des mois)
+    let colAnnee = null
+    if (!colMois) {
+      const estAnnee = (v) => { const n = norm(v); return /^(19|20)\d{2}$/.test(n) ? parseInt(n, 10) : null }
+      for (const row of lignes) {
+        if (!row) continue
+        const map = {}; let found = 0
+        for (let c = 1; c < row.length; c++) { const yy = estAnnee(row[c]); if (yy && !Object.values(map).includes(yy)) { map[c] = yy; found++ } }
+        if (found >= 2) { colAnnee = map; break }
+      }
+    }
+    if (!colMois && colAnnee) {
+      const annees = [...new Set(Object.values(colAnnee))].sort((a, b) => a - b)
+      erreur.value = 'Ce fichier donne des totaux ANNUELS par annee (' + annees.join(', ') + '), sans detail par mois : les mois sont dans le filtre du tableau croise, pas en colonnes. '
+        + 'Pour importer le plan mensuel, dans Excel : fais glisser le champ « Mois » dans la zone COLONNES du tableau croise (filtre l\'annee sur ' + annee.value + ' si besoin), re-exporte puis reimporte. Les colonnes Jan->Dec seront alors reconnues automatiquement.'
+      return
+    }
     capturerSnap('avant import')   // pour pouvoir annuler l'import
     let maj = 0, ignores = 0
     const inconnus = []
