@@ -212,7 +212,7 @@ async function importerFichier(e) {
   try {
     const XLSX = await chargerXLSX()
     const buf = await file.arrayBuffer()
-    const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
+    const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true })
     const ws = wb.Sheets[wb.SheetNames[0]]
     const lignes = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false })
     // Normalisation : minuscules, sans accents, sans ®™, espaces compactés
@@ -223,6 +223,51 @@ async function importerFichier(e) {
       if (p.code_pf) parCode[String(p.code_pf).trim().toLowerCase()] = p.id
       if (p.designation) { parDesig[norm(p.designation)] = p.id; const ck = compact(p.designation); if (ck) parDesigCompact[ck] = p.id }
     }
+
+    // === Mode agrégation : feuilles de détail par lot (colonnes Code, Taille, Début est.) ===
+    // Calcule le plan mensuel = somme des « Taille » par produit et par mois (mois = Début est.),
+    // pour l'année sélectionnée. Reproduit le tableau croisé « Somme de Taille » mais au mois.
+    const toDate = (v) => {
+      if (v instanceof Date && !isNaN(v)) return v
+      if (typeof v === 'number') { const d = new Date(Math.round((v - 25569) * 86400000)); return isNaN(d) ? null : d }
+      if (typeof v === 'string') { const s = v.trim(); const m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/); if (m) { let y = +m[3]; if (y < 100) y += 2000; const d = new Date(y, +m[2] - 1, +m[1]); return isNaN(d) ? null : d } const d = new Date(s); return isNaN(d) ? null : d }
+      return null
+    }
+    const feuillesLot = []
+    for (const sn of wb.SheetNames) {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, blankrows: false })
+      if (!rows.length || !rows[0]) continue
+      const head = rows[0].map(h => norm(h))
+      const iCode = head.indexOf('code')
+      const iTaille = head.indexOf('taille')
+      const iDate = head.findIndex(h => h.startsWith('debut est'))
+      if (iCode >= 0 && iTaille >= 0 && iDate >= 0) feuillesLot.push({ rows, iCode, iTaille, iDate })
+    }
+    if (feuillesLot.length) {
+      capturerSnap('avant import')
+      const agg = {}; let lots = 0; const nonReconnus = new Set()
+      for (const F of feuillesLot) {
+        for (let i = 1; i < F.rows.length; i++) {
+          const r = F.rows[i]; if (!r) continue
+          const code = String(r[F.iCode] == null ? '' : r[F.iCode]).trim(); if (!code) continue
+          const t = Number(r[F.iTaille]); if (!t || isNaN(t)) continue
+          const dt = toDate(r[F.iDate]); if (!dt || dt.getFullYear() !== annee.value) continue
+          const pid = parCode[code.toLowerCase()]
+          if (!pid) { if (nonReconnus.size < 8) nonReconnus.add(code); continue }
+          if (!agg[pid]) agg[pid] = {}
+          const m = dt.getMonth() + 1
+          agg[pid][m] = (agg[pid][m] || 0) + t
+          lots++
+        }
+      }
+      initCellules()
+      let maj = 0
+      for (const pid in agg) for (let m = 1; m <= 12; m++) { const v = agg[pid][m]; if (v) { cellules[pid][m] = Math.round(v); maj++ } }
+      if (!maj) { snapshotPrecedent.value = null; labelSnap.value = ''; erreur.value = 'Aucun lot avec une date de début estimée en ' + annee.value + ' trouvé dans les feuilles de détail.' + (nonReconnus.size ? ' (codes non reconnus au référentiel : ' + [...nonReconnus].join(', ') + ')' : '') }
+      else message.value = maj + ' valeur(s) mensuelle(s) calculées depuis ' + lots + ' lot(s) — Taille agrégée par mois de Début est., année ' + annee.value + '. Vérifie puis clique Enregistrer le plan.' + (nonReconnus.size ? ' — codes non trouvés au référentiel : ' + [...nonReconnus].join(', ') : '')
+      return
+    }
+
     // Reconnaissance des mois (en-tête de colonnes) — noms FR ou numéros 1..12
     const MOIS = {}
     ;[['janvier', 'jan'], ['fevrier', 'fev'], ['mars', 'mar'], ['avril', 'avr'], ['mai'], ['juin'], ['juillet', 'juil', 'jul'], ['aout', 'aou'], ['septembre', 'sept', 'sep'], ['octobre', 'oct'], ['novembre', 'nov'], ['decembre', 'dec']]
@@ -380,7 +425,7 @@ watch(annee, chargerPlan)
       </table>
     </div>
 
-    <details class="hint"><summary>Aide à la saisie et à l'import</summary><p>Astuce : laisse une case vide ou mets <strong>0</strong> s'il n'y a pas de production planifiée. Clique <strong>Enregistrer le plan</strong> pour sauvegarder toute la grille. La valeur est calculée à partir du PCSU de chaque produit.<br><strong>Importer un fichier</strong> : Excel/CSV avec en colonne 1 le <strong>Code PF</strong> ou la <strong>désignation</strong> du produit, et les mois <strong>Jan → Déc</strong> en colonnes (reconnus par l'en-tête : noms de mois ou numéros 1→12, sinon colonnes 2 à 13). Les tableaux croisés dynamiques sont acceptés : les lignes « Somme de… », « Étiquettes de… » et « Total » sont ignorées. Les valeurs remplissent la grille de l'année choisie (clique ensuite Enregistrer).</p></details>
+    <details class="hint"><summary>Aide à la saisie et à l'import</summary><p>Astuce : laisse une case vide ou mets <strong>0</strong> s'il n'y a pas de production planifiée. Clique <strong>Enregistrer le plan</strong> pour sauvegarder toute la grille. La valeur est calculée à partir du PCSU de chaque produit.<br><strong>Importer un fichier</strong> : Excel/CSV avec en colonne 1 le <strong>Code PF</strong> ou la <strong>désignation</strong> du produit, et les mois <strong>Jan → Déc</strong> en colonnes (reconnus par l'en-tête : noms de mois ou numéros 1→12, sinon colonnes 2 à 13). Les tableaux croisés dynamiques sont acceptés : les lignes « Somme de… », « Étiquettes de… » et « Total » sont ignorées. Les valeurs remplissent la grille de l'année choisie (clique ensuite Enregistrer).<br><strong>Export SAP détaillé par lot</strong> : si le fichier contient une feuille avec les colonnes <strong>Code</strong>, <strong>Taille</strong> et <strong>Début est.</strong> (feuilles Conditionnement / OTC), le plan mensuel est calculé automatiquement — somme des « Taille » par produit et par mois (mois = Début estimé), pour l'année sélectionnée.</p></details>
   </div>
 </template>
 
