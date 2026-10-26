@@ -1050,7 +1050,7 @@ onMounted(chargerTout)
         <div class="card-head"><h2 class="card-title">Ancienneté moyenne par périmètre</h2></div>
         <div class="anc-dist">
           <div v-for="b in ancParPerim" :key="b.label" class="anc-row">
-            <div class="anc-lbl">{{ b.label }} <span class="anc-sub">({{ b.n }})</span></div>
+            <div class="anc-lbl" :title="b.label">{{ b.label }} <span class="anc-sub">({{ b.n }})</span></div>
             <div class="anc-track"><div class="anc-fill alt" :style="{ width: (b.moyMois / ancPerimMax * 100) + '%' }"></div></div>
             <div class="anc-val">{{ ancFmt(Math.round(b.moyMois)) }}</div>
           </div>
@@ -1435,8 +1435,10 @@ onMounted(chargerTout)
 .rr-badge.u-ambre { background: #fef3c7; color: #b45309; }
 .rr-badge.u-anc { background: #ccfbf1; color: #0f766e; }
 .anc-dist { display: flex; flex-direction: column; gap: 9px; margin-top: 4px; }
-.anc-row { display: grid; grid-template-columns: 116px 1fr auto; align-items: center; gap: 10px; }
-.anc-lbl { font-size: 12.5px; color: #475569; font-weight: 600; }
+.anc-row { display: flex; align-items: center; gap: 10px; }
+.anc-lbl { flex: 0 1 auto; max-width: 55%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; color: #475569; font-weight: 600; }
+.anc-track { flex: 1 1 auto; min-width: 36px; }
+.anc-val { flex: 0 0 auto; }
 .anc-lbl .anc-sub { color: #94a3b8; font-weight: 500; }
 .anc-track { background: #f1f5f9; border-radius: 5px; height: 16px; overflow: hidden; }
 .anc-fill { height: 100%; border-radius: 5px; background: #0d9488; min-width: 2px; transition: width .3s ease; }
