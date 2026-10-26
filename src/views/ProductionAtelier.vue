@@ -166,6 +166,7 @@ const histParAn = computed(() => {
 })
 // Type d'analyse de la comparaison mensuelle : 'lots' | 'boites' | 'ca'
 const metrique = ref('lots')
+const metriqueUnite = computed(() => metrique.value === 'ca' ? "chiffre d'affaires (DA)" : (metrique.value === 'boites' ? 'boîtes' : 'lots'))
 const METRIQUES = [
   { id: 'lots', label: 'Lots', court: 'lots' },
   { id: 'boites', label: 'Boîtes', court: 'boîtes' },
@@ -283,7 +284,7 @@ function totalAtelierAnnee(ph, y) { return ((matriceMultiAn.value[ph] || {})[y] 
 // donc cumulée sur la MÊME fenêtre : janvier au mois en cours inclus.
 const moisYtd = moisCourant + 1
 function ytd(ph, y) {
-  const data = (matriceMultiAn.value[ph] || {})[y] || []
+  const data = (matriceChart.value[ph] || {})[y] || []
   let t = 0
   for (let m = 0; m < moisYtd; m++) t += Number(data[m]) || 0
   return t
@@ -755,7 +756,7 @@ onMounted(charger)
       <section class="card ytd-card">
         <div class="card-head">
           <h2 class="card-title">Cumul à date — janvier à {{ MOIS_LONG[moisCourant].toLowerCase() }}</h2>
-          <span class="ytd-note">Chaque année cumulée sur les {{ moisYtd }} mêmes mois</span>
+          <span class="ytd-note">Chaque année cumulée sur les {{ moisYtd }} mêmes mois · {{ metriqueUnite }}</span>
         </div>
         <div class="table-scroll">
           <table class="ytd-tbl">
@@ -763,7 +764,7 @@ onMounted(charger)
             <tbody>
               <tr v-for="l in ytdTable.lignes" :key="l.ph">
                 <td class="ytd-at">{{ l.ph }}</td>
-                <td v-for="y in ANNEES_COMP" :key="y" class="ta-r" :class="{ cur: y === anneeCourante }">{{ fmt(l.par[y]) }}</td>
+                <td v-for="y in ANNEES_COMP" :key="y" class="ta-r" :class="{ cur: y === anneeCourante }">{{ fmtMetrique(l.par[y]) }}</td>
                 <td class="ta-r" :class="l.pct == null ? '' : (l.pct < 0 ? 'ytd-ko' : 'ytd-ok')">{{ l.pct == null ? "—" : (l.pct > 0 ? "+" : "") + l.pct + " %" }}</td>
                 <td class="ta-r" :class="l.pctMoy == null ? '' : (l.pctMoy < 0 ? 'ytd-ko' : 'ytd-ok')">{{ l.pctMoy == null ? "—" : (l.pctMoy > 0 ? "+" : "") + l.pctMoy + " %" }}</td>
               </tr>
@@ -771,7 +772,7 @@ onMounted(charger)
             <tfoot>
               <tr class="ytd-tot">
                 <td class="ytd-at">Total</td>
-                <td v-for="y in ANNEES_COMP" :key="y" class="ta-r" :class="{ cur: y === anneeCourante }">{{ fmt(ytdTable.tot.par[y]) }}</td>
+                <td v-for="y in ANNEES_COMP" :key="y" class="ta-r" :class="{ cur: y === anneeCourante }">{{ fmtMetrique(ytdTable.tot.par[y]) }}</td>
                 <td class="ta-r" :class="ytdTable.tot.pct == null ? '' : (ytdTable.tot.pct < 0 ? 'ytd-ko' : 'ytd-ok')">{{ ytdTable.tot.pct == null ? "—" : (ytdTable.tot.pct > 0 ? "+" : "") + ytdTable.tot.pct + " %" }}</td>
                 <td class="ta-r" :class="ytdTable.tot.pctMoy == null ? '' : (ytdTable.tot.pctMoy < 0 ? 'ytd-ko' : 'ytd-ok')">{{ ytdTable.tot.pctMoy == null ? "—" : (ytdTable.tot.pctMoy > 0 ? "+" : "") + ytdTable.tot.pctMoy + " %" }}</td>
               </tr>
