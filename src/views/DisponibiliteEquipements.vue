@@ -1346,6 +1346,16 @@ onMounted(async () => {
 
       <!-- ===================== FILE D'ATTENTE ===================== -->
       <div v-show="ongletDispo === 'file'">
+        <div class="searchbar searchbar-top">
+          <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
+          <div v-if="zonesDispo.length > 1" class="zone-filtre" title="Filtrer par périmètre / zone (plusieurs choix possibles)">
+            <span class="zone-lbl">Zones :</span>
+            <button v-for="z in zonesDispo" :key="z.key" type="button" class="zone-chip" :class="{ on: zoneSel(z.key) }" @click="toggleZone(z.key)">{{ z.label }}</button>
+            <button v-if="perimSel.length" type="button" class="zone-reset" @click="perimSel = []">Toutes</button>
+          </div>
+          <label class="filtre-chk"><input type="checkbox" v-model="filtreUrgent" /> Urgents (&gt;{{ SEUIL_URGENT }} j)</label>
+          <label class="filtre-chk"><input type="checkbox" v-model="filtrePerime" /> OF périmés</label>
+        </div>
         <section class="qual-box">
           <h3 class="qual-h">Charge, triage et déviations par atelier</h3>
           <p class="qual-sub">File de production</p>
@@ -1471,16 +1481,6 @@ onMounted(async () => {
               </tfoot>
             </table>
         </section>
-        <div class="searchbar">
-          <input v-model="recherche" type="text" placeholder="Rechercher un lot ou un produit…" />
-          <div v-if="zonesDispo.length > 1" class="zone-filtre" title="Filtrer par périmètre / zone (plusieurs choix possibles)">
-            <span class="zone-lbl">Zones :</span>
-            <button v-for="z in zonesDispo" :key="z.key" type="button" class="zone-chip" :class="{ on: zoneSel(z.key) }" @click="toggleZone(z.key)">{{ z.label }}</button>
-            <button v-if="perimSel.length" type="button" class="zone-reset" @click="perimSel = []">Toutes</button>
-          </div>
-          <label class="filtre-chk"><input type="checkbox" v-model="filtreUrgent" /> Urgents (&gt;{{ SEUIL_URGENT }} j)</label>
-          <label class="filtre-chk"><input type="checkbox" v-model="filtrePerime" /> OF périmés</label>
-        </div>
         <h3 class="board-h">Fabrication — files par atelier</h3>
         <p class="note">
           Chaque lot apparaît dans l'atelier de son <strong>étape courante</strong> : « en cours » s'il y est démarré, « en attente » si l'étape précédente est terminée.
