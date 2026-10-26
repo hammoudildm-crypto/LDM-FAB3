@@ -15,6 +15,7 @@ const planRows = ref([])
 const realRows = ref([])
 const condRows = ref([])
 const ofs = ref([])
+const hormonalParCode = ref({})
 const msg = ref('')
 
 async function fetchAllPaged(make) {
@@ -33,7 +34,7 @@ async function fetchAllPaged(make) {
 async function charger() {
   msg.value = ''
   const rp = await fetchAllPaged(() => supabase.from('plan_production')
-    .select('annee, mois, quantite_planifiee, equipements(nom), produits(code_pf, designation, pcsu, taille_lot)'))
+    .select('annee, mois, quantite_planifiee, equipements(nom), produits(code_pf, designation, pcsu, taille_lot, forme)'))
   if (rp.error) { msg.value = rp.error.message; return }
   planRows.value = rp.data
 
@@ -49,14 +50,49 @@ async function charger() {
   condRows.value = rc.data
 
   const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('boites_fabriquees, date_fin_fabrication, equipements(nom), produits(code_pf, designation, pcsu, taille_lot)')
+    .select('boites_fabriquees, date_fin_fabrication, equipements(nom), produits(code_pf, designation, pcsu, taille_lot, forme)')
     .eq('actif', true))
   if (ro.error) { msg.value = ro.error.message; return }
   ofs.value = ro.data
+
+  // Drapeau hormonal par code produit (tolérant : si la colonne n'existe pas encore)
+  const rh = await supabase.from('produits').select('code_pf, hormonal')
+  const hm = {}
+  if (!rh.error && rh.data) for (const p of rh.data) if (p.hormonal) hm[p.code_pf] = true
+  hormonalParCode.value = hm
 }
 onMounted(charger)
 
 const num = (v) => Number(v || 0)
+// --- Suivi par périmètre / zone (déduit de la forme du produit) ---
+const HORMONAUX_KW = ['levothyrox', 'levothyroxine']
+function estHormonal(p) {
+  if (!p) return false
+  if (p.code_pf && hormonalParCode.value[p.code_pf]) return true
+  const s = ((p.designation || '') + ' ' + (p.code_pf || '')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  return HORMONAUX_KW.some(k => s.includes(k))
+}
+function zoneForme(forme) {
+  const f = (forme || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  if (!f) return 'autre'
+  if (/comprim|gelul|sachet|blister/.test(f)) return 'seche'
+  if (/pommade|crem|gel/.test(f)) return 'semi'
+  if (/seringue|injectable/.test(f)) return 'seringue'
+  return 'autre'
+}
+function zoneDe(p) { const z = zoneForme(p && p.forme); return (estHormonal(p) && z === 'seche') ? 'seche_hormonale' : z }
+const ZONES = [{ key: 'seche', label: 'Forme sèche' }, { key: 'seche_hormonale', label: 'Forme sèche hormonale' }, { key: 'semi', label: 'Forme semi solide' }, { key: 'seringue', label: 'Seringue' }, { key: 'autre', label: 'Autre' }]
+const perimSel = ref([])
+function toggleZone(k) { const i = perimSel.value.indexOf(k); if (i >= 0) perimSel.value.splice(i, 1); else perimSel.value.push(k) }
+function zoneSel(k) { return perimSel.value.includes(k) }
+function zoneMatch(p) { return !perimSel.value.length || perimSel.value.includes(zoneDe(p)) }
+const zonesDispo = computed(() => {
+  const s = new Set()
+  for (const r of planRows.value) if (r.produits) s.add(zoneDe(r.produits))
+  for (const o of ofs.value) if (o.produits) s.add(zoneDe(o.produits))
+  for (const c of condRows.value) { const p = c.ordres_fabrication && c.ordres_fabrication.produits; if (p) s.add(zoneDe(p)) }
+  return ZONES.filter(z => s.has(z.key))
+})
 const condBoites = (c) => {
   const p = c.ordres_fabrication && c.ordres_fabrication.produits ? c.ordres_fabrication.produits : null
   const upb = p ? num(p.unites_par_boite) : 0
@@ -67,7 +103,7 @@ const condBoites = (c) => {
 // --- Séries mensuelles (boîtes) ---
 const planParMois = computed(() => {
   const a = Array(12).fill(0)
-  for (const r of planRows.value) if (Number(r.annee) === anneeSel.value && r.mois >= 1 && r.mois <= 12) a[r.mois - 1] += num(r.quantite_planifiee)
+  for (const r of planRows.value) if (Number(r.annee) === anneeSel.value && r.mois >= 1 && r.mois <= 12 && zoneMatch(r.produits)) a[r.mois - 1] += num(r.quantite_planifiee)
   return a
 })
 const estDirectCond = (p) => !!(p && String(p.forme || '').toLowerCase() === 'seringue')
@@ -77,6 +113,7 @@ const fabReelParMois = computed(() => {
     if (!o.date_fin_fabrication) continue
     const d = new Date(o.date_fin_fabrication)
     if (d.getFullYear() !== anneeSel.value) continue
+    if (!zoneMatch(o.produits)) continue
     a[d.getMonth()] += num(o.boites_fabriquees)
   }
   // Produits « direct conditionnement » (seringue, ex. Rebif) : conditionné = fabriqué
@@ -84,6 +121,7 @@ const fabReelParMois = computed(() => {
     const o = c.ordres_fabrication
     const p = (o && o.produits) || {}
     if (!o || o.date_fin_fabrication || !c.date_conditionnement) continue
+    if (!zoneMatch(p)) continue
     const d = new Date(c.date_conditionnement)
     if (d.getFullYear() !== anneeSel.value) continue
     a[d.getMonth()] += condBoites(c)
@@ -99,6 +137,7 @@ const anticipParMois = computed(() => {
   const a = Array(12).fill(0)
   for (const c of condRows.value) {
     if (!c.date_conditionnement) continue
+    if (!zoneMatch(c.ordres_fabrication && c.ordres_fabrication.produits)) continue
     const d = new Date(c.date_conditionnement)
     if (d.getFullYear() === anneeSel.value && condFabAnnee(c) === anneeSel.value - 1) a[d.getMonth()] += condBoites(c)
   }
@@ -110,6 +149,7 @@ const condParMois = computed(() => {
   const a = Array(12).fill(0)
   for (const c of condRows.value) {
     if (!c.date_conditionnement) continue
+    if (!zoneMatch(c.ordres_fabrication && c.ordres_fabrication.produits)) continue
     const d = new Date(c.date_conditionnement)
     if (d.getFullYear() === anneeSel.value) a[d.getMonth()] += condBoites(c)
   }
@@ -131,11 +171,11 @@ const detailBarre = computed(() => {
     return acc[k]
   }
   for (const r of planRows.value) {
-    if (Number(r.annee) !== anneeSel.value || Number(r.mois) !== m.mois + 1) continue
+    if (Number(r.annee) !== anneeSel.value || Number(r.mois) !== m.mois + 1 || !zoneMatch(r.produits)) continue
     const e = rec(r.produits); if (e) e.plan += num(r.quantite_planifiee)
   }
   for (const o of ofs.value) {
-    if (!o.date_fin_fabrication) continue
+    if (!o.date_fin_fabrication || !zoneMatch(o.produits)) continue
     const d = new Date(o.date_fin_fabrication)
     if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
     const e = rec(o.produits); if (e) e.fab += num(o.boites_fabriquees)
@@ -143,13 +183,13 @@ const detailBarre = computed(() => {
   for (const c of condRows.value) {
     const o = c.ordres_fabrication
     const p = (o && o.produits) || {}
-    if (!o || o.date_fin_fabrication || !c.date_conditionnement) continue
+    if (!o || o.date_fin_fabrication || !c.date_conditionnement || !zoneMatch(p)) continue
     const d = new Date(c.date_conditionnement)
     if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
     const e = rec(p); if (e) e.fab += condBoites(c)
   }
   for (const c of condRows.value) {
-    if (!c.date_conditionnement) continue
+    if (!c.date_conditionnement || !zoneMatch(c.ordres_fabrication && c.ordres_fabrication.produits)) continue
     const d = new Date(c.date_conditionnement)
     if (d.getFullYear() !== anneeSel.value || d.getMonth() !== m.mois) continue
     const e = rec(c.ordres_fabrication ? c.ordres_fabrication.produits : null); if (e) e.cond += condBoites(c)
@@ -170,12 +210,12 @@ const detailEquip = computed(() => {
   const acc = {}
   const rec = (nom) => { const k = nom || 'Non attribué'; if (!acc[k]) acc[k] = { nom: k, plan: 0, boites: 0, lots: 0, ca: 0 }; return acc[k] }
   for (const r of planRows.value) {
-    if (Number(r.annee) !== anneeSel.value) continue
+    if (Number(r.annee) !== anneeSel.value || !zoneMatch(r.produits)) continue
     rec(r.equipements ? r.equipements.nom : null).plan += num(r.quantite_planifiee)
   }
   if (ongletEquip.value === 'fab') {
     for (const o of ofs.value) {
-      if (!o.date_fin_fabrication || new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value) continue
+      if (!o.date_fin_fabrication || new Date(o.date_fin_fabrication).getFullYear() !== anneeSel.value || !zoneMatch(o.produits)) continue
       const e = rec(o.equipements ? o.equipements.nom : null)
       const b = num(o.boites_fabriquees), p = o.produits, t = num(p && p.taille_lot), pc = num(p && p.pcsu)
       e.boites += b; e.lots += t > 0 ? b / t : 0; e.ca += b * pc
@@ -183,8 +223,9 @@ const detailEquip = computed(() => {
   } else {
     for (const c of condRows.value) {
       if (!c.date_conditionnement || new Date(c.date_conditionnement).getFullYear() !== anneeSel.value) continue
-      const e = rec(c.equipements ? c.equipements.nom : null)
       const p = c.ordres_fabrication ? c.ordres_fabrication.produits : null
+      if (!zoneMatch(p)) continue
+      const e = rec(c.equipements ? c.equipements.nom : null)
       const b = condBoites(c), t = num(p && p.taille_lot), pc = num(p && p.pcsu)
       e.boites += b; e.lots += t > 0 ? b / t : 0; e.ca += b * pc
     }
@@ -455,6 +496,11 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
           <span><i class="dot cond"></i>Conditionnement</span>
         </div>
       </div>
+      <div v-if="zonesDispo.length > 1" class="zone-bar" title="Suivi par périmètre / zone (plusieurs choix possibles)">
+        <span class="zone-lbl">Périmètre :</span>
+        <button v-for="z in zonesDispo" :key="z.key" type="button" class="zone-chip" :class="{ on: zoneSel(z.key) }" @click="toggleZone(z.key)">{{ z.label }}</button>
+        <button v-if="perimSel.length" type="button" class="zone-reset" @click="perimSel = []">Toutes</button>
+      </div>
       <MiniChart :labels="MOIS" :format="fmt" :max="maxMois" show-values clickable @pick="ouvrirBarre"
         :value-format="v => v == null ? '' : (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? Math.round(v / 1e3) + 'K' : String(v))"
         :series="[
@@ -700,6 +746,12 @@ const fmtPct = (p) => p == null ? '—' : p.toFixed(1) + ' %'
 .rp-eq-tabs button.on:nth-child(1) { background: #14b8a6; border-color: #14b8a6; color: #fff; }
 .rp-eq-tabs button.on:nth-child(2) { background: #0ea5e9; border-color: #0ea5e9; color: #fff; }
 .legend { display: flex; gap: 16px; font-size: 12px; color: #475569; }
+.zone-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+.zone-lbl { font-size: 12px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .03em; }
+.zone-chip { border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.zone-chip:hover { border-color: #0f766e; }
+.zone-chip.on { background: #f0fdfa; border-color: #0f766e; color: #0f766e; }
+.zone-reset { border: 0; background: transparent; color: #0f766e; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: underline; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
 .dot.plan, .bar-fill.plan { background: #94a3b8; }
