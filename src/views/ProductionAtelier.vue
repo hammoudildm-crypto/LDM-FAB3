@@ -89,7 +89,8 @@ const hist = ref([])
 const ofs = ref([])
 const histLots = ref([])   // historique des lots par phase (TDB importé)
 const planRows = ref([])    // PDP : quantités planifiées par produit et mois
-const produitsMap = ref({}) // code_pf -> { taille, pcsu } pour boîtes & CA
+const produitsMap = ref({}) // code_pf -> { taille, pcsu, forme } pour boîtes & CA
+const hormonalParCode = ref({}) // code_pf -> true si produit du périmètre hormonal
 const erreur = ref('')
 const chargement = ref(true)
 
@@ -118,13 +119,18 @@ async function charger() {
   if (!rc.error) conds.value = rc.data || []
   const rh = await fetchAllPaged(() => supabase.from('production_historique').select('annee, mois, etape, nb_lots'))
   if (!rh.error) hist.value = rh.data || []
-  const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, date_fin_fabrication, produits(code_pf, designation, taille_lot, pcsu)').eq('actif', true))
+  const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, date_fin_fabrication, produits(code_pf, designation, taille_lot, pcsu, forme)').eq('actif', true))
   if (!ro.error) ofs.value = ro.data || []
   const rhl = await fetchAllPaged(() => supabase.from('historique_lots_phases')
     .select('numero_lot, code_pf, designation, phase, date_fin'))
   if (!rhl.error) histLots.value = rhl.data || []
-  const rpd = await fetchAllPaged(() => supabase.from('produits').select('code_pf, taille_lot, pcsu'))
-  if (!rpd.error) { const m = {}; for (const p of (rpd.data || [])) m[p.code_pf] = { taille: Number(p.taille_lot || 0), pcsu: Number(p.pcsu || 0) }; produitsMap.value = m }
+  const rpd = await fetchAllPaged(() => supabase.from('produits').select('code_pf, taille_lot, pcsu, forme'))
+  if (!rpd.error) { const m = {}; for (const p of (rpd.data || [])) m[p.code_pf] = { taille: Number(p.taille_lot || 0), pcsu: Number(p.pcsu || 0), forme: p.forme || '' }; produitsMap.value = m }
+  // Drapeau hormonal par code produit (tolérant : si la colonne n'existe pas encore)
+  const rhm = await supabase.from('produits').select('code_pf, hormonal')
+  const hmm = {}
+  if (!rhm.error && rhm.data) for (const p of rhm.data) if (p.hormonal) hmm[p.code_pf] = true
+  hormonalParCode.value = hmm
   const rpl = await fetchAllPaged(() => supabase.from('plan_production')
     .select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot)'))
   if (!rpl.error) planRows.value = rpl.data || []   // table absente -> on reste sur le temps réel
@@ -140,6 +146,7 @@ const liveParAn = computed(() => {
   const ajouter = (ph, ordreId, d) => {
     if (/^(granulation|s[ée]chage)$/i.test(String(ph).trim())) ph = 'Granulation et Séchage'
     if (!d || ordreId == null || !PHASES.includes(ph)) return
+    if (!zoneMatchLive(ordreId)) return
     const dt = new Date(d), y = dt.getFullYear(), mo = dt.getMonth()
     if (!m[ph]) m[ph] = {}
     if (!m[ph][y]) m[ph][y] = Array(12).fill(0)
@@ -172,13 +179,42 @@ const METRIQUES = [
   { id: 'boites', label: 'Boîtes', court: 'boîtes' },
   { id: 'ca', label: "Chiffre d'affaires", court: 'CA' }
 ]
-const ofValMap = computed(() => { const m = {}; for (const o of ofs.value) { const p = o.produits || {}; m[o.id] = { taille: Number(p.taille_lot || 0), pcsu: Number(p.pcsu || 0) } } return m })
+// --- Suivi par périmètre / zone (déduit de la forme du produit) ---
+const HORMONAUX_KW = ['levothyrox', 'levothyroxine']
+const normZ = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+function zoneForme(forme) {
+  const f = normZ(forme); if (!f) return 'autre'
+  if (/comprim|gelul|sachet|blister/.test(f)) return 'seche'
+  if (/pommade|crem|gel/.test(f)) return 'semi'
+  if (/seringue|injectable/.test(f)) return 'seringue'
+  return 'autre'
+}
+function estHormonalCD(code, desig) {
+  if (code && hormonalParCode.value[code]) return true
+  const s = normZ((desig || '') + ' ' + (code || ''))
+  return HORMONAUX_KW.some(k => s.includes(k))
+}
+function zoneCD(forme, code, desig) { const z = zoneForme(forme); return (estHormonalCD(code, desig) && z === 'seche') ? 'seche_hormonale' : z }
+const ZONES = [{ key: 'seche', label: 'Forme sèche' }, { key: 'seche_hormonale', label: 'Forme sèche hormonale' }, { key: 'semi', label: 'Forme semi solide' }, { key: 'seringue', label: 'Seringue' }, { key: 'autre', label: 'Autre' }]
+const perimSel = ref([])
+function toggleZone(k) { const i = perimSel.value.indexOf(k); if (i >= 0) perimSel.value.splice(i, 1); else perimSel.value.push(k) }
+function zoneSel(k) { return perimSel.value.includes(k) }
+function zoneMatchLive(ordreId) { if (!perimSel.value.length) return true; const v = ofValMap.value[ordreId]; return v ? perimSel.value.includes(v.zone) : false }
+function zoneMatchCode(code, desig) { if (!perimSel.value.length) return true; const pm = produitsMap.value[code]; return perimSel.value.includes(zoneCD(pm ? pm.forme : '', code, desig)) }
+const zonesDispo = computed(() => {
+  const s = new Set()
+  for (const o of ofs.value) { const p = o.produits; if (p) s.add(zoneCD(p.forme, p.code_pf, p.designation)) }
+  for (const h of histLots.value) { const pm = produitsMap.value[h.code_pf]; s.add(zoneCD(pm ? pm.forme : '', h.code_pf, h.designation)) }
+  return ZONES.filter(z => s.has(z.key))
+})
+const ofValMap = computed(() => { const m = {}; for (const o of ofs.value) { const p = o.produits || {}; m[o.id] = { taille: Number(p.taille_lot || 0), pcsu: Number(p.pcsu || 0), zone: zoneCD(p.forme, p.code_pf, p.designation) } } return m })
 // Matrices BOÎTES & CA en temps réel (suivi + conditionnement + OF), valeur = taille_lot (boîtes) / taille_lot × pcsu (CA)
 const liveValParAn = computed(() => {
   const boites = {}, ca = {}, vus = {}
   const add = (ph, ordreId, d) => {
     if (/^(granulation|s[ée]chage)$/i.test(String(ph).trim())) ph = 'Granulation et Séchage'
     if (!d || ordreId == null || !PHASES.includes(ph)) return
+    if (!zoneMatchLive(ordreId)) return
     const v = ofValMap.value[ordreId]; if (!v) return
     const dt = new Date(d); if (isNaN(dt)) return
     const y = dt.getFullYear(), mo = dt.getMonth(), cle = ph + '|' + y + '|' + mo
@@ -199,6 +235,7 @@ const histValParAn = computed(() => {
   for (const h of histLots.value) {
     let ph = h.phase; if (/^(granulation|s[ée]chage)$/i.test(String(ph).trim())) ph = 'Granulation et Séchage'
     if (!h.date_fin || !PHASES.includes(ph)) continue
+    if (!zoneMatchCode(h.code_pf, h.designation)) continue
     const prod = produitsMap.value[h.code_pf]; if (!prod) continue
     const dt = new Date(h.date_fin); if (isNaN(dt)) continue
     const y = dt.getFullYear(), mo = dt.getMonth(), cle = ph + '|' + y + '|' + mo, key = h.numero_lot || h.code_pf
@@ -210,13 +247,28 @@ const histValParAn = computed(() => {
   }
   return { boites, ca }
 })
+// Lots par mois depuis l'historique par lot (filtrable par zone), utilisé quand un périmètre est actif
+const histLotsParAn = computed(() => {
+  const m = {}, vus = {}
+  for (const h of histLots.value) {
+    let ph = h.phase; if (/^(granulation|s[ée]chage)$/i.test(String(ph).trim())) ph = 'Granulation et Séchage'
+    if (!h.date_fin || !PHASES.includes(ph)) continue
+    if (!zoneMatchCode(h.code_pf, h.designation)) continue
+    const dt = new Date(h.date_fin); if (isNaN(dt)) continue
+    const y = dt.getFullYear(), mo = dt.getMonth(), cle = ph + '|' + y + '|' + mo, key = h.numero_lot || h.code_pf
+    if (!m[ph]) m[ph] = {}; if (!m[ph][y]) m[ph][y] = Array(12).fill(0)
+    if (!vus[cle]) vus[cle] = new Set()
+    if (!vus[cle].has(key)) { vus[cle].add(key); m[ph][y][mo]++ }
+  }
+  return m
+})
 // Valeurs mensuelles d'une étape pour une année : historique si année passée, sinon temps réel
 function valeurs(stage, year, metric) {
   metric = metric || 'lots'
   let hSrc, lSrc
   if (metric === 'boites') { hSrc = histValParAn.value.boites; lSrc = liveValParAn.value.boites }
   else if (metric === 'ca') { hSrc = histValParAn.value.ca; lSrc = liveValParAn.value.ca }
-  else { hSrc = histParAn.value; lSrc = liveParAn.value }
+  else { hSrc = (perimSel.value.length ? histLotsParAn.value : histParAn.value); lSrc = liveParAn.value }
   const h = (hSrc[stage] && hSrc[stage][year]) ? hSrc[stage][year] : null
   const l = (lSrc[stage] && lSrc[stage][year]) ? lSrc[stage][year] : null
   if (year < anneeCourante) return h || Array(12).fill(0)                 // années passées : historique importé
@@ -737,6 +789,11 @@ onMounted(charger)
         </div>
       </aside>
         <div class="pa-content">
+      <div v-if="zonesDispo.length > 1" class="zone-bar" title="Suivi par périmètre / zone (plusieurs choix possibles)">
+        <span class="zone-lbl">Périmètre :</span>
+        <button v-for="z in zonesDispo" :key="z.key" type="button" class="zone-chip" :class="{ on: zoneSel(z.key) }" @click="toggleZone(z.key)">{{ z.label }}</button>
+        <button v-if="perimSel.length" type="button" class="zone-reset" @click="perimSel = []">Toutes</button>
+      </div>
       <section class="card">
         <div class="card-head">
           <h2 class="card-title">Comparaison mensuelle par atelier</h2>
@@ -917,6 +974,12 @@ onMounted(charger)
 .pa-layout { display: flex; gap: 10px; align-items: stretch; margin-bottom: 8px; }
 .pa-side { flex: 0 0 275px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; align-self: stretch; overflow: hidden; }
 .pa-content { flex: 1; min-width: 0; }
+.zone-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+.zone-bar .zone-lbl { font-size: 12px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .03em; }
+.zone-bar .zone-chip { border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.zone-bar .zone-chip:hover { border-color: #0f766e; }
+.zone-bar .zone-chip.on { background: #f0fdfa; border-color: #0f766e; color: #0f766e; }
+.zone-bar .zone-reset { border: 0; background: transparent; color: #0f766e; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: underline; }
 .pa-row2 { display: flex; gap: 10px; align-items: stretch; margin-bottom: 8px; }
 .pa-row2 > .card, .pa-row2 > .proj-card { flex: 1 1 0; min-width: 0; margin-bottom: 0; display: flex; flex-direction: column; }
 @media (max-width: 1100px) { .pa-row2 { flex-direction: column; } .pa-row2 > .card, .pa-row2 > .proj-card { width: 100%; } }
