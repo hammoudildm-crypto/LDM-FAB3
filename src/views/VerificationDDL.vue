@@ -17,6 +17,7 @@ const LIMITE = 300
 
 const lots = ref([])
 const phases = ref([])
+const conds = ref([])   // enregistrements de conditionnement (statut produit)
 const msg = ref('')
 const anneeSel = ref(anneeCourante) // par défaut : année en cours (0 = toutes)
 const verifEnCours = ref(null)
@@ -61,6 +62,8 @@ async function charger() {
   lots.value = r.data
   const rp = await fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
   if (!rp.error) phases.value = rp.data
+  const rc = await fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, date_conditionnement, date_fin, statut').eq('actif', true))
+  if (!rc.error) conds.value = rc.data
   const rs = await supabase.from('superviseurs').select('*').order('nom')
   if (!rs.error) {
     supList.value = rs.data.map(s => s.nom)
@@ -113,6 +116,25 @@ const phasesParLot = computed(() => {
   }
   return m
 })
+// Statut de conditionnement par lot : on garde l'enregistrement le plus avancé
+// (Libéré > Terminé/date de fin > En cours).
+const rangCond = (r) => (r.statut === 'Libéré' ? 3 : (r.date_fin || r.statut === 'Terminé') ? 2 : 1)
+const condParLot = computed(() => {
+  const m = {}
+  for (const c of conds.value) {
+    const cur = m[c.ordre_id]
+    if (!cur || rangCond(c) > rangCond(cur)) m[c.ordre_id] = c
+  }
+  return m
+})
+// Libellé + classe du statut produit affiché dans la liste des DDL en attente.
+function statutCond(l) {
+  const c = condParLot.value[l.id]
+  if (!c) return { label: 'Non conditionné', cls: 'sc-none' }
+  if (c.statut === 'Libéré') return { label: 'Libéré', cls: 'sc-ok' }
+  if (c.date_fin || c.statut === 'Terminé') return { label: 'Conditionné', cls: 'sc-ok' }
+  return { label: 'En cours', cls: 'sc-run' }
+}
 // Date de fin de fabrication : la date renseignée, sinon la date de la DERNIÈRE phase de gamme si Terminé
 function dateFinFab(l) {
   const pl = phasesParLot.value[l.id] || {}
@@ -556,13 +578,14 @@ async function devalider(l) {
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
         <div v-else-if="!attenteFiltree.length" class="empty">Aucun DDL dans cette catégorie.</div>
         <table v-else class="mini">
-          <thead><tr><th class="th-verif" style="width:62px"></th><th style="width:58px">Lot</th><th>Produit</th><th style="width:90px">Réserver</th><th class="right" style="width:74px">Fin fab.</th><th class="right" style="width:50px">Attente</th></tr></thead>
+          <thead><tr><th class="th-verif" style="width:62px"></th><th style="width:58px">Lot</th><th>Produit</th><th style="width:104px">Statut</th><th style="width:90px">Réserver</th><th class="right" style="width:74px">Fin fab.</th><th class="right" style="width:50px">Attente</th></tr></thead>
           <tbody>
             <template v-for="l in attenteFiltree" :key="l.id">
               <tr :class="{ 'ddl-triage': triageIds.has(l.id), 'ddl-deviation': enDeviationDdl(l) }">
                 <td class="cell-verif"><button v-if="peutEditer" class="btn-verif" @click="ouvrir(l)">Vérifier</button></td>
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td class="desig">{{ prodNom(l) }}<span class="zperim" :class="'z-' + zoneLot(l)" :title="'Périmètre détecté : ' + zoneLabelLot(l)">{{ zoneLabelLot(l) }}</span></td>
+                <td><span class="scond" :class="statutCond(l).cls">{{ statutCond(l).label }}</span></td>
                 <td>
                   <select v-if="peutEditer" class="resv-sel" :value="l.ddl_verificateur || ''" @change="reserverVerif(l, $event.target.value)">
                     <option value="">— Réserver —</option>
@@ -574,7 +597,7 @@ async function devalider(l) {
                 <td class="right nowrap" :class="clsAttente(l)" style="font-weight:800">{{ dureeAttente(l) }}</td>
               </tr>
               <tr v-if="verifEnCours === l.id">
-                <td colspan="6">
+                <td colspan="7">
                   <div class="verif-form">
                     <select v-model="superviseurChoix" class="sv-sel">
                       <option value="">— Choisir un vérificateur —</option>
@@ -1073,6 +1096,10 @@ tr.ddl-triage .cell-verif { background: #fffbeb; }
 .zperim.z-semi { background: #fff7ed; color: #c2410c; }
 .zperim.z-seringue { background: #f0fdf4; color: #15803d; }
 .zperim.z-autre { background: #fef2f2; color: #b91c1c; }
+.scond { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.scond.sc-ok { background: #ecfdf5; color: #047857; }
+.scond.sc-run { background: #fff7ed; color: #c2410c; }
+.scond.sc-none { background: #f1f5f9; color: #64748b; }
 .btn-repartir { background: #7c3aed; color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .btn-repartir:hover:not(:disabled) { background: #6d28d9; }
 .btn-repartir:disabled { opacity: .5; cursor: not-allowed; }
