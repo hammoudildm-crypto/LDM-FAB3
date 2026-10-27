@@ -217,10 +217,12 @@ const repartitionAttente = computed(() => {
 // Filtre optionnel : null = tout, sinon 'propres' | 'triage' | 'deviation'
 const filtreAttente = ref(null)
 function basculerFiltreAttente(v) { filtreAttente.value = filtreAttente.value === v ? null : v }
+const perimSel = ref([])   // périmètres cochés (vide = tous)
 const attenteFiltree = computed(() => {
-  const f = filtreAttente.value
-  if (!f) return attente.value
+  const f = filtreAttente.value, zs = perimSel.value
   return attente.value.filter(l => {
+    if (zs.length && !zs.includes(zoneLot(l))) return false
+    if (!f) return true
     const t = enTriageDdl(l), d = enDeviationDdl(l)
     if (f === 'triage') return t
     if (f === 'deviation') return d
@@ -364,6 +366,10 @@ function estHormonal(p) {
 function zoneLot(l) { const p = l.produits || {}; const z = zoneForme(p.forme); return (estHormonal(p) && z === 'seche') ? 'seche_hormonale' : z }
 const ZONE_LABEL = { seche: 'Forme sèche', seche_hormonale: 'Forme sèche hormonale', semi: 'Forme semi solide', seringue: 'Seringue', autre: 'Forme ?' }
 function zoneLabelLot(l) { return ZONE_LABEL[zoneLot(l)] || '—' }
+const ZONES = [{ key: 'seche', label: 'Forme sèche' }, { key: 'seche_hormonale', label: 'Forme sèche hormonale' }, { key: 'semi', label: 'Forme semi solide' }, { key: 'seringue', label: 'Seringue' }, { key: 'autre', label: 'Forme ?' }]
+function toggleZone(k) { const i = perimSel.value.indexOf(k); if (i >= 0) perimSel.value.splice(i, 1); else perimSel.value.push(k) }
+function zoneSel(k) { return perimSel.value.includes(k) }
+const zonesDispo = computed(() => { const s = new Set(); for (const l of attente.value) s.add(zoneLot(l)); return ZONES.filter(z => s.has(z.key)) })
 const PERIM_TO_ZONE = { 'forme seche': 'seche', 'forme seche hormonale': 'seche_hormonale', 'forme semi solide': 'semi', 'seringue': 'seringue' }
 function perimZone(label) { return PERIM_TO_ZONE[normZ(label)] || null }
 
@@ -529,6 +535,11 @@ async function devalider(l) {
           <button type="button" class="ar-chip ar-dev" :class="{ on: filtreAttente === 'deviation' }" @click="basculerFiltreAttente('deviation')" title="Déviation fabrication déclarée — cliquer pour filtrer">
             <b>{{ repartitionAttente.deviation }}</b> avec déviation</button>
           <span v-if="repartitionAttente.deux" class="ar-note">dont {{ repartitionAttente.deux }} cumulant les deux</span>
+        </div>
+        <div v-if="zonesDispo.length > 1" class="zperim-filter">
+          <span class="zpf-lbl">Périmètre :</span>
+          <label v-for="z in zonesDispo" :key="z.key" class="zpf-chip" :class="{ on: zoneSel(z.key) }"><input type="checkbox" :checked="zoneSel(z.key)" @change="toggleZone(z.key)" />{{ z.label }}</label>
+          <button v-if="perimSel.length" type="button" class="zpf-reset" @click="perimSel = []">Tous</button>
         </div>
         <div class="v3-mid-scroll">
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
@@ -1038,6 +1049,12 @@ tr.ddl-triage .cell-verif { background: #fffbeb; }
 .pool-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
 .pool-title { font-size: 12px; font-weight: 800; color: #6d28d9; text-transform: uppercase; letter-spacing: .03em; }
 .z-auto-note { font-size: 11px; font-weight: 600; color: #94a3b8; }
+.zperim-filter { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 8px 0 4px; }
+.zpf-lbl { font-size: 12px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .03em; }
+.zpf-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 20px; padding: 4px 11px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.zpf-chip input { accent-color: #7c3aed; width: 14px; height: 14px; cursor: pointer; }
+.zpf-chip.on { background: #f5f3ff; border-color: #7c3aed; color: #6d28d9; }
+.zpf-reset { border: 0; background: transparent; color: #7c3aed; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: underline; }
 .zperim { display: inline-block; margin-left: 7px; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 5px; vertical-align: middle; white-space: nowrap; }
 .zperim.z-seche { background: #ecfeff; color: #0e7490; }
 .zperim.z-seche_hormonale { background: #f5f3ff; color: #6d28d9; }
