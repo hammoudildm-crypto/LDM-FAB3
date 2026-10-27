@@ -133,20 +133,29 @@ function dateDDL(l) { return dateFinFab(l) || (l.ddl_verifie ? (l.date_fin_fabri
 function joursAttente(l) { const d = dateDDL(l); if (!d) return null; return Math.floor((Date.now() - new Date(d).getTime()) / 86400000) }
 function dureeAttente(l) { const j = joursAttente(l); if (j == null) return '—'; return j <= 0 ? 'Auj.' : j + ' j' }
 function clsAttente(l) { const j = joursAttente(l); if (j == null) return ''; if (j >= 15) return 'att-bad'; if (j >= 7) return 'att-warn'; return 'att-ok' }
-const produits = computed(() => lots.value.filter(l => {
+// Base complète (filtrée seulement par année) — sert à l'attribution automatique
+// et à la liste des périmètres disponibles, indépendamment des cases cochées.
+const produitsTous = computed(() => lots.value.filter(l => {
   const d = dateDDL(l)
   return d && (anneeSel.value === 0 || anYear(d) === anneeSel.value)
 }))
+// Filtre de périmètre : toute la page (KPIs, graphes, par vérificateur, taux…)
+// suit les cases cochées. Vide = tous les périmètres.
+function zoneOk(l) { return !perimSel.value.length || perimSel.value.includes(zoneLot(l)) }
+const produits = computed(() => produitsTous.value.filter(zoneOk))
 const verifies = computed(() => produits.value.filter(l => l.ddl_verifie))
 // Les DDL déjà réservés à un vérificateur passent devant : ce sont ceux qui sont
 // affectés et donc actionnables. Les non réservés suivent, toujours par n° de lot.
 const parLot = (a, b) => String(a.numero_lot || '').localeCompare(String(b.numero_lot || ''), undefined, { numeric: true })
-const attente = computed(() => produits.value.filter(l => !l.ddl_verifie).sort((a, b) => {
+const triPending = (a, b) => {
   const ra = (a.ddl_verificateur || '').trim() ? 0 : 1
   const rb = (b.ddl_verificateur || '').trim() ? 0 : 1
   if (ra !== rb) return ra - rb
   return parLot(a, b)
-}))
+}
+// Attente filtrée par périmètre (affichage) + attente complète (attribution auto / choix de zone).
+const attente = computed(() => produits.value.filter(l => !l.ddl_verifie).sort(triPending))
+const attenteTous = computed(() => produitsTous.value.filter(l => !l.ddl_verifie).sort(triPending))
 const kpiQualite = computed(() => {
   const subj = produits.value
   const total = subj.length
@@ -190,6 +199,7 @@ const verifParMois = computed(() => {
   const a = Array(12).fill(0)
   for (const l of lots.value) {
     if (!l.ddl_verifie || !l.ddl_date_verification) continue
+    if (!zoneOk(l)) continue
     const d = new Date(l.ddl_date_verification)
     if (anneeSel.value && d.getFullYear() !== anneeSel.value) continue
     a[d.getMonth()]++
@@ -219,10 +229,10 @@ const filtreAttente = ref(null)
 function basculerFiltreAttente(v) { filtreAttente.value = filtreAttente.value === v ? null : v }
 const perimSel = ref([])   // périmètres cochés (vide = tous)
 const attenteFiltree = computed(() => {
-  const f = filtreAttente.value, zs = perimSel.value
+  // attente est déjà filtrée par périmètre ; ne reste que le filtre triage/déviation.
+  const f = filtreAttente.value
+  if (!f) return attente.value
   return attente.value.filter(l => {
-    if (zs.length && !zs.includes(zoneLot(l))) return false
-    if (!f) return true
     const t = enTriageDdl(l), d = enDeviationDdl(l)
     if (f === 'triage') return t
     if (f === 'deviation') return d
@@ -369,7 +379,7 @@ function zoneLabelLot(l) { return ZONE_LABEL[zoneLot(l)] || '—' }
 const ZONES = [{ key: 'seche', label: 'Forme sèche' }, { key: 'seche_hormonale', label: 'Forme sèche hormonale' }, { key: 'semi', label: 'Forme semi solide' }, { key: 'seringue', label: 'Seringue' }, { key: 'autre', label: 'Forme ?' }]
 function toggleZone(k) { const i = perimSel.value.indexOf(k); if (i >= 0) perimSel.value.splice(i, 1); else perimSel.value.push(k) }
 function zoneSel(k) { return perimSel.value.includes(k) }
-const zonesDispo = computed(() => { const s = new Set(); for (const l of attente.value) s.add(zoneLot(l)); return ZONES.filter(z => s.has(z.key)) })
+const zonesDispo = computed(() => { const s = new Set(); for (const l of attenteTous.value) s.add(zoneLot(l)); return ZONES.filter(z => s.has(z.key)) })
 const PERIM_TO_ZONE = { 'forme seche': 'seche', 'forme seche hormonale': 'seche_hormonale', 'forme semi solide': 'semi', 'seringue': 'seringue' }
 function perimZone(label) { return PERIM_TO_ZONE[normZ(label)] || null }
 
@@ -383,7 +393,7 @@ async function repartir(auto = false) {
   for (const v of pool) { const z = perimZone(supPerim.value[v]); if (z) (parPerim[z] = parPerim[z] || []).push(v) }
   // Dossiers à (ré)attribuer : non attribués ; + en mode manuel, ceux dont le vérificateur
   // n'est pas du bon périmètre ALORS qu'un vérificateur de ce périmètre est disponible.
-  const aTraiter = attente.value.filter(l => {
+  const aTraiter = attenteTous.value.filter(l => {
     const cur = (l.ddl_verificateur || '').trim()
     if (!cur) return true
     const z = zoneLot(l)
@@ -393,7 +403,7 @@ async function repartir(auto = false) {
   // Charge actuelle, en excluant les dossiers qu'on va réattribuer
   const ids = new Set(aTraiter.map(l => l.id))
   const charge = {}; for (const v of pool) charge[v] = 0
-  for (const l of attente.value) { if (ids.has(l.id)) continue; const v = (l.ddl_verificateur || '').trim(); if (v in charge) charge[v]++ }
+  for (const l of attenteTous.value) { if (ids.has(l.id)) continue; const v = (l.ddl_verificateur || '').trim(); if (v in charge) charge[v]++ }
   const updates = []
   let horsPerim = 0, reassignes = 0
   for (const l of aTraiter) {
