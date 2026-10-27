@@ -11,8 +11,10 @@ const donneurs = ref([])
 const produits = ref([])
 const ateliers = ref([])
 const equipements = ref([])
+const PERIMETRES = ['Fabrication forme sèche', 'Fabrication forme semi solide', 'Fabrication forme sèche hormonale', 'Apprentissage']
 const supList = ref([])
 const nouveauSup = ref('')
+const nouveauSupPerim = ref('')
 const editSupId = ref(null)
 const editSupNom = ref('')
 const condList = ref([])
@@ -199,7 +201,7 @@ async function chargerTout() {
   if (rE.error) { erreur.value = rE.error.message; return }
   equipements.value = rE.data
 
-  const rS = await supabase.from('superviseurs').select('id, nom, disponible').order('nom')
+  const rS = await supabase.from('superviseurs').select('*').order('nom')
   if (!rS.error) supList.value = rS.data
   const rPo = await supabase.from('postes').select('id, nom').order('nom')
   if (!rPo.error) postesList.value = rPo.data
@@ -286,9 +288,19 @@ async function supprimerPC(c) {
 async function ajouterSup() {
   const nom = nouveauSup.value.trim()
   if (!nom) return
-  const r = await supabase.from('superviseurs').insert({ nom })
+  let r = await supabase.from('superviseurs').insert({ nom, perimetre: nouveauSupPerim.value || null })
+  if (r.error && /perimetre/i.test(r.error.message || '')) {
+    r = await supabase.from('superviseurs').insert({ nom })
+    erreur.value = 'Vérificateur ajouté sans périmètre : la colonne « perimetre » n\'existe pas encore. Exécute : alter table superviseurs add column perimetre text;'
+  }
   if (r.error) { erreur.value = r.error.message; return }
-  nouveauSup.value = ''
+  nouveauSup.value = ''; nouveauSupPerim.value = ''
+  await chargerTout()
+}
+async function changerPerimSup(sv, val) {
+  const r = await supabase.from('superviseurs').update({ perimetre: val || null }).eq('id', sv.id)
+  if (r.error) { erreur.value = /perimetre/i.test(r.error.message || '') ? 'Colonne « perimetre » absente — exécute : alter table superviseurs add column perimetre text;' : r.error.message; return }
+  erreur.value = ''
   await chargerTout()
 }
 function ouvrirEditSup(sv) { editSupId.value = sv.id; editSupNom.value = sv.nom }
@@ -839,6 +851,7 @@ onMounted(async () => {
       <div v-show="ouvert.superviseurs">
         <div class="sv-add" v-if="peutEditer">
           <input v-model="nouveauSup" placeholder="Nom du vérificateur" @keyup.enter="ajouterSup" />
+          <select v-model="nouveauSupPerim" class="sv-perim"><option value="">Périmètre —</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
           <button class="btn" @click="ajouterSup">Ajouter</button>
         </div>
         <div v-if="!supList.length" class="empty">Aucun vérificateur.</div>
@@ -850,6 +863,8 @@ onMounted(async () => {
           </template>
           <template v-else>
             <span class="sv-nom">{{ sv.nom }}</span>
+            <select v-if="peutEditer" class="sv-perim" :value="sv.perimetre || ''" @change="changerPerimSup(sv, $event.target.value)" title="Périmètre du vérificateur"><option value="">Périmètre —</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
+            <span v-else-if="sv.perimetre" class="sv-perim-txt">{{ sv.perimetre }}</span>
             <label v-if="peutEditer" class="sv-dispo" title="Disponible pour la répartition automatique des dossiers de lot"><input type="checkbox" :checked="sv.disponible !== false" @change="toggleDispoSup(sv)" /> Dispo répartition</label>
             <template v-if="peutEditer">
               <button class="link" @click="ouvrirEditSup(sv)">Renommer</button>
@@ -1140,6 +1155,9 @@ button.link.danger { color: #b91c1c; }
 .sv-add input:focus, .sv-edit:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .sv-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid #eef2f6; }
 .sv-nom { flex: 1; font-size: 14px; font-weight: 600; color: #1b2733; }
+.sv-perim { font-size: 12.5px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #1b2733; font-weight: 600; max-width: 240px; }
+.sv-perim:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+.sv-perim-txt { font-size: 12px; color: #6d28d9; font-weight: 700; background: #f5f3ff; border: 1px solid #e9d5ff; border-radius: 7px; padding: 3px 9px; }
 .cad-form { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 9px; align-items: center; }
 .cad-form select, .cad-form input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
 .cad-form select { max-width: 250px; }
