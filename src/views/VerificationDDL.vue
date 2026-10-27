@@ -31,6 +31,8 @@ watch(supSuivis, (v) => { try { localStorage.setItem(CLE_SUP, JSON.stringify(v))
 const filtreSupOuvert = ref(false)
 const nouveauSuperviseur = ref('')
 const supList = ref([])  // superviseurs gérés dans Référentiels (noms)
+const supPerim = ref({}) // nom -> périmètre du vérificateur
+const hormonalParCode = ref({}) // code_pf -> true si produit hormonal
 const planRaw = ref([])  // plan de production (PDP)
 const histRecherche = ref('')
 const histDu = ref('')
@@ -52,15 +54,23 @@ async function fetchAllPaged(make) {
 async function charger() {
   msg.value = ''
   const r = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, en_triage, triage_fin, deviation, date_lancement, date_fin_fabrication, ddl_verifie, ddl_verificateur, ddl_date_verification, ddl_reserve, produits(designation, code_pf, gamme)')
+    .select('id, numero_lot, statut, en_triage, triage_fin, deviation, date_lancement, date_fin_fabrication, ddl_verifie, ddl_verificateur, ddl_date_verification, ddl_reserve, produits(designation, code_pf, gamme, forme)')
     .eq('actif', true)
     .order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (r.error) { msg.value = r.error.message; return }
   lots.value = r.data
   const rp = await fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut').eq('actif', true))
   if (!rp.error) phases.value = rp.data
-  const rs = await supabase.from('superviseurs').select('nom, disponible').order('nom')
-  if (!rs.error) { supList.value = rs.data.map(s => s.nom); supDispo.value = rs.data.filter(s => s.disponible !== false).map(s => s.nom) }
+  const rs = await supabase.from('superviseurs').select('*').order('nom')
+  if (!rs.error) {
+    supList.value = rs.data.map(s => s.nom)
+    supDispo.value = rs.data.filter(s => s.disponible !== false).map(s => s.nom)
+    const pm = {}; for (const s of rs.data) pm[s.nom] = s.perimetre || ''; supPerim.value = pm
+  }
+  const rhm = await supabase.from('produits').select('code_pf, hormonal')
+  const hmm = {}
+  if (!rhm.error && rhm.data) for (const p of rhm.data) if (p.hormonal) hmm[p.code_pf] = true
+  hormonalParCode.value = hmm
   const rpp = await fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(taille_lot)'))
   if (!rpp.error) planRaw.value = rpp.data
   autoRepartir()
@@ -335,6 +345,28 @@ function ouvrir(l) {
   msg.value = ''
 }
 
+// --- Zone / périmètre (déduit de la forme du produit) ---
+const HORMONAUX_KW = ['levothyrox', 'levothyroxine']
+const normZ = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+function zoneForme(forme) {
+  const f = normZ(forme); if (!f) return 'autre'
+  if (/comprim|gelul|sachet|blister/.test(f)) return 'seche'
+  if (/pommade|crem|gel/.test(f)) return 'semi'
+  if (/seringue|injectable/.test(f)) return 'seringue'
+  return 'autre'
+}
+function estHormonal(p) {
+  if (!p) return false
+  if (p.code_pf && hormonalParCode.value[p.code_pf]) return true
+  const s = normZ((p.designation || '') + ' ' + (p.code_pf || ''))
+  return HORMONAUX_KW.some(k => s.includes(k))
+}
+function zoneLot(l) { const p = l.produits || {}; const z = zoneForme(p.forme); return (estHormonal(p) && z === 'seche') ? 'seche_hormonale' : z }
+const PERIM_TO_ZONE = { 'forme seche': 'seche', 'forme seche hormonale': 'seche_hormonale', 'forme semi solide': 'semi', 'seringue': 'seringue' }
+function perimZone(label) { return PERIM_TO_ZONE[normZ(label)] || null }
+
+// Attribution automatique : chaque DDL va à un vérificateur de son périmètre (le moins chargé),
+// avec repli sur l'ensemble des vérificateurs disponibles si aucun ne couvre ce périmètre.
 async function repartir(auto = false) {
   if (!auto) msg.value = ''
   const pool = supDispo.value.slice()
@@ -343,16 +375,23 @@ async function repartir(auto = false) {
   if (!aRepartir.length) { if (!auto) msg.value = 'Aucun dossier en attente à répartir (tous déjà réservés).'; return }
   const charge = {}; for (const v of pool) charge[v] = 0
   for (const l of attente.value) { const v = (l.ddl_verificateur || '').trim(); if (v in charge) charge[v]++ }
+  const parPerim = {}
+  for (const v of pool) { const z = perimZone(supPerim.value[v]); if (z) (parPerim[z] = parPerim[z] || []).push(v) }
   const updates = []
+  let horsPerim = 0
   for (const l of aRepartir) {
-    let best = pool[0]; for (const v of pool) if (charge[v] < charge[best]) best = v
+    const z = zoneLot(l)
+    const couvert = z && parPerim[z] && parPerim[z].length
+    const cands = couvert ? parPerim[z] : pool
+    if (!couvert) horsPerim++
+    let best = cands[0]; for (const v of cands) if (charge[v] < charge[best]) best = v
     charge[best]++; l.ddl_verificateur = best
     updates.push(supabase.from('ordres_fabrication').update({ ddl_verificateur: best }).eq('id', l.id))
   }
   const res = await Promise.all(updates)
   const err = res.find(r => r.error)
   if (err) { msg.value = err.error.message; return }
-  msg.value = aRepartir.length + (auto ? ' nouveau(x) dossier(s) répartis automatiquement.' : ' dossier(s) réparti(s) sur ' + pool.length + ' vérificateur(s).')
+  msg.value = aRepartir.length + ' dossier(s) attribué(s) par périmètre' + (horsPerim ? ' — dont ' + horsPerim + ' sans vérificateur de leur périmètre (répartis sur l\'ensemble)' : '') + (auto ? ' (auto).' : '.')
 }
 async function reserverVerif(l, nom) {
   const r = await supabase.from('ordres_fabrication').update({ ddl_verificateur: nom || null }).eq('id', l.id)
@@ -466,7 +505,10 @@ async function devalider(l) {
       </div>
 
       <section class="card v3-mid z-attente">
-        <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }})</h3>
+        <div class="z-att-head">
+          <h3 class="card-title" style="margin:0">DDL en attente de vérification ({{ nbAttente }})</h3>
+          <button v-if="peutEditer && nbAttente" type="button" class="btn-repartir" @click="repartir(false)" title="Attribuer automatiquement les dossiers non réservés à un vérificateur de leur périmètre (repli sur l'ensemble si aucun ne couvre le périmètre)">⚖ Répartir par périmètre</button>
+        </div>
         <div class="att-rep">
           <button type="button" class="ar-chip ar-ok" :class="{ on: filtreAttente === 'propres' }" @click="basculerFiltreAttente('propres')" title="Ni triage en cours, ni déviation — cliquer pour filtrer">
             <b>{{ repartitionAttente.propres }}</b> sans triage ni déviation</button>
@@ -983,6 +1025,7 @@ tr.ddl-triage .cell-verif { background: #fffbeb; }
 .pool-box { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
 .pool-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
 .pool-title { font-size: 12px; font-weight: 800; color: #6d28d9; text-transform: uppercase; letter-spacing: .03em; }
+.z-att-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .btn-repartir { background: #7c3aed; color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .btn-repartir:hover:not(:disabled) { background: #6d28d9; }
 .btn-repartir:disabled { opacity: .5; cursor: not-allowed; }
