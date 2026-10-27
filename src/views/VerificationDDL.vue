@@ -457,6 +457,12 @@ async function devalider(l) {
 
     <p v-if="msg" class="alert">{{ msg }}</p>
 
+    <div v-if="zonesDispo.length > 1" class="zperim-filter zperim-filter-top" title="Filtrer les dossiers par périmètre (plusieurs choix possibles)">
+      <span class="zpf-lbl">Périmètre :</span>
+      <label v-for="z in zonesDispo" :key="z.key" class="zpf-chip" :class="{ on: zoneSel(z.key) }"><input type="checkbox" :checked="zoneSel(z.key)" @change="toggleZone(z.key)" />{{ z.label }}</label>
+      <button v-if="perimSel.length" type="button" class="zpf-reset" @click="perimSel = []">Tous</button>
+    </div>
+
     <section class="card plan-ddl plan-ddl-top">
       <h3 class="card-title">Plan de vérification DDL<span v-if="anneeSel"> — {{ anneeSel }}</span> <span class="pddl-src">· basé sur le PDP</span></h3>
       <div class="pddl-top-row">
@@ -535,11 +541,6 @@ async function devalider(l) {
           <button type="button" class="ar-chip ar-dev" :class="{ on: filtreAttente === 'deviation' }" @click="basculerFiltreAttente('deviation')" title="Déviation fabrication déclarée — cliquer pour filtrer">
             <b>{{ repartitionAttente.deviation }}</b> avec déviation</button>
           <span v-if="repartitionAttente.deux" class="ar-note">dont {{ repartitionAttente.deux }} cumulant les deux</span>
-        </div>
-        <div v-if="zonesDispo.length > 1" class="zperim-filter">
-          <span class="zpf-lbl">Périmètre :</span>
-          <label v-for="z in zonesDispo" :key="z.key" class="zpf-chip" :class="{ on: zoneSel(z.key) }"><input type="checkbox" :checked="zoneSel(z.key)" @change="toggleZone(z.key)" />{{ z.label }}</label>
-          <button v-if="perimSel.length" type="button" class="zpf-reset" @click="perimSel = []">Tous</button>
         </div>
         <div class="v3-mid-scroll">
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
@@ -1050,6 +1051,7 @@ tr.ddl-triage .cell-verif { background: #fffbeb; }
 .pool-title { font-size: 12px; font-weight: 800; color: #6d28d9; text-transform: uppercase; letter-spacing: .03em; }
 .z-auto-note { font-size: 11px; font-weight: 600; color: #94a3b8; }
 .zperim-filter { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 8px 0 4px; }
+.zperim-filter-top { margin: 2px 0 16px; }
 .zpf-lbl { font-size: 12px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .03em; }
 .zpf-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 20px; padding: 4px 11px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .zpf-chip input { accent-color: #7c3aed; width: 14px; height: 14px; cursor: pointer; }
