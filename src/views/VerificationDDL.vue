@@ -362,6 +362,8 @@ function estHormonal(p) {
   return HORMONAUX_KW.some(k => s.includes(k))
 }
 function zoneLot(l) { const p = l.produits || {}; const z = zoneForme(p.forme); return (estHormonal(p) && z === 'seche') ? 'seche_hormonale' : z }
+const ZONE_LABEL = { seche: 'Forme sèche', seche_hormonale: 'Forme sèche hormonale', semi: 'Forme semi solide', seringue: 'Seringue', autre: 'Forme ?' }
+function zoneLabelLot(l) { return ZONE_LABEL[zoneLot(l)] || '—' }
 const PERIM_TO_ZONE = { 'forme seche': 'seche', 'forme seche hormonale': 'seche_hormonale', 'forme semi solide': 'semi', 'seringue': 'seringue' }
 function perimZone(label) { return PERIM_TO_ZONE[normZ(label)] || null }
 
@@ -378,7 +380,6 @@ async function repartir(auto = false) {
   const aTraiter = attente.value.filter(l => {
     const cur = (l.ddl_verificateur || '').trim()
     if (!cur) return true
-    if (auto) return false
     const z = zoneLot(l)
     return !!(z && parPerim[z] && parPerim[z].length && perimZone(supPerim.value[cur]) !== z)
   })
@@ -519,10 +520,7 @@ async function devalider(l) {
       </div>
 
       <section class="card v3-mid z-attente">
-        <div class="z-att-head">
-          <h3 class="card-title" style="margin:0">DDL en attente de vérification ({{ nbAttente }})</h3>
-          <button v-if="peutEditer && nbAttente" type="button" class="btn-repartir" @click="repartir(false)" title="Attribuer automatiquement les dossiers non réservés à un vérificateur de leur périmètre (repli sur l'ensemble si aucun ne couvre le périmètre)">⚖ Répartir par périmètre</button>
-        </div>
+        <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }}) <span class="z-auto-note">· attribution par périmètre automatique</span></h3>
         <div class="att-rep">
           <button type="button" class="ar-chip ar-ok" :class="{ on: filtreAttente === 'propres' }" @click="basculerFiltreAttente('propres')" title="Ni triage en cours, ni déviation — cliquer pour filtrer">
             <b>{{ repartitionAttente.propres }}</b> sans triage ni déviation</button>
@@ -542,7 +540,7 @@ async function devalider(l) {
               <tr :class="{ 'ddl-triage': triageIds.has(l.id), 'ddl-deviation': enDeviationDdl(l) }">
                 <td class="cell-verif"><button v-if="peutEditer" class="btn-verif" @click="ouvrir(l)">Vérifier</button></td>
                 <td class="mono">{{ l.numero_lot }}</td>
-                <td class="desig">{{ prodNom(l) }}</td>
+                <td class="desig">{{ prodNom(l) }}<span class="zperim" :class="'z-' + zoneLot(l)" :title="'Périmètre détecté : ' + zoneLabelLot(l)">{{ zoneLabelLot(l) }}</span></td>
                 <td>
                   <select v-if="peutEditer" class="resv-sel" :value="l.ddl_verificateur || ''" @change="reserverVerif(l, $event.target.value)">
                     <option value="">— Réserver —</option>
@@ -1039,7 +1037,13 @@ tr.ddl-triage .cell-verif { background: #fffbeb; }
 .pool-box { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
 .pool-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
 .pool-title { font-size: 12px; font-weight: 800; color: #6d28d9; text-transform: uppercase; letter-spacing: .03em; }
-.z-att-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.z-auto-note { font-size: 11px; font-weight: 600; color: #94a3b8; }
+.zperim { display: inline-block; margin-left: 7px; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 5px; vertical-align: middle; white-space: nowrap; }
+.zperim.z-seche { background: #ecfeff; color: #0e7490; }
+.zperim.z-seche_hormonale { background: #f5f3ff; color: #6d28d9; }
+.zperim.z-semi { background: #fff7ed; color: #c2410c; }
+.zperim.z-seringue { background: #f0fdf4; color: #15803d; }
+.zperim.z-autre { background: #fef2f2; color: #b91c1c; }
 .btn-repartir { background: #7c3aed; color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .btn-repartir:hover:not(:disabled) { background: #6d28d9; }
 .btn-repartir:disabled { opacity: .5; cursor: not-allowed; }
