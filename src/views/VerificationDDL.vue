@@ -371,27 +371,41 @@ async function repartir(auto = false) {
   if (!auto) msg.value = ''
   const pool = supDispo.value.slice()
   if (!pool.length) { if (!auto) msg.value = 'Aucun vérificateur disponible — active-les dans Référentiels → Vérificateurs.'; return }
-  const aRepartir = attente.value.filter(l => !(l.ddl_verificateur || '').trim())
-  if (!aRepartir.length) { if (!auto) msg.value = 'Aucun dossier en attente à répartir (tous déjà réservés).'; return }
-  const charge = {}; for (const v of pool) charge[v] = 0
-  for (const l of attente.value) { const v = (l.ddl_verificateur || '').trim(); if (v in charge) charge[v]++ }
   const parPerim = {}
   for (const v of pool) { const z = perimZone(supPerim.value[v]); if (z) (parPerim[z] = parPerim[z] || []).push(v) }
+  // Dossiers à (ré)attribuer : non attribués ; + en mode manuel, ceux dont le vérificateur
+  // n'est pas du bon périmètre ALORS qu'un vérificateur de ce périmètre est disponible.
+  const aTraiter = attente.value.filter(l => {
+    const cur = (l.ddl_verificateur || '').trim()
+    if (!cur) return true
+    if (auto) return false
+    const z = zoneLot(l)
+    return !!(z && parPerim[z] && parPerim[z].length && perimZone(supPerim.value[cur]) !== z)
+  })
+  if (!aTraiter.length) { if (!auto) msg.value = 'Attributions déjà conformes au périmètre (rien à changer).'; return }
+  // Charge actuelle, en excluant les dossiers qu'on va réattribuer
+  const ids = new Set(aTraiter.map(l => l.id))
+  const charge = {}; for (const v of pool) charge[v] = 0
+  for (const l of attente.value) { if (ids.has(l.id)) continue; const v = (l.ddl_verificateur || '').trim(); if (v in charge) charge[v]++ }
   const updates = []
-  let horsPerim = 0
-  for (const l of aRepartir) {
+  let horsPerim = 0, reassignes = 0
+  for (const l of aTraiter) {
     const z = zoneLot(l)
     const couvert = z && parPerim[z] && parPerim[z].length
     const cands = couvert ? parPerim[z] : pool
     if (!couvert) horsPerim++
     let best = cands[0]; for (const v of cands) if (charge[v] < charge[best]) best = v
+    if ((l.ddl_verificateur || '').trim()) reassignes++
     charge[best]++; l.ddl_verificateur = best
     updates.push(supabase.from('ordres_fabrication').update({ ddl_verificateur: best }).eq('id', l.id))
   }
   const res = await Promise.all(updates)
   const err = res.find(r => r.error)
   if (err) { msg.value = err.error.message; return }
-  msg.value = aRepartir.length + ' dossier(s) attribué(s) par périmètre' + (horsPerim ? ' — dont ' + horsPerim + ' sans vérificateur de leur périmètre (répartis sur l\'ensemble)' : '') + (auto ? ' (auto).' : '.')
+  msg.value = aTraiter.length + ' dossier(s) attribué(s) par périmètre'
+    + (reassignes ? ' (dont ' + reassignes + ' ré-attribué(s) au bon périmètre)' : '')
+    + (horsPerim ? ' — ' + horsPerim + ' sans vérificateur de leur périmètre (sur l\'ensemble)' : '')
+    + (auto ? ' (auto).' : '.')
 }
 async function reserverVerif(l, nom) {
   const r = await supabase.from('ordres_fabrication').update({ ddl_verificateur: nom || null }).eq('id', l.id)
