@@ -111,13 +111,29 @@ async function enregistrer() {
   if (!form.personne_id) { erreur.value = 'Choisis une personne.'; return }
   if (!form.formation_id) { erreur.value = 'Choisis une formation.'; return }
   if (!form.date_formation) { erreur.value = 'La date est requise.'; return }
-  const payload = { personne_id: Number(form.personne_id), formation_id: Number(form.formation_id), date_formation: form.date_formation, formateur: form.formateur || null, resultat: form.resultat }
-  let r
-  if (form.id) r = await supabase.from('formation_enregistrements').update(payload).eq('id', form.id)
-  else r = await supabase.from('formation_enregistrements').insert(payload)
-  if (r.error) { erreur.value = r.error.message; return }
-  message.value = form.id ? 'Enregistrement mis à jour.' : 'Enregistrement ajouté.'
-  reset(); await charger()
+  const pid = Number(form.personne_id), fid = Number(form.formation_id)
+  if (!Number.isFinite(pid) || !Number.isFinite(fid)) { erreur.value = 'Personne ou formation invalide (identifiant non numérique).'; return }
+  const payload = { personne_id: pid, formation_id: fid, date_formation: form.date_formation, formateur: form.formateur || null, resultat: form.resultat }
+  try {
+    let r
+    if (form.id) r = await supabase.from('formation_enregistrements').update(payload).eq('id', form.id).select()
+    else r = await supabase.from('formation_enregistrements').insert(payload).select()
+    if (r.error) {
+      const e = r.error
+      erreur.value = (e.message || e.details || e.hint || 'Enregistrement refusé par la base') + (e.code ? ' [' + e.code + ']' : '')
+      console.error('formation_enregistrements — échec enregistrement :', e)
+      return
+    }
+    if (!r.data || !r.data.length) {
+      erreur.value = 'La base n\'a rien renvoyé après l\'enregistrement (droits de lecture/écriture à vérifier).'
+      return
+    }
+    message.value = form.id ? 'Enregistrement mis à jour.' : 'Enregistrement ajouté.'
+    reset(); await charger()
+  } catch (ex) {
+    erreur.value = 'Échec de l\'enregistrement : ' + (ex && ex.message ? ex.message : String(ex))
+    console.error('formation_enregistrements — exception :', ex)
+  }
 }
 function modifier(e) { Object.assign(form, { id: e.id, personne_id: String(e.personne_id), formation_id: String(e.formation_id), date_formation: e.date_formation, formateur: e.formateur || '', resultat: e.resultat || 'acquis' }) }
 async function supprimer(e) {
