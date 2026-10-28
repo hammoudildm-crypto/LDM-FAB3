@@ -25,6 +25,7 @@
       <div class="card-head">
         <h2 class="card-title">Enregistrements</h2>
         <span class="count">{{ enrFiltres.length }}</span>
+        <button v-if="peutSupprimer && doublons.length" class="btn ghost" type="button" @click.prevent="nettoyerDoublons" title="Conserver la fiche la plus récente par personne et formation, supprimer les autres">🧹 Nettoyer {{ doublons.length }} doublon(s)</button>
         <select v-model="filtrePersonne" class="filtre" style="margin-left:auto"><option value="">Toutes les personnes</option><option v-for="p in personnes" :key="p.id" :value="String(p.id)">{{ p.nom }}</option></select>
       </div>
       <div v-if="!enrFiltres.length" class="empty-card">Aucun enregistrement. Ajoute une formation suivie ci-dessus.</div>
@@ -115,6 +116,29 @@ const enrEnrichis = computed(() => enregistrements.value.map(e => {
   }
 }))
 const enrFiltres = computed(() => filtrePersonne.value ? enrEnrichis.value.filter(e => String(e.personne_id) === filtrePersonne.value) : enrEnrichis.value)
+// Doublons = fiches en trop pour un même couple (personne, formation).
+// On garde la plus récente (date, puis id le plus grand) ; les autres sont à supprimer.
+const doublons = computed(() => {
+  const groups = {}
+  for (const e of enregistrements.value) { const k = e.personne_id + '|' + e.formation_id; (groups[k] = groups[k] || []).push(e) }
+  const extra = []
+  for (const k in groups) {
+    const g = groups[k]; if (g.length < 2) continue
+    g.sort((a, b) => String(b.date_formation || '').localeCompare(String(a.date_formation || '')) || (Number(b.id) - Number(a.id)))
+    extra.push(...g.slice(1))
+  }
+  return extra
+})
+async function nettoyerDoublons() {
+  const list = doublons.value
+  if (!list.length) return
+  if (!confirm('Supprimer ' + list.length + ' doublon(s) ?\nPour chaque personne et formation, seule la fiche la plus récente est conservée.')) return
+  erreur.value = ''; message.value = ''
+  const r = await supabase.from('formation_enregistrements').delete().in('id', list.map(e => e.id))
+  if (r.error) { erreur.value = r.error.message; return }
+  message.value = list.length + ' doublon(s) supprimé(s).'
+  await charger()
+}
 
 function statutTxt(e) { if (e.resultat === 'non acquis') return '✗ Non acquis'; if (e.statut === 'valide') return '✓ Valide'; if (e.statut === 'bientot') return '⚠ Expire bientôt'; if (e.statut === 'expire') return '✗ Expiré'; return 'Permanent' }
 
