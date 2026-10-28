@@ -10,6 +10,7 @@
       <div class="card-head">
         <h2 class="card-title">Formations</h2>
         <span class="count">{{ formations.length }}</span>
+        <button v-if="peutSupprimer && doublons.length" class="btn ghost" type="button" @click.prevent="nettoyerDoublons" title="Fusionner les formations en double : repointe les enregistrements et exigences vers la fiche conservée, puis retire le doublon">🧹 Fusionner {{ doublons.length }} doublon(s)</button>
         <input v-model="recherche" class="ref-search" placeholder="🔍 Rechercher une formation" style="margin-left:auto" />
         <button v-if="peutEditer && !formations.length" class="btn" style="margin-left:auto" @click="chargerStandard">Charger le référentiel standard</button>
       </div>
@@ -91,6 +92,44 @@ const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\
 const formationsVues = computed(() => { const q = normR(recherche.value).trim(); if (!q) return formations.value; return formations.value.filter(f => normR(f.nom).includes(q) || normR(f.categorie).includes(q) || normR(f.code_sop).includes(q)) })
 const categories = computed(() => [...new Set(formationsVues.value.map(f => f.categorie || ''))].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : (catIndex(a) - catIndex(b)) || a.localeCompare(b))))
 function formationsDe(cat) { return formationsVues.value.filter(f => (f.categorie || '') === cat).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
+
+// Doublons du référentiel = formations de même nom (normalisé). On conserve la
+// fiche la plus complète (code SOP renseigné, puis ordre/id) ; les autres sont
+// fusionnées : enregistrements et exigences repointés vers la fiche gardée.
+const doublons = computed(() => {
+  const groups = {}
+  for (const f of formations.value) { const k = normR(f.nom); if (!k) continue; (groups[k] = groups[k] || []).push(f) }
+  const pairs = []
+  for (const k in groups) {
+    const g = groups[k]; if (g.length < 2) continue
+    g.sort((a, b) => ((b.code_sop ? 1 : 0) - (a.code_sop ? 1 : 0)) || ((a.ordre || 0) - (b.ordre || 0)) || (a.id - b.id))
+    for (let i = 1; i < g.length; i++) pairs.push({ dup: g[i], keep: g[0] })
+  }
+  return pairs
+})
+async function nettoyerDoublons() {
+  const list = doublons.value
+  if (!list.length) return
+  if (!confirm('Fusionner ' + list.length + ' formation(s) en double ?\nLes enregistrements et exigences liés seront repointés vers la fiche conservée, puis le doublon sera retiré.')) return
+  erreur.value = ''; message.value = ''
+  try {
+    for (const { dup, keep } of list) {
+      let r = await supabase.from('formation_enregistrements').update({ formation_id: keep.id }).eq('formation_id', dup.id)
+      if (r.error) throw r.error
+      r = await supabase.from('formation_requise').update({ formation_id: keep.id }).eq('formation_id', dup.id)
+      if (r.error) { // exigence déjà présente sur la fiche gardée (conflit) → on retire celle du doublon
+        const rd = await supabase.from('formation_requise').delete().eq('formation_id', dup.id)
+        if (rd.error) throw rd.error
+      }
+      r = await supabase.from('formations').update({ actif: false }).eq('id', dup.id)
+      if (r.error) throw r.error
+    }
+    message.value = list.length + ' doublon(s) fusionné(s) et retiré(s). Si des fiches identiques apparaissent, lance « Nettoyer les doublons » sur la page Enregistrements.'
+    await charger()
+  } catch (ex) {
+    erreur.value = 'Échec du nettoyage : ' + (ex && ex.message ? ex.message : String(ex))
+  }
+}
 
 async function enregistrer() {
   erreur.value = ''; message.value = ''
