@@ -176,11 +176,11 @@
       <h3 class="sec-titre">Taux par formation</h3>
       <div v-if="!tauxParFormation.length" class="empty-sm">Aucune formation requise.</div>
       <table v-else class="form-tbl">
-        <thead><tr><th>Formation</th><th>Code SOP</th><th class="r">Validées / Requises</th><th class="tx">Taux</th></tr></thead>
+        <thead><tr><th>Formation</th><th style="white-space:nowrap">Code SOP</th><th class="r">Validées / Requises</th><th class="tx">Taux</th></tr></thead>
         <tbody>
           <tr v-for="f in tauxParFormation" :key="f.id">
             <td class="nom">{{ f.nom }}</td>
-            <td><span v-if="f.code_sop" class="sop">{{ f.code_sop }}</span><span v-else class="pp-z">—</span></td>
+            <td style="white-space:nowrap"><span v-if="f.code_sop" class="sop">{{ f.code_sop }}</span><span v-else class="pp-z">—</span></td>
             <td class="r">{{ f.val }} / {{ f.req }}</td>
             <td class="tx"><div class="bar"><div class="bar-fill" :class="barCls(f.taux)" :style="{ width: f.taux + '%' }"></div><span class="bar-txt">{{ f.taux.toFixed(0) }}%</span></div></td>
           </tr>
