@@ -117,8 +117,14 @@ const enrEnrichis = computed(() => enregistrements.value.map(e => {
   }
 }))
 const enrFiltres = computed(() => filtrePersonne.value ? enrEnrichis.value.filter(e => String(e.personne_id) === filtrePersonne.value) : enrEnrichis.value)
-// Formateurs déjà saisis : proposés en liste déroulante pour éviter de retaper (et mal orthographier) le même nom.
-const formateursDispo = computed(() => [...new Set(enregistrements.value.map(e => (e.formateur || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)))
+// Formateurs proposés = personnel de la page Effectifs (table organigramme),
+// complété des formateurs déjà saisis (pour ne pas perdre d'historique).
+const formateursDispo = computed(() => {
+  const s = new Set()
+  for (const p of personnes.value) { const n = (p.nom || '').trim(); if (n) s.add(n) }
+  for (const e of enregistrements.value) { const v = (e.formateur || '').trim(); if (v) s.add(v) }
+  return [...s].sort((a, b) => a.localeCompare(b))
+})
 // Doublons = fiches en trop pour un même couple (personne, formation).
 // On garde la plus récente (date, puis id le plus grand) ; les autres sont à supprimer.
 const doublons = computed(() => {
