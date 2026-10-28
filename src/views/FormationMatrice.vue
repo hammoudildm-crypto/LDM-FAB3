@@ -5,6 +5,9 @@
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
 
+    <p style="font-family:monospace;font-size:12px;background:#fef9c3;border:1px solid #eab308;border-radius:6px;padding:6px 10px;margin:6px 0;white-space:pre-wrap">DIAG · {{ enregistrements.length }} enregistrement(s) chargé(s) · {{ personnes.length }} personnes · {{ formations.length }} formations · {{ requises.length }} exigence(s) · cases reconnues: {{ Object.keys(latestByKey).length }}
+1er enreg → personne_id={{ enregistrements[0] ? enregistrements[0].personne_id : '∅' }} ({{ enregistrements[0] && personneById[enregistrements[0].personne_id] ? '✓ '+personneById[enregistrements[0].personne_id].nom : '✗ inconnu' }}) · formation_id={{ enregistrements[0] ? enregistrements[0].formation_id : '∅' }} ({{ enregistrements[0] && formationById[enregistrements[0].formation_id] ? '✓ '+formationById[enregistrements[0].formation_id].nom : '✗ inconnue' }}) · type ids: pers {{ enregistrements[0] ? typeof enregistrements[0].personne_id : '-' }} / org {{ personnes[0] ? typeof personnes[0].id : '-' }}</p>
+
     <div v-if="nbExpire || nbBientot" class="alerte-ech" :class="{ crit: nbExpire }">
       <span v-if="nbExpire">✗ <b>{{ nbExpire }}</b> qualification(s) expirée(s) ou non acquise(s)</span>
       <span v-if="nbExpire && nbBientot" class="sep">·</span>
