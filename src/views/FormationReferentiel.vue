@@ -28,6 +28,8 @@
         </div>
       </div>
 
+      <p v-if="formationSimilaire && !form.id" style="margin:6px 0 0;color:#b45309;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:7px 11px;font-size:13px">⚠ Une formation très proche existe déjà : « {{ formationSimilaire.nom }} »<span v-if="formationSimilaire.code_sop"> · {{ formationSimilaire.code_sop }}</span>. Modifie-la (✎) plutôt que d'ajouter un doublon.</p>
+
       <div v-if="!formations.length" class="empty-card">Aucune formation. Clique « Charger le référentiel standard » ci-dessus, ou ajoute-les une par une.</div>
 
       <div v-for="cat in categories" :key="cat || '—'" class="form-cat">
@@ -89,6 +91,14 @@ onMounted(charger)
 
 const catIndex = (c) => { const i = CATS.indexOf(c); return i >= 0 ? i : 999 }
 const normR = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+// Cl\u00e9 de comparaison tol\u00e9rante (casse, accents, espaces multiples et ponctuation ignor\u00e9s)
+const dupeKey = (t) => normR(t).replace(/[^a-z0-9]+/g, ' ').trim()
+// Formation d\u00e9j\u00e0 pr\u00e9sente ressemblant \u00e0 celle en cours de saisie (pour l'avertissement en direct)
+const formationSimilaire = computed(() => {
+  const k = dupeKey(form.nom)
+  if (!k) return null
+  return formations.value.find(f => dupeKey(f.nom) === k && f.id !== form.id) || null
+})
 const formationsVues = computed(() => { const q = normR(recherche.value).trim(); if (!q) return formations.value; return formations.value.filter(f => normR(f.nom).includes(q) || normR(f.categorie).includes(q) || normR(f.code_sop).includes(q)) })
 const categories = computed(() => [...new Set(formationsVues.value.map(f => f.categorie || ''))].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : (catIndex(a) - catIndex(b)) || a.localeCompare(b))))
 function formationsDe(cat) { return formationsVues.value.filter(f => (f.categorie || '') === cat).sort((a, b) => (a.ordre || 0) - (b.ordre || 0) || a.id - b.id) }
@@ -134,10 +144,9 @@ async function nettoyerDoublons() {
 async function enregistrer() {
   erreur.value = ''; message.value = ''
   if (!form.nom.trim()) { erreur.value = 'Le nom de la formation est requis.'; return }
-  // Anti-doublon : une procédure/formation déjà enregistrée sous le même nom
-  const nomNorm = normR(form.nom.trim())
-  const doublon = formations.value.find(f => normR(f.nom) === nomNorm && f.id !== form.id)
-  if (doublon) { erreur.value = 'Cette formation existe déjà : « ' + doublon.nom + ' ». Aucun doublon n\'a été enregistré.'; return }
+  // Anti-doublon robuste : même nom à la casse, aux accents, espaces et ponctuation près
+  const doublon = formations.value.find(f => dupeKey(f.nom) === dupeKey(form.nom) && f.id !== form.id)
+  if (doublon) { erreur.value = 'Cette formation existe déjà : « ' + doublon.nom + ' ». Aucun doublon n\'a été enregistré — modifie la fiche existante si besoin.'; return }
   const payload = { nom: form.nom.trim(), categorie: form.categorie || null, validite_mois: (form.validite_mois === '' || form.validite_mois == null) ? null : Number(form.validite_mois), code_sop: (form.code_sop || '').trim() || null }
   const envoyer = (pl) => form.id
     ? supabase.from('formations').update(pl).eq('id', form.id)
