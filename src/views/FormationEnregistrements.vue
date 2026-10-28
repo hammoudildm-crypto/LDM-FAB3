@@ -125,6 +125,16 @@ async function enregistrer() {
   if (!form.date_formation) { erreur.value = 'La date est requise.'; return }
   const pid = Number(form.personne_id), fid = Number(form.formation_id)
   if (!Number.isFinite(pid) || !Number.isFinite(fid)) { erreur.value = 'Personne ou formation invalide (identifiant non numérique).'; return }
+  // Anti-doublon : une seule fiche par (personne, formation). Si elle existe déjà,
+  // on bascule en modification de la fiche existante au lieu d'en créer une seconde.
+  const doublon = enregistrements.value.find(e => Number(e.personne_id) === pid && Number(e.formation_id) === fid && e.id !== form.id)
+  if (doublon) {
+    const pnom = (personneById.value[pid] || {}).nom || 'cette personne'
+    const fnom = (formationById.value[fid] || {}).nom || 'cette formation'
+    form.id = doublon.id
+    erreur.value = '« ' + fnom + ' » est déjà enregistrée pour ' + pnom + '. La fiche existante est ouverte — ajuste la date ou le résultat puis clique « Mettre à jour » (aucun doublon n’est créé).'
+    return
+  }
   const payload = { personne_id: pid, formation_id: fid, date_formation: form.date_formation, formateur: form.formateur || null, resultat: form.resultat }
   try {
     let r
