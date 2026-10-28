@@ -39,7 +39,7 @@
             <td style="white-space:nowrap">{{ e.date_formation }}</td>
             <td>{{ e.formateur || '—' }}</td>
             <td><span :class="e.resultat === 'acquis' ? 'c-ok' : 'c-ko'">{{ e.resultat === 'acquis' ? '✓ Acquis' : '✗ Non acquis' }}</span></td>
-            <td>{{ e.expiration || 'Permanent' }}</td>
+            <td style="white-space:nowrap">{{ e.expiration || 'Permanent' }}</td>
             <td><span class="etat" :class="'e-' + e.statut">{{ statutTxt(e) }}</span></td>
             <td v-if="peutEditer" class="act"><button type="button" @click.prevent="modifier(e)" title="Modifier">✎</button><button v-if="peutSupprimer" type="button" @click.prevent="supprimer(e)" title="Supprimer">🗑</button></td>
           </tr>
