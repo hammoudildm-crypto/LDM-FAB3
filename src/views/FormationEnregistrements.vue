@@ -15,7 +15,8 @@
         <input v-model="rechercheSop" class="s-in" placeholder="🔍 Code SOP" />
         <select v-model="form.formation_id" class="grow"><option value="">Formation —</option><option v-for="f in formationsFiltrees" :key="f.id" :value="String(f.id)">{{ f.nom }}{{ f.code_sop ? ' · ' + f.code_sop : '' }}</option></select>
         <input type="date" v-model="form.date_formation" />
-        <input v-model="form.formateur" placeholder="Formateur" class="c" />
+        <input v-model="form.formateur" placeholder="Formateur" class="c" list="liste-formateurs" autocomplete="off" />
+        <datalist id="liste-formateurs"><option v-for="f in formateursDispo" :key="f" :value="f" /></datalist>
         <select v-model="form.resultat" class="res"><option value="acquis">Acquis</option><option value="non acquis">Non acquis</option></select>
         <div class="acts"><button class="btn" type="button" @click.prevent="enregistrer">{{ form.id ? 'Mettre à jour' : 'Ajouter' }}</button><button v-if="form.id" class="btn ghost" type="button" @click.prevent="reset">Annuler</button></div>
       </div>
@@ -116,6 +117,8 @@ const enrEnrichis = computed(() => enregistrements.value.map(e => {
   }
 }))
 const enrFiltres = computed(() => filtrePersonne.value ? enrEnrichis.value.filter(e => String(e.personne_id) === filtrePersonne.value) : enrEnrichis.value)
+// Formateurs déjà saisis : proposés en liste déroulante pour éviter de retaper (et mal orthographier) le même nom.
+const formateursDispo = computed(() => [...new Set(enregistrements.value.map(e => (e.formateur || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)))
 // Doublons = fiches en trop pour un même couple (personne, formation).
 // On garde la plus récente (date, puis id le plus grand) ; les autres sont à supprimer.
 const doublons = computed(() => {
