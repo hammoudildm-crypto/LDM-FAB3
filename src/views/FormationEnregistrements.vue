@@ -17,7 +17,7 @@
         <input type="date" v-model="form.date_formation" />
         <input v-model="form.formateur" placeholder="Formateur" class="c" />
         <select v-model="form.resultat" class="res"><option value="acquis">Acquis</option><option value="non acquis">Non acquis</option></select>
-        <div class="acts"><button class="btn" @click="enregistrer">{{ form.id ? 'Mettre à jour' : 'Ajouter' }}</button><button v-if="form.id" class="btn ghost" @click="reset">Annuler</button></div>
+        <div class="acts"><button class="btn" type="button" @click.prevent="enregistrer">{{ form.id ? 'Mettre à jour' : 'Ajouter' }}</button><button v-if="form.id" class="btn ghost" type="button" @click.prevent="reset">Annuler</button></div>
       </div>
     </section>
 
@@ -39,7 +39,7 @@
             <td><span :class="e.resultat === 'acquis' ? 'c-ok' : 'c-ko'">{{ e.resultat === 'acquis' ? '✓ Acquis' : '✗ Non acquis' }}</span></td>
             <td>{{ e.expiration || 'Permanent' }}</td>
             <td><span class="etat" :class="'e-' + e.statut">{{ statutTxt(e) }}</span></td>
-            <td v-if="peutEditer" class="act"><button @click="modifier(e)" title="Modifier">✎</button><button v-if="peutSupprimer" @click="supprimer(e)" title="Supprimer">🗑</button></td>
+            <td v-if="peutEditer" class="act"><button type="button" @click.prevent="modifier(e)" title="Modifier">✎</button><button v-if="peutSupprimer" type="button" @click.prevent="supprimer(e)" title="Supprimer">🗑</button></td>
           </tr>
         </tbody>
       </table>
@@ -90,17 +90,29 @@ const formationsFiltrees = computed(() => {
 })
 const formationById = computed(() => { const m = {}; for (const f of formations.value) m[f.id] = f; return m })
 
-function addMonths(dateStr, m) { const d = new Date(dateStr + 'T00:00:00'); d.setMonth(d.getMonth() + m); return d.toISOString().slice(0, 10) }
+function addMonths(dateStr, m) {
+  if (!dateStr) return null
+  const d = new Date(String(dateStr).slice(0, 10) + 'T00:00:00')
+  if (isNaN(d.getTime())) return null
+  d.setMonth(d.getMonth() + m)
+  return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
+}
 const today = new Date().toISOString().slice(0, 10)
 const dans60 = (() => { const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() + 60); return d.toISOString().slice(0, 10) })()
 
 const enrEnrichis = computed(() => enregistrements.value.map(e => {
-  const p = personneById.value[e.personne_id]
-  const f = formationById.value[e.formation_id]
-  const exp = (f && f.validite_mois && e.date_formation) ? addMonths(e.date_formation, f.validite_mois) : null
-  let statut = 'permanent'
-  if (exp) statut = exp < today ? 'expire' : (exp <= dans60 ? 'bientot' : 'valide')
-  return { ...e, personneNom: p ? p.nom : '(personne supprimée)', formationNom: f ? f.nom : '(formation supprimée)', codeSop: f ? (f.code_sop || '') : '', expiration: exp, statut }
+  try {
+    const p = personneById.value[e.personne_id]
+    const f = formationById.value[e.formation_id]
+    const dateStr = e.date_formation ? String(e.date_formation).slice(0, 10) : ''
+    const exp = (f && f.validite_mois && dateStr) ? addMonths(dateStr, f.validite_mois) : null
+    let statut = 'permanent'
+    if (exp) statut = exp < today ? 'expire' : (exp <= dans60 ? 'bientot' : 'valide')
+    return { ...e, date_formation: dateStr || e.date_formation, personneNom: p ? p.nom : '(personne supprimée)', formationNom: f ? f.nom : '(formation supprimée)', codeSop: f ? (f.code_sop || '') : '', expiration: exp, statut }
+  } catch (ex) {
+    console.error('enrEnrichis — ligne ignorée :', e, ex)
+    return { ...e, personneNom: '(donnée illisible)', formationNom: '—', codeSop: '', expiration: null, statut: 'permanent' }
+  }
 }))
 const enrFiltres = computed(() => filtrePersonne.value ? enrEnrichis.value.filter(e => String(e.personne_id) === filtrePersonne.value) : enrEnrichis.value)
 
