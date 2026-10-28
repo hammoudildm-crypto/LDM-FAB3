@@ -5,9 +5,6 @@
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
 
-    <p style="font-family:monospace;font-size:12px;background:#fef9c3;border:1px solid #eab308;border-radius:6px;padding:6px 10px;margin:6px 0;white-space:pre-wrap">DIAG · {{ enregistrements.length }} enregistrement(s) chargé(s) · {{ personnes.length }} personnes · {{ formations.length }} formations · {{ requises.length }} exigence(s) · cases reconnues: {{ Object.keys(latestByKey).length }}
-1er enreg → personne_id={{ enregistrements[0] ? enregistrements[0].personne_id : '∅' }} ({{ enregistrements[0] && personneById[enregistrements[0].personne_id] ? '✓ '+personneById[enregistrements[0].personne_id].nom : '✗ inconnu' }}) · formation_id={{ enregistrements[0] ? enregistrements[0].formation_id : '∅' }} ({{ enregistrements[0] && formationById[enregistrements[0].formation_id] ? '✓ '+formationById[enregistrements[0].formation_id].nom : '✗ inconnue' }}) · type ids: pers {{ enregistrements[0] ? typeof enregistrements[0].personne_id : '-' }} / org {{ personnes[0] ? typeof personnes[0].id : '-' }}</p>
-
     <div v-if="nbExpire || nbBientot" class="alerte-ech" :class="{ crit: nbExpire }">
       <span v-if="nbExpire">✗ <b>{{ nbExpire }}</b> qualification(s) expirée(s) ou non acquise(s)</span>
       <span v-if="nbExpire && nbBientot" class="sep">·</span>
@@ -306,18 +303,30 @@ const persIds = computed(() => new Set(personnesFiltrees.value.map(p => p.id)))
 const formationById = computed(() => { const m = {}; for (const f of formations.value) m[f.id] = f; return m })
 const personneById = computed(() => { const m = {}; for (const p of personnes.value) m[p.id] = p; return m })
 const requisParFonction = computed(() => { const m = {}; for (const r of requises.value) { (m[r.fonction] = m[r.fonction] || new Set()).add(r.formation_id) } return m })
-function addMonths(dateStr, m) { const d = new Date(dateStr + 'T00:00:00'); d.setMonth(d.getMonth() + m); return d.toISOString().slice(0, 10) }
+function addMonths(dateStr, m) {
+  if (!dateStr) return null
+  const d = new Date(String(dateStr).slice(0, 10) + 'T00:00:00')
+  if (isNaN(d.getTime())) return null
+  d.setMonth(d.getMonth() + m)
+  return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
+}
 function fmtDate(d) { if (!d) return '—'; const t = new Date(String(d).slice(0, 10) + 'T00:00:00'); return isNaN(t) ? String(d) : t.toLocaleDateString('fr-FR') }
 const today = new Date().toISOString().slice(0, 10)
 const dans60 = (() => { const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() + 60); return d.toISOString().slice(0, 10) })()
 
 const enrEnrichis = computed(() => enregistrements.value.map(e => {
-  const f = formationById.value[e.formation_id]
-  const exp = (f && f.validite_mois && e.date_formation) ? addMonths(e.date_formation, f.validite_mois) : null
-  let cell = 'valide'
-  if (e.resultat === 'non acquis') cell = 'expire'
-  else if (exp) cell = exp < today ? 'expire' : (exp <= dans60 ? 'bientot' : 'valide')
-  return { ...e, expiration: exp, cell }
+  try {
+    const f = formationById.value[e.formation_id]
+    const dateStr = e.date_formation ? String(e.date_formation).slice(0, 10) : ''
+    const exp = (f && f.validite_mois && dateStr) ? addMonths(dateStr, f.validite_mois) : null
+    let cell = 'valide'
+    if (e.resultat === 'non acquis') cell = 'expire'
+    else if (exp) cell = exp < today ? 'expire' : (exp <= dans60 ? 'bientot' : 'valide')
+    return { ...e, date_formation: dateStr || e.date_formation, expiration: exp, cell }
+  } catch (ex) {
+    console.error('enrEnrichis (matrice) — ligne ignorée :', e, ex)
+    return { ...e, expiration: null, cell: 'valide' }
+  }
 }))
 const latestByKey = computed(() => {
   const m = {}
