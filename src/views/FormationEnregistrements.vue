@@ -36,7 +36,7 @@
           <tr v-for="e in enrFiltres" :key="e.id" :class="{ 'row-ko': e.statut === 'expire' || e.resultat === 'non acquis' }">
             <td class="nom">{{ e.personneNom }}</td>
             <td>{{ e.formationNom }}<span v-if="e.codeSop" class="sop">{{ e.codeSop }}</span></td>
-            <td>{{ e.date_formation }}</td>
+            <td style="white-space:nowrap">{{ e.date_formation }}</td>
             <td>{{ e.formateur || '—' }}</td>
             <td><span :class="e.resultat === 'acquis' ? 'c-ok' : 'c-ko'">{{ e.resultat === 'acquis' ? '✓ Acquis' : '✗ Non acquis' }}</span></td>
             <td>{{ e.expiration || 'Permanent' }}</td>
