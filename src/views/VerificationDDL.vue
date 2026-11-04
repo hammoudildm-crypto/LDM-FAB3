@@ -137,6 +137,8 @@ function statutCond(l) {
 }
 // Rang d'affichage par statut : conditionné/libéré (0), en cours (1), non conditionné (2)
 function condRank(l) { const cls = statutCond(l).cls; return cls === 'sc-ok' ? 0 : cls === 'sc-run' ? 1 : 2 }
+// Alarme : lot conditionné/libéré ou en cours de conditionnement alors que le DDL n'est pas vérifié → à traiter en priorité.
+function alarmeCond(l) { return statutCond(l).cls !== 'sc-none' }
 // Date de fin de fabrication : la date renseignée, sinon la date de la DERNIÈRE phase de gamme si Terminé
 function dateFinFab(l) {
   const pl = phasesParLot.value[l.id] || {}
@@ -589,7 +591,7 @@ async function devalider(l) {
                 <td class="cell-verif"><button v-if="peutEditer" class="btn-verif" @click="ouvrir(l)">Vérifier</button></td>
                 <td class="mono">{{ l.numero_lot }}</td>
                 <td class="desig">{{ prodNom(l) }}<span class="zperim" :class="'z-' + zoneLot(l)" :title="'Périmètre détecté : ' + zoneLabelLot(l)">{{ zoneLabelLot(l) }}</span></td>
-                <td><span class="scond" :class="statutCond(l).cls">{{ statutCond(l).label }}</span></td>
+                <td><span v-if="alarmeCond(l)" class="alarme-rouge" title="⚠ Lot conditionné ou en cours — DDL non vérifié : à traiter en priorité"></span><span class="scond" :class="statutCond(l).cls">{{ statutCond(l).label }}</span></td>
                 <td>
                   <select v-if="peutEditer" class="resv-sel" :value="l.ddl_verificateur || ''" @change="reserverVerif(l, $event.target.value)">
                     <option value="">— Réserver —</option>
@@ -1104,6 +1106,8 @@ tr.ddl-triage .cell-verif { background: #fffbeb; }
 .scond.sc-ok { background: #ecfdf5; color: #047857; }
 .scond.sc-run { background: #fff7ed; color: #c2410c; }
 .scond.sc-none { background: #f1f5f9; color: #64748b; }
+.alarme-rouge { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #ef4444; margin-right: 6px; vertical-align: middle; box-shadow: 0 0 0 0 rgba(239,68,68,.7); animation: alarmePulse 1.1s infinite; }
+@keyframes alarmePulse { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,.7); } 70% { box-shadow: 0 0 0 7px rgba(239,68,68,0); } 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } }
 .btn-repartir { background: #7c3aed; color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .btn-repartir:hover:not(:disabled) { background: #6d28d9; }
 .btn-repartir:disabled { opacity: .5; cursor: not-allowed; }
