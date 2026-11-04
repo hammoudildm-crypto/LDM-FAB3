@@ -35,6 +35,86 @@
       <div class="tb-kpi tb-kpi-m"><span class="k-lbl">Chiffre d'affaires</span><span class="k-val">{{ fmtCA(totCAMois) }}</span></div>
     </div>
 
+    <!-- Décisions & KPIs transverses de suivi d'activité -->
+    <section class="pilot">
+      <div v-if="alertes.length" class="decisions">
+        <div class="dec-h">⚠ Points d'attention — aide à la décision</div>
+        <div class="dec-list">
+          <div v-for="(al, i) in alertes" :key="'a' + i" class="dec-item" :class="al.lvl">
+            <span class="dec-t">{{ al.t }}</span><span class="dec-d">{{ al.d }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="trans-grid">
+        <div class="trans-card">
+          <div class="trans-dom q">Qualité</div>
+          <div class="trans-kpis">
+            <div class="tk"><span class="tk-v" :class="devOuvertes ? 'warn' : 'ok'">{{ devOuvertes }}</span><span class="tk-l">Déviations ouvertes</span></div>
+            <div class="tk"><span class="tk-v" :class="devCritiques ? 'bad' : 'ok'">{{ devCritiques }}</span><span class="tk-l">dont critiques</span></div>
+            <div class="tk"><span class="tk-v" :class="capaRetard ? 'bad' : 'ok'">{{ capaRetard }}</span><span class="tk-l">CAPA en retard</span></div>
+          </div>
+        </div>
+        <div class="trans-card">
+          <div class="trans-dom e">Équipements</div>
+          <div class="trans-kpis">
+            <div class="tk"><span class="tk-v" :class="equipKpi.dispo != null && equipKpi.dispo < 85 ? 'warn' : 'ok'">{{ equipKpi.dispo != null ? equipKpi.dispo + '%' : '—' }}</span><span class="tk-l">Disponibilité</span></div>
+            <div class="tk"><span class="tk-v">{{ fmtH(equipKpi.mtbf) }}</span><span class="tk-l">MTBF</span></div>
+            <div class="tk"><span class="tk-v">{{ fmtH(equipKpi.mttr) }}</span><span class="tk-l">MTTR</span></div>
+          </div>
+        </div>
+        <div class="trans-card">
+          <div class="trans-dom r">Rendement</div>
+          <div class="trans-kpis">
+            <div class="tk"><span class="tk-v" :class="rendementFab != null && rendementFab < 90 ? 'warn' : 'ok'">{{ rendementFab != null ? rendementFab + '%' : '—' }}</span><span class="tk-l">Fabrication {{ annee }}</span></div>
+            <div class="tk"><span class="tk-v" :class="tauxGlobal != null && tauxGlobal < 100 ? 'warn' : 'ok'">{{ tauxGlobal != null ? tauxGlobal + '%' : '—' }}</span><span class="tk-l">Réalisation plan</span></div>
+          </div>
+        </div>
+        <div class="trans-card">
+          <div class="trans-dom p">Personnel</div>
+          <div class="trans-kpis">
+            <div class="tk"><span class="tk-v" :class="formationKpi.taux != null && formationKpi.taux < 90 ? 'warn' : 'ok'">{{ formationKpi.taux != null ? formationKpi.taux + '%' : '—' }}</span><span class="tk-l">Qualification</span></div>
+            <div class="tk"><span class="tk-v" :class="formationKpi.expire ? 'bad' : 'ok'">{{ formationKpi.expire }}</span><span class="tk-l">Expirées</span></div>
+            <div class="tk"><span class="tk-v" :class="formationKpi.bientot ? 'warn' : 'ok'">{{ formationKpi.bientot }}</span><span class="tk-l">À recycler</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pilotage — graphiques de suivi d'activité -->
+    <section class="pilot">
+      <div class="pilot-grid">
+        <div class="pilot-card wide">
+          <div class="pilot-h">
+            <span class="pilot-t">Plan vs {{ onglet === 'fab' ? 'Fabriqué' : 'Conditionné' }} par mois — {{ annee }} <span class="pilot-u">(boîtes)</span></span>
+            <span class="pilot-leg"><i class="lg b-plan"></i>Plan<i class="lg b-real"></i>Réalisé</span>
+          </div>
+          <svg :viewBox="'0 0 ' + graphPR.W + ' ' + graphPR.H" class="pilot-svg" preserveAspectRatio="none">
+            <line v-for="(g, i) in graphPR.grid" :key="'g' + i" :x1="graphPR.mL" :x2="graphPR.mL + graphPR.iw" :y1="g.y" :y2="g.y" class="grid" />
+            <rect v-for="(b, i) in graphPR.bars" :key="'b' + i" :x="b.x" :y="b.y" :width="b.w" :height="b.h" :class="b.cls" rx="2"><title>{{ fmt(b.v) }}</title></rect>
+            <text v-for="(l, i) in graphPR.labels" :key="'l' + i" :x="l.x" :y="l.y" class="x-lbl">{{ l.t }}</text>
+          </svg>
+        </div>
+        <div class="pilot-card">
+          <div class="pilot-h"><span class="pilot-t">Chiffre d'affaires mensuel <span class="pilot-u">(DA)</span></span></div>
+          <svg :viewBox="'0 0 ' + graphCA.W + ' ' + graphCA.H" class="pilot-svg" preserveAspectRatio="none">
+            <rect v-for="(b, i) in graphCA.bars" :key="'c' + i" :x="b.x" :y="b.y" :width="b.w" :height="b.h" class="b-ca" rx="2"><title>{{ fmtCA(b.v) }}</title></rect>
+            <text v-for="(l, i) in graphCA.labels" :key="'cl' + i" :x="l.x" :y="l.y" class="x-lbl">{{ l.t }}</text>
+          </svg>
+        </div>
+        <div class="pilot-card">
+          <div class="pilot-h"><span class="pilot-t">Top {{ libGroupe }} <span class="pilot-u">(boîtes, {{ annee }})</span></span></div>
+          <div class="top-list">
+            <div v-for="(d, i) in graphTop" :key="'t' + i" class="top-row">
+              <span class="top-nom" :title="d.nom">{{ d.nom }}</span>
+              <span class="top-bar"><span class="top-in" :style="{ width: d.pct + '%' }"></span></span>
+              <span class="top-val">{{ fmt(d.boites) }}<span v-if="d.taux != null" class="top-taux" :class="d.taux >= 100 ? 'ok' : 'bas'">{{ d.taux }}%</span></span>
+            </div>
+            <div v-if="!graphTop.length" class="tb-empty">Aucune donnée.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Regroupement -->
     <div class="tb-grp">
       <span class="grp-lbl">Regrouper par :</span>
@@ -200,11 +280,14 @@ const equipsByOf = computed(() => {
 watch(onglet, () => { if (onglet.value === 'cond' && grp.value === 'phase') grp.value = 'equip' })
 
 const fabRaw = ref([]); const condRaw = ref([]); const planRaw = ref([]); const suiviRaw = ref([])
+// Sources transverses (qualité, équipements, RH)
+const deviationsRaw = ref([]); const capaRaw = ref([]); const trsRaw = ref([])
+const organigrammeRaw = ref([]); const formationsRaw = ref([]); const formEnrRaw = ref([]); const formReqRaw = ref([])
 onMounted(async () => {
   try {
     const [rf, rc, rp, rs, re, rcad] = await Promise.all([
       fetchAllPaged(() => supabase.from('ordres_fabrication')
-        .select('id, produit_id, numero_lot, boites_fabriquees, date_fin_fabrication, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
+        .select('id, produit_id, numero_lot, boites_fabriquees, quantite_theorique, date_fin_fabrication, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('conditionnement')
         .select('quantite_conditionnee, date_conditionnement, equipements(nom, type), ordres_fabrication(numero_lot, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
       fetchAllPaged(() => supabase.from('plan_production')
@@ -214,6 +297,18 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('cadences_produit').select('produit_id, equipement_id, cadence_nominale'))
     ])
     fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs; equipRef.value = re.data || []; cadences.value = rcad.data || []
+    // KPIs transverses (qualité, équipements, RH) — tables/colonnes conformes aux modules existants
+    const [rdev, rcapa, rtrs, rorg, rform, rfenr, rfreq] = await Promise.all([
+      fetchAllPaged(() => supabase.from('deviations').select('statut, criticite, date_dev')),
+      fetchAllPaged(() => supabase.from('capa').select('statut, echeance, date_capa')),
+      fetchAllPaged(() => supabase.from('trs_postes').select('date, temps_ouverture_min, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min')),
+      fetchAllPaged(() => supabase.from('organigramme').select('id, fonction, actif').eq('actif', true)),
+      fetchAllPaged(() => supabase.from('formations').select('id, nom, validite_mois, actif').eq('actif', true)),
+      fetchAllPaged(() => supabase.from('formation_enregistrements').select('personne_id, formation_id, date_formation, resultat')),
+      fetchAllPaged(() => supabase.from('formation_requise').select('fonction, formation_id'))
+    ])
+    deviationsRaw.value = rdev; capaRaw.value = rcapa; trsRaw.value = rtrs
+    organigrammeRaw.value = rorg; formationsRaw.value = rform; formEnrRaw.value = rfenr; formReqRaw.value = rfreq
   } catch (e) { console.error(e) } finally { chargement.value = false }
 })
 
@@ -375,6 +470,138 @@ const totBoitesMois = computed(() => srcMois.value.reduce((s, r) => s + num(r.bo
 const totCAMois = computed(() => srcMois.value.reduce((s, r) => s + num(r.boites) * (r.produit ? num(r.produit.pcsu) : 0), 0))
 const totPlanMois = computed(() => { let tot = 0; for (const r of planRaw.value) { if (Number(r.annee) === annee.value && Number(r.mois) === moisCourant) tot += num(r.quantite_planifiee) } return tot })
 const tauxGlobalMois = computed(() => totPlanMois.value > 0 ? Math.round(totBoitesMois.value / totPlanMois.value * 100) : null)
+
+// ===== Pilotage — séries mensuelles & géométrie des graphiques =====
+const MOIS_COURTS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+const serieMensuelle = computed(() => {
+  const src = onglet.value === 'fab' ? fabData.value : condData.value
+  const real = Array(12).fill(0), ca = Array(12).fill(0), plan = Array(12).fill(0)
+  for (const r of src) {
+    if (!r.produit || !(num(r.boites) > 0) || !r.mois) continue
+    const i = r.mois - 1; real[i] += num(r.boites); ca[i] += num(r.boites) * num(r.produit.pcsu)
+  }
+  for (let m = 1; m <= 12; m++) { const agg = planAgg(m); plan[m - 1] = Object.values(agg).reduce((s, v) => s + v, 0) }
+  return MOIS_COURTS.map((nom, i) => ({ nom, real: real[i], ca: ca[i], plan: plan[i] }))
+})
+// Barres groupées Plan vs Réalisé (boîtes) par mois
+const graphPR = computed(() => {
+  const s = serieMensuelle.value
+  const W = 760, H = 220, mL = 10, mR = 10, mT = 12, mB = 24
+  const iw = W - mL - mR, ih = H - mT - mB, baseY = mT + ih
+  const max = Math.max(1, ...s.map(x => Math.max(x.plan, x.real)))
+  const step = iw / 12, bw = Math.min(15, step / 3)
+  const bars = []
+  s.forEach((x, i) => {
+    const cx = mL + step * i + step / 2
+    const hp = x.plan / max * ih, hr = x.real / max * ih
+    bars.push({ x: cx - bw - 2, y: baseY - hp, w: bw, h: hp, cls: 'b-plan', v: x.plan })
+    bars.push({ x: cx + 2, y: baseY - hr, w: bw, h: hr, cls: 'b-real', v: x.real })
+  })
+  const labels = s.map((x, i) => ({ x: mL + step * i + step / 2, y: H - 7, t: x.nom }))
+  const grid = [0.25, 0.5, 0.75, 1].map(g => ({ y: baseY - g * ih }))
+  return { W, H, mL, iw, bars, labels, grid }
+})
+// Barres CA mensuel
+const graphCA = computed(() => {
+  const s = serieMensuelle.value
+  const W = 760, H = 200, mL = 10, mR = 10, mT = 12, mB = 24
+  const iw = W - mL - mR, ih = H - mT - mB, baseY = mT + ih
+  const max = Math.max(1, ...s.map(x => x.ca))
+  const step = iw / 12, bw = Math.min(28, step * 0.62)
+  const bars = s.map((x, i) => { const cx = mL + step * i + step / 2; const h = x.ca / max * ih; return { x: cx - bw / 2, y: baseY - h, w: bw, h, v: x.ca } })
+  const labels = s.map((x, i) => ({ x: mL + step * i + step / 2, y: H - 7, t: x.nom }))
+  return { W, H, bars, labels }
+})
+// Top catégories (selon regroupement actif) par boîtes
+const graphTop = computed(() => {
+  const top = donnees.value.slice(0, 7)
+  const max = Math.max(1, ...top.map(d => d.boites))
+  return top.map(d => ({ nom: d.cle, boites: d.boites, pct: d.boites / max * 100, taux: d.taux }))
+})
+
+// ===== KPIs transverses pour le pilotage (qualité, équipements, RH) =====
+const _today = new Date(new Date().toISOString().slice(0, 10))
+const _dans60 = new Date(_today.getTime() + 60 * 86400000)
+const normNomF = (n) => (n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim()
+function addMonths(dateStr, m) {
+  if (!dateStr || !m) return null
+  const d = new Date(String(dateStr).slice(0, 10) + 'T00:00:00')
+  if (isNaN(d.getTime())) return null
+  d.setMonth(d.getMonth() + Number(m)); return d
+}
+const fmtH = (h) => h == null ? '—' : (h >= 10 ? Math.round(h) : h.toFixed(1)) + ' h'
+// Qualité
+const statutKeyCapa = (s) => { const t = (s || '').toLowerCase(); if (/cl[oô]tur/.test(t)) return 'cloturee'; if (/r[ée]alis/.test(t)) return 'realisee'; return 'autre' }
+const devOuvertes = computed(() => deviationsRaw.value.filter(d => d.statut !== 'Clôturée').length)
+const devCritiques = computed(() => deviationsRaw.value.filter(d => d.criticite === 'Critique' && d.statut !== 'Clôturée').length)
+const capaRetard = computed(() => capaRaw.value.filter(c => c.echeance && !['cloturee', 'realisee'].includes(statutKeyCapa(c.statut)) && new Date(c.echeance) < _today).length)
+// Équipements — disponibilité, MTBF, MTTR (trs_postes) sur l'année sélectionnée
+const equipKpi = computed(() => {
+  let ouv = 0, arrets = 0, panne = 0, evPanne = 0
+  for (const t of trsRaw.value) {
+    if (!t.date || anYear(t.date) !== annee.value) continue
+    const o = num(t.temps_ouverture_min); if (!(o > 0)) continue
+    const p = num(t.arret_panne_min)
+    const a = p + num(t.arret_format_min) + num(t.arret_nettoyage_min) + num(t.arret_reglage_min) + num(t.arret_maintenance_min) + num(t.arret_attente_min) + num(t.arret_autre_min)
+    ouv += o; arrets += a; panne += p; if (p > 0) evPanne++
+  }
+  const fonct = Math.max(0, ouv - arrets)
+  return { dispo: ouv > 0 ? Math.round(fonct / ouv * 100) : null, mtbf: evPanne ? fonct / evPanne / 60 : null, mttr: evPanne ? panne / evPanne / 60 : null, evPanne }
+})
+// Rendement fabrication sur l'année
+const rendementFab = computed(() => {
+  let theo = 0, prod = 0
+  for (const o of fabRaw.value) {
+    if (!o.date_fin_fabrication || anYear(o.date_fin_fabrication) !== annee.value) continue
+    const t = num(o.quantite_theorique), b = num(o.boites_fabriquees)
+    if (t > 0 && b > 0) { theo += t; prod += b }
+  }
+  return theo > 0 ? Math.round(prod / theo * 100) : null
+})
+// Formation / qualification (logique Matrice, dédup par nom canonique)
+const canonF = computed(() => {
+  const cleById = {}, idByCle = {}
+  for (const f of formationsRaw.value) { const cle = normNomF(f.nom); cleById[f.id] = cle; if (!(cle in idByCle)) idByCle[cle] = f.id }
+  const map = {}, valid = {}
+  for (const f of formationsRaw.value) { const c = idByCle[cleById[f.id]]; map[f.id] = c; if (valid[c] == null && f.validite_mois != null) valid[c] = f.validite_mois }
+  return { map, valid }
+})
+const formationKpi = computed(() => {
+  const cf = canonF.value
+  const reqByFonction = {}
+  for (const r of formReqRaw.value) { const c = cf.map[r.formation_id] || r.formation_id; if (!reqByFonction[r.fonction]) reqByFonction[r.fonction] = new Set(); reqByFonction[r.fonction].add(c) }
+  const latest = {}
+  for (const e of formEnrRaw.value) { const c = cf.map[e.formation_id] || e.formation_id; const k = e.personne_id + '|' + c; if (!latest[k] || String(e.date_formation) > String(latest[k].date_formation)) latest[k] = e }
+  let requises = 0, valides = 0, expire = 0, bientot = 0, qualifies = 0, totalPers = 0
+  for (const p of organigrammeRaw.value) {
+    const reqs = reqByFonction[p.fonction]; if (!reqs || !reqs.size) continue
+    totalPers++; let pv = 0
+    for (const c of reqs) {
+      requises++
+      const e = latest[p.id + '|' + c]
+      if (!e) continue
+      if (e.resultat === 'non acquis') { expire++; continue }
+      const exp = addMonths(e.date_formation, cf.valid[c])
+      if (exp && exp < _today) { expire++; continue }
+      if (exp && exp <= _dans60) { bientot++; continue }
+      valides++; pv++
+    }
+    if (pv === reqs.size) qualifies++
+  }
+  return { taux: requises ? Math.round(valides / requises * 100) : null, expire, bientot, qualifies, totalPers }
+})
+// Bandeau de décisions — signaux nécessitant l'attention du manager
+const alertes = computed(() => {
+  const a = []
+  if (capaRetard.value > 0) a.push({ t: capaRetard.value + ' CAPA en retard', d: 'Échéance dépassée — relancer les responsables', lvl: 'high' })
+  if (devCritiques.value > 0) a.push({ t: devCritiques.value + ' déviation(s) critique(s) ouverte(s)', d: 'À traiter en priorité', lvl: 'high' })
+  if (formationKpi.value.expire > 0) a.push({ t: formationKpi.value.expire + ' qualification(s) expirée(s)', d: 'Personnel à requalifier', lvl: 'high' })
+  if (formationKpi.value.bientot > 0) a.push({ t: formationKpi.value.bientot + ' qualification(s) à recycler (< 60 j)', d: 'Planifier le recyclage', lvl: 'mid' })
+  if (equipKpi.value.dispo != null && equipKpi.value.dispo < 85) a.push({ t: 'Disponibilité équipements ' + equipKpi.value.dispo + '%', d: "Sous l'objectif (85%) — analyser les arrêts", lvl: 'mid' })
+  if (rendementFab.value != null && rendementFab.value < 90) a.push({ t: 'Rendement fabrication ' + rendementFab.value + '%', d: 'Pertes élevées — vérifier les procédés', lvl: 'mid' })
+  if (tauxGlobalMois.value != null && tauxGlobalMois.value < 100) a.push({ t: 'Plan du mois réalisé à ' + tauxGlobalMois.value + '%', d: 'Retard sur le planning — ajuster la charge', lvl: 'mid' })
+  return a
+})
 </script>
 
 <style scoped>
@@ -422,6 +649,59 @@ const tauxGlobalMois = computed(() => totPlanMois.value > 0 ? Math.round(totBoit
 .bar { display: block; height: 8px; background: #eef2f7; border-radius: 4px; overflow: hidden; }
 .bar-in { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #14b8a6, #0ea5e9); }
 .tb-table tfoot .tot td { font-weight: 800; padding: 13px 16px; border-top: 2px solid #e2e8f0; background: #f8fafc; }
+
+/* Pilotage — graphiques de suivi d'activité */
+.pilot { margin: 2px 0 18px; }
+.pilot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.pilot-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px 16px; box-shadow: 0 8px 22px rgba(30,41,59,.06); min-width: 0; }
+.pilot-card.wide { grid-column: 1 / -1; }
+.pilot-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.pilot-t { font-size: 13px; font-weight: 800; color: #0f172a; }
+.pilot-u { color: #94a3b8; font-weight: 600; font-size: 11.5px; }
+.pilot-leg { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: #64748b; }
+.pilot-leg .lg { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.pilot-leg .lg.b-real { margin-left: 8px; }
+.pilot-leg .lg.b-plan { background: #cbd5e1; }
+.pilot-leg .lg.b-real { background: #14b8a6; }
+.pilot-svg { width: 100%; height: auto; display: block; }
+.pilot-svg .grid { stroke: #eef2f7; stroke-width: 1; }
+.pilot-svg .b-plan { fill: #cbd5e1; }
+.pilot-svg .b-real { fill: #14b8a6; }
+.pilot-svg .b-ca { fill: #0ea5e9; }
+.pilot-svg .x-lbl { fill: #94a3b8; font-size: 11px; font-weight: 600; text-anchor: middle; }
+.top-list { display: flex; flex-direction: column; gap: 9px; padding-top: 2px; }
+.top-row { display: grid; grid-template-columns: 116px 1fr auto; align-items: center; gap: 10px; font-size: 12.5px; }
+.top-nom { font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-bar { height: 10px; background: #eef2f7; border-radius: 5px; overflow: hidden; }
+.top-in { display: block; height: 100%; border-radius: 5px; background: linear-gradient(90deg, #14b8a6, #0ea5e9); }
+.top-val { font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.top-taux { font-size: 10.5px; font-weight: 800; margin-left: 6px; }
+.top-taux.ok { color: #15803d; } .top-taux.bas { color: #dc2626; }
+@media (max-width: 820px) { .pilot-grid { grid-template-columns: 1fr; } }
+
+/* Décisions & KPIs transverses */
+.decisions { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 14px; padding: 12px 15px; margin-bottom: 14px; }
+.dec-h { font-size: 12.5px; font-weight: 800; color: #b45309; margin-bottom: 9px; text-transform: uppercase; letter-spacing: .4px; }
+.dec-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+.dec-item { display: flex; flex-direction: column; gap: 2px; background: #fff; border: 1px solid #fde4c8; border-left-width: 4px; border-radius: 10px; padding: 8px 12px; }
+.dec-item.high { border-left-color: #dc2626; }
+.dec-item.mid { border-left-color: #f59e0b; }
+.dec-t { font-size: 13px; font-weight: 800; color: #0f172a; }
+.dec-d { font-size: 11.5px; color: #64748b; font-weight: 600; }
+.trans-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
+.trans-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 13px 15px; box-shadow: 0 8px 22px rgba(30,41,59,.06); }
+.trans-dom { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; padding-left: 9px; border-left: 4px solid #94a3b8; }
+.trans-dom.q { border-left-color: #a855f7; color: #7c3aed; }
+.trans-dom.e { border-left-color: #0ea5e9; color: #0369a1; }
+.trans-dom.r { border-left-color: #14b8a6; color: #0f766e; }
+.trans-dom.p { border-left-color: #f59e0b; color: #b45309; }
+.trans-kpis { display: flex; gap: 12px; flex-wrap: wrap; }
+.tk { display: flex; flex-direction: column; gap: 1px; min-width: 58px; }
+.tk-v { font-size: 20px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tk-v.ok { color: #15803d; } .tk-v.warn { color: #d97706; } .tk-v.bad { color: #dc2626; }
+.tk-l { font-size: 10.5px; color: #64748b; font-weight: 600; }
+@media (max-width: 1100px) { .trans-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .trans-grid { grid-template-columns: 1fr; } }
 
 @media (max-width: 820px) {
   .tb { padding: 18px; } .tb-kpis { grid-template-columns: repeat(2, 1fr); }
