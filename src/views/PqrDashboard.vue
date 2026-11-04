@@ -42,25 +42,32 @@
               </div>
               <div class="cap-cards">
                 <div class="cap-card">
-                  <svg viewBox="0 0 42 42" class="cap-donut">
-                    <circle class="cd-bg" cx="21" cy="21" r="15.915" />
-                    <g transform="rotate(-90 21 21)"><circle v-if="capabilite.cpkMoy != null" class="cd-seg" cx="21" cy="21" r="15.915" :stroke="capCol(capabilite.cpkMoy)" :stroke-dasharray="gaugeDash(capabilite.cpkMoy)" stroke-dashoffset="0" /></g>
-                    <text x="21" y="23" class="cd-val" :style="{ fill: capCol(capabilite.cpkMoy) }">{{ capabilite.cpkMoy != null ? capabilite.cpkMoy.toFixed(2) : '—' }}</text>
+                  <svg viewBox="0 0 100 60" class="cap-gauge">
+                    <path v-for="(z, i) in jgZones" :key="'zk' + i" class="jg-zone" :d="z.d" :stroke="z.c" />
+                    <line class="jg-needle" x1="50" y1="47" x2="50" y2="17" :transform="'rotate(' + jgNeedle(capabilite.cpkMoy) + ' 50 47)'" />
+                    <circle class="jg-hub" cx="50" cy="47" r="3" />
+                    <text x="50" y="58" class="jg-val" :style="{ fill: capCol(capabilite.cpkMoy) }">{{ capabilite.cpkMoy != null ? capabilite.cpkMoy.toFixed(2) : '—' }}</text>
                   </svg>
                   <div class="cap-l">Cpk moyen</div>
                   <span class="cap-badge" :style="{ background: capCol(capabilite.cpkMoy) }">{{ capLabel(capabilite.cpkMoy) }}</span>
                 </div>
                 <div class="cap-card">
-                  <svg viewBox="0 0 42 42" class="cap-donut">
-                    <circle class="cd-bg" cx="21" cy="21" r="15.915" />
-                    <g transform="rotate(-90 21 21)"><circle v-if="capabilite.cpMoy != null" class="cd-seg" cx="21" cy="21" r="15.915" :stroke="capCol(capabilite.cpMoy)" :stroke-dasharray="gaugeDash(capabilite.cpMoy)" stroke-dashoffset="0" /></g>
-                    <text x="21" y="23" class="cd-val" :style="{ fill: capCol(capabilite.cpMoy) }">{{ capabilite.cpMoy != null ? capabilite.cpMoy.toFixed(2) : '—' }}</text>
+                  <svg viewBox="0 0 100 60" class="cap-gauge">
+                    <path v-for="(z, i) in jgZones" :key="'zl' + i" class="jg-zone" :d="z.d" :stroke="z.c" />
+                    <line class="jg-needle" x1="50" y1="47" x2="50" y2="17" :transform="'rotate(' + jgNeedle(capabilite.cpMoy) + ' 50 47)'" />
+                    <circle class="jg-hub" cx="50" cy="47" r="3" />
+                    <text x="50" y="58" class="jg-val" :style="{ fill: capCol(capabilite.cpMoy) }">{{ capabilite.cpMoy != null ? capabilite.cpMoy.toFixed(2) : '—' }}</text>
                   </svg>
                   <div class="cap-l">Cp moyen</div>
                   <div class="cap-note">Potentiel (procédé centré)</div>
                 </div>
                 <div class="cap-card">
-                  <div class="cap-v" :style="{ color: capCol(capabilite.pire ? capabilite.pire.cpk : null) }">{{ capabilite.pire ? capabilite.pire.cpk.toFixed(2) : '—' }}</div>
+                  <svg viewBox="0 0 100 60" class="cap-gauge">
+                    <path v-for="(z, i) in jgZones" :key="'zm' + i" class="jg-zone" :d="z.d" :stroke="z.c" />
+                    <line class="jg-needle" x1="50" y1="47" x2="50" y2="17" :transform="'rotate(' + jgNeedle(capabilite.pire ? capabilite.pire.cpk : null) + ' 50 47)'" />
+                    <circle class="jg-hub" cx="50" cy="47" r="3" />
+                    <text x="50" y="58" class="jg-val" :style="{ fill: capCol(capabilite.pire ? capabilite.pire.cpk : null) }">{{ capabilite.pire ? capabilite.pire.cpk.toFixed(2) : '—' }}</text>
+                  </svg>
                   <div class="cap-l">Cpk le plus faible</div>
                   <div class="cap-note" :title="capabilite.pire ? capabilite.pire.nom : ''">{{ capabilite.pire ? capabilite.pire.nom : '—' }}</div>
                 </div>
@@ -658,6 +665,18 @@ const capabilite = computed(() => {
 })
 // Jauge donut : indice (0 → 2) en pourcentage d'arc
 function gaugeDash(v) { if (v == null) return '0 100'; const pct = Math.max(0, Math.min(100, v / 2 * 100)); return pct.toFixed(1) + ' ' + (100 - pct).toFixed(1) }
+// --- Jauges demi-cercle à aiguille (remplacent les anneaux Cp/Cpk) ---
+// Échelle 0 → 2 ; zones alignées sur les paliers de capabilité.
+function jgPol(r, deg) { const a = deg * Math.PI / 180; return [50 + r * Math.cos(a), 47 - r * Math.sin(a)] }
+function jgAng(v) { const vv = Math.max(0, Math.min(2, v)); return 180 - (vv / 2) * 180 }
+function jgArc(degA, degB) { const [xA, yA] = jgPol(36, degA), [xB, yB] = jgPol(36, degB); return `M ${xA.toFixed(2)} ${yA.toFixed(2)} A 36 36 0 0 1 ${xB.toFixed(2)} ${yB.toFixed(2)}` }
+const jgZones = [
+  { d: jgArc(jgAng(0), jgAng(1.00)), c: '#dc2626' },
+  { d: jgArc(jgAng(1.00), jgAng(1.33)), c: '#d97706' },
+  { d: jgArc(jgAng(1.33), jgAng(1.67)), c: '#16a34a' },
+  { d: jgArc(jgAng(1.67), jgAng(2.00)), c: '#15803d' }
+]
+function jgNeedle(v) { return v == null ? -90 : 90 * (Math.max(0, Math.min(2, v)) - 1) }
 // Courbe de capabilité (cloche normale vs limites) pour le paramètre sélectionné
 const capabCourbe = computed(() => {
   const p = paramSelObj.value
@@ -1004,6 +1023,12 @@ ${matHtml}
 .cap-donut .cd-bg { fill: none; stroke: var(--line); stroke-width: 4; }
 .cap-donut .cd-seg { fill: none; stroke-width: 4; stroke-linecap: round; }
 .cap-donut .cd-val { font-size: 9.5px; font-weight: 800; text-anchor: middle; font-variant-numeric: tabular-nums; }
+/* Jauge demi-cercle à aiguille (remplace l'anneau) */
+.cap-gauge { width: 100%; max-width: 128px; height: auto; display: block; margin: 0 auto 2px; }
+.cap-gauge .jg-zone { fill: none; stroke-width: 9; stroke-linecap: butt; }
+.cap-gauge .jg-needle { stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round; }
+.cap-gauge .jg-hub { fill: var(--ink); }
+.cap-gauge .jg-val { font-size: 15px; font-weight: 800; text-anchor: middle; font-variant-numeric: tabular-nums; }
 .bell-area { opacity: .16; }
 .bell-line { fill: none; stroke: #0f172a; stroke-width: 2; }
 .bell-mean { stroke: #2563eb; stroke-width: 1.5; }
@@ -1084,7 +1109,7 @@ ${matHtml}
 .psplit-left .cap-titre { font-size: 14px; }
 .psplit-left .cap-cards { grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
 .psplit-left .cap-card { min-height: 0; padding: 10px; }
-.psplit-left .cap-donut { width: 62px; height: 62px; }
+.psplit-left .cap-gauge { max-width: 116px; }
 .psplit-left .cap-v { font-size: 26px; }
 .psplit-left .cap-bar { height: 22px; }
 .psplit-left .cap-leg { margin-top: 9px; gap: 6px; }
