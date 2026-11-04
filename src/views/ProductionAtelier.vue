@@ -132,7 +132,7 @@ async function charger() {
   if (!rhm.error && rhm.data) for (const p of rhm.data) if (p.hormonal) hmm[p.code_pf] = true
   hormonalParCode.value = hmm
   const rpl = await fetchAllPaged(() => supabase.from('plan_production')
-    .select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot)'))
+    .select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot, pcsu)'))
   if (!rpl.error) planRows.value = rpl.data || []   // table absente -> on reste sur le temps réel
   const req = await fetchAllPaged(() => supabase.from('equipements').select('id, nom, type, code').eq('actif', true))
   if (!req.error) equipements.value = req.data || []
@@ -329,7 +329,7 @@ const matriceChart = computed(() => {
 function seriesAtelier(ph) {
   return ANNEES_COMP.map((y, i) => ({ label: String(y), color: COULEURS_ANNEES[i] || '#0f766e', data: matriceMultiAn.value[ph][y] }))
 }
-function totalAtelierAnnee(ph, y) { return ((matriceMultiAn.value[ph] || {})[y] || []).reduce((s, x) => s + x, 0) }
+function totalAtelierAnnee(ph, y) { return ((matriceChart.value[ph] || {})[y] || []).reduce((s, x) => s + x, 0) }
 
 // --- COMPARAISON YTD (cumul à date) -------------------------------
 // Un total annuel complet ne se compare pas à une année en cours. Chaque année est
@@ -387,24 +387,25 @@ const planParAtelier = computed(() => {
     if (Number(r.annee) !== anneeCourante) continue
     const pr = r.produits
     if (!pr || !pr.id) continue
-    if (!parProduit[pr.id]) parProduit[pr.id] = { boites: 0, gamme: Array.isArray(pr.gamme) ? pr.gamme : [], taille: Number(pr.taille_lot || 0) }
+    if (!parProduit[pr.id]) parProduit[pr.id] = { boites: 0, gamme: Array.isArray(pr.gamme) ? pr.gamme : [], taille: Number(pr.taille_lot || 0), pcsu: Number(pr.pcsu || 0) }
     parProduit[pr.id].boites += Number(r.quantite_planifiee || 0)
   }
   for (const id in parProduit) {
     const o = parProduit[id]
     if (o.taille <= 0 || o.boites <= 0) continue
-    const lots = o.boites / o.taille
+    // Contribution du plan selon l'indicateur choisi : lots, boîtes, ou CA (boîtes × prix de cession)
+    const contrib = metrique.value === 'boites' ? o.boites : (metrique.value === 'ca' ? o.boites * o.pcsu : o.boites / o.taille)
     const gset = new Set(o.gamme.map(g => String(g).toLowerCase().trim()))
     for (const ph of PHASES) {
       const compte = (ph === 'Livraison Vrac' || ph === 'Conditionnement') ? true : gset.has(ph.toLowerCase())
-      if (compte) res[ph] += lots
+      if (compte) res[ph] += contrib
     }
   }
   for (const ph of PHASES) res[ph] = Math.round(res[ph])
   return res
 })
 function projectionAtelier(ph) {
-  const data = (matriceMultiAn.value[ph] || {})[anneeCourante] || Array(12).fill(0)
+  const data = (matriceChart.value[ph] || {})[anneeCourante] || Array(12).fill(0)
   const mc = moisCourant
   const realiseTotal = data.reduce((s, x) => s + x, 0)      // réalisé (mois courant partiel inclus)
   let realiseClos = 0
@@ -877,7 +878,7 @@ onMounted(charger)
     <section v-if="projectionsTable.length" class="proj-card">
       <div class="proj-head">
         <h2 class="proj-title">Prévisionnel de fin d'année — {{ anneeCourante }}</h2>
-        <span class="proj-sub">réalisé à ce jour, projeté au 31/12</span>
+        <span class="proj-sub">réalisé à ce jour, projeté au 31/12 · {{ metriqueUnite }}</span>
       </div>
       <div class="proj-scroll">
         <table class="proj-table">
