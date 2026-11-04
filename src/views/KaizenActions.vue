@@ -20,6 +20,8 @@
   phase_pdca text default 'Plan',
   statut text default 'À faire',
   gain_attendu text default '',
+  origine_type text default '',
+  origine_ref text default '',
   date_creation date default current_date,
   date_echeance date,
   date_cloture date,
@@ -42,6 +44,8 @@
         <label>Statut<select v-model="form.statut"><option>À faire</option><option>En cours</option><option>Terminé</option><option>Abandonné</option></select></label>
         <label>Échéance<input type="date" v-model="form.date_echeance" /></label>
         <label class="kz-wide">Gain attendu<input v-model="form.gain_attendu" placeholder="Ex. −30% de temps de changement, moins de rebuts…" /></label>
+        <label>Origine qualité<select v-model="form.origine_type" @change="form.origine_ref = ''"><option value="">Aucune</option><option value="Déviation">Déviation</option><option value="CAPA">CAPA</option></select></label>
+        <label v-if="form.origine_type" class="kz-wide">Référence {{ form.origine_type }} à rattacher<select v-model="form.origine_ref" @change="prefillOrigine"><option value="">— choisir une {{ form.origine_type.toLowerCase() }} ouverte —</option><option v-for="o in sourcesOrigine" :key="o.numero" :value="o.numero">{{ o.numero }}<template v-if="o.label"> — {{ o.label }}</template></option></select></label>
       </div>
       <div class="kz-acts">
         <button type="button" class="kz-btn" @click="enregistrer" :disabled="sauve">{{ form.id ? 'Mettre à jour' : 'Ajouter' }}</button>
@@ -63,8 +67,9 @@
               <span class="kz-c-titre" @click="modifier(a)">{{ a.titre }}</span>
               <span class="kz-c-stat" :class="statutCls(a.statut)">{{ a.statut }}</span>
             </div>
-            <div v-if="a.atelier || a.responsable" class="kz-c-meta">
+            <div v-if="a.atelier || a.responsable || a.origine_ref" class="kz-c-meta">
               <span v-if="a.atelier" class="kz-c-at">{{ a.atelier }}</span>
+              <span v-if="a.origine_ref" class="kz-c-orig" :title="(a.origine_type || 'Origine') + ' liée'">🔗 {{ a.origine_ref }}</span>
               <span v-if="a.responsable" class="kz-c-resp">👤 {{ a.responsable }}</span>
             </div>
             <div v-if="a.gain_attendu" class="kz-c-gain">🎯 {{ a.gain_attendu }}</div>
@@ -92,11 +97,12 @@ const peutSupprimer = inject('peutSupprimer', ref(true))
 
 const PDCA = ['Plan', 'Do', 'Check', 'Act']
 const actions = ref([])
+const deviations = ref([]), capa = ref([])
 const erreur = ref(''), message = ref(''), sauve = ref(false)
 const besoinMigration = ref(false)
 const masquerClos = ref(false)
 
-const vide = () => ({ id: null, titre: '', description: '', atelier: '', responsable: '', priorite: 'Moyenne', phase_pdca: 'Plan', statut: 'À faire', gain_attendu: '', date_echeance: '' })
+const vide = () => ({ id: null, titre: '', description: '', atelier: '', responsable: '', priorite: 'Moyenne', phase_pdca: 'Plan', statut: 'À faire', gain_attendu: '', date_echeance: '', origine_type: '', origine_ref: '' })
 const form = reactive(vide())
 function reset() { Object.assign(form, vide()) }
 
@@ -117,8 +123,27 @@ async function charger() {
   }
   besoinMigration.value = false
   actions.value = r.data || []
+  // Sources qualité pour rattacher une action à une déviation / CAPA
+  const rd = await supabase.from('deviations').select('numero, produit_lot, zone, responsable, statut, description').order('id', { ascending: false })
+  if (!rd.error) deviations.value = rd.data || []
+  const rc = await supabase.from('capa').select('numero, action, responsable, statut, deviation_origine').order('id', { ascending: false })
+  if (!rc.error) capa.value = rc.data || []
 }
 onMounted(charger)
+
+const estOuvert = (s) => { const k = (s || '').toLowerCase(); return !k.includes('clôtur') && !k.includes('clotur') && !k.includes('réalis') && !k.includes('realis') }
+const sourcesOrigine = computed(() => {
+  if (form.origine_type === 'Déviation') return deviations.value.filter(d => estOuvert(d.statut)).map(d => ({ numero: d.numero, label: d.produit_lot || d.description || '', zone: d.zone || '', resp: d.responsable || '' }))
+  if (form.origine_type === 'CAPA') return capa.value.filter(c => estOuvert(c.statut)).map(c => ({ numero: c.numero, label: c.action || '', zone: '', resp: c.responsable || '' }))
+  return []
+})
+function prefillOrigine() {
+  const s = sourcesOrigine.value.find(o => o.numero === form.origine_ref)
+  if (!s) return
+  if (!form.titre.trim()) form.titre = 'Action suite à ' + form.origine_ref + (s.label ? ' — ' + s.label : '')
+  if (!form.atelier && s.zone) form.atelier = s.zone
+  if (!form.responsable && s.resp) form.responsable = s.resp
+}
 
 const ateliersDispo = computed(() => [...new Set(actions.value.map(a => (a.atelier || '').trim()).filter(Boolean))].sort())
 const actionsFiltrees = computed(() => masquerClos.value ? actions.value.filter(a => a.statut !== 'Terminé' && a.statut !== 'Abandonné') : actions.value)
@@ -130,12 +155,16 @@ async function enregistrer() {
   erreur.value = ''; message.value = ''
   if (!form.titre.trim()) { erreur.value = 'Le titre est requis.'; return }
   sauve.value = true
-  const payload = { titre: form.titre.trim(), description: form.description || '', atelier: form.atelier || '', responsable: form.responsable || '', priorite: form.priorite, phase_pdca: form.phase_pdca, statut: form.statut, gain_attendu: form.gain_attendu || '', date_echeance: form.date_echeance || null }
+  const payload = { titre: form.titre.trim(), description: form.description || '', atelier: form.atelier || '', responsable: form.responsable || '', priorite: form.priorite, phase_pdca: form.phase_pdca, statut: form.statut, gain_attendu: form.gain_attendu || '', date_echeance: form.date_echeance || null, origine_type: form.origine_type || '', origine_ref: form.origine_ref || '' }
   if (form.statut === 'Terminé') payload.date_cloture = new Date().toISOString().slice(0, 10)
+  const sauver = (p) => form.id ? supabase.from('ameliorations').update(p).eq('id', form.id).select() : supabase.from('ameliorations').insert(p).select()
   try {
-    let r
-    if (form.id) r = await supabase.from('ameliorations').update(payload).eq('id', form.id).select()
-    else r = await supabase.from('ameliorations').insert(payload).select()
+    let r = await sauver(payload)
+    if (r.error && /origine_(type|ref)/i.test(r.error.message || '')) {
+      const { origine_type, origine_ref, ...base } = payload
+      r = await sauver(base)
+      if (!r.error) { message.value = (form.id ? 'Action mise à jour' : 'Action ajoutée') + ' (origine non enregistrée : ajoute les colonnes origine_type/origine_ref à la table).'; reset(); await charger(); sauve.value = false; return }
+    }
     if (r.error) { erreur.value = r.error.message; sauve.value = false; return }
     message.value = form.id ? 'Action mise à jour.' : 'Action ajoutée.'
     reset(); await charger()
@@ -144,7 +173,7 @@ async function enregistrer() {
 }
 
 function modifier(a) {
-  Object.assign(form, { id: a.id, titre: a.titre || '', description: a.description || '', atelier: a.atelier || '', responsable: a.responsable || '', priorite: a.priorite || 'Moyenne', phase_pdca: a.phase_pdca || 'Plan', statut: a.statut || 'À faire', gain_attendu: a.gain_attendu || '', date_echeance: a.date_echeance || '' })
+  Object.assign(form, { id: a.id, titre: a.titre || '', description: a.description || '', atelier: a.atelier || '', responsable: a.responsable || '', priorite: a.priorite || 'Moyenne', phase_pdca: a.phase_pdca || 'Plan', statut: a.statut || 'À faire', gain_attendu: a.gain_attendu || '', date_echeance: a.date_echeance || '', origine_type: a.origine_type || '', origine_ref: a.origine_ref || '' })
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
@@ -205,6 +234,7 @@ function statutCls(s) { return s === 'Terminé' ? 's-ok' : s === 'En cours' ? 's
 .s-ok { background: #ecfdf5; color: #047857; } .s-run { background: #eff6ff; color: #1d4ed8; } .s-todo { background: #f1f5f9; color: #64748b; } .s-off { background: #fef2f2; color: #b91c1c; }
 .kz-c-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: 11px; color: #64748b; }
 .kz-c-at { background: #eef2ff; color: #4338ca; padding: 1px 7px; border-radius: 999px; font-weight: 600; }
+.kz-c-orig { background: #fef2f2; color: #be123c; padding: 1px 7px; border-radius: 999px; font-weight: 700; }
 .kz-c-gain { margin-top: 6px; font-size: 11.5px; color: #475569; }
 .kz-c-foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
 .kz-c-ech { font-size: 11px; color: #64748b; } .kz-c-ech.late { color: #b91c1c; font-weight: 700; }
