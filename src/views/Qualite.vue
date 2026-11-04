@@ -1,8 +1,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted, inject } from 'vue'
+import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
+const router = useRouter()
 const peutEditer = inject('peutEditer', ref(false))
 const peutSupprimer = inject('peutSupprimer', ref(false))
 const erreur = ref('')
@@ -91,6 +93,8 @@ async function devEnregistrer() {
 function devModifier(d) { Object.assign(devForm, { id: d.id, numero: d.numero || '', date_dev: d.date_dev || '', produit_lot: d.produit_lot || '', zone: d.zone || '', criticite: d.criticite || '', type: d.type || '', description: d.description || '', origine: d.origine || '', responsable: d.responsable || '', statut: d.statut || 'Ouverte', capa_liee: d.capa_liee || '', ishikawa: normIsh(d.ishikawa), cinq_pourquoi: norm5p(d.cinq_pourquoi), cause_racine: d.cause_racine || '' }); tab.value = 'dev'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
 async function devSupprimer(d) { if (!confirm('Supprimer la déviation ' + (d.numero || '') + ' ?')) return; const r = await supabase.from('deviations').delete().eq('id', d.id); if (r.error) { erreur.value = r.error.message; return } await charger() }
 function creerCapaDepuisDev(d) { capaReset(); capaForm.deviation_origine = d.numero || ''; capaForm.origine = 'Déviation'; capaForm.action = 'Suite à déviation ' + (d.numero || '') + (d.produit_lot ? ' (' + d.produit_lot + ')' : ''); tab.value = 'capa'; window.scrollTo({ top: 0, behavior: 'smooth' }) }
+function creerKaizenDepuisDev(d) { router.push({ path: '/kaizen', query: { ot: 'Déviation', ref: d.numero || '' } }) }
+function creerKaizenDepuisCapa(c) { router.push({ path: '/kaizen', query: { ot: 'CAPA', ref: c.numero || '' } }) }
 
 // ---- CAPA ----
 function capaReset() { Object.assign(capaForm, { id: null, numero: '', date_capa: new Date().toISOString().slice(0, 10), deviation_origine: '', changement_origine: '', origine: '', type: '', action: '', responsable: '', echeance: '', statut: 'Ouverte', efficacite: 'Non vérifiée' }) }
@@ -410,7 +414,7 @@ function appliquerIA() {
                 <td><span v-if="d.criticite" class="q-crit" :class="'crit-' + d.criticite.toLowerCase()">{{ d.criticite }}</span><span v-else>—</span></td>
                 <td class="qt-desc" :title="d.description">{{ d.description || '—' }}</td><td>{{ d.responsable || '—' }}</td><td class="qt-desc" :title="d.cause_racine">{{ d.cause_racine || '—' }}</td><td>{{ d.capa_liee || '—' }}</td>
                 <td><span class="q-stat" :class="'st-' + statutKey(d.statut)">{{ d.statut }}</span></td>
-                <td class="qt-act"><button v-if="peutEditer && !d.capa_liee" class="lnk" @click="creerCapaDepuisDev(d)" title="Créer une CAPA">→ CAPA</button><button v-if="peutEditer" @click="devModifier(d)" title="Modifier">✎</button><button v-if="peutSupprimer" @click="devSupprimer(d)" title="Supprimer">🗑</button></td>
+                <td class="qt-act"><button v-if="peutEditer && !d.capa_liee" class="lnk" @click="creerCapaDepuisDev(d)" title="Créer une CAPA">→ CAPA</button><button v-if="peutEditer" class="lnk" @click="creerKaizenDepuisDev(d)" title="Créer une action Kaizen">→ Kaizen</button><button v-if="peutEditer" @click="devModifier(d)" title="Modifier">✎</button><button v-if="peutSupprimer" @click="devSupprimer(d)" title="Supprimer">🗑</button></td>
               </tr>
             </tbody>
           </table>
@@ -464,7 +468,7 @@ function appliquerIA() {
                 <td class="qt-desc" :title="c.action">{{ c.action || '—' }}</td><td>{{ c.responsable || '—' }}</td>
                 <td><span :class="{ 'q-retard': estEnRetard(c) }">{{ fmtD(c.echeance) }}</span></td>
                 <td><span class="q-stat" :class="'st-' + statutKey(c.statut)">{{ c.statut }}</span></td>
-                <td class="qt-act"><button v-if="peutEditer" @click="capaModifier(c)" title="Modifier">✎</button><button v-if="peutSupprimer" @click="capaSupprimer(c)" title="Supprimer">🗑</button></td>
+                <td class="qt-act"><button v-if="peutEditer" class="lnk" @click="creerKaizenDepuisCapa(c)" title="Créer une action Kaizen">→ Kaizen</button><button v-if="peutEditer" @click="capaModifier(c)" title="Modifier">✎</button><button v-if="peutSupprimer" @click="capaSupprimer(c)" title="Supprimer">🗑</button></td>
               </tr>
             </tbody>
           </table>

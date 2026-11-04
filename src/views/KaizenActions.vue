@@ -90,7 +90,10 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, inject } from 'vue'
+import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
+
+const route = useRoute()
 
 const peutEditer = inject('peutEditer', ref(true))
 const peutSupprimer = inject('peutSupprimer', ref(true))
@@ -129,7 +132,12 @@ async function charger() {
   const rc = await supabase.from('capa').select('numero, action, responsable, statut, deviation_origine').order('id', { ascending: false })
   if (!rc.error) capa.value = rc.data || []
 }
-onMounted(charger)
+onMounted(async () => {
+  await charger()
+  // Pré-remplissage depuis la page Qualité (bouton « → Kaizen » d'une déviation/CAPA)
+  const ot = route.query.ot, rf = route.query.ref
+  if (ot && rf && !besoinMigration.value) { form.origine_type = String(ot); form.origine_ref = String(rf); prefillOrigine(); window.scrollTo({ top: 0 }) }
+})
 
 const estOuvert = (s) => { const k = (s || '').toLowerCase(); return !k.includes('clôtur') && !k.includes('clotur') && !k.includes('réalis') && !k.includes('realis') }
 const sourcesOrigine = computed(() => {
