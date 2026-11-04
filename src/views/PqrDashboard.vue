@@ -1028,6 +1028,11 @@ ${matHtml}
 .sec-sub { margin: 4px 0 10px; font-size: 13.5px; font-weight: 800; color: #7c3aed; }
 .chart-grid.cg-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; margin-top: 4px; }
 .chart-grid.cg-2 .chart-block, .chart-grid.cg-2 .chart-block + .chart-block { border: 1px solid #eef2f7; border-radius: 12px; padding: 12px 14px; margin-top: 0; background: #fff; }
+/* Ordre voulu : Tendance + Capabilité en haut, Carte de contrôle + Comparer en bas */
+.chart-grid.cg-2 > .chart-block:nth-child(1) { order: 1; } /* Tendance vs specs */
+.chart-grid.cg-2 > .chart-block:nth-child(2) { order: 3; } /* Carte de contrôle */
+.chart-grid.cg-2 > .chart-block:nth-child(3) { order: 2; } /* Courbe de capabilité */
+.chart-grid.cg-2 > .chart-block:nth-child(4) { order: 4; } /* Comparer */
 @media (max-width: 900px) { .chart-grid.cg-2 { grid-template-columns: 1fr; } }
 
 .chart-wrap { margin-top: 10px; }
