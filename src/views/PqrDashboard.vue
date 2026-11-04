@@ -108,10 +108,11 @@
         <div class="chart-head">
           <h3 class="sec-titre">{{ chartMode === 'compare' ? ('Comparaison · ' + comparIds.length + ' paramètre' + (comparIds.length > 1 ? 's' : '')) : (paramSelObj ? paramSelObj.nom : '—') }}<span v-if="chartMode !== 'compare' && paramSelObj && uniteEff(paramSelObj)" class="u"> ({{ uniteEff(paramSelObj) }})</span></h3>
           <div class="tabs">
-            <button :class="{ on: chartMode === 'trend' }" @click="chartMode = 'trend'">Tendance vs specs</button>
-            <button :class="{ on: chartMode === 'control' }" @click="chartMode = 'control'">Carte de contrôle</button>
-            <button :class="{ on: chartMode === 'capab' }" @click="chartMode = 'capab'">Courbe de capabilité</button>
-            <button :class="{ on: chartMode === 'compare' }" @click="chartMode = 'compare'">Comparer ({{ comparIds.length }})</button>
+            <button class="tab-all" :class="{ on: toutAfficher }" @click="toutAfficher = !toutAfficher" title="Afficher les 4 vues en même temps">⊞ Tout afficher</button>
+            <button :class="{ on: !toutAfficher && chartMode === 'trend' }" :disabled="toutAfficher" @click="chartMode = 'trend'">Tendance vs specs</button>
+            <button :class="{ on: !toutAfficher && chartMode === 'control' }" :disabled="toutAfficher" @click="chartMode = 'control'">Carte de contrôle</button>
+            <button :class="{ on: !toutAfficher && chartMode === 'capab' }" :disabled="toutAfficher" @click="chartMode = 'capab'">Courbe de capabilité</button>
+            <button :class="{ on: !toutAfficher && chartMode === 'compare' }" :disabled="toutAfficher" @click="chartMode = 'compare'">Comparer ({{ comparIds.length }})</button>
           </div>
         </div>
 
@@ -135,7 +136,8 @@
         </div>
 
         <!-- Tendance vs specs -->
-        <div v-if="chartMode === 'trend'">
+        <div v-if="toutAfficher || chartMode === 'trend'" class="chart-block">
+          <h4 v-if="toutAfficher" class="sec-sub">📈 Tendance vs specs</h4>
           <div v-if="chartData" class="chart-wrap">
             <svg :viewBox="'0 0 ' + chartData.W + ' ' + chartData.H" class="trend" preserveAspectRatio="xMidYMid meet" @mousemove="moveCur($event, chartData)" @mouseleave="clearCur()">
               <line :x1="chartData.mL" :y1="chartData.mT" :x2="chartData.mL" :y2="chartData.H - chartData.mB" class="axis" />
@@ -161,7 +163,8 @@
         </div>
 
         <!-- Carte de contrôle -->
-        <div v-else-if="chartMode === 'control'">
+        <div v-if="toutAfficher || chartMode === 'control'" class="chart-block">
+          <h4 v-if="toutAfficher" class="sec-sub">📊 Carte de contrôle</h4>
           <div v-if="controlData" class="chart-wrap">
             <svg :viewBox="'0 0 ' + controlData.W + ' ' + controlData.H" class="trend" preserveAspectRatio="xMidYMid meet" @mousemove="moveCur($event, controlData)" @mouseleave="clearCur()">
               <line :x1="controlData.mL" :y1="controlData.mT" :x2="controlData.mL" :y2="controlData.H - controlData.mB" class="axis" />
@@ -203,7 +206,8 @@
         </div>
 
         <!-- Courbe de capabilité (distribution vs specs) -->
-        <div v-else-if="chartMode === 'capab'">
+        <div v-if="toutAfficher || chartMode === 'capab'" class="chart-block">
+          <h4 v-if="toutAfficher" class="sec-sub">🔔 Courbe de capabilité</h4>
           <div v-if="capabCourbe" class="chart-wrap">
             <svg :viewBox="'0 0 ' + capabCourbe.W + ' ' + capabCourbe.H" class="trend" preserveAspectRatio="xMidYMid meet">
               <line :x1="capabCourbe.mL" :y1="capabCourbe.y0" :x2="capabCourbe.W - capabCourbe.mR" :y2="capabCourbe.y0" class="axis" />
@@ -230,7 +234,8 @@
         </div>
 
         <!-- Comparaison multi-paramètres -->
-        <div v-else-if="chartMode === 'compare'">
+        <div v-if="toutAfficher || chartMode === 'compare'" class="chart-block">
+          <h4 v-if="toutAfficher" class="sec-sub">⚖️ Comparer ({{ comparIds.length }})</h4>
           <div v-if="multiChartData" class="chart-wrap">
             <svg :viewBox="'0 0 ' + multiChartData.W + ' ' + multiChartData.H" class="trend" preserveAspectRatio="xMidYMid meet" @mousemove="moveCur($event, multiChartData)" @mouseleave="clearCur()">
               <line :x1="multiChartData.mL" :y1="multiChartData.mT" :x2="multiChartData.mL" :y2="multiChartData.H - multiChartData.mB" class="axis" />
@@ -360,6 +365,7 @@ const comparIds = ref([])
 function estCompare(id) { return comparIds.value.includes(id) }
 function toggleCompare(id) { const i = comparIds.value.indexOf(id); if (i >= 0) comparIds.value.splice(i, 1); else comparIds.value.push(id) }
 const chartMode = ref('trend')
+const toutAfficher = ref(true)   // affiche les 4 vues empilées en même temps
 const horsPlie = ref(true)
 const corrX = ref('')
 const corrY = ref('')
@@ -1012,6 +1018,12 @@ ${matHtml}
 .tabs { display: inline-flex; background: #f1f5f9; border-radius: 10px; padding: 3px; }
 .tabs button { border: 0; background: transparent; padding: 6px 13px; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 700; color: #64748b; cursor: pointer; }
 .tabs button.on { background: #fff; color: #a855f7; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
+.tabs button:disabled { opacity: .5; cursor: default; }
+.tabs .tab-all { color: #7c3aed; }
+.tabs .tab-all.on { background: #a855f7; color: #fff; box-shadow: none; }
+.tabs .tab-all:disabled { opacity: 1; }
+.chart-block + .chart-block { margin-top: 10px; padding-top: 16px; border-top: 1px dashed #e2e8f0; }
+.sec-sub { margin: 4px 0 10px; font-size: 13.5px; font-weight: 800; color: #7c3aed; }
 
 .chart-wrap { margin-top: 10px; }
 .corr-ctrls { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin: 8px 0 12px; }
