@@ -1,12 +1,17 @@
 <template>
-  <div class="andon">
+  <div class="andon" :class="{ pres: presentation }" ref="racine">
     <div class="an-head">
       <div>
         <div class="an-eyebrow">Lean · アンドン</div>
         <h1 class="an-title">Andon — État des lignes</h1>
         <p class="an-sub">Signal visuel temps réel de la production : ce qui tourne, et où sont les arrêts / problèmes.</p>
       </div>
-      <button type="button" class="an-refresh" @click="charger" :disabled="chargement">{{ chargement ? '…' : '↻ Actualiser' }}</button>
+      <div class="an-tools">
+        <span v-if="majAt" class="an-maj">Actualisé à {{ majAt }}</span>
+        <label class="an-auto" title="Rafraîchissement automatique toutes les 30 s"><input type="checkbox" v-model="auto" /> Auto</label>
+        <button type="button" class="an-refresh" @click="charger" :disabled="chargement" title="Actualiser">{{ chargement ? '…' : '↻' }}</button>
+        <button type="button" class="an-refresh" @click="basculerPlein" title="Mode présentation plein écran">{{ presentation ? '✕ Quitter' : '⛶ Plein écran' }}</button>
+      </div>
     </div>
 
     <p v-if="erreur" class="an-alert">{{ erreur }}</p>
@@ -30,13 +35,15 @@
         <div class="an-tile-counts">
           <span class="an-cnt c-cours">{{ t.nb }} en cours</span>
           <span v-if="t.prob" class="an-cnt c-prob">{{ t.prob }} problème<span v-if="t.prob > 1">s</span></span>
+          <span v-if="t.long" class="an-cnt c-long">{{ t.long }} qui traîne<span v-if="t.long > 1">nt</span></span>
           <span v-if="t.attente" class="an-cnt c-att">{{ t.attente }} en attente</span>
         </div>
         <ul v-if="t.lots.length" class="an-lots">
-          <li v-for="l in t.lots" :key="l.id" :class="{ 'lot-prob': l.probleme }">
+          <li v-for="l in t.lots" :key="l.id" :class="{ 'lot-prob': l.probleme, 'lot-long': estLong(l) }">
             <span class="an-lot-no">{{ l.lot }}</span>
             <span class="an-lot-prod">{{ l.code }}<span v-if="l.desig"> — {{ l.desig }}</span></span>
             <span v-if="l.tags.length" class="an-lot-tags"><span v-for="tg in l.tags" :key="tg" class="an-tag">{{ tg }}</span></span>
+            <span v-if="l.debut" class="an-lot-dur" :class="{ long: estLong(l) }">⏱ {{ dureeLabel(l.debut) }}</span>
             <span v-if="l.equip" class="an-lot-eq">{{ equipNom(l.equip) }}</span>
           </li>
         </ul>
@@ -49,7 +56,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { supabase } from '../supabase'
 
 const phases = ref([])      // suivi_phases actives
@@ -57,6 +64,12 @@ const ordres = ref([])      // OF en cours
 const equipements = ref([])
 const chargement = ref(true)
 const erreur = ref('')
+const auto = ref(true)           // rafraîchissement automatique (30 s)
+const majAt = ref('')            // heure de dernière mise à jour
+const presentation = ref(false)  // mode plein écran / présentation
+const racine = ref(null)
+const SEUIL_LONG = 3             // jours : au-delà, un lot en cours « traîne »
+let timer = null
 
 async function fetchAllPaged(make) {
   const size = 1000; let from = 0, all = []
@@ -76,9 +89,27 @@ async function charger() {
   if (!rp.error) phases.value = rp.data || []
   const re = await fetchAllPaged(() => supabase.from('equipements').select('id, code, nom').eq('actif', true))
   if (!re.error) equipements.value = re.data || []
+  majAt.value = new Date().toLocaleTimeString('fr-FR')
   chargement.value = false
 }
-onMounted(charger)
+
+function demarrerAuto() { arreterAuto(); if (auto.value) timer = setInterval(() => { if (!chargement.value) charger() }, 30000) }
+function arreterAuto() { if (timer) { clearInterval(timer); timer = null } }
+watch(auto, (v) => v ? demarrerAuto() : arreterAuto())
+onMounted(() => { charger(); demarrerAuto() })
+onUnmounted(arreterAuto)
+
+async function basculerPlein() {
+  presentation.value = !presentation.value
+  try {
+    if (presentation.value && racine.value && racine.value.requestFullscreen) await racine.value.requestFullscreen()
+    else if (!presentation.value && document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen()
+  } catch (e) { /* le mode CSS reste actif même si l'API plein écran est refusée */ }
+}
+
+function joursDepuis(d) { if (!d) return null; const x = new Date(String(d).slice(0, 10) + 'T00:00:00'); if (isNaN(x.getTime())) return null; return Math.max(0, Math.floor((Date.now() - x.getTime()) / 86400000)) }
+function dureeLabel(d) { const j = joursDepuis(d); return j == null ? '' : (j === 0 ? "aujourd'hui" : j === 1 ? '1 j' : j + ' j') }
+function estLong(l) { const j = joursDepuis(l.debut); return j != null && j > SEUIL_LONG }
 
 const ordreById = computed(() => { const m = {}; for (const o of ordres.value) m[o.id] = o; return m })
 const equipById = computed(() => { const m = {}; for (const e of equipements.value) m[e.id] = e; return m })
@@ -108,7 +139,7 @@ const parAtelier = computed(() => {
       if (o.deviation_cond) tags.push('Déviation cond.')
       if (o.en_triage || (s.triage_debut && !s.triage_fin)) tags.push('Triage')
       const probleme = tags.length > 0
-      ;(cours[ph] = cours[ph] || []).push({ id: o.id, lot: o.numero_lot || '—', code: (o.produits && o.produits.code_pf) || '—', desig: (o.produits && o.produits.designation) || '', probleme, tags, equip: s.equipement_id || null })
+      ;(cours[ph] = cours[ph] || []).push({ id: o.id, lot: o.numero_lot || '—', code: (o.produits && o.produits.code_pf) || '—', desig: (o.produits && o.produits.designation) || '', probleme, tags, debut: s.date_debut || null, equip: s.equipement_id || null })
     } else if (s.statut === 'À faire' || (!s.date_debut && !s.date_phase)) {
       attente[ph] = (attente[ph] || 0) + 1
     }
@@ -119,10 +150,11 @@ const parAtelier = computed(() => {
 const tuiles = computed(() => {
   const { cours, attente } = parAtelier.value
   return ateliersReels.value.map(ph => {
-    const lots = (cours[ph] || []).sort((a, b) => (b.probleme ? 1 : 0) - (a.probleme ? 1 : 0))
+    const lots = (cours[ph] || []).sort((a, b) => (b.probleme ? 1 : 0) - (a.probleme ? 1 : 0) || (joursDepuis(b.debut) || 0) - (joursDepuis(a.debut) || 0))
     const prob = lots.filter(l => l.probleme).length
+    const long = lots.filter(l => estLong(l)).length
     const etat = prob > 0 ? 'rouge' : (lots.length > 0 ? 'vert' : 'gris')
-    return { phase: ph, lots, nb: lots.length, prob, attente: attente[ph] || 0, etat }
+    return { phase: ph, lots, nb: lots.length, prob, long, attente: attente[ph] || 0, etat }
   })
 })
 
@@ -134,6 +166,27 @@ function etatTxt(e) { return e === 'rouge' ? 'ALERTE' : e === 'vert' ? 'En march
 
 <style scoped>
 .andon { max-width: 1280px; margin: 0 auto; padding: 4px 2px 40px; }
+.an-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.an-maj { font-size: 11.5px; color: #94a3b8; font-weight: 600; }
+.an-auto { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: #475569; font-weight: 600; }
+.c-long { background: #fff7ed; color: #c2410c; }
+.an-lot-dur { font-size: 10.5px; color: #64748b; font-weight: 700; background: #f1f5f9; padding: 1px 6px; border-radius: 999px; }
+.an-lot-dur.long { background: #ffedd5; color: #c2410c; }
+.an-lots li.lot-long:not(.lot-prob) { background: #fff7ed; }
+/* Mode présentation / plein écran (écran d'atelier) */
+.andon.pres { max-width: none; background: #0b1220; color: #e5e7eb; min-height: 100vh; padding: 22px 26px; }
+.andon.pres .an-eyebrow { color: #fb7185; }
+.andon.pres .an-title { color: #fff; font-size: 30px; }
+.andon.pres .an-sub, .andon.pres .an-foot { display: none; }
+.andon.pres .an-maj { color: #94a3b8; }
+.andon.pres .an-auto { color: #cbd5e1; }
+.andon.pres .an-kpi, .andon.pres .an-tile { background: #111a2e; border-color: #1f2a44; }
+.andon.pres .an-kpi .an-kv, .andon.pres .an-tile-title { color: #f1f5f9; }
+.andon.pres .an-grid { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 18px; }
+.andon.pres .an-tile-title { font-size: 19px; }
+.andon.pres .an-lots li { background: #0b1220; color: #e5e7eb; }
+.andon.pres .an-lot-no, .andon.pres .an-lot-prod { color: #e5e7eb; }
+.andon.pres .an-tile.t-rouge { background: #2a1115; border-color: #7f1d1d; }
 .an-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .an-eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #e11d48; }
 .an-title { margin: 2px 0 2px; font-size: 24px; font-weight: 800; color: #0f172a; }
