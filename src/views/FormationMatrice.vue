@@ -5,12 +5,6 @@
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
 
-    <div v-if="nbExpire || nbBientot" class="alerte-ech" :class="{ crit: nbExpire }">
-      <span v-if="nbExpire">✗ <b>{{ nbExpire }}</b> qualification(s) expirée(s) ou non acquise(s)</span>
-      <span v-if="nbExpire && nbBientot" class="sep">·</span>
-      <span v-if="nbBientot">⚠ <b>{{ nbBientot }}</b> à recycler sous 60 jours</span>
-    </div>
-
     <section class="card">
       <div class="perim-cards">
         <button type="button" class="pc" :class="{ on: filtreAtelier === '' }" @click="filtreAtelier = ''">
