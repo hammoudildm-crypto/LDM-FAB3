@@ -1398,7 +1398,7 @@ onMounted(async () => {
                     <td colspan="6">
                       <div class="qd-head">Lots de l'atelier « {{ r.label }} » — {{ r.allLots.length }} lot(s)</div>
                       <table class="qd-tbl">
-                        <thead><tr><th>N° lot</th><th>Produit</th><th>Statut</th><th class="qnum">Boîtes</th><th>Fin étape préc.</th><th class="qnum">Durée stockage</th><th class="qnum">Holding time</th><th>État</th><th>Équipement</th><th v-if="r.label === 'Conditionnement'">Statut AQL vrac</th></tr></thead>
+                        <thead><tr><th>N° lot</th><th>Produit</th><th>Statut</th><th class="qnum">Boîtes</th><th>Fin étape préc.</th><th class="qnum">Durée stockage</th><th class="qnum">Holding time</th><th>Validité OF</th><th>État</th><th>Équipement</th><th v-if="r.label === 'Conditionnement'">Statut AQL vrac</th></tr></thead>
                         <tbody>
                           <tr v-for="l in r.allLots" :key="l.id" @click="ouvrirLot(l, l.pk)" title="Ouvrir le suivi de fabrication de ce lot">
                             <td class="qd-lot">{{ l.lot }}<span v-if="l.perime" class="perime-tag">OF périmé</span></td>
@@ -1408,6 +1408,10 @@ onMounted(async () => {
                             <td class="qd-date" :title="l.datePrec ? 'Étape précédente terminée le ' + fmtDate(l.datePrec) : 'Date non renseignée'">{{ fmtDate(l.datePrec) }}</td>
                             <td class="qnum qd-dur" :class="[ageClass(l.datePrec), { 'hold-over': depasseHold(l) }]" :title="l.datePrec ? 'En stock depuis le ' + fmtDate(l.datePrec) : ''">{{ joursDepuis(l.datePrec) }}<span v-if="depasseHold(l)" class="hold-tag">⚠ dépassé</span></td>
                             <td class="qnum qd-hold" :class="{ 'hold-over': depasseHold(l) }" :title="l.holdJ ? 'Holding time de stockage du produit : ' + l.holdJ + ' j' : 'Holding time non renseigné pour ce produit'">{{ l.holdJ ? l.holdJ + ' j' : '—' }}</td>
+                            <td class="qd-date" :class="{ 'qd-perime-txt': l.perime }" :title="l.validite ? 'Fin de validité de l\'OF' : 'Pas de date de validité d\'OF'">
+                              <template v-if="l.validite">{{ fmtDate(l.validite) }}<span v-if="l.perime" class="perime-tag">périmé</span></template>
+                              <span v-else class="qd-eqnone">—</span>
+                            </td>
                             <td>
                               <span v-if="l.triage" class="qd-tag qd-tri">Triage</span>
                               <span v-if="l.deviation" class="qd-tag qd-fab">Déviation fab.</span>
@@ -1425,7 +1429,7 @@ onMounted(async () => {
                               <span v-else class="qd-aqlv-none" title="Aucun contrôle AQL sur la dernière étape de fabrication">non contrôlé</span>
                             </td>
                           </tr>
-                          <tr v-if="!r.allLots.length"><td :colspan="r.label === 'Conditionnement' ? 10 : 9" class="qd-empty">Aucun lot dans cet atelier.</td></tr>
+                          <tr v-if="!r.allLots.length"><td :colspan="r.label === 'Conditionnement' ? 11 : 10" class="qd-empty">Aucun lot dans cet atelier.</td></tr>
                         </tbody>
                       </table>
                     </td>
@@ -1774,6 +1778,7 @@ onMounted(async () => {
 .lot-row:hover td { background: #f0f9ff; }
 .lot-row:hover .pf { color: #0891b2; text-decoration: underline; }
 .perime-tag { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 700; color: #b91c1c; background: #fee2e2; padding: 1px 6px; border-radius: 999px; }
+.qd-perime-txt { color: #b91c1c; font-weight: 700; }
 .lot-sub { display: block; font-size: 10.5px; color: #64748b; margin-top: 2px; }
 .unit { font-size: 10px; color: #94a3b8; font-weight: 500; }
 .row-perime td { background: #fff5f6; }
