@@ -101,6 +101,7 @@ const LINK_ICONS = {
   '/andon': '<rect x="8" y="2" width="8" height="20" rx="4"/><circle cx="12" cy="7" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="17" r="1.6"/>',
   '/tpm': '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6z"/>',
   '/smed': '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',
+  '/kaizen': '<path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="M4.9 4.9l2.9 2.9"/><path d="M2 12h4"/><circle cx="12" cy="13" r="4"/>',
   '/temps-reel': '<circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/>',
   '/avancement': '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
   '/production-atelier': '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
