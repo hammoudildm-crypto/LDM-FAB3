@@ -1063,20 +1063,25 @@ ${matHtml}
 @media (max-width: 900px) { .chart-grid.cg-2 { grid-template-columns: 1fr; } }
 
 /* Capabilité en colonne à gauche, grille 2×2 à droite */
-.analyse-row { display: flex; gap: 18px; align-items: flex-start; margin-top: 10px; }
+.analyse-row { display: flex; gap: 18px; align-items: stretch; margin-top: 10px; }
 .analyse-left { flex: 0 0 332px; max-width: 332px; }
-.analyse-left .cap-wrap { margin-bottom: 0; }
+.analyse-left .cap-wrap { margin-bottom: 0; height: 100%; }
 .analyse-left .cap-cards { grid-template-columns: 1fr; gap: 10px; margin-bottom: 14px; }
 .analyse-left .cap-card { min-height: 0; padding: 13px; }
 .analyse-left .cap-donut { width: 84px; height: 84px; }
-.analyse-right { flex: 1; min-width: 0; }
+.analyse-right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .analyse-right .chart-head { margin-top: 0; }
+/* La grille remplit la hauteur de la colonne droite = hauteur de la Capabilité */
+.analyse-right .chart-grid { flex: 1 1 auto; }
+.analyse-right .chart-grid.cg-2 { align-content: space-between; }
 .analyse-row.no-cap .analyse-right { width: 100%; }
 @media (max-width: 1100px) {
   .analyse-row { flex-direction: column; gap: 16px; }
   .analyse-left { flex: none; max-width: none; width: 100%; }
+  .analyse-left .cap-wrap { height: auto; }
   .analyse-left .cap-cards { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
   .analyse-left .cap-donut { width: 94px; height: 94px; }
+  .analyse-right .chart-grid.cg-2 { align-content: start; }
 }
 
 .chart-wrap { margin-top: 10px; }
