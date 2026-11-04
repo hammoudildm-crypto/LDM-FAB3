@@ -68,12 +68,25 @@ const message = ref('')
 const form = reactive({ id: null, personne_id: '', formation_id: '', date_formation: new Date().toISOString().slice(0, 10), formateur: '', resultat: 'acquis' })
 function reset() { Object.assign(form, { id: null, personne_id: '', formation_id: '', date_formation: new Date().toISOString().slice(0, 10), formateur: '', resultat: 'acquis' }) }
 
+// Récupère TOUTES les lignes par pages de 1000 (Supabase plafonne une requête à 1000).
+async function fetchAllPaged(make) {
+  const size = 1000; let from = 0, all = []
+  for (;;) {
+    const r = await make().range(from, from + size - 1)
+    if (r.error) return { error: r.error, data: all }
+    all = all.concat(r.data || [])
+    if (!r.data || r.data.length < size) break
+    from += size
+  }
+  return { data: all, error: null }
+}
 async function charger() {
   const rp = await supabase.from('organigramme').select('id, nom, matricule, fonction').eq('actif', true).order('nom')
   if (!rp.error) personnes.value = rp.data || []
   const rf = await supabase.from('formations').select('*').eq('actif', true).order('ordre')
   if (!rf.error) formations.value = rf.data || []
-  const re = await supabase.from('formation_enregistrements').select('*').order('date_formation', { ascending: false })
+  // Paginer : au-delà de 1000 enregistrements, la détection des doublons doit voir TOUTES les fiches.
+  const re = await fetchAllPaged(() => supabase.from('formation_enregistrements').select('*').order('date_formation', { ascending: false }))
   if (re.error) { erreur.value = re.error.message; return }
   enregistrements.value = re.data || []
 }
