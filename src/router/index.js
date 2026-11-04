@@ -34,6 +34,7 @@ import RealisationPlan from '../views/RealisationPlan.vue'
 import Rendement from '../views/Rendement.vue'
 import DisponibiliteEquipements from '../views/DisponibiliteEquipements.vue'
 import SuiviTriage from '../views/SuiviTriage.vue'
+import AndonLignes from '../views/AndonLignes.vue'
 import AvancementLots from '../views/AvancementLots.vue'
 import ProductionAtelier from '../views/ProductionAtelier.vue'
 import SuiviTRS from '../views/SuiviTRS.vue'
@@ -95,6 +96,7 @@ const routes = [
   { path: '/rendement', name: 'rendement', component: Rendement },
   { path: '/dispo-equipements', name: 'dispo-equipements', component: DisponibiliteEquipements },
   { path: '/suivi-triage', name: 'suivi-triage', component: SuiviTriage },
+  { path: '/andon', name: 'andon', component: AndonLignes },
   { path: '/avancement', name: 'avancement', component: AvancementLots },
   { path: '/production-atelier', name: 'production-atelier', component: ProductionAtelier },
   { path: '/suivi-trs', name: 'suivi-trs', component: SuiviTRS },

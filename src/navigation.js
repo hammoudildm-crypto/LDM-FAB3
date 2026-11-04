@@ -33,7 +33,10 @@ export const MODULES = [
     links: [['/pqr-parametres', 'Paramètres critiques'], ['/pqr-saisie', 'Saisie des mesures'], ['/pqr-tableau', 'Tableau de bord PQR']] },
   { key: 'pilotage', label: 'Pilotage', c: '#22c55e',
     icon: `<g ${S}><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></g>`,
-    links: [['/tableau-de-bord', 'Tableau de bord'], ['/realisation-plan', 'Réalisation vs Plan'], ['/realisation-pdp', 'Réalisation PDP par phase'], ['/pdp-equipement', 'PDP par équipement'], ['/rendement', 'Rendement'], ['/ca', "Chiffre d'affaires"], ['/qse', 'Indicateurs QSE']] }
+    links: [['/tableau-de-bord', 'Tableau de bord'], ['/realisation-plan', 'Réalisation vs Plan'], ['/realisation-pdp', 'Réalisation PDP par phase'], ['/pdp-equipement', 'PDP par équipement'], ['/rendement', 'Rendement'], ['/ca', "Chiffre d'affaires"], ['/qse', 'Indicateurs QSE']] },
+  { key: 'lean', label: 'Lean / Amélioration', c: '#e11d48',
+    icon: `<g ${S}><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></g>`,
+    links: [['/andon', 'Andon — État des lignes']] }
 ]
 
 // Carte chemin -> couleur de module (pour l'accent de page : bordure topbar, lien actif).
