@@ -36,6 +36,7 @@ import DisponibiliteEquipements from '../views/DisponibiliteEquipements.vue'
 import SuiviTriage from '../views/SuiviTriage.vue'
 import AndonLignes from '../views/AndonLignes.vue'
 import TpmMaintenance from '../views/TpmMaintenance.vue'
+import SmedChangements from '../views/SmedChangements.vue'
 import AvancementLots from '../views/AvancementLots.vue'
 import ProductionAtelier from '../views/ProductionAtelier.vue'
 import SuiviTRS from '../views/SuiviTRS.vue'
@@ -99,6 +100,7 @@ const routes = [
   { path: '/suivi-triage', name: 'suivi-triage', component: SuiviTriage },
   { path: '/andon', name: 'andon', component: AndonLignes },
   { path: '/tpm', name: 'tpm', component: TpmMaintenance },
+  { path: '/smed', name: 'smed', component: SmedChangements },
   { path: '/avancement', name: 'avancement', component: AvancementLots },
   { path: '/production-atelier', name: 'production-atelier', component: ProductionAtelier },
   { path: '/suivi-trs', name: 'suivi-trs', component: SuiviTRS },

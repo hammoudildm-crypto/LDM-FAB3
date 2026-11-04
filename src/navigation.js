@@ -36,7 +36,7 @@ export const MODULES = [
     links: [['/tableau-de-bord', 'Tableau de bord'], ['/realisation-plan', 'Réalisation vs Plan'], ['/realisation-pdp', 'Réalisation PDP par phase'], ['/pdp-equipement', 'PDP par équipement'], ['/rendement', 'Rendement'], ['/ca', "Chiffre d'affaires"], ['/qse', 'Indicateurs QSE']] },
   { key: 'lean', label: 'Lean / Amélioration', c: '#e11d48',
     icon: `<g ${S}><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></g>`,
-    links: [['/andon', 'Andon — État des lignes'], ['/tpm', 'TPM — Maintenance']] }
+    links: [['/andon', 'Andon — État des lignes'], ['/tpm', 'TPM — Maintenance'], ['/smed', 'SMED — Changement de série']] }
 ]
 
 // Carte chemin -> couleur de module (pour l'accent de page : bordure topbar, lien actif).
