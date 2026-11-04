@@ -962,15 +962,17 @@ ${matHtml}
 .btn.ghost:hover { background: var(--pqr-tint); border-color: var(--pqr-line); box-shadow: none; }
 .btn.sm { padding: 7px 12px; font-size: 13px; }
 
-.pqr-bar { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 18px; align-items: flex-end; }
+.pqr-bar { display: flex; flex-wrap: nowrap; gap: 10px; margin-bottom: 18px; align-items: flex-end; }
 .pqr-bar .f { display: flex; flex-direction: column; gap: 5px; }
-.pqr-bar .f.grow { flex: 1; min-width: 240px; }
+.pqr-bar .f.grow { flex: 1 1 auto; min-width: 0; }
 .pqr-bar label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .pqr-bar select, .pqr-bar input { padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: var(--r-sm); font: inherit; font-size: 13px; background: var(--surface); color: var(--ink); transition: border-color .13s, box-shadow .13s; }
 .pqr-bar select:focus, .pqr-bar input:focus { outline: none; border-color: var(--pqr); box-shadow: 0 0 0 3px rgba(168,85,247,.15); }
-.pqr-bar .prod-search { min-width: 170px; }
+.pqr-bar .prod-search { min-width: 120px; }
 .pqr-bar label .cnt { color: var(--pqr); font-weight: 700; }
 .pqr-bar .f.grow select { width: 100%; }
+/* La barre de filtres tient sur une seule ligne ; repli sur petit écran */
+@media (max-width: 860px) { .pqr-bar { flex-wrap: wrap; } .pqr-bar .prod-search { min-width: 150px; } }
 
 .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
 .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 15px 14px; text-align: center; box-shadow: inset 0 3px 0 var(--pqr); }
