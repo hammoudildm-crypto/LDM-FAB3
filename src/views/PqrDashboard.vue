@@ -417,6 +417,9 @@ watch(produitSel, async (pid) => {
   }
   mesures.value = allM
   paramSel.value = synthese.value.length ? synthese.value[0].id : null
+  // Pré-sélectionne 2 paramètres numériques pour que « Comparer » affiche toujours des
+  // données par défaut ; la sélection reste modifiable via les cases ⇄ de la synthèse.
+  comparIds.value = paramsNumDispo.value.slice(0, 2).map(p => p.id)
 })
 
 const mesuresFiltrees = computed(() => mesures.value.filter(m => {
