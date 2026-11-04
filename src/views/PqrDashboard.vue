@@ -33,6 +33,43 @@
           <div class="kpi" :class="{ bad: nbHors > 0 }"><div class="kv">{{ nbHors }}</div><div class="kl">Hors spec</div></div>
         </div>
 
+        <div class="psplit">
+          <div class="psplit-left">
+        <h3 class="sec-titre">Synthèse par paramètre</h3>
+        <p class="hint">Clique une ligne pour mettre à jour les graphiques à droite. Cpk ≥ 1,33 : capable · 1,00–1,33 : acceptable · &lt; 1,00 : insuffisant.</p>
+        <div class="syn-layout">
+          <aside class="syn-side">
+            <button :class="{ on: !phaseSyn }" @click="phaseSyn = ''">Toutes</button>
+            <button v-for="ph in phasesAvecMesures" :key="ph" :class="{ on: phaseSyn === ph }" @click="phaseSyn = ph">{{ ph }}</button>
+          </aside>
+          <div class="syn-main">
+        <div v-for="ph in phasesSynAffichees" :key="ph" class="pqr-phase">
+          <h4 class="pqr-phase-titre">{{ ph }}</h4>
+          <table class="pqr-tbl">
+            <thead><tr><th class="r cmp-th" title="Cocher pour comparer sur le même graphe">⇄</th><th>Paramètre</th><th class="r">n</th><th class="r">Moyenne</th><th class="r">σ</th><th class="r">Limites</th><th class="r">Conf.</th><th class="r">Cp</th><th class="r">Cpk</th><th>Capabilité</th></tr></thead>
+            <tbody>
+              <template v-for="et in etapesDeSyn(ph)" :key="ph + '|' + et">
+              <tr v-if="et" class="etape-row"><td colspan="10">{{ et }}</td></tr>
+              <tr v-for="r in syntheseDeEtape(ph, et)" :key="r.id" :class="{ sel: r.id === paramSel, cmp: estCompare(r.id) }" @click="paramSel = r.id">
+                <td class="r cmp-td"><input type="checkbox" :checked="estCompare(r.id)" :disabled="r.bool" @click.stop="toggleCompare(r.id)" title="Comparer ce paramètre" /></td>
+                <td class="nom">{{ r.nom }} <span v-if="r.bool" class="tag-bool">ON/OFF</span><span v-else class="u">{{ r.unite ? '(' + r.unite + ')' : '' }}</span></td>
+                <td class="r">{{ r.n }}</td>
+                <td class="r">{{ r.bool ? (r.nOn + ' ON / ' + (r.n - r.nOn) + ' OFF') : fmtNum(r.mean) }}</td>
+                <td class="r">{{ r.bool ? '—' : r.std.toFixed(3) }}</td>
+                <td class="r lim">{{ r.bool ? (r.attendu ? 'Att. ' + r.attendu : 'ON/OFF') : limTxt(r.lsl, r.usl) }}</td>
+                <td class="r"><span :class="r.conf >= 100 ? 'c-ok' : 'c-ko'">{{ r.conf.toFixed(0) }}%</span></td>
+                <td class="r">{{ r.bool ? '—' : (r.cp != null ? r.cp.toFixed(2) : '—') }}</td>
+                <td class="r cpk">{{ r.bool ? '—' : (r.cpk != null ? r.cpk.toFixed(2) : '—') }}</td>
+                <td><span class="verdict" :class="r.bool ? 'v-na' : verdictCls(r.cpk)">{{ r.bool ? 'ON/OFF' : verdictTxt(r.cpk) }}</span></td>
+              </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+          </div>
+        </div>
+          </div>
+          <div class="psplit-right">
         <div class="analyse-row" :class="{ 'no-cap': !capabilite.n }">
           <aside v-if="capabilite.n" class="analyse-left">
             <div class="cap-wrap">
@@ -235,38 +272,6 @@
         </div>
         </div>
           </div>
-        </div>
-
-        <h3 class="sec-titre">Synthèse par paramètre</h3>
-        <p class="hint">Clique une ligne pour mettre à jour les graphiques ci-dessus. Cpk ≥ 1,33 : capable · 1,00–1,33 : acceptable · &lt; 1,00 : insuffisant.</p>
-        <div class="syn-layout">
-          <aside class="syn-side">
-            <button :class="{ on: !phaseSyn }" @click="phaseSyn = ''">Toutes</button>
-            <button v-for="ph in phasesAvecMesures" :key="ph" :class="{ on: phaseSyn === ph }" @click="phaseSyn = ph">{{ ph }}</button>
-          </aside>
-          <div class="syn-main">
-        <div v-for="ph in phasesSynAffichees" :key="ph" class="pqr-phase">
-          <h4 class="pqr-phase-titre">{{ ph }}</h4>
-          <table class="pqr-tbl">
-            <thead><tr><th class="r cmp-th" title="Cocher pour comparer sur le même graphe">⇄</th><th>Paramètre</th><th class="r">n</th><th class="r">Moyenne</th><th class="r">σ</th><th class="r">Limites</th><th class="r">Conf.</th><th class="r">Cp</th><th class="r">Cpk</th><th>Capabilité</th></tr></thead>
-            <tbody>
-              <template v-for="et in etapesDeSyn(ph)" :key="ph + '|' + et">
-              <tr v-if="et" class="etape-row"><td colspan="10">{{ et }}</td></tr>
-              <tr v-for="r in syntheseDeEtape(ph, et)" :key="r.id" :class="{ sel: r.id === paramSel, cmp: estCompare(r.id) }" @click="paramSel = r.id">
-                <td class="r cmp-td"><input type="checkbox" :checked="estCompare(r.id)" :disabled="r.bool" @click.stop="toggleCompare(r.id)" title="Comparer ce paramètre" /></td>
-                <td class="nom">{{ r.nom }} <span v-if="r.bool" class="tag-bool">ON/OFF</span><span v-else class="u">{{ r.unite ? '(' + r.unite + ')' : '' }}</span></td>
-                <td class="r">{{ r.n }}</td>
-                <td class="r">{{ r.bool ? (r.nOn + ' ON / ' + (r.n - r.nOn) + ' OFF') : fmtNum(r.mean) }}</td>
-                <td class="r">{{ r.bool ? '—' : r.std.toFixed(3) }}</td>
-                <td class="r lim">{{ r.bool ? (r.attendu ? 'Att. ' + r.attendu : 'ON/OFF') : limTxt(r.lsl, r.usl) }}</td>
-                <td class="r"><span :class="r.conf >= 100 ? 'c-ok' : 'c-ko'">{{ r.conf.toFixed(0) }}%</span></td>
-                <td class="r">{{ r.bool ? '—' : (r.cp != null ? r.cp.toFixed(2) : '—') }}</td>
-                <td class="r cpk">{{ r.bool ? '—' : (r.cpk != null ? r.cpk.toFixed(2) : '—') }}</td>
-                <td><span class="verdict" :class="r.bool ? 'v-na' : verdictCls(r.cpk)">{{ r.bool ? 'ON/OFF' : verdictTxt(r.cpk) }}</span></td>
-              </tr>
-              </template>
-            </tbody>
-          </table>
         </div>
           </div>
         </div>
@@ -1061,6 +1066,23 @@ ${matHtml}
 .chart-grid.cg-2 > .chart-block:nth-child(3) { order: 2; } /* Courbe de capabilité */
 .chart-grid.cg-2 > .chart-block:nth-child(4) { order: 4; } /* Comparer */
 @media (max-width: 900px) { .chart-grid.cg-2 { grid-template-columns: 1fr; } }
+
+/* Tableau Synthèse en colonne gauche, Capabilité + grille 2×2 à droite */
+.psplit { display: flex; gap: 18px; align-items: flex-start; margin-top: 10px; }
+.psplit-left { flex: 1 1 47%; min-width: 0; }
+.psplit-right { flex: 1 1 53%; min-width: 0; }
+.psplit-left .sec-titre { margin-top: 0; }
+.psplit-left .syn-layout { flex-direction: column; gap: 10px; }
+.psplit-left .syn-side { flex: none; width: 100%; flex-direction: row; flex-wrap: wrap; position: static; top: auto; }
+.psplit-left .syn-side button { flex: 1 1 auto; padding: 6px 10px; font-size: 12px; }
+.psplit-left .syn-main { overflow-x: auto; }
+.psplit-left .pqr-tbl { font-size: 12px; }
+.psplit-left .pqr-tbl th, .psplit-left .pqr-tbl td { padding: 6px 7px; }
+.psplit-right .analyse-row { margin-top: 0; }
+@media (max-width: 1100px) {
+  .psplit { flex-direction: column; gap: 14px; }
+  .psplit-left, .psplit-right { flex: none; width: 100%; }
+}
 
 /* Capabilité en bande horizontale (pleine largeur), grille 2×2 en dessous */
 .analyse-row { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
