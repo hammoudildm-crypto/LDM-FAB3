@@ -1063,17 +1063,39 @@ ${matHtml}
 @media (max-width: 900px) { .chart-grid.cg-2 { grid-template-columns: 1fr; } }
 
 /* Capabilité en colonne à gauche, grille 2×2 à droite */
-.analyse-row { display: flex; gap: 18px; align-items: stretch; margin-top: 10px; }
-.analyse-left { flex: 0 0 332px; max-width: 332px; }
-.analyse-left .cap-wrap { margin-bottom: 0; height: 100%; }
-.analyse-left .cap-cards { grid-template-columns: 1fr; gap: 10px; margin-bottom: 14px; }
-.analyse-left .cap-card { min-height: 0; padding: 13px; }
-.analyse-left .cap-donut { width: 84px; height: 84px; }
+.analyse-row { display: flex; gap: 16px; align-items: stretch; margin-top: 10px; }
+.analyse-left { flex: 0 0 312px; max-width: 312px; }
+.analyse-left .cap-wrap { margin-bottom: 0; height: 100%; padding: 12px 14px 14px; display: flex; flex-direction: column; }
+.analyse-left .cap-head { margin-bottom: 10px; }
+.analyse-left .cap-titre { font-size: 13.5px; }
+.analyse-left .cap-sub { font-size: 11px; }
+.analyse-left .cap-cards { grid-template-columns: 1fr; gap: 8px; margin-bottom: 10px; flex: 1 1 auto; grid-auto-rows: 1fr; }
+.analyse-left .cap-card { min-height: 0; padding: 9px 11px; }
+.analyse-left .cap-donut { width: 56px; height: 56px; margin: 0 auto; }
+.analyse-left .cap-l { margin-top: 4px; }
+.analyse-left .cap-v { font-size: 25px; }
+.analyse-left .cap-badge { margin-top: 5px; }
+.analyse-left .cap-note { margin-top: 3px; }
+.analyse-left .cap-bar { height: 20px; }
+.analyse-left .cap-leg { margin-top: 8px; gap: 5px; }
 .analyse-right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .analyse-right .chart-head { margin-top: 0; }
 /* La grille remplit la hauteur de la colonne droite = hauteur de la Capabilité */
 .analyse-right .chart-grid { flex: 1 1 auto; }
-.analyse-right .chart-grid.cg-2 { align-content: space-between; }
+.analyse-right .chart-grid.cg-2 { align-content: space-between; gap: 10px; }
+/* Graphes compacts dans la grille 2×2 pour alléger la hauteur et dégager le tableau */
+.analyse-right .chart-grid.cg-2 .chart-block { padding: 10px 12px; }
+.analyse-right .chart-grid.cg-2 .sec-sub { margin: 0 0 6px; font-size: 12px; }
+.analyse-right .chart-grid.cg-2 .chart-wrap { margin-top: 6px; }
+.analyse-right .chart-grid.cg-2 .trend { max-height: 158px; }
+.analyse-right .chart-grid.cg-2 .leg,
+.analyse-right .chart-grid.cg-2 .multi-leg { margin-top: 5px; }
+.analyse-right .chart-grid.cg-2 .hint { margin-top: 5px; font-size: 10.5px; }
+.analyse-right .chart-grid.cg-2 .cur-readout { margin-top: 6px; padding: 6px 10px; }
+.analyse-right .chart-grid.cg-2 .cap-readrow { margin-top: 6px; padding: 8px 10px; }
+.analyse-right .chart-grid.cg-2 .viol-box,
+.analyse-right .chart-grid.cg-2 .viol-ok { margin-top: 6px; }
+.analyse-right .zone-ctrl { margin: 8px 0 2px; padding: 8px 10px; }
 .analyse-row.no-cap .analyse-right { width: 100%; }
 @media (max-width: 1100px) {
   .analyse-row { flex-direction: column; gap: 16px; }
