@@ -32,6 +32,35 @@
     <p v-if="erreur && !besoinMigration" class="kz-alert">{{ erreur }}</p>
     <p v-if="message" class="kz-ok">{{ message }}</p>
 
+    <div v-if="!besoinMigration && actions.length" class="kz-dash">
+      <div class="kz-kpis">
+        <div class="kz-kpi"><div class="kz-kv">{{ kpis.actives }}</div><div class="kz-kl">Actions actives</div></div>
+        <div class="kz-kpi"><div class="kz-kv">{{ kpis.enCours }}</div><div class="kz-kl">En cours</div></div>
+        <div class="kz-kpi k-ok"><div class="kz-kv">{{ kpis.terminees }}</div><div class="kz-kl">Terminées</div></div>
+        <div class="kz-kpi" :class="{ 'k-bad': kpis.retard }"><div class="kz-kv">{{ kpis.retard }}</div><div class="kz-kl">En retard</div></div>
+        <div class="kz-kpi"><div class="kz-kv">{{ kpis.taux }} %</div><div class="kz-kl">Taux de réalisation</div></div>
+      </div>
+      <div class="kz-breaks">
+        <div class="kz-break">
+          <div class="kz-break-h">Par priorité</div>
+          <div class="kz-prio">
+            <span class="kz-prio-c p-haute">{{ parPriorite.Haute }} Haute</span>
+            <span class="kz-prio-c p-moyenne">{{ parPriorite.Moyenne }} Moyenne</span>
+            <span class="kz-prio-c p-basse">{{ parPriorite.Basse }} Basse</span>
+          </div>
+        </div>
+        <div class="kz-break">
+          <div class="kz-break-h">Par atelier</div>
+          <div v-if="!parAtelierTop.length" class="kz-break-empty">—</div>
+          <div v-for="x in parAtelierTop" :key="x.k" class="kz-atl-row">
+            <span class="kz-atl-lbl">{{ x.k }}</span>
+            <div class="kz-atl-bar"><div class="kz-atl-fill" :style="{ width: (maxAtelier ? x.v / maxAtelier * 100 : 0) + '%' }"></div></div>
+            <span class="kz-atl-v">{{ x.v }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <section v-if="peutEditer && !besoinMigration" class="kz-form card">
       <div class="kz-form-head">{{ form.id ? 'Modifier l\'action' : 'Nouvelle action d\'amélioration' }}</div>
       <div class="kz-grid">
@@ -54,7 +83,10 @@
     </section>
 
     <div v-if="!besoinMigration" class="kz-toolbar">
-      <label class="kz-chk"><input type="checkbox" v-model="masquerClos" /> Masquer les actions terminées/abandonnées</label>
+      <label class="kz-chk"><input type="checkbox" v-model="masquerClos" /> Masquer terminées/abandonnées</label>
+      <select v-model="fAtelier" class="kz-filtre"><option value="">Tous ateliers</option><option v-for="a in ateliersDispo" :key="a" :value="a">{{ a }}</option></select>
+      <select v-model="fPriorite" class="kz-filtre"><option value="">Toutes priorités</option><option>Haute</option><option>Moyenne</option><option>Basse</option></select>
+      <select v-model="fResp" class="kz-filtre"><option value="">Tous responsables</option><option v-for="r in respDispo" :key="r" :value="r">{{ r }}</option></select>
       <span class="kz-count">{{ actionsFiltrees.length }} action(s)</span>
     </div>
 
@@ -154,7 +186,30 @@ function prefillOrigine() {
 }
 
 const ateliersDispo = computed(() => [...new Set(actions.value.map(a => (a.atelier || '').trim()).filter(Boolean))].sort())
-const actionsFiltrees = computed(() => masquerClos.value ? actions.value.filter(a => a.statut !== 'Terminé' && a.statut !== 'Abandonné') : actions.value)
+const respDispo = computed(() => [...new Set(actions.value.map(a => (a.responsable || '').trim()).filter(Boolean))].sort())
+const fAtelier = ref(''), fPriorite = ref(''), fResp = ref('')
+const actionsFiltrees = computed(() => actions.value.filter(a => {
+  if (masquerClos.value && (a.statut === 'Terminé' || a.statut === 'Abandonné')) return false
+  if (fAtelier.value && (a.atelier || '').trim() !== fAtelier.value) return false
+  if (fPriorite.value && (a.priorite || 'Moyenne') !== fPriorite.value) return false
+  if (fResp.value && (a.responsable || '').trim() !== fResp.value) return false
+  return true
+}))
+
+// Tableau de bord Kaizen
+const kpis = computed(() => {
+  const all = actions.value
+  const abandon = all.filter(a => a.statut === 'Abandonné').length
+  const terminees = all.filter(a => a.statut === 'Terminé').length
+  const enCours = all.filter(a => a.statut === 'En cours').length
+  const actives = all.length - abandon
+  const retard = all.filter(a => enRetard(a)).length
+  const taux = actives ? Math.round(terminees / actives * 100) : 0
+  return { actives, enCours, terminees, retard, taux }
+})
+const parPriorite = computed(() => { const o = { Haute: 0, Moyenne: 0, Basse: 0 }; for (const a of actions.value) { if (a.statut === 'Abandonné') continue; const p = a.priorite || 'Moyenne'; if (p in o) o[p]++ } return o })
+const parAtelierTop = computed(() => { const m = {}; for (const a of actions.value) { if (a.statut === 'Abandonné') continue; const k = (a.atelier || '').trim() || '—'; m[k] = (m[k] || 0) + 1 } return Object.entries(m).map(([k, v]) => ({ k, v })).sort((a, b) => b.v - a.v).slice(0, 6) })
+const maxAtelier = computed(() => parAtelierTop.value.reduce((mx, x) => Math.max(mx, x.v), 0))
 function parPhase(ph) { return actionsFiltrees.value.filter(a => (a.phase_pdca || 'Plan') === ph) }
 function idxPdca(p) { const i = PDCA.indexOf(p); return i < 0 ? 0 : i }
 function phaseSuivante(p) { return PDCA[Math.min(3, idxPdca(p) + 1)] }
@@ -225,6 +280,30 @@ function statutCls(s) { return s === 'Terminé' ? 's-ok' : s === 'En cours' ? 's
 .kz-toolbar { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
 .kz-chk { font-size: 13px; color: #475569; display: flex; align-items: center; gap: 6px; }
 .kz-count { color: #94a3b8; font-size: 12.5px; font-weight: 600; margin-left: auto; }
+.kz-filtre { border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 9px; font: inherit; font-size: 12.5px; color: #334155; background: #fff; }
+.kz-dash { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+.kz-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.kz-kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 11px 12px; }
+.kz-kpi.k-ok { background: #ecfdf5; border-color: #a7f3d0; }
+.kz-kpi.k-bad { background: #fef2f2; border-color: #fecaca; }
+.kz-kv { font-size: 21px; font-weight: 800; color: #0f172a; line-height: 1; }
+.kz-kpi.k-ok .kz-kv { color: #047857; } .kz-kpi.k-bad .kz-kv { color: #b91c1c; }
+.kz-kl { margin-top: 5px; font-size: 11px; color: #64748b; font-weight: 600; }
+.kz-breaks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.kz-break { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 12px 14px; }
+.kz-break-h { font-weight: 700; color: #0f172a; font-size: 13px; margin-bottom: 10px; }
+.kz-break-empty { color: #cbd5e1; font-size: 13px; }
+.kz-prio { display: flex; flex-direction: column; gap: 6px; }
+.kz-prio-c { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 8px; }
+.kz-prio-c.p-haute { background: #fef2f2; color: #b91c1c; }
+.kz-prio-c.p-moyenne { background: #fffbeb; color: #b45309; }
+.kz-prio-c.p-basse { background: #f1f5f9; color: #475569; }
+.kz-atl-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.kz-atl-lbl { width: 100px; flex: none; font-size: 12px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kz-atl-bar { flex: 1; height: 12px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.kz-atl-fill { height: 100%; background: #e11d48; border-radius: 4px; min-width: 2px; }
+.kz-atl-v { width: 26px; flex: none; text-align: right; font-size: 12px; font-weight: 700; color: #475569; }
+@media (max-width: 900px) { .kz-dash { grid-template-columns: 1fr; } .kz-kpis { grid-template-columns: repeat(3, 1fr); } }
 .kz-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: start; }
 .kz-col { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; }
 .kz-col-head { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: 13px; color: #0f172a; margin-bottom: 10px; }
