@@ -224,8 +224,8 @@
             <tbody>
               <tr v-for="p in personnesFiltrees" :key="p.id">
                 <td class="sticky-l nom">{{ p.nom }}</td>
-                <td v-for="f in formations" :key="f.id" class="cell">
-                  <span class="pt" :class="'e-' + cellStatut(p.id, f.id)" :title="cellTitre(p, f)">{{ cellIcon(cellStatut(p.id, f.id)) }}</span>
+                <td v-for="f in formations" :key="f.id" class="cell cell-clic" :title="cellTitre(p, f)" @click="ouvrirCase(p, f)">
+                  <span class="pt" :class="'e-' + cellStatut(p.id, f.id)">{{ cellIcon(cellStatut(p.id, f.id)) }}</span>
                 </td>
               </tr>
             </tbody>
@@ -241,6 +241,22 @@
       </template>
       </div>
     </section>
+
+    <div v-if="caseSel" class="case-overlay" @click="fermerCase">
+      <div class="case-modal" @click.stop>
+        <button class="case-x" type="button" @click="fermerCase">✕</button>
+        <h4 class="case-pers">{{ caseSel.personne }}<span class="case-fn">{{ caseSel.fonction }}</span></h4>
+        <p class="case-form">{{ caseSel.formation }}<span v-if="caseSel.code_sop" class="sop">{{ caseSel.code_sop }}</span></p>
+        <div class="case-etat" :class="'cse-' + caseSel.statut">{{ etatTxt(caseSel.statut) }}</div>
+        <ul class="case-info">
+          <li><span>Formé le</span><b>{{ caseSel.e ? fmtDate(caseSel.e.date_formation) : '—' }}</b></li>
+          <li><span>Expiration</span><b>{{ caseSel.e ? (caseSel.e.expiration ? fmtDate(caseSel.e.expiration) : 'Permanent') : '—' }}</b></li>
+          <li><span>Résultat</span><b>{{ caseSel.e ? (caseSel.e.resultat === 'non acquis' ? 'Non acquis' : 'Acquis') : '—' }}</b></li>
+          <li v-if="caseSel.e && caseSel.e.formateur"><span>Formateur</span><b>{{ caseSel.e.formateur }}</b></li>
+        </ul>
+        <p v-if="!caseSel.e" class="case-none">Aucune formation enregistrée ici{{ caseSel.statut === 'manquant' ? ' — pourtant exigée pour sa fonction.' : (caseSel.statut === 'absent' ? ' (non exigée pour sa fonction).' : '.') }}</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -368,6 +384,12 @@ const latestByKey = computed(() => {
 function cellStatut(pid, fid) { const cf = canonId(fid); const e = latestByKey.value[pid + '|' + cf]; if (e) return e.cell; const p = personneById.value[pid]; const req = p && requisParFonction.value[p.fonction]; return (req && req.has(cf)) ? 'manquant' : 'absent' }
 function cellIcon(st) { return st === 'valide' ? '✓' : st === 'bientot' ? '⚠' : st === 'expire' ? '✗' : st === 'manquant' ? '!' : '—' }
 function etatTxt(st) { return st === 'valide' ? '✓ Valide' : st === 'bientot' ? '⚠ Expire bientôt' : st === 'expire' ? '✗ Expiré' : st === 'manquant' ? '! Manquant (requis)' : 'Non formé' }
+// Détail d'une case de la matrice au clic
+const caseSel = ref(null)
+function ouvrirCase(p, f) {
+  caseSel.value = { personne: p.nom, fonction: p.fonction || '', formation: f.nom, code_sop: f.code_sop || '', statut: cellStatut(p.id, f.id), e: latestByKey.value[p.id + '|' + canonId(f.id)] || null }
+}
+function fermerCase() { caseSel.value = null }
 function cellTitre(p, f) {
   const e = latestByKey.value[p.id + '|' + canonId(f.id)]
   if (!e) return p.nom + ' — ' + f.nom + ' : non formé'
@@ -684,4 +706,22 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .etat.e-manquant { background: #fecaca; color: #991b1b; }
 .leg { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; padding-left: 2px; }
 .leg .lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; font-weight: 600; }
+.cell-clic { cursor: pointer; }
+.cell-clic:hover { background: #f1f5f9; }
+.case-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 60; padding: 16px; }
+.case-modal { background: #fff; border-radius: 14px; padding: 18px 20px; max-width: 420px; width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,.25); position: relative; }
+.case-x { position: absolute; top: 10px; right: 12px; border: 0; background: transparent; font-size: 17px; cursor: pointer; color: #64748b; }
+.case-pers { margin: 0 24px 4px 0; font-size: 16px; }
+.case-fn { font-weight: 500; color: #64748b; font-size: 13px; margin-left: 8px; }
+.case-form { margin: 0 0 12px; font-size: 13px; color: #334155; }
+.case-etat { display: inline-block; font-weight: 700; font-size: 12px; padding: 3px 11px; border-radius: 999px; margin-bottom: 12px; }
+.cse-valide { background: #ecfdf5; color: #047857; }
+.cse-bientot { background: #fffbeb; color: #b45309; }
+.cse-expire { background: #fef2f2; color: #b91c1c; }
+.cse-manquant { background: #fff7ed; color: #c2410c; }
+.cse-absent { background: #f1f5f9; color: #64748b; }
+.case-info { list-style: none; margin: 0; padding: 0; }
+.case-info li { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-top: 1px solid #f1f5f9; font-size: 13px; }
+.case-info li span { color: #64748b; }
+.case-none { margin: 12px 0 0; font-size: 12.5px; color: #94a3b8; }
 </style>
