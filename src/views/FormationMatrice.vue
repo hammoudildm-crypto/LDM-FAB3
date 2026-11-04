@@ -7,7 +7,8 @@
 
     <p style="font-family:monospace;font-size:12px;background:#fef9c3;border:1px solid #eab308;border-radius:6px;padding:6px 10px;margin:6px 0;white-space:pre-wrap">DIAG · {{ enregistrements.length }} enregistrement(s) · {{ personnes.length }} personnes · {{ formations.length }} formations (actives) · cases reconnues: {{ Object.keys(latestByKey).length }}
 orphelins → formation inactive/inconnue (pas de colonne): {{ enregistrements.filter(e => !formationById[e.formation_id]).length }} · personne inactive/inconnue (pas de ligne): {{ enregistrements.filter(e => !personneById[e.personne_id]).length }}
-dernier enreg → pers {{ enregistrements[enregistrements.length-1] ? enregistrements[enregistrements.length-1].personne_id : '∅' }} ({{ enregistrements[enregistrements.length-1] && personneById[enregistrements[enregistrements.length-1].personne_id] ? '✓' : '✗' }}) · form {{ enregistrements[enregistrements.length-1] ? enregistrements[enregistrements.length-1].formation_id : '∅' }} ({{ enregistrements[enregistrements.length-1] && formationById[enregistrements[enregistrements.length-1].formation_id] ? '✓' : '✗' }})</p>
+dernier enreg → pers {{ enregistrements[enregistrements.length-1] ? enregistrements[enregistrements.length-1].personne_id : '∅' }} ({{ enregistrements[enregistrements.length-1] && personneById[enregistrements[enregistrements.length-1].personne_id] ? '✓' : '✗' }}) · form {{ enregistrements[enregistrements.length-1] ? enregistrements[enregistrements.length-1].formation_id : '∅' }} ({{ enregistrements[enregistrements.length-1] && formationById[enregistrements[enregistrements.length-1].formation_id] ? '✓' : '✗' }})
+{{ probeAmireche }}</p>
 
     <div v-if="nbExpire || nbBientot" class="alerte-ech" :class="{ crit: nbExpire }">
       <span v-if="nbExpire">✗ <b>{{ nbExpire }}</b> qualification(s) expirée(s) ou non acquise(s)</span>
@@ -306,6 +307,14 @@ const persIds = computed(() => new Set(personnesFiltrees.value.map(p => p.id)))
 
 const formationById = computed(() => { const m = {}; for (const f of formations.value) m[f.id] = f; return m })
 const personneById = computed(() => { const m = {}; for (const p of personnes.value) m[p.id] = p; return m })
+// Sonde temporaire : cas AMIRECHE Nadir
+const probeAmireche = computed(() => {
+  const t = personnes.value.find(p => (p.nom || '').toLowerCase().includes('amireche'))
+  if (!t) return 'AMIRECHE introuvable dans organigramme actif'
+  const recs = enregistrements.value.filter(e => Number(e.personne_id) === Number(t.id))
+  const det = recs.map(e => { const f = formationById.value[e.formation_id]; return 'fid=' + e.formation_id + (f ? '✓' : '✗inactive') }).join(' | ')
+  return 'AMIRECHE id=' + t.id + ' · fonction=' + (t.fonction || '∅') + ' · ' + recs.length + ' enreg · ' + (det || 'AUCUN enreg lié à cet id')
+})
 const requisParFonction = computed(() => { const m = {}; for (const r of requises.value) { (m[r.fonction] = m[r.fonction] || new Set()).add(r.formation_id) } return m })
 function addMonths(dateStr, m) {
   if (!dateStr) return null
