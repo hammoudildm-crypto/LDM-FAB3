@@ -23,8 +23,33 @@
       <div class="tpm-kpi"><div class="tpm-kv">{{ tot.mttr ? hm(tot.mttr) : '—' }}</div><div class="tpm-kl">MTTR moyen (h)</div></div>
     </div>
 
+    <div v-if="lignes.length" class="tpm-two">
+      <section class="tpm-card">
+        <div class="tpm-ch">Pareto des causes d'arrêt — {{ annee }}</div>
+        <div class="tpm-pareto">
+          <div v-if="!pareto.length" class="tpm-empty2">Aucun arrêt saisi.</div>
+          <div v-for="x in pareto" :key="x.col" class="tpm-par-row">
+            <span class="tpm-par-lbl">{{ x.label }}</span>
+            <div class="tpm-par-bar"><div class="tpm-par-fill" :style="{ width: (paretoMax ? x.min / paretoMax * 100 : 0) + '%', background: x.color }"></div></div>
+            <span class="tpm-par-val">{{ hm(x.min) }} h · {{ x.pct.toFixed(0) }}%<span class="tpm-par-cum"> · cumul {{ x.cumPct.toFixed(0) }}%</span></span>
+          </div>
+        </div>
+      </section>
+      <section class="tpm-card">
+        <div class="tpm-ch">Disponibilité par mois — {{ annee }}</div>
+        <div class="tpm-months">
+          <div v-for="(m, i) in parMois" :key="i" class="tpm-mcol" :title="MOIS[i] + ' : dispo ' + m.dispo.toFixed(0) + '% · arrêts maint.+panne ' + m.mpH.toFixed(1) + ' h'">
+            <div class="tpm-mbararea"><div class="tpm-mbar" :class="'b-' + clsDispo(m.dispo)" :style="{ height: (m.actif ? Math.max(3, Math.min(100, m.dispo)) : 0) + '%' }"></div></div>
+            <div class="tpm-mdispo">{{ m.actif ? Math.round(m.dispo) : '' }}</div>
+            <div class="tpm-mlabel">{{ MOIS[i] }}</div>
+          </div>
+        </div>
+        <div class="tpm-mleg">Barres = disponibilité (%). Survol : arrêts maintenance + panne du mois.</div>
+      </section>
+    </div>
+
     <section class="tpm-card">
-      <div class="tpm-ch">Par équipement — {{ annee }}</div>
+      <div class="tpm-ch">Par équipement — {{ annee }} <span class="tpm-ch-hint">(cliquer une ligne pour le détail des arrêts)</span></div>
       <div class="tpm-scroll">
         <table class="tpm-tbl">
           <thead>
@@ -42,18 +67,31 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="l in lignes" :key="l.id">
-              <td class="tpm-eq">{{ l.nom }}</td>
-              <td class="r">{{ hm(l.ouv) }}</td>
-              <td class="r">{{ hm(l.fonct) }}</td>
-              <td class="r"><span class="tpm-pct" :class="'t-' + clsDispo(l.dispo)">{{ l.dispo.toFixed(1) }} %</span></td>
-              <td class="r">{{ hm(l.maint) }}</td>
-              <td class="r">{{ l.pctMaint.toFixed(1) }} %</td>
-              <td class="r" :class="{ 'tpm-red': l.panne > 0 }">{{ hm(l.panne) }}</td>
-              <td class="r">{{ l.evPanne || '—' }}</td>
-              <td class="r">{{ l.mtbf ? hm(l.mtbf) : '—' }}</td>
-              <td class="r">{{ l.mttr ? hm(l.mttr) : '—' }}</td>
-            </tr>
+            <template v-for="l in lignes" :key="l.id">
+              <tr class="tpm-row" :class="{ open: ouvertId === l.id }" @click="toggle(l.id)">
+                <td class="tpm-eq"><span class="tpm-caret">{{ ouvertId === l.id ? '▾' : '▸' }}</span> {{ l.nom }}</td>
+                <td class="r">{{ hm(l.ouv) }}</td>
+                <td class="r">{{ hm(l.fonct) }}</td>
+                <td class="r"><span class="tpm-pct" :class="'t-' + clsDispo(l.dispo)">{{ l.dispo.toFixed(1) }} %</span></td>
+                <td class="r">{{ hm(l.maint) }}</td>
+                <td class="r">{{ l.pctMaint.toFixed(1) }} %</td>
+                <td class="r" :class="{ 'tpm-red': l.panne > 0 }">{{ hm(l.panne) }}</td>
+                <td class="r">{{ l.evPanne || '—' }}</td>
+                <td class="r">{{ l.mtbf ? hm(l.mtbf) : '—' }}</td>
+                <td class="r">{{ l.mttr ? hm(l.mttr) : '—' }}</td>
+              </tr>
+              <tr v-if="ouvertId === l.id" class="tpm-detail">
+                <td :colspan="10">
+                  <div class="tpm-det-head">Répartition des arrêts — {{ l.nom }}</div>
+                  <div v-for="d in detailMotifs(l)" :key="d.label" class="tpm-par-row">
+                    <span class="tpm-par-lbl">{{ d.label }}</span>
+                    <div class="tpm-par-bar"><div class="tpm-par-fill" :style="{ width: d.pct + '%', background: d.color }"></div></div>
+                    <span class="tpm-par-val">{{ hm(d.min) }} h · {{ d.pct.toFixed(0) }}%</span>
+                  </div>
+                  <div v-if="!detailMotifs(l).length" class="tpm-empty2">Aucun arrêt pour cet équipement.</div>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -73,7 +111,20 @@ const erreur = ref('')
 const annee = ref(new Date().getFullYear())
 
 const MOTIFS = ['arret_panne_min', 'arret_format_min', 'arret_nettoyage_min', 'arret_reglage_min', 'arret_maintenance_min', 'arret_attente_min', 'arret_autre_min']
+const MOTIFS_INFO = [
+  ['arret_panne_min', 'Panne', '#ef4444'],
+  ['arret_maintenance_min', 'Maintenance', '#6366f1'],
+  ['arret_format_min', 'Changement format', '#f59e0b'],
+  ['arret_reglage_min', 'Réglage', '#8b5cf6'],
+  ['arret_nettoyage_min', 'Nettoyage', '#0d9488'],
+  ['arret_attente_min', 'Attente', '#94a3b8'],
+  ['arret_autre_min', 'Autre', '#cbd5e1']
+]
+const MOTIF_LBL = Object.fromEntries(MOTIFS_INFO.map(m => [m[0], m[1]]))
+const MOTIF_COL = Object.fromEntries(MOTIFS_INFO.map(m => [m[0], m[2]]))
+const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
 const num = (v) => Number(v) || 0
+const ouvertId = ref(null)
 
 async function fetchAllPaged(make) {
   const size = 1000; let from = 0, all = []
@@ -104,10 +155,10 @@ const lignes = computed(() => {
   const g = {}
   for (const p of postesAnnee.value) {
     const id = p.equipement_id; if (id == null) continue
-    if (!g[id]) g[id] = { id, nom: (p.equipements && (p.equipements.code || p.equipements.nom)) || ('#' + id), ouv: 0, fonct: 0, maint: 0, panne: 0, evPanne: 0 }
+    if (!g[id]) g[id] = { id, nom: (p.equipements && (p.equipements.code || p.equipements.nom)) || ('#' + id), ouv: 0, fonct: 0, maint: 0, panne: 0, evPanne: 0, motifs: Object.fromEntries(MOTIFS.map(m => [m, 0])) }
     const o = g[id]
     const ouv = num(p.temps_ouverture_min)
-    let arr = 0; for (const m of MOTIFS) arr += num(p[m])
+    let arr = 0; for (const m of MOTIFS) { const v = num(p[m]); arr += v; o.motifs[m] += v }
     o.ouv += ouv
     o.fonct += Math.max(0, ouv - arr)
     o.maint += num(p.arret_maintenance_min)
@@ -123,6 +174,35 @@ const lignes = computed(() => {
   })
   return out.sort((a, b) => (b.panne + b.maint) - (a.panne + a.maint))
 })
+
+// Pareto des causes d'arrêt (tous motifs, pour prioriser)
+const pareto = computed(() => {
+  const m = {}; for (const [col] of MOTIFS_INFO) m[col] = 0
+  for (const p of postesAnnee.value) for (const [col] of MOTIFS_INFO) m[col] += num(p[col])
+  const tot = Object.values(m).reduce((a, b) => a + b, 0)
+  let cum = 0
+  return MOTIFS_INFO.map(([col, label, color]) => ({ col, label, color, min: m[col] })).filter(x => x.min > 0).sort((a, b) => b.min - a.min).map(x => { cum += x.min; return { ...x, pct: tot ? x.min / tot * 100 : 0, cumPct: tot ? cum / tot * 100 : 0 } })
+})
+const paretoMax = computed(() => pareto.value.reduce((mx, x) => Math.max(mx, x.min), 0))
+
+// Évolution mensuelle (disponibilité + arrêts maintenance/panne)
+const parMois = computed(() => {
+  const a = Array.from({ length: 12 }, () => ({ ouv: 0, fonct: 0, mp: 0 }))
+  for (const p of postesAnnee.value) {
+    const d = new Date(p.date); if (isNaN(d.getTime())) continue
+    const mo = d.getMonth()
+    const ouv = num(p.temps_ouverture_min); let arr = 0; for (const m of MOTIFS) arr += num(p[m])
+    a[mo].ouv += ouv; a[mo].fonct += Math.max(0, ouv - arr); a[mo].mp += num(p.arret_maintenance_min) + num(p.arret_panne_min)
+  }
+  return a.map(x => ({ dispo: x.ouv ? x.fonct / x.ouv * 100 : 0, mpH: x.mp / 60, actif: x.ouv > 0 }))
+})
+const mpMoisMax = computed(() => parMois.value.reduce((mx, x) => Math.max(mx, x.mpH), 0))
+
+function detailMotifs(l) {
+  const tot = MOTIFS.reduce((s, m) => s + l.motifs[m], 0)
+  return MOTIFS_INFO.map(([col, label, color]) => ({ label, color, min: l.motifs[col], pct: tot ? l.motifs[col] / tot * 100 : 0 })).filter(x => x.min > 0).sort((a, b) => b.min - a.min)
+}
+function toggle(id) { ouvertId.value = ouvertId.value === id ? null : id }
 
 const tot = computed(() => {
   let maint = 0, panne = 0, evPanne = 0, ouv = 0, fonct = 0
@@ -160,5 +240,30 @@ function clsDispo(d) { return d >= 90 ? 'ok' : d >= 75 ? 'mid' : 'ko' }
 .tpm-pct { font-weight: 800; }
 .tpm-red { color: #b91c1c; font-weight: 700; }
 .tpm-foot { margin-top: 16px; color: #94a3b8; font-size: 12px; }
+.tpm-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.tpm-ch-hint { font-weight: 500; color: #94a3b8; font-size: 12px; }
+.tpm-empty2 { color: #94a3b8; font-size: 12.5px; padding: 8px 0; }
+.tpm-pareto { padding: 12px 16px; }
+.tpm-par-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+.tpm-par-lbl { width: 120px; flex: none; font-size: 12.5px; color: #334155; font-weight: 600; }
+.tpm-par-bar { flex: 1; height: 14px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.tpm-par-fill { height: 100%; border-radius: 4px; min-width: 2px; }
+.tpm-par-val { width: 150px; flex: none; text-align: right; font-size: 11.5px; color: #475569; font-variant-numeric: tabular-nums; }
+.tpm-par-cum { color: #94a3b8; }
+.tpm-months { display: flex; align-items: flex-end; gap: 4px; padding: 14px 16px 6px; height: 150px; }
+.tpm-mcol { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.tpm-mbararea { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.tpm-mbar { width: 70%; border-radius: 4px 4px 0 0; min-height: 2px; transition: height .3s; }
+.b-ok { background: #10b981; } .b-mid { background: #f59e0b; } .b-ko { background: #ef4444; }
+.tpm-mdispo { font-size: 10px; color: #64748b; font-weight: 700; margin-top: 3px; height: 13px; }
+.tpm-mlabel { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+.tpm-mleg { padding: 0 16px 12px; color: #94a3b8; font-size: 11.5px; }
+.tpm-row { cursor: pointer; }
+.tpm-row:hover { background: #f8fafc; }
+.tpm-row.open { background: #eef2ff; }
+.tpm-caret { color: #94a3b8; font-size: 10px; margin-right: 2px; }
+.tpm-detail td { background: #f8fafc; padding: 12px 16px; }
+.tpm-det-head { font-weight: 700; color: #0f172a; font-size: 13px; margin-bottom: 8px; }
+@media (max-width: 860px) { .tpm-two { grid-template-columns: 1fr; } }
 @media (max-width: 860px) { .tpm-kpis { grid-template-columns: repeat(3, 1fr); } }
 </style>
