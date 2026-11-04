@@ -5,11 +5,6 @@
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
 
-    <p style="font-family:monospace;font-size:12px;background:#fef9c3;border:1px solid #eab308;border-radius:6px;padding:6px 10px;margin:6px 0;white-space:pre-wrap">DIAG · {{ enregistrements.length }} enregistrement(s) · {{ personnes.length }} personnes · {{ formations.length }} formations (actives) · cases reconnues: {{ Object.keys(latestByKey).length }}
-orphelins → formation inactive/inconnue (pas de colonne): {{ enregistrements.filter(e => !formationById[e.formation_id]).length }} · personne inactive/inconnue (pas de ligne): {{ enregistrements.filter(e => !personneById[e.personne_id]).length }}
-dernier enreg → pers {{ enregistrements[enregistrements.length-1] ? enregistrements[enregistrements.length-1].personne_id : '∅' }} ({{ enregistrements[enregistrements.length-1] && personneById[enregistrements[enregistrements.length-1].personne_id] ? '✓' : '✗' }}) · form {{ enregistrements[enregistrements.length-1] ? enregistrements[enregistrements.length-1].formation_id : '∅' }} ({{ enregistrements[enregistrements.length-1] && formationById[enregistrements[enregistrements.length-1].formation_id] ? '✓' : '✗' }})
-{{ probeAmireche }}</p>
-
     <div v-if="nbExpire || nbBientot" class="alerte-ech" :class="{ crit: nbExpire }">
       <span v-if="nbExpire">✗ <b>{{ nbExpire }}</b> qualification(s) expirée(s) ou non acquise(s)</span>
       <span v-if="nbExpire && nbBientot" class="sep">·</span>
@@ -263,6 +258,7 @@ import PageHeader from '../components/PageHeader.vue'
 
 const personnes = ref([])
 const formations = ref([])
+const formationsAll = ref([])   // toutes les fiches (actives + inactives) pour la correspondance par nom
 const enregistrements = ref([])
 const requises = ref([])
 const filtreAtelier = ref('')
@@ -276,16 +272,31 @@ const normP = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace
 const erreur = ref('')
 const router = useRouter()
 
+// Récupère TOUTES les lignes par pages de 1000 (Supabase plafonne une requête à 1000).
+async function fetchAllPaged(make) {
+  const size = 1000; let from = 0, all = []
+  for (;;) {
+    const r = await make().range(from, from + size - 1)
+    if (r.error) return { error: r.error, data: all }
+    all = all.concat(r.data || [])
+    if (!r.data || r.data.length < size) break
+    from += size
+  }
+  return { data: all, error: null }
+}
 async function charger() {
   const rp = await supabase.from('organigramme').select('id, nom, matricule, fonction, atelier_id, equipe, equipement, machine, date_recrutement').eq('actif', true).order('nom')
   if (!rp.error) personnes.value = rp.data || []
   const rf = await supabase.from('formations').select('*').eq('actif', true).order('ordre')
   if (!rf.error) formations.value = rf.data || []
-  const re = await supabase.from('formation_enregistrements').select('*')
+  // Enregistrements : paginer — il y en a plus de 1000, sinon des personnes manquent (taux faussé).
+  const re = await fetchAllPaged(() => supabase.from('formation_enregistrements').select('*'))
   if (re.error) { erreur.value = re.error.message; return }
   enregistrements.value = re.data || []
-  const rq = await supabase.from('formation_requise').select('*')
+  const rq = await fetchAllPaged(() => supabase.from('formation_requise').select('*'))
   if (!rq.error) requises.value = rq.data || []
+  const rfa = await fetchAllPaged(() => supabase.from('formations').select('id, nom'))   // toutes (actives + inactives) pour la correspondance par nom
+  if (!rfa.error) formationsAll.value = rfa.data || []
 }
 onMounted(charger)
 
@@ -307,25 +318,25 @@ const persIds = computed(() => new Set(personnesFiltrees.value.map(p => p.id)))
 
 const formationById = computed(() => { const m = {}; for (const f of formations.value) m[f.id] = f; return m })
 const personneById = computed(() => { const m = {}; for (const p of personnes.value) m[p.id] = p; return m })
-// Sonde temporaire : correspondance par ID vs par NOM pour AMIRECHE Nadir
-const probeAmireche = computed(() => {
-  const t = personnes.value.find(p => (p.nom || '').toLowerCase().includes('amireche'))
-  if (!t) return 'AMIRECHE introuvable dans le personnel actif.'
-  const recs = enregistrements.value.filter(e => Number(e.personne_id) === Number(t.id))
-  const req = requisParFonction.value[t.fonction] || new Set()
-  const reqIds = [...req]
-  const nk = (fid) => { const f = formationById.value[fid]; return f ? normP(f.nom).replace(/[^a-z0-9]+/g, ' ').trim() : null }
-  const reqNames = new Set(reqIds.map(nk).filter(Boolean))
-  const reqSansFiche = reqIds.filter(id => !formationById.value[id]).length
-  let interId = 0, interNom = 0
-  for (const e of recs) {
-    const fid = Number(e.formation_id)
-    if (req.has(fid) || req.has(String(fid))) interId++
-    const n = nk(fid); if (n && reqNames.has(n)) interNom++
-  }
-  return 'AMIRECHE[' + (t.fonction || '∅') + '] recs=' + recs.length + ' · exigées=' + reqIds.length + ' · communes par ID=' + interId + ' · communes par NOM=' + interNom + ' · exigences sans fiche active=' + reqSansFiche
+// Identité "par nom" d'une formation : une formation enregistrée et une formation
+// exigée qui portent le même nom doivent se correspondre même si leur identifiant
+// diffère (fiches en double). On ramène donc chaque formation_id à un id canonique
+// (de préférence une fiche active) partagé par toutes les fiches de même nom.
+const nomCle = (nom) => normP(nom || '').replace(/[^a-z0-9]+/g, ' ').trim()
+const toutesFormationsById = computed(() => { const m = {}; for (const f of formationsAll.value) m[f.id] = f; return m })
+const canonParNom = computed(() => {
+  const m = {}
+  for (const f of formations.value) { const k = nomCle(f.nom); if (k && !(k in m)) m[k] = f.id }       // actives prioritaires
+  for (const f of formationsAll.value) { const k = nomCle(f.nom); if (k && !(k in m)) m[k] = f.id }     // puis le reste
+  return m
 })
-const requisParFonction = computed(() => { const m = {}; for (const r of requises.value) { (m[r.fonction] = m[r.fonction] || new Set()).add(r.formation_id) } return m })
+function canonId(fid) {
+  const f = toutesFormationsById.value[fid] || formationById.value[fid]
+  if (!f) return fid
+  const k = nomCle(f.nom)
+  return (k && canonParNom.value[k]) || fid
+}
+const requisParFonction = computed(() => { const m = {}; for (const r of requises.value) { (m[r.fonction] = m[r.fonction] || new Set()).add(canonId(r.formation_id)) } return m })
 function addMonths(dateStr, m) {
   if (!dateStr) return null
   const d = new Date(String(dateStr).slice(0, 10) + 'T00:00:00')
@@ -338,17 +349,18 @@ const today = new Date().toISOString().slice(0, 10)
 const dans60 = (() => { const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() + 60); return d.toISOString().slice(0, 10) })()
 
 const enrEnrichis = computed(() => enregistrements.value.map(e => {
+  const cfid = canonId(e.formation_id)   // ramène au formation_id canonique (correspondance par nom)
   try {
-    const f = formationById.value[e.formation_id]
+    const f = formationById.value[cfid]
     const dateStr = e.date_formation ? String(e.date_formation).slice(0, 10) : ''
     const exp = (f && f.validite_mois && dateStr) ? addMonths(dateStr, f.validite_mois) : null
     let cell = 'valide'
     if (e.resultat === 'non acquis') cell = 'expire'
     else if (exp) cell = exp < today ? 'expire' : (exp <= dans60 ? 'bientot' : 'valide')
-    return { ...e, date_formation: dateStr || e.date_formation, expiration: exp, cell }
+    return { ...e, formation_id: cfid, date_formation: dateStr || e.date_formation, expiration: exp, cell }
   } catch (ex) {
     console.error('enrEnrichis (matrice) — ligne ignorée :', e, ex)
-    return { ...e, expiration: null, cell: 'valide' }
+    return { ...e, formation_id: cfid, expiration: null, cell: 'valide' }
   }
 }))
 const latestByKey = computed(() => {
@@ -359,11 +371,11 @@ const latestByKey = computed(() => {
   }
   return m
 })
-function cellStatut(pid, fid) { const e = latestByKey.value[pid + '|' + fid]; if (e) return e.cell; const p = personneById.value[pid]; const req = p && requisParFonction.value[p.fonction]; return (req && req.has(fid)) ? 'manquant' : 'absent' }
+function cellStatut(pid, fid) { const cf = canonId(fid); const e = latestByKey.value[pid + '|' + cf]; if (e) return e.cell; const p = personneById.value[pid]; const req = p && requisParFonction.value[p.fonction]; return (req && req.has(cf)) ? 'manquant' : 'absent' }
 function cellIcon(st) { return st === 'valide' ? '✓' : st === 'bientot' ? '⚠' : st === 'expire' ? '✗' : st === 'manquant' ? '!' : '—' }
 function etatTxt(st) { return st === 'valide' ? '✓ Valide' : st === 'bientot' ? '⚠ Expire bientôt' : st === 'expire' ? '✗ Expiré' : st === 'manquant' ? '! Manquant (requis)' : 'Non formé' }
 function cellTitre(p, f) {
-  const e = latestByKey.value[p.id + '|' + f.id]
+  const e = latestByKey.value[p.id + '|' + canonId(f.id)]
   if (!e) return p.nom + ' — ' + f.nom + ' : non formé'
   return p.nom + ' — ' + f.nom + '\nFormé le ' + e.date_formation + (e.expiration ? ' · expire le ' + e.expiration : ' · permanent') + (e.resultat === 'non acquis' ? ' · NON ACQUIS' : '')
 }
