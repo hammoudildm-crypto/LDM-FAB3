@@ -11,6 +11,7 @@
     <div class="cad-tabs">
       <button type="button" :class="{ on: vueMode === 'matrice' }" @click="vueMode = 'matrice'">Matrice cadences</button>
       <button type="button" :class="{ on: vueMode === 'params' }" @click="vueMode = 'params'">Paramètres de temps</button>
+      <button type="button" :class="{ on: vueMode === 'duree' }" @click="vueMode = 'duree'">Durée réelle par phase</button>
     </div>
 
 <template v-if="vueMode === 'matrice'">
@@ -70,6 +71,35 @@
         </div>
       </section>
     </template>
+
+    <template v-if="vueMode === 'duree'">
+      <section class="card mat-card">
+        <div class="mat-head">
+          <input type="search" v-model="filtre" class="prod-search-big" placeholder="Filtrer les produits (code ou désignation)…" />
+          <span class="mat-count">Durée moyenne réelle d'une phase (en jours), calculée à partir des lots dont le <b>début</b> et la <b>fin</b> sont saisis — {{ produitsDuree.length }} produit(s). Entre parenthèses : nombre de lots.</span>
+        </div>
+        <div class="mat-scroll">
+          <table class="mat-table">
+            <thead>
+              <tr>
+                <th class="mat-corner">Produit</th>
+                <th v-for="ph in phasesDuree" :key="ph" class="mat-col">{{ ph }}<div class="mat-unit">jours (lots)</div></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in produitsDuree" :key="p.id">
+                <td class="mat-prod"><span class="mat-code">{{ p.code_pf }}</span><span class="mat-des">{{ p.designation }}</span></td>
+                <td v-for="ph in phasesDuree" :key="ph" class="dz-cell" :class="{ vide: !dureeCell(p.id, ph) }">
+                  <template v-if="dureeCell(p.id, ph)"><b>{{ dureeCell(p.id, ph).moy.toFixed(1) }}</b> <span class="dz-n">({{ dureeCell(p.id, ph).n }})</span></template>
+                  <span v-else>·</span>
+                </td>
+              </tr>
+              <tr v-if="!produitsDuree.length"><td :colspan="phasesDuree.length + 1" class="dz-empty">Aucune phase avec une date de début ET de fin saisies. Renseigne ces dates dans Suivi des phases pour alimenter ce tableau.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </template>
   </div>
 </template>
 
@@ -107,7 +137,48 @@ onMounted(async () => {
   await chargerEquip()
   await chargerCadences()
   chargement.value = false
+  chargerDurees()
 })
+
+// --- Durée réelle moyenne par phase (onglet 'duree'), d'après suivi_phases ---
+const phasesSuivi = ref([])
+const ordreProduit = ref({})
+async function chargerDurees() {
+  phasesSuivi.value = await fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, date_debut, date_phase').eq('actif', true))
+  const ofs = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, produit_id'))
+  const m = {}; for (const o of ofs) m[o.id] = o.produit_id; ordreProduit.value = m
+}
+function normPhaseDz(ph) { ph = String(ph || '').trim(); return /^(granulation|s[ée]chage)$/i.test(ph) ? 'Granulation et Séchage' : ph }
+const ORDRE_PHASES_DZ = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Pelliculage', 'Conditionnement', 'Livraison Vrac']
+const dureeStats = computed(() => {
+  const acc = {}
+  for (const s of phasesSuivi.value) {
+    if (!s.date_debut || !s.date_phase) continue
+    const d0 = new Date(String(s.date_debut).slice(0, 10) + 'T00:00:00'), d1 = new Date(String(s.date_phase).slice(0, 10) + 'T00:00:00')
+    if (isNaN(d0.getTime()) || isNaN(d1.getTime())) continue
+    const jours = Math.round((d1 - d0) / 86400000)
+    if (jours < 0) continue
+    const pid = ordreProduit.value[s.ordre_id]; if (pid == null) continue
+    const ph = normPhaseDz(s.phase); if (!ph) continue
+    if (!acc[pid]) acc[pid] = {}
+    if (!acc[pid][ph]) acc[pid][ph] = { somme: 0, n: 0 }
+    acc[pid][ph].somme += jours; acc[pid][ph].n++
+  }
+  return acc
+})
+const phasesDuree = computed(() => {
+  const s = new Set()
+  for (const pid in dureeStats.value) for (const ph in dureeStats.value[pid]) s.add(ph)
+  return [...s].sort((a, b) => { const ia = ORDRE_PHASES_DZ.indexOf(a), ib = ORDRE_PHASES_DZ.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b) })
+})
+const produitsDuree = computed(() => {
+  const ids = new Set(Object.keys(dureeStats.value).map(Number))
+  let list = produits.value.filter(p => ids.has(p.id))
+  const f = filtre.value.trim().toLowerCase()
+  if (f) list = list.filter(p => (p.code_pf + ' ' + p.designation).toLowerCase().includes(f))
+  return list.sort((a, b) => String(a.code_pf).localeCompare(String(b.code_pf), undefined, { numeric: true }))
+})
+function dureeCell(pid, ph) { const s = dureeStats.value[pid] && dureeStats.value[pid][ph]; return s ? { moy: s.somme / s.n, n: s.n } : null }
 
 function phaseDeType(type) {
   const t = (type || '').toLowerCase()
@@ -398,6 +469,11 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 .mat-cell { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: #0f172a; }
 .mat-cell.vide { color: #cbd5e1; font-weight: 400; text-align: center; }
 .mat-cell { padding: 3px 5px; }
+.dz-cell { text-align: center; font-variant-numeric: tabular-nums; color: #0f172a; padding: 6px 8px; white-space: nowrap; }
+.dz-cell.vide { color: #cbd5e1; }
+.dz-cell b { font-weight: 700; }
+.dz-n { color: #94a3b8; font-size: 11px; }
+.dz-empty { text-align: center; color: #64748b; padding: 18px; font-size: 13px; }
 .mat-in { width: 76px; padding: 5px 7px; border: 1px solid transparent; border-radius: 6px; font: inherit; font-size: 12.5px; text-align: right; background: transparent; font-variant-numeric: tabular-nums; font-weight: 600; color: #0f172a; }
 .mat-in:hover { border-color: #cbd5e1; background: #fff; }
 .mat-in:focus { outline: none; border-color: #0f766e; background: #fff; box-shadow: 0 0 0 2px rgba(15,118,110,.15); }
