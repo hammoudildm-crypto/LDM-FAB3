@@ -495,7 +495,7 @@ async function devalider(l) {
 
     <p v-if="msg" class="alert">{{ msg }}</p>
 
-    <div v-if="zonesDispo.length > 1" class="zperim-filter zperim-filter-top" title="Filtrer les dossiers par périmètre (plusieurs choix possibles)">
+    <div v-if="zonesDispo.length" class="zperim-filter zperim-filter-top" title="Filtrer les dossiers par périmètre (plusieurs choix possibles)">
       <span class="zpf-lbl">Périmètre :</span>
       <label v-for="z in zonesDispo" :key="z.key" class="zpf-chip" :class="{ on: zoneSel(z.key) }"><input type="checkbox" :checked="zoneSel(z.key)" @change="toggleZone(z.key)" />{{ z.label }}</label>
       <button v-if="perimSel.length" type="button" class="zpf-reset" @click="perimSel = []">Tous</button>
