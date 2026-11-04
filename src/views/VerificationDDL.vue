@@ -135,6 +135,8 @@ function statutCond(l) {
   if (c.date_fin || c.statut === 'Terminé') return { label: 'Conditionné', cls: 'sc-ok' }
   return { label: 'En cours', cls: 'sc-run' }
 }
+// Rang d'affichage par statut : conditionné/libéré (0), en cours (1), non conditionné (2)
+function condRank(l) { const cls = statutCond(l).cls; return cls === 'sc-ok' ? 0 : cls === 'sc-run' ? 1 : 2 }
 // Date de fin de fabrication : la date renseignée, sinon la date de la DERNIÈRE phase de gamme si Terminé
 function dateFinFab(l) {
   const pl = phasesParLot.value[l.id] || {}
@@ -253,13 +255,15 @@ const perimSel = ref([])   // périmètres cochés (vide = tous)
 const attenteFiltree = computed(() => {
   // attente est déjà filtrée par périmètre ; ne reste que le filtre triage/déviation.
   const f = filtreAttente.value
-  if (!f) return attente.value
-  return attente.value.filter(l => {
+  const base = !f ? attente.value : attente.value.filter(l => {
     const t = enTriageDdl(l), d = enDeviationDdl(l)
     if (f === 'triage') return t
     if (f === 'deviation') return d
     return !t && !d
   })
+  // Tri par statut de conditionnement : conditionné, puis en cours, puis non conditionné.
+  // Tri stable → à statut égal on garde l'ordre existant (réservés d'abord, puis n° de lot).
+  return [...base].sort((a, b) => condRank(a) - condRank(b))
 })
 const taux = computed(() => {
   const tot = nbVerifies.value + nbAttente.value
