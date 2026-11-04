@@ -942,6 +942,9 @@ ${matHtml}
   --shadow: 0 1px 2px rgba(16,24,40,.05);
   --shadow-card: 0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04);
 }
+/* En-tête PQR : titre + sous-titre sur une seule ligne */
+.pqr-page :deep(.ph-left) { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 12px; row-gap: 2px; }
+.pqr-page :deep(.ph-sub) { margin: 0; max-width: none; }
 .syn-layout { display: flex; gap: 16px; align-items: flex-start; }
 .syn-side { flex: 0 0 180px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 12px; }
 .syn-side button { text-align: left; border: 1px solid #e2e8f0; background: #fff; padding: 8px 12px; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 600; color: #475569; cursor: pointer; transition: background .12s, border-color .12s; }
