@@ -21,21 +21,63 @@
       <div class="sm-kpi"><div class="sm-kv">{{ tot.pct.toFixed(1) }} %</div><div class="sm-kl">du temps d'ouverture</div></div>
     </div>
 
+    <div v-if="parEquip.length" class="sm-two">
+      <section class="sm-card">
+        <div class="sm-ch">Temps moyen de changement par mois — {{ annee }}</div>
+        <div class="sm-months">
+          <div v-for="(m, i) in parMois" :key="i" class="sm-mcol" :title="MOIS[i] + ' : ' + (m.actif ? Math.round(m.moy) + ' min · ' + m.nb + ' chgt' : 'aucun')">
+            <div class="sm-mbararea"><div class="sm-mbar" :class="'b-' + clsMoy(m.moy)" :style="{ height: (m.actif && moisMax ? Math.max(4, m.moy / moisMax * 100) : 0) + '%' }"></div></div>
+            <div class="sm-mv">{{ m.actif ? Math.round(m.moy) : '' }}</div>
+            <div class="sm-mlabel">{{ MOIS[i] }}</div>
+          </div>
+        </div>
+        <div class="sm-mleg">Barres = minutes moyennes par changement (plus bas = mieux).</div>
+      </section>
+      <section class="sm-card sm-split-card">
+        <div class="sm-ch">Format vs Réglage — {{ annee }}</div>
+        <div class="sm-split">
+          <div class="sm-split-bar">
+            <div class="sm-split-f" :style="{ width: splitFR.fp + '%' }"></div>
+            <div class="sm-split-r" :style="{ width: splitFR.rp + '%' }"></div>
+          </div>
+          <div class="sm-split-leg">
+            <span><span class="sm-dot sm-dot-f"></span> Format : {{ hm(splitFR.f) }} h ({{ splitFR.fp.toFixed(0) }}%)</span>
+            <span><span class="sm-dot sm-dot-r"></span> Réglage : {{ hm(splitFR.r) }} h ({{ splitFR.rp.toFixed(0) }}%)</span>
+          </div>
+          <p class="sm-split-txt">Principe SMED : convertir un maximum d'opérations <b>internes</b> (machine arrêtée) en <b>externes</b> (préparées machine en marche) pour réduire ces temps.</p>
+        </div>
+      </section>
+    </div>
+
     <section class="sm-card">
-      <div class="sm-ch">Par équipement — {{ annee }}</div>
+      <div class="sm-ch">Par équipement — {{ annee }} <span class="sm-ch-hint">(cliquer une ligne pour l'évolution mensuelle)</span></div>
       <div class="sm-scroll">
         <table class="sm-tbl">
           <thead><tr><th>Équipement</th><th class="r">Changements</th><th class="r">Temps total (h)</th><th class="r">Moyen (min)</th><th class="r">Format (h)</th><th class="r">Réglage (h)</th><th class="r">% ouverture</th></tr></thead>
           <tbody>
-            <tr v-for="l in parEquip" :key="l.id">
-              <td class="sm-eq">{{ l.nom }}</td>
-              <td class="r">{{ l.nb }}</td>
-              <td class="r">{{ hm(l.temps) }}</td>
-              <td class="r"><b :class="clsMoy(l.moy)">{{ Math.round(l.moy) }}</b></td>
-              <td class="r">{{ hm(l.format) }}</td>
-              <td class="r">{{ hm(l.reglage) }}</td>
-              <td class="r">{{ l.pct.toFixed(1) }} %</td>
-            </tr>
+            <template v-for="l in parEquip" :key="l.id">
+              <tr class="sm-row" :class="{ open: ouvertId === l.id }" @click="toggle(l.id)">
+                <td class="sm-eq"><span class="sm-caret">{{ ouvertId === l.id ? '▾' : '▸' }}</span> {{ l.nom }}</td>
+                <td class="r">{{ l.nb }}</td>
+                <td class="r">{{ hm(l.temps) }}</td>
+                <td class="r"><b :class="clsMoy(l.moy)">{{ Math.round(l.moy) }}</b></td>
+                <td class="r">{{ hm(l.format) }}</td>
+                <td class="r">{{ hm(l.reglage) }}</td>
+                <td class="r">{{ l.pct.toFixed(1) }} %</td>
+              </tr>
+              <tr v-if="ouvertId === l.id" class="sm-detail">
+                <td colspan="7">
+                  <div class="sm-det-head">Temps moyen de changement par mois — {{ l.nom }}</div>
+                  <div class="sm-months sm-months-sm">
+                    <div v-for="(m, i) in moisEquip(l.id)" :key="i" class="sm-mcol" :title="MOIS[i] + ' : ' + (m.actif ? Math.round(m.moy) + ' min · ' + m.nb + ' chgt' : 'aucun')">
+                      <div class="sm-mbararea"><div class="sm-mbar" :class="'b-' + clsMoy(m.moy)" :style="{ height: (m.actif && m.mx ? Math.max(4, m.moy / m.mx * 100) : 0) + '%' }"></div></div>
+                      <div class="sm-mv">{{ m.actif ? Math.round(m.moy) : '' }}</div>
+                      <div class="sm-mlabel">{{ MOIS[i] }}</div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -128,6 +170,29 @@ const tot = computed(() => {
   return { temps, nb, pct: ouv ? temps / ouv * 100 : 0 }
 })
 
+const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
+const ouvertId = ref(null)
+function toggle(id) { ouvertId.value = ouvertId.value === id ? null : id }
+
+// Répartition format vs réglage (interne vs externe à convertir en SMED)
+const splitFR = computed(() => { let f = 0, r = 0; for (const l of parEquip.value) { f += l.format; r += l.reglage }; const t = f + r; return { f, r, fp: t ? f / t * 100 : 0, rp: t ? r / t * 100 : 0 } })
+
+// Évolution mensuelle du temps moyen de changement
+const parMois = computed(() => {
+  const a = Array.from({ length: 12 }, () => ({ temps: 0, nb: 0 }))
+  for (const p of postesAnnee.value) { const t = tempsChg(p); if (t <= 0) continue; const d = new Date(p.date); if (isNaN(d.getTime())) continue; const mo = d.getMonth(); a[mo].temps += t; a[mo].nb++ }
+  return a.map(x => ({ moy: x.nb ? x.temps / x.nb : 0, nb: x.nb, actif: x.nb > 0 }))
+})
+const moisMax = computed(() => parMois.value.reduce((mx, x) => Math.max(mx, x.moy), 0))
+
+// Détail mensuel d'un équipement (pour le dépliage)
+function moisEquip(id) {
+  const a = Array.from({ length: 12 }, () => ({ temps: 0, nb: 0 }))
+  for (const p of postesAnnee.value) { if (p.equipement_id !== id) continue; const t = tempsChg(p); if (t <= 0) continue; const d = new Date(p.date); if (isNaN(d.getTime())) continue; a[d.getMonth()].temps += t; a[d.getMonth()].nb++ }
+  const mx = a.reduce((m, x) => Math.max(m, x.nb ? x.temps / x.nb : 0), 0)
+  return a.map(x => ({ moy: x.nb ? x.temps / x.nb : 0, nb: x.nb, actif: x.nb > 0, mx }))
+}
+
 function hm(min) { const h = (Number(min) || 0) / 60; return h >= 100 ? Math.round(h).toLocaleString('fr-FR') : h.toFixed(1) }
 function clsMoy(m) { return m >= 120 ? 'm-ko' : m >= 45 ? 'm-mid' : 'm-ok' }
 </script>
@@ -158,5 +223,31 @@ function clsMoy(m) { return m >= 120 ? 'm-ko' : m >= 45 ? 'm-mid' : 'm-ok' }
 .m-ok { color: #047857; } .m-mid { color: #b45309; } .m-ko { color: #b91c1c; }
 .sm-none { text-align: center; color: #94a3b8; padding: 16px; }
 .sm-foot { margin-top: 6px; color: #94a3b8; font-size: 12px; }
+.sm-two { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; margin-bottom: 16px; }
+.sm-ch-hint { font-weight: 500; color: #94a3b8; font-size: 12px; }
+.sm-months { display: flex; align-items: flex-end; gap: 4px; padding: 14px 16px 6px; height: 150px; }
+.sm-months-sm { height: 110px; padding: 10px 0 4px; }
+.sm-mcol { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.sm-mbararea { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.sm-mbar { width: 68%; border-radius: 4px 4px 0 0; min-height: 2px; transition: height .3s; }
+.b-ok { background: #10b981; } .b-mid { background: #f59e0b; } .b-ko { background: #ef4444; }
+.sm-mv { font-size: 10px; color: #64748b; font-weight: 700; margin-top: 3px; height: 13px; }
+.sm-mlabel { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+.sm-mleg { padding: 0 16px 12px; color: #94a3b8; font-size: 11.5px; }
+.sm-split-card { display: flex; flex-direction: column; }
+.sm-split { padding: 16px; }
+.sm-split-bar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: #f1f5f9; }
+.sm-split-f { background: #f59e0b; } .sm-split-r { background: #8b5cf6; }
+.sm-split-leg { display: flex; flex-direction: column; gap: 5px; margin-top: 12px; font-size: 12.5px; color: #475569; }
+.sm-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+.sm-dot-f { background: #f59e0b; } .sm-dot-r { background: #8b5cf6; }
+.sm-split-txt { margin: 14px 0 0; font-size: 12px; color: #64748b; line-height: 1.5; }
+.sm-row { cursor: pointer; }
+.sm-row:hover { background: #f8fafc; }
+.sm-row.open { background: #ecfeff; }
+.sm-caret { color: #94a3b8; font-size: 10px; margin-right: 2px; }
+.sm-detail td { background: #f8fafc; padding: 10px 16px; }
+.sm-det-head { font-weight: 700; color: #0f172a; font-size: 13px; margin-bottom: 4px; }
+@media (max-width: 860px) { .sm-two { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .sm-kpis { grid-template-columns: repeat(2, 1fr); } }
 </style>
