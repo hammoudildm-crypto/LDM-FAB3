@@ -135,6 +135,7 @@
           <p class="hint" style="margin:6px 0 0">La fenêtre choisie filtre toute l'analyse : synthèse, Cp/Cpk, conformité et graphes.</p>
         </div>
 
+        <div class="chart-grid" :class="{ 'cg-2': toutAfficher }">
         <!-- Tendance vs specs -->
         <div v-if="toutAfficher || chartMode === 'trend'" class="chart-block">
           <h4 v-if="toutAfficher" class="sec-sub">📈 Tendance vs specs</h4>
@@ -262,6 +263,7 @@
             <p class="hint">Chaque courbe est normalisée sur sa propre plage (0 % = min, 100 % = max) pour comparer les tendances malgré des unités différentes. Valeurs moyennées par lot ; survole un point pour la valeur réelle.</p>
           </div>
           <div v-else class="empty-sm">Coche au moins un paramètre numérique dans la synthèse ci-dessus (colonne ⇄) pour superposer leurs courbes ici.</div>
+        </div>
         </div>
 
         <h3 class="sec-titre">Analyse d'impact entre paramètres</h3>
@@ -1024,6 +1026,9 @@ ${matHtml}
 .tabs .tab-all:disabled { opacity: 1; }
 .chart-block + .chart-block { margin-top: 10px; padding-top: 16px; border-top: 1px dashed #e2e8f0; }
 .sec-sub { margin: 4px 0 10px; font-size: 13.5px; font-weight: 800; color: #7c3aed; }
+.chart-grid.cg-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; margin-top: 4px; }
+.chart-grid.cg-2 .chart-block, .chart-grid.cg-2 .chart-block + .chart-block { border: 1px solid #eef2f7; border-radius: 12px; padding: 12px 14px; margin-top: 0; background: #fff; }
+@media (max-width: 900px) { .chart-grid.cg-2 { grid-template-columns: 1fr; } }
 
 .chart-wrap { margin-top: 10px; }
 .corr-ctrls { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin: 8px 0 12px; }
