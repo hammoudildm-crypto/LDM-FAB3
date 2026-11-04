@@ -33,44 +33,6 @@
           <div class="kpi" :class="{ bad: nbHors > 0 }"><div class="kv">{{ nbHors }}</div><div class="kl">Hors spec</div></div>
         </div>
 
-        <div v-if="capabilite.n" class="cap-wrap">
-          <div class="cap-head">
-            <h3 class="cap-titre">Capabilité du procédé — Cp / Cpk</h3>
-            <span class="cap-sub">{{ capabilite.n }} paramètre(s) numérique(s) évalué(s) · guide : Cpk ≥ 1,33 capable · ≥ 1,67 excellent</span>
-          </div>
-          <div class="cap-cards">
-            <div class="cap-card">
-              <svg viewBox="0 0 42 42" class="cap-donut">
-                <circle class="cd-bg" cx="21" cy="21" r="15.915" />
-                <g transform="rotate(-90 21 21)"><circle v-if="capabilite.cpkMoy != null" class="cd-seg" cx="21" cy="21" r="15.915" :stroke="capCol(capabilite.cpkMoy)" :stroke-dasharray="gaugeDash(capabilite.cpkMoy)" stroke-dashoffset="0" /></g>
-                <text x="21" y="23" class="cd-val" :style="{ fill: capCol(capabilite.cpkMoy) }">{{ capabilite.cpkMoy != null ? capabilite.cpkMoy.toFixed(2) : '—' }}</text>
-              </svg>
-              <div class="cap-l">Cpk moyen</div>
-              <span class="cap-badge" :style="{ background: capCol(capabilite.cpkMoy) }">{{ capLabel(capabilite.cpkMoy) }}</span>
-            </div>
-            <div class="cap-card">
-              <svg viewBox="0 0 42 42" class="cap-donut">
-                <circle class="cd-bg" cx="21" cy="21" r="15.915" />
-                <g transform="rotate(-90 21 21)"><circle v-if="capabilite.cpMoy != null" class="cd-seg" cx="21" cy="21" r="15.915" :stroke="capCol(capabilite.cpMoy)" :stroke-dasharray="gaugeDash(capabilite.cpMoy)" stroke-dashoffset="0" /></g>
-                <text x="21" y="23" class="cd-val" :style="{ fill: capCol(capabilite.cpMoy) }">{{ capabilite.cpMoy != null ? capabilite.cpMoy.toFixed(2) : '—' }}</text>
-              </svg>
-              <div class="cap-l">Cp moyen</div>
-              <div class="cap-note">Potentiel (procédé centré)</div>
-            </div>
-            <div class="cap-card">
-              <div class="cap-v" :style="{ color: capCol(capabilite.pire ? capabilite.pire.cpk : null) }">{{ capabilite.pire ? capabilite.pire.cpk.toFixed(2) : '—' }}</div>
-              <div class="cap-l">Cpk le plus faible</div>
-              <div class="cap-note" :title="capabilite.pire ? capabilite.pire.nom : ''">{{ capabilite.pire ? capabilite.pire.nom : '—' }}</div>
-            </div>
-          </div>
-          <div class="cap-bar">
-            <template v-for="t in capTiers" :key="'b' + t.key"><div v-if="capabilite.counts[t.key]" class="cap-seg" :style="{ width: (capabilite.counts[t.key] / capabilite.n * 100) + '%', background: t.col }" :title="t.label + ' : ' + capabilite.counts[t.key]"></div></template>
-          </div>
-          <div class="cap-leg">
-            <span v-for="t in capTiers" :key="'l' + t.key" class="cap-lg"><i :style="{ background: t.col }"></i>{{ t.label }} <b>{{ capabilite.counts[t.key] }}</b> <span class="cap-lh">{{ t.hint }}</span></span>
-          </div>
-        </div>
-
         <h3 class="sec-titre">Synthèse par paramètre</h3>
         <p class="hint">Clique une ligne pour voir ses graphiques. Cpk ≥ 1,33 : capable · 1,00–1,33 : acceptable · &lt; 1,00 : insuffisant.</p>
         <div class="syn-layout">
@@ -105,6 +67,47 @@
           </div>
         </div>
 
+        <div class="analyse-row" :class="{ 'no-cap': !capabilite.n }">
+          <aside v-if="capabilite.n" class="analyse-left">
+            <div class="cap-wrap">
+              <div class="cap-head">
+                <h3 class="cap-titre">Capabilité du procédé — Cp / Cpk</h3>
+                <span class="cap-sub">{{ capabilite.n }} paramètre(s) numérique(s) évalué(s) · guide : Cpk ≥ 1,33 capable · ≥ 1,67 excellent</span>
+              </div>
+              <div class="cap-cards">
+                <div class="cap-card">
+                  <svg viewBox="0 0 42 42" class="cap-donut">
+                    <circle class="cd-bg" cx="21" cy="21" r="15.915" />
+                    <g transform="rotate(-90 21 21)"><circle v-if="capabilite.cpkMoy != null" class="cd-seg" cx="21" cy="21" r="15.915" :stroke="capCol(capabilite.cpkMoy)" :stroke-dasharray="gaugeDash(capabilite.cpkMoy)" stroke-dashoffset="0" /></g>
+                    <text x="21" y="23" class="cd-val" :style="{ fill: capCol(capabilite.cpkMoy) }">{{ capabilite.cpkMoy != null ? capabilite.cpkMoy.toFixed(2) : '—' }}</text>
+                  </svg>
+                  <div class="cap-l">Cpk moyen</div>
+                  <span class="cap-badge" :style="{ background: capCol(capabilite.cpkMoy) }">{{ capLabel(capabilite.cpkMoy) }}</span>
+                </div>
+                <div class="cap-card">
+                  <svg viewBox="0 0 42 42" class="cap-donut">
+                    <circle class="cd-bg" cx="21" cy="21" r="15.915" />
+                    <g transform="rotate(-90 21 21)"><circle v-if="capabilite.cpMoy != null" class="cd-seg" cx="21" cy="21" r="15.915" :stroke="capCol(capabilite.cpMoy)" :stroke-dasharray="gaugeDash(capabilite.cpMoy)" stroke-dashoffset="0" /></g>
+                    <text x="21" y="23" class="cd-val" :style="{ fill: capCol(capabilite.cpMoy) }">{{ capabilite.cpMoy != null ? capabilite.cpMoy.toFixed(2) : '—' }}</text>
+                  </svg>
+                  <div class="cap-l">Cp moyen</div>
+                  <div class="cap-note">Potentiel (procédé centré)</div>
+                </div>
+                <div class="cap-card">
+                  <div class="cap-v" :style="{ color: capCol(capabilite.pire ? capabilite.pire.cpk : null) }">{{ capabilite.pire ? capabilite.pire.cpk.toFixed(2) : '—' }}</div>
+                  <div class="cap-l">Cpk le plus faible</div>
+                  <div class="cap-note" :title="capabilite.pire ? capabilite.pire.nom : ''">{{ capabilite.pire ? capabilite.pire.nom : '—' }}</div>
+                </div>
+              </div>
+              <div class="cap-bar">
+                <template v-for="t in capTiers" :key="'b' + t.key"><div v-if="capabilite.counts[t.key]" class="cap-seg" :style="{ width: (capabilite.counts[t.key] / capabilite.n * 100) + '%', background: t.col }" :title="t.label + ' : ' + capabilite.counts[t.key]"></div></template>
+              </div>
+              <div class="cap-leg">
+                <span v-for="t in capTiers" :key="'l' + t.key" class="cap-lg"><i :style="{ background: t.col }"></i>{{ t.label }} <b>{{ capabilite.counts[t.key] }}</b> <span class="cap-lh">{{ t.hint }}</span></span>
+              </div>
+            </div>
+          </aside>
+          <div class="analyse-right">
         <div class="chart-head">
           <h3 class="sec-titre">{{ chartMode === 'compare' ? ('Comparaison · ' + comparIds.length + ' paramètre' + (comparIds.length > 1 ? 's' : '')) : (paramSelObj ? paramSelObj.nom : '—') }}<span v-if="chartMode !== 'compare' && paramSelObj && uniteEff(paramSelObj)" class="u"> ({{ uniteEff(paramSelObj) }})</span></h3>
           <div class="tabs">
@@ -264,6 +267,8 @@
           </div>
           <div v-else class="empty-sm">Coche au moins un paramètre numérique dans la synthèse ci-dessus (colonne ⇄) pour superposer leurs courbes ici.</div>
         </div>
+        </div>
+          </div>
         </div>
 
         <h3 class="sec-titre">Analyse d'impact entre paramètres</h3>
@@ -1056,6 +1061,23 @@ ${matHtml}
 .chart-grid.cg-2 > .chart-block:nth-child(3) { order: 2; } /* Courbe de capabilité */
 .chart-grid.cg-2 > .chart-block:nth-child(4) { order: 4; } /* Comparer */
 @media (max-width: 900px) { .chart-grid.cg-2 { grid-template-columns: 1fr; } }
+
+/* Capabilité en colonne à gauche, grille 2×2 à droite */
+.analyse-row { display: flex; gap: 18px; align-items: flex-start; margin-top: 10px; }
+.analyse-left { flex: 0 0 332px; max-width: 332px; }
+.analyse-left .cap-wrap { margin-bottom: 0; }
+.analyse-left .cap-cards { grid-template-columns: 1fr; gap: 10px; margin-bottom: 14px; }
+.analyse-left .cap-card { min-height: 0; padding: 13px; }
+.analyse-left .cap-donut { width: 84px; height: 84px; }
+.analyse-right { flex: 1; min-width: 0; }
+.analyse-right .chart-head { margin-top: 0; }
+.analyse-row.no-cap .analyse-right { width: 100%; }
+@media (max-width: 1100px) {
+  .analyse-row { flex-direction: column; gap: 16px; }
+  .analyse-left { flex: none; max-width: none; width: 100%; }
+  .analyse-left .cap-cards { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .analyse-left .cap-donut { width: 94px; height: 94px; }
+}
 
 .chart-wrap { margin-top: 10px; }
 .corr-ctrls { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin: 8px 0 12px; }
