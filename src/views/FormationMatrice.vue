@@ -307,21 +307,23 @@ const persIds = computed(() => new Set(personnesFiltrees.value.map(p => p.id)))
 
 const formationById = computed(() => { const m = {}; for (const f of formations.value) m[f.id] = f; return m })
 const personneById = computed(() => { const m = {}; for (const p of personnes.value) m[p.id] = p; return m })
-// Sonde temporaire : verdict en clair pour AMIRECHE Nadir
+// Sonde temporaire : correspondance par ID vs par NOM pour AMIRECHE Nadir
 const probeAmireche = computed(() => {
   const t = personnes.value.find(p => (p.nom || '').toLowerCase().includes('amireche'))
   if (!t) return 'AMIRECHE introuvable dans le personnel actif.'
   const recs = enregistrements.value.filter(e => Number(e.personne_id) === Number(t.id))
   const req = requisParFonction.value[t.fonction] || new Set()
-  const recFids = new Set(recs.map(e => Number(e.formation_id)))
-  const inter = [...req].filter(fid => recFids.has(Number(fid)))
-  const interVal = inter.filter(fid => cellStatut(t.id, fid) === 'valide')
-  let v
-  if (!req.size) v = 'sa fonction « ' + (t.fonction || '∅') + ' » n’a AUCUNE formation exigée → son taux devrait être "pas d’exigence" (à définir dans Exigences par fonction).'
-  else if (inter.length === 0) v = 'AUCUNE de ses ' + recs.length + ' formations enregistrées ne fait partie des ' + req.size + ' EXIGÉES pour « ' + t.fonction + ' » → taux 0% est NORMAL. Solution : ajoute ces formations aux exigences de sa fonction, ou enregistre les formations exigées.'
-  else if (interVal.length === 0) v = inter.length + ' formation(s) exigée(s) sont bien enregistrées mais comptées NON valides (date/validité) → vrai bug à corriger.'
-  else v = interVal.length + '/' + req.size + ' exigées validées → taux attendu ' + Math.round(interVal.length / req.size * 100) + '%. Si tu vois encore 0%, fais Ctrl+Shift+R.'
-  return 'AMIRECHE (id ' + t.id + ') : ' + recs.length + ' enreg · ' + req.size + ' exigées · ' + inter.length + ' en commun → ' + v
+  const reqIds = [...req]
+  const nk = (fid) => { const f = formationById.value[fid]; return f ? normP(f.nom).replace(/[^a-z0-9]+/g, ' ').trim() : null }
+  const reqNames = new Set(reqIds.map(nk).filter(Boolean))
+  const reqSansFiche = reqIds.filter(id => !formationById.value[id]).length
+  let interId = 0, interNom = 0
+  for (const e of recs) {
+    const fid = Number(e.formation_id)
+    if (req.has(fid) || req.has(String(fid))) interId++
+    const n = nk(fid); if (n && reqNames.has(n)) interNom++
+  }
+  return 'AMIRECHE[' + (t.fonction || '∅') + '] recs=' + recs.length + ' · exigées=' + reqIds.length + ' · communes par ID=' + interId + ' · communes par NOM=' + interNom + ' · exigences sans fiche active=' + reqSansFiche
 })
 const requisParFonction = computed(() => { const m = {}; for (const r of requises.value) { (m[r.fonction] = m[r.fonction] || new Set()).add(r.formation_id) } return m })
 function addMonths(dateStr, m) {
