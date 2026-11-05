@@ -297,15 +297,17 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('cadences_produit').select('produit_id, equipement_id, cadence_nominale'))
     ])
     fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs; equipRef.value = re.data || []; cadences.value = rcad.data || []
-    // KPIs transverses (qualité, équipements, RH) — tables/colonnes conformes aux modules existants
+    // KPIs transverses (qualité, équipements, RH) — chaque requête est tolérante :
+    // une table absente n'affecte que son propre KPI et ne casse jamais la page.
+    const safe = async (make) => { try { return await fetchAllPaged(make) } catch (e) { console.warn('KPI transverse indisponible :', (e && e.message) || e); return [] } }
     const [rdev, rcapa, rtrs, rorg, rform, rfenr, rfreq] = await Promise.all([
-      fetchAllPaged(() => supabase.from('deviations').select('statut, criticite, date_dev')),
-      fetchAllPaged(() => supabase.from('capa').select('statut, echeance, date_capa')),
-      fetchAllPaged(() => supabase.from('trs_postes').select('date, temps_ouverture_min, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min')),
-      fetchAllPaged(() => supabase.from('organigramme').select('id, fonction, actif').eq('actif', true)),
-      fetchAllPaged(() => supabase.from('formations').select('id, nom, validite_mois, actif').eq('actif', true)),
-      fetchAllPaged(() => supabase.from('formation_enregistrements').select('personne_id, formation_id, date_formation, resultat')),
-      fetchAllPaged(() => supabase.from('formation_requise').select('fonction, formation_id'))
+      safe(() => supabase.from('deviations').select('statut, criticite, date_dev')),
+      safe(() => supabase.from('capa').select('statut, echeance, date_capa')),
+      safe(() => supabase.from('trs_postes').select('date, temps_ouverture_min, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min')),
+      safe(() => supabase.from('organigramme').select('id, fonction, actif').eq('actif', true)),
+      safe(() => supabase.from('formations').select('id, nom, validite_mois, actif').eq('actif', true)),
+      safe(() => supabase.from('formation_enregistrements').select('personne_id, formation_id, date_formation, resultat')),
+      safe(() => supabase.from('formation_requise').select('fonction, formation_id'))
     ])
     deviationsRaw.value = rdev; capaRaw.value = rcapa; trsRaw.value = rtrs
     organigrammeRaw.value = rorg; formationsRaw.value = rform; formEnrRaw.value = rfenr; formReqRaw.value = rfreq
