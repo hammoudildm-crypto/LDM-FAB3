@@ -30,6 +30,13 @@ create table if not exists public.postes_ligne (
 
 alter table public.postes_ligne enable row level security;
 
+-- Idempotent : on retire d'abord les policies éventuelles (create policy n'a pas
+-- de « if not exists »), pour que ce script puisse être relancé sans erreur.
+drop policy if exists "postes_ligne sel" on public.postes_ligne;
+drop policy if exists "postes_ligne ins" on public.postes_ligne;
+drop policy if exists "postes_ligne upd" on public.postes_ligne;
+drop policy if exists "postes_ligne del" on public.postes_ligne;
+
 create policy "postes_ligne sel" on public.postes_ligne for select to authenticated using (true);
 create policy "postes_ligne ins" on public.postes_ligne for insert to authenticated with check (true);
 create policy "postes_ligne upd" on public.postes_ligne for update to authenticated using (true);
