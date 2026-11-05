@@ -1226,8 +1226,8 @@ ${matHtml}
 .zone-slider .zs-input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid #6366f1; box-shadow: 0 1px 3px rgba(15,23,42,.25); cursor: pointer; pointer-events: auto; margin-top: -6px; }
 .zone-slider .zs-input::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid #6366f1; box-shadow: 0 1px 3px rgba(15,23,42,.25); cursor: pointer; pointer-events: auto; }
 
-.viol-box { margin-top: 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 10px 13px; }
-.viol-titre { font-size: 12px; font-weight: 800; color: #b91c1c; margin-bottom: 5px; }
-.viol-row { font-size: 12px; color: #7f1d1d; padding: 2px 0; }
-.viol-ok { margin-top: 10px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; border-radius: 10px; padding: 9px 13px; font-size: 13px; font-weight: 600; }
+.viol-box { margin-top: 7px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 6px 9px; }
+.viol-titre { font-size: 10.5px; font-weight: 800; color: #b91c1c; margin-bottom: 2px; }
+.viol-row { font-size: 10.5px; color: #7f1d1d; padding: 1px 0; line-height: 1.35; }
+.viol-ok { margin-top: 7px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 600; }
 </style>
