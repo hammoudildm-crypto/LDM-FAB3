@@ -56,7 +56,6 @@ import FormationMatrice from '../views/FormationMatrice.vue'
 import FormationExigences from '../views/FormationExigences.vue'
 import CalculPesee from '../views/CalculPesee.vue'
 import FormationPlanning from '../views/FormationPlanning.vue'
-import DemandeClient from '../views/DemandeClient.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Hub },
@@ -71,7 +70,6 @@ const routes = [
   { path: '/referentiels', name: 'referentiels', component: Referentiels , meta: { role: 'admin' } },
   { path: '/plan', name: 'plan', component: PlanDirecteur },
   { path: '/ordres', name: 'ordres', component: OrdresFabrication },
-  { path: '/demande-client', name: 'demande-client', component: DemandeClient },
   { path: '/suivi', name: 'suivi', component: SaisieProduction },
   { path: '/conditionnement', name: 'conditionnement', component: Conditionnement },
   { path: '/saisie-trs', name: 'saisie-trs', component: SaisieTRS },

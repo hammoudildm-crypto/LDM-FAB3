@@ -12,7 +12,7 @@ export const MODULES = [
     links: [['/referentiels', 'Référentiels'], ['/cadences', 'Cadences'], ['/habilitations', 'Habilitations']] },
   { key: 'ordo', label: 'Ordonnancement & OF', c: '#6366f1',
     icon: `<g ${S}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></g>`,
-    links: [['/ordonnancement', 'Ordonnancement'], ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication'], ['/demande-client', 'Demande client'], ['/planning-equipements', 'Planning équipements']] },
+    links: [['/ordonnancement', 'Ordonnancement'], ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication'], ['/planning-equipements', 'Planning équipements']] },
   { key: 'suivifab', label: 'Suivi de fabrication', c: '#0ea5e9',
     icon: `<g ${S}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></g>`,
     links: [['/temps-reel', 'Suivi temps réel'], ['/avancement', 'Suivi du process'], ['/encours', 'En-cours']] },
