@@ -25,7 +25,7 @@
 
     <div v-if="lignes.length" class="tpm-two">
       <section class="tpm-card">
-        <div class="tpm-ch">Pareto des causes d'arrêt — {{ annee }}</div>
+        <div class="tpm-ch">Pareto des causes d'arrêt — {{ moisSel != null ? MOIS[moisSel] + ' ' + annee : annee }}</div>
         <div class="tpm-pareto">
           <div v-if="!pareto.length" class="tpm-empty2">Aucun arrêt saisi.</div>
           <div v-for="x in pareto" :key="x.col" class="tpm-par-row">
@@ -36,20 +36,20 @@
         </div>
       </section>
       <section class="tpm-card">
-        <div class="tpm-ch">Disponibilité par mois — {{ annee }}</div>
+        <div class="tpm-ch">Disponibilité par mois — {{ annee }} <span v-if="moisSel != null" class="tpm-clear" @click="moisSel = null">× {{ MOIS[moisSel] }} — voir l'année</span></div>
         <div class="tpm-months">
-          <div v-for="(m, i) in parMois" :key="i" class="tpm-mcol" :title="MOIS[i] + ' : dispo ' + m.dispo.toFixed(0) + '% · arrêts maint.+panne ' + m.mpH.toFixed(1) + ' h'">
+          <div v-for="(m, i) in parMois" :key="i" class="tpm-mcol" :class="{ sel: moisSel === i, dim: moisSel != null && moisSel !== i }" @click="moisSel = (moisSel === i ? null : i)" :title="MOIS[i] + ' : dispo ' + m.dispo.toFixed(0) + '% · arrêts maint.+panne ' + m.mpH.toFixed(1) + ' h — cliquer pour filtrer'">
             <div class="tpm-mbararea"><div class="tpm-mbar" :class="'b-' + clsDispo(m.dispo)" :style="{ height: (m.actif ? Math.max(3, Math.min(100, m.dispo)) : 0) + '%' }"></div></div>
             <div class="tpm-mdispo">{{ m.actif ? Math.round(m.dispo) : '' }}</div>
             <div class="tpm-mlabel">{{ MOIS[i] }}</div>
           </div>
         </div>
-        <div class="tpm-mleg">Barres = disponibilité (%). Survol : arrêts maintenance + panne du mois.</div>
+        <div class="tpm-mleg">Barres = disponibilité (%). <b>Cliquer un mois</b> pour filtrer la page ; survol : arrêts maintenance + panne.</div>
       </section>
     </div>
 
     <section class="tpm-card">
-      <div class="tpm-ch">Par équipement — {{ annee }} <span class="tpm-ch-hint">(cliquer une ligne pour le détail des arrêts)</span></div>
+      <div class="tpm-ch">Par équipement — {{ moisSel != null ? MOIS[moisSel] + ' ' + annee : annee }} <span class="tpm-ch-hint">(cliquer une ligne pour le détail des arrêts)</span></div>
       <div class="tpm-scroll">
         <table class="tpm-tbl">
           <thead>
@@ -150,10 +150,13 @@ const anneesDispo = computed(() => {
 watch(anneesDispo, (ys) => { if (ys.length && !ys.includes(annee.value)) annee.value = ys[0] })
 
 const postesAnnee = computed(() => postes.value.filter(p => p.date && new Date(p.date).getFullYear() === annee.value))
+// Filtre mois (clic sur « Disponibilité par mois ») ; null = toute l'année
+const moisSel = ref(null)
+const postesFiltre = computed(() => moisSel.value == null ? postesAnnee.value : postesAnnee.value.filter(p => { const d = new Date(p.date); return !isNaN(d.getTime()) && d.getMonth() === moisSel.value }))
 
 const lignes = computed(() => {
   const g = {}
-  for (const p of postesAnnee.value) {
+  for (const p of postesFiltre.value) {
     const id = p.equipement_id; if (id == null) continue
     if (!g[id]) g[id] = { id, code: (p.equipements && p.equipements.code) || '', nom: (p.equipements && p.equipements.nom) || '', ouv: 0, fonct: 0, maint: 0, panne: 0, evPanne: 0, motifs: Object.fromEntries(MOTIFS.map(m => [m, 0])) }
     const o = g[id]
@@ -178,7 +181,7 @@ const lignes = computed(() => {
 // Pareto des causes d'arrêt (tous motifs, pour prioriser)
 const pareto = computed(() => {
   const m = {}; for (const [col] of MOTIFS_INFO) m[col] = 0
-  for (const p of postesAnnee.value) for (const [col] of MOTIFS_INFO) m[col] += num(p[col])
+  for (const p of postesFiltre.value) for (const [col] of MOTIFS_INFO) m[col] += num(p[col])
   const tot = Object.values(m).reduce((a, b) => a + b, 0)
   let cum = 0
   return MOTIFS_INFO.map(([col, label, color]) => ({ col, label, color, min: m[col] })).filter(x => x.min > 0).sort((a, b) => b.min - a.min).map(x => { cum += x.min; return { ...x, pct: tot ? x.min / tot * 100 : 0, cumPct: tot ? cum / tot * 100 : 0 } })
@@ -252,7 +255,12 @@ function clsDispo(d) { return d >= 90 ? 'ok' : d >= 75 ? 'mid' : 'ko' }
 .tpm-par-val { width: 150px; flex: none; text-align: right; font-size: 11.5px; color: #475569; font-variant-numeric: tabular-nums; }
 .tpm-par-cum { color: #94a3b8; }
 .tpm-months { display: flex; align-items: flex-end; gap: 4px; padding: 14px 16px 6px; height: 150px; }
-.tpm-mcol { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.tpm-mcol { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; cursor: pointer; border-radius: 7px; padding-top: 2px; transition: background .12s, opacity .12s; }
+.tpm-mcol:hover { background: #f1f5f9; }
+.tpm-mcol.sel { background: #e0f2fe; box-shadow: inset 0 0 0 1px #7dd3fc; }
+.tpm-mcol.dim { opacity: .45; }
+.tpm-clear { cursor: pointer; margin-left: 8px; font-size: 11.5px; font-weight: 700; color: #0369a1; background: #e0f2fe; border-radius: 999px; padding: 2px 10px; }
+.tpm-clear:hover { background: #bae6fd; }
 .tpm-mbararea { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
 .tpm-mbar { width: 70%; border-radius: 4px 4px 0 0; min-height: 2px; transition: height .3s; }
 .b-ok { background: #10b981; } .b-mid { background: #f59e0b; } .b-ko { background: #ef4444; }
