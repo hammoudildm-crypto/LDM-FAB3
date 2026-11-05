@@ -32,8 +32,9 @@ const form = reactive({
   temps_ouverture_min: 450,
   arret_panne_min: 0, arret_format_min: 0, arret_nettoyage_min: 0,
   arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
-  production_realisee: 0, rebuts: 0, commentaire: ''
+  production_realisee: 0, rebuts: 0, retouches: 0, commentaire: ''
 })
+const colRetouche = ref(false)   // vrai une fois la migration 003 exécutée (colonne trs_postes.retouches)
 
 const MOTIFS = [
   ['arret_panne_min', 'Panne'], ['arret_format_min', 'Changement de format'],
@@ -49,6 +50,8 @@ async function charger() {
   if (!rp.error) produits.value = rp.data || []
   const rs = await supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf)').eq('actif', true).order('date', { ascending: false }).order('poste').limit(80)
   if (!rs.error) saisies.value = rs.data || []
+  const pr = await supabase.from('trs_postes').select('retouches').limit(1)
+  colRetouche.value = !pr.error
 }
 onMounted(charger)
 
@@ -102,6 +105,7 @@ function chargerContexte() {
     for (const m of MOTIFS) form[m[0]] = ex[m[0]] || 0
     form.production_realisee = ex.production_realisee || 0
     form.rebuts = ex.rebuts || 0
+    form.retouches = ex.retouches || 0
     form.commentaire = ex.commentaire || ''
   }
 }
@@ -135,6 +139,7 @@ async function enregistrer() {
     production_realisee: Number(form.production_realisee) || 0,
     rebuts: Number(form.rebuts) || 0, commentaire: form.commentaire || null
   }
+  if (colRetouche.value) payload.retouches = Number(form.retouches) || 0
   for (const m of MOTIFS) payload[m[0]] = Number(form[m[0]]) || 0
   const r = await supabase.from('trs_postes').upsert(payload, { onConflict: 'equipement_id,date,poste' })
   if (r.error) { msg.value = r.error.message; return }
@@ -146,6 +151,7 @@ async function enregistrer() {
   for (const m of MOTIFS) form[m[0]] = 0
   form.production_realisee = 0
   form.rebuts = 0
+  form.retouches = 0
   form.commentaire = ''
 }
 
@@ -229,6 +235,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
           <h3 class="card-title">Production</h3>
           <label class="fl">{{ cadenceMode === 'cycle' ? 'Temps écoulé (min)' : 'Production réalisée (' + uniteCad.replace('/h','') + ')' }}<input type="number" min="0" v-model.number="form.production_realisee" /></label>
           <label v-if="cadenceMode !== 'cycle'" class="fl">Rebuts<input type="number" min="0" v-model.number="form.rebuts" /></label>
+          <label v-if="colRetouche" class="fl">Retouches<input type="number" min="0" v-model.number="form.retouches" title="Unités reprises/retouchées — alimente le KPI « Taux de retouche »." /></label>
           <label class="fl">Commentaire<input type="text" v-model="form.commentaire" placeholder="Optionnel" /></label>
 
           <div class="trs-box">

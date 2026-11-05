@@ -127,12 +127,12 @@ function resetDO() { Object.assign(formDO, { id: null, code: '', nom: '', activi
 // --- Produit ---
 const formP = reactive({
   id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-  unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', hormonal: false, gamme: []
+  unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', cout_standard: '', hormonal: false, gamme: []
 })
 function resetP() {
   Object.assign(formP, {
     id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-    unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', hormonal: false, gamme: []
+    unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', cout_standard: '', hormonal: false, gamme: []
   })
 }
 
@@ -141,7 +141,9 @@ const formA = reactive({ id: null, code: '', nom: '' })
 function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
 
 // --- Équipement ---
-const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1 })
+const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1, heures_theoriques_mois: '' })
+const colCout = ref(false)     // vrai une fois la migration 003 exécutée (produits.cout_standard)
+const colHeures = ref(false)   // vrai une fois la migration 003 exécutée (equipements.heures_theoriques_mois)
 const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, cadences: false, postes: false, causes: false, peseeConfig: false })
 const sectionActive = ref(null)
 const peseeConfigs = ref([])
@@ -177,7 +179,7 @@ async function supprimerPoste(po) {
   if (r.error) { erreur.value = r.error.message; return }
   await chargerTout()
 }
-function resetE() { Object.assign(formE, { id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1 }) }
+function resetE() { Object.assign(formE, { id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1, heures_theoriques_mois: '' }) }
 
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
 function atelierDe(e) { return ateliers.value.find(a => a.id === e.atelier_id) || null }
@@ -192,6 +194,7 @@ async function chargerTout() {
     .select('*, donneurs_ordre(nom, code)').eq('actif', true).order('code_pf')
   if (rP.error) { erreur.value = rP.error.message; return }
   produits.value = rP.data
+  colCout.value = !(await supabase.from('produits').select('cout_standard').limit(1)).error
 
   const rA = await supabase.from('ateliers').select('*').eq('actif', true).order('code')
   if (rA.error) { erreur.value = rA.error.message; return }
@@ -200,6 +203,7 @@ async function chargerTout() {
   const rE = await supabase.from('equipements').select('*').eq('actif', true).order('code')
   if (rE.error) { erreur.value = rE.error.message; return }
   equipements.value = rE.data
+  colHeures.value = !(await supabase.from('equipements').select('heures_theoriques_mois').limit(1)).error
 
   const rS = await supabase.from('superviseurs').select('*').order('nom')
   if (!rS.error) supList.value = rS.data
@@ -474,6 +478,7 @@ async function enregistrerP() {
     nb_turbines: toNum(formP.nb_turbines),
     aql: formP.aql.trim() || null,
     pcsu: toNum(formP.pcsu),
+    cout_standard: toNum(formP.cout_standard),
     hormonal: !!formP.hormonal,
     gamme: normGammeR(formP.gamme)
   }
@@ -485,7 +490,7 @@ async function enregistrerP() {
   let res = await doSave(pl)
   while (res.error && res.error.message) {
     const m = res.error.message
-    const col = ['holding_time_jours', 'holding_times', 'apis', 'nb_turbines', 'hormonal'].find(c => (c in pl) && m.includes("'" + c + "'"))
+    const col = ['holding_time_jours', 'holding_times', 'apis', 'nb_turbines', 'hormonal', 'cout_standard'].find(c => (c in pl) && m.includes("'" + c + "'"))
     if (!col) break
     delete pl[col]; stripped.push(col); res = await doSave(pl)
   }
@@ -503,7 +508,7 @@ function modifierP(p) {
     holding_times: (p.holding_times && typeof p.holding_times === 'object') ? { ...p.holding_times } : {},
     apis_txt: Array.isArray(p.apis) ? p.apis.join(', ') : '',
     nb_turbines: p.nb_turbines ?? '',
-    aql: p.aql || '', pcsu: p.pcsu ?? '', hormonal: !!p.hormonal,
+    aql: p.aql || '', pcsu: p.pcsu ?? '', cout_standard: p.cout_standard ?? '', hormonal: !!p.hormonal,
     gamme: normGammeR(p.gamme)
   })
 }
@@ -556,6 +561,7 @@ async function enregistrerE() {
   erreur.value = ''
   if (!formE.code.trim() || !formE.nom.trim()) { erreur.value = 'Code et nom de l\'équipement obligatoires.'; return }
   const payload = { code: formE.code.trim(), nom: formE.nom.trim(), atelier_id: formE.atelier_id || null, type: formE.type.trim() || null, nb_machines: Math.max(1, Number(formE.nb_machines) || 1) }
+  if (colHeures.value) payload.heures_theoriques_mois = toNum(formE.heures_theoriques_mois)
   const res = formE.id
     ? await supabase.from('equipements').update(payload).eq('id', formE.id)
     : await supabase.from('equipements').insert(payload)
@@ -563,7 +569,7 @@ async function enregistrerE() {
   resetE()
   await chargerTout()
 }
-function modifierE(e) { Object.assign(formE, { id: e.id, code: e.code, nom: e.nom, atelier_id: e.atelier_id || '', type: e.type || '', nb_machines: Number(e.nb_machines) || 1 }) }
+function modifierE(e) { Object.assign(formE, { id: e.id, code: e.code, nom: e.nom, atelier_id: e.atelier_id || '', type: e.type || '', nb_machines: Number(e.nb_machines) || 1, heures_theoriques_mois: e.heures_theoriques_mois ?? '' }) }
 async function supprimerE(e) {
   if (!confirm('Supprimer definitivement l' + ap + 'equipement ' + (e.nom || e.code || '') + ' ? Action irreversible.')) return
   const r = await supabase.from('equipements').delete().eq('id', e.id)
@@ -695,6 +701,7 @@ onMounted(async () => {
         </label>
         <label>Type<input v-model="formE.type" placeholder="Compression" /></label>
         <label>Nombre de machines identiques<input type="number" min="1" v-model.number="formE.nb_machines" placeholder="1" /></label>
+        <label v-if="colHeures">Heures théoriques / mois<input type="number" min="0" step="any" v-model="formE.heures_theoriques_mois" placeholder="416" title="Heures d'ouverture théoriques par mois (capacité calendaire) — KPI « Taux d'utilisation capacité »." /></label>
         <div class="form-actions">
           <button class="btn" @click="enregistrerE">{{ formE.id ? 'Mettre à jour' : 'Ajouter' }}</button>
           <button v-if="formE.id" class="btn ghost" @click="resetE">Annuler</button>
@@ -761,6 +768,7 @@ onMounted(async () => {
         <label>Holding time par défaut (jours)<input v-model="formP.holding_time_jours" type="number" step="any" placeholder="30" title="Valeur de repli utilisée quand aucun holding time n'est défini pour l'étape concernée" /></label>
         <label>AQL<input v-model="formP.aql" placeholder="0.65" /></label>
         <label>PCSU<input v-model="formP.pcsu" type="number" step="any" placeholder="12.50" /></label>
+        <label v-if="colCout">Coût standard / boîte<input v-model="formP.cout_standard" type="number" step="any" min="0" placeholder="0.00" title="Coût standard par boîte (même devise que PCSU) — KPI « Coût de production / unité »." /></label>
         <label class="gamme-field">API (principes actifs)<input v-model="formP.apis_txt" placeholder="ex. Métformine, Glibenclamide — séparés par des virgules" /><span class="gamme-hint">Pour les produits à 2 API ou plus, le CQ (dosage, dissolution, uniformité de teneur) se saisit par API dans la revue qualité (PQR).</span></label>
         <label>Nombre de turbines<input v-model="formP.nb_turbines" type="number" min="1" step="1" placeholder="1" title="Nombre de turbines de pelliculage sur lesquelles le lot est réparti (pour le triage par turbine)" /></label>
         <label class="gamme-field">Gamme de process
