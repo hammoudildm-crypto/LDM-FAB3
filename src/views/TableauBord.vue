@@ -159,7 +159,7 @@
             </tbody>
           </table>
         </div>
-        <p class="kpi-note">« Mesuré » = indicateur calculé sans cible normative (débit, délai, Takt, cadence, production par équipe/personne). Takt = temps disponible ÷ quantité planifiée du <i>Plan directeur de production</i> (où la demande est représentée) ; Production à temps = lots terminés avant l'échéance saisie sur l'OF. Délai = réception OF → fin de fabrication ; Production par équipe / Productivité = boîtes rapportées aux effectifs. Les 20 indicateurs sont désormais reliés à une source : un « N/A » signifie seulement que la donnée n'est pas encore saisie — retouche (Saisie TRS), capacité (jours ouvrés × régime de travail, page Suivi de capacité), coût (PCSU du référentiel produit), équilibrage (flux entre phases, calculé depuis les cadences). OEE, Disponibilité, Performance et Qualité proviennent des postes TRS ; Performance/OEE nécessitent des cadences nominales renseignées.</p>
+        <p class="kpi-note">« Mesuré » = indicateur calculé sans cible normative (débit, délai, Takt, cadence, production par équipe/personne). Takt = temps disponible ÷ quantité planifiée du <i>Plan directeur de production</i> (où la demande est représentée) ; Production à temps = lots dont la fin de fabrication est au plus tard à la date de fin de validité de l'OF. Délai = réception OF → fin de fabrication ; Production par équipe / Productivité = boîtes rapportées aux effectifs. Les 20 indicateurs sont désormais reliés à une source : un « N/A » signifie seulement que la donnée n'est pas encore saisie — retouche (Saisie TRS), capacité (jours ouvrés × régime de travail, page Suivi de capacité), coût (PCSU du référentiel produit), équilibrage (flux entre phases, calculé depuis les cadences). OEE, Disponibilité, Performance et Qualité proviennent des postes TRS ; Performance/OEE nécessitent des cadences nominales renseignées.</p>
       </div>
     </section>
 
@@ -340,7 +340,7 @@ onMounted(async () => {
   try {
     const [rf, rc, rp, rs, re, rcad] = await Promise.all([
       fetchAllPaged(() => supabase.from('ordres_fabrication')
-        .select('id, produit_id, numero_lot, boites_fabriquees, quantite_theorique, date_fin_fabrication, date_reception, date_lancement, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
+        .select('id, produit_id, numero_lot, boites_fabriquees, quantite_theorique, date_fin_fabrication, date_reception, date_lancement, date_fin_validite, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('conditionnement')
         .select('quantite_conditionnee, date_conditionnement, equipements(nom, type), ordres_fabrication(numero_lot, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
       fetchAllPaged(() => supabase.from('plan_production')
@@ -746,21 +746,16 @@ const demandeAnnee = computed(() => {
   return d
 })
 // Production à temps : % de lots terminés au plus tard à leur échéance.
-// Échéance automatique = fin du mois de lancement (cadence mensuelle du PDP) ;
-// un champ « Échéance de livraison » saisi sur l'OF, s'il existe, fait exception.
+// Échéance = date de fin de validité de l'OF (date_fin_validite) ; un champ
+// « Échéance de livraison » saisi sur l'OF, s'il existe, fait exception.
 const onTimeKpi = computed(() => {
   const manuel = {}
   for (const o of ofEcheanceRaw.value) if (o && o.date_echeance) manuel[o.id] = o.date_echeance
   let total = 0, aTemps = 0
   for (const o of fabRaw.value) {
     if (!o.date_fin_fabrication || anYear(o.date_fin_fabrication) !== annee.value) continue
-    let ech = manuel[o.id]
-    if (!ech) {
-      const base = o.date_lancement || o.date_reception
-      if (!base) continue
-      const d = new Date(base)
-      ech = new Date(d.getFullYear(), d.getMonth() + 1, 0)   // dernier jour du mois planifié
-    }
+    const ech = manuel[o.id] || o.date_fin_validite
+    if (!ech) continue
     total++
     if (new Date(o.date_fin_fabrication) <= new Date(ech)) aTemps++
   }
@@ -876,7 +871,7 @@ const kpisStd = computed(() => {
     { n: 'Utilisation machine', d: 'Temps de marche vs planifié', f: 'Marche / temps planifié ×100', c: '≥ 80%', dir: 'up', s: 80, v: A, u: '%', fr: 'Hebdo' },
     { n: 'Temps de réglage (Setup)', d: 'Temps de réglage total', f: 'Σ temps de réglage', c: '↓ mieux', dir: 'down', s: null, v: a.reglage ? a.reglage / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
     { n: 'Changement de série (SMED)', d: 'Changement d\'une série à l\'autre', f: 'Σ format + réglage', c: '↓ mieux', dir: 'down', s: null, v: (a.format + a.reglage) ? (a.format + a.reglage) / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
-    { n: 'Production à temps', d: '% lots finis dans le mois planifié', f: 'Lots à temps / total ×100 (échéance = fin de mois PDP)', c: '≥ 95%', dir: 'up', s: 95, v: onTimeKpi.value, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Production à temps', d: '% lots finis avant la fin de validité OF', f: 'Lots à temps / total ×100 (échéance = date fin de validité OF)', c: '≥ 95%', dir: 'up', s: 95, v: onTimeKpi.value, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Coût de production / unité', d: 'PCSU moyen par boîte (référentiel)', f: 'Σ(boîtes × PCSU) / boîtes', c: '↓ mieux', dir: 'down', s: null, v: coutUnite.value, u: ' DA', fr: 'Mensuel' },
     { n: 'Productivité main-d\'œuvre', d: 'Sortie par personne (effectif)', f: 'Boîtes fabriquées / effectif moyen', c: '↑ mieux', dir: 'info', s: null, v: (eff.effMoyen && prodBase) ? prodBase / eff.effMoyen : null, u: '', fr: 'Hebdo/Mens.' },
     { n: 'Équilibrage de ligne', d: 'Équilibre du flux entre phases (cadences)', f: 'Σ temps/boîte / (nb phases × goulot) ×100', c: '≥ 90%', dir: 'up', s: 90, v: equilibrageLigne.value, u: '%', fr: 'Hebdo' }
