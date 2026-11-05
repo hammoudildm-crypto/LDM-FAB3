@@ -159,7 +159,7 @@
             </tbody>
           </table>
         </div>
-        <p class="kpi-note">« Mesuré » = indicateur calculé sans cible normative (débit, délai, Takt, cadence, production par équipe/personne). Takt = temps disponible ÷ quantité planifiée du <i>Plan directeur de production</i> (où la demande est représentée) ; Production à temps = lots terminés avant l'échéance saisie sur l'OF. Délai = réception OF → fin de fabrication ; Production par équipe / Productivité = boîtes rapportées aux effectifs. Les 20 indicateurs sont désormais reliés à une source : un « N/A » signifie seulement que la donnée n'est pas encore saisie — retouche (Saisie TRS), capacité (heures théoriques/mois par équipement, Référentiels), coût (PCSU du référentiel produit), équilibrage (écran Postes de ligne). OEE, Disponibilité, Performance et Qualité proviennent des postes TRS ; Performance/OEE nécessitent des cadences nominales renseignées.</p>
+        <p class="kpi-note">« Mesuré » = indicateur calculé sans cible normative (débit, délai, Takt, cadence, production par équipe/personne). Takt = temps disponible ÷ quantité planifiée du <i>Plan directeur de production</i> (où la demande est représentée) ; Production à temps = lots terminés avant l'échéance saisie sur l'OF. Délai = réception OF → fin de fabrication ; Production par équipe / Productivité = boîtes rapportées aux effectifs. Les 20 indicateurs sont désormais reliés à une source : un « N/A » signifie seulement que la donnée n'est pas encore saisie — retouche (Saisie TRS), capacité (jours ouvrés × régime de travail, page Suivi de capacité), coût (PCSU du référentiel produit), équilibrage (écran Postes de ligne). OEE, Disponibilité, Performance et Qualité proviennent des postes TRS ; Performance/OEE nécessitent des cadences nominales renseignées.</p>
       </div>
     </section>
 
@@ -334,7 +334,8 @@ const deviationsRaw = ref([]); const capaRaw = ref([]); const trsRaw = ref([])
 const organigrammeRaw = ref([]); const formationsRaw = ref([]); const formEnrRaw = ref([]); const formReqRaw = ref([])
 const cadencesRaw = ref([]); const effectifsRaw = ref([])
 const ofEcheanceRaw = ref([])
-const retoucheRaw = ref([]); const equipCapRaw = ref([]); const postesLigneRaw = ref([])
+const retoucheRaw = ref([]); const postesLigneRaw = ref([])
+const regimeMap = ref({})   // régime de travail par équipement, partagé avec la page Suivi de capacité (localStorage)
 onMounted(async () => {
   try {
     const [rf, rc, rp, rs, re, rcad] = await Promise.all([
@@ -352,7 +353,7 @@ onMounted(async () => {
     // KPIs transverses (qualité, équipements, RH) — chaque requête est tolérante :
     // une table absente n'affecte que son propre KPI et ne casse jamais la page.
     const safe = async (make) => { try { return await fetchAllPaged(make) } catch (e) { console.warn('KPI transverse indisponible :', (e && e.message) || e); return [] } }
-    const [rdev, rcapa, rtrs, rorg, rform, rfenr, rfreq, rcadp, reff, roe, rret, rcap, rpl] = await Promise.all([
+    const [rdev, rcapa, rtrs, rorg, rform, rfenr, rfreq, rcadp, reff, roe, rret, rpl] = await Promise.all([
       safe(() => supabase.from('deviations').select('statut, criticite, date_dev')),
       safe(() => supabase.from('capa').select('statut, echeance, date_capa')),
       safe(() => supabase.from('trs_postes').select('date, equipement_id, produit_id, temps_ouverture_min, production_realisee, rebuts, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min')),
@@ -364,13 +365,13 @@ onMounted(async () => {
       safe(() => supabase.from('effectifs').select('annee, mois, equipe, effectif, actif').eq('actif', true)),
       safe(() => supabase.from('ordres_fabrication').select('id, date_fin_fabrication, date_echeance')),
       safe(() => supabase.from('trs_postes').select('date, production_realisee, retouches')),
-      safe(() => supabase.from('equipements').select('id, heures_theoriques_mois')),
       safe(() => supabase.from('postes_ligne').select('equipement_id, temps_cycle_sec, actif').eq('actif', true))
     ])
     deviationsRaw.value = rdev; capaRaw.value = rcapa; trsRaw.value = rtrs
     organigrammeRaw.value = rorg; formationsRaw.value = rform; formEnrRaw.value = rfenr; formReqRaw.value = rfreq
     cadencesRaw.value = rcadp; effectifsRaw.value = reff; ofEcheanceRaw.value = roe
-    retoucheRaw.value = rret; equipCapRaw.value = rcap; postesLigneRaw.value = rpl
+    retoucheRaw.value = rret; postesLigneRaw.value = rpl
+    try { regimeMap.value = JSON.parse(localStorage.getItem('sc_reg_equip') || '{}') || {} } catch (e) { regimeMap.value = {} }
   } catch (e) { console.error(e) } finally { chargement.value = false }
 })
 
@@ -764,14 +765,37 @@ const retoucheKpi = computed(() => {
   }
   return prod > 0 ? ret / prod * 100 : null
 })
-// Taux d'utilisation capacité : temps de marche réel vs capacité calendaire (heures théoriques × mois écoulés)
+// Taux d'utilisation capacité : temps de marche réel vs capacité calendaire.
+// Capacité = jours ouvrés (hors week-end) × régime de travail × 8 h/poste, même
+// base que la page « Suivi de capacité des équipements » (régime via localStorage,
+// défaut 3×8). Calculé par équipement présent dans les postes TRS (couverture cohérente).
+function joursOuvresMoisTB(an, moisIdx) {
+  const d = new Date(an, moisIdx, 1); let n = 0
+  while (d.getMonth() === moisIdx) { const wd = d.getDay(); if (wd !== 0 && wd !== 6) n++; d.setDate(d.getDate() + 1) }
+  return n
+}
 const utilisationCapacite = computed(() => {
   const now = new Date()
-  const mois = annee.value === now.getFullYear() ? (now.getMonth() + 1) : 12
-  let capH = 0
-  for (const e of equipCapRaw.value) { const h = num(e.heures_theoriques_mois); if (h > 0) capH += h * mois }
-  if (!(capH > 0)) return null
-  return Math.min(100, (trsAgg.value.fonct / 60) / capH * 100)
+  const moisMax = annee.value === now.getFullYear() ? (now.getMonth() + 1) : 12
+  let joursAn = 0
+  for (let m = 0; m < moisMax; m++) joursAn += joursOuvresMoisTB(annee.value, m)
+  if (!(joursAn > 0)) return null
+  const fonctEq = {}
+  for (const t of trsRaw.value) {
+    if (!t.date || anYear(t.date) !== annee.value) continue
+    const o = num(t.temps_ouverture_min); if (!(o > 0)) continue
+    const arr = num(t.arret_panne_min) + num(t.arret_format_min) + num(t.arret_nettoyage_min) + num(t.arret_reglage_min) + num(t.arret_maintenance_min) + num(t.arret_attente_min) + num(t.arret_autre_min)
+    fonctEq[t.equipement_id] = (fonctEq[t.equipement_id] || 0) + Math.max(0, o - arr)
+  }
+  const rg = regimeMap.value || {}
+  let marcheH = 0, capaH = 0
+  for (const id in fonctEq) {
+    marcheH += fonctEq[id] / 60
+    const r = rg[id]
+    const postes = r === '4' ? 3 : (r ? Number(r) : 3)   // défaut 3×8, comme la page Suivi de capacité
+    capaH += joursAn * postes * 8
+  }
+  return capaH > 0 ? Math.min(100, marcheH / capaH * 100) : null
 })
 // Coût de production / unité : PCSU (coût/boîte du référentiel produit) pondéré par la production
 const coutUnite = computed(() => totBoites.value > 0 ? totCA.value / totBoites.value : null)

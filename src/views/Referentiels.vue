@@ -141,8 +141,7 @@ const formA = reactive({ id: null, code: '', nom: '' })
 function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
 
 // --- Équipement ---
-const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1, heures_theoriques_mois: '' })
-const colHeures = ref(false)   // vrai une fois la migration 003 exécutée (equipements.heures_theoriques_mois)
+const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1 })
 const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, cadences: false, postes: false, causes: false, peseeConfig: false })
 const sectionActive = ref(null)
 const peseeConfigs = ref([])
@@ -178,7 +177,7 @@ async function supprimerPoste(po) {
   if (r.error) { erreur.value = r.error.message; return }
   await chargerTout()
 }
-function resetE() { Object.assign(formE, { id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1, heures_theoriques_mois: '' }) }
+function resetE() { Object.assign(formE, { id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1 }) }
 
 function toNum(v) { return v === '' || v === null ? null : Number(v) }
 function atelierDe(e) { return ateliers.value.find(a => a.id === e.atelier_id) || null }
@@ -201,7 +200,6 @@ async function chargerTout() {
   const rE = await supabase.from('equipements').select('*').eq('actif', true).order('code')
   if (rE.error) { erreur.value = rE.error.message; return }
   equipements.value = rE.data
-  colHeures.value = !(await supabase.from('equipements').select('heures_theoriques_mois').limit(1)).error
 
   const rS = await supabase.from('superviseurs').select('*').order('nom')
   if (!rS.error) supList.value = rS.data
@@ -558,7 +556,6 @@ async function enregistrerE() {
   erreur.value = ''
   if (!formE.code.trim() || !formE.nom.trim()) { erreur.value = 'Code et nom de l\'équipement obligatoires.'; return }
   const payload = { code: formE.code.trim(), nom: formE.nom.trim(), atelier_id: formE.atelier_id || null, type: formE.type.trim() || null, nb_machines: Math.max(1, Number(formE.nb_machines) || 1) }
-  if (colHeures.value) payload.heures_theoriques_mois = toNum(formE.heures_theoriques_mois)
   const res = formE.id
     ? await supabase.from('equipements').update(payload).eq('id', formE.id)
     : await supabase.from('equipements').insert(payload)
@@ -566,7 +563,7 @@ async function enregistrerE() {
   resetE()
   await chargerTout()
 }
-function modifierE(e) { Object.assign(formE, { id: e.id, code: e.code, nom: e.nom, atelier_id: e.atelier_id || '', type: e.type || '', nb_machines: Number(e.nb_machines) || 1, heures_theoriques_mois: e.heures_theoriques_mois ?? '' }) }
+function modifierE(e) { Object.assign(formE, { id: e.id, code: e.code, nom: e.nom, atelier_id: e.atelier_id || '', type: e.type || '', nb_machines: Number(e.nb_machines) || 1 }) }
 async function supprimerE(e) {
   if (!confirm('Supprimer definitivement l' + ap + 'equipement ' + (e.nom || e.code || '') + ' ? Action irreversible.')) return
   const r = await supabase.from('equipements').delete().eq('id', e.id)
@@ -698,7 +695,6 @@ onMounted(async () => {
         </label>
         <label>Type<input v-model="formE.type" placeholder="Compression" /></label>
         <label>Nombre de machines identiques<input type="number" min="1" v-model.number="formE.nb_machines" placeholder="1" /></label>
-        <label v-if="colHeures">Heures théoriques / mois<input type="number" min="0" step="any" v-model="formE.heures_theoriques_mois" placeholder="416" title="Heures d'ouverture théoriques par mois (capacité calendaire) — KPI « Taux d'utilisation capacité »." /></label>
         <div class="form-actions">
           <button class="btn" @click="enregistrerE">{{ formE.id ? 'Mettre à jour' : 'Ajouter' }}</button>
           <button v-if="formE.id" class="btn ghost" @click="resetE">Annuler</button>
