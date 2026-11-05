@@ -349,7 +349,7 @@ onMounted(async () => {
       fetchAllPaged(() => supabase.from('equipements').select('id, nom, type, code').eq('actif', true)),
       fetchAllPaged(() => supabase.from('cadences_produit').select('produit_id, equipement_id, cadence_nominale'))
     ])
-    fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs; equipRef.value = re.data || []; cadences.value = rcad.data || []
+    fabRaw.value = rf; condRaw.value = rc; planRaw.value = rp; suiviRaw.value = rs; equipRef.value = re || []; cadences.value = rcad || []
     // KPIs transverses (qualité, équipements, RH) — chaque requête est tolérante :
     // une table absente n'affecte que son propre KPI et ne casse jamais la page.
     const safe = async (make) => { try { return await fetchAllPaged(make) } catch (e) { console.warn('KPI transverse indisponible :', (e && e.message) || e); return [] } }
@@ -823,10 +823,13 @@ const equilibrageLigne = computed(() => {
   for (const c of cadences.value) {
     const cad = num(c.cadence_nominale); if (!(cad > 0)) continue
     const ph = phaseEq[c.equipement_id]; if (!ph) continue
-    const cv = conv[c.produit_id]; if (!cv) continue
     let debit                                  // boîtes/h
-    if (ph === 'conditionnement') debit = cad
-    else { if (!(cv.tl > 0 && cv.plk > 0)) continue; debit = cad * cv.tl / cv.plk }
+    if (ph === 'conditionnement') debit = cad   // cadence déjà en boîtes/h
+    else {
+      const cv = conv[c.produit_id]
+      if (!cv || !(cv.tl > 0 && cv.plk > 0)) continue   // fab : besoin du poids de lot
+      debit = cad * cv.tl / cv.plk               // kg/h → boîtes/h
+    }
     if (!(debit > 0)) continue
     const m = (parProduit[c.produit_id] = parProduit[c.produit_id] || {})
     if (!m[ph] || debit > m[ph]) m[ph] = debit   // meilleur débit par phase
