@@ -127,12 +127,12 @@ function resetDO() { Object.assign(formDO, { id: null, code: '', nom: '', activi
 // --- Produit ---
 const formP = reactive({
   id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-  unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', cout_standard: '', hormonal: false, gamme: []
+  unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', hormonal: false, gamme: []
 })
 function resetP() {
   Object.assign(formP, {
     id: null, code_pf: '', designation: '', forme: '', donneur_ordre_id: '',
-    unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', cout_standard: '', hormonal: false, gamme: []
+    unites_par_boite: '', poids_unitaire_mg: '', poids_lot_kg: '', taille_lot: '', duree_vie_mois: '', holding_time_jours: '', holding_times: {}, apis_txt: '', nb_turbines: '', aql: '', pcsu: '', hormonal: false, gamme: []
   })
 }
 
@@ -142,7 +142,6 @@ function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
 
 // --- Équipement ---
 const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1, heures_theoriques_mois: '' })
-const colCout = ref(false)     // vrai une fois la migration 003 exécutée (produits.cout_standard)
 const colHeures = ref(false)   // vrai une fois la migration 003 exécutée (equipements.heures_theoriques_mois)
 const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, cadences: false, postes: false, causes: false, peseeConfig: false })
 const sectionActive = ref(null)
@@ -194,7 +193,6 @@ async function chargerTout() {
     .select('*, donneurs_ordre(nom, code)').eq('actif', true).order('code_pf')
   if (rP.error) { erreur.value = rP.error.message; return }
   produits.value = rP.data
-  colCout.value = !(await supabase.from('produits').select('cout_standard').limit(1)).error
 
   const rA = await supabase.from('ateliers').select('*').eq('actif', true).order('code')
   if (rA.error) { erreur.value = rA.error.message; return }
@@ -478,7 +476,6 @@ async function enregistrerP() {
     nb_turbines: toNum(formP.nb_turbines),
     aql: formP.aql.trim() || null,
     pcsu: toNum(formP.pcsu),
-    cout_standard: toNum(formP.cout_standard),
     hormonal: !!formP.hormonal,
     gamme: normGammeR(formP.gamme)
   }
@@ -490,7 +487,7 @@ async function enregistrerP() {
   let res = await doSave(pl)
   while (res.error && res.error.message) {
     const m = res.error.message
-    const col = ['holding_time_jours', 'holding_times', 'apis', 'nb_turbines', 'hormonal', 'cout_standard'].find(c => (c in pl) && m.includes("'" + c + "'"))
+    const col = ['holding_time_jours', 'holding_times', 'apis', 'nb_turbines', 'hormonal'].find(c => (c in pl) && m.includes("'" + c + "'"))
     if (!col) break
     delete pl[col]; stripped.push(col); res = await doSave(pl)
   }
@@ -508,7 +505,7 @@ function modifierP(p) {
     holding_times: (p.holding_times && typeof p.holding_times === 'object') ? { ...p.holding_times } : {},
     apis_txt: Array.isArray(p.apis) ? p.apis.join(', ') : '',
     nb_turbines: p.nb_turbines ?? '',
-    aql: p.aql || '', pcsu: p.pcsu ?? '', cout_standard: p.cout_standard ?? '', hormonal: !!p.hormonal,
+    aql: p.aql || '', pcsu: p.pcsu ?? '', hormonal: !!p.hormonal,
     gamme: normGammeR(p.gamme)
   })
 }
@@ -768,7 +765,6 @@ onMounted(async () => {
         <label>Holding time par défaut (jours)<input v-model="formP.holding_time_jours" type="number" step="any" placeholder="30" title="Valeur de repli utilisée quand aucun holding time n'est défini pour l'étape concernée" /></label>
         <label>AQL<input v-model="formP.aql" placeholder="0.65" /></label>
         <label>PCSU<input v-model="formP.pcsu" type="number" step="any" placeholder="12.50" /></label>
-        <label v-if="colCout">Coût standard / boîte<input v-model="formP.cout_standard" type="number" step="any" min="0" placeholder="0.00" title="Coût standard par boîte (même devise que PCSU) — KPI « Coût de production / unité »." /></label>
         <label class="gamme-field">API (principes actifs)<input v-model="formP.apis_txt" placeholder="ex. Métformine, Glibenclamide — séparés par des virgules" /><span class="gamme-hint">Pour les produits à 2 API ou plus, le CQ (dosage, dissolution, uniformité de teneur) se saisit par API dans la revue qualité (PQR).</span></label>
         <label>Nombre de turbines<input v-model="formP.nb_turbines" type="number" min="1" step="1" placeholder="1" title="Nombre de turbines de pelliculage sur lesquelles le lot est réparti (pour le triage par turbine)" /></label>
         <label class="gamme-field">Gamme de process

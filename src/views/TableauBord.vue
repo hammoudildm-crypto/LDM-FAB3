@@ -159,7 +159,7 @@
             </tbody>
           </table>
         </div>
-        <p class="kpi-note">« Mesuré » = indicateur calculé sans cible normative (débit, délai, Takt, cadence, production par équipe/personne). Takt = temps disponible ÷ quantité planifiée du <i>Plan directeur de production</i> (où la demande est représentée) ; Production à temps = lots terminés avant l'échéance saisie sur l'OF. Délai = réception OF → fin de fabrication ; Production par équipe / Productivité = boîtes rapportées aux effectifs. Les 20 indicateurs sont désormais reliés à une source : un « N/A » signifie seulement que la donnée n'est pas encore saisie — retouche (Saisie TRS), capacité (heures théoriques/mois par équipement, Référentiels), coût (coût standard par produit, Référentiels), équilibrage (écran Postes de ligne). OEE, Disponibilité, Performance et Qualité proviennent des postes TRS ; Performance/OEE nécessitent des cadences nominales renseignées.</p>
+        <p class="kpi-note">« Mesuré » = indicateur calculé sans cible normative (débit, délai, Takt, cadence, production par équipe/personne). Takt = temps disponible ÷ quantité planifiée du <i>Plan directeur de production</i> (où la demande est représentée) ; Production à temps = lots terminés avant l'échéance saisie sur l'OF. Délai = réception OF → fin de fabrication ; Production par équipe / Productivité = boîtes rapportées aux effectifs. Les 20 indicateurs sont désormais reliés à une source : un « N/A » signifie seulement que la donnée n'est pas encore saisie — retouche (Saisie TRS), capacité (heures théoriques/mois par équipement, Référentiels), coût (PCSU du référentiel produit), équilibrage (écran Postes de ligne). OEE, Disponibilité, Performance et Qualité proviennent des postes TRS ; Performance/OEE nécessitent des cadences nominales renseignées.</p>
       </div>
     </section>
 
@@ -334,7 +334,7 @@ const deviationsRaw = ref([]); const capaRaw = ref([]); const trsRaw = ref([])
 const organigrammeRaw = ref([]); const formationsRaw = ref([]); const formEnrRaw = ref([]); const formReqRaw = ref([])
 const cadencesRaw = ref([]); const effectifsRaw = ref([])
 const ofEcheanceRaw = ref([])
-const retoucheRaw = ref([]); const equipCapRaw = ref([]); const produitCoutRaw = ref([]); const postesLigneRaw = ref([])
+const retoucheRaw = ref([]); const equipCapRaw = ref([]); const postesLigneRaw = ref([])
 onMounted(async () => {
   try {
     const [rf, rc, rp, rs, re, rcad] = await Promise.all([
@@ -352,7 +352,7 @@ onMounted(async () => {
     // KPIs transverses (qualité, équipements, RH) — chaque requête est tolérante :
     // une table absente n'affecte que son propre KPI et ne casse jamais la page.
     const safe = async (make) => { try { return await fetchAllPaged(make) } catch (e) { console.warn('KPI transverse indisponible :', (e && e.message) || e); return [] } }
-    const [rdev, rcapa, rtrs, rorg, rform, rfenr, rfreq, rcadp, reff, roe, rret, rcap, rcout, rpl] = await Promise.all([
+    const [rdev, rcapa, rtrs, rorg, rform, rfenr, rfreq, rcadp, reff, roe, rret, rcap, rpl] = await Promise.all([
       safe(() => supabase.from('deviations').select('statut, criticite, date_dev')),
       safe(() => supabase.from('capa').select('statut, echeance, date_capa')),
       safe(() => supabase.from('trs_postes').select('date, equipement_id, produit_id, temps_ouverture_min, production_realisee, rebuts, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min')),
@@ -365,13 +365,12 @@ onMounted(async () => {
       safe(() => supabase.from('ordres_fabrication').select('id, date_fin_fabrication, date_echeance')),
       safe(() => supabase.from('trs_postes').select('date, production_realisee, retouches')),
       safe(() => supabase.from('equipements').select('id, heures_theoriques_mois')),
-      safe(() => supabase.from('produits').select('id, cout_standard')),
       safe(() => supabase.from('postes_ligne').select('equipement_id, temps_cycle_sec, actif').eq('actif', true))
     ])
     deviationsRaw.value = rdev; capaRaw.value = rcapa; trsRaw.value = rtrs
     organigrammeRaw.value = rorg; formationsRaw.value = rform; formEnrRaw.value = rfenr; formReqRaw.value = rfreq
     cadencesRaw.value = rcadp; effectifsRaw.value = reff; ofEcheanceRaw.value = roe
-    retoucheRaw.value = rret; equipCapRaw.value = rcap; produitCoutRaw.value = rcout; postesLigneRaw.value = rpl
+    retoucheRaw.value = rret; equipCapRaw.value = rcap; postesLigneRaw.value = rpl
   } catch (e) { console.error(e) } finally { chargement.value = false }
 })
 
@@ -774,18 +773,8 @@ const utilisationCapacite = computed(() => {
   if (!(capH > 0)) return null
   return Math.min(100, (trsAgg.value.fonct / 60) / capH * 100)
 })
-// Coût de production / unité : coût standard pondéré par la production (boîtes)
-const coutUnite = computed(() => {
-  const cout = {}
-  for (const p of produitCoutRaw.value) if (num(p.cout_standard) > 0) cout[p.id] = num(p.cout_standard)
-  let total = 0, boites = 0
-  for (const o of fabRaw.value) {
-    if (!o.date_fin_fabrication || anYear(o.date_fin_fabrication) !== annee.value) continue
-    const b = num(o.boites_fabriquees); if (!(b > 0) || cout[o.produit_id] == null) continue
-    total += b * cout[o.produit_id]; boites += b
-  }
-  return boites > 0 ? total / boites : null
-})
+// Coût de production / unité : PCSU (coût/boîte du référentiel produit) pondéré par la production
+const coutUnite = computed(() => totBoites.value > 0 ? totCA.value / totBoites.value : null)
 // Équilibrage de ligne : moyenne par ligne de (Σ cycles) / (nb postes × goulot) × 100
 const equilibrageLigne = computed(() => {
   const parLigne = {}
@@ -833,7 +822,7 @@ const kpisStd = computed(() => {
     { n: 'Temps de réglage (Setup)', d: 'Temps de réglage total', f: 'Σ temps de réglage', c: '↓ mieux', dir: 'down', s: null, v: a.reglage ? a.reglage / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
     { n: 'Changement de série (SMED)', d: 'Changement d\'une série à l\'autre', f: 'Σ format + réglage', c: '↓ mieux', dir: 'down', s: null, v: (a.format + a.reglage) ? (a.format + a.reglage) / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
     { n: 'Production à temps', d: '% lots terminés à l\'échéance', f: 'Lots à temps / lots avec échéance ×100', c: '≥ 95%', dir: 'up', s: 95, v: onTimeKpi.value, u: '%', fr: 'Quot./Hebdo' },
-    { n: 'Coût de production / unité', d: 'Coût standard par boîte', f: 'Σ(boîtes × coût standard) / boîtes', c: '↓ mieux', dir: 'down', s: null, v: coutUnite.value, u: ' DA', fr: 'Mensuel' },
+    { n: 'Coût de production / unité', d: 'PCSU moyen par boîte (référentiel)', f: 'Σ(boîtes × PCSU) / boîtes', c: '↓ mieux', dir: 'down', s: null, v: coutUnite.value, u: ' DA', fr: 'Mensuel' },
     { n: 'Productivité main-d\'œuvre', d: 'Sortie par personne (effectif)', f: 'Boîtes fabriquées / effectif moyen', c: '↑ mieux', dir: 'info', s: null, v: (eff.effMoyen && prodBase) ? prodBase / eff.effMoyen : null, u: '', fr: 'Hebdo/Mens.' },
     { n: 'Équilibrage de ligne', d: 'Répartition de la charge entre postes', f: 'Σ cycles / (nb postes × goulot) ×100', c: '≥ 90%', dir: 'up', s: 90, v: equilibrageLigne.value, u: '%', fr: 'Hebdo' }
   ]
