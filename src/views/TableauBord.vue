@@ -119,6 +119,7 @@
           <span class="kpi-chip ok">{{ kpiSummary.ok }} sur objectif</span>
           <span class="kpi-chip warn">{{ kpiSummary.warn }} à surveiller</span>
           <span class="kpi-chip bad">{{ kpiSummary.bad }} hors objectif</span>
+          <span v-if="kpiSummary.info" class="kpi-chip info">{{ kpiSummary.info }} mesuré</span>
           <span class="kpi-chip na">{{ kpiSummary.na }} n/a</span>
           <button type="button" class="tb-detail-toggle" @click="kpiOuvert = !kpiOuvert">{{ kpiOuvert ? '▾ Réduire' : '▸ Détail' }}</button>
         </span>
@@ -131,9 +132,10 @@
               <span v-if="kpiSummary.ok" class="seg ok" :style="{ width: pctSeg(kpiSummary.ok) }"></span>
               <span v-if="kpiSummary.warn" class="seg warn" :style="{ width: pctSeg(kpiSummary.warn) }"></span>
               <span v-if="kpiSummary.bad" class="seg bad" :style="{ width: pctSeg(kpiSummary.bad) }"></span>
+              <span v-if="kpiSummary.info" class="seg info" :style="{ width: pctSeg(kpiSummary.info) }"></span>
               <span v-if="kpiSummary.na" class="seg na" :style="{ width: pctSeg(kpiSummary.na) }"></span>
             </div>
-            <div class="kp-leg"><span><i class="ok"></i>Sur objectif <b>{{ kpiSummary.ok }}</b></span><span><i class="warn"></i>À surveiller <b>{{ kpiSummary.warn }}</b></span><span><i class="bad"></i>Hors objectif <b>{{ kpiSummary.bad }}</b></span><span><i class="na"></i>N/A <b>{{ kpiSummary.na }}</b></span></div>
+            <div class="kp-leg"><span><i class="ok"></i>Sur objectif <b>{{ kpiSummary.ok }}</b></span><span><i class="warn"></i>À surveiller <b>{{ kpiSummary.warn }}</b></span><span><i class="bad"></i>Hors objectif <b>{{ kpiSummary.bad }}</b></span><span><i class="info"></i>Mesuré <b>{{ kpiSummary.info }}</b></span><span><i class="na"></i>N/A <b>{{ kpiSummary.na }}</b></span></div>
           </div>
           <div class="kpi-panel">
             <div class="kp-t">À améliorer en priorité</div>
@@ -157,7 +159,7 @@
             </tbody>
           </table>
         </div>
-        <p class="kpi-note">Les indicateurs sans source dans ProdTrack (capacité installée, nombre d'équipes, heures-homme, coûts, dates de livraison, retouches) sont marqués « N/A » — ils s'activeront en ajoutant ces saisies. OEE, Disponibilité, Performance et Qualité proviennent des postes TRS ; Performance/OEE nécessitent des cadences nominales renseignées.</p>
+        <p class="kpi-note">« Mesuré » = indicateur calculé sans cible normative (débit, délai, cadence, production par équipe/personne). Délai de fabrication = réception OF → fin de fabrication ; Production par équipe / Productivité = boîtes fabriquées rapportées aux effectifs saisis. Restent en « N/A » les indicateurs sans source dans ProdTrack : capacité installée, retouches, livraison à échéance, coûts, équilibrage de ligne et demande (Takt) — ils s'activeront en ajoutant ces saisies. OEE, Disponibilité, Performance et Qualité proviennent des postes TRS ; Performance/OEE nécessitent des cadences nominales renseignées.</p>
       </div>
     </section>
 
@@ -330,12 +332,12 @@ const fabRaw = ref([]); const condRaw = ref([]); const planRaw = ref([]); const 
 // Sources transverses (qualité, équipements, RH)
 const deviationsRaw = ref([]); const capaRaw = ref([]); const trsRaw = ref([])
 const organigrammeRaw = ref([]); const formationsRaw = ref([]); const formEnrRaw = ref([]); const formReqRaw = ref([])
-const cadencesRaw = ref([])
+const cadencesRaw = ref([]); const effectifsRaw = ref([])
 onMounted(async () => {
   try {
     const [rf, rc, rp, rs, re, rcad] = await Promise.all([
       fetchAllPaged(() => supabase.from('ordres_fabrication')
-        .select('id, produit_id, numero_lot, boites_fabriquees, quantite_theorique, date_fin_fabrication, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
+        .select('id, produit_id, numero_lot, boites_fabriquees, quantite_theorique, date_fin_fabrication, date_reception, date_lancement, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('conditionnement')
         .select('quantite_conditionnee, date_conditionnement, equipements(nom, type), ordres_fabrication(numero_lot, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
       fetchAllPaged(() => supabase.from('plan_production')
@@ -348,7 +350,7 @@ onMounted(async () => {
     // KPIs transverses (qualité, équipements, RH) — chaque requête est tolérante :
     // une table absente n'affecte que son propre KPI et ne casse jamais la page.
     const safe = async (make) => { try { return await fetchAllPaged(make) } catch (e) { console.warn('KPI transverse indisponible :', (e && e.message) || e); return [] } }
-    const [rdev, rcapa, rtrs, rorg, rform, rfenr, rfreq, rcadp] = await Promise.all([
+    const [rdev, rcapa, rtrs, rorg, rform, rfenr, rfreq, rcadp, reff] = await Promise.all([
       safe(() => supabase.from('deviations').select('statut, criticite, date_dev')),
       safe(() => supabase.from('capa').select('statut, echeance, date_capa')),
       safe(() => supabase.from('trs_postes').select('date, equipement_id, produit_id, temps_ouverture_min, production_realisee, rebuts, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min')),
@@ -356,11 +358,12 @@ onMounted(async () => {
       safe(() => supabase.from('formations').select('id, nom, validite_mois, actif').eq('actif', true)),
       safe(() => supabase.from('formation_enregistrements').select('personne_id, formation_id, date_formation, resultat')),
       safe(() => supabase.from('formation_requise').select('fonction, formation_id')),
-      safe(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode'))
+      safe(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode')),
+      safe(() => supabase.from('effectifs').select('annee, mois, equipe, effectif, actif').eq('actif', true))
     ])
     deviationsRaw.value = rdev; capaRaw.value = rcapa; trsRaw.value = rtrs
     organigrammeRaw.value = rorg; formationsRaw.value = rform; formEnrRaw.value = rfenr; formReqRaw.value = rfreq
-    cadencesRaw.value = rcadp
+    cadencesRaw.value = rcadp; effectifsRaw.value = reff
   } catch (e) { console.error(e) } finally { chargement.value = false }
 })
 
@@ -702,6 +705,31 @@ function fmtKpi(v, u) {
   if (u === '') return fmt(v)
   return v.toFixed(1) + u
 }
+// Délai de fabrication moyen (jours) : réception OF → fin de fabrication, lots terminés dans l'année
+const ofDelai = computed(() => {
+  let n = 0, somme = 0
+  for (const o of fabRaw.value) {
+    if (!o.date_fin_fabrication || !o.date_reception) continue
+    if (anYear(o.date_fin_fabrication) !== annee.value) continue
+    const j = (new Date(o.date_fin_fabrication) - new Date(o.date_reception)) / 86400000
+    if (!(j >= 0) || j > 400) continue
+    somme += j; n++
+  }
+  return n ? somme / n : null
+})
+// Effectifs : nombre d'équipes distinctes et effectif mensuel moyen sur l'année
+const effectifKpi = computed(() => {
+  const equipes = new Set(); const parMois = {}
+  for (const e of effectifsRaw.value) {
+    if (Number(e.annee) !== annee.value) continue
+    if (e.equipe) equipes.add(String(e.equipe).trim().toLowerCase())
+    const m = Number(e.mois) || 0
+    parMois[m] = (parMois[m] || 0) + num(e.effectif)
+  }
+  const mois = Object.values(parMois)
+  const effMoyen = mois.length ? mois.reduce((s, v) => s + v, 0) / mois.length : null
+  return { nbEquipes: equipes.size || null, effMoyen }
+})
 const kpisStd = computed(() => {
   const a = trsAgg.value
   const A = a.ouv ? a.fonct / a.ouv * 100 : null
@@ -710,6 +738,8 @@ const kpisStd = computed(() => {
   const oee = (A != null && P != null && Q != null) ? A * P * Q / 10000 : null
   const rej = a.prod ? a.rebuts / a.prod * 100 : null
   const cyc = a.good ? a.fonct / a.good : null
+  const eff = effectifKpi.value
+  const prodBase = totBoites.value || a.good || null
   const rows = [
     { n: 'OEE (TRS)', d: 'Efficacité globale des équipements', f: 'Disponibilité × Performance × Qualité', c: '≥ 85%', dir: 'up', s: 85, v: oee, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Disponibilité', d: 'Temps de marche vs temps ouvert', f: 'Temps de marche / temps ouvert ×100', c: '≥ 90%', dir: 'up', s: 90, v: A, u: '%', fr: 'Quot./Hebdo' },
@@ -718,10 +748,10 @@ const kpisStd = computed(() => {
     { n: 'Efficience de production', d: 'Sortie réelle vs théorique', f: 'Sortie réelle / théorique ×100', c: '≥ 90%', dir: 'up', s: 90, v: P != null ? P : rendementFab.value, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Taux d\'utilisation capacité', d: 'Capacité installée utilisée', f: 'Réel / capacité installée ×100', c: '≥ 80%', dir: 'up', s: 80, v: null, u: '%', fr: 'Hebdo/Mens.' },
     { n: 'Débit (Throughput)', d: 'Unités conformes produites', f: 'Total unités conformes', c: '↑ mieux', dir: 'info', s: null, v: a.good || null, u: '', fr: 'Quot.' },
-    { n: 'Production par équipe', d: 'Unités conformes par équipe', f: 'Unités conformes / nb d\'équipes', c: '↑ mieux', dir: 'info', s: null, v: null, u: '', fr: 'Quot.' },
+    { n: 'Production par équipe', d: 'Boîtes produites par équipe (an)', f: 'Boîtes fabriquées / nb d\'équipes', c: '↑ mieux', dir: 'info', s: null, v: (eff.nbEquipes && prodBase) ? prodBase / eff.nbEquipes : null, u: '', fr: 'Quot.' },
     { n: 'Temps de cycle', d: 'Temps pour produire une unité', f: 'Temps de marche / unités', c: '↓ mieux', dir: 'down', s: null, v: cyc, u: ' min', fr: 'Quot.' },
     { n: 'Takt Time', d: 'Rythme requis par la demande', f: 'Temps disponible / demande', c: 'selon demande', dir: 'info', s: null, v: null, u: '', fr: 'Quot.' },
-    { n: 'Délai (Lead Time)', d: 'Réception commande → livraison', f: 'Date livraison − réception', c: '↓ mieux', dir: 'down', s: null, v: null, u: '', fr: 'Hebdo/Mens.' },
+    { n: 'Délai (Lead Time)', d: 'Réception OF → fin de fabrication', f: 'Fin de fabrication − réception (moy. jours)', c: '↓ mieux', dir: 'down', s: null, v: ofDelai.value, u: ' j', fr: 'Hebdo/Mens.' },
     { n: 'First Pass Yield (FPY)', d: 'Unités bonnes du premier coup', f: 'Bonnes / total entrée ×100', c: '≥ 95%', dir: 'up', s: 95, v: rendementFab.value, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Taux de rejet', d: '% d\'unités rejetées', f: 'Rejetées / produites ×100', c: '< 2%', dir: 'down', s: 2, v: rej, u: '%', fr: 'Quot.' },
     { n: 'Taux de rebut', d: '% matière mise au rebut', f: 'Rebuts / produites ×100', c: '< 1,5%', dir: 'down', s: 1.5, v: rej, u: '%', fr: 'Quot./Hebdo' },
@@ -732,7 +762,7 @@ const kpisStd = computed(() => {
     { n: 'Changement de série (SMED)', d: 'Changement d\'une série à l\'autre', f: 'Σ format + réglage', c: '↓ mieux', dir: 'down', s: null, v: (a.format + a.reglage) ? (a.format + a.reglage) / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
     { n: 'Production à temps', d: '% commandes livrées à échéance', f: 'À temps / total ×100', c: '≥ 95%', dir: 'up', s: 95, v: null, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Coût de production / unité', d: 'Coût total par unité conforme', f: 'Coût total / unités conformes', c: '↓ mieux', dir: 'down', s: null, v: null, u: '', fr: 'Mensuel' },
-    { n: 'Productivité main-d\'œuvre', d: 'Sortie par heure-homme', f: 'Unités conformes / heures-homme', c: '↑ mieux', dir: 'info', s: null, v: null, u: '', fr: 'Hebdo/Mens.' },
+    { n: 'Productivité main-d\'œuvre', d: 'Sortie par personne (effectif)', f: 'Boîtes fabriquées / effectif moyen', c: '↑ mieux', dir: 'info', s: null, v: (eff.effMoyen && prodBase) ? prodBase / eff.effMoyen : null, u: '', fr: 'Hebdo/Mens.' },
     { n: 'Équilibrage de ligne', d: 'Répartition de la charge de travail', f: '(Cycle / goulot) / Takt ×100', c: '≥ 90%', dir: 'up', s: 90, v: null, u: '%', fr: 'Hebdo' }
   ]
   return rows.map(r => ({ ...r, st: statutKpi(r.v, r.dir, r.s) }))
@@ -742,9 +772,10 @@ const kpiSummary = computed(() => {
   const ok = k.filter(x => x.st === 'ok').length
   const warn = k.filter(x => x.st === 'warn').length
   const bad = k.filter(x => x.st === 'bad').length
-  const na = k.filter(x => x.st === 'na' || x.st === 'info').length
+  const info = k.filter(x => x.st === 'info').length
+  const na = k.filter(x => x.st === 'na').length
   const top = k.filter(x => x.st === 'bad').concat(k.filter(x => x.st === 'warn')).slice(0, 5)
-  return { ok, warn, bad, na, total: k.length, top }
+  return { ok, warn, bad, info, na, total: k.length, top }
 })
 const pctSeg = (n) => (kpiSummary.value.total ? (n / kpiSummary.value.total * 100) : 0) + '%'
 </script>
@@ -836,17 +867,17 @@ const pctSeg = (n) => (kpiSummary.value.total ? (n / kpiSummary.value.total * 10
 .kpi-u { color: #94a3b8; font-weight: 600; font-size: 13px; }
 .kpi-sum { display: inline-flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .kpi-chip { font-size: 11.5px; font-weight: 800; padding: 3px 11px; border-radius: 999px; }
-.kpi-chip.ok { background: #dcfce7; color: #15803d; } .kpi-chip.warn { background: #fef3c7; color: #b45309; } .kpi-chip.bad { background: #fee2e2; color: #b91c1c; } .kpi-chip.na { background: #f1f5f9; color: #64748b; }
+.kpi-chip.ok { background: #dcfce7; color: #15803d; } .kpi-chip.warn { background: #fef3c7; color: #b45309; } .kpi-chip.bad { background: #fee2e2; color: #b91c1c; } .kpi-chip.info { background: #e2e8f0; color: #475569; } .kpi-chip.na { background: #f1f5f9; color: #64748b; }
 .kpi-panels { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; margin-bottom: 14px; }
 .kpi-panel { background: #fff; border: 1px solid #e8edf3; border-radius: 14px; padding: 13px 15px; box-shadow: 0 6px 18px rgba(30,41,59,.05); }
 .kp-t { font-size: 12px; font-weight: 800; color: #334155; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 10px; }
 .kp-bar { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: #eef2f7; }
 .kp-bar .seg { height: 100%; }
-.kp-bar .seg.ok { background: #16a34a; } .kp-bar .seg.warn { background: #f59e0b; } .kp-bar .seg.bad { background: #dc2626; } .kp-bar .seg.na { background: #cbd5e1; }
+.kp-bar .seg.ok { background: #16a34a; } .kp-bar .seg.warn { background: #f59e0b; } .kp-bar .seg.bad { background: #dc2626; } .kp-bar .seg.info { background: #94a3b8; } .kp-bar .seg.na { background: #cbd5e1; }
 .kp-leg { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 11.5px; color: #64748b; font-weight: 600; }
 .kp-leg span { display: inline-flex; align-items: center; gap: 5px; }
 .kp-leg i { width: 10px; height: 10px; border-radius: 3px; }
-.kp-leg i.ok { background: #16a34a; } .kp-leg i.warn { background: #f59e0b; } .kp-leg i.bad { background: #dc2626; } .kp-leg i.na { background: #cbd5e1; }
+.kp-leg i.ok { background: #16a34a; } .kp-leg i.warn { background: #f59e0b; } .kp-leg i.bad { background: #dc2626; } .kp-leg i.info { background: #94a3b8; } .kp-leg i.na { background: #cbd5e1; }
 .kp-leg b { color: #0f172a; }
 .kp-top { display: flex; align-items: center; gap: 9px; padding: 5px 0; border-bottom: 1px solid #f1f5f9; font-size: 12.5px; }
 .kp-top:last-child { border-bottom: 0; }
