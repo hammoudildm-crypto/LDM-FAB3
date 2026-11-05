@@ -206,9 +206,15 @@
             </svg>
             <div class="leg"><span class="lg"><i class="l-clg"></i>Moyenne (CL)</span><span class="lg"><i class="l-ug"></i>±3σ (UCL/LCL)</span><span class="lg"><i class="d-ko"></i>Violation de règle</span></div>
             <div v-if="cur.i >= 0 && controlData.pts[cur.i]" class="cur-readout"><b>{{ controlData.pts[cur.i].lot || '—' }}</b> · {{ controlData.pts[cur.i].v }}{{ paramSelObj && uniteEff(paramSelObj) ? ' ' + uniteEff(paramSelObj) : '' }}<span v-if="controlData.pts[cur.i].viol.length" class="cur-viol">⚠ {{ controlData.pts[cur.i].viol.join(', ') }}</span></div>
-            <div v-if="controlData.alertes.length" class="viol-box">
-              <div class="viol-titre">⚠ Signaux de maîtrise détectés</div>
-              <div v-for="(a, i) in controlData.alertes" :key="i" class="viol-row"><b>{{ a.lot }}</b> ({{ a.v }}) — {{ a.rules.join(' · ') }}</div>
+            <div v-if="controlData.alertes.length" class="viol-box" :class="{ open: violOuvert }">
+              <button type="button" class="viol-titre" @click="violOuvert = !violOuvert" :aria-expanded="violOuvert">
+                <span class="viol-chev">{{ violOuvert ? '▾' : '▸' }}</span>
+                <span>⚠ Signaux de maîtrise détectés</span>
+                <span class="viol-cnt">{{ controlData.alertes.length }}</span>
+              </button>
+              <div v-if="violOuvert" class="viol-list">
+                <div v-for="(a, i) in controlData.alertes" :key="i" class="viol-row"><b>{{ a.lot }}</b> ({{ a.v }}) — {{ a.rules.join(' · ') }}</div>
+              </div>
             </div>
             <div v-else class="viol-ok">✓ Procédé sous contrôle — aucune règle Nelson/Westgard déclenchée.</div>
             <p class="hint rules">Règles : <b>1-3s</b> 1 pt &gt; 3σ · <b>2-2s</b> 2 pts &gt; 2σ même côté · <b>4-1s</b> 4 pts &gt; 1σ même côté · <b>9-x</b> 9 pts du même côté · <b>tendance</b> 6 pts croissants/décroissants.</p>
@@ -383,6 +389,7 @@ function estCompare(id) { return comparIds.value.includes(id) }
 function toggleCompare(id) { const i = comparIds.value.indexOf(id); if (i >= 0) comparIds.value.splice(i, 1); else comparIds.value.push(id) }
 const chartMode = ref('trend')
 const toutAfficher = ref(true)   // affiche les 4 vues empilées en même temps
+const violOuvert = ref(false)    // bandeau « Signaux de maîtrise » repliable
 const horsPlie = ref(true)
 const corrX = ref('')
 const corrY = ref('')
@@ -1226,8 +1233,11 @@ ${matHtml}
 .zone-slider .zs-input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid #6366f1; box-shadow: 0 1px 3px rgba(15,23,42,.25); cursor: pointer; pointer-events: auto; margin-top: -6px; }
 .zone-slider .zs-input::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid #6366f1; box-shadow: 0 1px 3px rgba(15,23,42,.25); cursor: pointer; pointer-events: auto; }
 
-.viol-box { margin-top: 7px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 6px 9px; }
-.viol-titre { font-size: 10.5px; font-weight: 800; color: #b91c1c; margin-bottom: 2px; }
+.viol-box { margin-top: 7px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 5px 9px; }
+.viol-titre { display: flex; align-items: center; gap: 6px; width: 100%; background: none; border: 0; padding: 1px 0; font: inherit; font-size: 10.5px; font-weight: 800; color: #b91c1c; cursor: pointer; text-align: left; }
+.viol-chev { font-size: 9px; width: 10px; flex: none; }
+.viol-cnt { margin-left: auto; background: #dc2626; color: #fff; font-size: 9.5px; font-weight: 800; padding: 1px 7px; border-radius: 999px; flex: none; }
+.viol-list { margin-top: 3px; }
 .viol-row { font-size: 10.5px; color: #7f1d1d; padding: 1px 0; line-height: 1.35; }
 .viol-ok { margin-top: 7px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 600; }
 </style>
