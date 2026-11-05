@@ -11,6 +11,7 @@ const STATUTS = ['Planifié', 'En cours', 'Terminé', 'Libéré', 'Rejeté']
 const statutOriginal = ref('Planifié')  // statut réel du lot chargé (pour la sentinelle __auto__)
 
 const lots = ref([])
+const echeanceCol = ref(false)   // vrai une fois la migration 002 exécutée (colonne date_echeance présente)
 const produits = ref([])
 const equipements = ref([])
 // Ateliers de conditionnement uniquement (pour la ligne finale réservée)
@@ -37,7 +38,7 @@ const sig = reactive({ open: false, mode: 'sign', ordre: null, pin: '', pin2: ''
 
 const form = reactive({
   id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
-  date_reception: '', date_fin_validite: '',
+  date_reception: '', date_fin_validite: '', date_echeance: '',
   date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: '',
   deviation_cond: false, en_triage_cond: false,
   triage_cond_debut: '', triage_cond_fin: ''
@@ -46,7 +47,7 @@ function resetForm() {
   statutOriginal.value = 'Planifié'
   Object.assign(form, {
     id: null, numero_lot: '', produit_id: '', quantite_theorique: '',
-    date_reception: '', date_fin_validite: '',
+    date_reception: '', date_fin_validite: '', date_echeance: '',
     date_lancement: '', date_fin_fabrication: '', statut: '__auto__', equipement_id: '', commentaire: '',
     deviation_cond: false, en_triage_cond: false,
     triage_cond_debut: '', triage_cond_fin: ''
@@ -87,6 +88,7 @@ async function chargerTout() {
     .eq('actif', true).order('date_lancement', { ascending: false, nullsFirst: false }).order('id', { ascending: false }))
   if (rl.error) { erreur.value = rl.error.message; return }
   lots.value = rl.data
+  echeanceCol.value = (rl.data || []).some(l => Object.prototype.hasOwnProperty.call(l, 'date_echeance'))
 
   const rs = await supabase.from('signatures').select('ordre_id, email, signed_at, motif').order('signed_at', { ascending: false })
   if (!rs.error) signatures.value = rs.data
@@ -245,6 +247,7 @@ async function enregistrer() {
     quantite_theorique: toNum(form.quantite_theorique),
     date_reception: form.date_reception || null,
     date_fin_validite: form.date_fin_validite || null,
+    ...(echeanceCol.value ? { date_echeance: form.date_echeance || null } : {}),
     date_lancement: form.date_lancement || null,
     date_fin_fabrication: dateFin,
     statut: statutFinal,
@@ -291,7 +294,7 @@ function modifier(l) {
   Object.assign(form, {
     id: l.id, numero_lot: l.numero_lot, produit_id: l.produit_id || '',
     quantite_theorique: l.quantite_theorique ?? '', date_lancement: l.date_lancement || '',
-    date_reception: l.date_reception || '', date_fin_validite: l.date_fin_validite || '',
+    date_reception: l.date_reception || '', date_fin_validite: l.date_fin_validite || '', date_echeance: l.date_echeance || '',
     date_fin_fabrication: l.date_fin_fabrication || '',
     statut: ['Libéré', 'Rejeté'].includes(l.statut) ? l.statut : '__auto__', equipement_id: l.equipement_id || '', commentaire: l.commentaire || '', deviation_cond: !!l.deviation_cond, en_triage_cond: !!l.en_triage_cond,
     triage_cond_debut: l.triage_cond_debut || '', triage_cond_fin: l.triage_cond_fin || ''
@@ -484,6 +487,7 @@ onMounted(async () => {
           <label>Quantité théorique<input v-model="form.quantite_theorique" type="number" placeholder="500000" :disabled="qteFigee" :title="qteFigee ? 'Figée : taille de lot du produit (Référentiels).' : 'Saisir la quantité (pas de taille de lot définie pour ce produit).'" /></label>
           <label>Date de réception OF<input v-model="form.date_reception" type="date" /></label>
           <label>Date fin de validité OF<input v-model="form.date_fin_validite" type="date" /></label>
+          <label v-if="echeanceCol">Échéance de livraison<input v-model="form.date_echeance" type="date" title="Date cible de livraison — sert au KPI « Production à temps »." /></label>
           <label>Statut
             <select v-model="form.statut" title="Seuls Libéré / Rejeté (qualité) sont manuels. Planifié / En cours / Terminé sont automatiques.">
               <option value="__auto__">Automatique (piloté par fabrication + conditionnement)</option>

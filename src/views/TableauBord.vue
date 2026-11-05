@@ -159,7 +159,7 @@
             </tbody>
           </table>
         </div>
-        <p class="kpi-note">« Mesuré » = indicateur calculé sans cible normative (débit, délai, cadence, production par équipe/personne). Délai de fabrication = réception OF → fin de fabrication ; Production par équipe / Productivité = boîtes fabriquées rapportées aux effectifs saisis. Restent en « N/A » les indicateurs sans source dans ProdTrack : capacité installée, retouches, livraison à échéance, coûts, équilibrage de ligne et demande (Takt) — ils s'activeront en ajoutant ces saisies. OEE, Disponibilité, Performance et Qualité proviennent des postes TRS ; Performance/OEE nécessitent des cadences nominales renseignées.</p>
+        <p class="kpi-note">« Mesuré » = indicateur calculé sans cible normative (débit, délai, Takt, cadence, production par équipe/personne). Takt = temps disponible ÷ demande client saisie (<i>Ordonnancement → Demande client</i>) ; Production à temps = lots terminés avant l'échéance saisie sur l'OF. Délai = réception OF → fin de fabrication ; Production par équipe / Productivité = boîtes rapportées aux effectifs. Restent en « N/A » les 4 indicateurs sans source dans ProdTrack : capacité installée, taux de retouche, coût/unité et équilibrage de ligne. OEE, Disponibilité, Performance et Qualité proviennent des postes TRS ; Performance/OEE nécessitent des cadences nominales renseignées.</p>
       </div>
     </section>
 
@@ -333,6 +333,7 @@ const fabRaw = ref([]); const condRaw = ref([]); const planRaw = ref([]); const 
 const deviationsRaw = ref([]); const capaRaw = ref([]); const trsRaw = ref([])
 const organigrammeRaw = ref([]); const formationsRaw = ref([]); const formEnrRaw = ref([]); const formReqRaw = ref([])
 const cadencesRaw = ref([]); const effectifsRaw = ref([])
+const demandeRaw = ref([]); const ofEcheanceRaw = ref([])
 onMounted(async () => {
   try {
     const [rf, rc, rp, rs, re, rcad] = await Promise.all([
@@ -350,7 +351,7 @@ onMounted(async () => {
     // KPIs transverses (qualité, équipements, RH) — chaque requête est tolérante :
     // une table absente n'affecte que son propre KPI et ne casse jamais la page.
     const safe = async (make) => { try { return await fetchAllPaged(make) } catch (e) { console.warn('KPI transverse indisponible :', (e && e.message) || e); return [] } }
-    const [rdev, rcapa, rtrs, rorg, rform, rfenr, rfreq, rcadp, reff] = await Promise.all([
+    const [rdev, rcapa, rtrs, rorg, rform, rfenr, rfreq, rcadp, reff, rdem, roe] = await Promise.all([
       safe(() => supabase.from('deviations').select('statut, criticite, date_dev')),
       safe(() => supabase.from('capa').select('statut, echeance, date_capa')),
       safe(() => supabase.from('trs_postes').select('date, equipement_id, produit_id, temps_ouverture_min, production_realisee, rebuts, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min')),
@@ -359,11 +360,13 @@ onMounted(async () => {
       safe(() => supabase.from('formation_enregistrements').select('personne_id, formation_id, date_formation, resultat')),
       safe(() => supabase.from('formation_requise').select('fonction, formation_id')),
       safe(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode')),
-      safe(() => supabase.from('effectifs').select('annee, mois, equipe, effectif, actif').eq('actif', true))
+      safe(() => supabase.from('effectifs').select('annee, mois, equipe, effectif, actif').eq('actif', true)),
+      safe(() => supabase.from('demande_client').select('annee, mois, quantite_demandee, actif').eq('actif', true)),
+      safe(() => supabase.from('ordres_fabrication').select('id, date_fin_fabrication, date_echeance'))
     ])
     deviationsRaw.value = rdev; capaRaw.value = rcapa; trsRaw.value = rtrs
     organigrammeRaw.value = rorg; formationsRaw.value = rform; formEnrRaw.value = rfenr; formReqRaw.value = rfreq
-    cadencesRaw.value = rcadp; effectifsRaw.value = reff
+    cadencesRaw.value = rcadp; effectifsRaw.value = reff; demandeRaw.value = rdem; ofEcheanceRaw.value = roe
   } catch (e) { console.error(e) } finally { chargement.value = false }
 })
 
@@ -730,6 +733,23 @@ const effectifKpi = computed(() => {
   const effMoyen = mois.length ? mois.reduce((s, v) => s + v, 0) / mois.length : null
   return { nbEquipes: equipes.size || null, effMoyen }
 })
+// Demande client de l'année (boîtes) → base du Takt Time
+const demandeAnnee = computed(() => {
+  let d = 0
+  for (const r of demandeRaw.value) { if (Number(r.annee) === annee.value) d += num(r.quantite_demandee) }
+  return d
+})
+// Production à temps : % de lots terminés au plus tard à l'échéance visée
+const onTimeKpi = computed(() => {
+  let total = 0, aTemps = 0
+  for (const o of ofEcheanceRaw.value) {
+    if (!o.date_fin_fabrication || !o.date_echeance) continue
+    if (anYear(o.date_fin_fabrication) !== annee.value) continue
+    total++
+    if (new Date(o.date_fin_fabrication) <= new Date(o.date_echeance)) aTemps++
+  }
+  return total ? Math.round(aTemps / total * 100) : null
+})
 const kpisStd = computed(() => {
   const a = trsAgg.value
   const A = a.ouv ? a.fonct / a.ouv * 100 : null
@@ -740,6 +760,7 @@ const kpisStd = computed(() => {
   const cyc = a.good ? a.fonct / a.good : null
   const eff = effectifKpi.value
   const prodBase = totBoites.value || a.good || null
+  const takt = (a.ouv && demandeAnnee.value) ? a.ouv / demandeAnnee.value : null
   const rows = [
     { n: 'OEE (TRS)', d: 'Efficacité globale des équipements', f: 'Disponibilité × Performance × Qualité', c: '≥ 85%', dir: 'up', s: 85, v: oee, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Disponibilité', d: 'Temps de marche vs temps ouvert', f: 'Temps de marche / temps ouvert ×100', c: '≥ 90%', dir: 'up', s: 90, v: A, u: '%', fr: 'Quot./Hebdo' },
@@ -750,7 +771,7 @@ const kpisStd = computed(() => {
     { n: 'Débit (Throughput)', d: 'Unités conformes produites', f: 'Total unités conformes', c: '↑ mieux', dir: 'info', s: null, v: a.good || null, u: '', fr: 'Quot.' },
     { n: 'Production par équipe', d: 'Boîtes produites par équipe (an)', f: 'Boîtes fabriquées / nb d\'équipes', c: '↑ mieux', dir: 'info', s: null, v: (eff.nbEquipes && prodBase) ? prodBase / eff.nbEquipes : null, u: '', fr: 'Quot.' },
     { n: 'Temps de cycle', d: 'Temps pour produire une unité', f: 'Temps de marche / unités', c: '↓ mieux', dir: 'down', s: null, v: cyc, u: ' min', fr: 'Quot.' },
-    { n: 'Takt Time', d: 'Rythme requis par la demande', f: 'Temps disponible / demande', c: 'selon demande', dir: 'info', s: null, v: null, u: '', fr: 'Quot.' },
+    { n: 'Takt Time', d: 'Rythme requis par la demande client', f: 'Temps disponible / boîtes demandées', c: 'selon demande', dir: 'info', s: null, v: takt, u: ' min', fr: 'Quot.' },
     { n: 'Délai (Lead Time)', d: 'Réception OF → fin de fabrication', f: 'Fin de fabrication − réception (moy. jours)', c: '↓ mieux', dir: 'down', s: null, v: ofDelai.value, u: ' j', fr: 'Hebdo/Mens.' },
     { n: 'First Pass Yield (FPY)', d: 'Unités bonnes du premier coup', f: 'Bonnes / total entrée ×100', c: '≥ 95%', dir: 'up', s: 95, v: rendementFab.value, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Taux de rejet', d: '% d\'unités rejetées', f: 'Rejetées / produites ×100', c: '< 2%', dir: 'down', s: 2, v: rej, u: '%', fr: 'Quot.' },
@@ -760,7 +781,7 @@ const kpisStd = computed(() => {
     { n: 'Utilisation machine', d: 'Temps de marche vs planifié', f: 'Marche / temps planifié ×100', c: '≥ 80%', dir: 'up', s: 80, v: A, u: '%', fr: 'Hebdo' },
     { n: 'Temps de réglage (Setup)', d: 'Temps de réglage total', f: 'Σ temps de réglage', c: '↓ mieux', dir: 'down', s: null, v: a.reglage ? a.reglage / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
     { n: 'Changement de série (SMED)', d: 'Changement d\'une série à l\'autre', f: 'Σ format + réglage', c: '↓ mieux', dir: 'down', s: null, v: (a.format + a.reglage) ? (a.format + a.reglage) / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
-    { n: 'Production à temps', d: '% commandes livrées à échéance', f: 'À temps / total ×100', c: '≥ 95%', dir: 'up', s: 95, v: null, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Production à temps', d: '% lots terminés à l\'échéance', f: 'Lots à temps / lots avec échéance ×100', c: '≥ 95%', dir: 'up', s: 95, v: onTimeKpi.value, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Coût de production / unité', d: 'Coût total par unité conforme', f: 'Coût total / unités conformes', c: '↓ mieux', dir: 'down', s: null, v: null, u: '', fr: 'Mensuel' },
     { n: 'Productivité main-d\'œuvre', d: 'Sortie par personne (effectif)', f: 'Boîtes fabriquées / effectif moyen', c: '↑ mieux', dir: 'info', s: null, v: (eff.effMoyen && prodBase) ? prodBase / eff.effMoyen : null, u: '', fr: 'Hebdo/Mens.' },
     { n: 'Équilibrage de ligne', d: 'Répartition de la charge de travail', f: '(Cycle / goulot) / Takt ×100', c: '≥ 90%', dir: 'up', s: 90, v: null, u: '%', fr: 'Hebdo' }
