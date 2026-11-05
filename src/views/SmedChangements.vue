@@ -57,7 +57,7 @@
           <tbody>
             <template v-for="l in parEquip" :key="l.id">
               <tr class="sm-row" :class="{ open: ouvertId === l.id }" @click="toggle(l.id)">
-                <td class="sm-eq"><span class="sm-caret">{{ ouvertId === l.id ? '▾' : '▸' }}</span> {{ l.nom }}</td>
+                <td class="sm-eq"><span class="sm-caret">{{ ouvertId === l.id ? '▾' : '▸' }}</span> {{ l.nom || l.code || ('#' + l.id) }}<span v-if="l.code && l.nom" class="sm-eqcode">{{ l.code }}</span></td>
                 <td class="r">{{ l.nb }}</td>
                 <td class="r">{{ hm(l.temps) }}</td>
                 <td class="r"><b :class="clsMoy(l.moy)">{{ Math.round(l.moy) }}</b></td>
@@ -67,7 +67,7 @@
               </tr>
               <tr v-if="ouvertId === l.id" class="sm-detail">
                 <td colspan="7">
-                  <div class="sm-det-head">Temps moyen de changement par mois — {{ l.nom }}</div>
+                  <div class="sm-det-head">Temps moyen de changement par mois — {{ l.nom || l.code }}<span v-if="l.code && l.nom"> ({{ l.code }})</span></div>
                   <div class="sm-months sm-months-sm">
                     <div v-for="(m, i) in moisEquip(l.id)" :key="i" class="sm-mcol" :title="MOIS[i] + ' : ' + (m.actif ? Math.round(m.moy) + ' min · ' + m.nb + ' chgt' : 'aucun')">
                       <div class="sm-mbararea"><div class="sm-mbar" :class="'b-' + clsMoy(m.moy)" :style="{ height: (m.actif && m.mx ? Math.max(4, m.moy / m.mx * 100) : 0) + '%' }"></div></div>
@@ -145,7 +145,7 @@ const parEquip = computed(() => {
   const g = {}
   for (const p of postesAnnee.value) {
     const id = p.equipement_id; if (id == null) continue
-    if (!g[id]) g[id] = { id, nom: (p.equipements && (p.equipements.code || p.equipements.nom)) || ('#' + id), nb: 0, temps: 0, format: 0, reglage: 0, ouv: 0 }
+    if (!g[id]) g[id] = { id, code: (p.equipements && p.equipements.code) || '', nom: (p.equipements && p.equipements.nom) || '', nb: 0, temps: 0, format: 0, reglage: 0, ouv: 0 }
     const o = g[id]; o.ouv += num(p.temps_ouverture_min)
     const t = tempsChg(p)
     if (t > 0) { o.nb++; o.temps += t; o.format += num(p.arret_format_min); o.reglage += num(p.arret_reglage_min) }
@@ -246,6 +246,7 @@ function clsMoy(m) { return m >= 120 ? 'm-ko' : m >= 45 ? 'm-mid' : 'm-ok' }
 .sm-row:hover { background: #f8fafc; }
 .sm-row.open { background: #ecfeff; }
 .sm-caret { color: #94a3b8; font-size: 10px; margin-right: 2px; }
+.sm-eqcode { display: inline-block; margin-left: 7px; padding: 1px 7px; border-radius: 999px; background: #eef2f7; color: #64748b; font-size: 10.5px; font-weight: 700; letter-spacing: .02em; vertical-align: middle; }
 .sm-detail td { background: #f8fafc; padding: 10px 16px; }
 .sm-det-head { font-weight: 700; color: #0f172a; font-size: 13px; margin-bottom: 4px; }
 @media (max-width: 860px) { .sm-two { grid-template-columns: 1fr; } }
