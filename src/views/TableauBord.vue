@@ -111,6 +111,56 @@
       </div>
     </section>
 
+    <!-- Indicateurs de performance — KPI production standard -->
+    <section class="kpi-sec">
+      <div class="kpi-head">
+        <span class="kpi-titre">Indicateurs de performance — KPI production <span class="kpi-u">{{ annee }}</span></span>
+        <span class="kpi-sum">
+          <span class="kpi-chip ok">{{ kpiSummary.ok }} sur objectif</span>
+          <span class="kpi-chip warn">{{ kpiSummary.warn }} à surveiller</span>
+          <span class="kpi-chip bad">{{ kpiSummary.bad }} hors objectif</span>
+          <span class="kpi-chip na">{{ kpiSummary.na }} n/a</span>
+          <button type="button" class="tb-detail-toggle" @click="kpiOuvert = !kpiOuvert">{{ kpiOuvert ? '▾ Réduire' : '▸ Détail' }}</button>
+        </span>
+      </div>
+      <div v-if="kpiOuvert">
+        <div class="kpi-panels">
+          <div class="kpi-panel">
+            <div class="kp-t">Répartition des statuts</div>
+            <div class="kp-bar">
+              <span v-if="kpiSummary.ok" class="seg ok" :style="{ width: pctSeg(kpiSummary.ok) }"></span>
+              <span v-if="kpiSummary.warn" class="seg warn" :style="{ width: pctSeg(kpiSummary.warn) }"></span>
+              <span v-if="kpiSummary.bad" class="seg bad" :style="{ width: pctSeg(kpiSummary.bad) }"></span>
+              <span v-if="kpiSummary.na" class="seg na" :style="{ width: pctSeg(kpiSummary.na) }"></span>
+            </div>
+            <div class="kp-leg"><span><i class="ok"></i>Sur objectif <b>{{ kpiSummary.ok }}</b></span><span><i class="warn"></i>À surveiller <b>{{ kpiSummary.warn }}</b></span><span><i class="bad"></i>Hors objectif <b>{{ kpiSummary.bad }}</b></span><span><i class="na"></i>N/A <b>{{ kpiSummary.na }}</b></span></div>
+          </div>
+          <div class="kpi-panel">
+            <div class="kp-t">À améliorer en priorité</div>
+            <div v-for="(k, i) in kpiSummary.top" :key="'kt' + i" class="kp-top"><span class="kp-rank">{{ i + 1 }}</span><span class="kp-name">{{ k.n }}</span><span class="kst" :class="k.st">{{ fmtKpi(k.v, k.u) }}</span></div>
+            <div v-if="!kpiSummary.top.length" class="kp-empty">Tous les indicateurs évalués sont sur objectif ✓</div>
+          </div>
+        </div>
+        <div class="kpi-wrap">
+          <table class="kpi-tbl">
+            <thead><tr><th class="num">#</th><th>Indicateur</th><th>Formule / mesure</th><th class="c">Cible</th><th class="c">Réel</th><th class="c">Statut</th><th>Fréquence</th></tr></thead>
+            <tbody>
+              <tr v-for="(k, i) in kpisStd" :key="'k' + i" :class="'row-' + k.st">
+                <td class="num">{{ i + 1 }}</td>
+                <td class="kn"><b>{{ k.n }}</b><span class="kd">{{ k.d }}</span></td>
+                <td class="kf">{{ k.f }}</td>
+                <td class="c kc">{{ k.c }}</td>
+                <td class="c kv">{{ fmtKpi(k.v, k.u) }}</td>
+                <td class="c"><span class="kst" :class="k.st">{{ stLabel(k.st) }}</span></td>
+                <td class="kfr">{{ k.fr }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="kpi-note">Les indicateurs sans source dans ProdTrack (capacité installée, nombre d'équipes, heures-homme, coûts, dates de livraison, retouches) sont marqués « N/A » — ils s'activeront en ajoutant ces saisies. OEE, Disponibilité, Performance et Qualité proviennent des postes TRS ; Performance/OEE nécessitent des cadences nominales renseignées.</p>
+      </div>
+    </section>
+
     <!-- Regroupement -->
     <div class="tb-grp">
       <span class="grp-lbl">Regrouper par :</span>
@@ -280,6 +330,7 @@ const fabRaw = ref([]); const condRaw = ref([]); const planRaw = ref([]); const 
 // Sources transverses (qualité, équipements, RH)
 const deviationsRaw = ref([]); const capaRaw = ref([]); const trsRaw = ref([])
 const organigrammeRaw = ref([]); const formationsRaw = ref([]); const formEnrRaw = ref([]); const formReqRaw = ref([])
+const cadencesRaw = ref([])
 onMounted(async () => {
   try {
     const [rf, rc, rp, rs, re, rcad] = await Promise.all([
@@ -297,17 +348,19 @@ onMounted(async () => {
     // KPIs transverses (qualité, équipements, RH) — chaque requête est tolérante :
     // une table absente n'affecte que son propre KPI et ne casse jamais la page.
     const safe = async (make) => { try { return await fetchAllPaged(make) } catch (e) { console.warn('KPI transverse indisponible :', (e && e.message) || e); return [] } }
-    const [rdev, rcapa, rtrs, rorg, rform, rfenr, rfreq] = await Promise.all([
+    const [rdev, rcapa, rtrs, rorg, rform, rfenr, rfreq, rcadp] = await Promise.all([
       safe(() => supabase.from('deviations').select('statut, criticite, date_dev')),
       safe(() => supabase.from('capa').select('statut, echeance, date_capa')),
-      safe(() => supabase.from('trs_postes').select('date, temps_ouverture_min, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min')),
+      safe(() => supabase.from('trs_postes').select('date, equipement_id, produit_id, temps_ouverture_min, production_realisee, rebuts, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min')),
       safe(() => supabase.from('organigramme').select('id, fonction, actif').eq('actif', true)),
       safe(() => supabase.from('formations').select('id, nom, validite_mois, actif').eq('actif', true)),
       safe(() => supabase.from('formation_enregistrements').select('personne_id, formation_id, date_formation, resultat')),
-      safe(() => supabase.from('formation_requise').select('fonction, formation_id'))
+      safe(() => supabase.from('formation_requise').select('fonction, formation_id')),
+      safe(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode'))
     ])
     deviationsRaw.value = rdev; capaRaw.value = rcapa; trsRaw.value = rtrs
     organigrammeRaw.value = rorg; formationsRaw.value = rform; formEnrRaw.value = rfenr; formReqRaw.value = rfreq
+    cadencesRaw.value = rcadp
   } catch (e) { console.error(e) } finally { chargement.value = false }
 })
 
@@ -615,6 +668,85 @@ function sparkPath(arr) {
 function sparkArea(arr) { const p = sparkPath(arr); if (!p) return ''; const W = 100, H = 26, pad = 2; return p + ' L ' + (W - pad) + ' ' + (H - pad) + ' L ' + pad + ' ' + (H - pad) + ' Z' }
 const nbLots = computed(() => donnees.value.reduce((s, d) => s + (Number(d.lots) || 0), 0))
 const tableOuverte = ref(false)
+
+// ===== KPIs de production standard (cible / réel / statut) =====
+const kpiOuvert = ref(true)
+// Agrégat trs_postes de l'année + cadences (pour Performance / OEE)
+const trsAgg = computed(() => {
+  const cad = {}
+  for (const c of cadencesRaw.value) cad[c.equipement_id + '|' + c.produit_id] = c
+  let ouv = 0, fonct = 0, prod = 0, rebuts = 0, reglage = 0, format = 0, theo = 0, prodTheo = 0
+  for (const t of trsRaw.value) {
+    if (!t.date || anYear(t.date) !== annee.value) continue
+    const o = num(t.temps_ouverture_min); if (!(o > 0)) continue
+    const rg = num(t.arret_reglage_min), ft = num(t.arret_format_min)
+    const arr = num(t.arret_panne_min) + ft + num(t.arret_nettoyage_min) + rg + num(t.arret_maintenance_min) + num(t.arret_attente_min) + num(t.arret_autre_min)
+    const f = Math.max(0, o - arr)
+    ouv += o; fonct += f; reglage += rg; format += ft
+    const p = num(t.production_realisee); prod += p; rebuts += num(t.rebuts)
+    const c = cad[t.equipement_id + '|' + t.produit_id]
+    if (c && c.mode === 'debit' && num(c.cadence_nominale) > 0) { theo += (f / 60) * num(c.cadence_nominale); prodTheo += p }
+  }
+  return { ouv, fonct, prod, good: Math.max(0, prod - rebuts), rebuts, reglage, format, theo, prodTheo }
+})
+function statutKpi(val, dir, seuil) {
+  if (val == null) return 'na'
+  if (dir === 'info' || seuil == null) return 'info'
+  if (dir === 'down') return val <= seuil ? 'ok' : (val <= seuil * 1.5 ? 'warn' : 'bad')
+  return val >= seuil ? 'ok' : (val >= seuil * 0.9 ? 'warn' : 'bad')
+}
+const stLabel = (st) => ({ ok: 'Sur objectif', warn: 'À surveiller', bad: 'Hors objectif', na: 'N/A', info: '—' }[st] || '—')
+function fmtKpi(v, u) {
+  if (v == null) return '—'
+  if (u === '%') return v.toFixed(1) + '%'
+  if (u === '') return fmt(v)
+  return v.toFixed(1) + u
+}
+const kpisStd = computed(() => {
+  const a = trsAgg.value
+  const A = a.ouv ? a.fonct / a.ouv * 100 : null
+  const Q = a.prod ? a.good / a.prod * 100 : null
+  const P = a.theo ? Math.min(100, a.prodTheo / a.theo * 100) : null
+  const oee = (A != null && P != null && Q != null) ? A * P * Q / 10000 : null
+  const rej = a.prod ? a.rebuts / a.prod * 100 : null
+  const cyc = a.good ? a.fonct / a.good : null
+  const rows = [
+    { n: 'OEE (TRS)', d: 'Efficacité globale des équipements', f: 'Disponibilité × Performance × Qualité', c: '≥ 85%', dir: 'up', s: 85, v: oee, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Disponibilité', d: 'Temps de marche vs temps ouvert', f: 'Temps de marche / temps ouvert ×100', c: '≥ 90%', dir: 'up', s: 90, v: A, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Performance', d: 'Cadence réelle vs cadence nominale', f: 'Production / production théorique ×100', c: '≥ 95%', dir: 'up', s: 95, v: P, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Qualité', d: '% d\'unités conformes', f: '(Produites − rebuts) / produites ×100', c: '≥ 99%', dir: 'up', s: 99, v: Q, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Efficience de production', d: 'Sortie réelle vs théorique', f: 'Sortie réelle / théorique ×100', c: '≥ 90%', dir: 'up', s: 90, v: P != null ? P : rendementFab.value, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Taux d\'utilisation capacité', d: 'Capacité installée utilisée', f: 'Réel / capacité installée ×100', c: '≥ 80%', dir: 'up', s: 80, v: null, u: '%', fr: 'Hebdo/Mens.' },
+    { n: 'Débit (Throughput)', d: 'Unités conformes produites', f: 'Total unités conformes', c: '↑ mieux', dir: 'info', s: null, v: a.good || null, u: '', fr: 'Quot.' },
+    { n: 'Production par équipe', d: 'Unités conformes par équipe', f: 'Unités conformes / nb d\'équipes', c: '↑ mieux', dir: 'info', s: null, v: null, u: '', fr: 'Quot.' },
+    { n: 'Temps de cycle', d: 'Temps pour produire une unité', f: 'Temps de marche / unités', c: '↓ mieux', dir: 'down', s: null, v: cyc, u: ' min', fr: 'Quot.' },
+    { n: 'Takt Time', d: 'Rythme requis par la demande', f: 'Temps disponible / demande', c: 'selon demande', dir: 'info', s: null, v: null, u: '', fr: 'Quot.' },
+    { n: 'Délai (Lead Time)', d: 'Réception commande → livraison', f: 'Date livraison − réception', c: '↓ mieux', dir: 'down', s: null, v: null, u: '', fr: 'Hebdo/Mens.' },
+    { n: 'First Pass Yield (FPY)', d: 'Unités bonnes du premier coup', f: 'Bonnes / total entrée ×100', c: '≥ 95%', dir: 'up', s: 95, v: rendementFab.value, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Taux de rejet', d: '% d\'unités rejetées', f: 'Rejetées / produites ×100', c: '< 2%', dir: 'down', s: 2, v: rej, u: '%', fr: 'Quot.' },
+    { n: 'Taux de rebut', d: '% matière mise au rebut', f: 'Rebuts / produites ×100', c: '< 1,5%', dir: 'down', s: 1.5, v: rej, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Taux de retouche', d: '% d\'unités retouchées', f: 'Retouchées / produites ×100', c: '< 2%', dir: 'down', s: 2, v: null, u: '%', fr: 'Quot.' },
+    { n: 'Respect du planning', d: '% production réalisée au plan', f: 'Réalisé / planifié ×100', c: '≥ 95%', dir: 'up', s: 95, v: tauxGlobal.value, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Utilisation machine', d: 'Temps de marche vs planifié', f: 'Marche / temps planifié ×100', c: '≥ 80%', dir: 'up', s: 80, v: A, u: '%', fr: 'Hebdo' },
+    { n: 'Temps de réglage (Setup)', d: 'Temps de réglage total', f: 'Σ temps de réglage', c: '↓ mieux', dir: 'down', s: null, v: a.reglage ? a.reglage / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
+    { n: 'Changement de série (SMED)', d: 'Changement d\'une série à l\'autre', f: 'Σ format + réglage', c: '↓ mieux', dir: 'down', s: null, v: (a.format + a.reglage) ? (a.format + a.reglage) / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
+    { n: 'Production à temps', d: '% commandes livrées à échéance', f: 'À temps / total ×100', c: '≥ 95%', dir: 'up', s: 95, v: null, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Coût de production / unité', d: 'Coût total par unité conforme', f: 'Coût total / unités conformes', c: '↓ mieux', dir: 'down', s: null, v: null, u: '', fr: 'Mensuel' },
+    { n: 'Productivité main-d\'œuvre', d: 'Sortie par heure-homme', f: 'Unités conformes / heures-homme', c: '↑ mieux', dir: 'info', s: null, v: null, u: '', fr: 'Hebdo/Mens.' },
+    { n: 'Équilibrage de ligne', d: 'Répartition de la charge de travail', f: '(Cycle / goulot) / Takt ×100', c: '≥ 90%', dir: 'up', s: 90, v: null, u: '%', fr: 'Hebdo' }
+  ]
+  return rows.map(r => ({ ...r, st: statutKpi(r.v, r.dir, r.s) }))
+})
+const kpiSummary = computed(() => {
+  const k = kpisStd.value
+  const ok = k.filter(x => x.st === 'ok').length
+  const warn = k.filter(x => x.st === 'warn').length
+  const bad = k.filter(x => x.st === 'bad').length
+  const na = k.filter(x => x.st === 'na' || x.st === 'info').length
+  const top = k.filter(x => x.st === 'bad').concat(k.filter(x => x.st === 'warn')).slice(0, 5)
+  return { ok, warn, bad, na, total: k.length, top }
+})
+const pctSeg = (n) => (kpiSummary.value.total ? (n / kpiSummary.value.total * 100) : 0) + '%'
 </script>
 
 <style scoped>
@@ -696,6 +828,50 @@ const tableOuverte = ref(false)
 /* Toggle détail */
 .tb-detail-toggle { margin-left: auto; background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
 .tb-detail-toggle:hover { background: #e2e8f0; }
+
+/* Indicateurs KPI standard */
+.kpi-sec { margin: 6px 0 18px; }
+.kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.kpi-titre { font-size: 15px; font-weight: 800; color: #0f172a; }
+.kpi-u { color: #94a3b8; font-weight: 600; font-size: 13px; }
+.kpi-sum { display: inline-flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.kpi-chip { font-size: 11.5px; font-weight: 800; padding: 3px 11px; border-radius: 999px; }
+.kpi-chip.ok { background: #dcfce7; color: #15803d; } .kpi-chip.warn { background: #fef3c7; color: #b45309; } .kpi-chip.bad { background: #fee2e2; color: #b91c1c; } .kpi-chip.na { background: #f1f5f9; color: #64748b; }
+.kpi-panels { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; margin-bottom: 14px; }
+.kpi-panel { background: #fff; border: 1px solid #e8edf3; border-radius: 14px; padding: 13px 15px; box-shadow: 0 6px 18px rgba(30,41,59,.05); }
+.kp-t { font-size: 12px; font-weight: 800; color: #334155; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 10px; }
+.kp-bar { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: #eef2f7; }
+.kp-bar .seg { height: 100%; }
+.kp-bar .seg.ok { background: #16a34a; } .kp-bar .seg.warn { background: #f59e0b; } .kp-bar .seg.bad { background: #dc2626; } .kp-bar .seg.na { background: #cbd5e1; }
+.kp-leg { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 11.5px; color: #64748b; font-weight: 600; }
+.kp-leg span { display: inline-flex; align-items: center; gap: 5px; }
+.kp-leg i { width: 10px; height: 10px; border-radius: 3px; }
+.kp-leg i.ok { background: #16a34a; } .kp-leg i.warn { background: #f59e0b; } .kp-leg i.bad { background: #dc2626; } .kp-leg i.na { background: #cbd5e1; }
+.kp-leg b { color: #0f172a; }
+.kp-top { display: flex; align-items: center; gap: 9px; padding: 5px 0; border-bottom: 1px solid #f1f5f9; font-size: 12.5px; }
+.kp-top:last-child { border-bottom: 0; }
+.kp-rank { width: 19px; height: 19px; border-radius: 50%; background: #fee2e2; color: #b91c1c; font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.kp-name { font-weight: 700; color: #334155; flex: 1; }
+.kp-top .kst { font-size: 11px; }
+.kp-empty { font-size: 12.5px; color: #15803d; font-weight: 700; padding: 8px 0; }
+.kpi-wrap { overflow-x: auto; background: #fff; border: 1px solid #e8edf3; border-radius: 14px; box-shadow: 0 6px 18px rgba(30,41,59,.05); }
+.kpi-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.kpi-tbl th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; color: #64748b; font-weight: 700; padding: 10px 11px; background: #f8fafc; border-bottom: 1px solid #e8edf3; white-space: nowrap; }
+.kpi-tbl th.c, .kpi-tbl td.c { text-align: center; }
+.kpi-tbl th.num, .kpi-tbl td.num { text-align: center; width: 30px; color: #94a3b8; }
+.kpi-tbl td { padding: 9px 11px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.kpi-tbl tbody tr:last-child td { border-bottom: 0; }
+.kpi-tbl .kn b { color: #0f172a; font-weight: 700; display: block; }
+.kpi-tbl .kn .kd { color: #94a3b8; font-size: 11px; font-weight: 500; }
+.kpi-tbl .kf { color: #64748b; font-size: 11.5px; }
+.kpi-tbl .kc { color: #475569; font-weight: 700; white-space: nowrap; }
+.kpi-tbl .kv { font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kpi-tbl .kfr { color: #94a3b8; font-size: 11px; white-space: nowrap; }
+.kpi-tbl .row-ok .kv { color: #15803d; } .kpi-tbl .row-bad { background: #fff7f7; } .kpi-tbl .row-bad .kv { color: #b91c1c; } .kpi-tbl .row-warn .kv { color: #b45309; }
+.kst { display: inline-block; font-size: 10.5px; font-weight: 800; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.kst.ok { background: #dcfce7; color: #15803d; } .kst.warn { background: #fef3c7; color: #b45309; } .kst.bad { background: #fee2e2; color: #b91c1c; } .kst.na { background: #f1f5f9; color: #94a3b8; } .kst.info { background: #eef2f7; color: #64748b; }
+.kpi-note { font-size: 11px; color: #94a3b8; margin: 9px 2px 0; line-height: 1.5; }
+@media (max-width: 760px) { .kpi-panels { grid-template-columns: 1fr; } }
 
 .pilot { margin: 2px 0 18px; }
 .pilot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
