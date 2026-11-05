@@ -69,7 +69,7 @@
           <tbody>
             <template v-for="l in lignes" :key="l.id">
               <tr class="tpm-row" :class="{ open: ouvertId === l.id }" @click="toggle(l.id)">
-                <td class="tpm-eq"><span class="tpm-caret">{{ ouvertId === l.id ? '▾' : '▸' }}</span> {{ l.nom }}</td>
+                <td class="tpm-eq"><span class="tpm-caret">{{ ouvertId === l.id ? '▾' : '▸' }}</span> {{ l.nom || l.code || ('#' + l.id) }}<span v-if="l.code && l.nom" class="tpm-code">{{ l.code }}</span></td>
                 <td class="r">{{ hm(l.ouv) }}</td>
                 <td class="r">{{ hm(l.fonct) }}</td>
                 <td class="r"><span class="tpm-pct" :class="'t-' + clsDispo(l.dispo)">{{ l.dispo.toFixed(1) }} %</span></td>
@@ -82,7 +82,7 @@
               </tr>
               <tr v-if="ouvertId === l.id" class="tpm-detail">
                 <td :colspan="10">
-                  <div class="tpm-det-head">Répartition des arrêts — {{ l.nom }}</div>
+                  <div class="tpm-det-head">Répartition des arrêts — {{ l.nom || l.code }}<span v-if="l.code && l.nom"> ({{ l.code }})</span></div>
                   <div v-for="d in detailMotifs(l)" :key="d.label" class="tpm-par-row">
                     <span class="tpm-par-lbl">{{ d.label }}</span>
                     <div class="tpm-par-bar"><div class="tpm-par-fill" :style="{ width: d.pct + '%', background: d.color }"></div></div>
@@ -155,7 +155,7 @@ const lignes = computed(() => {
   const g = {}
   for (const p of postesAnnee.value) {
     const id = p.equipement_id; if (id == null) continue
-    if (!g[id]) g[id] = { id, nom: (p.equipements && (p.equipements.code || p.equipements.nom)) || ('#' + id), ouv: 0, fonct: 0, maint: 0, panne: 0, evPanne: 0, motifs: Object.fromEntries(MOTIFS.map(m => [m, 0])) }
+    if (!g[id]) g[id] = { id, code: (p.equipements && p.equipements.code) || '', nom: (p.equipements && p.equipements.nom) || '', ouv: 0, fonct: 0, maint: 0, panne: 0, evPanne: 0, motifs: Object.fromEntries(MOTIFS.map(m => [m, 0])) }
     const o = g[id]
     const ouv = num(p.temps_ouverture_min)
     let arr = 0; for (const m of MOTIFS) { const v = num(p[m]); arr += v; o.motifs[m] += v }
@@ -237,6 +237,7 @@ function clsDispo(d) { return d >= 90 ? 'ok' : d >= 75 ? 'mid' : 'ko' }
 .tpm-tbl th { background: #f8fafc; font-weight: 700; color: #475569; text-align: left; font-size: 12px; }
 .tpm-tbl th.r, .tpm-tbl td.r { text-align: right; font-variant-numeric: tabular-nums; }
 .tpm-eq { font-weight: 700; color: #0f172a; }
+.tpm-code { display: inline-block; margin-left: 7px; padding: 1px 7px; border-radius: 999px; background: #eef2f7; color: #64748b; font-size: 10.5px; font-weight: 700; letter-spacing: .02em; vertical-align: middle; }
 .tpm-pct { font-weight: 800; }
 .tpm-red { color: #b91c1c; font-weight: 700; }
 .tpm-foot { margin-top: 16px; color: #94a3b8; font-size: 12px; }
