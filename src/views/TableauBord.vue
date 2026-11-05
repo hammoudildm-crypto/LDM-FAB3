@@ -745,14 +745,24 @@ const demandeAnnee = computed(() => {
   for (const r of planRaw.value) { if (Number(r.annee) === annee.value) d += num(r.quantite_planifiee) }
   return d
 })
-// Production à temps : % de lots terminés au plus tard à l'échéance visée
+// Production à temps : % de lots terminés au plus tard à leur échéance.
+// Échéance automatique = fin du mois de lancement (cadence mensuelle du PDP) ;
+// un champ « Échéance de livraison » saisi sur l'OF, s'il existe, fait exception.
 const onTimeKpi = computed(() => {
+  const manuel = {}
+  for (const o of ofEcheanceRaw.value) if (o && o.date_echeance) manuel[o.id] = o.date_echeance
   let total = 0, aTemps = 0
-  for (const o of ofEcheanceRaw.value) {
-    if (!o.date_fin_fabrication || !o.date_echeance) continue
-    if (anYear(o.date_fin_fabrication) !== annee.value) continue
+  for (const o of fabRaw.value) {
+    if (!o.date_fin_fabrication || anYear(o.date_fin_fabrication) !== annee.value) continue
+    let ech = manuel[o.id]
+    if (!ech) {
+      const base = o.date_lancement || o.date_reception
+      if (!base) continue
+      const d = new Date(base)
+      ech = new Date(d.getFullYear(), d.getMonth() + 1, 0)   // dernier jour du mois planifié
+    }
     total++
-    if (new Date(o.date_fin_fabrication) <= new Date(o.date_echeance)) aTemps++
+    if (new Date(o.date_fin_fabrication) <= new Date(ech)) aTemps++
   }
   return total ? Math.round(aTemps / total * 100) : null
 })
@@ -845,7 +855,7 @@ const kpisStd = computed(() => {
     { n: 'Utilisation machine', d: 'Temps de marche vs planifié', f: 'Marche / temps planifié ×100', c: '≥ 80%', dir: 'up', s: 80, v: A, u: '%', fr: 'Hebdo' },
     { n: 'Temps de réglage (Setup)', d: 'Temps de réglage total', f: 'Σ temps de réglage', c: '↓ mieux', dir: 'down', s: null, v: a.reglage ? a.reglage / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
     { n: 'Changement de série (SMED)', d: 'Changement d\'une série à l\'autre', f: 'Σ format + réglage', c: '↓ mieux', dir: 'down', s: null, v: (a.format + a.reglage) ? (a.format + a.reglage) / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
-    { n: 'Production à temps', d: '% lots terminés à l\'échéance', f: 'Lots à temps / lots avec échéance ×100', c: '≥ 95%', dir: 'up', s: 95, v: onTimeKpi.value, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Production à temps', d: '% lots finis dans le mois planifié', f: 'Lots à temps / total ×100 (échéance = fin de mois PDP)', c: '≥ 95%', dir: 'up', s: 95, v: onTimeKpi.value, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Coût de production / unité', d: 'PCSU moyen par boîte (référentiel)', f: 'Σ(boîtes × PCSU) / boîtes', c: '↓ mieux', dir: 'down', s: null, v: coutUnite.value, u: ' DA', fr: 'Mensuel' },
     { n: 'Productivité main-d\'œuvre', d: 'Sortie par personne (effectif)', f: 'Boîtes fabriquées / effectif moyen', c: '↑ mieux', dir: 'info', s: null, v: (eff.effMoyen && prodBase) ? prodBase / eff.effMoyen : null, u: '', fr: 'Hebdo/Mens.' },
     { n: 'Équilibrage de ligne', d: 'Répartition de la charge entre postes', f: 'Σ cycles / (nb postes × goulot) ×100', c: '≥ 90%', dir: 'up', s: 90, v: equilibrageLigne.value, u: '%', fr: 'Hebdo' }
