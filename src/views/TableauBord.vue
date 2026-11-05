@@ -19,66 +19,69 @@
       <button type="button" :class="{ on: onglet === 'cond' }" class="tb-tab cond" @click="onglet = 'cond'">Conditionnement</button>
     </div>
 
-    <!-- Synthèse -->
-    <div class="tb-kpis">
-      <div class="tb-kpi"><span class="k-lbl">Plan (boîtes)</span><span class="k-val">{{ totPlan ? fmt(totPlan) : '—' }}</span></div>
-      <div class="tb-kpi"><span class="k-lbl">{{ onglet === 'fab' ? 'Fabriqué' : 'Conditionné' }}</span><span class="k-val">{{ fmt(totBoites) }}</span></div>
-      <div class="tb-kpi"><span class="k-lbl">Taux</span><span class="k-val" :class="tauxGlobal != null && tauxGlobal < 100 ? 'v-bas' : ''">{{ tauxGlobal != null ? tauxGlobal + '%' : '—' }}</span></div>
-      <div class="tb-kpi"><span class="k-lbl">Chiffre d'affaires</span><span class="k-val">{{ fmtCA(totCA) }}</span></div>
-    </div>
-
-    <div class="tb-mois-lbl">Mois en cours — {{ nomMois }} {{ annee }}</div>
-    <div class="tb-kpis">
-      <div class="tb-kpi tb-kpi-m"><span class="k-lbl">Plan (boîtes)</span><span class="k-val">{{ totPlanMois ? fmt(totPlanMois) : '—' }}</span></div>
-      <div class="tb-kpi tb-kpi-m"><span class="k-lbl">{{ onglet === 'fab' ? 'Fabriqué' : 'Conditionné' }}</span><span class="k-val">{{ fmt(totBoitesMois) }}</span></div>
-      <div class="tb-kpi tb-kpi-m"><span class="k-lbl">Taux</span><span class="k-val" :class="tauxGlobalMois != null && tauxGlobalMois < 100 ? 'v-bas' : ''">{{ tauxGlobalMois != null ? tauxGlobalMois + '%' : '—' }}</span></div>
-      <div class="tb-kpi tb-kpi-m"><span class="k-lbl">Chiffre d'affaires</span><span class="k-val">{{ fmtCA(totCAMois) }}</span></div>
-    </div>
-
-    <!-- Décisions & KPIs transverses de suivi d'activité -->
-    <section class="pilot">
-      <div v-if="alertes.length" class="decisions">
-        <div class="dec-h">⚠ Points d'attention — aide à la décision</div>
-        <div class="dec-list">
-          <div v-for="(al, i) in alertes" :key="'a' + i" class="dec-item" :class="al.lvl">
-            <span class="dec-t">{{ al.t }}</span><span class="dec-d">{{ al.d }}</span>
-          </div>
+    <!-- Vue globale — scorecard KPI -->
+    <div class="sc-grid">
+      <div class="sc teal">
+        <div class="sc-l">{{ onglet === 'fab' ? 'Fabriqué' : 'Conditionné' }} <span class="sc-u">boîtes</span></div>
+        <div class="sc-v">{{ fmt(totBoites) }}</div>
+        <svg viewBox="0 0 100 26" class="sc-spark" preserveAspectRatio="none"><path :d="sparkArea(serieReal)" class="sp-area teal" /><path :d="sparkPath(serieReal)" class="sp-line teal" /></svg>
+        <div class="sc-s">ce mois <b>{{ fmt(totBoitesMois) }}</b></div>
+      </div>
+      <div class="sc teal">
+        <div class="sc-l">Taux de réalisation</div>
+        <div class="sc-rw">
+          <svg viewBox="0 0 36 36" class="sc-ring"><circle class="rg-bg" cx="18" cy="18" r="15.915" /><circle class="rg-fg" cx="18" cy="18" r="15.915" :stroke="colPct(tauxGlobal, 100)" :stroke-dasharray="ringDash(tauxGlobal)" stroke-dashoffset="25" /><text x="18" y="21" class="rg-v" :style="{ fill: colPct(tauxGlobal, 100) }">{{ tauxGlobal != null ? tauxGlobal + '%' : '—' }}</text></svg>
+          <div class="sc-s">plan <b>{{ totPlan ? fmt(totPlan) : '—' }}</b><br>ce mois <b>{{ tauxGlobalMois != null ? tauxGlobalMois + '%' : '—' }}</b></div>
         </div>
       </div>
-      <div class="trans-grid">
-        <div class="trans-card">
-          <div class="trans-dom q">Qualité</div>
-          <div class="trans-kpis">
-            <div class="tk"><span class="tk-v" :class="devOuvertes ? 'warn' : 'ok'">{{ devOuvertes }}</span><span class="tk-l">Déviations ouvertes</span></div>
-            <div class="tk"><span class="tk-v" :class="devCritiques ? 'bad' : 'ok'">{{ devCritiques }}</span><span class="tk-l">dont critiques</span></div>
-            <div class="tk"><span class="tk-v" :class="capaRetard ? 'bad' : 'ok'">{{ capaRetard }}</span><span class="tk-l">CAPA en retard</span></div>
-          </div>
-        </div>
-        <div class="trans-card">
-          <div class="trans-dom e">Équipements</div>
-          <div class="trans-kpis">
-            <div class="tk"><span class="tk-v" :class="equipKpi.dispo != null && equipKpi.dispo < 85 ? 'warn' : 'ok'">{{ equipKpi.dispo != null ? equipKpi.dispo + '%' : '—' }}</span><span class="tk-l">Disponibilité</span></div>
-            <div class="tk"><span class="tk-v">{{ fmtH(equipKpi.mtbf) }}</span><span class="tk-l">MTBF</span></div>
-            <div class="tk"><span class="tk-v">{{ fmtH(equipKpi.mttr) }}</span><span class="tk-l">MTTR</span></div>
-          </div>
-        </div>
-        <div class="trans-card">
-          <div class="trans-dom r">Rendement</div>
-          <div class="trans-kpis">
-            <div class="tk"><span class="tk-v" :class="rendementFab != null && rendementFab < 90 ? 'warn' : 'ok'">{{ rendementFab != null ? rendementFab + '%' : '—' }}</span><span class="tk-l">Fabrication {{ annee }}</span></div>
-            <div class="tk"><span class="tk-v" :class="tauxGlobal != null && tauxGlobal < 100 ? 'warn' : 'ok'">{{ tauxGlobal != null ? tauxGlobal + '%' : '—' }}</span><span class="tk-l">Réalisation plan</span></div>
-          </div>
-        </div>
-        <div class="trans-card">
-          <div class="trans-dom p">Personnel</div>
-          <div class="trans-kpis">
-            <div class="tk"><span class="tk-v" :class="formationKpi.taux != null && formationKpi.taux < 90 ? 'warn' : 'ok'">{{ formationKpi.taux != null ? formationKpi.taux + '%' : '—' }}</span><span class="tk-l">Qualification</span></div>
-            <div class="tk"><span class="tk-v" :class="formationKpi.expire ? 'bad' : 'ok'">{{ formationKpi.expire }}</span><span class="tk-l">Expirées</span></div>
-            <div class="tk"><span class="tk-v" :class="formationKpi.bientot ? 'warn' : 'ok'">{{ formationKpi.bientot }}</span><span class="tk-l">À recycler</span></div>
-          </div>
+      <div class="sc teal">
+        <div class="sc-l">Chiffre d'affaires <span class="sc-u">DA</span></div>
+        <div class="sc-v sc-v-ca">{{ fmtCA(totCA) }}</div>
+        <svg viewBox="0 0 100 26" class="sc-spark" preserveAspectRatio="none"><path :d="sparkArea(serieCA)" class="sp-area sky" /><path :d="sparkPath(serieCA)" class="sp-line sky" /></svg>
+        <div class="sc-s">ce mois <b>{{ fmtCA(totCAMois) }}</b></div>
+      </div>
+      <div class="sc teal">
+        <div class="sc-l">Lots {{ onglet === 'fab' ? 'fabriqués' : 'conditionnés' }}</div>
+        <div class="sc-v">{{ fmt(nbLots) }}</div>
+        <div class="sc-s">répartis sur {{ donnees.length }} {{ libGroupe ? libGroupe.toLowerCase() + '(s)' : 'catégorie(s)' }}</div>
+      </div>
+      <div class="sc teal">
+        <div class="sc-l">Rendement fabrication</div>
+        <div class="sc-rw">
+          <svg viewBox="0 0 36 36" class="sc-ring"><circle class="rg-bg" cx="18" cy="18" r="15.915" /><circle class="rg-fg" cx="18" cy="18" r="15.915" :stroke="colPct(rendementFab, 90)" :stroke-dasharray="ringDash(rendementFab)" stroke-dashoffset="25" /><text x="18" y="21" class="rg-v" :style="{ fill: colPct(rendementFab, 90) }">{{ rendementFab != null ? rendementFab + '%' : '—' }}</text></svg>
+          <div class="sc-s">boîtes / quantité<br>théorique</div>
         </div>
       </div>
-    </section>
+      <div class="sc sky">
+        <div class="sc-l">Disponibilité équip.</div>
+        <div class="sc-rw">
+          <svg viewBox="0 0 36 36" class="sc-ring"><circle class="rg-bg" cx="18" cy="18" r="15.915" /><circle class="rg-fg" cx="18" cy="18" r="15.915" :stroke="colPct(equipKpi.dispo, 85)" :stroke-dasharray="ringDash(equipKpi.dispo)" stroke-dashoffset="25" /><text x="18" y="21" class="rg-v" :style="{ fill: colPct(equipKpi.dispo, 85) }">{{ equipKpi.dispo != null ? equipKpi.dispo + '%' : '—' }}</text></svg>
+          <div class="sc-s">MTBF <b>{{ fmtH(equipKpi.mtbf) }}</b><br>MTTR <b>{{ fmtH(equipKpi.mttr) }}</b></div>
+        </div>
+      </div>
+      <div class="sc amber">
+        <div class="sc-l">Qualification personnel</div>
+        <div class="sc-rw">
+          <svg viewBox="0 0 36 36" class="sc-ring"><circle class="rg-bg" cx="18" cy="18" r="15.915" /><circle class="rg-fg" cx="18" cy="18" r="15.915" :stroke="colPct(formationKpi.taux, 90)" :stroke-dasharray="ringDash(formationKpi.taux)" stroke-dashoffset="25" /><text x="18" y="21" class="rg-v" :style="{ fill: colPct(formationKpi.taux, 90) }">{{ formationKpi.taux != null ? formationKpi.taux + '%' : '—' }}</text></svg>
+          <div class="sc-s"><b :class="formationKpi.expire ? 'c-bad' : ''">{{ formationKpi.expire }}</b> expirées<br><b :class="formationKpi.bientot ? 'c-warn' : ''">{{ formationKpi.bientot }}</b> à recycler</div>
+        </div>
+      </div>
+      <div class="sc violet">
+        <div class="sc-l">Qualité</div>
+        <div class="sc-v" :class="devOuvertes ? 'c-warn' : 'c-ok'">{{ devOuvertes }}</div>
+        <div class="sc-s">déviations ouvertes<br><b :class="devCritiques ? 'c-bad' : ''">{{ devCritiques }}</b> critiques · <b :class="capaRetard ? 'c-bad' : ''">{{ capaRetard }}</b> CAPA en retard</div>
+      </div>
+    </div>
+
+    <!-- Décisions -->
+    <div v-if="alertes.length" class="decisions">
+      <div class="dec-h">⚠ Points d'attention — aide à la décision</div>
+      <div class="dec-list">
+        <div v-for="(al, i) in alertes" :key="'a' + i" class="dec-item" :class="al.lvl">
+          <span class="dec-t">{{ al.t }}</span><span class="dec-d">{{ al.d }}</span>
+        </div>
+      </div>
+    </div>
 
     <!-- Pilotage — graphiques de suivi d'activité -->
     <section class="pilot">
@@ -94,14 +97,7 @@
             <text v-for="(l, i) in graphPR.labels" :key="'l' + i" :x="l.x" :y="l.y" class="x-lbl">{{ l.t }}</text>
           </svg>
         </div>
-        <div class="pilot-card">
-          <div class="pilot-h"><span class="pilot-t">Chiffre d'affaires mensuel <span class="pilot-u">(DA)</span></span></div>
-          <svg :viewBox="'0 0 ' + graphCA.W + ' ' + graphCA.H" class="pilot-svg" preserveAspectRatio="none">
-            <rect v-for="(b, i) in graphCA.bars" :key="'c' + i" :x="b.x" :y="b.y" :width="b.w" :height="b.h" class="b-ca" rx="2"><title>{{ fmtCA(b.v) }}</title></rect>
-            <text v-for="(l, i) in graphCA.labels" :key="'cl' + i" :x="l.x" :y="l.y" class="x-lbl">{{ l.t }}</text>
-          </svg>
-        </div>
-        <div class="pilot-card">
+        <div class="pilot-card wide">
           <div class="pilot-h"><span class="pilot-t">Top {{ libGroupe }} <span class="pilot-u">(boîtes, {{ annee }})</span></span></div>
           <div class="top-list">
             <div v-for="(d, i) in graphTop" :key="'t' + i" class="top-row">
@@ -119,10 +115,11 @@
     <div class="tb-grp">
       <span class="grp-lbl">Regrouper par :</span>
       <button v-for="g in groupesVisibles" :key="g.k" type="button" :class="{ on: grp === g.k }" @click="grp = g.k">{{ g.lbl }}</button>
+      <button type="button" class="tb-detail-toggle" @click="tableOuverte = !tableOuverte">{{ tableOuverte ? '▾ Masquer le détail' : '▸ Afficher le détail' }}</button>
     </div>
 
     <!-- Tableau -->
-    <div class="tb-card">
+    <div v-if="tableOuverte" class="tb-card">
       <div v-if="chargement" class="tb-empty">Chargement…</div>
       <div v-else-if="!donnees.length" class="tb-empty">Aucune donnée de {{ onglet === 'fab' ? 'fabrication' : 'conditionnement' }} pour {{ annee }}.</div>
       <table v-else class="tb-table">
@@ -488,7 +485,7 @@ const serieMensuelle = computed(() => {
 // Barres groupées Plan vs Réalisé (boîtes) par mois
 const graphPR = computed(() => {
   const s = serieMensuelle.value
-  const W = 760, H = 220, mL = 10, mR = 10, mT = 12, mB = 24
+  const W = 760, H = 182, mL = 10, mR = 10, mT = 12, mB = 24
   const iw = W - mL - mR, ih = H - mT - mB, baseY = mT + ih
   const max = Math.max(1, ...s.map(x => Math.max(x.plan, x.real)))
   const step = iw / 12, bw = Math.min(15, step / 3)
@@ -604,6 +601,20 @@ const alertes = computed(() => {
   if (tauxGlobalMois.value != null && tauxGlobalMois.value < 100) a.push({ t: 'Plan du mois réalisé à ' + tauxGlobalMois.value + '%', d: 'Retard sur le planning — ajuster la charge', lvl: 'mid' })
   return a
 })
+
+// ===== Illustrations compactes : anneaux (%) + sparklines (tendance) =====
+const ringDash = (pct) => { const p = Math.max(0, Math.min(100, pct == null ? 0 : pct)); return p.toFixed(1) + ' ' + (100 - p).toFixed(1) }
+const colPct = (p, seuil = 90) => p == null ? '#cbd5e1' : (p >= seuil ? '#16a34a' : (p >= seuil - 15 ? '#d97706' : '#dc2626'))
+const serieReal = computed(() => serieMensuelle.value.map(x => x.real))
+const serieCA = computed(() => serieMensuelle.value.map(x => x.ca))
+function sparkPath(arr) {
+  const a = arr || []; if (a.length < 2) return ''
+  const max = Math.max(1, ...a), W = 100, H = 26, pad = 2
+  return a.map((v, i) => { const x = pad + i / (a.length - 1) * (W - 2 * pad); const y = H - pad - (v / max) * (H - 2 * pad); return (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) }).join(' ')
+}
+function sparkArea(arr) { const p = sparkPath(arr); if (!p) return ''; const W = 100, H = 26, pad = 2; return p + ' L ' + (W - pad) + ' ' + (H - pad) + ' L ' + pad + ' ' + (H - pad) + ' Z' }
+const nbLots = computed(() => donnees.value.reduce((s, d) => s + (Number(d.lots) || 0), 0))
+const tableOuverte = ref(false)
 </script>
 
 <style scoped>
@@ -653,6 +664,39 @@ const alertes = computed(() => {
 .tb-table tfoot .tot td { font-weight: 800; padding: 13px 16px; border-top: 2px solid #e2e8f0; background: #f8fafc; }
 
 /* Pilotage — graphiques de suivi d'activité */
+/* Scorecard — vue globale des KPIs */
+.sc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+.sc { position: relative; background: #fff; border: 1px solid #e8edf3; border-radius: 16px; padding: 13px 15px 11px; box-shadow: 0 6px 18px rgba(30,41,59,.05); min-width: 0; min-height: 116px; display: flex; flex-direction: column; }
+.sc::before { content: ''; position: absolute; left: 15px; right: 15px; top: 0; height: 3px; border-radius: 0 0 3px 3px; background: #cbd5e1; }
+.sc.teal::before { background: #14b8a6; }
+.sc.sky::before { background: #0ea5e9; }
+.sc.amber::before { background: #f59e0b; }
+.sc.violet::before { background: #a855f7; }
+.sc-l { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 6px; }
+.sc-u { color: #94a3b8; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.sc-v { font-size: 26px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; line-height: 1.05; letter-spacing: -.01em; }
+.sc-v-ca { font-size: 20px; }
+.sc-v.c-ok { color: #15803d; } .sc-v.c-warn { color: #d97706; }
+.sc-s { font-size: 11px; color: #64748b; font-weight: 600; margin-top: auto; padding-top: 6px; line-height: 1.45; }
+.sc-s b { color: #0f172a; font-variant-numeric: tabular-nums; }
+.sc-s b.c-bad { color: #dc2626; } .sc-s b.c-warn { color: #d97706; }
+.sc-spark { width: 100%; height: 26px; display: block; margin: 5px 0 1px; }
+.sp-line { fill: none; stroke-width: 1.6; }
+.sp-line.teal { stroke: #14b8a6; } .sp-line.sky { stroke: #0ea5e9; }
+.sp-area { stroke: none; opacity: .13; }
+.sp-area.teal { fill: #14b8a6; } .sp-area.sky { fill: #0ea5e9; }
+.sc-rw { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
+.sc-ring { width: 58px; height: 58px; flex: none; }
+.sc-ring .rg-bg { fill: none; stroke: #eef2f7; stroke-width: 3.2; }
+.sc-ring .rg-fg { fill: none; stroke-width: 3.2; stroke-linecap: round; }
+.sc-ring .rg-v { font-size: 9px; font-weight: 800; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.sc-rw .sc-s { margin-top: 0; padding-top: 0; }
+@media (max-width: 1100px) { .sc-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .sc-grid { grid-template-columns: 1fr; } }
+/* Toggle détail */
+.tb-detail-toggle { margin-left: auto; background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.tb-detail-toggle:hover { background: #e2e8f0; }
+
 .pilot { margin: 2px 0 18px; }
 .pilot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .pilot-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px 16px; box-shadow: 0 8px 22px rgba(30,41,59,.06); min-width: 0; }
