@@ -56,7 +56,6 @@ import FormationMatrice from '../views/FormationMatrice.vue'
 import FormationExigences from '../views/FormationExigences.vue'
 import CalculPesee from '../views/CalculPesee.vue'
 import FormationPlanning from '../views/FormationPlanning.vue'
-import PostesLigne from '../views/PostesLigne.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Hub },
@@ -104,7 +103,6 @@ const routes = [
   { path: '/tpm', name: 'tpm', component: TpmMaintenance },
   { path: '/smed', name: 'smed', component: SmedChangements },
   { path: '/kaizen', name: 'kaizen', component: KaizenActions },
-  { path: '/postes-ligne', name: 'postes-ligne', component: PostesLigne },
   { path: '/avancement', name: 'avancement', component: AvancementLots },
   { path: '/production-atelier', name: 'production-atelier', component: ProductionAtelier },
   { path: '/suivi-trs', name: 'suivi-trs', component: SuiviTRS },
