@@ -282,12 +282,9 @@
           <div v-else class="empty-sm">Coche au moins un paramètre numérique dans la synthèse ci-dessus (colonne ⇄) pour superposer leurs courbes ici.</div>
         </div>
         </div>
-          </div>
-        </div>
-          </div>
 
         <!-- Sixpack de capabilité (type Minitab) -->
-        <div v-if="!paramBool && chartMode !== 'compare'" class="six-wrap">
+        <div v-if="!paramBool && chartMode !== 'compare'" class="chart-block six-wrap">
           <button class="btn sm six-toggle" @click="sixpackOuvert = !sixpackOuvert">{{ sixpackOuvert ? '▾ Masquer le' : '▸ Afficher le' }} Sixpack de capabilité (carte I · étendue mobile · histogramme · normalité · indices)</button>
           <div v-if="sixpackOuvert" class="six-body">
             <template v-if="sixpack && !sixpack.insuffisant">
@@ -369,7 +366,9 @@
             <div v-else class="empty-sm">Il faut au moins 8 mesures et une limite de spécification pour construire le Sixpack.</div>
           </div>
         </div>
-
+          </div>
+        </div>
+          </div>
         </div>
 
         <h3 class="sec-titre">Analyse d'impact entre paramètres</h3>
@@ -1263,9 +1262,9 @@ ${matHtml}
 @media (max-width: 900px) { .chart-grid.cg-2 { grid-template-columns: 1fr; } }
 
 /* Tableau Synthèse en colonne gauche, Capabilité + grille 2×2 à droite */
-.psplit { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; margin-top: 10px; }
-.psplit-left { flex: 1 1 calc(47% - 12px); min-width: 0; }
-.psplit-right { flex: 1 1 calc(53% - 12px); min-width: 0; }
+.psplit { display: flex; gap: 18px; align-items: flex-start; margin-top: 10px; }
+.psplit-left { flex: 1 1 47%; min-width: 0; }
+.psplit-right { flex: 1 1 53%; min-width: 0; }
 .psplit-left .sec-titre { margin-top: 0; }
 /* Capabilité compacte intégrée au-dessus du tableau de synthèse */
 .psplit-left .cap-wrap { margin: 0 0 16px; padding: 14px 16px; }
@@ -1398,10 +1397,10 @@ ${matHtml}
 .viol-row { font-size: 10.5px; color: #7f1d1d; padding: 1px 0; line-height: 1.35; }
 .viol-ok { margin-top: 7px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 600; }
 /* Sixpack de capabilité */
-.six-wrap { flex: 1 1 100%; width: 100%; min-width: 0; padding-top: 14px; border-top: 1px dashed var(--line-2); }
+.six-wrap { margin-top: 12px; padding-top: 14px; border-top: 1px dashed var(--line-2); min-width: 0; }
 .six-toggle { font-size: 13px; }
 .six-body { margin-top: 12px; }
-.six-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.six-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .six-card { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); padding: 8px 10px; box-shadow: var(--shadow); min-width: 0; }
 .six-h { font-size: 11.5px; font-weight: 700; color: var(--ink-2); margin-bottom: 4px; text-align: center; }
 .six-ad { font-weight: 500; color: var(--muted); font-size: 10.5px; }
