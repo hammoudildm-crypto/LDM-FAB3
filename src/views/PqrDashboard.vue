@@ -281,6 +281,18 @@
                     <tr><td>Cible</td><td>{{ fmtNum(sixpack.TGT) }}</td></tr>
                   </table>
                 </div>
+                <div class="six-card six-capplot">
+                  <div class="six-h">Graphique des capabilités</div>
+                  <svg :viewBox="'0 0 ' + sixpack.capPlot.W + ' ' + sixpack.capPlot.H" class="six-svg">
+                    <g v-for="(r, i) in sixpack.capPlot.rows" :key="'cp' + i">
+                      <text x="6" :y="r.y + 3.5" class="cp-lbl">{{ r.lbl }}</text>
+                      <line :x1="r.x1" :y1="r.y" :x2="r.x2" :y2="r.y" class="cp-line" />
+                      <line :x1="r.x1" :y1="r.y - 5" :x2="r.x1" :y2="r.y + 5" class="cp-tick" />
+                      <line :x1="r.x2" :y1="r.y - 5" :x2="r.x2" :y2="r.y + 5" class="cp-tick" />
+                      <line v-if="r.xc != null" :x1="r.xc" :y1="r.y - 5" :x2="r.xc" :y2="r.y + 5" class="cp-tick" />
+                    </g>
+                  </svg>
+                </div>
               </div>
               <p class="hint" style="margin-top:8px">« À l'intérieur » = σ court terme (étendue mobile ÷ 1,128) ; « Global » = écart-type global. Normalité par test d'Anderson-Darling : p &lt; 0,05 signale un écart à la loi normale (indices à interpréter avec prudence).</p>
             </template>
@@ -804,7 +816,19 @@ const sixpack = computed(() => {
   const npp = { W: NW, H: NH, pts: sorted.map((v, i) => ({ cx: nxx(v), cy: nyy(zs[i]) })), line: { x1: nxx(vlo), y1: nyy((vlo - mean) / sdO), x2: nxx(vhi), y2: nyy((vhi - mean) / sdO) }, AD: ad.A2, pAD: ad.p }
   const m25 = Math.min(25, n); const last = vals.slice(n - m25)
   const lc = mkChart(last, [mean], n - m25 + 1); lc.center = lc.yy(mean)
-  return { insuffisant: false, n, mean, sdO, sdW, MRbar, LSL, USL, TGT, unite: uniteEff(p), nom: p.nom, ic, mc, histo, npp, last: lc, stats: { cp, cpk: cpk === Infinity ? null : cpk, pp, ppk: ppk === Infinity ? null : ppk, cpm, ppmObs, ppmO, ppmW } }
+  // Graphique des capabilités : 3 intervalles (Global, À l'intérieur, Spécifications) sur une échelle commune
+  const sp = 3 * Math.max(sdO, sdW)
+  const clo0 = Math.min(LSL != null ? LSL : mean, mean - sp), chi0 = Math.max(USL != null ? USL : mean, mean + sp)
+  const cpad = (chi0 - clo0) * 0.06 || 1; const clo = clo0 - cpad, chi = chi0 + cpad
+  const CW = 440, CH = 150, cmL = 92, cmR = 14, cmT = 16
+  const cxx = (x) => cmL + (x - clo) / (chi - clo) * (CW - cmL - cmR)
+  const capRows = [
+    { lbl: 'Global', a: mean - 3 * sdO, b: mean + 3 * sdO, c: mean, y: cmT + 20 },
+    { lbl: 'À l\'intérieur', a: mean - 3 * sdW, b: mean + 3 * sdW, c: mean, y: cmT + 58 },
+    { lbl: 'Spécifications', a: LSL != null ? LSL : clo, b: USL != null ? USL : chi, c: (LSL != null && USL != null) ? (LSL + USL) / 2 : null, y: cmT + 96 }
+  ].map(r => ({ lbl: r.lbl, y: r.y, x1: cxx(r.a), x2: cxx(r.b), xc: r.c != null ? cxx(r.c) : null }))
+  const capPlot = { W: CW, H: CH, rows: capRows }
+  return { insuffisant: false, n, mean, sdO, sdW, MRbar, LSL, USL, TGT, unite: uniteEff(p), nom: p.nom, ic, mc, histo, npp, last: lc, capPlot, stats: { cp, cpk: cpk === Infinity ? null : cpk, pp, ppk: ppk === Infinity ? null : ppk, cpm, ppmObs, ppmO, ppmW } }
 })
 const sixFmt = (v, d = 2) => (v == null || !isFinite(v)) ? '—' : Number(v).toFixed(d)
 const byDate = (a, b) => String(a.date_mesure || '').localeCompare(String(b.date_mesure || '')) || ((a.of_id || 0) - (b.of_id || 0)) || ((a.rang || 0) - (b.rang || 0))
@@ -1363,5 +1387,9 @@ ${matHtml}
 .six-tbl td { padding: 2.5px 6px; border-bottom: 1px solid var(--line); }
 .six-tbl td:last-child { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
 .six-tbl tr.sh td { background: var(--pqr-tint, #faf5ff); font-weight: 700; color: var(--pqr-ink, #6b21a8); font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; text-align: left; }
+.six-capplot { grid-column: 1 / -1; }
+.cp-line { stroke: #334155; stroke-width: 1.4; }
+.cp-tick { stroke: #334155; stroke-width: 1.4; }
+.cp-lbl { font-size: 11px; font-weight: 700; fill: #475569; }
 @media (max-width: 760px) { .six-grid { grid-template-columns: 1fr; } }
 </style>
