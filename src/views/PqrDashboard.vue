@@ -251,6 +251,90 @@
           <div v-else class="empty-sm">Il faut au moins 2 mesures et une limite de spécification (min ou max) pour tracer la courbe.</div>
         </div>
 
+        <!-- Sixpack de capabilité (type Minitab) -->
+        <div v-if="!paramBool && chartMode !== 'compare'" class="chart-block six-wrap">
+          <button class="btn sm six-toggle" @click="sixpackOuvert = !sixpackOuvert">{{ sixpackOuvert ? '▾ Masquer le' : '▸ Afficher le' }} Sixpack de capabilité (carte I · étendue mobile · histogramme · normalité · indices)</button>
+          <div v-if="sixpackOuvert" class="six-body">
+            <template v-if="sixpack && !sixpack.insuffisant">
+              <div class="six-grid">
+                <div class="six-card">
+                  <div class="six-h">Carte des valeurs individuelles (I)</div>
+                  <svg :viewBox="'0 0 ' + sixpack.ic.W + ' ' + sixpack.ic.H" class="six-svg">
+                    <line :x1="sixpack.ic.mL" :x2="sixpack.ic.W - sixpack.ic.mR" :y1="sixpack.ic.yUCL" :y2="sixpack.ic.yUCL" class="cl-lim" />
+                    <line :x1="sixpack.ic.mL" :x2="sixpack.ic.W - sixpack.ic.mR" :y1="sixpack.ic.yLCL" :y2="sixpack.ic.yLCL" class="cl-lim" />
+                    <line :x1="sixpack.ic.mL" :x2="sixpack.ic.W - sixpack.ic.mR" :y1="sixpack.ic.center" :y2="sixpack.ic.center" class="cl-ctr" />
+                    <path :d="sixpack.ic.path" class="cl-path" />
+                    <circle v-for="(q, i) in sixpack.ic.pts" :key="'ic' + i" :cx="q.x" :cy="q.y" r="2.2" :class="q.oos ? 'cl-oos' : 'cl-dot'" />
+                    <text :x="sixpack.ic.W - sixpack.ic.mR + 5" :y="sixpack.ic.yUCL + 3" class="cl-lbl">LCS {{ fmtNum(sixpack.ic.vUCL) }}</text>
+                    <text :x="sixpack.ic.W - sixpack.ic.mR + 5" :y="sixpack.ic.center + 3" class="cl-lbl ctr">X̄ {{ fmtNum(sixpack.ic.vMean) }}</text>
+                    <text :x="sixpack.ic.W - sixpack.ic.mR + 5" :y="sixpack.ic.yLCL + 3" class="cl-lbl">LCI {{ fmtNum(sixpack.ic.vLCL) }}</text>
+                  </svg>
+                </div>
+                <div class="six-card">
+                  <div class="six-h">Histogramme des capabilités</div>
+                  <svg :viewBox="'0 0 ' + sixpack.histo.W + ' ' + sixpack.histo.H" class="six-svg">
+                    <rect v-for="(b, i) in sixpack.histo.bars" :key="'hb' + i" :x="b.x" :y="b.y" :width="b.w" :height="b.h" class="hi-bar" />
+                    <path :d="sixpack.histo.curveW" class="hi-curve-w" />
+                    <path :d="sixpack.histo.curveO" class="hi-curve-o" />
+                    <template v-if="sixpack.histo.xLsl != null"><line :x1="sixpack.histo.xLsl" :y1="sixpack.histo.mT - 6" :x2="sixpack.histo.xLsl" :y2="sixpack.histo.y0" class="hi-spec" /><text :x="sixpack.histo.xLsl" :y="sixpack.histo.mT - 9" class="hi-spec-lbl">LSI</text></template>
+                    <template v-if="sixpack.histo.xUsl != null"><line :x1="sixpack.histo.xUsl" :y1="sixpack.histo.mT - 6" :x2="sixpack.histo.xUsl" :y2="sixpack.histo.y0" class="hi-spec" /><text :x="sixpack.histo.xUsl" :y="sixpack.histo.mT - 9" class="hi-spec-lbl">LSS</text></template>
+                    <line v-if="sixpack.histo.xCible != null" :x1="sixpack.histo.xCible" :y1="sixpack.histo.mT" :x2="sixpack.histo.xCible" :y2="sixpack.histo.y0" class="hi-cible" />
+                  </svg>
+                </div>
+                <div class="six-card">
+                  <div class="six-h">Carte d'étendue mobile</div>
+                  <svg :viewBox="'0 0 ' + sixpack.mc.W + ' ' + sixpack.mc.H" class="six-svg">
+                    <line :x1="sixpack.mc.mL" :x2="sixpack.mc.W - sixpack.mc.mR" :y1="sixpack.mc.yUCL" :y2="sixpack.mc.yUCL" class="cl-lim" />
+                    <line :x1="sixpack.mc.mL" :x2="sixpack.mc.W - sixpack.mc.mR" :y1="sixpack.mc.yLCL" :y2="sixpack.mc.yLCL" class="cl-lim" />
+                    <line :x1="sixpack.mc.mL" :x2="sixpack.mc.W - sixpack.mc.mR" :y1="sixpack.mc.center" :y2="sixpack.mc.center" class="cl-ctr" />
+                    <path :d="sixpack.mc.path" class="cl-path" />
+                    <circle v-for="(q, i) in sixpack.mc.pts" :key="'mc' + i" :cx="q.x" :cy="q.y" r="2.2" :class="q.oos ? 'cl-oos' : 'cl-dot'" />
+                    <text :x="sixpack.mc.W - sixpack.mc.mR + 5" :y="sixpack.mc.yUCL + 3" class="cl-lbl">LCS {{ fmtNum(sixpack.mc.vUCL) }}</text>
+                    <text :x="sixpack.mc.W - sixpack.mc.mR + 5" :y="sixpack.mc.center + 3" class="cl-lbl ctr">EM {{ fmtNum(sixpack.mc.vMean) }}</text>
+                  </svg>
+                </div>
+                <div class="six-card">
+                  <div class="six-h">Diag. probab. de Normale <span class="six-ad">AD {{ sixFmt(sixpack.npp.AD, 3) }} · p {{ sixpack.npp.pAD < 0.005 ? '< 0,005' : sixFmt(sixpack.npp.pAD, 3) }}</span></div>
+                  <svg :viewBox="'0 0 ' + sixpack.npp.W + ' ' + sixpack.npp.H" class="six-svg">
+                    <line :x1="sixpack.npp.line.x1" :y1="sixpack.npp.line.y1" :x2="sixpack.npp.line.x2" :y2="sixpack.npp.line.y2" class="np-line" />
+                    <circle v-for="(q, i) in sixpack.npp.pts" :key="'np' + i" :cx="q.cx" :cy="q.cy" r="1.9" class="np-dot" />
+                  </svg>
+                </div>
+                <div class="six-card">
+                  <div class="six-h">{{ Math.min(25, sixpack.n) }} dernières observations</div>
+                  <svg :viewBox="'0 0 ' + sixpack.last.W + ' ' + sixpack.last.H" class="six-svg">
+                    <line :x1="sixpack.last.mL" :x2="sixpack.last.W - sixpack.last.mR" :y1="sixpack.last.center" :y2="sixpack.last.center" class="cl-ctr dash" />
+                    <path :d="sixpack.last.path" class="cl-path" />
+                    <circle v-for="(q, i) in sixpack.last.pts" :key="'lc' + i" :cx="q.x" :cy="q.y" r="2.2" class="cl-dot" />
+                  </svg>
+                </div>
+                <div class="six-card six-stats">
+                  <div class="six-h">Indices de capabilité</div>
+                  <table class="six-tbl">
+                    <tr class="sh"><td colspan="2">À l'intérieur (court terme)</td></tr>
+                    <tr><td>σ intérieur</td><td>{{ sixFmt(sixpack.sdW, 4) }}</td></tr>
+                    <tr><td>Cp</td><td>{{ sixFmt(sixpack.stats.cp) }}</td></tr>
+                    <tr><td>Cpk</td><td>{{ sixFmt(sixpack.stats.cpk) }}</td></tr>
+                    <tr class="sh"><td colspan="2">Global (long terme)</td></tr>
+                    <tr><td>σ global</td><td>{{ sixFmt(sixpack.sdO, 4) }}</td></tr>
+                    <tr><td>Pp</td><td>{{ sixFmt(sixpack.stats.pp) }}</td></tr>
+                    <tr><td>Ppk</td><td>{{ sixFmt(sixpack.stats.ppk) }}</td></tr>
+                    <tr><td>Cpm</td><td>{{ sixFmt(sixpack.stats.cpm) }}</td></tr>
+                    <tr class="sh"><td colspan="2">PPM (défauts / million)</td></tr>
+                    <tr><td>Observé</td><td>{{ sixFmt(sixpack.stats.ppmObs, 0) }}</td></tr>
+                    <tr><td>Attendu (global)</td><td>{{ sixFmt(sixpack.stats.ppmO, 1) }}</td></tr>
+                    <tr class="sh"><td colspan="2">Spécifications</td></tr>
+                    <tr><td>LSI / LSS</td><td>{{ fmtNum(sixpack.LSL) }} / {{ fmtNum(sixpack.USL) }}</td></tr>
+                    <tr><td>Cible</td><td>{{ fmtNum(sixpack.TGT) }}</td></tr>
+                  </table>
+                </div>
+              </div>
+              <p class="hint" style="margin-top:8px">« À l'intérieur » = σ court terme (étendue mobile ÷ 1,128) ; « Global » = écart-type global. Normalité par test d'Anderson-Darling : p &lt; 0,05 signale un écart à la loi normale (indices à interpréter avec prudence).</p>
+            </template>
+            <div v-else class="empty-sm">Il faut au moins 8 mesures et une limite de spécification pour construire le Sixpack.</div>
+          </div>
+        </div>
+
         <!-- Comparaison multi-paramètres -->
         <div v-if="toutAfficher || chartMode === 'compare'" class="chart-block">
           <h4 v-if="toutAfficher" class="sec-sub">⚖️ Comparer ({{ comparIds.length }})</h4>
@@ -714,6 +798,78 @@ const capabCourbe = computed(() => {
 
 const paramSelObj = computed(() => paramById.value[paramSel.value] || null)
 const paramBool = computed(() => { const p = paramSelObj.value; return !!(p && p.type === 'bool') })
+
+// ================= Sixpack de capabilité (type Minitab) =================
+function pqrErf(x) { const s = x < 0 ? -1 : 1; x = Math.abs(x); const t = 1 / (1 + 0.3275911 * x); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return s * y }
+function pqrNcdf(z) { return 0.5 * (1 + pqrErf(z / Math.SQRT2)) }
+function pqrNinv(p) { if (p <= 0) return -5; if (p >= 1) return 5; const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00], b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01], c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00], d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00], pl = 0.02425; let q, r; if (p < pl) { q = Math.sqrt(-2 * Math.log(p)); return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1) } if (p <= 1 - pl) { q = p - 0.5; r = q * q; return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1) } q = Math.sqrt(-2 * Math.log(1 - p)); return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1) }
+function pqrAD(sorted, mean, sd) { const n = sorted.length; let S = 0; for (let i = 0; i < n; i++) { const Fi = Math.min(1 - 1e-12, Math.max(1e-12, pqrNcdf((sorted[i] - mean) / sd))); const Fj = Math.min(1 - 1e-12, Math.max(1e-12, pqrNcdf((sorted[n - 1 - i] - mean) / sd))); S += (2 * (i + 1) - 1) * (Math.log(Fi) + Math.log(1 - Fj)) } const A2 = -n - S / n, A2s = A2 * (1 + 0.75 / n + 2.25 / (n * n)); let p; if (A2s >= 0.6) p = Math.exp(1.2937 - 5.709 * A2s + 0.0186 * A2s * A2s); else if (A2s >= 0.34) p = Math.exp(0.9177 - 4.279 * A2s - 1.38 * A2s * A2s); else if (A2s > 0.2) p = 1 - Math.exp(-8.318 + 42.796 * A2s - 59.938 * A2s * A2s); else p = 1 - Math.exp(-13.436 + 101.14 * A2s - 223.73 * A2s * A2s); return { A2, p: Math.min(1, Math.max(0, p)) } }
+
+const sixpackOuvert = ref(false)
+const sixpack = computed(() => {
+  const p = paramSelObj.value
+  if (!p || p.type === 'bool') return null
+  const ms = mesuresParam(p); const vals = ms.map(m => Number(m.valeur)).filter(v => !Number.isNaN(v))
+  const n = vals.length
+  const LSL = effMin(p), USL = effMax(p), TGT = effCible(p)
+  if (n < 8 || (LSL == null && USL == null)) return { insuffisant: true, n }
+  const mean = vals.reduce((a, b) => a + b, 0) / n
+  const sdO = Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) || 1e-9
+  const mr = []; for (let i = 1; i < n; i++) mr.push(Math.abs(vals[i] - vals[i - 1]))
+  const MRbar = mr.reduce((a, b) => a + b, 0) / mr.length
+  const sdW = (MRbar / 1.128) || sdO
+  const iUCL = mean + 2.66 * MRbar, iLCL = mean - 2.66 * MRbar, mrUCL = 3.267 * MRbar
+  const cp = (LSL != null && USL != null && sdW > 0) ? (USL - LSL) / (6 * sdW) : null
+  const cpk = sdW > 0 ? Math.min(USL != null ? (USL - mean) / (3 * sdW) : Infinity, LSL != null ? (mean - LSL) / (3 * sdW) : Infinity) : null
+  const pp = (LSL != null && USL != null && sdO > 0) ? (USL - LSL) / (6 * sdO) : null
+  const ppk = sdO > 0 ? Math.min(USL != null ? (USL - mean) / (3 * sdO) : Infinity, LSL != null ? (mean - LSL) / (3 * sdO) : Infinity) : null
+  const cpm = (TGT != null && LSL != null && USL != null) ? (USL - LSL) / (6 * Math.sqrt(sdO * sdO + (mean - TGT) ** 2)) : null
+  const ppmObs = vals.filter(v => (LSL != null && v < LSL) || (USL != null && v > USL)).length / n * 1e6
+  const ppmO = ((LSL != null ? pqrNcdf((LSL - mean) / sdO) : 0) + (USL != null ? 1 - pqrNcdf((USL - mean) / sdO) : 0)) * 1e6
+  const ppmW = ((LSL != null ? pqrNcdf((LSL - mean) / sdW) : 0) + (USL != null ? 1 - pqrNcdf((USL - mean) / sdW) : 0)) * 1e6
+  const sorted = vals.slice().sort((a, b) => a - b)
+  const ad = pqrAD(sorted, mean, sdO)
+  const W = 440, H = 190, mL = 42, mR = 70, mT = 18, mB = 24
+  function mkChart(ys, levels, idx0) {
+    const allY = ys.concat(levels).filter(v => v != null && isFinite(v))
+    let lo = Math.min(...allY), hi = Math.max(...allY); const pad = (hi - lo) * 0.12 || 1; lo -= pad; hi += pad
+    const m = ys.length
+    const xx = (k) => mL + (m <= 1 ? 0.5 : k / (m - 1)) * (W - mL - mR)
+    const yy = (v) => mT + (1 - (v - lo) / (hi - lo)) * (H - mT - mB)
+    const pts = ys.map((v, k) => ({ x: xx(k), y: yy(v), v, idx: k + idx0 }))
+    const path = pts.map((q, i) => (i ? 'L' : 'M') + q.x.toFixed(1) + ' ' + q.y.toFixed(1)).join(' ')
+    return { W, H, mL, mR, mT, mB, pts, path, yy, xx }
+  }
+  const ic = mkChart(vals, [iUCL, iLCL, mean], 1)
+  ic.pts.forEach(q => { q.oos = q.v > iUCL + 1e-9 || q.v < iLCL - 1e-9 })
+  ic.center = ic.yy(mean); ic.yUCL = ic.yy(iUCL); ic.yLCL = ic.yy(iLCL); ic.vUCL = iUCL; ic.vLCL = iLCL; ic.vMean = mean
+  const mc = mkChart(mr, [mrUCL, 0, MRbar], 2)
+  mc.pts.forEach(q => { q.oos = q.v > mrUCL + 1e-9 })
+  mc.center = mc.yy(MRbar); mc.yUCL = mc.yy(mrUCL); mc.yLCL = mc.yy(0); mc.vUCL = mrUCL; mc.vMean = MRbar
+  const hlo0 = Math.min(sorted[0], LSL != null ? LSL : sorted[0]), hhi0 = Math.max(sorted[n - 1], USL != null ? USL : sorted[n - 1])
+  const hpad = (hhi0 - hlo0) * 0.08 || 1; const hlo = hlo0 - hpad, hhi = hhi0 + hpad
+  const kb = Math.min(18, Math.max(7, Math.ceil(Math.sqrt(n)))); const bw = (hhi - hlo) / kb
+  const counts = new Array(kb).fill(0); for (const v of vals) { let bi = Math.floor((v - hlo) / bw); if (bi < 0) bi = 0; if (bi >= kb) bi = kb - 1; counts[bi]++ }
+  const curveMax = n * bw * Math.max(1 / (sdO * Math.sqrt(2 * Math.PI)), 1 / (sdW * Math.sqrt(2 * Math.PI)))
+  const yMaxH = Math.max(Math.max(...counts), curveMax) * 1.1 || 1
+  const HW = 440, HH = 190, hmL = 14, hmR = 14, hmT = 26, hmB = 24
+  const hxx = (x) => hmL + (x - hlo) / (hhi - hlo) * (HW - hmL - hmR)
+  const hyy = (c) => hmT + (1 - c / yMaxH) * (HH - hmT - hmB)
+  const bars = counts.map((c, i) => ({ x: hxx(hlo + i * bw), y: hyy(c), w: Math.max(1, hxx(hlo + bw) - hxx(hlo) - 1.5), h: hyy(0) - hyy(c) }))
+  function curve(sd) { let s = ''; const N = 72; for (let i = 0; i <= N; i++) { const x = hlo + (hhi - hlo) * i / N; const cc = n * bw / (sd * Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * ((x - mean) / sd) ** 2); s += (i ? 'L' : 'M') + hxx(x).toFixed(1) + ' ' + hyy(cc).toFixed(1) + ' ' } return s }
+  const histo = { W: HW, H: HH, mT: hmT, mB: hmB, bars, curveO: curve(sdO), curveW: curve(sdW), y0: hyy(0), xLsl: LSL != null ? hxx(LSL) : null, xUsl: USL != null ? hxx(USL) : null, xCible: TGT != null ? hxx(TGT) : null }
+  const NW = 440, NH = 190, nmL = 44, nmR = 18, nmT = 18, nmB = 28
+  const zs = sorted.map((v, i) => pqrNinv((i + 1 - 0.375) / (n + 0.25)))
+  let vlo = sorted[0], vhi = sorted[n - 1]; const vpad = (vhi - vlo) * 0.06 || 1; vlo -= vpad; vhi += vpad
+  let zlo = Math.min(...zs), zhi = Math.max(...zs); const zpad = (zhi - zlo) * 0.08 || 0.5; zlo -= zpad; zhi += zpad
+  const nxx = (v) => nmL + (v - vlo) / (vhi - vlo) * (NW - nmL - nmR)
+  const nyy = (z) => nmT + (1 - (z - zlo) / (zhi - zlo)) * (NH - nmT - nmB)
+  const npp = { W: NW, H: NH, pts: sorted.map((v, i) => ({ cx: nxx(v), cy: nyy(zs[i]) })), line: { x1: nxx(vlo), y1: nyy((vlo - mean) / sdO), x2: nxx(vhi), y2: nyy((vhi - mean) / sdO) }, AD: ad.A2, pAD: ad.p }
+  const m25 = Math.min(25, n); const last = vals.slice(n - m25)
+  const lc = mkChart(last, [mean], n - m25 + 1); lc.center = lc.yy(mean)
+  return { insuffisant: false, n, mean, sdO, sdW, MRbar, LSL, USL, TGT, unite: uniteEff(p), nom: p.nom, ic, mc, histo, npp, last: lc, stats: { cp, cpk: cpk === Infinity ? null : cpk, pp, ppk: ppk === Infinity ? null : ppk, cpm, ppmObs, ppmO, ppmW } }
+})
+const sixFmt = (v, d = 2) => (v == null || !isFinite(v)) ? '—' : Number(v).toFixed(d)
 const byDate = (a, b) => String(a.date_mesure || '').localeCompare(String(b.date_mesure || '')) || ((a.of_id || 0) - (b.of_id || 0)) || ((a.rang || 0) - (b.rang || 0))
 function mesuresParam(p) { return mesuresPlat.value.filter(m => m.parametre_id === p.id && !Number.isNaN(Number(m.valeur))).slice().sort(byDate) }
 
@@ -1240,4 +1396,34 @@ ${matHtml}
 .viol-list { margin-top: 3px; }
 .viol-row { font-size: 10.5px; color: #7f1d1d; padding: 1px 0; line-height: 1.35; }
 .viol-ok { margin-top: 7px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 600; }
+/* Sixpack de capabilité */
+.six-wrap { margin-top: 10px; }
+.six-body { margin-top: 12px; }
+.six-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.six-card { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); padding: 8px 10px; box-shadow: var(--shadow); min-width: 0; }
+.six-h { font-size: 11.5px; font-weight: 700; color: var(--ink-2); margin-bottom: 4px; text-align: center; }
+.six-ad { font-weight: 500; color: var(--muted); font-size: 10.5px; }
+.six-svg { width: 100%; height: auto; display: block; }
+.cl-lim { stroke: #dc2626; stroke-width: 1; }
+.cl-ctr { stroke: #16a34a; stroke-width: 1; }
+.cl-ctr.dash { stroke: #94a3b8; stroke-dasharray: 4 3; }
+.cl-path { fill: none; stroke: #2563eb; stroke-width: 1; }
+.cl-dot { fill: #2563eb; }
+.cl-oos { fill: #dc2626; }
+.cl-lbl { font-size: 9px; fill: #64748b; }
+.cl-lbl.ctr { fill: #16a34a; }
+.hi-bar { fill: #bfdbfe; stroke: #60a5fa; stroke-width: .5; }
+.hi-curve-o { fill: none; stroke: #dc2626; stroke-width: 1.4; }
+.hi-curve-w { fill: none; stroke: #334155; stroke-width: 1.1; stroke-dasharray: 4 3; }
+.hi-spec { stroke: #dc2626; stroke-width: 1; stroke-dasharray: 3 2; }
+.hi-spec-lbl { font-size: 10px; font-weight: 700; fill: #dc2626; text-anchor: middle; }
+.hi-cible { stroke: #16a34a; stroke-width: 1; stroke-dasharray: 2 2; }
+.np-line { stroke: #dc2626; stroke-width: 1.1; }
+.np-dot { fill: #2563eb; }
+.six-stats { display: flex; flex-direction: column; }
+.six-tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.six-tbl td { padding: 2.5px 6px; border-bottom: 1px solid var(--line); }
+.six-tbl td:last-child { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+.six-tbl tr.sh td { background: var(--pqr-tint, #faf5ff); font-weight: 700; color: var(--pqr-ink, #6b21a8); font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; text-align: left; }
+@media (max-width: 760px) { .six-grid { grid-template-columns: 1fr; } }
 </style>
