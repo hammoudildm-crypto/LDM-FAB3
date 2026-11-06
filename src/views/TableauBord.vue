@@ -125,6 +125,30 @@
         </span>
       </div>
       <div v-if="kpiOuvert">
+        <!-- Jauges : indicateurs évalués (cible + statut) -->
+        <div v-if="kpisEval.length" class="kpi-gauges">
+          <div v-for="(k, i) in kpisEval" :key="'g' + i" class="kg-card">
+            <svg viewBox="0 0 36 36" class="kg-ring">
+              <circle class="kg-track" cx="18" cy="18" r="15.915" />
+              <circle class="kg-fill" cx="18" cy="18" r="15.915" :stroke="kpiColor(k.st)" :stroke-dasharray="kpiFill(k) + ' ' + (100 - kpiFill(k))" stroke-dashoffset="25" />
+              <text x="18" y="19.6" class="kg-val" :style="{ fill: kpiColor(k.st) }">{{ fmtKpi(k.v, k.u) }}</text>
+            </svg>
+            <div class="kg-name">{{ k.n }}</div>
+            <div class="kg-cible">cible {{ k.c }}</div>
+          </div>
+        </div>
+
+        <!-- Tuiles : valeurs suivies (mesuré) -->
+        <div v-if="kpisMesure.length" class="kpi-tiles">
+          <div v-for="(k, i) in kpisMesure" :key="'t' + i" class="kt-card" :style="{ '--a': tileIcon(k.n).c }">
+            <svg viewBox="0 0 24 24" class="kt-ic" v-html="tileIcon(k.n).p"></svg>
+            <div class="kt-txt"><div class="kt-v">{{ fmtKpi(k.v, k.u) }}</div><div class="kt-n">{{ k.n }}</div></div>
+          </div>
+        </div>
+
+        <button type="button" class="kpi-detail-btn" @click="detailOuvert = !detailOuvert">{{ detailOuvert ? '▾ Masquer le détail' : '▸ Détail & tableau complet (' + kpisStd.length + ')' }}</button>
+
+        <div v-if="detailOuvert">
         <div class="kpi-panels">
           <div class="kpi-panel">
             <div class="kp-t">Répartition des statuts</div>
@@ -160,6 +184,7 @@
           </table>
         </div>
         <p class="kpi-note">« Mesuré » = indicateur calculé sans cible normative (débit, délai, Takt, cadence, production par équipe/personne). Takt = temps disponible ÷ quantité planifiée du <i>Plan directeur de production</i> (où la demande est représentée) ; Production à temps = lots dont la fin de fabrication est au plus tard à la date de fin de validité de l'OF. Délai = réception OF → fin de fabrication ; Production par équipe / Productivité = boîtes rapportées aux effectifs. Les 20 indicateurs sont désormais reliés à une source : un « N/A » signifie seulement que la donnée n'est pas encore saisie — retouche (Saisie TRS), capacité (jours ouvrés × régime de travail, page Suivi de capacité), coût (PCSU du référentiel produit), équilibrage (flux entre phases, calculé depuis les cadences). OEE, Disponibilité, Performance et Qualité proviennent des postes TRS ; Performance/OEE nécessitent des cadences nominales renseignées.</p>
+        </div>
       </div>
     </section>
 
@@ -892,6 +917,32 @@ const kpiSummary = computed(() => {
   return { ok, warn, bad, info, na, total: k.length, top }
 })
 const pctSeg = (n) => (kpiSummary.value.total ? (n / kpiSummary.value.total * 100) : 0) + '%'
+
+// --- Présentation graphique des KPI ---
+const detailOuvert = ref(false)
+// Jauges : indicateurs évalués (avec cible et valeur) ; Tuiles : valeurs suivies (mesuré)
+const kpisEval = computed(() => kpisStd.value.filter(k => k.st === 'ok' || k.st === 'warn' || k.st === 'bad'))
+const kpisMesure = computed(() => kpisStd.value.filter(k => k.st === 'info'))
+function kpiColor(st) { return st === 'ok' ? '#16a34a' : st === 'warn' ? '#f59e0b' : st === 'bad' ? '#dc2626' : '#94a3b8' }
+// Remplissage de l'anneau (0–100) : valeur directe si « plus haut = mieux », sinon rapportée à 3× la cible
+function kpiFill(k) {
+  if (k.v == null) return 0
+  if (k.dir === 'down') return Math.max(3, Math.min(100, k.s ? k.v / (k.s * 3) * 100 : k.v))
+  return Math.max(3, Math.min(100, k.v))
+}
+// Icônes (tracé SVG + couleur d'accent) pour les tuiles « valeurs suivies »
+const TILE_ICONS = {
+  'Débit': { c: '#14b8a6', p: '<line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="5"/><line x1="18" y1="20" x2="18" y2="14"/>' },
+  'Temps de cycle': { c: '#0ea5e9', p: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/>' },
+  'Takt': { c: '#0ea5e9', p: '<circle cx="12" cy="13" r="8"/><line x1="12" y1="13" x2="12" y2="9"/><line x1="9" y1="2" x2="15" y2="2"/>' },
+  'Délai': { c: '#6366f1', p: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>' },
+  'réglage': { c: '#a855f7', p: '<path d="M14.5 6.5a3.5 3.5 0 0 1-4.6 4.6L5 16l3 3 4.9-4.9a3.5 3.5 0 0 0 4.6-4.6l-2 2-2-2z"/>' },
+  'Changement': { c: '#a855f7', p: '<polyline points="16 3 20 7 16 11"/><line x1="20" y1="7" x2="7" y2="7"/><polyline points="8 13 4 17 8 21"/><line x1="4" y1="17" x2="17" y2="17"/>' },
+  'par équipe': { c: '#f59e0b', p: '<circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 6a3 3 0 0 1 0 6"/><path d="M19.5 20a5.5 5.5 0 0 0-3-5"/>' },
+  'Productivité': { c: '#f59e0b', p: '<circle cx="12" cy="8" r="3.5"/><path d="M5 21a7 7 0 0 1 14 0"/>' },
+  'Coût': { c: '#10b981', p: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>' }
+}
+function tileIcon(name) { for (const k in TILE_ICONS) if (name.includes(k)) return TILE_ICONS[k]; return { c: '#64748b', p: '<circle cx="12" cy="12" r="9"/>' } }
 </script>
 
 <style scoped>
@@ -977,6 +1028,24 @@ const pctSeg = (n) => (kpiSummary.value.total ? (n / kpiSummary.value.total * 10
 /* Indicateurs KPI standard */
 .kpi-sec { margin: 6px 0 18px; }
 .kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+/* Présentation graphique : jauges (indicateurs évalués) */
+.kpi-gauges { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.kg-card { background: #fff; border: 1px solid #e8edf3; border-radius: 14px; padding: 12px 8px 10px; text-align: center; box-shadow: 0 4px 14px rgba(30, 41, 59, .05); display: flex; flex-direction: column; align-items: center; }
+.kg-ring { width: 74px; height: 74px; }
+.kg-track { fill: none; stroke: #eef2f7; stroke-width: 3.4; }
+.kg-fill { fill: none; stroke-width: 3.4; stroke-linecap: round; transition: stroke-dasharray .6s ease; }
+.kg-val { font-size: 8.6px; font-weight: 800; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.kg-name { font-size: 11px; font-weight: 700; color: #334155; margin-top: 7px; line-height: 1.2; }
+.kg-cible { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+/* Présentation graphique : tuiles (valeurs suivies) */
+.kpi-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(152px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.kt-card { background: #fff; border: 1px solid #e8edf3; border-left: 3px solid var(--a, #64748b); border-radius: 12px; padding: 11px 13px; display: flex; align-items: center; gap: 11px; box-shadow: 0 4px 14px rgba(30, 41, 59, .05); }
+.kt-ic { width: 26px; height: 26px; flex: none; color: var(--a, #64748b); fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.kt-txt { min-width: 0; }
+.kt-v { font-size: 17px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.kt-n { font-size: 11px; color: #64748b; font-weight: 600; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kpi-detail-btn { background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; margin-bottom: 12px; }
+.kpi-detail-btn:hover { background: #e9eef5; }
 .kpi-titre { font-size: 15px; font-weight: 800; color: #0f172a; }
 .kpi-u { color: #94a3b8; font-weight: 600; font-size: 13px; }
 .kpi-sum { display: inline-flex; align-items: center; gap: 7px; flex-wrap: wrap; }
