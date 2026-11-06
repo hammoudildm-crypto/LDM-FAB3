@@ -86,7 +86,7 @@
     <!-- Pilotage — graphiques de suivi d'activité -->
     <section class="pilot">
       <div class="pilot-grid">
-        <div class="pilot-card wide">
+        <div class="pilot-card">
           <div class="pilot-h">
             <span class="pilot-t">Plan vs {{ onglet === 'fab' ? 'Fabriqué' : 'Conditionné' }} par mois — {{ annee }} <span class="pilot-u">(boîtes)</span></span>
             <span class="pilot-leg"><i class="lg b-plan"></i>Plan<i class="lg b-real"></i>Réalisé</span>
@@ -97,7 +97,7 @@
             <text v-for="(l, i) in graphPR.labels" :key="'l' + i" :x="l.x" :y="l.y" class="x-lbl">{{ l.t }}</text>
           </svg>
         </div>
-        <div class="pilot-card wide">
+        <div class="pilot-card">
           <div class="pilot-h"><span class="pilot-t">Top {{ libGroupe }} <span class="pilot-u">(boîtes, {{ annee }})</span></span></div>
           <div class="top-list">
             <div v-for="(d, i) in graphTop" :key="'t' + i" class="top-row">
