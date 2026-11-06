@@ -595,6 +595,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .app-topbar .burger { display: none; background: none; border: 0; color: var(--topbar-text); font-size: 22px; cursor: pointer; padding: 4px; line-height: 1; }
 .app-shell.masquee .app-topbar .burger { display: inline-flex; }
 .tb-brand { display: none; }
+.app-shell.masquee .tb-brand { display: inline-flex; }
 .tb-spacer { flex: 1; }
 .tb-item { position: relative; }
 .tb-icon { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 1px solid var(--topbar-border); color: var(--topbar-muted); border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
@@ -620,7 +621,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .tb-accueil-ar { font-size: 16px; line-height: 1; }
 @media (max-width: 560px) { .tb-accueil { margin-left: 8px; padding: 6px 9px; } .tb-accueil-tx { display: none; } }
 .brand-link { display: flex; align-items: center; gap: 10px; text-decoration: none; cursor: pointer; }
-.tb-brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; cursor: pointer; transition: opacity .15s ease; }
+.tb-brand { align-items: center; gap: 9px; text-decoration: none; cursor: pointer; transition: opacity .15s ease; }
 .tb-mark { width: 28px; height: 28px; border-radius: 8px; display: inline-grid; place-items: center; background: linear-gradient(140deg, var(--accent-bright), #14b8a6); box-shadow: 0 2px 7px rgba(20,184,166,.4); flex-shrink: 0; }
 .brand-link:hover, .tb-brand:hover { opacity: .72; }
 .app-topbar { border-bottom: 3px solid var(--cat, #5b9bd5); transition: border-color .25s ease; }
