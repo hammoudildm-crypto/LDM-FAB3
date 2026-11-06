@@ -128,6 +128,7 @@ const NAV_GROUPS = MODULES
 function groupVisible(g) { return !g.admin || estAdmin.value }
 // Couleur d'accent de la page = couleur de son module (barre + lien actif)
 const couleurPage = computed(() => MODULE_COLOR[route.path] || '#5b9bd5')
+const estLogin = computed(() => route.path === '/login')   // page de connexion = plein écran, hors cadre
 const openGroups = ref(new Set([moduleDe(route.path)].filter(Boolean)))
 watch(() => route.path, (p) => { const k = moduleDe(p); if (k) openGroups.value = new Set([k]) })
 function toggleGroup(key) {
@@ -251,7 +252,8 @@ async function signOut() {
 </script>
 
 <template>
-  <div class="app-shell" :class="{ masquee: sidebarMasquee }">
+  <RouterView v-if="estLogin" />
+  <div v-else class="app-shell" :class="{ masquee: sidebarMasquee }">
     <div class="side-reveal" aria-hidden="true"></div>
     <aside class="sidebar" :class="{ open: sidebarOpen }">
       <div class="side-brand">

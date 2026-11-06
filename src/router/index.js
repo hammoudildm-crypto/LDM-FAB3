@@ -139,6 +139,11 @@ async function roleCourant() {
 supabase.auth.onAuthStateChange(() => { roleCache = null })   // re-vérifier après connexion ou déconnexion
 
 router.beforeEach(async (to) => {
+  // Accès contrôlé : toute page exige une session, sauf la page de connexion.
+  const s = await supabase.auth.getSession()
+  const connecte = !!(s.data && s.data.session)
+  if (!connecte && to.path !== '/login') return { path: '/login' }
+  if (connecte && to.path === '/login') return { path: '/' }
   if (to.meta && to.meta.role === 'admin' && (await roleCourant()) !== 'admin') return { path: '/' }
   return true
 })
