@@ -251,6 +251,42 @@
           <div v-else class="empty-sm">Il faut au moins 2 mesures et une limite de spécification (min ou max) pour tracer la courbe.</div>
         </div>
 
+        <!-- Comparaison multi-paramètres -->
+        <div v-if="toutAfficher || chartMode === 'compare'" class="chart-block">
+          <h4 v-if="toutAfficher" class="sec-sub">⚖️ Comparer ({{ comparIds.length }})</h4>
+          <div v-if="multiChartData" class="chart-wrap">
+            <svg :viewBox="'0 0 ' + multiChartData.W + ' ' + multiChartData.H" class="trend" preserveAspectRatio="xMidYMid meet" @mousemove="moveCur($event, multiChartData)" @mouseleave="clearCur()">
+              <line :x1="multiChartData.mL" :y1="multiChartData.mT" :x2="multiChartData.mL" :y2="multiChartData.H - multiChartData.mB" class="axis" />
+              <line :x1="multiChartData.mL" :y1="multiChartData.H - multiChartData.mB" :x2="multiChartData.W - multiChartData.mR" :y2="multiChartData.H - multiChartData.mB" class="axis" />
+              <g v-for="s in multiChartData.series" :key="'ser' + s.id">
+                <path :d="s.path" class="l-multi" :style="{ stroke: s.color }" />
+                <template v-for="(pt, i) in s.pts" :key="i"><circle v-if="pt" :cx="pt.x" :cy="pt.y" r="3.6" :style="{ fill: s.color }"><title>{{ s.nom }} — {{ pt.lot }} : {{ pt.v }}{{ s.unite ? ' ' + s.unite : '' }}</title></circle></template>
+              </g>
+              <g v-for="(l, i) in multiChartData.lotLabels" :key="'mll' + i"><text v-if="i % multiChartData.step === 0" :x="l.x" :y="multiChartData.H - multiChartData.mB + 11" class="lot-lbl" :transform="'rotate(-45 ' + l.x + ' ' + (multiChartData.H - multiChartData.mB + 11) + ')'">{{ l.lot }}</text></g>
+              <text :x="multiChartData.mL - 6" :y="multiChartData.mT + 5" class="ax">100%</text>
+              <text :x="multiChartData.mL - 6" :y="multiChartData.H - multiChartData.mB + 4" class="ax">0%</text>
+              <template v-if="cur.i >= 0">
+                <line :x1="cur.x" :y1="multiChartData.mT" :x2="cur.x" :y2="multiChartData.H - multiChartData.mB" class="cur-line" />
+                <template v-for="s in multiChartData.series" :key="'cd' + s.id"><circle v-if="s.pts[cur.i]" :cx="cur.x" :cy="s.pts[cur.i].y" r="5" class="cur-dot" :style="{ stroke: s.color }" /></template>
+              </template>
+            </svg>
+            <div class="multi-leg">
+              <span v-for="s in multiChartData.series" :key="'lg' + s.id" class="ml-item"><span class="ml-dot" :style="{ background: s.color }"></span>{{ s.nom }} <span class="ml-rg">{{ fmtNum(s.min) }}–{{ fmtNum(s.max) }}{{ s.unite ? ' ' + s.unite : '' }}</span></span>
+            </div>
+            <div v-if="cur.i >= 0 && multiChartData.lotLabels[cur.i]" class="cur-readout">
+              <b>{{ multiChartData.lotLabels[cur.i].lot || '—' }}</b>
+              <span v-for="s in multiChartData.series" :key="'cr' + s.id" class="cr-it"><span class="cr-dot" :style="{ background: s.color }"></span>{{ s.nom }} : {{ s.pts[cur.i] ? s.pts[cur.i].v : '—' }}{{ s.pts[cur.i] && s.unite ? ' ' + s.unite : '' }}</span>
+            </div>
+            <p class="hint">Chaque courbe est normalisée sur sa propre plage (0 % = min, 100 % = max) pour comparer les tendances malgré des unités différentes. Valeurs moyennées par lot ; survole un point pour la valeur réelle.</p>
+          </div>
+          <div v-else class="empty-sm">Coche au moins un paramètre numérique dans la synthèse ci-dessus (colonne ⇄) pour superposer leurs courbes ici.</div>
+        </div>
+        </div>
+          </div>
+        </div>
+          </div>
+        </div>
+
         <!-- Sixpack de capabilité (type Minitab) -->
         <div v-if="!paramBool && chartMode !== 'compare'" class="chart-block six-wrap">
           <button class="btn sm six-toggle" @click="sixpackOuvert = !sixpackOuvert">{{ sixpackOuvert ? '▾ Masquer le' : '▸ Afficher le' }} Sixpack de capabilité (carte I · étendue mobile · histogramme · normalité · indices)</button>
@@ -332,42 +368,6 @@
               <p class="hint" style="margin-top:8px">« À l'intérieur » = σ court terme (étendue mobile ÷ 1,128) ; « Global » = écart-type global. Normalité par test d'Anderson-Darling : p &lt; 0,05 signale un écart à la loi normale (indices à interpréter avec prudence).</p>
             </template>
             <div v-else class="empty-sm">Il faut au moins 8 mesures et une limite de spécification pour construire le Sixpack.</div>
-          </div>
-        </div>
-
-        <!-- Comparaison multi-paramètres -->
-        <div v-if="toutAfficher || chartMode === 'compare'" class="chart-block">
-          <h4 v-if="toutAfficher" class="sec-sub">⚖️ Comparer ({{ comparIds.length }})</h4>
-          <div v-if="multiChartData" class="chart-wrap">
-            <svg :viewBox="'0 0 ' + multiChartData.W + ' ' + multiChartData.H" class="trend" preserveAspectRatio="xMidYMid meet" @mousemove="moveCur($event, multiChartData)" @mouseleave="clearCur()">
-              <line :x1="multiChartData.mL" :y1="multiChartData.mT" :x2="multiChartData.mL" :y2="multiChartData.H - multiChartData.mB" class="axis" />
-              <line :x1="multiChartData.mL" :y1="multiChartData.H - multiChartData.mB" :x2="multiChartData.W - multiChartData.mR" :y2="multiChartData.H - multiChartData.mB" class="axis" />
-              <g v-for="s in multiChartData.series" :key="'ser' + s.id">
-                <path :d="s.path" class="l-multi" :style="{ stroke: s.color }" />
-                <template v-for="(pt, i) in s.pts" :key="i"><circle v-if="pt" :cx="pt.x" :cy="pt.y" r="3.6" :style="{ fill: s.color }"><title>{{ s.nom }} — {{ pt.lot }} : {{ pt.v }}{{ s.unite ? ' ' + s.unite : '' }}</title></circle></template>
-              </g>
-              <g v-for="(l, i) in multiChartData.lotLabels" :key="'mll' + i"><text v-if="i % multiChartData.step === 0" :x="l.x" :y="multiChartData.H - multiChartData.mB + 11" class="lot-lbl" :transform="'rotate(-45 ' + l.x + ' ' + (multiChartData.H - multiChartData.mB + 11) + ')'">{{ l.lot }}</text></g>
-              <text :x="multiChartData.mL - 6" :y="multiChartData.mT + 5" class="ax">100%</text>
-              <text :x="multiChartData.mL - 6" :y="multiChartData.H - multiChartData.mB + 4" class="ax">0%</text>
-              <template v-if="cur.i >= 0">
-                <line :x1="cur.x" :y1="multiChartData.mT" :x2="cur.x" :y2="multiChartData.H - multiChartData.mB" class="cur-line" />
-                <template v-for="s in multiChartData.series" :key="'cd' + s.id"><circle v-if="s.pts[cur.i]" :cx="cur.x" :cy="s.pts[cur.i].y" r="5" class="cur-dot" :style="{ stroke: s.color }" /></template>
-              </template>
-            </svg>
-            <div class="multi-leg">
-              <span v-for="s in multiChartData.series" :key="'lg' + s.id" class="ml-item"><span class="ml-dot" :style="{ background: s.color }"></span>{{ s.nom }} <span class="ml-rg">{{ fmtNum(s.min) }}–{{ fmtNum(s.max) }}{{ s.unite ? ' ' + s.unite : '' }}</span></span>
-            </div>
-            <div v-if="cur.i >= 0 && multiChartData.lotLabels[cur.i]" class="cur-readout">
-              <b>{{ multiChartData.lotLabels[cur.i].lot || '—' }}</b>
-              <span v-for="s in multiChartData.series" :key="'cr' + s.id" class="cr-it"><span class="cr-dot" :style="{ background: s.color }"></span>{{ s.nom }} : {{ s.pts[cur.i] ? s.pts[cur.i].v : '—' }}{{ s.pts[cur.i] && s.unite ? ' ' + s.unite : '' }}</span>
-            </div>
-            <p class="hint">Chaque courbe est normalisée sur sa propre plage (0 % = min, 100 % = max) pour comparer les tendances malgré des unités différentes. Valeurs moyennées par lot ; survole un point pour la valeur réelle.</p>
-          </div>
-          <div v-else class="empty-sm">Coche au moins un paramètre numérique dans la synthèse ci-dessus (colonne ⇄) pour superposer leurs courbes ici.</div>
-        </div>
-        </div>
-          </div>
-        </div>
           </div>
         </div>
 
@@ -1397,7 +1397,8 @@ ${matHtml}
 .viol-row { font-size: 10.5px; color: #7f1d1d; padding: 1px 0; line-height: 1.35; }
 .viol-ok { margin-top: 7px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 600; }
 /* Sixpack de capabilité */
-.six-wrap { margin-top: 10px; }
+.six-wrap { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line-2); }
+.six-toggle { font-size: 13px; }
 .six-body { margin-top: 12px; }
 .six-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .six-card { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); padding: 8px 10px; box-shadow: var(--shadow); min-width: 0; }
