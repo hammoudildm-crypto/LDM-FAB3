@@ -1264,8 +1264,8 @@ ${matHtml}
 
 /* Tableau Synthèse en colonne gauche, Capabilité + grille 2×2 à droite */
 .psplit { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; margin-top: 10px; }
-.psplit-left { flex: 1 1 47%; min-width: 0; }
-.psplit-right { flex: 1 1 53%; min-width: 0; }
+.psplit-left { flex: 1 1 calc(47% - 12px); min-width: 0; }
+.psplit-right { flex: 1 1 calc(53% - 12px); min-width: 0; }
 .psplit-left .sec-titre { margin-top: 0; }
 /* Capabilité compacte intégrée au-dessus du tableau de synthèse */
 .psplit-left .cap-wrap { margin: 0 0 16px; padding: 14px 16px; }
