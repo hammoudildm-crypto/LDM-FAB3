@@ -121,8 +121,6 @@
           <div class="tabs">
             <button class="tab-all" :class="{ on: toutAfficher }" @click="toutAfficher = !toutAfficher" title="Afficher les 4 vues en même temps">⊞ Tout afficher</button>
             <button :class="{ on: !toutAfficher && chartMode === 'trend' }" :disabled="toutAfficher" @click="chartMode = 'trend'">Tendance vs specs</button>
-            <button :class="{ on: !toutAfficher && chartMode === 'control' }" :disabled="toutAfficher" @click="chartMode = 'control'">Carte de contrôle</button>
-            <button :class="{ on: !toutAfficher && chartMode === 'capab' }" :disabled="toutAfficher" @click="chartMode = 'capab'">Courbe de capabilité</button>
             <button :class="{ on: !toutAfficher && chartMode === 'compare' }" :disabled="toutAfficher" @click="chartMode = 'compare'">Comparer ({{ comparIds.length }})</button>
           </div>
         </div>
@@ -172,83 +170,6 @@
           </div>
           <div v-else-if="paramBool" class="empty-sm">Paramètre ON/OFF — pas de courbe applicable (conformité dans la synthèse).</div>
           <div v-else class="empty-sm">Sélectionne un paramètre ci-dessus.</div>
-        </div>
-
-        <!-- Carte de contrôle -->
-        <div v-if="toutAfficher || chartMode === 'control'" class="chart-block">
-          <h4 v-if="toutAfficher" class="sec-sub">📊 Carte de contrôle</h4>
-          <div v-if="controlData" class="chart-wrap">
-            <svg :viewBox="'0 0 ' + controlData.W + ' ' + controlData.H" class="trend" preserveAspectRatio="xMidYMid meet" @mousemove="moveCur($event, controlData)" @mouseleave="clearCur()">
-              <line :x1="controlData.mL" :y1="controlData.mT" :x2="controlData.mL" :y2="controlData.H - controlData.mB" class="axis" />
-              <line :x1="controlData.mL" :y1="controlData.H - controlData.mB" :x2="controlData.W - controlData.mR" :y2="controlData.H - controlData.mB" class="axis" />
-              <line :x1="controlData.mL" :y1="controlData.yUcl" :x2="controlData.W - controlData.mR" :y2="controlData.yUcl" class="l-ucl" />
-              <line :x1="controlData.mL" :y1="controlData.yLcl" :x2="controlData.W - controlData.mR" :y2="controlData.yLcl" class="l-ucl" />
-              <line :x1="controlData.mL" :y1="controlData.y2u" :x2="controlData.W - controlData.mR" :y2="controlData.y2u" class="l-sig" />
-              <line :x1="controlData.mL" :y1="controlData.y2l" :x2="controlData.W - controlData.mR" :y2="controlData.y2l" class="l-sig" />
-              <line :x1="controlData.mL" :y1="controlData.y1u" :x2="controlData.W - controlData.mR" :y2="controlData.y1u" class="l-sig1" />
-              <line :x1="controlData.mL" :y1="controlData.y1l" :x2="controlData.W - controlData.mR" :y2="controlData.y1l" class="l-sig1" />
-              <line :x1="controlData.mL" :y1="controlData.yCl" :x2="controlData.W - controlData.mR" :y2="controlData.yCl" class="l-cl" />
-              <text :x="controlData.W - controlData.mR" :y="controlData.yUcl - 4" class="lbl-ucl">+3σ</text>
-              <text :x="controlData.W - controlData.mR" :y="controlData.yLcl + 12" class="lbl-ucl">−3σ</text>
-              <text :x="controlData.W - controlData.mR" :y="controlData.yCl - 4" class="lbl-cl">x̄ {{ fmtNum(controlData.mean) }}</text>
-              <path :d="controlData.path" class="l-data" />
-              <g v-for="(pt, i) in controlData.pts" :key="i">
-                <circle v-if="pt.viol.length" :cx="pt.x" :cy="pt.y" r="7.5" class="pt-ring" />
-                <circle :cx="pt.x" :cy="pt.y" r="4.5" :class="pt.viol.length ? 'pt-ko' : 'pt-ok'"><title>{{ pt.lot }} : {{ pt.v }}{{ pt.viol.length ? ' — ' + pt.viol.join(', ') : '' }}</title></circle>
-              </g>
-              <g v-for="(pt, i) in controlData.pts" :key="'cll' + i"><text v-if="i % controlData.step === 0" :x="pt.x" :y="controlData.H - controlData.mB + 11" class="lot-lbl" :transform="'rotate(-45 ' + pt.x + ' ' + (controlData.H - controlData.mB + 11) + ')'">{{ pt.lot }}</text></g>
-              <text :x="controlData.mL - 6" :y="controlData.mT + 5" class="ax">{{ controlData.ymax.toFixed(1) }}</text>
-              <text :x="controlData.mL - 6" :y="controlData.H - controlData.mB + 4" class="ax">{{ controlData.ymin.toFixed(1) }}</text>
-              <template v-if="cur.i >= 0 && controlData.pts[cur.i]">
-                <line :x1="cur.x" :y1="controlData.mT" :x2="cur.x" :y2="controlData.H - controlData.mB" class="cur-line" />
-                <circle :cx="cur.x" :cy="controlData.pts[cur.i].y" r="5.5" class="cur-dot" />
-              </template>
-            </svg>
-            <div class="leg"><span class="lg"><i class="l-clg"></i>Moyenne (CL)</span><span class="lg"><i class="l-ug"></i>±3σ (UCL/LCL)</span><span class="lg"><i class="d-ko"></i>Violation de règle</span></div>
-            <div v-if="cur.i >= 0 && controlData.pts[cur.i]" class="cur-readout"><b>{{ controlData.pts[cur.i].lot || '—' }}</b> · {{ controlData.pts[cur.i].v }}{{ paramSelObj && uniteEff(paramSelObj) ? ' ' + uniteEff(paramSelObj) : '' }}<span v-if="controlData.pts[cur.i].viol.length" class="cur-viol">⚠ {{ controlData.pts[cur.i].viol.join(', ') }}</span></div>
-            <div v-if="controlData.alertes.length" class="viol-box" :class="{ open: violOuvert }">
-              <button type="button" class="viol-titre" @click="violOuvert = !violOuvert" :aria-expanded="violOuvert">
-                <span class="viol-chev">{{ violOuvert ? '▾' : '▸' }}</span>
-                <span>⚠ Signaux de maîtrise détectés</span>
-                <span class="viol-cnt">{{ controlData.alertes.length }}</span>
-              </button>
-              <div v-if="violOuvert" class="viol-list">
-                <div v-for="(a, i) in controlData.alertes" :key="i" class="viol-row"><b>{{ a.lot }}</b> ({{ a.v }}) — {{ a.rules.join(' · ') }}</div>
-              </div>
-            </div>
-            <div v-else class="viol-ok">✓ Procédé sous contrôle — aucune règle Nelson/Westgard déclenchée.</div>
-            <p class="hint rules">Règles : <b>1-3s</b> 1 pt &gt; 3σ · <b>2-2s</b> 2 pts &gt; 2σ même côté · <b>4-1s</b> 4 pts &gt; 1σ même côté · <b>9-x</b> 9 pts du même côté · <b>tendance</b> 6 pts croissants/décroissants.</p>
-          </div>
-          <div v-else-if="paramBool" class="empty-sm">Carte de contrôle non applicable à un paramètre ON/OFF.</div>
-          <div v-else class="empty-sm">Au moins 2 mesures sont nécessaires pour construire la carte de contrôle.</div>
-        </div>
-
-        <!-- Courbe de capabilité (distribution vs specs) -->
-        <div v-if="toutAfficher || chartMode === 'capab'" class="chart-block">
-          <h4 v-if="toutAfficher" class="sec-sub">🔔 Courbe de capabilité</h4>
-          <div v-if="capabCourbe" class="chart-wrap">
-            <svg :viewBox="'0 0 ' + capabCourbe.W + ' ' + capabCourbe.H" class="trend" preserveAspectRatio="xMidYMid meet">
-              <line :x1="capabCourbe.mL" :y1="capabCourbe.y0" :x2="capabCourbe.W - capabCourbe.mR" :y2="capabCourbe.y0" class="axis" />
-              <path :d="capabCourbe.area" class="bell-area" :style="{ fill: capCol(capabCourbe.cpk) }" />
-              <path :d="capabCourbe.line" class="bell-line" />
-              <template v-if="capabCourbe.xLsl != null"><line :x1="capabCourbe.xLsl" :y1="capabCourbe.mT" :x2="capabCourbe.xLsl" :y2="capabCourbe.y0" class="bell-spec" /><text :x="capabCourbe.xLsl" :y="capabCourbe.mT - 5" class="bell-lbl spec">LSL {{ fmtNum(capabCourbe.lsl) }}</text></template>
-              <template v-if="capabCourbe.xUsl != null"><line :x1="capabCourbe.xUsl" :y1="capabCourbe.mT" :x2="capabCourbe.xUsl" :y2="capabCourbe.y0" class="bell-spec" /><text :x="capabCourbe.xUsl" :y="capabCourbe.mT - 5" class="bell-lbl spec">USL {{ fmtNum(capabCourbe.usl) }}</text></template>
-              <line :x1="capabCourbe.xMean" :y1="capabCourbe.yMeanTop" :x2="capabCourbe.xMean" :y2="capabCourbe.y0" class="bell-mean" />
-              <text :x="capabCourbe.xMean" :y="capabCourbe.yMeanTop - 4" class="bell-lbl mean">μ {{ fmtNum(capabCourbe.mean) }}</text>
-              <template v-if="capabCourbe.xCible != null"><line :x1="capabCourbe.xCible" :y1="capabCourbe.mT + 6" :x2="capabCourbe.xCible" :y2="capabCourbe.y0" class="bell-cible" /><text :x="capabCourbe.xCible" :y="capabCourbe.y0 + 24" class="bell-lbl cible">Cible {{ fmtNum(capabCourbe.cible) }}</text></template>
-            </svg>
-            <div class="cap-readrow">
-              <span class="crr"><b :style="{ color: capCol(capabCourbe.cp) }">{{ capabCourbe.cp != null ? capabCourbe.cp.toFixed(2) : '—' }}</b> Cp</span>
-              <span class="crr"><b :style="{ color: capCol(capabCourbe.cpk) }">{{ capabCourbe.cpk != null ? capabCourbe.cpk.toFixed(2) : '—' }}</b> Cpk</span>
-              <span class="crr"><b>{{ fmtNum(capabCourbe.mean) }}</b> μ</span>
-              <span class="crr"><b>{{ capabCourbe.std.toFixed(3) }}</b> σ</span>
-              <span class="crr"><b>{{ capabCourbe.n }}</b> mesures</span>
-              <span class="verdict" :class="verdictCls(capabCourbe.cpk)" style="margin-left:auto">{{ verdictTxt(capabCourbe.cpk) }}</span>
-            </div>
-            <p class="hint">Courbe normale estimée N(μ, σ) du paramètre, comparée aux limites de spécification. Un procédé capable et centré place toute la cloche entre LSL et USL, centrée sur la cible.</p>
-          </div>
-          <div v-else-if="paramBool" class="empty-sm">Courbe de capabilité non applicable à un paramètre ON/OFF.</div>
-          <div v-else class="empty-sm">Il faut au moins 2 mesures et une limite de spécification (min ou max) pour tracer la courbe.</div>
         </div>
 
         <!-- Comparaison multi-paramètres -->
@@ -365,6 +286,22 @@
             </template>
             <div v-else class="empty-sm">Il faut au moins 8 mesures et une limite de spécification pour construire le Sixpack.</div>
           </div>
+        </div>
+
+        <!-- Signaux de maîtrise (règles Western Electric) — sous le Sixpack -->
+        <div v-if="!paramBool && chartMode !== 'compare' && controlData" class="chart-block six-signaux">
+          <div v-if="controlData.alertes.length" class="viol-box" :class="{ open: violOuvert }">
+            <button type="button" class="viol-titre" @click="violOuvert = !violOuvert" :aria-expanded="violOuvert">
+              <span class="viol-chev">{{ violOuvert ? '▾' : '▸' }}</span>
+              <span>⚠ Signaux de maîtrise détectés</span>
+              <span class="viol-cnt">{{ controlData.alertes.length }}</span>
+            </button>
+            <div v-if="violOuvert" class="viol-list">
+              <div v-for="(a, i) in controlData.alertes" :key="i" class="viol-row"><b>{{ a.lot }}</b> ({{ a.v }}) — {{ a.rules.join(' · ') }}</div>
+            </div>
+          </div>
+          <div v-else class="viol-ok">✓ Procédé sous contrôle — aucune règle Nelson/Westgard déclenchée.</div>
+          <p class="hint rules">Règles : <b>1-3s</b> 1 pt &gt; 3σ · <b>2-2s</b> 2 pts &gt; 2σ même côté · <b>4-1s</b> 4 pts &gt; 1σ même côté · <b>9-x</b> 9 pts du même côté · <b>tendance</b> 6 pts croissants/décroissants.</p>
         </div>
           </div>
         </div>
