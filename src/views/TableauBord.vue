@@ -126,7 +126,7 @@
       </div>
       <div v-if="kpiOuvert">
         <!-- Jauges : indicateurs évalués (cible + statut) -->
-        <div v-if="kpisEval.length" class="kpi-gauges">
+        <div v-if="kpisEval.length" class="kpi-gauges" :style="{ '--gcols': gaugeCols }">
           <div v-for="(k, i) in kpisEval" :key="'g' + i" class="kg-card">
             <svg viewBox="0 0 36 36" class="kg-ring">
               <circle class="kg-track" cx="18" cy="18" r="15.915" />
@@ -139,7 +139,7 @@
         </div>
 
         <!-- Tuiles : valeurs suivies (mesuré) -->
-        <div v-if="kpisMesure.length" class="kpi-tiles">
+        <div v-if="kpisMesure.length" class="kpi-tiles" :style="{ '--tcols': tileCols }">
           <div v-for="(k, i) in kpisMesure" :key="'t' + i" class="kt-card" :style="{ '--a': tileIcon(k.n).c }">
             <svg viewBox="0 0 24 24" class="kt-ic" v-html="tileIcon(k.n).p"></svg>
             <div class="kt-txt"><div class="kt-v">{{ fmtKpi(k.v, k.u) }}</div><div class="kt-n">{{ k.n }}</div></div>
@@ -943,6 +943,10 @@ const TILE_ICONS = {
   'Coût': { c: '#10b981', p: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>' }
 }
 function tileIcon(name) { for (const k in TILE_ICONS) if (name.includes(k)) return TILE_ICONS[k]; return { c: '#64748b', p: '<circle cx="12" cy="12" r="9"/>' } }
+// Nombre de colonnes équilibré : répartit les éléments en lignes égales (14 → 7+7, 9 → 5+4…)
+function balancedCols(n, max) { if (n <= 1) return 1; const rows = Math.ceil(n / max); return Math.ceil(n / rows) }
+const gaugeCols = computed(() => balancedCols(kpisEval.value.length, 8))
+const tileCols = computed(() => balancedCols(kpisMesure.value.length, 5))
 </script>
 
 <style scoped>
@@ -1029,7 +1033,7 @@ function tileIcon(name) { for (const k in TILE_ICONS) if (name.includes(k)) retu
 .kpi-sec { margin: 6px 0 18px; }
 .kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 /* Présentation graphique : jauges (indicateurs évalués) */
-.kpi-gauges { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.kpi-gauges { display: grid; grid-template-columns: repeat(var(--gcols, 7), minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
 .kg-card { background: #fff; border: 1px solid #e8edf3; border-radius: 14px; padding: 12px 8px 10px; text-align: center; box-shadow: 0 4px 14px rgba(30, 41, 59, .05); display: flex; flex-direction: column; align-items: center; }
 .kg-ring { width: 74px; height: 74px; }
 .kg-track { fill: none; stroke: #eef2f7; stroke-width: 3.4; }
@@ -1038,7 +1042,7 @@ function tileIcon(name) { for (const k in TILE_ICONS) if (name.includes(k)) retu
 .kg-name { font-size: 11px; font-weight: 700; color: #334155; margin-top: 7px; line-height: 1.2; }
 .kg-cible { font-size: 10px; color: #94a3b8; margin-top: 2px; }
 /* Présentation graphique : tuiles (valeurs suivies) */
-.kpi-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(152px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.kpi-tiles { display: grid; grid-template-columns: repeat(var(--tcols, 5), minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
 .kt-card { background: #fff; border: 1px solid #e8edf3; border-left: 3px solid var(--a, #64748b); border-radius: 12px; padding: 11px 13px; display: flex; align-items: center; gap: 11px; box-shadow: 0 4px 14px rgba(30, 41, 59, .05); }
 .kt-ic { width: 26px; height: 26px; flex: none; color: var(--a, #64748b); fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .kt-txt { min-width: 0; }
@@ -1046,6 +1050,8 @@ function tileIcon(name) { for (const k in TILE_ICONS) if (name.includes(k)) retu
 .kt-n { font-size: 11px; color: #64748b; font-weight: 600; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kpi-detail-btn { background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; margin-bottom: 12px; }
 .kpi-detail-btn:hover { background: #e9eef5; }
+@media (max-width: 900px) { .kpi-gauges { grid-template-columns: repeat(4, minmax(0, 1fr)); } .kpi-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .kpi-gauges { grid-template-columns: repeat(3, minmax(0, 1fr)); } .kpi-tiles { grid-template-columns: repeat(1, minmax(0, 1fr)); } }
 .kpi-titre { font-size: 15px; font-weight: 800; color: #0f172a; }
 .kpi-u { color: #94a3b8; font-weight: 600; font-size: 13px; }
 .kpi-sum { display: inline-flex; align-items: center; gap: 7px; flex-wrap: wrap; }
