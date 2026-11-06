@@ -1400,7 +1400,7 @@ ${matHtml}
 .six-wrap { margin-top: 12px; padding-top: 14px; border-top: 1px dashed var(--line-2); min-width: 0; }
 .six-toggle { font-size: 13px; }
 .six-body { margin-top: 12px; }
-.six-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.six-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .six-card { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); padding: 8px 10px; box-shadow: var(--shadow); min-width: 0; }
 .six-h { font-size: 11.5px; font-weight: 700; color: var(--ink-2); margin-bottom: 4px; text-align: center; }
 .six-ad { font-weight: 500; color: var(--muted); font-size: 10.5px; }
