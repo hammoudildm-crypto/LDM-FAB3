@@ -404,6 +404,34 @@ const planParAtelier = computed(() => {
   for (const ph of PHASES) res[ph] = Math.round(res[ph])
   return res
 })
+// Plan (PDP) par atelier ET par mois (même répartition gamme que planParAtelier), année en cours.
+const planParAtelierMois = computed(() => {
+  const res = {}
+  for (const ph of PHASES) res[ph] = Array(12).fill(0)
+  const parProduit = {}
+  for (const r of planRows.value) {
+    if (Number(r.annee) !== anneeCourante) continue
+    const pr = r.produits; if (!pr || !pr.id) continue
+    const mi = Number(r.mois) - 1; if (mi < 0 || mi > 11) continue
+    if (!parProduit[pr.id]) parProduit[pr.id] = { gamme: Array.isArray(pr.gamme) ? pr.gamme : [], taille: Number(pr.taille_lot || 0), pcsu: Number(pr.pcsu || 0), mois: Array(12).fill(0) }
+    parProduit[pr.id].mois[mi] += Number(r.quantite_planifiee || 0)
+  }
+  for (const id in parProduit) {
+    const o = parProduit[id]
+    if (o.taille <= 0) continue
+    const gset = new Set(o.gamme.map(g => String(g).toLowerCase().trim()))
+    for (const ph of PHASES) {
+      const compte = (ph === 'Livraison Vrac' || ph === 'Conditionnement') ? true : gset.has(ph.toLowerCase())
+      if (!compte) continue
+      for (let mi = 0; mi < 12; mi++) {
+        const bo = o.mois[mi]; if (bo <= 0) continue
+        res[ph][mi] += metrique.value === 'boites' ? bo : (metrique.value === 'ca' ? bo * o.pcsu : bo / o.taille)
+      }
+    }
+  }
+  for (const ph of PHASES) res[ph] = res[ph].map(x => Math.round(x))
+  return res
+})
 function projectionAtelier(ph) {
   const data = (matriceChart.value[ph] || {})[anneeCourante] || Array(12).fill(0)
   const mc = moisCourant
@@ -537,6 +565,21 @@ const valeurBarrePA = computed(() => {
   const m = modalPA.value; if (!m) return 0
   const d = matriceChart.value[atelierSel.value]
   return d && d[m.annee] ? d[m.annee][m.mois] : 0
+})
+// Récapitulatif plan / réalisé (annuel + mois) de l'atelier affiché dans le modal
+const recapPA = computed(() => {
+  const m = modalPA.value; if (!m) return null
+  const ph = atelierSel.value, y = m.annee
+  const serie = valeurs(ph, y, metrique.value)
+  const realAn = serie.reduce((s, x) => s + x, 0)
+  const realMois = serie[m.mois] || 0
+  const courante = y === anneeCourante
+  return {
+    planAn: courante ? (planParAtelier.value[ph] || 0) : null,
+    realAn,
+    planMois: courante ? ((planParAtelierMois.value[ph] || [])[m.mois] || 0) : null,
+    realMois,
+  }
 })
 // La valeur affichée vient-elle de l'historique importé (compteurs seuls, sans lots) ?
 const sourceHistPA = computed(() => {
@@ -951,6 +994,12 @@ onMounted(charger)
           <button class="pa-md-x" @click="modalPA = null">✕</button>
         </div>
         <div class="pa-md-sub"><template v-if="metrique === 'lots'">{{ fmtMetrique(valeurBarrePA) }} lot(s) terminé(s)</template><template v-else-if="metrique === 'boites'">{{ fmtMetrique(valeurBarrePA) }} boîte(s) · valeur nominale</template><template v-else>{{ fmtMetrique(valeurBarrePA) }} · CA nominal</template><span v-if="lotsMoisPA.length"> · {{ lotsMoisPA.length }} lot(s) détaillé(s)</span></div>
+        <div v-if="recapPA" class="pa-recap">
+          <div class="pa-rc"><div class="pa-rc-l">Plan annuel</div><div class="pa-rc-v">{{ recapPA.planAn == null ? '—' : fmtMetrique(recapPA.planAn) }}</div></div>
+          <div class="pa-rc"><div class="pa-rc-l">Réalisé annuel</div><div class="pa-rc-v pa-rc-real">{{ fmtMetrique(recapPA.realAn) }}</div></div>
+          <div class="pa-rc"><div class="pa-rc-l">Plan du mois</div><div class="pa-rc-v">{{ recapPA.planMois == null ? '—' : fmtMetrique(recapPA.planMois) }}</div></div>
+          <div class="pa-rc"><div class="pa-rc-l">Réalisé du mois</div><div class="pa-rc-v pa-rc-real">{{ fmtMetrique(recapPA.realMois) }}</div></div>
+        </div>
         <div class="pa-md-body">
           <p v-if="sourceHistPA && !lotsMoisPA.length" class="pa-note">Valeur issue de l'<strong>historique importé</strong> — le détail des lots n'est pas disponible pour ce mois.</p>
           <div v-else-if="!lotsMoisPA.length" class="empty">Aucun lot pour ce mois.</div>
@@ -1065,6 +1114,12 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-md-head h3 { margin: 0; font-size: 15.5px; }
 .pa-md-x { background: none; border: 0; font-size: 17px; color: #94a3b8; cursor: pointer; }
 .pa-md-sub { padding: 8px 18px; font-size: 12.5px; color: #64748b; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; }
+.pa-recap { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px 18px 2px; }
+.pa-rc { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 10px; background: #f8fafc; text-align: center; }
+.pa-rc-l { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .02em; }
+.pa-rc-v { font-size: 18px; font-weight: 800; color: #334155; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.pa-rc-v.pa-rc-real { color: #0f766e; }
+@media (max-width: 520px) { .pa-recap { grid-template-columns: repeat(2, 1fr); } }
 .pa-md-body { overflow-y: auto; padding: 6px 18px 16px; }
 .pa-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .pa-table td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; }
