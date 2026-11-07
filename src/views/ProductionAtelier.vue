@@ -875,6 +875,12 @@ onMounted(charger)
           </select>
         </div>
         <div class="side-sec">
+          <div class="side-lbl">Mesure</div>
+          <div class="side-metric-tg" role="group" aria-label="Type d'analyse">
+            <button v-for="m in METRIQUES" :key="m.id" type="button" :class="{ on: metrique === m.id }" @click="metrique = m.id">{{ m.label }}</button>
+          </div>
+        </div>
+        <div class="side-sec">
           <div class="side-lbl">Atelier</div>
           <div class="pa-atelier-tg">
             <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
@@ -896,9 +902,6 @@ onMounted(charger)
       <section class="card">
         <div class="card-head">
           <h2 class="card-title">Comparaison mensuelle par atelier</h2>
-          <div class="pa-metric-tg" role="group" aria-label="Type d'analyse">
-            <button v-for="m in METRIQUES" :key="m.id" type="button" :class="{ on: metrique === m.id }" @click="metrique = m.id">{{ m.label }}</button>
-          </div>
         </div>
         <div class="chart-titre">{{ atelierSel }} — {{ sousTitreChart }}</div>
         <div class="chart-wrap">
@@ -1217,6 +1220,10 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .proj-note { font-size: 12px; color: #64748b; line-height: 1.5; margin: 12px 0 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 12px; }
 .pa-atelier-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .pa-atelier-lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: #64748b; white-space: nowrap; }
+.side-metric-tg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.side-metric-tg button { border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 7px 4px; font: inherit; font-size: 10.5px; font-weight: 600; color: #64748b; cursor: pointer; white-space: normal; text-align: center; line-height: 1.2; transition: all .12s; }
+.side-metric-tg button:hover { border-color: #99f6e4; background: #f0fdfa; }
+.side-metric-tg button.on { background: #0f766e; border-color: #0f766e; color: #fff; box-shadow: 0 2px 6px rgba(15,118,110,.28); }
 .pa-atelier-tg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
 .pa-atelier-tg button { border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 6px 4px; font: inherit; font-size: 10px; font-weight: 600; color: #64748b; cursor: pointer; white-space: normal; text-align: center; line-height: 1.2; transition: all .12s; }
 .pa-atelier-tg button:hover { border-color: #99f6e4; background: #f0fdfa; }
