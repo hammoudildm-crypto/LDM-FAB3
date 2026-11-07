@@ -357,8 +357,8 @@
         </div>
 
         <div v-if="matriceCorr" class="mat-block">
-          <button class="mat-toggle" @click="matriceOuverte = !matriceOuverte">{{ matriceOuverte ? '▾' : '▸' }} Matrice de corrélation ({{ matriceCorr.params.length }} paramètres)</button>
-          <div v-if="matriceOuverte" class="mat-wrap">
+          <div class="mat-titre">Matrice de corrélation ({{ matriceCorr.params.length }} paramètres)</div>
+          <div class="mat-wrap">
             <p class="hint">Chaque case = corrélation (r) entre deux paramètres. Bleu = positive, rouge = négative, intensité = force. Clique une case pour l'analyser en détail.</p>
             <div class="mat-scroll">
               <table class="mat-tbl">
@@ -625,7 +625,6 @@ const corrEq = computed(() => {
   const bf = parseFloat(Math.abs(b).toFixed(4)).toString()
   return 'y = ' + af + '·x ' + (b >= 0 ? '+ ' : '− ') + bf
 })
-const matriceOuverte = ref(false)
 const matriceCorr = computed(() => {
   const ps = paramsNumDispo.value
   if (ps.length < 2) return null
@@ -1317,8 +1316,7 @@ ${matHtml}
 .eq-lbl { font-size: 12px; fill: #4f46e5; font-weight: 700; }
 .corr-actions { margin: 10px 0 2px; }
 .mat-block { margin-top: 16px; }
-.mat-toggle { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 700; color: #334155; cursor: pointer; }
-.mat-toggle:hover { background: #e2e8f0; }
+.mat-titre { font-size: 13px; font-weight: 800; color: var(--ink); }
 .mat-wrap { margin-top: 8px; }
 .mat-scroll { overflow-x: auto; }
 .mat-tbl { border-collapse: collapse; font-size: 11px; }
