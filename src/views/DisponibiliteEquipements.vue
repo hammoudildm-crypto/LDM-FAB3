@@ -538,13 +538,13 @@ const kpisFile = computed(() => {
   const delai = nbJ ? Math.round(sommeJ / nbJ) : 0
   const totalProd = pesee + attFab + attCond + coursFab + coursCond
   return [
-    { v: fmt(totalProd), l: "Lots en production", tint: TINTS.cyan, ic: ICONS.layers },
-    { v: fmt(pesee + attFab + attCond), l: "Lots en attente", tint: TINTS.amber, ic: ICONS.hourglass },
-    { v: fmt(coursFab + coursCond), l: "Lots en cours", tint: TINTS.blue, ic: ICONS.activity },
-    { v: fmt(secs), l: "Ateliers à sec (risque)", tint: TINTS.rose, ic: ICONS.alert },
-    { v: atelierMax, l: "Atelier le plus chargé" + (maxCharge ? " (" + maxCharge + ")" : ""), tint: TINTS.indigo, ic: ICONS.factory, small: true },
-    { v: delai + " j", l: "Délai moyen d'attente", tint: TINTS.violet, ic: ICONS.gauge },
-    { v: fmt(perimes), l: "OF périmés", tint: perimes > 0 ? TINTS.rose : TINTS.slate, ic: ICONS.alert },
+    { v: fmt(totalProd), l: "Lots en production", tint: TINTS.cyan, ic: ICONS.layers, to: '/encours' },
+    { v: fmt(pesee + attFab + attCond), l: "Lots en attente", tint: TINTS.amber, ic: ICONS.hourglass, to: '/encours' },
+    { v: fmt(coursFab + coursCond), l: "Lots en cours", tint: TINTS.blue, ic: ICONS.activity, to: '/encours' },
+    { v: fmt(secs), l: "Ateliers à sec (risque)", tint: TINTS.rose, ic: ICONS.alert, to: '/production-atelier' },
+    { v: atelierMax, l: "Atelier le plus chargé" + (maxCharge ? " (" + maxCharge + ")" : ""), tint: TINTS.indigo, ic: ICONS.factory, small: true, to: '/production-atelier' },
+    { v: delai + " j", l: "Délai moyen d'attente", tint: TINTS.violet, ic: ICONS.gauge, to: '/encours' },
+    { v: fmt(perimes), l: "OF périmés", tint: perimes > 0 ? TINTS.rose : TINTS.slate, ic: ICONS.alert, to: '/ordres' },
   ]
 })
 // ===== Qualité : suivi du triage et des déviations =====
@@ -624,15 +624,15 @@ const kpisQualite = computed(() => {
   const pctTri = aTrier > 0 ? Math.min(100, Math.round(triee / aTrier * 100)) : null
   const devProd = qualiteTotaux.value.dev
   return [
-    { v: fmt(enTriFab), l: 'Lots en triage — fabrication', tint: enTriFab ? TINTS.amber : TINTS.slate, ic: ICONS.hourglass },
-    { v: pctTri == null ? '—' : pctTri + ' %', l: 'Avancement du triage (Kg triés / à trier)', tint: TINTS.blue, ic: ICONS.percent },
-    { v: fmt(devProd), l: 'Lots en file avec déviation', tint: devProd ? TINTS.rose : TINTS.slate, ic: ICONS.alert },
-    { v: fmt(q.devFab), l: 'Déviations fabrication ' + anneeCourante, tint: q.devFab ? TINTS.rose : TINTS.slate, ic: ICONS.flask },
-    { v: q.brftFab == null ? '—' : q.brftFab + ' %', l: 'BRFT fabrication ' + anneeCourante + ' (' + q.finis + ' lots)', tint: TINTS.emerald, ic: ICONS.check },
-    { v: fmt(a.n), l: 'Contrôles AQL ' + anneeCourante, tint: TINTS.indigo, ic: ICONS.clipboard },
-    { v: a.taux == null ? '—' : a.taux + ' %', l: 'Taux d\'acceptation AQL', tint: a.taux != null && a.taux < 100 ? TINTS.amber : TINTS.emerald, ic: ICONS.target },
-    { v: fmt(a.refuses), l: 'Contrôles AQL refusés ' + anneeCourante, tint: a.refuses ? TINTS.rose : TINTS.slate, ic: ICONS.xCircle },
-    { v: fmt(a.aControler), l: 'Lots à contrôler (compression close, sans AQL)', tint: a.aControler ? TINTS.amber : TINTS.slate, ic: ICONS.hourglass },
+    { v: fmt(enTriFab), l: 'Lots en triage — fabrication', tint: enTriFab ? TINTS.amber : TINTS.slate, ic: ICONS.hourglass, to: '/suivi-triage' },
+    { v: pctTri == null ? '—' : pctTri + ' %', l: 'Avancement du triage (Kg triés / à trier)', tint: TINTS.blue, ic: ICONS.percent, to: '/suivi-triage' },
+    { v: fmt(devProd), l: 'Lots en file avec déviation', tint: devProd ? TINTS.rose : TINTS.slate, ic: ICONS.alert, to: '/qualite' },
+    { v: fmt(q.devFab), l: 'Déviations fabrication ' + anneeCourante, tint: q.devFab ? TINTS.rose : TINTS.slate, ic: ICONS.flask, to: '/qualite' },
+    { v: q.brftFab == null ? '—' : q.brftFab + ' %', l: 'BRFT fabrication ' + anneeCourante + ' (' + q.finis + ' lots)', tint: TINTS.emerald, ic: ICONS.check, to: '/qualite' },
+    { v: fmt(a.n), l: 'Contrôles AQL ' + anneeCourante, tint: TINTS.indigo, ic: ICONS.clipboard, to: '/suivi-triage' },
+    { v: a.taux == null ? '—' : a.taux + ' %', l: 'Taux d\'acceptation AQL', tint: a.taux != null && a.taux < 100 ? TINTS.amber : TINTS.emerald, ic: ICONS.target, to: '/suivi-triage' },
+    { v: fmt(a.refuses), l: 'Contrôles AQL refusés ' + anneeCourante, tint: a.refuses ? TINTS.rose : TINTS.slate, ic: ICONS.xCircle, to: '/suivi-triage' },
+    { v: fmt(a.aControler), l: 'Lots à contrôler (compression close, sans AQL)', tint: a.aControler ? TINTS.amber : TINTS.slate, ic: ICONS.hourglass, to: '/suivi-triage' },
   ]
 })
 
@@ -1357,16 +1357,16 @@ onMounted(async () => {
           <h3 class="qual-h">Charge, triage et déviations par atelier</h3>
           <p class="qual-sub">File de production</p>
           <div class="kpi-grid qual-kpis">
-            <div class="kpi" v-for="(k, i) in kpisFile" :key="'f' + i">
+            <div class="kpi" :class="{ 'kpi-clic': k.to }" v-for="(k, i) in kpisFile" :key="'f' + i" @click="k.to && router.push({ path: k.to })" @keydown.enter="k.to && router.push({ path: k.to })" :role="k.to ? 'button' : null" :tabindex="k.to ? 0 : null" :title="k.to ? 'Ouvrir le détail' : ''">
               <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
-              <div class="kpi-lbl">{{ k.l }}</div>
+              <div class="kpi-lbl">{{ k.l }}<span v-if="k.to" class="kpi-arrow">→</span></div>
             </div>
           </div>
           <p class="qual-sub">Qualité</p>
           <div class="kpi-grid qual-kpis">
-            <div class="kpi" v-for="(k, i) in kpisQualite" :key="'q' + i">
+            <div class="kpi" :class="{ 'kpi-clic': k.to }" v-for="(k, i) in kpisQualite" :key="'q' + i" @click="k.to && router.push({ path: k.to })" @keydown.enter="k.to && router.push({ path: k.to })" :role="k.to ? 'button' : null" :tabindex="k.to ? 0 : null" :title="k.to ? 'Ouvrir le détail' : ''">
               <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
-              <div class="kpi-lbl">{{ k.l }}</div>
+              <div class="kpi-lbl">{{ k.l }}<span v-if="k.to" class="kpi-arrow">→</span></div>
             </div>
           </div>
             <p class="qual-sub">Détail par atelier</p>
@@ -1731,6 +1731,11 @@ onMounted(async () => {
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .kpi-val { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
 .kpi-lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
+.kpi-clic { cursor: pointer; transition: border-color .12s, box-shadow .12s, transform .12s; }
+.kpi-clic:hover { border-color: #94a3b8; box-shadow: 0 4px 12px rgba(16,24,40,.10); transform: translateY(-1px); }
+.kpi-clic:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+.kpi-arrow { margin-left: 5px; color: #94a3b8; font-weight: 700; opacity: 0; transition: opacity .12s; }
+.kpi-clic:hover .kpi-arrow { opacity: 1; }
 
 .searchbar { margin-bottom: 14px; }
 .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 12px 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 2px rgba(16,24,40,.04); margin-bottom: 16px; }
