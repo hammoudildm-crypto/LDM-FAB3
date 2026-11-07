@@ -607,6 +607,33 @@ function fmtValChart(n) {
   }
   return Number(Math.round(n)).toLocaleString('fr-FR')
 }
+// --- KPIs de production (tous ateliers) : plan & réalisation, annuel & mois en cours, en lots/boîtes/CA ---
+// Plan = PDP (plan_production) ; Réalisation = délivrable fabrication (Livraison Vrac), même calcul que la page.
+const planTotals = computed(() => {
+  let aL = 0, aB = 0, aC = 0, mL = 0, mB = 0, mC = 0
+  for (const r of planRows.value) {
+    if (Number(r.annee) !== anneeCourante) continue
+    const pr = r.produits; if (!pr) continue
+    const b = Number(r.quantite_planifiee || 0)
+    const taille = Number(pr.taille_lot || 0), pcsu = Number(pr.pcsu || 0)
+    const l = taille > 0 ? b / taille : 0, c = b * pcsu
+    aL += l; aB += b; aC += c
+    if (Number(r.mois) === moisCourant + 1) { mL += l; mB += b; mC += c }
+  }
+  return { an: { lots: aL, boites: aB, ca: aC }, mois: { lots: mL, boites: mB, ca: mC } }
+})
+const realTotals = computed(() => {
+  const mk = (metric) => { const s = valeurs('Livraison Vrac', anneeCourante, metric); return { an: s.reduce((x, y) => x + y, 0), mois: s[moisCourant] || 0 } }
+  const L = mk('lots'), B = mk('boites'), C = mk('ca')
+  return { an: { lots: L.an, boites: B.an, ca: C.an }, mois: { lots: L.mois, boites: B.mois, ca: C.mois } }
+})
+// CA compact en DA pour les KPIs
+function fmtDA(n) {
+  const v = Number(n || 0)
+  if (v >= 1e9) return (Math.round(v / 1e8) / 10).toLocaleString('fr-FR') + ' Md DA'
+  if (v >= 1e6) return (Math.round(v / 1e5) / 10).toLocaleString('fr-FR') + ' M DA'
+  return Math.round(v).toLocaleString('fr-FR') + ' DA'
+}
 const sousTitreChart = computed(() => {
   if (metrique.value === 'boites') return 'boîtes produites par mois (valeur nominale = taille du lot)'
   if (metrique.value === 'ca') return "chiffre d'affaires nominal par mois (taille du lot × prix de cession)"
@@ -810,6 +837,34 @@ onMounted(charger)
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.blue"><svg viewBox="0 0 24 24" v-html="ICONS.flask"></svg></span><div class="kpi-val">{{ atelierTop ? atelierTop.nom : '—' }}</div></div><div class="kpi-lbl">Atelier le plus actif<span v-if="atelierTop"> ({{ atelierTop.n }})</span></div></div>
         <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.amber"><svg viewBox="0 0 24 24" v-html="ICONS.calendar"></svg></span><div class="kpi-val">{{ moisTop ? moisTop.nom : '—' }}</div></div><div class="kpi-lbl">Mois le plus actif<span v-if="moisTop"> ({{ moisTop.n }})</span></div></div>
       </div>
+
+      <section class="prod-kpis">
+        <div class="pk-card pk-plan">
+          <div class="pk-h">Plan annuel <span class="pk-sub">· {{ anneeCourante }}</span></div>
+          <div class="pk-row"><span class="pk-l">Lots</span><span class="pk-v">{{ fmt(Math.round(planTotals.an.lots)) }}</span></div>
+          <div class="pk-row"><span class="pk-l">Boîtes</span><span class="pk-v">{{ fmt(Math.round(planTotals.an.boites)) }}</span></div>
+          <div class="pk-row"><span class="pk-l">CA</span><span class="pk-v">{{ fmtDA(planTotals.an.ca) }}</span></div>
+        </div>
+        <div class="pk-card pk-plan">
+          <div class="pk-h">Plan du mois <span class="pk-sub">· {{ MOIS_LONG[moisCourant] }}</span></div>
+          <div class="pk-row"><span class="pk-l">Lots</span><span class="pk-v">{{ fmt(Math.round(planTotals.mois.lots)) }}</span></div>
+          <div class="pk-row"><span class="pk-l">Boîtes</span><span class="pk-v">{{ fmt(Math.round(planTotals.mois.boites)) }}</span></div>
+          <div class="pk-row"><span class="pk-l">CA</span><span class="pk-v">{{ fmtDA(planTotals.mois.ca) }}</span></div>
+        </div>
+        <div class="pk-card pk-real">
+          <div class="pk-h">Réalisation annuelle <span class="pk-sub">· {{ anneeCourante }}</span></div>
+          <div class="pk-row"><span class="pk-l">Lots</span><span class="pk-v">{{ fmt(Math.round(realTotals.an.lots)) }}</span></div>
+          <div class="pk-row"><span class="pk-l">Boîtes</span><span class="pk-v">{{ fmt(Math.round(realTotals.an.boites)) }}</span></div>
+          <div class="pk-row"><span class="pk-l">CA</span><span class="pk-v">{{ fmtDA(realTotals.an.ca) }}</span></div>
+        </div>
+        <div class="pk-card pk-real">
+          <div class="pk-h">Réalisation du mois <span class="pk-sub">· {{ MOIS_LONG[moisCourant] }}</span></div>
+          <div class="pk-row"><span class="pk-l">Lots</span><span class="pk-v">{{ fmt(Math.round(realTotals.mois.lots)) }}</span></div>
+          <div class="pk-row"><span class="pk-l">Boîtes</span><span class="pk-v">{{ fmt(Math.round(realTotals.mois.boites)) }}</span></div>
+          <div class="pk-row"><span class="pk-l">CA</span><span class="pk-v">{{ fmtDA(realTotals.mois.ca) }}</span></div>
+        </div>
+      </section>
+      <p class="prod-kpis-note">Plan = PDP · Réalisation = délivrable fabrication (Livraison Vrac). CA nominal (boîtes × prix de cession).</p>
 
       <div class="pa-layout">
       <aside class="pa-side">
@@ -1057,6 +1112,20 @@ onMounted(charger)
 
 .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; padding: 6px 10px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.prod-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 6px; }
+.pk-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 11px 14px; background: #fff; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.pk-plan { border-top: 3px solid #94a3b8; }
+.pk-real { border-top: 3px solid #0f766e; background: #f6fdfb; }
+.pk-h { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 6px; }
+.pk-sub { font-weight: 600; color: #94a3b8; font-size: 11px; }
+.pk-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 3px 0; border-top: 1px dashed #eef2f6; }
+.pk-row:first-of-type { border-top: 0; }
+.pk-l { font-size: 10.5px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+.pk-v { font-size: 15px; font-weight: 800; color: #1e293b; font-variant-numeric: tabular-nums; text-align: right; }
+.pk-real .pk-v { color: #0f766e; }
+.prod-kpis-note { font-size: 10.5px; color: #94a3b8; margin: 0 0 12px; }
+@media (max-width: 900px) { .prod-kpis { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px) { .prod-kpis { grid-template-columns: 1fr; } }
 .kpi-top { display: flex; align-items: center; gap: 10px; }
 .kpi-ic { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .kpi-ic svg { width: 15px; height: 15px; }
