@@ -206,8 +206,8 @@
 
         <!-- Sixpack de capabilité (type Minitab) -->
         <div v-if="!paramBool && chartMode !== 'compare'" class="chart-block six-wrap">
-          <button class="btn sm six-toggle" @click="sixpackOuvert = !sixpackOuvert">{{ sixpackOuvert ? '▾ Masquer le' : '▸ Afficher le' }} Sixpack de capabilité (carte I · étendue mobile · histogramme · normalité · indices)</button>
-          <div v-if="sixpackOuvert" class="six-body">
+          <div class="six-titre">Sixpack de capabilité <span class="six-sub">carte I · étendue mobile · histogramme · normalité · indices</span></div>
+          <div class="six-body">
             <template v-if="sixpack && !sixpack.insuffisant">
               <div class="six-grid">
                 <div class="six-card">
@@ -754,7 +754,6 @@ function pqrNcdf(z) { return 0.5 * (1 + pqrErf(z / Math.SQRT2)) }
 function pqrNinv(p) { if (p <= 0) return -5; if (p >= 1) return 5; const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00], b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01], c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00], d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00], pl = 0.02425; let q, r; if (p < pl) { q = Math.sqrt(-2 * Math.log(p)); return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1) } if (p <= 1 - pl) { q = p - 0.5; r = q * q; return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1) } q = Math.sqrt(-2 * Math.log(1 - p)); return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1) }
 function pqrAD(sorted, mean, sd) { const n = sorted.length; let S = 0; for (let i = 0; i < n; i++) { const Fi = Math.min(1 - 1e-12, Math.max(1e-12, pqrNcdf((sorted[i] - mean) / sd))); const Fj = Math.min(1 - 1e-12, Math.max(1e-12, pqrNcdf((sorted[n - 1 - i] - mean) / sd))); S += (2 * (i + 1) - 1) * (Math.log(Fi) + Math.log(1 - Fj)) } const A2 = -n - S / n, A2s = A2 * (1 + 0.75 / n + 2.25 / (n * n)); let p; if (A2s >= 0.6) p = Math.exp(1.2937 - 5.709 * A2s + 0.0186 * A2s * A2s); else if (A2s >= 0.34) p = Math.exp(0.9177 - 4.279 * A2s - 1.38 * A2s * A2s); else if (A2s > 0.2) p = 1 - Math.exp(-8.318 + 42.796 * A2s - 59.938 * A2s * A2s); else p = 1 - Math.exp(-13.436 + 101.14 * A2s - 223.73 * A2s * A2s); return { A2, p: Math.min(1, Math.max(0, p)) } }
 
-const sixpackOuvert = ref(false)
 function buildSixpack(p) {
   if (!p || p.type === 'bool') return null
   const ms = mesuresParam(p); const vals = ms.map(m => Number(m.valeur)).filter(v => !Number.isNaN(v))
@@ -1399,7 +1398,8 @@ ${matHtml}
 .viol-ok { margin-top: 7px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 600; }
 /* Sixpack de capabilité */
 .six-wrap { margin-top: 12px; padding-top: 14px; border-top: 1px dashed var(--line-2); min-width: 0; }
-.six-toggle { font-size: 13px; }
+.six-titre { font-size: 13px; font-weight: 800; color: var(--ink); display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.six-sub { font-size: 11px; font-weight: 500; color: var(--muted); }
 .six-body { margin-top: 12px; }
 .six-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .six-card { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); padding: 8px 10px; box-shadow: var(--shadow); min-width: 0; }
