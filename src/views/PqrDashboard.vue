@@ -205,9 +205,9 @@
                   </svg>
                 </div>
                 <div class="six-card">
-                  <div class="six-h">Histogramme des capabilités</div>
+                  <div class="six-h">Histogramme des capabilités <span v-if="sixpack.histo.verdict && sixpack.histo.verdict !== '—'" class="six-cap" :class="sixpack.histo.capCls">{{ sixpack.histo.verdict }}</span></div>
                   <svg :viewBox="'0 0 ' + sixpack.histo.W + ' ' + sixpack.histo.H" class="six-svg">
-                    <rect v-for="(b, i) in sixpack.histo.bars" :key="'hb' + i" :x="b.x" :y="b.y" :width="b.w" :height="b.h" class="hi-bar" />
+                    <rect v-for="(b, i) in sixpack.histo.bars" :key="'hb' + i" :x="b.x" :y="b.y" :width="b.w" :height="b.h" class="hi-bar" :class="sixpack.histo.capCls" />
                     <path :d="sixpack.histo.curveW" class="hi-curve-w" />
                     <path :d="sixpack.histo.curveO" class="hi-curve-o" />
                     <template v-if="sixpack.histo.xLsl != null"><line :x1="sixpack.histo.xLsl" :y1="sixpack.histo.mT - 6" :x2="sixpack.histo.xLsl" :y2="sixpack.histo.y0" class="hi-spec" /><text :x="sixpack.histo.xLsl" :y="sixpack.histo.mT - 9" class="hi-spec-lbl">LSI</text></template>
@@ -753,7 +753,8 @@ function buildSixpack(p) {
   const hyy = (c) => hmT + (1 - c / yMaxH) * (HH - hmT - hmB)
   const bars = counts.map((c, i) => ({ x: hxx(hlo + i * bw), y: hyy(c), w: Math.max(1, hxx(hlo + bw) - hxx(hlo) - 1.5), h: hyy(0) - hyy(c) }))
   function curve(sd) { let s = ''; const N = 72; for (let i = 0; i <= N; i++) { const x = hlo + (hhi - hlo) * i / N; const cc = n * bw / (sd * Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * ((x - mean) / sd) ** 2); s += (i ? 'L' : 'M') + hxx(x).toFixed(1) + ' ' + hyy(cc).toFixed(1) + ' ' } return s }
-  const histo = { W: HW, H: HH, mT: hmT, mB: hmB, bars, curveO: curve(sdO), curveW: curve(sdW), y0: hyy(0), xLsl: LSL != null ? hxx(LSL) : null, xUsl: USL != null ? hxx(USL) : null, xCible: TGT != null ? hxx(TGT) : null }
+  const capClsH = (cpk == null || !isFinite(cpk)) ? 'hcap-na' : cpk >= 1.33 ? 'hcap-ok' : cpk >= 1.0 ? 'hcap-mid' : 'hcap-bad'
+  const histo = { W: HW, H: HH, mT: hmT, mB: hmB, bars, curveO: curve(sdO), curveW: curve(sdW), y0: hyy(0), xLsl: LSL != null ? hxx(LSL) : null, xUsl: USL != null ? hxx(USL) : null, xCible: TGT != null ? hxx(TGT) : null, capCls: capClsH, verdict: verdictTxt(cpk === Infinity ? null : cpk) }
   const NW = 440, NH = 190, nmL = 44, nmR = 18, nmT = 18, nmB = 28
   const zs = sorted.map((v, i) => pqrNinv((i + 1 - 0.375) / (n + 0.25)))
   let vlo = sorted[0], vhi = sorted[n - 1]; const vpad = (vhi - vlo) * 0.06 || 1; vlo -= vpad; vhi += vpad
@@ -905,7 +906,7 @@ function sixpackExportHtml(sp) {
   const ic = sp.ic, mc = sp.mc, h = sp.histo, np = sp.npp, lc = sp.last, cp = sp.capPlot, st = sp.stats
   const circ = (pts) => pts.map(q => `<circle cx="${q.x.toFixed(1)}" cy="${q.y.toFixed(1)}" r="2.2" class="${q.oos ? 'cl-oos' : 'cl-dot'}"/>`).join('')
   const pI = `<div class="sx-card"><div class="sx-h">Carte des valeurs individuelles (I)</div><svg viewBox="0 0 ${ic.W} ${ic.H}"><line x1="${ic.mL}" x2="${ic.W - ic.mR}" y1="${ic.yUCL}" y2="${ic.yUCL}" class="cl-lim"/><line x1="${ic.mL}" x2="${ic.W - ic.mR}" y1="${ic.yLCL}" y2="${ic.yLCL}" class="cl-lim"/><line x1="${ic.mL}" x2="${ic.W - ic.mR}" y1="${ic.center}" y2="${ic.center}" class="cl-ctr"/><path d="${ic.path}" class="cl-path"/>${circ(ic.pts)}<text x="${ic.W - ic.mR + 5}" y="${ic.yUCL + 3}" class="cl-lbl">LCS ${fmtNum(ic.vUCL)}</text><text x="${ic.W - ic.mR + 5}" y="${ic.center + 3}" class="cl-lbl ctr">X̄ ${fmtNum(ic.vMean)}</text><text x="${ic.W - ic.mR + 5}" y="${ic.yLCL + 3}" class="cl-lbl">LCI ${fmtNum(ic.vLCL)}</text></svg></div>`
-  const pH = `<div class="sx-card"><div class="sx-h">Histogramme des capabilités</div><svg viewBox="0 0 ${h.W} ${h.H}">${h.bars.map(b => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" class="hi-bar"/>`).join('')}<path d="${h.curveW}" class="hi-curve-w"/><path d="${h.curveO}" class="hi-curve-o"/>${h.xLsl != null ? `<line x1="${h.xLsl}" y1="${h.mT - 6}" x2="${h.xLsl}" y2="${h.y0}" class="hi-spec"/><text x="${h.xLsl}" y="${h.mT - 9}" class="hi-spec-lbl">LSI</text>` : ''}${h.xUsl != null ? `<line x1="${h.xUsl}" y1="${h.mT - 6}" x2="${h.xUsl}" y2="${h.y0}" class="hi-spec"/><text x="${h.xUsl}" y="${h.mT - 9}" class="hi-spec-lbl">LSS</text>` : ''}${h.xCible != null ? `<line x1="${h.xCible}" y1="${h.mT}" x2="${h.xCible}" y2="${h.y0}" class="hi-cible"/>` : ''}</svg></div>`
+  const pH = `<div class="sx-card"><div class="sx-h">Histogramme des capabilités ${h.verdict && h.verdict !== '—' ? `<span class="six-cap ${h.capCls}">${h.verdict}</span>` : ''}</div><svg viewBox="0 0 ${h.W} ${h.H}">${h.bars.map(b => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" class="hi-bar ${h.capCls}"/>`).join('')}<path d="${h.curveW}" class="hi-curve-w"/><path d="${h.curveO}" class="hi-curve-o"/>${h.xLsl != null ? `<line x1="${h.xLsl}" y1="${h.mT - 6}" x2="${h.xLsl}" y2="${h.y0}" class="hi-spec"/><text x="${h.xLsl}" y="${h.mT - 9}" class="hi-spec-lbl">LSI</text>` : ''}${h.xUsl != null ? `<line x1="${h.xUsl}" y1="${h.mT - 6}" x2="${h.xUsl}" y2="${h.y0}" class="hi-spec"/><text x="${h.xUsl}" y="${h.mT - 9}" class="hi-spec-lbl">LSS</text>` : ''}${h.xCible != null ? `<line x1="${h.xCible}" y1="${h.mT}" x2="${h.xCible}" y2="${h.y0}" class="hi-cible"/>` : ''}</svg></div>`
   const pMR = `<div class="sx-card"><div class="sx-h">Carte d'étendue mobile</div><svg viewBox="0 0 ${mc.W} ${mc.H}"><line x1="${mc.mL}" x2="${mc.W - mc.mR}" y1="${mc.yUCL}" y2="${mc.yUCL}" class="cl-lim"/><line x1="${mc.mL}" x2="${mc.W - mc.mR}" y1="${mc.yLCL}" y2="${mc.yLCL}" class="cl-lim"/><line x1="${mc.mL}" x2="${mc.W - mc.mR}" y1="${mc.center}" y2="${mc.center}" class="cl-ctr"/><path d="${mc.path}" class="cl-path"/>${circ(mc.pts)}<text x="${mc.W - mc.mR + 5}" y="${mc.yUCL + 3}" class="cl-lbl">LCS ${fmtNum(mc.vUCL)}</text><text x="${mc.W - mc.mR + 5}" y="${mc.center + 3}" class="cl-lbl ctr">EM ${fmtNum(mc.vMean)}</text></svg></div>`
   const pN = `<div class="sx-card"><div class="sx-h">Diag. probab. de Normale <span class="sx-ad">AD ${sixFmt(np.AD, 3)} · p ${np.pAD < 0.005 ? '&lt; 0,005' : sixFmt(np.pAD, 3)}</span></div><svg viewBox="0 0 ${np.W} ${np.H}"><line x1="${np.line.x1}" y1="${np.line.y1}" x2="${np.line.x2}" y2="${np.line.y2}" class="np-line"/>${np.pts.map(q => `<circle cx="${q.cx.toFixed(1)}" cy="${q.cy.toFixed(1)}" r="1.9" class="np-dot"/>`).join('')}</svg></div>`
   const pL = `<div class="sx-card"><div class="sx-h">${Math.min(25, sp.n)} dernières observations</div><svg viewBox="0 0 ${lc.W} ${lc.H}"><line x1="${lc.mL}" x2="${lc.W - lc.mR}" y1="${lc.center}" y2="${lc.center}" class="cl-ctr dash"/><path d="${lc.path}" class="cl-path"/>${lc.pts.map(q => `<circle cx="${q.x.toFixed(1)}" cy="${q.y.toFixed(1)}" r="2.2" class="cl-dot"/>`).join('')}</svg></div>`
@@ -957,7 +958,8 @@ tr.ph td{background:#f8fafc;font-weight:800;color:#a855f7;text-transform:upperca
 .cl-lim{stroke:#dc2626;stroke-width:1}.cl-ctr{stroke:#16a34a;stroke-width:1}.cl-ctr.dash{stroke:#94a3b8;stroke-width:1;stroke-dasharray:4 3}
 .cl-path{fill:none;stroke:#2563eb;stroke-width:1}.cl-dot{fill:#2563eb}.cl-oos{fill:#dc2626}
 .cl-lbl{font-size:9px;fill:#64748b}.cl-lbl.ctr{fill:#16a34a}
-.hi-bar{fill:#bfdbfe;stroke:#60a5fa;stroke-width:.5}.hi-curve-o{fill:none;stroke:#dc2626;stroke-width:1.4}.hi-curve-w{fill:none;stroke:#334155;stroke-width:1.1;stroke-dasharray:4 3}
+.hi-bar{fill:#bfdbfe;stroke:#60a5fa;stroke-width:.5}.hi-bar.hcap-ok{fill:#bbf7d0;stroke:#22c55e}.hi-bar.hcap-mid{fill:#fde68a;stroke:#f59e0b}.hi-bar.hcap-bad{fill:#fecaca;stroke:#ef4444}.hi-curve-o{fill:none;stroke:#dc2626;stroke-width:1.4}.hi-curve-w{fill:none;stroke:#334155;stroke-width:1.1;stroke-dasharray:4 3}
+.six-cap{font-size:9px;font-weight:800;padding:1px 6px;border-radius:999px}.six-cap.hcap-ok{background:#dcfce7;color:#15803d}.six-cap.hcap-mid{background:#fef3c7;color:#b45309}.six-cap.hcap-bad{background:#fee2e2;color:#b91c1c}.six-cap.hcap-na{background:#f1f5f9;color:#64748b}
 .hi-spec{stroke:#dc2626;stroke-width:1;stroke-dasharray:3 2}.hi-spec-lbl{font-size:10px;font-weight:700;fill:#dc2626;text-anchor:middle}.hi-cible{stroke:#16a34a;stroke-width:1;stroke-dasharray:2 2}
 .np-line{stroke:#dc2626;stroke-width:1.1}.np-dot{fill:#2563eb}
 .cp-line,.cp-tick{stroke:#334155;stroke-width:1.4}.cp-lbl{font-size:11px;font-weight:700;fill:#475569}
@@ -1342,6 +1344,14 @@ ${matHtml}
 .cl-lbl { font-size: 9px; fill: #64748b; }
 .cl-lbl.ctr { fill: #16a34a; }
 .hi-bar { fill: #bfdbfe; stroke: #60a5fa; stroke-width: .5; }
+.hi-bar.hcap-ok { fill: #bbf7d0; stroke: #22c55e; }
+.hi-bar.hcap-mid { fill: #fde68a; stroke: #f59e0b; }
+.hi-bar.hcap-bad { fill: #fecaca; stroke: #ef4444; }
+.six-cap { font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 999px; vertical-align: middle; }
+.six-cap.hcap-ok { background: #dcfce7; color: #15803d; }
+.six-cap.hcap-mid { background: #fef3c7; color: #b45309; }
+.six-cap.hcap-bad { background: #fee2e2; color: #b91c1c; }
+.six-cap.hcap-na { background: #f1f5f9; color: #64748b; }
 .hi-curve-o { fill: none; stroke: #dc2626; stroke-width: 1.4; }
 .hi-curve-w { fill: none; stroke: #334155; stroke-width: 1.1; stroke-dasharray: 4 3; }
 .hi-spec { stroke: #dc2626; stroke-width: 1; stroke-dasharray: 3 2; }
