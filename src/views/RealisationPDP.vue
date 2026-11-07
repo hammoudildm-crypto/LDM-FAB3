@@ -551,7 +551,7 @@ const serieMois = computed(() => {
 </script>
 
 <style scoped>
-.rp { padding: 24px 30px 50px; max-width: 1200px; margin: 0 auto; color: #1e293b; font-family: 'Segoe UI', system-ui, sans-serif; }
+.rp { padding: 24px 30px 50px; max-width: none; margin: 0; color: #1e293b; font-family: 'Segoe UI', system-ui, sans-serif; }
 .rp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
 .rp-title { margin: 0; font-size: 24px; font-weight: 800; color: #0f172a; }
 .rp-sub { margin: 4px 0 0; font-size: 13px; color: #64748b; }
