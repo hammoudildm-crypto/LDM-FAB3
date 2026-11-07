@@ -315,10 +315,6 @@
           <div v-else class="viol-ok">✓ Procédé sous contrôle — aucune règle Nelson/Westgard déclenchée.</div>
           <p class="hint rules">Règles : <b>1-3s</b> 1 pt &gt; 3σ · <b>2-2s</b> 2 pts &gt; 2σ même côté · <b>4-1s</b> 4 pts &gt; 1σ même côté · <b>9-x</b> 9 pts du même côté · <b>tendance</b> 6 pts croissants/décroissants.</p>
         </div>
-          </div>
-        </div>
-          </div>
-        </div>
 
         <h3 class="sec-titre">Analyse d'impact entre paramètres</h3>
         <p class="hint">Relation entre deux paramètres, appariés par lot (moyenne par lot). Un lien statistique n'implique pas forcément une cause directe.</p>
@@ -377,6 +373,10 @@
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+          </div>
+        </div>
           </div>
         </div>
 
