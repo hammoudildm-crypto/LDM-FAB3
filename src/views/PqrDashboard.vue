@@ -125,25 +125,6 @@
           </div>
         </div>
 
-        <div v-if="lotsOrdonnes.length > 1" class="zone-ctrl">
-          <div class="zone-head">
-            <span class="zone-ttl">⇥ Zone à analyser</span>
-            <span class="zone-info">{{ lotLabelAt(Math.min(zoneA, zoneB)) }} → {{ lotLabelAt(Math.max(zoneA, zoneB)) }} · {{ Math.abs(zoneB - zoneA) + 1 }}/{{ lotsOrdonnes.length }} lots</span>
-            <button v-if="zoneActive" class="zone-reset" @click="resetZone">↺ Tout</button>
-          </div>
-          <div class="zone-row">
-            <button class="zone-step" @click="zoneGrow(-1)" :disabled="zoneA === zoneB" title="Réduire côté lots récents">−</button>
-            <div class="zone-slider">
-              <div class="zs-track"></div>
-              <div class="zs-sel" :style="{ left: zonePct(Math.min(zoneA, zoneB)) + '%', right: (100 - zonePct(Math.max(zoneA, zoneB))) + '%' }"></div>
-              <input type="range" class="zs-input" :min="0" :max="lotsOrdonnes.length - 1" step="1" :value="zoneA" @input="onZoneA" />
-              <input type="range" class="zs-input" :min="0" :max="lotsOrdonnes.length - 1" step="1" :value="zoneB" @input="onZoneB" />
-            </div>
-            <button class="zone-step" @click="zoneGrow(1)" :disabled="Math.max(zoneA, zoneB) === lotsOrdonnes.length - 1" title="Étendre vers les lots récents">+</button>
-          </div>
-          <p class="hint" style="margin:6px 0 0">La fenêtre choisie filtre toute l'analyse : synthèse, Cp/Cpk, conformité et graphes.</p>
-        </div>
-
         <div class="chart-grid" :class="{ 'cg-2': toutAfficher }">
         <!-- Tendance vs specs -->
         <div v-if="toutAfficher || chartMode === 'trend'" class="chart-block">
@@ -476,39 +457,8 @@ const mesuresFiltrees = computed(() => mesures.value.filter(m => {
   if ((dateDu.value || dateAu.value) && !d) return false
   return true
 }))
-// ---- Zone d'analyse : filtre sur une fenêtre de lots ----
-const lotKeyOf = (m) => m.of_id != null ? 'of' + m.of_id : (m.numero_lot ? 'lot' + m.numero_lot : '')
-const lotsOrdonnes = computed(() => {
-  const meta = {}
-  for (const m of mesuresFiltrees.value) {
-    const key = lotKeyOf(m); if (!key) continue
-    if (!meta[key]) meta[key] = { key, lot: m.numero_lot || key, date: m.date_mesure || '' }
-    else if (m.date_mesure && (!meta[key].date || m.date_mesure < meta[key].date)) meta[key].date = m.date_mesure
-  }
-  return Object.values(meta).sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.lot).localeCompare(String(b.lot)))
-})
-const zoneA = ref(0), zoneB = ref(0)
-function resetZone() { zoneA.value = 0; zoneB.value = Math.max(0, lotsOrdonnes.value.length - 1) }
-watch(lotsOrdonnes, resetZone, { immediate: true })
-const zoneActive = computed(() => lotsOrdonnes.value.length > 1 && (Math.min(zoneA.value, zoneB.value) > 0 || Math.max(zoneA.value, zoneB.value) < lotsOrdonnes.value.length - 1))
-function onZoneA(e) { zoneA.value = Number(e.target.value) }
-function onZoneB(e) { zoneB.value = Number(e.target.value) }
-function zoneGrow(d) {
-  const n = lotsOrdonnes.value.length
-  const a = Math.min(zoneA.value, zoneB.value)
-  let b = Math.max(zoneA.value, zoneB.value)
-  if (d > 0) b = Math.min(n - 1, b + 1)   // étend vers la droite (lots récents)
-  else b = Math.max(a, b - 1)             // réduit côté droit, garde le bord gauche
-  zoneA.value = a; zoneB.value = b
-}
-function zonePct(i) { const n = lotsOrdonnes.value.length; return n <= 1 ? 0 : i / (n - 1) * 100 }
-function lotLabelAt(i) { const l = lotsOrdonnes.value[i]; return l ? l.lot : '—' }
-const zoneKeys = computed(() => { const ls = lotsOrdonnes.value; const a = Math.min(zoneA.value, zoneB.value), b = Math.max(zoneA.value, zoneB.value); return new Set(ls.slice(a, b + 1).map(l => l.key)) })
-const mesuresZone = computed(() => {
-  if (!zoneActive.value) return mesuresFiltrees.value
-  const keep = zoneKeys.value
-  return mesuresFiltrees.value.filter(m => { const k = lotKeyOf(m); return !k || keep.has(k) })
-})
+// ---- Mesures de base pour l'analyse (toutes les mesures filtrées) ----
+const mesuresZone = computed(() => mesuresFiltrees.value)
 
 const baseParById = computed(() => { const m = {}; for (const p of params.value) m[p.id] = p; return m })
 // Identité logique : un paramètre « par API » est scindé par principe actif (id::api)
@@ -1366,27 +1316,6 @@ ${matHtml}
 .cur-readout .cur-viol { color: #fca5a5; font-weight: 700; }
 .cur-readout .cr-it { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; color: #e2e8f0; }
 .cur-readout .cr-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
-.zone-ctrl { margin: 12px 0 2px; padding: 10px 12px; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 10px; }
-.zone-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
-.zone-ttl { font-size: 11px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: .04em; }
-.zone-info { font-size: 12px; color: #64748b; font-weight: 700; font-variant-numeric: tabular-nums; }
-.zone-reset { margin-left: auto; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; border-radius: 7px; padding: 3px 10px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
-.zone-reset:hover { background: #e0e7ff; }
-.zone-row { display: flex; align-items: center; gap: 10px; }
-.zone-row .zone-slider { flex: 1; }
-.zone-step { flex: none; width: 28px; height: 28px; border-radius: 8px; border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca; font-size: 18px; font-weight: 700; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.zone-step:hover:not(:disabled) { background: #e0e7ff; }
-.zone-step:disabled { opacity: .4; cursor: default; }
-.zone-slider { position: relative; height: 24px; }
-.zone-slider .zs-track { position: absolute; left: 0; right: 0; top: 10px; height: 4px; background: #e2e8f0; border-radius: 3px; }
-.zone-slider .zs-sel { position: absolute; top: 10px; height: 4px; background: #6366f1; border-radius: 3px; }
-.zone-slider .zs-input { position: absolute; left: 0; top: 0; width: 100%; height: 24px; margin: 0; background: none; -webkit-appearance: none; appearance: none; pointer-events: none; }
-.zone-slider .zs-input:focus { outline: none; }
-.zone-slider .zs-input::-webkit-slider-runnable-track { background: none; border: none; }
-.zone-slider .zs-input::-moz-range-track { background: none; border: none; }
-.zone-slider .zs-input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid #6366f1; box-shadow: 0 1px 3px rgba(15,23,42,.25); cursor: pointer; pointer-events: auto; margin-top: -6px; }
-.zone-slider .zs-input::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid #6366f1; box-shadow: 0 1px 3px rgba(15,23,42,.25); cursor: pointer; pointer-events: auto; }
-
 .viol-box { margin-top: 7px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 5px 9px; }
 .viol-titre { display: flex; align-items: center; gap: 6px; width: 100%; background: none; border: 0; padding: 1px 0; font: inherit; font-size: 10.5px; font-weight: 800; color: #b91c1c; cursor: pointer; text-align: left; }
 .viol-chev { font-size: 9px; width: 10px; flex: none; }
