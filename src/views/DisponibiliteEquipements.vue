@@ -120,7 +120,7 @@ async function charger() {
 
   await chargerSacs()
   await chargerControlesAql()
-  const rpl = await fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produits(gamme)'))
+  const rpl = await fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme)'))
   if (!rpl.error) planRows.value = rpl.data || []
 
   chargement.value = false
@@ -290,6 +290,7 @@ const deviationIds = computed(() => new Set(ofs.value.filter(o => !!o.deviation)
 const deviationCondIds = computed(() => new Set(ofs.value.filter(o => !!o.deviation_cond).map(o => o.id)))
 // File par phase : lots à l'étape courante (en attente = étape précédente finie ; en cours = démarrée)
 const anneeCourante = new Date().getFullYear()
+const moisCourant = new Date().getMonth() + 1
 const planParPhase = computed(() => {
   const acc = {}
   for (const r of planRows.value) {
@@ -316,6 +317,63 @@ function infoPhase(k) {
   const plan = planParPhase.value[k] || 0, realise = realiseParPhase.value[k] || 0
   return { plan, realise, taux: plan > 0 ? Math.round(realise / plan * 100) : null }
 }
+// ===== Capacité par atelier (en boîtes) : plan annuel, plan du mois, réalisé année, réalisé mois =====
+// Plan du mois en cours, réparti sur chaque phase de la gamme du produit.
+const planMoisParPhase = computed(() => {
+  const acc = {}
+  for (const r of planRows.value) {
+    if (Number(r.annee) !== anneeCourante || Number(r.mois) !== moisCourant) continue
+    const p = r.produits; if (!p) continue
+    const g = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : CANON_FAB
+    const vus = new Set(); for (const ph of g) { const k = phaseKey(ph); if (k) vus.add(k) }
+    for (const k of vus) acc[k] = (acc[k] || 0) + Number(r.quantite_planifiee || 0)
+  }
+  return acc
+})
+// Réalisé = boîtes fabriquées (date de fin de fabrication), réparties sur chaque phase de la gamme.
+const realiseBtParPhase = computed(() => {
+  const an = {}, mois = {}
+  for (const o of ofs.value) {
+    const d = o.date_fin_fabrication; if (!d) continue
+    const dt = new Date(d); if (dt.getFullYear() !== anneeCourante) continue
+    const p = o.produits || {}
+    const g = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : CANON_FAB
+    const b = Number(o.boites_fabriquees) || Number(o.quantite_theorique) || 0
+    const estMois = (dt.getMonth() + 1) === moisCourant
+    const vus = new Set(); for (const ph of g) { const k = phaseKey(ph); if (k) vus.add(k) }
+    for (const k of vus) { an[k] = (an[k] || 0) + b; if (estMois) mois[k] = (mois[k] || 0) + b }
+  }
+  return { an, mois }
+})
+// Granulation + séchage sont fusionnés dans le tableau (clé 'gran_sech') → clé canonique 'granulation'.
+function capAtelier(pk) {
+  const k = pk === 'gran_sech' ? 'granulation' : pk
+  return {
+    annuel: planParPhase.value[k] || 0,
+    planMois: planMoisParPhase.value[k] || 0,
+    realAn: realiseBtParPhase.value.an[k] || 0,
+    realMois: realiseBtParPhase.value.mois[k] || 0,
+  }
+}
+// Totaux usine (distincts, sans double compte entre phases)
+const capaTotaux = computed(() => {
+  let planAn = 0, planMois = 0
+  for (const r of planRows.value) {
+    if (Number(r.annee) !== anneeCourante) continue
+    const q = Number(r.quantite_planifiee || 0)
+    planAn += q
+    if (Number(r.mois) === moisCourant) planMois += q
+  }
+  let realAn = 0, realMois = 0
+  for (const o of ofs.value) {
+    const d = o.date_fin_fabrication; if (!d) continue
+    const dt = new Date(d); if (dt.getFullYear() !== anneeCourante) continue
+    const b = Number(o.boites_fabriquees) || Number(o.quantite_theorique) || 0
+    realAn += b
+    if ((dt.getMonth() + 1) === moisCourant) realMois += b
+  }
+  return { planAn, planMois, realAn, realMois }
+})
 // Produit « direct conditionnement » (ex. seringues importées type Rebif) : pas d'étape de fabrication
 function estDirectCond(p) { return !!(p && String(p.forme || '').toLowerCase() === 'seringue') }
 const queuePhase = computed(() => {
@@ -590,15 +648,15 @@ const qualiteParAtelier = computed(() => {
     deviation: deviationIds.value.has(l.id), deviationCond: deviationCondIds.value.has(l.id)
   }))
   const p = compte(pes, [], 'pesee')
-  if (p.tot) rows.push({ label: 'Pesée (attente)', ...p })
-  for (const ph of vueFile.value) rows.push({ label: ph.phase.label, ...compte(ph.attente, ph.cours, ph.key) })
+  if (p.tot) rows.push({ label: 'Pesée (attente)', pk: 'pesee', ...p })
+  for (const ph of vueFile.value) rows.push({ label: ph.phase.label, pk: ph.key, ...compte(ph.attente, ph.cours, ph.key) })
   let cAtt = [], cCours = []
   for (const g of vueCondLignes.value) { cAtt = cAtt.concat(g.attente); cCours = cCours.concat(g.cours) }
   const c = compte(cAtt, cCours, 'conditionnement')
-  if (c.tot) rows.push({ label: 'Conditionnement', ...c })
+  if (c.tot) rows.push({ label: 'Conditionnement', pk: 'conditionnement', ...c })
   // Charge relative : barre proportionnelle à l'atelier le plus chargé (reprend « Charge par atelier »)
   const max = Math.max(1, ...rows.map(r => r.tot))
-  return rows.map(r => ({ ...r, pct: Math.round(r.tot / max * 100), pctDev: r.tot ? Math.round(r.dev / r.tot * 100) : 0 }))
+  return rows.map(r => ({ ...r, pct: Math.round(r.tot / max * 100), pctDev: r.tot ? Math.round(r.dev / r.tot * 100) : 0, cap: capAtelier(r.pk) }))
 })
 // Dépliage du détail des lots en déviation (clic sur la colonne « Avec déviation »)
 const devOuvert = ref(null)
@@ -1371,7 +1429,7 @@ onMounted(async () => {
           </div>
             <p class="qual-sub">Détail par atelier</p>
             <table v-if="qualiteParAtelier.length" class="qual-tbl">
-              <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">Boîtes</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th></tr></thead>
+              <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">Boîtes</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th><th class="qnum qcap" title="Capacité annuelle de l'atelier = total planifié de l'année (boîtes)">Cap. annuelle</th><th class="qnum" title="Planifié du mois en cours (boîtes)">Plan du mois</th><th class="qnum" title="Boîtes fabriquées cette année (date de fin de fabrication)">Réalisé année</th><th class="qnum" title="Boîtes fabriquées ce mois">Réalisé mois</th></tr></thead>
               <tbody>
                 <template v-for="r in qualiteParAtelier" :key="r.label">
                   <tr :class="{ 'q-row-open': atelierOuvert === r.label, 'q-row-clic': r.tot > 0 }" @click="toggleAtelier(r.label, r.tot)" :title="r.tot ? 'Voir les lots de cet atelier' : ''">
@@ -1390,9 +1448,13 @@ onMounted(async () => {
                       {{ r.dev || '—' }}<span v-if="r.dev" class="q-caret">{{ devOuvert === r.label ? '▾' : '▸' }}</span>
                     </td>
                     <td class="qnum" :class="{ 'q-bad': r.pctDev >= 20 }">{{ r.pctDev }}%</td>
+                    <td class="qnum qcap qcap-v">{{ r.cap.annuel ? fmt(r.cap.annuel) : '—' }}</td>
+                    <td class="qnum">{{ r.cap.planMois ? fmt(r.cap.planMois) : '—' }}</td>
+                    <td class="qnum">{{ r.cap.realAn ? fmt(r.cap.realAn) : '—' }}</td>
+                    <td class="qnum">{{ r.cap.realMois ? fmt(r.cap.realMois) : '—' }}</td>
                   </tr>
                   <tr v-if="atelierOuvert === r.label" class="q-detail q-detail-at">
-                    <td colspan="6">
+                    <td colspan="10">
                       <div class="qd-head">Lots de l'atelier « {{ r.label }} » — {{ r.allLots.length }} lot(s)</div>
                       <table class="qd-tbl">
                         <thead><tr><th>N° lot</th><th>Produit</th><th>Statut</th><th class="qnum">Boîtes</th><th>Fin étape préc.</th><th class="qnum">Durée stockage</th><th class="qnum">Holding time</th><th>Validité OF</th><th>État</th><th>Équipement</th><th v-if="r.label === 'Conditionnement'">Statut AQL vrac</th></tr></thead>
@@ -1432,7 +1494,7 @@ onMounted(async () => {
                     </td>
                   </tr>
                   <tr v-if="devOuvert === r.label" class="q-detail">
-                    <td colspan="6">
+                    <td colspan="10">
                       <table class="qd-tbl">
                         <thead><tr><th>N° lot</th><th>Produit</th><th>Déviation</th></tr></thead>
                         <tbody>
@@ -1460,9 +1522,13 @@ onMounted(async () => {
                     {{ qualiteTotaux.dev || '—' }}<span v-if="qualiteTotaux.dev" class="q-caret">{{ devOuvert === '__tous__' ? '▾' : '▸' }}</span>
                   </td>
                   <td class="qnum">{{ qualiteTotaux.pctDev }}%</td>
+                  <td class="qnum qcap qcap-v" title="Total usine — plan annuel (sans double compte entre phases)">{{ fmt(capaTotaux.planAn) }}</td>
+                  <td class="qnum" title="Total usine — plan du mois">{{ fmt(capaTotaux.planMois) }}</td>
+                  <td class="qnum" title="Total usine — réalisé année">{{ fmt(capaTotaux.realAn) }}</td>
+                  <td class="qnum" title="Total usine — réalisé mois">{{ fmt(capaTotaux.realMois) }}</td>
                 </tr>
                 <tr v-if="devOuvert === '__tous__'" class="q-detail">
-                  <td colspan="6">
+                  <td colspan="10">
                     <table class="qd-tbl">
                       <thead><tr><th>N° lot</th><th>Produit</th><th>Atelier</th><th>Déviation</th></tr></thead>
                       <tbody>
@@ -1950,6 +2016,8 @@ onMounted(async () => {
 .qual-tbl .q-bts .unit { font-size: 10px; font-weight: 600; color: #94a3b8; }
 .qual-tbl .q-tot td { border-top: 2px solid #e2e8f0; border-bottom: none; font-weight: 800; background: #f8fafc; }
 .qual-tbl .qcharge-h { min-width: 190px; }
+.qual-tbl .qcap { border-left: 2px solid #e2e8f0; }
+.qual-tbl .qcap-v { color: #6d28d9; font-weight: 700; }
 .q-charge { display: flex; align-items: center; gap: 9px; }
 .qc-bar { flex: 1; min-width: 60px; height: 13px; background: #ecfeff; border-radius: 999px; overflow: hidden; }
 .qc-fill { height: 100%; background: linear-gradient(90deg, #22d3ee, #0891b2); border-radius: 999px; min-width: 2px; transition: width .3s ease; }
