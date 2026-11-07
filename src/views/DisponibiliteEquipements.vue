@@ -619,19 +619,16 @@ const kpisQualite = computed(() => {
   const q = qualiteAnnee.value
   const a = aqlStats.value
   const enTriFab = lotsTriage.value.length
-  const enTriCond = triageCondIds.value.size
   let aTrier = 0, triee = 0
   for (const l of lotsTriage.value) { const e = qteEdit[l.id] || {}; aTrier += Number(e.aTrier) || 0; triee += Number(e.triee) || 0 }
   const pctTri = aTrier > 0 ? Math.min(100, Math.round(triee / aTrier * 100)) : null
   const devProd = qualiteTotaux.value.dev
   return [
     { v: fmt(enTriFab), l: 'Lots en triage — fabrication', tint: enTriFab ? TINTS.amber : TINTS.slate, ic: ICONS.hourglass },
-    { v: fmt(enTriCond), l: 'Lots en triage — conditionnement', tint: enTriCond ? TINTS.amber : TINTS.slate, ic: ICONS.package },
     { v: pctTri == null ? '—' : pctTri + ' %', l: 'Avancement du triage (Kg triés / à trier)', tint: TINTS.blue, ic: ICONS.percent },
     { v: fmt(devProd), l: 'Lots en file avec déviation', tint: devProd ? TINTS.rose : TINTS.slate, ic: ICONS.alert },
     { v: fmt(q.devFab), l: 'Déviations fabrication ' + anneeCourante, tint: q.devFab ? TINTS.rose : TINTS.slate, ic: ICONS.flask },
     { v: q.brftFab == null ? '—' : q.brftFab + ' %', l: 'BRFT fabrication ' + anneeCourante + ' (' + q.finis + ' lots)', tint: TINTS.emerald, ic: ICONS.check },
-    { v: q.brftCond == null ? '—' : q.brftCond + ' %', l: 'BRFT conditionnement ' + anneeCourante, tint: TINTS.teal, ic: ICONS.check },
     { v: fmt(a.n), l: 'Contrôles AQL ' + anneeCourante, tint: TINTS.indigo, ic: ICONS.clipboard },
     { v: a.taux == null ? '—' : a.taux + ' %', l: 'Taux d\'acceptation AQL', tint: a.taux != null && a.taux < 100 ? TINTS.amber : TINTS.emerald, ic: ICONS.target },
     { v: fmt(a.refuses), l: 'Contrôles AQL refusés ' + anneeCourante, tint: a.refuses ? TINTS.rose : TINTS.slate, ic: ICONS.xCircle },
