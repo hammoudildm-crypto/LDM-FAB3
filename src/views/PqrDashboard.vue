@@ -755,8 +755,7 @@ function pqrNinv(p) { if (p <= 0) return -5; if (p >= 1) return 5; const a = [-3
 function pqrAD(sorted, mean, sd) { const n = sorted.length; let S = 0; for (let i = 0; i < n; i++) { const Fi = Math.min(1 - 1e-12, Math.max(1e-12, pqrNcdf((sorted[i] - mean) / sd))); const Fj = Math.min(1 - 1e-12, Math.max(1e-12, pqrNcdf((sorted[n - 1 - i] - mean) / sd))); S += (2 * (i + 1) - 1) * (Math.log(Fi) + Math.log(1 - Fj)) } const A2 = -n - S / n, A2s = A2 * (1 + 0.75 / n + 2.25 / (n * n)); let p; if (A2s >= 0.6) p = Math.exp(1.2937 - 5.709 * A2s + 0.0186 * A2s * A2s); else if (A2s >= 0.34) p = Math.exp(0.9177 - 4.279 * A2s - 1.38 * A2s * A2s); else if (A2s > 0.2) p = 1 - Math.exp(-8.318 + 42.796 * A2s - 59.938 * A2s * A2s); else p = 1 - Math.exp(-13.436 + 101.14 * A2s - 223.73 * A2s * A2s); return { A2, p: Math.min(1, Math.max(0, p)) } }
 
 const sixpackOuvert = ref(false)
-const sixpack = computed(() => {
-  const p = paramSelObj.value
+function buildSixpack(p) {
   if (!p || p.type === 'bool') return null
   const ms = mesuresParam(p); const vals = ms.map(m => Number(m.valeur)).filter(v => !Number.isNaN(v))
   const n = vals.length
@@ -829,7 +828,8 @@ const sixpack = computed(() => {
   ].map(r => ({ lbl: r.lbl, y: r.y, x1: cxx(r.a), x2: cxx(r.b), xc: r.c != null ? cxx(r.c) : null }))
   const capPlot = { W: CW, H: CH, rows: capRows }
   return { insuffisant: false, n, mean, sdO, sdW, MRbar, LSL, USL, TGT, unite: uniteEff(p), nom: p.nom, ic, mc, histo, npp, last: lc, capPlot, stats: { cp, cpk: cpk === Infinity ? null : cpk, pp, ppk: ppk === Infinity ? null : ppk, cpm, ppmObs, ppmO, ppmW } }
-})
+}
+const sixpack = computed(() => buildSixpack(paramSelObj.value))
 const sixFmt = (v, d = 2) => (v == null || !isFinite(v)) ? '—' : Number(v).toFixed(d)
 const byDate = (a, b) => String(a.date_mesure || '').localeCompare(String(b.date_mesure || '')) || ((a.of_id || 0) - (b.of_id || 0)) || ((a.rang || 0) - (b.rang || 0))
 function mesuresParam(p) { return mesuresPlat.value.filter(m => m.parametre_id === p.id && !Number.isNaN(Number(m.valeur))).slice().sort(byDate) }
@@ -951,6 +951,21 @@ const horsSpecListe = computed(() => {
   return out.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
 })
 
+// HTML du Sixpack pour l'export PDF (mêmes géométries que l'affichage, classes sx-/cl-/hi-/np-/cp-)
+function sixpackExportHtml(sp) {
+  if (!sp || sp.insuffisant) return ''
+  const ic = sp.ic, mc = sp.mc, h = sp.histo, np = sp.npp, lc = sp.last, cp = sp.capPlot, st = sp.stats
+  const circ = (pts) => pts.map(q => `<circle cx="${q.x.toFixed(1)}" cy="${q.y.toFixed(1)}" r="2.2" class="${q.oos ? 'cl-oos' : 'cl-dot'}"/>`).join('')
+  const pI = `<div class="sx-card"><div class="sx-h">Carte des valeurs individuelles (I)</div><svg viewBox="0 0 ${ic.W} ${ic.H}"><line x1="${ic.mL}" x2="${ic.W - ic.mR}" y1="${ic.yUCL}" y2="${ic.yUCL}" class="cl-lim"/><line x1="${ic.mL}" x2="${ic.W - ic.mR}" y1="${ic.yLCL}" y2="${ic.yLCL}" class="cl-lim"/><line x1="${ic.mL}" x2="${ic.W - ic.mR}" y1="${ic.center}" y2="${ic.center}" class="cl-ctr"/><path d="${ic.path}" class="cl-path"/>${circ(ic.pts)}<text x="${ic.W - ic.mR + 5}" y="${ic.yUCL + 3}" class="cl-lbl">LCS ${fmtNum(ic.vUCL)}</text><text x="${ic.W - ic.mR + 5}" y="${ic.center + 3}" class="cl-lbl ctr">X̄ ${fmtNum(ic.vMean)}</text><text x="${ic.W - ic.mR + 5}" y="${ic.yLCL + 3}" class="cl-lbl">LCI ${fmtNum(ic.vLCL)}</text></svg></div>`
+  const pH = `<div class="sx-card"><div class="sx-h">Histogramme des capabilités</div><svg viewBox="0 0 ${h.W} ${h.H}">${h.bars.map(b => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" class="hi-bar"/>`).join('')}<path d="${h.curveW}" class="hi-curve-w"/><path d="${h.curveO}" class="hi-curve-o"/>${h.xLsl != null ? `<line x1="${h.xLsl}" y1="${h.mT - 6}" x2="${h.xLsl}" y2="${h.y0}" class="hi-spec"/><text x="${h.xLsl}" y="${h.mT - 9}" class="hi-spec-lbl">LSI</text>` : ''}${h.xUsl != null ? `<line x1="${h.xUsl}" y1="${h.mT - 6}" x2="${h.xUsl}" y2="${h.y0}" class="hi-spec"/><text x="${h.xUsl}" y="${h.mT - 9}" class="hi-spec-lbl">LSS</text>` : ''}${h.xCible != null ? `<line x1="${h.xCible}" y1="${h.mT}" x2="${h.xCible}" y2="${h.y0}" class="hi-cible"/>` : ''}</svg></div>`
+  const pMR = `<div class="sx-card"><div class="sx-h">Carte d'étendue mobile</div><svg viewBox="0 0 ${mc.W} ${mc.H}"><line x1="${mc.mL}" x2="${mc.W - mc.mR}" y1="${mc.yUCL}" y2="${mc.yUCL}" class="cl-lim"/><line x1="${mc.mL}" x2="${mc.W - mc.mR}" y1="${mc.yLCL}" y2="${mc.yLCL}" class="cl-lim"/><line x1="${mc.mL}" x2="${mc.W - mc.mR}" y1="${mc.center}" y2="${mc.center}" class="cl-ctr"/><path d="${mc.path}" class="cl-path"/>${circ(mc.pts)}<text x="${mc.W - mc.mR + 5}" y="${mc.yUCL + 3}" class="cl-lbl">LCS ${fmtNum(mc.vUCL)}</text><text x="${mc.W - mc.mR + 5}" y="${mc.center + 3}" class="cl-lbl ctr">EM ${fmtNum(mc.vMean)}</text></svg></div>`
+  const pN = `<div class="sx-card"><div class="sx-h">Diag. probab. de Normale <span class="sx-ad">AD ${sixFmt(np.AD, 3)} · p ${np.pAD < 0.005 ? '&lt; 0,005' : sixFmt(np.pAD, 3)}</span></div><svg viewBox="0 0 ${np.W} ${np.H}"><line x1="${np.line.x1}" y1="${np.line.y1}" x2="${np.line.x2}" y2="${np.line.y2}" class="np-line"/>${np.pts.map(q => `<circle cx="${q.cx.toFixed(1)}" cy="${q.cy.toFixed(1)}" r="1.9" class="np-dot"/>`).join('')}</svg></div>`
+  const pL = `<div class="sx-card"><div class="sx-h">${Math.min(25, sp.n)} dernières observations</div><svg viewBox="0 0 ${lc.W} ${lc.H}"><line x1="${lc.mL}" x2="${lc.W - lc.mR}" y1="${lc.center}" y2="${lc.center}" class="cl-ctr dash"/><path d="${lc.path}" class="cl-path"/>${lc.pts.map(q => `<circle cx="${q.x.toFixed(1)}" cy="${q.y.toFixed(1)}" r="2.2" class="cl-dot"/>`).join('')}</svg></div>`
+  const rw = (l, v) => `<tr><td>${l}</td><td>${v}</td></tr>`, shd = (l) => `<tr class="sh"><td colspan="2">${l}</td></tr>`
+  const pS = `<div class="sx-card"><div class="sx-h">Indices de capabilité</div><table class="sx-tbl">${shd("À l'intérieur (court terme)")}${rw('σ intérieur', sixFmt(sp.sdW, 4))}${rw('Cp', sixFmt(st.cp))}${rw('Cpk', sixFmt(st.cpk))}${shd('Global (long terme)')}${rw('σ global', sixFmt(sp.sdO, 4))}${rw('Pp', sixFmt(st.pp))}${rw('Ppk', sixFmt(st.ppk))}${rw('Cpm', sixFmt(st.cpm))}${shd('PPM')}${rw('Observé', sixFmt(st.ppmObs, 0))}${rw('Attendu (global)', sixFmt(st.ppmO, 1))}${shd('Spécifications')}${rw('LSI / LSS', fmtNum(sp.LSL) + ' / ' + fmtNum(sp.USL))}${rw('Cible', fmtNum(sp.TGT))}</table></div>`
+  const pCP = `<div class="sx-card sx-capplot"><div class="sx-h">Graphique des capabilités</div><svg viewBox="0 0 ${cp.W} ${cp.H}">${cp.rows.map(r => `<text x="6" y="${r.y + 3.5}" class="cp-lbl">${r.lbl}</text><line x1="${r.x1}" y1="${r.y}" x2="${r.x2}" y2="${r.y}" class="cp-line"/><line x1="${r.x1}" y1="${r.y - 5}" x2="${r.x1}" y2="${r.y + 5}" class="cp-tick"/><line x1="${r.x2}" y1="${r.y - 5}" x2="${r.x2}" y2="${r.y + 5}" class="cp-tick"/>${r.xc != null ? `<line x1="${r.xc}" y1="${r.y - 5}" x2="${r.xc}" y2="${r.y + 5}" class="cp-tick"/>` : ''}`).join('')}</svg></div>`
+  return `<div class="sx-grid">${pI}${pH}${pMR}${pN}${pL}${pS}${pCP}</div>`
+}
 function exporterPDF() {
   const pr = produits.value.find(x => String(x.id) === produitSel.value)
   const prNom = pr ? (pr.code_pf + ' — ' + pr.designation) : ''
@@ -964,6 +979,12 @@ function exporterPDF() {
   let horsHtml = horsSpecListe.value.length
     ? horsSpecListe.value.map(h => `<tr><td>${h.lot}</td><td>${h.phase}</td><td>${h.nom}</td><td class="r">${h.valeur} ${h.unite}</td><td class="r">${limTxt(h.lsl, h.usl)}</td><td>${h.date || '—'}</td></tr>`).join('')
     : '<tr><td colspan="6" style="text-align:center;color:#16a34a">Aucun lot hors spec</td></tr>'
+  let sixHtml = ''
+  for (const p of paramsNumDispo.value) {
+    const sp = buildSixpack(p)
+    if (!sp || sp.insuffisant) continue
+    sixHtml += `<div class="sx-sec"><h2>Sixpack de capabilité — ${sp.nom}${sp.unite ? ' (' + sp.unite + ')' : ''}</h2>${sixpackExportHtml(sp)}</div>`
+  }
   const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Revue PQR — ${prNom}</title>
 <style>
 *{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:28px;font-size:12px}
@@ -978,6 +999,24 @@ th{text-align:left;background:#faf5ff;color:#6b21a8;padding:5px 7px;border-botto
 th.r,td.r{text-align:right} td{padding:4px 7px;border-bottom:1px solid #f1f5f9}
 tr.ph td{background:#f8fafc;font-weight:800;color:#a855f7;text-transform:uppercase;font-size:10px}
 .foot{margin-top:22px;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px}
+.sx-sec{page-break-before:always;margin-top:8px}
+.sx-sec h2{margin-top:0}
+.sx-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start}
+.sx-card{border:1px solid #e8edf3;border-radius:7px;padding:5px 8px}
+.sx-card svg{width:100%;height:auto;display:block}
+.sx-h{font-size:10px;font-weight:700;color:#334155;text-align:center;margin-bottom:3px}
+.sx-ad{font-weight:400;color:#94a3b8;font-size:9px}
+.cl-lim{stroke:#dc2626;stroke-width:1}.cl-ctr{stroke:#16a34a;stroke-width:1}.cl-ctr.dash{stroke:#94a3b8;stroke-width:1;stroke-dasharray:4 3}
+.cl-path{fill:none;stroke:#2563eb;stroke-width:1}.cl-dot{fill:#2563eb}.cl-oos{fill:#dc2626}
+.cl-lbl{font-size:9px;fill:#64748b}.cl-lbl.ctr{fill:#16a34a}
+.hi-bar{fill:#bfdbfe;stroke:#60a5fa;stroke-width:.5}.hi-curve-o{fill:none;stroke:#dc2626;stroke-width:1.4}.hi-curve-w{fill:none;stroke:#334155;stroke-width:1.1;stroke-dasharray:4 3}
+.hi-spec{stroke:#dc2626;stroke-width:1;stroke-dasharray:3 2}.hi-spec-lbl{font-size:10px;font-weight:700;fill:#dc2626;text-anchor:middle}.hi-cible{stroke:#16a34a;stroke-width:1;stroke-dasharray:2 2}
+.np-line{stroke:#dc2626;stroke-width:1.1}.np-dot{fill:#2563eb}
+.cp-line,.cp-tick{stroke:#334155;stroke-width:1.4}.cp-lbl{font-size:11px;font-weight:700;fill:#475569}
+.sx-tbl{width:100%;border-collapse:collapse;font-size:10px;margin:0}
+.sx-tbl td{padding:2px 6px;border-bottom:1px solid #eef2f6}.sx-tbl td:last-child{text-align:right;font-weight:700}
+.sx-tbl tr.sh td{background:#faf5ff;color:#6b21a8;font-weight:700;font-size:9px;text-transform:uppercase}
+.sx-capplot{grid-column:1 / -1}
 @media print{body{margin:14mm}}
 </style></head><body>
 <h1>Revue Produit Qualité — PQR</h1><p class="sub">${prNom}</p>
@@ -987,6 +1026,7 @@ tr.ph td{background:#f8fafc;font-weight:800;color:#a855f7;text-transform:upperca
 <table><thead><tr><th>Paramètre</th><th class="r">n</th><th class="r">Moyenne</th><th class="r">σ</th><th class="r">Limites</th><th class="r">Conf.</th><th class="r">Cpk</th><th>Capabilité</th></tr></thead><tbody>${synthHtml}</tbody></table>
 <h2>Lots hors spec</h2>
 <table><thead><tr><th>Lot</th><th>Phase</th><th>Paramètre</th><th class="r">Valeur</th><th class="r">Limites</th><th>Date</th></tr></thead><tbody>${horsHtml}</tbody></table>
+${sixHtml}
 <div class="foot">Document généré par ProdTrack — Module PQR. Cpk ≥ 1,33 : capable · 1,00–1,33 : acceptable · &lt; 1,00 : insuffisant.</div>
 </body></html>`
   const w = window.open('', '_blank')
