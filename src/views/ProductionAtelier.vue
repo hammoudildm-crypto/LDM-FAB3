@@ -119,7 +119,7 @@ async function charger() {
   if (!rc.error) conds.value = rc.data || []
   const rh = await fetchAllPaged(() => supabase.from('production_historique').select('annee, mois, etape, nb_lots'))
   if (!rh.error) hist.value = rh.data || []
-  const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, date_fin_fabrication, produits(code_pf, designation, taille_lot, pcsu, forme)').eq('actif', true))
+  const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, date_fin_fabrication, boites_fabriquees, produits(code_pf, designation, taille_lot, pcsu, forme)').eq('actif', true))
   if (!ro.error) ofs.value = ro.data || []
   const rhl = await fetchAllPaged(() => supabase.from('historique_lots_phases')
     .select('numero_lot, code_pf, designation, phase, date_fin'))
@@ -540,16 +540,17 @@ const lotsMoisPA = computed(() => {
   const ph = atelierSel.value, y = m.annee
   const dansMois = (d) => { if (!d) return false; const dt = new Date(d); return dt.getFullYear() === y && dt.getMonth() === m.mois }
   const parLot = new Map()
-  const push = (lot, code, desig, src) => {
+  const push = (lot, code, desig, src, qte = null) => {
     if (lot == null) return
     const k = String(lot).trim()
     if (!k || parLot.has(k)) return
-    parLot.set(k, { lot: k, code: code || '—', desig: desig || '', src })
+    parLot.set(k, { lot: k, code: code || '—', desig: desig || '', src, qte })
   }
   const pushOf = (id, src) => {
     const o = ofById.value[id]
     if (!o) return
-    push(o.numero_lot, o.produits ? o.produits.code_pf : null, o.produits ? o.produits.designation : null, src)
+    const qte = Number(o.boites_fabriquees) || Number(o.produits ? o.produits.taille_lot : 0) || null
+    push(o.numero_lot, o.produits ? o.produits.code_pf : null, o.produits ? o.produits.designation : null, src, qte)
   }
   if (ph === 'Conditionnement') {
     for (const c of conds.value) if (dansMois(c.date_fin || c.date_conditionnement)) pushOf(c.ordre_id, 'live')
@@ -1067,6 +1068,7 @@ onMounted(charger)
                 <td class="pa-lot">{{ l.lot }}</td>
                 <td class="pa-code">{{ l.code }}</td>
                 <td class="pa-des">{{ l.desig }}</td>
+                <td class="pa-qte">{{ l.qte != null ? fmt(l.qte) + ' bts' : '—' }}</td>
               </tr>
             </tbody>
           </table>
@@ -1195,6 +1197,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-md-body { overflow-y: auto; padding: 6px 18px 16px; }
 .pa-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .pa-table td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; }
+.pa-qte { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: #0f766e; white-space: nowrap; }
 .pa-lot { font-family: ui-monospace, monospace; font-weight: 700; white-space: nowrap; }
 .pa-code { font-family: ui-monospace, monospace; font-weight: 600; color: #0f766e; white-space: nowrap; }
 .pa-des { color: #475569; }
