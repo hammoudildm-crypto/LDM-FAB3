@@ -936,7 +936,8 @@ const equilibrageLigne = computed(() => {
 const kpisStd = computed(() => {
   const a = trsAgg.value
   const A = a.ouv ? a.fonct / a.ouv * 100 : null
-  const Q = a.prod ? a.goodFtq / a.prod * 100 : null
+  // Qualité = conformité du premier coup = 100 − taux de rebut (perte fabrication) − taux de retouche
+  const Q = tauxRebut.value != null ? Math.max(0, 100 - tauxRebut.value - (retoucheKpi.value || 0)) : null
   const P = a.theo ? Math.min(100, a.prodTheo / a.theo * 100) : null
   const oee = (A != null && P != null && Q != null) ? A * P * Q / 10000 : null
   const cyc = a.good ? a.fonct / a.good : null
@@ -947,7 +948,7 @@ const kpisStd = computed(() => {
     { n: 'OEE (TRS)', d: 'Efficacité globale des équipements', f: 'Disponibilité × Performance × Qualité', c: '≥ 85%', dir: 'up', s: 85, v: oee, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Disponibilité', d: 'Temps de marche vs temps ouvert', f: 'Temps de marche / temps ouvert ×100', c: '≥ 90%', dir: 'up', s: 90, v: A, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Performance', d: 'Cadence réelle vs cadence nominale', f: 'Production / production théorique ×100', c: '≥ 95%', dir: 'up', s: 95, v: P, u: '%', fr: 'Quot./Hebdo' },
-    { n: 'Qualité', d: '% conformes du premier coup (rebuts + retouches exclus)', f: '(Produites − rebuts − retouches) / produites ×100', c: '≥ 99%', dir: 'up', s: 99, v: Q, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Qualité', d: 'Conformité : 100 − taux de rebut − taux de retouche', f: '100 − taux de rebut − taux de retouche', c: '≥ 99%', dir: 'up', s: 99, v: Q, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Efficience de production', d: 'Sortie réelle vs théorique', f: 'Sortie réelle / théorique ×100', c: '≥ 90%', dir: 'up', s: 90, v: P != null ? P : rendementFab.value, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Taux d\'utilisation capacité', d: 'Marche vs capacité calendaire', f: 'Temps de marche / capacité théorique ×100', c: '≥ 80%', dir: 'up', s: 80, v: utilisationCapacite.value, u: '%', fr: 'Hebdo/Mens.' },
     { n: 'Débit (Throughput)', d: 'Unités conformes produites', f: 'Total unités conformes', c: '↑ mieux', dir: 'info', s: null, v: a.good || null, u: '', fr: 'Quot.' },
