@@ -380,7 +380,7 @@ onMounted(async () => {
   try {
     const [rf, rc, rp, rs, re, rcad] = await Promise.all([
       fetchAllPaged(() => supabase.from('ordres_fabrication')
-        .select('id, produit_id, numero_lot, boites_fabriquees, quantite_theorique, date_fin_fabrication, date_reception, date_lancement, date_fin_validite, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
+        .select('id, produit_id, numero_lot, statut, boites_fabriquees, quantite_theorique, date_fin_fabrication, date_reception, date_lancement, date_fin_validite, equipements(nom), produits(gamme, code_pf, designation, pcsu, taille_lot, donneurs_ordre(nom))')),
       fetchAllPaged(() => supabase.from('conditionnement')
         .select('quantite_conditionnee, date_conditionnement, equipements(nom, type), ordres_fabrication(numero_lot, date_fin_fabrication, produits(code_pf, designation, pcsu, taille_lot, unites_par_boite, donneurs_ordre(nom)))')),
       fetchAllPaged(() => supabase.from('plan_production')
@@ -661,6 +661,17 @@ const rendementFab = computed(() => {
   }
   return theo > 0 ? Math.round(prod / theo * 100) : null
 })
+// Taux de rejet : lots d'OF au statut « rejeté » / total lots de l'année
+const tauxRejetLots = computed(() => {
+  let total = 0, rejetes = 0
+  for (const o of fabRaw.value) {
+    const d = o.date_lancement || o.date_fin_fabrication || o.date_reception
+    if (!d || anYear(d) !== annee.value) continue
+    total++
+    if (/rejet/i.test(String(o.statut || ''))) rejetes++
+  }
+  return total ? rejetes / total * 100 : null
+})
 // Formation / qualification (logique Matrice, dédup par nom canonique)
 const canonF = computed(() => {
   const cleById = {}, idByCle = {}
@@ -922,7 +933,7 @@ const kpisStd = computed(() => {
     { n: 'Takt Time', d: 'Rythme requis par la demande (PDP)', f: 'Temps disponible / quantité planifiée', c: 'selon demande', dir: 'info', s: null, v: takt, u: ' min', fr: 'Quot.' },
     { n: 'Délai (Lead Time)', d: 'Réception OF → fin de fabrication', f: 'Fin de fabrication − réception (moy. jours)', c: '↓ mieux', dir: 'down', s: null, v: ofDelai.value, u: ' j', fr: 'Hebdo/Mens.' },
     { n: 'First Pass Yield (FPY)', d: 'Unités bonnes du premier coup', f: 'Bonnes / total entrée ×100', c: '≥ 95%', dir: 'up', s: 95, v: rendementFab.value, u: '%', fr: 'Quot./Hebdo' },
-    { n: 'Taux de rejet', d: '% d\'unités rejetées', f: 'Rejetées / produites ×100', c: '< 2%', dir: 'down', s: 2, v: rej, u: '%', fr: 'Quot.' },
+    { n: 'Taux de rejet', d: '% de lots rejetés (statut OF rejeté)', f: 'Lots rejetés / total lots ×100', c: '< 2%', dir: 'down', s: 2, v: tauxRejetLots.value, u: '%', fr: 'Hebdo/Mens.' },
     { n: 'Taux de rebut', d: '% matière mise au rebut', f: 'Rebuts / produites ×100', c: '< 1,5%', dir: 'down', s: 1.5, v: rej, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Taux de retouche', d: '% d\'unités retouchées', f: 'Retouchées / produites ×100', c: '< 2%', dir: 'down', s: 2, v: retoucheKpi.value, u: '%', fr: 'Quot.' },
     { n: 'Respect du planning', d: '% production réalisée au plan', f: 'Réalisé / planifié ×100', c: '≥ 95%', dir: 'up', s: 95, v: tauxGlobal.value, u: '%', fr: 'Quot./Hebdo' },
