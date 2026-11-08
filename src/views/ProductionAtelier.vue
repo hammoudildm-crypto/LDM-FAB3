@@ -523,6 +523,7 @@ const seriesChart = computed(() => {
 const anneesChart = computed(() => ANNEES_COMP.filter(y => anneesActives.value.has(y)))
 const ofById = computed(() => { const m = {}; for (const o of ofs.value) m[o.id] = o; return m })
 const modalPA = ref(null)   // { mois, annee }
+const paAgrandi = ref(false)
 function ouvrirBarrePA(i, si) {
   const ys = anneesChart.value
   if (!ys.length) return
@@ -1068,10 +1069,13 @@ onMounted(charger)
     </template>
 
     <div v-if="modalPA" class="modal-overlay" @click="modalPA = null">
-      <div class="pa-modal" @click.stop>
+      <div class="pa-modal" :class="{ 'pa-modal-xl': paAgrandi }" @click.stop>
         <div class="pa-md-head">
           <h3>{{ atelierSel }} — {{ MOIS_LONG[modalPA.mois] }} {{ modalPA.annee }}</h3>
-          <button class="pa-md-x" @click="modalPA = null">✕</button>
+          <div class="pa-md-actions">
+            <button class="pa-md-ico" :title="paAgrandi ? 'Réduire la fenêtre' : 'Agrandir la fenêtre'" @click="paAgrandi = !paAgrandi"><span class="pa-md-ico-g">{{ paAgrandi ? '⤡' : '⤢' }}</span>{{ paAgrandi ? 'Réduire' : 'Agrandir' }}</button>
+            <button class="pa-md-x" @click="modalPA = null">✕</button>
+          </div>
         </div>
         <div class="pa-md-sub"><template v-if="metrique === 'lots'">{{ fmtMetrique(valeurBarrePA) }} lot(s) terminé(s)</template><template v-else-if="metrique === 'boites'">{{ fmtMetrique(valeurBarrePA) }} boîte(s) · valeur nominale</template><template v-else>{{ fmtMetrique(valeurBarrePA) }} · CA nominal</template><span v-if="lotsMoisPA.length"> · {{ lotsMoisPA.length }} lot(s) détaillé(s)</span></div>
         <div v-if="recapPA" class="pa-recap">
@@ -1221,9 +1225,14 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
   .kpi-grid { grid-template-columns: 1fr; }
 }
 .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
-.pa-modal { background: #fff; border-radius: 14px; width: min(600px, 100%); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
-.pa-md-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; }
+.pa-modal { background: #fff; border-radius: 14px; width: min(600px, 100%); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); transition: width .18s ease, max-height .18s ease; }
+.pa-modal.pa-modal-xl { width: min(1100px, 100%); max-height: 94vh; }
+.pa-md-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px 10px; }
 .pa-md-head h3 { margin: 0; font-size: 15.5px; }
+.pa-md-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+.pa-md-ico { display: inline-flex; align-items: center; gap: 5px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 10px; font: inherit; font-size: 11.5px; font-weight: 700; color: #475569; cursor: pointer; white-space: nowrap; transition: all .12s; }
+.pa-md-ico:hover { background: #e2e8f0; color: #0f766e; }
+.pa-md-ico-g { font-size: 14px; line-height: 1; }
 .pa-md-x { background: none; border: 0; font-size: 17px; color: #94a3b8; cursor: pointer; }
 .pa-md-sub { padding: 8px 18px; font-size: 12.5px; color: #64748b; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; }
 .pa-recap { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px 18px 2px; }
