@@ -524,6 +524,12 @@ const anneesChart = computed(() => ANNEES_COMP.filter(y => anneesActives.value.h
 const ofById = computed(() => { const m = {}; for (const o of ofs.value) m[o.id] = o; return m })
 const modalPA = ref(null)   // { mois, annee }
 const paAgrandi = ref(false)
+const paModalEl = ref(null)
+function basculerTaille() {
+  // on efface une taille éventuellement réglée à la main pour que le préréglage s'applique
+  if (paModalEl.value) { paModalEl.value.style.width = ''; paModalEl.value.style.height = '' }
+  paAgrandi.value = !paAgrandi.value
+}
 function ouvrirBarrePA(i, si) {
   const ys = anneesChart.value
   if (!ys.length) return
@@ -1069,11 +1075,11 @@ onMounted(charger)
     </template>
 
     <div v-if="modalPA" class="modal-overlay" @click="modalPA = null">
-      <div class="pa-modal" :class="{ 'pa-modal-xl': paAgrandi }" @click.stop>
+      <div class="pa-modal" :class="{ 'pa-modal-xl': paAgrandi }" ref="paModalEl" @click.stop>
         <div class="pa-md-head">
           <h3>{{ atelierSel }} — {{ MOIS_LONG[modalPA.mois] }} {{ modalPA.annee }}</h3>
           <div class="pa-md-actions">
-            <button class="pa-md-ico" :title="paAgrandi ? 'Réduire la fenêtre' : 'Agrandir la fenêtre'" @click="paAgrandi = !paAgrandi"><span class="pa-md-ico-g">{{ paAgrandi ? '⤡' : '⤢' }}</span>{{ paAgrandi ? 'Réduire' : 'Agrandir' }}</button>
+            <button class="pa-md-ico" :title="paAgrandi ? 'Réduire la fenêtre' : 'Agrandir la fenêtre'" @click="basculerTaille()"><span class="pa-md-ico-g">{{ paAgrandi ? '⤡' : '⤢' }}</span>{{ paAgrandi ? 'Réduire' : 'Agrandir' }}</button>
             <button class="pa-md-x" @click="modalPA = null">✕</button>
           </div>
         </div>
@@ -1225,7 +1231,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
   .kpi-grid { grid-template-columns: 1fr; }
 }
 .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
-.pa-modal { background: #fff; border-radius: 14px; width: min(600px, 100%); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); transition: width .18s ease, max-height .18s ease; }
+.pa-modal { background: #fff; border-radius: 14px; width: min(600px, 100%); max-width: 100%; max-height: 88vh; min-width: 340px; min-height: 220px; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3); resize: both; overflow: hidden; }
 .pa-modal.pa-modal-xl { width: min(1100px, 100%); max-height: 94vh; }
 .pa-md-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px 10px; }
 .pa-md-head h3 { margin: 0; font-size: 15.5px; }
@@ -1241,7 +1247,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-rc-v { font-size: 18px; font-weight: 800; color: #334155; margin-top: 2px; font-variant-numeric: tabular-nums; }
 .pa-rc-v.pa-rc-real { color: #0f766e; }
 @media (max-width: 520px) { .pa-recap { grid-template-columns: repeat(2, 1fr); } }
-.pa-md-body { overflow-y: auto; padding: 6px 18px 16px; }
+.pa-md-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px 18px 16px; }
 .pa-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .pa-table td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; }
 .pa-qte { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: #0f766e; white-space: nowrap; }
