@@ -81,7 +81,7 @@ async function charger() {
   equipements.value = re.data || []
 
   const rof = await fetchAllPaged(() => supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, produit_id, deviation, deviation_cond, en_triage, triage_debut, triage_fin, qte_a_trier, qte_triee, en_triage_cond, triage_cond_debut, triage_cond_fin, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite, taille_lot, poids_unitaire_mg, poids_sac_kg), equipements(code, nom)')
+    .select('id, numero_lot, statut, produit_id, deviation, deviation_cond, en_triage, triage_debut, triage_fin, qte_a_trier, qte_triee, en_triage_cond, triage_cond_debut, triage_cond_fin, quantite_theorique, boites_fabriquees, date_reception, date_fin_validite, date_lancement, date_fin_fabrication, equipement_id, rdt_granulation, rdt_melange, rdt_compression, rdt_pelliculage, produits(code_pf, designation, forme, gamme, unites_par_boite, taille_lot, pcsu, poids_unitaire_mg, poids_sac_kg), equipements(code, nom)')
     .eq('actif', true))
   if (rof.error) { erreur.value = rof.error.message; chargement.value = false; return }
   ofs.value = rof.data || []
@@ -120,7 +120,7 @@ async function charger() {
 
   await chargerSacs()
   await chargerControlesAql()
-  const rpl = await fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme)'))
+  const rpl = await fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(gamme, taille_lot, pcsu)'))
   if (!rpl.error) planRows.value = rpl.data || []
 
   chargement.value = false
@@ -291,6 +291,7 @@ const deviationCondIds = computed(() => new Set(ofs.value.filter(o => !!o.deviat
 // File par phase : lots à l'étape courante (en attente = étape précédente finie ; en cours = démarrée)
 const anneeCourante = new Date().getFullYear()
 const moisCourant = new Date().getMonth() + 1
+const moisNomCourant = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][new Date().getMonth()]
 const planParPhase = computed(() => {
   const acc = {}
   for (const r of planRows.value) {
@@ -374,6 +375,41 @@ const capaTotaux = computed(() => {
   }
   return { planAn, planMois, realAn, realMois }
 })
+// KPIs de production (usine) : plan & réalisation, annuel & mois en cours, en lots/boîtes/CA.
+// Plan = PDP (plan_production) ; Réalisation = boîtes fabriquées (date de fin de fabrication).
+const kpiProdQ = computed(() => {
+  let pAnB = 0, pAnL = 0, pAnC = 0, pMoB = 0, pMoL = 0, pMoC = 0
+  for (const r of planRows.value) {
+    if (Number(r.annee) !== anneeCourante) continue
+    const pr = r.produits; if (!pr) continue
+    const b = Number(r.quantite_planifiee || 0)
+    const taille = Number(pr.taille_lot || 0), pcsu = Number(pr.pcsu || 0)
+    const l = taille > 0 ? b / taille : 0, c = b * pcsu
+    pAnB += b; pAnL += l; pAnC += c
+    if (Number(r.mois) === moisCourant) { pMoB += b; pMoL += l; pMoC += c }
+  }
+  let rAnB = 0, rAnL = 0, rAnC = 0, rMoB = 0, rMoL = 0, rMoC = 0
+  for (const o of ofs.value) {
+    const d = o.date_fin_fabrication; if (!d) continue
+    const dt = new Date(d); if (dt.getFullYear() !== anneeCourante) continue
+    const pr = o.produits || {}
+    const b = Number(o.boites_fabriquees) || Number(o.quantite_theorique) || 0
+    const taille = Number(pr.taille_lot || 0), pcsu = Number(pr.pcsu || 0)
+    const l = taille > 0 ? b / taille : 0, c = b * pcsu
+    rAnB += b; rAnL += l; rAnC += c
+    if ((dt.getMonth() + 1) === moisCourant) { rMoB += b; rMoL += l; rMoC += c }
+  }
+  return {
+    plan: { an: { lots: pAnL, boites: pAnB, ca: pAnC }, mois: { lots: pMoL, boites: pMoB, ca: pMoC } },
+    real: { an: { lots: rAnL, boites: rAnB, ca: rAnC }, mois: { lots: rMoL, boites: rMoB, ca: rMoC } },
+  }
+})
+function fmtDAq(n) {
+  const v = Number(n || 0)
+  if (v >= 1e9) return (Math.round(v / 1e8) / 10).toLocaleString('fr-FR') + ' Md DA'
+  if (v >= 1e6) return (Math.round(v / 1e5) / 10).toLocaleString('fr-FR') + ' M DA'
+  return Math.round(v).toLocaleString('fr-FR') + ' DA'
+}
 // Produit « direct conditionnement » (ex. seringues importées type Rebif) : pas d'étape de fabrication
 function estDirectCond(p) { return !!(p && String(p.forme || '').toLowerCase() === 'seringue') }
 const queuePhase = computed(() => {
@@ -1427,6 +1463,34 @@ onMounted(async () => {
               <div class="kpi-lbl">{{ k.l }}<span v-if="k.to" class="kpi-arrow">→</span></div>
             </div>
           </div>
+            <p class="qual-sub">Production — plan vs réalisation</p>
+            <section class="prodq-kpis">
+              <div class="pqk-card pqk-plan">
+                <div class="pqk-h">Plan annuel <span class="pqk-sub">· {{ anneeCourante }}</span></div>
+                <div class="pqk-row"><span class="pqk-l">Lots</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.plan.an.lots)) }}</span></div>
+                <div class="pqk-row"><span class="pqk-l">Boîtes</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.plan.an.boites)) }}</span></div>
+                <div class="pqk-row"><span class="pqk-l">CA</span><span class="pqk-v">{{ fmtDAq(kpiProdQ.plan.an.ca) }}</span></div>
+              </div>
+              <div class="pqk-card pqk-plan">
+                <div class="pqk-h">Plan du mois <span class="pqk-sub">· {{ moisNomCourant }}</span></div>
+                <div class="pqk-row"><span class="pqk-l">Lots</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.plan.mois.lots)) }}</span></div>
+                <div class="pqk-row"><span class="pqk-l">Boîtes</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.plan.mois.boites)) }}</span></div>
+                <div class="pqk-row"><span class="pqk-l">CA</span><span class="pqk-v">{{ fmtDAq(kpiProdQ.plan.mois.ca) }}</span></div>
+              </div>
+              <div class="pqk-card pqk-real">
+                <div class="pqk-h">Réalisation annuelle <span class="pqk-sub">· {{ anneeCourante }}</span></div>
+                <div class="pqk-row"><span class="pqk-l">Lots</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.real.an.lots)) }}</span></div>
+                <div class="pqk-row"><span class="pqk-l">Boîtes</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.real.an.boites)) }}</span></div>
+                <div class="pqk-row"><span class="pqk-l">CA</span><span class="pqk-v">{{ fmtDAq(kpiProdQ.real.an.ca) }}</span></div>
+              </div>
+              <div class="pqk-card pqk-real">
+                <div class="pqk-h">Réalisation du mois <span class="pqk-sub">· {{ moisNomCourant }}</span></div>
+                <div class="pqk-row"><span class="pqk-l">Lots</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.real.mois.lots)) }}</span></div>
+                <div class="pqk-row"><span class="pqk-l">Boîtes</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.real.mois.boites)) }}</span></div>
+                <div class="pqk-row"><span class="pqk-l">CA</span><span class="pqk-v">{{ fmtDAq(kpiProdQ.real.mois.ca) }}</span></div>
+              </div>
+            </section>
+            <p class="prodq-note">Plan = PDP · Réalisation = boîtes fabriquées (date de fin de fabrication). CA nominal (boîtes × prix de cession).</p>
             <p class="qual-sub">Détail par atelier</p>
             <table v-if="qualiteParAtelier.length" class="qual-tbl">
               <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">Boîtes</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th><th class="qnum qcap" title="Capacité annuelle de l'atelier = total planifié de l'année (boîtes)">Cap. annuelle</th><th class="qnum" title="Planifié du mois en cours (boîtes)">Plan du mois</th><th class="qnum" title="Boîtes fabriquées cette année (date de fin de fabrication)">Réalisé année</th><th class="qnum" title="Boîtes fabriquées ce mois">Réalisé mois</th></tr></thead>
@@ -1994,6 +2058,20 @@ onMounted(async () => {
 /* Qualité — triage et déviations */
 .qual-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .qual-h { margin: 0 0 12px; font-size: 15px; font-weight: 800; color: #0f172a; }
+.prodq-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 6px; }
+.pqk-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 11px 14px; background: #fff; }
+.pqk-plan { border-top: 3px solid #94a3b8; }
+.pqk-real { border-top: 3px solid #0f766e; background: #f6fdfb; }
+.pqk-h { font-size: 12.5px; font-weight: 800; color: #334155; margin-bottom: 6px; }
+.pqk-sub { font-weight: 600; color: #94a3b8; font-size: 11px; }
+.pqk-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 3px 0; border-top: 1px dashed #eef2f6; }
+.pqk-row:first-of-type { border-top: 0; }
+.pqk-l { font-size: 10.5px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+.pqk-v { font-size: 15px; font-weight: 800; color: #1e293b; font-variant-numeric: tabular-nums; text-align: right; }
+.pqk-real .pqk-v { color: #0f766e; }
+.prodq-note { font-size: 10.5px; color: #94a3b8; margin: 0 0 14px; }
+@media (max-width: 900px) { .prodq-kpis { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px) { .prodq-kpis { grid-template-columns: 1fr; } }
 /* 7 colonnes fixes : les deux bandeaux (File de production et Qualité) s'alignent colonne par
    colonne. En auto-fit, un bandeau de 7 tuiles et un de 11 ne donnaient pas la même largeur. */
 .qual-kpis { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 9px; margin-bottom: 12px; }
