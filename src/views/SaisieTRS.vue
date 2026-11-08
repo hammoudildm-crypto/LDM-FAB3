@@ -42,6 +42,8 @@ const MOTIFS = [
   ['arret_maintenance_min', 'Maintenance'], ['arret_attente_min', 'Attente (matière/perso.)'],
   ['arret_autre_min', 'Autre']
 ]
+// Nettoyage & Réglage sont sortis de la grille pour être alignés avec Retouches sur une même ligne
+const motifsGrille = MOTIFS.filter(m => m[0] !== 'arret_nettoyage_min' && m[0] !== 'arret_reglage_min')
 
 async function charger() {
   const re = await supabase.from('equipements').select('id, code, nom, type').eq('actif', true).order('code')
@@ -227,7 +229,12 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
           <h3 class="card-title">Temps du poste (minutes)</h3>
           <label class="fl">Temps d'ouverture (pause 30 min déduite)<input type="number" v-model.number="form.temps_ouverture_min" /></label>
           <div class="motifs">
-            <label v-for="m in MOTIFS" :key="m[0]" class="fl" :class="{ hl: m[0] === 'arret_nettoyage_min' }">{{ m[1] }}<input type="number" min="0" v-model.number="form[m[0]]" /></label>
+            <label v-for="m in motifsGrille" :key="m[0]" class="fl">{{ m[1] }}<input type="number" min="0" v-model.number="form[m[0]]" /></label>
+          </div>
+          <div class="trio">
+            <label class="fl hl">Nettoyage<input type="number" min="0" v-model.number="form.arret_nettoyage_min" /></label>
+            <label class="fl">Réglage<input type="number" min="0" v-model.number="form.arret_reglage_min" /></label>
+            <label v-if="colRetouche" class="fl">Retouches<input type="number" min="0" v-model.number="form.retouches" title="Unités reprises/retouchées — alimente le KPI « Taux de retouche »." /></label>
           </div>
           <div class="sub">Σ arrêts : <b>{{ sommeArrets }}</b> min · Fonctionnement : <b>{{ tempsFonct }}</b> min</div>
         </div>
@@ -235,7 +242,6 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
           <h3 class="card-title">Production</h3>
           <label class="fl">{{ cadenceMode === 'cycle' ? 'Temps écoulé (min)' : 'Production réalisée (' + uniteCad.replace('/h','') + ')' }}<input type="number" min="0" v-model.number="form.production_realisee" /></label>
           <label v-if="cadenceMode !== 'cycle'" class="fl">Rebuts<input type="number" min="0" v-model.number="form.rebuts" /></label>
-          <label v-if="colRetouche" class="fl">Retouches<input type="number" min="0" v-model.number="form.retouches" title="Unités reprises/retouchées — alimente le KPI « Taux de retouche »." /></label>
           <label class="fl">Commentaire<input type="text" v-model="form.commentaire" placeholder="Optionnel" /></label>
 
           <div class="trs-box">
@@ -297,6 +303,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
 .fl { margin-bottom: 10px; }
 .motifs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.trio { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
 .fl.hl input { border-color: #0f766e; background: #f0fdfa; }
 .sub { font-size: 13px; color: #64748b; margin-top: 8px; }
 .trs-box { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin: 14px 0; background: #f8fafc; }
@@ -313,7 +320,7 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .right { text-align: right; }
 .nowrap { white-space: nowrap; }
 .empty { color: #94a3b8; text-align: center; padding: 16px; font-style: italic; }
-@media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } .motifs { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } .motifs { grid-template-columns: 1fr; } .trio { grid-template-columns: 1fr; } }
 .cad-inline { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; }
 .cad-inline-in { width: 110px; font-size: 13px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
 .cad-inline-sel { font-size: 13px; padding: 5px 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
