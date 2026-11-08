@@ -552,7 +552,7 @@ const lotsMoisPA = computed(() => {
   const pushOf = (id, src) => {
     const o = ofById.value[id]
     if (!o) return
-    const qte = Number(o.boites_fabriquees) || Number(o.produits ? o.produits.taille_lot : 0) || null
+    const qte = Number(o.produits ? o.produits.taille_lot : 0) || Number(o.boites_fabriquees) || null
     const pcsu = Number(o.produits ? o.produits.pcsu : 0) || 0
     push(o.numero_lot, o.produits ? o.produits.code_pf : null, o.produits ? o.produits.designation : null, src, qte, pcsu)
   }
