@@ -856,28 +856,41 @@ function joursOuvresMoisTB(an, moisIdx) {
   while (d.getMonth() === moisIdx) { const wd = d.getDay(); if (wd !== 0 && wd !== 6) n++; d.setDate(d.getDate() + 1) }
   return n
 }
-const utilisationCapacite = computed(() => {
+// Base capacité partagée : heures de marche, d'ouverture et capacité calendaire (par équipement présent en TRS)
+const capaBase = computed(() => {
   const now = new Date()
   const moisMax = annee.value === now.getFullYear() ? (now.getMonth() + 1) : 12
   let joursAn = 0
   for (let m = 0; m < moisMax; m++) joursAn += joursOuvresMoisTB(annee.value, m)
   if (!(joursAn > 0)) return null
-  const fonctEq = {}
+  const fonctEq = {}, ouvEq = {}
   for (const t of trsRaw.value) {
     if (!t.date || anYear(t.date) !== annee.value) continue
     const o = num(t.temps_ouverture_min); if (!(o > 0)) continue
     const arr = num(t.arret_panne_min) + num(t.arret_format_min) + num(t.arret_nettoyage_min) + num(t.arret_reglage_min) + num(t.arret_maintenance_min) + num(t.arret_attente_min) + num(t.arret_autre_min)
     fonctEq[t.equipement_id] = (fonctEq[t.equipement_id] || 0) + Math.max(0, o - arr)
+    ouvEq[t.equipement_id] = (ouvEq[t.equipement_id] || 0) + o
   }
   const rg = regimeMap.value || {}
-  let marcheH = 0, capaH = 0
-  for (const id in fonctEq) {
-    marcheH += fonctEq[id] / 60
+  let marcheH = 0, ouvH = 0, capaH = 0
+  for (const id in ouvEq) {
+    marcheH += (fonctEq[id] || 0) / 60
+    ouvH += ouvEq[id] / 60
     const r = rg[id]
     const postes = r === '4' ? 3 : (r ? Number(r) : 3)   // défaut 3×8, comme la page Suivi de capacité
     capaH += joursAn * postes * 8
   }
-  return capaH > 0 ? Math.min(100, marcheH / capaH * 100) : null
+  return { marcheH, ouvH, capaH }
+})
+// Taux d'utilisation capacité = marche ÷ capacité calendaire
+const utilisationCapacite = computed(() => {
+  const b = capaBase.value
+  return b && b.capaH > 0 ? Math.min(100, b.marcheH / b.capaH * 100) : null
+})
+// Taux d'engagement (Utilisation machine) = temps d'ouverture ÷ capacité calendaire
+const tauxEngagement = computed(() => {
+  const b = capaBase.value
+  return b && b.capaH > 0 ? Math.min(100, b.ouvH / b.capaH * 100) : null
 })
 // Coût de production / unité : PCSU (coût/boîte du référentiel produit) pondéré par la production
 const coutUnite = computed(() => totBoites.value > 0 ? totCA.value / totBoites.value : null)
@@ -947,7 +960,7 @@ const kpisStd = computed(() => {
     { n: 'Taux de rebut', d: 'Perte fabrication : théorique − livré au conditionnement', f: '(Qté théorique − boîtes fabriquées) / théorique ×100', c: '< 1,5%', dir: 'down', s: 1.5, v: tauxRebut.value, u: '%', fr: 'Par lot / Hebdo' },
     { n: 'Taux de retouche', d: '% d\'unités retouchées', f: 'Retouchées / produites ×100', c: '< 2%', dir: 'down', s: 2, v: retoucheKpi.value, u: '%', fr: 'Quot.' },
     { n: 'Respect du planning', d: '% production réalisée au plan', f: 'Réalisé / planifié ×100', c: '≥ 95%', dir: 'up', s: 95, v: tauxGlobal.value, u: '%', fr: 'Quot./Hebdo' },
-    { n: 'Utilisation machine', d: 'Temps de marche vs planifié', f: 'Marche / temps planifié ×100', c: '≥ 80%', dir: 'up', s: 80, v: A, u: '%', fr: 'Hebdo' },
+    { n: 'Utilisation machine', d: 'Taux d\'engagement : ouverture vs capacité calendaire', f: 'Temps d\'ouverture / capacité théorique ×100', c: '≥ 80%', dir: 'up', s: 80, v: tauxEngagement.value, u: '%', fr: 'Hebdo/Mens.' },
     { n: 'Temps de réglage (Setup)', d: 'Temps de réglage total', f: 'Σ temps de réglage', c: '↓ mieux', dir: 'down', s: null, v: a.reglage ? a.reglage / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
     { n: 'Changement de série (SMED)', d: 'Changement d\'une série à l\'autre', f: 'Σ format + réglage', c: '↓ mieux', dir: 'down', s: null, v: (a.format + a.reglage) ? (a.format + a.reglage) / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
     { n: 'Production à temps', d: '% lots finis avant la fin de validité OF', f: 'Lots à temps / total ×100 (échéance = date fin de validité OF)', c: '≥ 95%', dir: 'up', s: 95, v: onTimeKpi.value, u: '%', fr: 'Quot./Hebdo' },
