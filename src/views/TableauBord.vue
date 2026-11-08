@@ -396,7 +396,7 @@ onMounted(async () => {
     const [rdev, rcapa, rtrs, rorg, rform, rfenr, rfreq, rcadp, reff, roe, rret, rconv] = await Promise.all([
       safe(() => supabase.from('deviations').select('statut, criticite, date_dev')),
       safe(() => supabase.from('capa').select('statut, echeance, date_capa')),
-      safe(() => supabase.from('trs_postes').select('date, equipement_id, produit_id, temps_ouverture_min, production_realisee, rebuts, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min')),
+      safe(() => supabase.from('trs_postes').select('date, equipement_id, produit_id, temps_ouverture_min, production_realisee, rebuts, retouches, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min')),
       safe(() => supabase.from('organigramme').select('id, fonction, actif').eq('actif', true)),
       safe(() => supabase.from('formations').select('id, nom, validite_mois, actif').eq('actif', true)),
       safe(() => supabase.from('formation_enregistrements').select('personne_id, formation_id, date_formation, resultat')),
@@ -726,7 +726,7 @@ const kpiOuvert = ref(true)
 const trsAgg = computed(() => {
   const cad = {}
   for (const c of cadencesRaw.value) cad[c.equipement_id + '|' + c.produit_id] = c
-  let ouv = 0, fonct = 0, prod = 0, rebuts = 0, reglage = 0, format = 0, theo = 0, prodTheo = 0
+  let ouv = 0, fonct = 0, prod = 0, rebuts = 0, retouches = 0, reglage = 0, format = 0, theo = 0, prodTheo = 0
   let panne = 0, nettoyage = 0, maintenance = 0, attente = 0, autre = 0
   for (const t of trsRaw.value) {
     if (!t.date || anYear(t.date) !== annee.value) continue
@@ -737,11 +737,13 @@ const trsAgg = computed(() => {
     const f = Math.max(0, o - arr)
     ouv += o; fonct += f; reglage += rg; format += ft
     panne += pn; nettoyage += net; maintenance += mn; attente += att; autre += au
-    const p = num(t.production_realisee); prod += p; rebuts += num(t.rebuts)
+    const p = num(t.production_realisee); prod += p; rebuts += num(t.rebuts); retouches += num(t.retouches)
     const c = cad[t.equipement_id + '|' + t.produit_id]
     if (c && c.mode === 'debit' && num(c.cadence_nominale) > 0) { theo += (f / 60) * num(c.cadence_nominale); prodTheo += p }
   }
-  return { ouv, fonct, prod, good: Math.max(0, prod - rebuts), rebuts, reglage, format, theo, prodTheo, arrets: { panne, format, nettoyage, reglage, maintenance, attente, autre } }
+  const good = Math.max(0, prod - rebuts)                    // conformes vendables (reprises incluses) → Débit, cycle
+  const goodFtq = Math.max(0, prod - rebuts - retouches)     // conformes du 1er coup (rebuts + retouches exclus) → Qualité TRS
+  return { ouv, fonct, prod, good, goodFtq, rebuts, retouches, reglage, format, theo, prodTheo, arrets: { panne, format, nettoyage, reglage, maintenance, attente, autre } }
 })
 // Décomposition des arrêts (en % du temps d'ouverture), triée par perte décroissante
 const arretsDecomp = computed(() => {
@@ -899,7 +901,7 @@ const equilibrageLigne = computed(() => {
 const kpisStd = computed(() => {
   const a = trsAgg.value
   const A = a.ouv ? a.fonct / a.ouv * 100 : null
-  const Q = a.prod ? a.good / a.prod * 100 : null
+  const Q = a.prod ? a.goodFtq / a.prod * 100 : null
   const P = a.theo ? Math.min(100, a.prodTheo / a.theo * 100) : null
   const oee = (A != null && P != null && Q != null) ? A * P * Q / 10000 : null
   const rej = a.prod ? a.rebuts / a.prod * 100 : null
@@ -911,7 +913,7 @@ const kpisStd = computed(() => {
     { n: 'OEE (TRS)', d: 'Efficacité globale des équipements', f: 'Disponibilité × Performance × Qualité', c: '≥ 85%', dir: 'up', s: 85, v: oee, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Disponibilité', d: 'Temps de marche vs temps ouvert', f: 'Temps de marche / temps ouvert ×100', c: '≥ 90%', dir: 'up', s: 90, v: A, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Performance', d: 'Cadence réelle vs cadence nominale', f: 'Production / production théorique ×100', c: '≥ 95%', dir: 'up', s: 95, v: P, u: '%', fr: 'Quot./Hebdo' },
-    { n: 'Qualité', d: '% d\'unités conformes', f: '(Produites − rebuts) / produites ×100', c: '≥ 99%', dir: 'up', s: 99, v: Q, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Qualité', d: '% conformes du premier coup (rebuts + retouches exclus)', f: '(Produites − rebuts − retouches) / produites ×100', c: '≥ 99%', dir: 'up', s: 99, v: Q, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Efficience de production', d: 'Sortie réelle vs théorique', f: 'Sortie réelle / théorique ×100', c: '≥ 90%', dir: 'up', s: 90, v: P != null ? P : rendementFab.value, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Taux d\'utilisation capacité', d: 'Marche vs capacité calendaire', f: 'Temps de marche / capacité théorique ×100', c: '≥ 80%', dir: 'up', s: 80, v: utilisationCapacite.value, u: '%', fr: 'Hebdo/Mens.' },
     { n: 'Débit (Throughput)', d: 'Unités conformes produites', f: 'Total unités conformes', c: '↑ mieux', dir: 'info', s: null, v: a.good || null, u: '', fr: 'Quot.' },
