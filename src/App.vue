@@ -183,7 +183,7 @@ async function chargerAlertes() {
   const auj = new Date()
   const limite = new Date(auj.getTime() + 3 * 86400000).toISOString().slice(0, 10)
   const r = await supabase.from('ordres_fabrication')
-    .select('id, numero_lot, statut, date_fin_validite, produits(code_pf, designation)')
+    .select('id, numero_lot, statut, date_reception, date_fin_validite, produits(code_pf, designation)')
     .eq('actif', true)
     .not('date_fin_validite', 'is', null)
     .is('date_fin_fabrication', null)
@@ -195,6 +195,8 @@ async function chargerAlertes() {
     desig: o.produits ? o.produits.designation : '',
     date: o.date_fin_validite,
     dateStr: new Date(o.date_fin_validite).toLocaleDateString('fr-FR'),
+    reception: o.date_reception,
+    receptionStr: o.date_reception ? new Date(o.date_reception).toLocaleDateString('fr-FR') : '—',
     jours: Math.ceil((new Date(o.date_fin_validite) - auj) / 86400000)
   })).sort((a, b) => a.jours - b.jours)
   notifierNavigateur()
@@ -289,8 +291,14 @@ async function signOut() {
       </div>
       <RouterLink v-for="a in alertes" :key="a.id" :to="{ path: '/ordres', query: { edit: a.id } }"
         class="notif-item" :class="{ perime: a.jours <= 0 }" @click="alertesOuvertes = false; sidebarOpen = false">
-        <div class="notif-lot">{{ a.lot }} <span class="notif-desig">{{ a.code ? a.code + ' — ' : '' }}{{ a.desig }}</span></div>
-        <div class="notif-when">{{ a.jours <= 0 ? '⛔ OF non valide (expiré)' : '⌛ Expire dans ' + a.jours + ' j' }} · {{ a.dateStr }}</div>
+        <div class="ni-main">
+          <div class="notif-lot">{{ a.lot }} <span class="notif-desig">{{ a.code ? a.code + ' — ' : '' }}{{ a.desig }}</span></div>
+          <div class="notif-when">{{ a.jours <= 0 ? '⛔ OF non valide (expiré)' : '⌛ Expire dans ' + a.jours + ' j' }}</div>
+        </div>
+        <div class="ni-dates">
+          <div class="ni-d"><span class="ni-d-l">Réception OF</span><span class="ni-d-v">{{ a.receptionStr }}</span></div>
+          <div class="ni-d"><span class="ni-d-l">Date validité</span><span class="ni-d-v ni-d-valid">{{ a.dateStr }}</span></div>
+        </div>
       </RouterLink>
       <p v-if="!alertes.length" class="notif-empty">Aucune alerte de validité.</p>
     </div>
@@ -430,19 +438,26 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .alert-bar { background: #
 .cloche { position: relative; font-size: 14px; }
 .cloche-badge { position: absolute; top: -5px; right: -5px; background: #ef4444; color: #fff; font-size: 9px; font-weight: 800; min-width: 15px; height: 15px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
 .notif-backdrop { position: fixed; inset: 0; z-index: 55; }
-.notif-panel { position: fixed; left: 12px; bottom: 66px; width: 300px; max-width: calc(100vw - 24px); max-height: 60vh; overflow-y: auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 14px 36px rgba(16,24,40,.24); z-index: 60; padding: 8px; }
+.notif-panel { position: fixed; left: 12px; bottom: 66px; width: 580px; max-width: calc(100vw - 24px); max-height: 72vh; overflow-y: auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 14px 36px rgba(16,24,40,.24); z-index: 60; padding: 8px; }
 .notif-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; color: #0f172a; padding: 4px 8px 8px; text-transform: uppercase; letter-spacing: .04em; }
 .notif-x { background: none; border: 0; cursor: pointer; color: #64748b; font-size: 13px; }
-.notif-item { display: block; text-decoration: none; padding: 8px 10px; border-radius: 8px; border-left: 3px solid #f59e0b; margin-bottom: 4px; background: #fffbeb; }
+.notif-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; text-decoration: none; padding: 8px 12px; border-radius: 8px; border-left: 3px solid #f59e0b; margin-bottom: 4px; background: #fffbeb; }
 .notif-item.perime { border-left-color: #ef4444; background: #fef2f2; }
 .notif-item:hover { background: #fef3c7; }
+.ni-main { flex: 1 1 220px; min-width: 0; }
 .notif-lot { font-size: 13px; font-weight: 700; color: #0f172a; }
 .notif-desig { font-weight: 400; color: #64748b; font-size: 12px; }
 .notif-when { font-size: 11px; color: #b45309; margin-top: 2px; }
 .notif-item.perime .notif-when { color: #b91c1c; }
+.ni-dates { display: flex; gap: 18px; flex: none; }
+.ni-d { display: flex; flex-direction: column; min-width: 82px; }
+.ni-d-l { font-size: 9px; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; font-weight: 800; }
+.ni-d-v { font-size: 12.5px; font-weight: 700; color: #334155; font-variant-numeric: tabular-nums; margin-top: 1px; }
+.ni-d-valid { color: #b45309; }
+.notif-item.perime .ni-d-valid { color: #b91c1c; }
 .notif-empty { font-size: 12px; color: #94a3b8; padding: 8px; }
 html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-panel { background: #161f33; border-color: #2a3650; }
-html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-lot, html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-head { color: #e6edf6; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-lot, html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-head, html:is([data-theme="sombre"], [data-theme="minuit"]) .ni-d-v { color: #e6edf6; }
 html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-item { background: #2a1f0a; }
 html:is([data-theme="sombre"], [data-theme="minuit"]) .notif-item.perime { background: #2a1010; }
 .mobile-top { display: none; }
