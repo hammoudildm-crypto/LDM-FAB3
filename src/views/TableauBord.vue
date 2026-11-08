@@ -672,6 +672,17 @@ const tauxRejetLots = computed(() => {
   }
   return total ? rejetes / total * 100 : null
 })
+// Taux de rebut : perte de fabrication = (quantité théorique − quantité livrée au conditionnement) ÷ théorique
+// Quantité livrée au conditionnement = boîtes fabriquées (sortie de fabrication).
+const tauxRebut = computed(() => {
+  let theo = 0, perte = 0
+  for (const o of fabRaw.value) {
+    if (!o.date_fin_fabrication || anYear(o.date_fin_fabrication) !== annee.value) continue
+    const t = num(o.quantite_theorique), b = num(o.boites_fabriquees)
+    if (t > 0) { theo += t; perte += Math.max(0, t - b) }
+  }
+  return theo > 0 ? perte / theo * 100 : null
+})
 // Formation / qualification (logique Matrice, dédup par nom canonique)
 const canonF = computed(() => {
   const cleById = {}, idByCle = {}
@@ -915,7 +926,6 @@ const kpisStd = computed(() => {
   const Q = a.prod ? a.goodFtq / a.prod * 100 : null
   const P = a.theo ? Math.min(100, a.prodTheo / a.theo * 100) : null
   const oee = (A != null && P != null && Q != null) ? A * P * Q / 10000 : null
-  const rej = a.prod ? a.rebuts / a.prod * 100 : null
   const cyc = a.good ? a.fonct / a.good : null
   const eff = effectifKpi.value
   const prodBase = totBoites.value || a.good || null
@@ -934,7 +944,7 @@ const kpisStd = computed(() => {
     { n: 'Délai (Lead Time)', d: 'Réception OF → fin de fabrication', f: 'Fin de fabrication − réception (moy. jours)', c: '↓ mieux', dir: 'down', s: null, v: ofDelai.value, u: ' j', fr: 'Hebdo/Mens.' },
     { n: 'First Pass Yield (FPY)', d: 'Unités bonnes du premier coup', f: 'Bonnes / total entrée ×100', c: '≥ 95%', dir: 'up', s: 95, v: rendementFab.value, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Taux de rejet', d: '% de lots rejetés (statut OF rejeté)', f: 'Lots rejetés / total lots ×100', c: '< 2%', dir: 'down', s: 2, v: tauxRejetLots.value, u: '%', fr: 'Hebdo/Mens.' },
-    { n: 'Taux de rebut', d: '% matière mise au rebut', f: 'Rebuts / produites ×100', c: '< 1,5%', dir: 'down', s: 1.5, v: rej, u: '%', fr: 'Quot./Hebdo' },
+    { n: 'Taux de rebut', d: 'Perte fabrication : théorique − livré au conditionnement', f: '(Qté théorique − boîtes fabriquées) / théorique ×100', c: '< 1,5%', dir: 'down', s: 1.5, v: tauxRebut.value, u: '%', fr: 'Par lot / Hebdo' },
     { n: 'Taux de retouche', d: '% d\'unités retouchées', f: 'Retouchées / produites ×100', c: '< 2%', dir: 'down', s: 2, v: retoucheKpi.value, u: '%', fr: 'Quot.' },
     { n: 'Respect du planning', d: '% production réalisée au plan', f: 'Réalisé / planifié ×100', c: '≥ 95%', dir: 'up', s: 95, v: tauxGlobal.value, u: '%', fr: 'Quot./Hebdo' },
     { n: 'Utilisation machine', d: 'Temps de marche vs planifié', f: 'Marche / temps planifié ×100', c: '≥ 80%', dir: 'up', s: 80, v: A, u: '%', fr: 'Hebdo' },
