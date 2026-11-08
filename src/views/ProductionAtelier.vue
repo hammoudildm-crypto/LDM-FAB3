@@ -534,33 +534,54 @@ function ouvrirBarrePA(i, si) {
 //  - Livraison Vrac   -> date de fin de FABRICATION (ordres_fabrication)
 //  - Conditionnement  -> date de fin de CONDITIONNEMENT
 //  - autres phases    -> suivi_phases (temps réel) + historique_lots_phases (TDB)
+// Granulation et Séchage sont suivis séparément mais regroupés dans un seul atelier
+function normPhase(p) { return /^(granulation|s[ée]chage)$/i.test(String(p).trim()) ? 'Granulation et Séchage' : p }
 const lotsMoisPA = computed(() => {
   const m = modalPA.value
   if (!m) return []
   const ph = atelierSel.value, y = m.annee
   const dansMois = (d) => { if (!d) return false; const dt = new Date(d); return dt.getFullYear() === y && dt.getMonth() === m.mois }
   const parLot = new Map()
-  const push = (lot, code, desig, src, qte = null) => {
+  const push = (lot, code, desig, src, qte = null, pcsu = 0) => {
     if (lot == null) return
     const k = String(lot).trim()
     if (!k || parLot.has(k)) return
-    parLot.set(k, { lot: k, code: code || '—', desig: desig || '', src, qte })
+    parLot.set(k, { lot: k, code: code || '—', desig: desig || '', src, qte, pcsu })
   }
   const pushOf = (id, src) => {
     const o = ofById.value[id]
     if (!o) return
     const qte = Number(o.boites_fabriquees) || Number(o.produits ? o.produits.taille_lot : 0) || null
-    push(o.numero_lot, o.produits ? o.produits.code_pf : null, o.produits ? o.produits.designation : null, src, qte)
+    const pcsu = Number(o.produits ? o.produits.pcsu : 0) || 0
+    push(o.numero_lot, o.produits ? o.produits.code_pf : null, o.produits ? o.produits.designation : null, src, qte, pcsu)
   }
   if (ph === 'Conditionnement') {
     for (const c of conds.value) if (dansMois(c.date_fin || c.date_conditionnement)) pushOf(c.ordre_id, 'live')
   } else if (ph === 'Livraison Vrac') {
     for (const o of ofs.value) if (dansMois(o.date_fin_fabrication)) pushOf(o.id, 'live')
   } else {
-    for (const sp of phases.value) if (sp.phase === ph && dansMois(sp.date_phase)) pushOf(sp.ordre_id, 'live')
-    for (const h of histLots.value) if (h.phase === ph && dansMois(h.date_fin)) push(h.numero_lot, h.code_pf, h.designation, 'hist')
+    for (const sp of phases.value) if (normPhase(sp.phase) === ph && dansMois(sp.date_phase)) pushOf(sp.ordre_id, 'live')
+    for (const h of histLots.value) if (normPhase(h.phase) === ph && dansMois(h.date_fin)) { const pr = produitsMap.value[h.code_pf]; push(h.numero_lot, h.code_pf, h.designation, 'hist', pr ? (Number(pr.taille) || null) : null, pr ? (Number(pr.pcsu) || 0) : 0) }
   }
   return [...parLot.values()].sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
+})
+// Analyse globale par produit : regroupe les lots du mois par produit (nb lots, boîtes, CA, part)
+const produitsMoisPA = computed(() => {
+  const map = new Map()
+  for (const l of lotsMoisPA.value) {
+    const key = (l.code && l.code !== '—') ? l.code : (l.desig || l.lot)
+    if (!map.has(key)) map.set(key, { code: l.code, desig: l.desig, lots: 0, qte: 0, ca: 0 })
+    const e = map.get(key)
+    e.lots += 1
+    const q = Number(l.qte) || 0
+    e.qte += q
+    e.ca += q * (Number(l.pcsu) || 0)
+  }
+  const liste = [...map.values()]
+  const totQte = liste.reduce((s, e) => s + e.qte, 0)
+  for (const e of liste) e.pct = totQte > 0 ? Math.round(e.qte / totQte * 100) : 0
+  liste.sort((a, b) => b.qte - a.qte || b.lots - a.lots)
+  return { liste, totLots: liste.reduce((s, e) => s + e.lots, 0), totQte, totCa: liste.reduce((s, e) => s + e.ca, 0) }
 })
 const valeurBarrePA = computed(() => {
   const m = modalPA.value; if (!m) return 0
@@ -1062,16 +1083,33 @@ onMounted(charger)
         <div class="pa-md-body">
           <p v-if="sourceHistPA && !lotsMoisPA.length" class="pa-note">Valeur issue de l'<strong>historique importé</strong> — le détail des lots n'est pas disponible pour ce mois.</p>
           <div v-else-if="!lotsMoisPA.length" class="empty">Aucun lot pour ce mois.</div>
-          <table v-else class="pa-table">
-            <tbody>
-              <tr v-for="l in lotsMoisPA" :key="l.id">
-                <td class="pa-lot">{{ l.lot }}</td>
-                <td class="pa-code">{{ l.code }}</td>
-                <td class="pa-des">{{ l.desig }}</td>
-                <td class="pa-qte">{{ l.qte != null ? fmt(l.qte) + ' bts' : '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <template v-else>
+            <div class="pa-sub-h">Analyse par produit <span class="pa-sub-n">{{ produitsMoisPA.liste.length }}</span></div>
+            <table class="pa-prodtbl">
+              <thead><tr><th>Produit</th><th class="r">Lots</th><th class="r">Boîtes</th><th class="r">CA</th><th class="r">Part</th></tr></thead>
+              <tbody>
+                <tr v-for="(p, i) in produitsMoisPA.liste" :key="'pp' + i">
+                  <td class="pp-prod"><b>{{ p.code || '—' }}</b><span class="pp-des">{{ p.desig }}</span></td>
+                  <td class="r">{{ p.lots }}</td>
+                  <td class="r">{{ p.qte ? fmt(p.qte) : '—' }}</td>
+                  <td class="r">{{ p.ca ? fmtDA(p.ca) : '—' }}</td>
+                  <td class="r pp-part"><span class="pp-bar"><span :style="{ width: p.pct + '%' }"></span></span>{{ p.pct }}%</td>
+                </tr>
+              </tbody>
+              <tfoot><tr><td>Total</td><td class="r">{{ produitsMoisPA.totLots }}</td><td class="r">{{ fmt(produitsMoisPA.totQte) }}</td><td class="r">{{ fmtDA(produitsMoisPA.totCa) }}</td><td class="r">100%</td></tr></tfoot>
+            </table>
+            <div class="pa-sub-h">Détail des lots <span class="pa-sub-n">{{ lotsMoisPA.length }}</span></div>
+            <table class="pa-table">
+              <tbody>
+                <tr v-for="(l, i) in lotsMoisPA" :key="'l' + i">
+                  <td class="pa-lot">{{ l.lot }}</td>
+                  <td class="pa-code">{{ l.code }}</td>
+                  <td class="pa-des">{{ l.desig }}</td>
+                  <td class="pa-qte">{{ l.qte != null ? fmt(l.qte) + ' bts' : '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
           <p v-if="sourceHistPA && lotsMoisPA.length" class="pa-note">Note : la valeur du graphe vient de l'<strong>historique importé</strong> ; la liste ci-dessus est le détail <strong>temps réel</strong> — les deux peuvent différer.</p>
         </div>
       </div>
@@ -1198,6 +1236,18 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .pa-table td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; }
 .pa-qte { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: #0f766e; white-space: nowrap; }
+.pa-sub-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; margin: 12px 0 6px; }
+.pa-sub-n { background: #f1f5f9; color: #475569; border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 700; margin-left: 4px; }
+.pa-prodtbl { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 2px; }
+.pa-prodtbl th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; font-weight: 800; padding: 4px 8px; border-bottom: 1px solid #e2e8f0; }
+.pa-prodtbl th.r, .pa-prodtbl td.r { text-align: right; }
+.pa-prodtbl td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; font-variant-numeric: tabular-nums; }
+.pa-prodtbl tfoot td { font-weight: 800; border-top: 1px solid #cbd5e1; border-bottom: 0; color: #334155; }
+.pp-prod b { color: #0f172a; }
+.pp-des { color: #94a3b8; margin-left: 6px; font-size: 11.5px; }
+.pp-part { white-space: nowrap; color: #475569; font-weight: 700; }
+.pp-bar { display: inline-block; width: 42px; height: 6px; background: #eef2f6; border-radius: 3px; overflow: hidden; vertical-align: middle; margin-right: 6px; }
+.pp-bar > span { display: block; height: 100%; background: #0f766e; border-radius: 3px; }
 .pa-lot { font-family: ui-monospace, monospace; font-weight: 700; white-space: nowrap; }
 .pa-code { font-family: ui-monospace, monospace; font-weight: 600; color: #0f766e; white-space: nowrap; }
 .pa-des { color: #475569; }
