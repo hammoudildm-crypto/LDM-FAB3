@@ -292,11 +292,12 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 .okmsg { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .card-title { margin: 0 0 12px; font-size: 16px; }
-.sel-row { display: flex; gap: 14px; flex-wrap: wrap; }
+.sel-row { display: flex; gap: 14px; flex-wrap: nowrap; align-items: flex-start; }
+.sel-row > label { flex: 1 1 0; min-width: 0; }
 .sel-row label, .fl { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
-.sel-row select, .sel-row input, .fl input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 500; }
-.sel-row select { max-width: 320px; }
-.prod-search { font-size: 13px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 5px; max-width: 320px; }
+.sel-row select, .sel-row input, .fl input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 500; width: 100%; box-sizing: border-box; }
+.prod-search { font-size: 13px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 5px; width: 100%; box-sizing: border-box; }
+@media (max-width: 900px) { .sel-row { flex-wrap: wrap; } .sel-row > label { flex: 1 1 180px; } }
 .cad-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; font-size: 14px; }
 .cad-lbl { font-weight: 600; color: #475569; }
 .cad-row input { font-size: 14px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; width: 130px; }
