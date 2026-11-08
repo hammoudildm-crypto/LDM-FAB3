@@ -146,6 +146,21 @@
           </div>
         </div>
 
+        <div v-if="arretsDecomp && arretsDecomp.items.length" class="arrets-box">
+          <div class="arrets-head">
+            <span class="arrets-t">Décomposition des arrêts</span>
+            <span class="arrets-sub">% du temps d'ouverture · perte totale {{ arretsDecomp.totPct.toFixed(1) }}% → Disponibilité {{ arretsDecomp.dispo.toFixed(1) }}%</span>
+          </div>
+          <div class="arrets-list">
+            <div v-for="(x, i) in arretsDecomp.items" :key="x.k" class="arret-row" :class="{ 'arret-top': i === 0 }">
+              <span class="arret-lbl">{{ x.lbl }}</span>
+              <span class="arret-bar"><span :style="{ width: Math.min(100, x.pct) + '%' }"></span></span>
+              <span class="arret-pct">{{ x.pct.toFixed(1) }}%</span>
+              <span class="arret-h">{{ fmt(Math.round(x.min / 60)) }} h</span>
+            </div>
+          </div>
+        </div>
+
         <button type="button" class="kpi-detail-btn" @click="detailOuvert = !detailOuvert">{{ detailOuvert ? '▾ Masquer le détail' : '▸ Détail & tableau complet (' + kpisStd.length + ')' }}</button>
 
         <div v-if="detailOuvert">
@@ -712,18 +727,31 @@ const trsAgg = computed(() => {
   const cad = {}
   for (const c of cadencesRaw.value) cad[c.equipement_id + '|' + c.produit_id] = c
   let ouv = 0, fonct = 0, prod = 0, rebuts = 0, reglage = 0, format = 0, theo = 0, prodTheo = 0
+  let panne = 0, nettoyage = 0, maintenance = 0, attente = 0, autre = 0
   for (const t of trsRaw.value) {
     if (!t.date || anYear(t.date) !== annee.value) continue
     const o = num(t.temps_ouverture_min); if (!(o > 0)) continue
     const rg = num(t.arret_reglage_min), ft = num(t.arret_format_min)
-    const arr = num(t.arret_panne_min) + ft + num(t.arret_nettoyage_min) + rg + num(t.arret_maintenance_min) + num(t.arret_attente_min) + num(t.arret_autre_min)
+    const pn = num(t.arret_panne_min), net = num(t.arret_nettoyage_min), mn = num(t.arret_maintenance_min), att = num(t.arret_attente_min), au = num(t.arret_autre_min)
+    const arr = pn + ft + net + rg + mn + att + au
     const f = Math.max(0, o - arr)
     ouv += o; fonct += f; reglage += rg; format += ft
+    panne += pn; nettoyage += net; maintenance += mn; attente += att; autre += au
     const p = num(t.production_realisee); prod += p; rebuts += num(t.rebuts)
     const c = cad[t.equipement_id + '|' + t.produit_id]
     if (c && c.mode === 'debit' && num(c.cadence_nominale) > 0) { theo += (f / 60) * num(c.cadence_nominale); prodTheo += p }
   }
-  return { ouv, fonct, prod, good: Math.max(0, prod - rebuts), rebuts, reglage, format, theo, prodTheo }
+  return { ouv, fonct, prod, good: Math.max(0, prod - rebuts), rebuts, reglage, format, theo, prodTheo, arrets: { panne, format, nettoyage, reglage, maintenance, attente, autre } }
+})
+// Décomposition des arrêts (en % du temps d'ouverture), triée par perte décroissante
+const arretsDecomp = computed(() => {
+  const a = trsAgg.value
+  if (!a.ouv) return null
+  const defs = [['panne', 'Panne'], ['format', 'Changement de format'], ['nettoyage', 'Nettoyage'], ['reglage', 'Réglage'], ['maintenance', 'Maintenance'], ['attente', 'Attente'], ['autre', 'Autre']]
+  const items = defs.map(([k, lbl]) => ({ k, lbl, min: a.arrets[k] || 0, pct: (a.arrets[k] || 0) / a.ouv * 100 }))
+    .filter(x => x.min > 0).sort((x, y) => y.min - x.min)
+  const totArr = items.reduce((s, x) => s + x.min, 0)
+  return { items, totPct: totArr / a.ouv * 100, dispo: a.fonct / a.ouv * 100 }
 })
 function statutKpi(val, dir, seuil) {
   if (val == null) return 'na'
@@ -1044,6 +1072,20 @@ const tileCols = computed(() => balancedCols(kpisMesure.value.length, 5))
 /* Présentation graphique : tuiles (valeurs suivies) */
 .kpi-tiles { display: grid; grid-template-columns: repeat(var(--tcols, 5), minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
 .kt-card { background: #fff; border: 1px solid #e8edf3; border-left: 3px solid var(--a, #64748b); border-radius: 12px; padding: 11px 13px; display: flex; align-items: center; gap: 11px; box-shadow: 0 4px 14px rgba(30, 41, 59, .05); }
+.arrets-box { background: #fff; border: 1px solid #e8edf3; border-radius: 14px; padding: 13px 16px; margin-bottom: 14px; box-shadow: 0 4px 14px rgba(30, 41, 59, .05); }
+.arrets-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.arrets-t { font-size: 13px; font-weight: 800; color: #0f172a; }
+.arrets-sub { font-size: 11px; color: #94a3b8; font-weight: 600; }
+.arrets-list { display: flex; flex-direction: column; gap: 6px; }
+.arret-row { display: grid; grid-template-columns: 160px 1fr 54px 64px; align-items: center; gap: 10px; font-size: 12px; }
+.arret-lbl { color: #475569; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arret-top .arret-lbl { color: #b91c1c; font-weight: 800; }
+.arret-bar { height: 10px; background: #f1f5f9; border-radius: 5px; overflow: hidden; }
+.arret-bar > span { display: block; height: 100%; background: #f59e0b; border-radius: 5px; }
+.arret-top .arret-bar > span { background: #ef4444; }
+.arret-pct { text-align: right; font-weight: 800; color: #334155; font-variant-numeric: tabular-nums; }
+.arret-h { text-align: right; color: #94a3b8; font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) { .arret-row { grid-template-columns: 104px 1fr 46px; } .arret-h { display: none; } }
 .kt-ic { width: 26px; height: 26px; flex: none; color: var(--a, #64748b); fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .kt-txt { min-width: 0; }
 .kt-v { font-size: 17px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; line-height: 1.1; }
