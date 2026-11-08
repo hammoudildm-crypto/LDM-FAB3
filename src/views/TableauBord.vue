@@ -887,10 +887,39 @@ const utilisationCapacite = computed(() => {
   const b = capaBase.value
   return b && b.capaH > 0 ? Math.min(100, b.marcheH / b.capaH * 100) : null
 })
-// Taux d'engagement (Utilisation machine) = temps d'ouverture ÷ capacité calendaire
-const tauxEngagement = computed(() => {
-  const b = capaBase.value
-  return b && b.capaH > 0 ? Math.min(100, b.ouvH / b.capaH * 100) : null
+// Capacité calendaire en BOÎTES, basée sur les lignes de conditionnement (cadence boîtes/h),
+// indépendante des saisies TRS : Σ (jours ouvrés × régime × 8h × cadence) sur les équipements de conditionnement.
+const capaBoitesCalendaire = computed(() => {
+  const now = new Date()
+  const moisMax = annee.value === now.getFullYear() ? (now.getMonth() + 1) : 12
+  let jours = 0
+  for (let m = 0; m < moisMax; m++) jours += joursOuvresMoisTB(annee.value, m)
+  if (!(jours > 0)) return null
+  const nomsCond = new Set()
+  for (const c of condRaw.value) { const e = c.equipements; if (e && e.nom) nomsCond.add(e.nom) }
+  const idByNom = {}; for (const e of equipRef.value) if (e && e.nom) idByNom[e.nom] = e.id
+  const cadByEq = {}
+  for (const c of cadences.value) { const cv = num(c.cadence_nominale); if (cv > 0 && c.equipement_id != null) cadByEq[c.equipement_id] = Math.max(cadByEq[c.equipement_id] || 0, cv) }
+  const rg = regimeMap.value || {}
+  let capa = 0
+  for (const nom of nomsCond) {
+    const id = idByNom[nom]; if (id == null) continue
+    const cad = cadByEq[id]; if (!(cad > 0)) continue                 // boîtes/h (cadence de conditionnement)
+    const r = rg[id]; const postes = r === '4' ? 3 : (r ? Number(r) : 3)
+    capa += jours * postes * 8 * cad
+  }
+  return capa > 0 ? capa : null
+})
+// Utilisation machine = quantité livrée au conditionnement (boîtes fabriquées) ÷ capacité calendaire en boîtes
+const utilisationMachine = computed(() => {
+  const cap = capaBoitesCalendaire.value
+  if (!cap) return null
+  let livre = 0
+  for (const o of fabRaw.value) {
+    if (!o.date_fin_fabrication || anYear(o.date_fin_fabrication) !== annee.value) continue
+    livre += num(o.boites_fabriquees)
+  }
+  return Math.min(100, livre / cap * 100)
 })
 // Coût de production / unité : PCSU (coût/boîte du référentiel produit) pondéré par la production
 const coutUnite = computed(() => totBoites.value > 0 ? totCA.value / totBoites.value : null)
@@ -961,7 +990,7 @@ const kpisStd = computed(() => {
     { n: 'Taux de rebut', d: 'Perte fabrication : théorique − livré au conditionnement', f: '(Qté théorique − boîtes fabriquées) / théorique ×100', c: '< 1,5%', dir: 'down', s: 1.5, v: tauxRebut.value, u: '%', fr: 'Par lot / Hebdo' },
     { n: 'Taux de retouche', d: '% d\'unités retouchées', f: 'Retouchées / produites ×100', c: '< 2%', dir: 'down', s: 2, v: retoucheKpi.value, u: '%', fr: 'Quot.' },
     { n: 'Respect du planning', d: '% production réalisée au plan', f: 'Réalisé / planifié ×100', c: '≥ 95%', dir: 'up', s: 95, v: tauxGlobal.value, u: '%', fr: 'Quot./Hebdo' },
-    { n: 'Utilisation machine', d: 'Taux d\'engagement : ouverture vs capacité calendaire', f: 'Temps d\'ouverture / capacité théorique ×100', c: '≥ 80%', dir: 'up', s: 80, v: tauxEngagement.value, u: '%', fr: 'Hebdo/Mens.' },
+    { n: 'Utilisation machine', d: 'Livré au conditionnement vs capacité calendaire (boîtes)', f: 'Boîtes livrées / capacité calendaire en boîtes ×100', c: '≥ 80%', dir: 'up', s: 80, v: utilisationMachine.value, u: '%', fr: 'Hebdo/Mens.' },
     { n: 'Temps de réglage (Setup)', d: 'Temps de réglage total', f: 'Σ temps de réglage', c: '↓ mieux', dir: 'down', s: null, v: a.reglage ? a.reglage / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
     { n: 'Changement de série (SMED)', d: 'Changement d\'une série à l\'autre', f: 'Σ format + réglage', c: '↓ mieux', dir: 'down', s: null, v: (a.format + a.reglage) ? (a.format + a.reglage) / 60 : null, u: ' h', fr: 'Quot./Hebdo' },
     { n: 'Production à temps', d: '% lots finis avant la fin de validité OF', f: 'Lots à temps / total ×100 (échéance = date fin de validité OF)', c: '≥ 95%', dir: 'up', s: 95, v: onTimeKpi.value, u: '%', fr: 'Quot./Hebdo' },
