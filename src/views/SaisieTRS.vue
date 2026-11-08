@@ -43,7 +43,7 @@ const MOTIFS = [
   ['arret_autre_min', 'Autre']
 ]
 // Nettoyage & Réglage sont sortis de la grille pour être alignés avec Retouches sur une même ligne
-const motifsGrille = MOTIFS.filter(m => m[0] !== 'arret_nettoyage_min' && m[0] !== 'arret_reglage_min')
+const motifsGrille = MOTIFS.filter(m => !['arret_nettoyage_min', 'arret_reglage_min', 'arret_maintenance_min', 'arret_attente_min'].includes(m[0]))
 
 async function charger() {
   const re = await supabase.from('equipements').select('id, code, nom, type').eq('actif', true).order('code')
@@ -236,13 +236,17 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <label class="fl">Réglage<input type="number" min="0" v-model.number="form.arret_reglage_min" /></label>
             <label v-if="colRetouche" class="fl">Retouches<input type="number" min="0" v-model.number="form.retouches" title="Unités reprises/retouchées — alimente le KPI « Taux de retouche »." /></label>
           </div>
+          <div class="trio">
+            <label class="fl">Maintenance<input type="number" min="0" v-model.number="form.arret_maintenance_min" /></label>
+            <label class="fl">Attente (matière/perso.)<input type="number" min="0" v-model.number="form.arret_attente_min" /></label>
+            <label class="fl">Commentaire<input type="text" v-model="form.commentaire" placeholder="Optionnel" /></label>
+          </div>
           <div class="sub">Σ arrêts : <b>{{ sommeArrets }}</b> min · Fonctionnement : <b>{{ tempsFonct }}</b> min</div>
         </div>
         <div>
           <h3 class="card-title">Production</h3>
           <label class="fl">{{ cadenceMode === 'cycle' ? 'Temps écoulé (min)' : 'Production réalisée (' + uniteCad.replace('/h','') + ')' }}<input type="number" min="0" v-model.number="form.production_realisee" /></label>
           <label v-if="cadenceMode !== 'cycle'" class="fl">Rebuts<input type="number" min="0" v-model.number="form.rebuts" /></label>
-          <label class="fl">Commentaire<input type="text" v-model="form.commentaire" placeholder="Optionnel" /></label>
 
           <div class="trs-box">
             <div class="trs-line"><span>Disponibilité</span><b>{{ pct(dispo) }}</b></div>
