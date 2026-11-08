@@ -189,12 +189,14 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
           </select>
         </label>
-        <label>Produit
-          <input class="prod-search" v-model="rechercheProduit" placeholder="Rechercher (code / nom)…" />
-          <select v-model="produitId">
-            <option value="">— {{ produitsFiltres.length }} produit(s) —</option>
-            <option v-for="p in produitsFiltres" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
-          </select>
+        <label class="prod-col">Produit
+          <div class="prod-row">
+            <input class="prod-search" v-model="rechercheProduit" placeholder="Rechercher (code / nom)…" />
+            <select v-model="produitId">
+              <option value="">— {{ produitsFiltres.length }} produit(s) —</option>
+              <option v-for="p in produitsFiltres" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option>
+            </select>
+          </div>
         </label>
         <label>Date
           <input type="date" v-model="dateSel" @change="chargerContexte" />
@@ -294,6 +296,9 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 .card-title { margin: 0 0 12px; font-size: 16px; }
 .sel-row { display: flex; gap: 14px; flex-wrap: nowrap; align-items: flex-start; }
 .sel-row > label { flex: 1 1 0; min-width: 0; }
+.sel-row > label.prod-col { flex: 2.3 1 0; }
+.prod-row { display: flex; gap: 8px; align-items: center; }
+.prod-row > * { flex: 1 1 0; min-width: 0; margin: 0; }
 .sel-row label, .fl { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
 .sel-row select, .sel-row input, .fl input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 500; width: 100%; box-sizing: border-box; }
 .prod-search { font-size: 13px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 5px; width: 100%; box-sizing: border-box; }
