@@ -480,7 +480,7 @@ const projKpis = computed(() => {
   for (const r of rows) { if (r.pctPlan == null) continue; if (!pire || r.pctPlan < pire.pctPlan) pire = r }
   return { avancement: projTotaux.value.pctPlan, atteignent, total: rows.length, pire, vsN1: projTotaux.value.vsN1 }
 })
-const atelierSel = ref('Compression')
+const atelierSel = ref('Livraison Vrac')
 const anneesActives = ref(new Set(ANNEES_COMP))
 function toggleAnnee(y) {
   const s = new Set(anneesActives.value)
