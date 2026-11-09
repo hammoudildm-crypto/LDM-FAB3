@@ -23,6 +23,14 @@ const editCondId = ref(null)
 const editCondNom = ref('')
 const postesList = ref([])
 const nouveauPoste = ref('')
+const nouveauPostePerim = ref('')
+// Postes regroupés par périmètre (ordre PERIMETRES, puis « Sans périmètre »)
+const postesParPerim = computed(() => {
+  const groupes = PERIMETRES.map(pe => ({ perim: pe, items: postesList.value.filter(po => (po.perimetre || '') === pe) }))
+  const sans = postesList.value.filter(po => !PERIMETRES.includes(po.perimetre || ''))
+  if (sans.length) groupes.push({ perim: '', items: sans })
+  return groupes.filter(g => g.items.length)
+})
 const editPosteId = ref(null)
 const editPosteNom = ref('')
 const BRANCHES_ISH = [
@@ -160,9 +168,19 @@ const SECTIONS = [
 function ouvrirSection(k) { sectionActive.value = k; ouvert[k] = true }
 async function ajouterPoste() {
   const nom = nouveauPoste.value.trim(); if (!nom) return
-  const r = await supabase.from('postes').insert({ nom })
+  let r = await supabase.from('postes').insert({ nom, perimetre: nouveauPostePerim.value || null })
+  if (r.error && /perimetre/i.test(r.error.message || '')) {
+    r = await supabase.from('postes').insert({ nom })
+    erreur.value = 'Poste ajouté sans périmètre : la colonne « perimetre » n\'existe pas encore. Exécute : alter table postes add column perimetre text;'
+  }
   if (r.error) { erreur.value = r.error.message; return }
-  nouveauPoste.value = ''; await chargerTout()
+  nouveauPoste.value = ''; nouveauPostePerim.value = ''; await chargerTout()
+}
+async function changerPerimPoste(po, val) {
+  const r = await supabase.from('postes').update({ perimetre: val || null }).eq('id', po.id)
+  if (r.error) { erreur.value = /perimetre/i.test(r.error.message || '') ? 'Colonne « perimetre » absente — exécute : alter table postes add column perimetre text;' : r.error.message; return }
+  erreur.value = ''
+  await chargerTout()
 }
 function ouvrirEditPoste(po) { editPosteId.value = po.id; editPosteNom.value = po.nom }
 async function renommerPoste(po) {
@@ -203,7 +221,8 @@ async function chargerTout() {
 
   const rS = await supabase.from('superviseurs').select('*').order('nom')
   if (!rS.error) supList.value = rS.data
-  const rPo = await supabase.from('postes').select('id, nom').order('nom')
+  let rPo = await supabase.from('postes').select('id, nom, perimetre').order('nom')
+  if (rPo.error && /perimetre/i.test(rPo.error.message || '')) rPo = await supabase.from('postes').select('id, nom').order('nom')
   if (!rPo.error) postesList.value = rPo.data
   const rCt = await supabase.from('causes_types').select('id, branche, libelle').order('libelle')
   if (!rCt.error) causesList.value = rCt.data
@@ -885,22 +904,28 @@ onMounted(async () => {
       <div v-show="ouvert.postes">
         <div class="sv-add" v-if="peutEditer">
           <input v-model="nouveauPoste" placeholder="Intitulé du poste (ex. Superviseur granulation)" @keyup.enter="ajouterPoste" />
+          <select v-model="nouveauPostePerim" class="sv-perim"><option value="">Périmètre —</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
           <button class="btn" @click="ajouterPoste">Ajouter</button>
         </div>
         <div v-if="!postesList.length" class="empty">Aucun poste.</div>
-        <div v-for="po in postesList" :key="po.id" class="sv-row">
-          <template v-if="editPosteId === po.id">
-            <input v-model="editPosteNom" class="sv-edit" @keyup.enter="renommerPoste(po)" />
-            <button class="btn" @click="renommerPoste(po)">OK</button>
-            <button class="link" @click="editPosteId = null">Annuler</button>
-          </template>
-          <template v-else>
-            <span class="sv-nom">{{ po.nom }}</span>
-            <template v-if="peutEditer">
-              <button class="link" @click="ouvrirEditPoste(po)">Renommer</button>
-              <button v-if="peutSupprimer" class="link danger" @click="supprimerPoste(po)">Supprimer</button>
+        <div v-for="grp in postesParPerim" :key="grp.perim || '—'" class="poste-grp">
+          <div class="poste-grp-h"><span>{{ grp.perim || 'Sans périmètre' }}</span><span class="poste-grp-n">{{ grp.items.length }}</span></div>
+          <div v-for="po in grp.items" :key="po.id" class="sv-row">
+            <template v-if="editPosteId === po.id">
+              <input v-model="editPosteNom" class="sv-edit" @keyup.enter="renommerPoste(po)" />
+              <button class="btn" @click="renommerPoste(po)">OK</button>
+              <button class="link" @click="editPosteId = null">Annuler</button>
             </template>
-          </template>
+            <template v-else>
+              <span class="sv-nom">{{ po.nom }}</span>
+              <select v-if="peutEditer" class="sv-perim" :value="po.perimetre || ''" @change="changerPerimPoste(po, $event.target.value)" title="Périmètre du poste"><option value="">Périmètre —</option><option v-for="pe in PERIMETRES" :key="pe" :value="pe">{{ pe }}</option></select>
+              <span v-else-if="po.perimetre" class="sv-perim-txt">{{ po.perimetre }}</span>
+              <template v-if="peutEditer">
+                <button class="link" @click="ouvrirEditPoste(po)">Renommer</button>
+                <button v-if="peutSupprimer" class="link danger" @click="supprimerPoste(po)">Supprimer</button>
+              </template>
+            </template>
+          </div>
         </div>
       </div>
     </section>
@@ -1158,6 +1183,10 @@ button.link.danger { color: #b91c1c; }
 .sv-perim { font-size: 12.5px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #1b2733; font-weight: 600; max-width: 240px; }
 .sv-perim:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
 .sv-perim-txt { font-size: 12px; color: #6d28d9; font-weight: 700; background: #f5f3ff; border: 1px solid #e9d5ff; border-radius: 7px; padding: 3px 9px; }
+.poste-grp { margin-top: 12px; }
+.poste-grp:first-of-type { margin-top: 6px; }
+.poste-grp-h { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #6d28d9; background: #f5f3ff; border: 1px solid #e9d5ff; border-radius: 8px; padding: 6px 11px; margin-bottom: 6px; }
+.poste-grp-n { margin-left: auto; font-size: 11px; font-weight: 700; color: #7c3aed; background: #fff; border: 1px solid #e9d5ff; border-radius: 999px; padding: 1px 9px; }
 .cad-form { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 9px; align-items: center; }
 .cad-form select, .cad-form input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
 .cad-form select { max-width: 250px; }
