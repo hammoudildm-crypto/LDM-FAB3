@@ -11,8 +11,13 @@
         <h2 class="card-title">Exigences</h2>
         <select v-model="fonctionSel" class="fct-sel" style="margin-left:auto">
           <option value="">Choisir une fonction —</option>
-          <option v-for="f in fonctions" :key="f" :value="f">{{ f }}{{ compteRequis[f] ? ' (' + compteRequis[f] + ')' : '' }}</option>
+          <option v-for="f in fonctionsAffichees" :key="f" :value="f">{{ f }}{{ compteRequis[f] ? ' (' + compteRequis[f] + ')' : '' }}</option>
         </select>
+      </div>
+      <div v-if="perimetres.length" class="perim-row">
+        <span class="perim-lbl">Périmètre :</span>
+        <button type="button" class="perim-chip" :class="{ on: !perimetreSel }" @click="perimetreSel = ''">Tous</button>
+        <button v-for="p in perimetres" :key="p" type="button" class="perim-chip" :class="{ on: perimetreSel === p }" @click="perimetreSel = p">{{ p }}</button>
       </div>
 
       <div v-if="!fonctions.length" class="empty-card">Aucun poste défini dans Référentiels. Ajoute des postes dans « Référentiels » d'abord.</div>
@@ -48,10 +53,13 @@ import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
 const CATS = ['BPF', 'Hygiène', 'Sécurité', 'Procédé', 'Documentation', 'Équipement']
+const normOrg = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’ʼ']/g, "'").replace(/\s+/g, ' ').trim()
 const formations = ref([])
 const postes = ref([])
 const requises = ref([])
+const orgNodes = ref([])
 const fonctionSel = ref('')
+const perimetreSel = ref('')
 const requisSet = ref({})
 const erreur = ref('')
 const message = ref('')
@@ -63,6 +71,8 @@ async function charger() {
   if (!rp.error) postes.value = (rp.data || []).map(r => (r.nom || '').trim()).filter(Boolean)
   const rr = await supabase.from('formation_requise').select('*')
   if (!rr.error) requises.value = rr.data || []
+  const rg = await supabase.from('organigramme').select('fonction, atelier_id').eq('actif', true)
+  if (!rg.error) orgNodes.value = rg.data || []
 }
 onMounted(charger)
 
@@ -73,8 +83,26 @@ const compteRequis = computed(() => { const m = {}; for (const r of requises.val
 // Liste des fonctions = postes du référentiel + toute fonction ayant déjà des exigences (pour ne rien perdre)
 const fonctions = computed(() => {
   const dejaRequis = [...new Set(requises.value.map(r => (r.fonction || '').trim()).filter(Boolean))]
-  return [...new Set([...postes.value, ...dejaRequis])].sort((a, b) => a.localeCompare(b))
+  const orgFn = [...new Set(orgNodes.value.map(n => (n.fonction || '').trim()).filter(Boolean))]
+  return [...new Set([...postes.value, ...orgFn, ...dejaRequis])].sort((a, b) => a.localeCompare(b))
 })
+// Périmètres (organigramme : atelier_id) + mapping fonction → périmètre, pour filtrer la liste
+const perimetres = computed(() => [...new Set(orgNodes.value.map(n => (n.atelier_id || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)))
+const fonctionParPerim = computed(() => {
+  const m = {}
+  for (const n of orgNodes.value) {
+    const p = (n.atelier_id || '').trim(), f = normOrg(n.fonction)
+    if (!p || !f) continue
+    ;(m[p] = m[p] || new Set()).add(f)
+  }
+  return m
+})
+const fonctionsAffichees = computed(() => {
+  if (!perimetreSel.value) return fonctions.value
+  const set = fonctionParPerim.value[perimetreSel.value]
+  return set ? fonctions.value.filter(f => set.has(normOrg(f))) : []
+})
+watch(perimetreSel, () => { if (fonctionSel.value && !fonctionsAffichees.value.includes(fonctionSel.value)) fonctionSel.value = '' })
 
 watch(fonctionSel, (fn) => {
   const obj = {}
@@ -108,6 +136,11 @@ async function enregistrer() {
 .btn { background: #0d9488; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .btn.ghost { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
 .fct-sel { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; font-weight: 600; min-width: 220px; }
+.perim-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
+.perim-lbl { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; }
+.perim-chip { padding: 6px 13px; border: 1px solid #cbd5e1; border-radius: 999px; background: #fff; color: #475569; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: all .12s; }
+.perim-chip:hover { border-color: #5eead4; background: #f0fdfa; }
+.perim-chip.on { background: #0d9488; border-color: #0d9488; color: #fff; box-shadow: 0 2px 8px rgba(13,148,136,.25); }
 
 .exi-cat { margin-top: 14px; }
 .exi-cat-titre { margin: 0 0 6px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #0d9488; }
