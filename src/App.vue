@@ -20,7 +20,8 @@ const AUTO_REFRESH_MS = 300000 // 5 minutes (filet de sécurité ; le temps rée
 // Écrans où l'on saisit : jamais de rechargement automatique, il effacerait le travail en cours.
 // Seuls ces tableaux de bord (lecture seule) se rafraîchissent automatiquement.
 // Toute autre page — saisie, paramétrage, formulaires, pages futures — est protégée par défaut.
-const ROUTES_AVEC_AUTO = ['/accueil', '/temps-reel', '/tableau-de-bord', '/tableau-de-bord-classique', '/avancement', '/encours', '/rendement', '/ca', '/suivi-trs']
+// Tableau de bord retiré : page de consultation (KPI annuels/mensuels) — le remontage auto cassait la lecture
+const ROUTES_AVEC_AUTO = ['/accueil', '/temps-reel', '/avancement', '/encours', '/rendement', '/ca', '/suivi-trs']
 let autoRefreshTimer = null
 // Ne jamais recharger pendant qu'un opérateur saisit (champ focalisé) ou qu'une fenêtre est ouverte
 const refreshEnAttente = ref(false)
