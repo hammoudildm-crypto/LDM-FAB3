@@ -1448,6 +1448,36 @@ onMounted(async () => {
           <label class="filtre-chk"><input type="checkbox" v-model="filtrePerime" /> OF périmés</label>
         </div>
         <section class="qual-box">
+          <h3 class="qual-h">Production — plan vs réalisation</h3>
+          <section class="prodq-kpis">
+            <div class="pqk-card pqk-plan">
+              <div class="pqk-h">Plan annuel <span class="pqk-sub">· {{ anneeCourante }}</span></div>
+              <div class="pqk-row"><span class="pqk-l">Lots</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.plan.an.lots)) }}</span></div>
+              <div class="pqk-row"><span class="pqk-l">Boîtes</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.plan.an.boites)) }}</span></div>
+              <div class="pqk-row"><span class="pqk-l">CA</span><span class="pqk-v">{{ fmtDAq(kpiProdQ.plan.an.ca) }}</span></div>
+            </div>
+            <div class="pqk-card pqk-plan">
+              <div class="pqk-h">Plan du mois <span class="pqk-sub">· {{ moisNomCourant }}</span></div>
+              <div class="pqk-row"><span class="pqk-l">Lots</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.plan.mois.lots)) }}</span></div>
+              <div class="pqk-row"><span class="pqk-l">Boîtes</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.plan.mois.boites)) }}</span></div>
+              <div class="pqk-row"><span class="pqk-l">CA</span><span class="pqk-v">{{ fmtDAq(kpiProdQ.plan.mois.ca) }}</span></div>
+            </div>
+            <div class="pqk-card pqk-real">
+              <div class="pqk-h">Réalisation annuelle <span class="pqk-sub">· {{ anneeCourante }}</span></div>
+              <div class="pqk-row"><span class="pqk-l">Lots</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.real.an.lots)) }}</span></div>
+              <div class="pqk-row"><span class="pqk-l">Boîtes</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.real.an.boites)) }}</span></div>
+              <div class="pqk-row"><span class="pqk-l">CA</span><span class="pqk-v">{{ fmtDAq(kpiProdQ.real.an.ca) }}</span></div>
+            </div>
+            <div class="pqk-card pqk-real">
+              <div class="pqk-h">Réalisation du mois <span class="pqk-sub">· {{ moisNomCourant }}</span></div>
+              <div class="pqk-row"><span class="pqk-l">Lots</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.real.mois.lots)) }}</span></div>
+              <div class="pqk-row"><span class="pqk-l">Boîtes</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.real.mois.boites)) }}</span></div>
+              <div class="pqk-row"><span class="pqk-l">CA</span><span class="pqk-v">{{ fmtDAq(kpiProdQ.real.mois.ca) }}</span></div>
+            </div>
+          </section>
+          <p class="prodq-note">Plan = PDP · Réalisation = boîtes fabriquées (date de fin de fabrication). CA nominal (boîtes × prix de cession).</p>
+        </section>
+        <section class="qual-box">
           <h3 class="qual-h">Charge, triage et déviations par atelier</h3>
           <p class="qual-sub">File de production</p>
           <div class="kpi-grid qual-kpis">
@@ -1463,34 +1493,6 @@ onMounted(async () => {
               <div class="kpi-lbl">{{ k.l }}<span v-if="k.to" class="kpi-arrow">→</span></div>
             </div>
           </div>
-            <p class="qual-sub">Production — plan vs réalisation</p>
-            <section class="prodq-kpis">
-              <div class="pqk-card pqk-plan">
-                <div class="pqk-h">Plan annuel <span class="pqk-sub">· {{ anneeCourante }}</span></div>
-                <div class="pqk-row"><span class="pqk-l">Lots</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.plan.an.lots)) }}</span></div>
-                <div class="pqk-row"><span class="pqk-l">Boîtes</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.plan.an.boites)) }}</span></div>
-                <div class="pqk-row"><span class="pqk-l">CA</span><span class="pqk-v">{{ fmtDAq(kpiProdQ.plan.an.ca) }}</span></div>
-              </div>
-              <div class="pqk-card pqk-plan">
-                <div class="pqk-h">Plan du mois <span class="pqk-sub">· {{ moisNomCourant }}</span></div>
-                <div class="pqk-row"><span class="pqk-l">Lots</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.plan.mois.lots)) }}</span></div>
-                <div class="pqk-row"><span class="pqk-l">Boîtes</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.plan.mois.boites)) }}</span></div>
-                <div class="pqk-row"><span class="pqk-l">CA</span><span class="pqk-v">{{ fmtDAq(kpiProdQ.plan.mois.ca) }}</span></div>
-              </div>
-              <div class="pqk-card pqk-real">
-                <div class="pqk-h">Réalisation annuelle <span class="pqk-sub">· {{ anneeCourante }}</span></div>
-                <div class="pqk-row"><span class="pqk-l">Lots</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.real.an.lots)) }}</span></div>
-                <div class="pqk-row"><span class="pqk-l">Boîtes</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.real.an.boites)) }}</span></div>
-                <div class="pqk-row"><span class="pqk-l">CA</span><span class="pqk-v">{{ fmtDAq(kpiProdQ.real.an.ca) }}</span></div>
-              </div>
-              <div class="pqk-card pqk-real">
-                <div class="pqk-h">Réalisation du mois <span class="pqk-sub">· {{ moisNomCourant }}</span></div>
-                <div class="pqk-row"><span class="pqk-l">Lots</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.real.mois.lots)) }}</span></div>
-                <div class="pqk-row"><span class="pqk-l">Boîtes</span><span class="pqk-v">{{ fmt(Math.round(kpiProdQ.real.mois.boites)) }}</span></div>
-                <div class="pqk-row"><span class="pqk-l">CA</span><span class="pqk-v">{{ fmtDAq(kpiProdQ.real.mois.ca) }}</span></div>
-              </div>
-            </section>
-            <p class="prodq-note">Plan = PDP · Réalisation = boîtes fabriquées (date de fin de fabrication). CA nominal (boîtes × prix de cession).</p>
             <p class="qual-sub">Détail par atelier</p>
             <table v-if="qualiteParAtelier.length" class="qual-tbl">
               <thead><tr><th>Atelier</th><th class="qcharge-h">Charge — lots en file</th><th class="qnum">Boîtes</th><th class="qnum">En triage</th><th class="qnum">Avec déviation</th><th class="qnum">Part dév.</th><th class="qnum qcap" title="Capacité annuelle de l'atelier = total planifié de l'année (boîtes)">Cap. annuelle</th><th class="qnum" title="Planifié du mois en cours (boîtes)">Plan du mois</th><th class="qnum" title="Boîtes fabriquées cette année (date de fin de fabrication)">Réalisé année</th><th class="qnum" title="Boîtes fabriquées ce mois">Réalisé mois</th></tr></thead>
