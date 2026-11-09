@@ -388,16 +388,18 @@ const kpiProdQ = computed(() => {
     pAnB += b; pAnL += l; pAnC += c
     if (Number(r.mois) === moisCourant) { pMoB += b; pMoL += l; pMoC += c }
   }
+  // Réalisation NOMINALE (délivrable Livraison Vrac, comme la page Production par atelier) :
+  // lots = compte des OF terminés, boîtes = Σ taille de lot, CA = Σ taille × pcsu.
   let rAnB = 0, rAnL = 0, rAnC = 0, rMoB = 0, rMoL = 0, rMoC = 0
   for (const o of ofs.value) {
     const d = o.date_fin_fabrication; if (!d) continue
     const dt = new Date(d); if (dt.getFullYear() !== anneeCourante) continue
     const pr = o.produits || {}
-    const b = Number(o.boites_fabriquees) || Number(o.quantite_theorique) || 0
-    const taille = Number(pr.taille_lot || 0), pcsu = Number(pr.pcsu || 0)
-    const l = taille > 0 ? b / taille : 0, c = b * pcsu
-    rAnB += b; rAnL += l; rAnC += c
-    if ((dt.getMonth() + 1) === moisCourant) { rMoB += b; rMoL += l; rMoC += c }
+    const taille = Number(pr.taille_lot || 0); if (taille <= 0) continue
+    const pcsu = Number(pr.pcsu || 0)
+    const b = taille, c = taille * pcsu
+    rAnB += b; rAnL += 1; rAnC += c
+    if ((dt.getMonth() + 1) === moisCourant) { rMoB += b; rMoL += 1; rMoC += c }
   }
   return {
     plan: { an: { lots: pAnL, boites: pAnB, ca: pAnC }, mois: { lots: pMoL, boites: pMoB, ca: pMoC } },
