@@ -194,6 +194,24 @@
         </tbody>
       </table>
 
+      <h3 class="sec-titre">Avancement de la formation par phase</h3>
+      <p class="hint">Basé sur le champ « Phase » des personnes (une personne sur plusieurs phases compte dans chacune). Trié des phases les plus en retard en premier.</p>
+      <div v-if="!tauxParPhase.length" class="empty-sm">Aucune phase renseignée sur le personnel filtré.</div>
+      <table v-else class="form-tbl">
+        <thead><tr><th>Phase</th><th class="c">Personnes</th><th class="r">Validées / Requises</th><th class="c">À recycler</th><th class="c">Expiré</th><th class="c">Manquant</th><th class="tx">Avancement</th></tr></thead>
+        <tbody>
+          <tr v-for="g in tauxParPhase" :key="g.nom">
+            <td class="nom">{{ g.nom }}</td>
+            <td class="c">{{ g.nb }}</td>
+            <td class="r">{{ g.val }} / {{ g.req }}</td>
+            <td class="c"><span v-if="g.bientot" class="pp-n warn">{{ g.bientot }}</span><span v-else class="pp-z">—</span></td>
+            <td class="c"><span v-if="g.expire" class="pp-n bad">{{ g.expire }}</span><span v-else class="pp-z">—</span></td>
+            <td class="c"><span v-if="g.manquant" class="pp-n miss">{{ g.manquant }}</span><span v-else class="pp-z">—</span></td>
+            <td class="tx"><div v-if="g.taux != null" class="bar"><div class="bar-fill" :class="barCls(g.taux)" :style="{ width: g.taux + '%' }"></div><span class="bar-txt">{{ g.taux.toFixed(0) }}%</span></div><span v-else>—</span></td>
+          </tr>
+        </tbody>
+      </table>
+
       <h3 class="sec-titre">Évolution du taux de formation (12 mois)</h3>
       <div v-if="!evoChart" class="empty-sm">Pas assez d'historique pour tracer l'évolution.</div>
       <div v-else class="chart-wrap">
@@ -497,6 +515,23 @@ const tauxParPerimetre = computed(() => {
     g[per].req += req.size; g[per].val += val
   }
   return Object.values(g).map(x => ({ ...x, taux: x.req ? x.val / x.req * 100 : null })).sort((a, b) => (a.taux || 0) - (b.taux || 0))
+})
+// Avancement de la formation par phase (champ « equipement » de l'organigramme,
+// multi-valué : une personne travaillant plusieurs phases compte dans chacune).
+const tauxParPhase = computed(() => {
+  const g = {}
+  for (const p of personnesFiltrees.value) {
+    const req = requisParFonction.value[p.fonction]; if (!req || !req.size) continue
+    const phases = (p.equipement || '').split(',').map(x => x.trim()).filter(Boolean)
+    if (!phases.length) phases.push('(sans phase)')
+    let val = 0, bientot = 0, expire = 0, manquant = 0
+    for (const fid of req) { const st = cellStatut(p.id, fid); if (st === 'valide') val++; else if (st === 'bientot') bientot++; else if (st === 'expire') expire++; else if (st === 'manquant') manquant++ }
+    for (const ph of phases) {
+      if (!g[ph]) g[ph] = { nom: ph, req: 0, val: 0, bientot: 0, expire: 0, manquant: 0, nb: 0 }
+      g[ph].req += req.size; g[ph].val += val; g[ph].bientot += bientot; g[ph].expire += expire; g[ph].manquant += manquant; g[ph].nb++
+    }
+  }
+  return Object.values(g).map(x => ({ ...x, taux: x.req ? x.val / x.req * 100 : null })).sort((a, b) => (a.taux == null ? 1000 : a.taux) - (b.taux == null ? 1000 : b.taux) || a.nom.localeCompare(b.nom))
 })
 function moisLabel(d) { return d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) }
 function estValideA(pid, fid, dateStr) {
