@@ -81,6 +81,25 @@
         </div>
       </div>
 
+      <div v-if="tauxParPhase.length" class="phase-board">
+        <div class="phase-h"><span class="phase-ic">🏭</span>Avancement de la formation par phase</div>
+        <p class="hint" style="margin-top:0">Une personne affectée à plusieurs phases compte dans chacune. Trié des phases les plus en retard en premier. Respecte les filtres ci-dessus.</p>
+        <table class="form-tbl">
+          <thead><tr><th>Phase</th><th class="c">Personnes</th><th class="r">Validées / Requises</th><th class="c">À recycler</th><th class="c">Expiré</th><th class="c">Manquant</th><th class="tx">Avancement</th></tr></thead>
+          <tbody>
+            <tr v-for="g in tauxParPhase" :key="g.nom">
+              <td class="nom">{{ g.nom }}</td>
+              <td class="c">{{ g.nb }}</td>
+              <td class="r">{{ g.val }} / {{ g.req }}</td>
+              <td class="c"><span v-if="g.bientot" class="pp-n warn">{{ g.bientot }}</span><span v-else class="pp-z">—</span></td>
+              <td class="c"><span v-if="g.expire" class="pp-n bad">{{ g.expire }}</span><span v-else class="pp-z">—</span></td>
+              <td class="c"><span v-if="g.manquant" class="pp-n miss">{{ g.manquant }}</span><span v-else class="pp-z">—</span></td>
+              <td class="tx"><div v-if="g.taux != null" class="bar"><div class="bar-fill" :class="barCls(g.taux)" :style="{ width: g.taux + '%' }"></div><span class="bar-txt">{{ g.taux.toFixed(0) }}%</span></div><span v-else>—</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <div class="tabs2">
         <button :class="{ on: vue === 'matrice' }" @click="vue = 'matrice'">Matrice</button>
         <button :class="{ on: vue === 'planifier' }" @click="vue = 'planifier'">À planifier<span v-if="aPlanifier.length" class="tb">{{ aPlanifier.length }}</span></button>
@@ -189,24 +208,6 @@
           <tr v-for="g in tauxParPerimetre" :key="g.nom">
             <td class="nom">{{ g.nom }}</td>
             <td class="r">{{ g.val }} / {{ g.req }}</td>
-            <td class="tx"><div v-if="g.taux != null" class="bar"><div class="bar-fill" :class="barCls(g.taux)" :style="{ width: g.taux + '%' }"></div><span class="bar-txt">{{ g.taux.toFixed(0) }}%</span></div><span v-else>—</span></td>
-          </tr>
-        </tbody>
-      </table>
-
-      <h3 class="sec-titre">Avancement de la formation par phase</h3>
-      <p class="hint">Basé sur le champ « Phase » des personnes (une personne sur plusieurs phases compte dans chacune). Trié des phases les plus en retard en premier.</p>
-      <div v-if="!tauxParPhase.length" class="empty-sm">Aucune phase renseignée sur le personnel filtré.</div>
-      <table v-else class="form-tbl">
-        <thead><tr><th>Phase</th><th class="c">Personnes</th><th class="r">Validées / Requises</th><th class="c">À recycler</th><th class="c">Expiré</th><th class="c">Manquant</th><th class="tx">Avancement</th></tr></thead>
-        <tbody>
-          <tr v-for="g in tauxParPhase" :key="g.nom">
-            <td class="nom">{{ g.nom }}</td>
-            <td class="c">{{ g.nb }}</td>
-            <td class="r">{{ g.val }} / {{ g.req }}</td>
-            <td class="c"><span v-if="g.bientot" class="pp-n warn">{{ g.bientot }}</span><span v-else class="pp-z">—</span></td>
-            <td class="c"><span v-if="g.expire" class="pp-n bad">{{ g.expire }}</span><span v-else class="pp-z">—</span></td>
-            <td class="c"><span v-if="g.manquant" class="pp-n miss">{{ g.manquant }}</span><span v-else class="pp-z">—</span></td>
             <td class="tx"><div v-if="g.taux != null" class="bar"><div class="bar-fill" :class="barCls(g.taux)" :style="{ width: g.taux + '%' }"></div><span class="bar-txt">{{ g.taux.toFixed(0) }}%</span></div><span v-else>—</span></td>
           </tr>
         </tbody>
@@ -654,6 +655,11 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .kc-leg .lg { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #64748b; font-weight: 600; }
 .kc-leg .lg i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 
+.phase-board { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 14px; padding: 14px 16px 10px; margin-bottom: 20px; }
+.phase-board .form-tbl { background: #fff; border-radius: 10px; overflow: hidden; }
+.phase-board .form-tbl th { padding-left: 12px; padding-right: 12px; }
+.phase-h { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 800; color: #0f766e; margin-bottom: 4px; }
+.phase-ic { font-size: 17px; }
 .sec-titre { margin: 22px 0 8px; font-size: 15px; font-weight: 800; color: #0f172a; border-left: 4px solid #0d9488; padding-left: 9px; }
 .form-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .form-tbl th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; font-weight: 700; padding: 6px 10px; border-bottom: 2px solid #eef2f6; }
