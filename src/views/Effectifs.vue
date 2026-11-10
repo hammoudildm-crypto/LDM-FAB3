@@ -307,6 +307,31 @@ const mouvStats = computed(() => {
   return { entrees, sorties, eDebut, eFin, turnover: eMoy > 0 ? (sorties / eMoy * 100) : null }
 })
 const fmtTurnover = computed(() => mouvStats.value.turnover == null ? '—' : (mouvStats.value.turnover.toFixed(1).replace('.', ',') + '%'))
+// Mouvements (entrées / sorties / solde) par périmètre pour l'année sélectionnée
+const mouvParPerim = computed(() => {
+  const list = orgPerimRaw.value, y = mouvAnnee.value
+  const finRef = (y === new Date().getFullYear()) ? new Date() : new Date(y, 11, 31, 23, 59, 59)
+  const g = {}
+  const ensure = (p) => { if (!g[p]) g[p] = { perim: p, entrees: 0, sorties: 0, eff: 0 }; return g[p] }
+  for (const n of list) {
+    const p = n.atelier_id || 'Non renseigné'
+    if (n.date_recrutement) {
+      const r = new Date(n.date_recrutement)
+      if (!isNaN(r)) {
+        if (r.getFullYear() === y) ensure(p).entrees++
+        if (r <= finRef) { let present = true; if (n.date_sortie) { const sd = new Date(n.date_sortie); if (!isNaN(sd) && sd <= finRef) present = false } if (present) ensure(p).eff++ }
+      }
+    }
+    if (n.date_sortie) { const sd = new Date(n.date_sortie); if (!isNaN(sd) && sd.getFullYear() === y) ensure(p).sorties++ }
+  }
+  const order = [...PERIMETRES]
+  return Object.values(g)
+    .filter(x => x.entrees || x.sorties || x.eff)
+    .map(x => ({ ...x, solde: x.entrees - x.sorties }))
+    .sort((a, b) => { const ia = order.indexOf(a.perim), ib = order.indexOf(b.perim); if (ia >= 0 && ib >= 0) return ia - ib; if (ia >= 0) return -1; if (ib >= 0) return 1; return a.perim.localeCompare(b.perim) })
+})
+const mouvPerimTot = computed(() => mouvParPerim.value.reduce((t, x) => ({ eff: t.eff + x.eff, entrees: t.entrees + x.entrees, sorties: t.sorties + x.sorties, solde: t.solde + x.solde }), { eff: 0, entrees: 0, sorties: 0, solde: 0 }))
+const fmtSolde = (s) => (s > 0 ? '+' : s < 0 ? '−' : '') + Math.abs(s)
 
 // ===== Synthèse RH filtrable par périmètre (n'impacte ni l'export PDF ni les autres cartes) =====
 const synthPerim = ref('')
@@ -1081,6 +1106,24 @@ onMounted(chargerTout)
           <div class="mk"><div class="mk-v">{{ fmtTurnover }}</div><div class="mk-l">Taux de turnover</div></div>
           <div class="mk"><div class="mk-v">{{ mouvStats.eDebut }} → {{ mouvStats.eFin }}</div><div class="mk-l">Effectif (début → fin)</div></div>
         </div>
+        <div v-if="mouvParPerim.length" class="mpp-wrap">
+          <div class="evo-title">Mouvements du personnel par périmètre · {{ mouvAnnee }}</div>
+          <table class="mpp-tbl">
+            <thead><tr><th>Périmètre</th><th class="c">Effectif</th><th class="c">Entrées</th><th class="c">Sorties</th><th class="c">Solde</th></tr></thead>
+            <tbody>
+              <tr v-for="g in mouvParPerim" :key="g.perim">
+                <td class="mpp-nom">{{ g.perim }}</td>
+                <td class="c">{{ g.eff }}</td>
+                <td class="c"><span v-if="g.entrees" class="evo-in">+{{ g.entrees }}</span><span v-else class="mpp-z">—</span></td>
+                <td class="c"><span v-if="g.sorties" class="evo-out">−{{ g.sorties }}</span><span v-else class="mpp-z">—</span></td>
+                <td class="c"><span class="mpp-solde" :class="g.solde > 0 ? 'pos' : (g.solde < 0 ? 'neg' : 'nul')">{{ fmtSolde(g.solde) }}</span></td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr><td class="mpp-nom">Total</td><td class="c">{{ mouvPerimTot.eff }}</td><td class="c"><span class="evo-in">+{{ mouvPerimTot.entrees }}</span></td><td class="c"><span class="evo-out">−{{ mouvPerimTot.sorties }}</span></td><td class="c"><span class="mpp-solde" :class="mouvPerimTot.solde > 0 ? 'pos' : (mouvPerimTot.solde < 0 ? 'neg' : 'nul')">{{ fmtSolde(mouvPerimTot.solde) }}</span></td></tr>
+            </tfoot>
+          </table>
+        </div>
         <div v-if="evoEffectif.length > 1" class="evo-wrap">
           <div class="evo-title">Évolution de l'effectif · {{ mouvAnnee }}</div>
           <div class="evo-bars">
@@ -1461,6 +1504,19 @@ onMounted(chargerTout)
 .evo-b-mv { display: flex; gap: 4px; align-items: center; min-height: 13px; font-size: 9px; font-weight: 800; }
 .evo-in { color: #15803d; }
 .evo-out { color: #dc2626; }
+.mpp-wrap { margin-top: 20px; }
+.mpp-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.mpp-tbl th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; font-weight: 700; padding: 7px 12px; border-bottom: 2px solid #eef2f6; }
+.mpp-tbl td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
+.mpp-tbl th.c, .mpp-tbl td.c { text-align: center; white-space: nowrap; }
+.mpp-tbl td.mpp-nom { font-weight: 700; color: #0f172a; }
+.mpp-tbl tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; font-weight: 800; background: #f8fafc; }
+.mpp-tbl .evo-in, .mpp-tbl .evo-out { font-weight: 800; }
+.mpp-z { color: #cbd5e1; }
+.mpp-solde { font-weight: 800; padding: 1px 9px; border-radius: 999px; font-size: 12.5px; }
+.mpp-solde.pos { background: #dcfce7; color: #166534; }
+.mpp-solde.neg { background: #fee2e2; color: #b91c1c; }
+.mpp-solde.nul { background: #f1f5f9; color: #64748b; }
 .evo-nil { color: #d1d5db; font-weight: 700; }
 .evo-legende { margin-top: 10px; font-size: 10px; color: #94a3b8; font-weight: 700; }
 .entree-date { color: #15803d; font-weight: 700; }
