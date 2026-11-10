@@ -84,20 +84,20 @@
       <div v-if="tauxParPhase.length" class="phase-board">
         <div class="phase-h"><span class="phase-ic">🏭</span>Avancement de la formation par phase</div>
         <p class="hint" style="margin-top:0">Une personne affectée à plusieurs phases compte dans chacune. Trié des phases les plus en retard en premier. Respecte les filtres ci-dessus.</p>
-        <table class="form-tbl">
-          <thead><tr><th>Phase</th><th class="c">Personnes</th><th class="r">Validées / Requises</th><th class="c">À recycler</th><th class="c">Expiré</th><th class="c">Manquant</th><th class="tx">Avancement</th></tr></thead>
-          <tbody>
-            <tr v-for="g in tauxParPhase" :key="g.nom">
-              <td class="nom">{{ g.nom }}</td>
-              <td class="c">{{ g.nb }}</td>
-              <td class="r">{{ g.val }} / {{ g.req }}</td>
-              <td class="c"><span v-if="g.bientot" class="pp-n warn">{{ g.bientot }}</span><span v-else class="pp-z">—</span></td>
-              <td class="c"><span v-if="g.expire" class="pp-n bad">{{ g.expire }}</span><span v-else class="pp-z">—</span></td>
-              <td class="c"><span v-if="g.manquant" class="pp-n miss">{{ g.manquant }}</span><span v-else class="pp-z">—</span></td>
-              <td class="tx"><div v-if="g.taux != null" class="bar"><div class="bar-fill" :class="barCls(g.taux)" :style="{ width: g.taux + '%' }"></div><span class="bar-txt">{{ g.taux.toFixed(0) }}%</span></div><span v-else>—</span></td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="phase-strip">
+          <div v-for="g in tauxParPhase" :key="g.nom" class="phase-card">
+            <div class="phase-card-h"><span class="phase-card-nom" :title="g.nom">{{ g.nom }}</span><span class="phase-card-nb">{{ g.nb }} pers.</span></div>
+            <div class="phase-card-pct" :class="barCls(g.taux)">{{ g.taux != null ? g.taux.toFixed(0) + '%' : '—' }}</div>
+            <div class="bar"><div class="bar-fill" :class="barCls(g.taux)" :style="{ width: (g.taux || 0) + '%' }"></div></div>
+            <div class="phase-card-sub">{{ g.val }} / {{ g.req }} validées</div>
+            <div class="phase-card-tags">
+              <span v-if="g.bientot" class="pt-tag warn" title="À recycler">⚠ {{ g.bientot }}</span>
+              <span v-if="g.expire" class="pt-tag bad" title="Expiré">✗ {{ g.expire }}</span>
+              <span v-if="g.manquant" class="pt-tag miss" title="Manquant">! {{ g.manquant }}</span>
+              <span v-if="!g.bientot && !g.expire && !g.manquant" class="pt-tag ok">✓ à jour</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="tabs2">
@@ -660,6 +660,21 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .phase-board .form-tbl th { padding-left: 12px; padding-right: 12px; }
 .phase-h { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 800; color: #0f766e; margin-bottom: 4px; }
 .phase-ic { font-size: 17px; }
+.phase-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.phase-card { flex: 0 0 auto; width: 178px; background: #fff; border: 1px solid #d1fae5; border-radius: 12px; padding: 10px 12px; }
+.phase-card-h { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-bottom: 5px; }
+.phase-card-nom { font-size: 12.5px; font-weight: 800; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.phase-card-nb { font-size: 10.5px; font-weight: 700; color: #94a3b8; white-space: nowrap; flex: none; }
+.phase-card-pct { font-size: 23px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.05; }
+.phase-card-pct.ok { color: #16a34a; } .phase-card-pct.mid { color: #d97706; } .phase-card-pct.low { color: #dc2626; }
+.phase-card .bar { height: 8px; margin: 6px 0; }
+.phase-card-sub { font-size: 11px; color: #64748b; font-weight: 600; }
+.phase-card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.pt-tag { font-size: 10.5px; font-weight: 800; padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
+.pt-tag.warn { background: #fef3c7; color: #92400e; }
+.pt-tag.bad { background: #fee2e2; color: #b91c1c; }
+.pt-tag.miss { background: #e2e8f0; color: #475569; }
+.pt-tag.ok { background: #dcfce7; color: #166534; }
 .sec-titre { margin: 22px 0 8px; font-size: 15px; font-weight: 800; color: #0f172a; border-left: 4px solid #0d9488; padding-left: 9px; }
 .form-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .form-tbl th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; font-weight: 700; padding: 6px 10px; border-bottom: 2px solid #eef2f6; }
