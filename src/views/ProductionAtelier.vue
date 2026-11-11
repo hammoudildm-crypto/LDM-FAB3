@@ -568,6 +568,23 @@ const seriesChart = computed(() => {
 
 // --- Clic sur une barre : les lots de ce mois / cette année pour l'atelier ---
 const anneesChart = computed(() => ANNEES_COMP.filter(y => anneesActives.value.has(y)))
+// Synthèse de l'atelier affiché, par année active : total annuel, moyenne/mois, meilleur & pire mois
+const syntheseAtelier = computed(() => {
+  const out = []
+  for (let i = 0; i < ANNEES_COMP.length; i++) {
+    const y = ANNEES_COMP[i]
+    if (!anneesActives.value.has(y)) continue
+    const serie = valeurs(atelierSel.value, y, metrique.value)
+    const nMois = (y === anneeCourante) ? (moisCourant + 1) : 12
+    const vals = serie.slice(0, nMois)
+    const total = vals.reduce((s, x) => s + x, 0)
+    if (total <= 0) continue
+    let bi = 0, wi = 0
+    vals.forEach((v, idx) => { if (v > vals[bi]) bi = idx; if (v < vals[wi]) wi = idx })
+    out.push({ year: y, color: COULEURS_ANNEES[i], total, moy: total / nMois, best: { mois: MOIS_LONG[bi], val: vals[bi] }, worst: { mois: MOIS_LONG[wi], val: vals[wi] } })
+  }
+  return out
+})
 const ofById = computed(() => { const m = {}; for (const o of ofs.value) m[o.id] = o; return m })
 const modalPA = ref(null)   // { mois, annee }
 const paAgrandi = ref(false)
@@ -1008,6 +1025,18 @@ onMounted(charger)
           <p v-else class="empty">Sélectionne au moins une année pour afficher le graphe.</p>
         </div>
         <p v-if="partSel" class="pa-filter-note">Filtre partenaire : <b>{{ partSel }}</b> · les années passées sans détail au lot conservent l'historique global (non ventilable par partenaire).</p>
+        <div v-if="syntheseAtelier.length" class="synth-box">
+          <div class="synth-h">Synthèse — {{ atelierSel }} · {{ metriqueUnite }}</div>
+          <div class="synth-grid">
+            <div v-for="s in syntheseAtelier" :key="s.year" class="synth-card">
+              <div class="synth-an"><span class="synth-dot" :style="{ background: s.color }"></span>{{ s.year }}</div>
+              <div class="synth-stat"><span class="synth-lbl">Quantité annuelle</span><span class="synth-val">{{ fmtMetrique(s.total) }}</span></div>
+              <div class="synth-stat"><span class="synth-lbl">Moyenne / mois</span><span class="synth-val">{{ fmtMetrique(Math.round(s.moy)) }}</span></div>
+              <div class="synth-stat"><span class="synth-lbl synth-up">▲ Meilleur mois</span><span class="synth-val">{{ s.best.mois }}<em>{{ fmtMetrique(s.best.val) }}</em></span></div>
+              <div class="synth-stat"><span class="synth-lbl synth-dn">▼ Mois le plus faible</span><span class="synth-val">{{ s.worst.mois }}<em>{{ fmtMetrique(s.worst.val) }}</em></span></div>
+            </div>
+          </div>
+        </div>
       </section>
       <section class="card ytd-card">
         <div class="card-head">
@@ -1390,6 +1419,19 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-part-tg button { text-align: center; font-size: 10px; padding: 6px 4px; }
 .pa-part-tg .pa-part-all { grid-column: 1 / -1; }
 .pa-filter-note { margin: 8px 2px 0; font-size: 11.5px; color: #7c3aed; background: #faf5ff; border: 1px solid #ede9fe; border-radius: 8px; padding: 7px 11px; }
+.synth-box { margin-top: 14px; border-top: 1px dashed #e2e8f0; padding-top: 12px; }
+.synth-h { font-size: 12.5px; font-weight: 800; color: #0f766e; margin-bottom: 9px; }
+.synth-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.synth-card { border: 1px solid #e8edf3; border-radius: 11px; padding: 11px 13px; background: #fff; }
+.synth-an { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 8px; }
+.synth-dot { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+.synth-stat { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 3px 0; border-top: 1px solid #f1f5f9; }
+.synth-stat:first-of-type { border-top: 0; }
+.synth-lbl { font-size: 11px; color: #64748b; font-weight: 600; white-space: nowrap; }
+.synth-up { color: #15803d; }
+.synth-dn { color: #b45309; }
+.synth-val { font-size: 12.5px; font-weight: 700; color: #0f172a; text-align: right; }
+.synth-val em { font-style: normal; color: #0f766e; font-weight: 800; margin-left: 6px; }
 .pa-part-tg button:hover { border-color: #ddd6fe; background: #faf5ff; }
 .pa-part-tg button.on { background: #7c3aed; border-color: #7c3aed; color: #fff; box-shadow: 0 2px 6px rgba(124,58,237,.28); }
 .side-reset { float: right; color: #7c3aed; cursor: pointer; font-size: 9.5px; font-weight: 800; letter-spacing: 0; text-transform: none; }
