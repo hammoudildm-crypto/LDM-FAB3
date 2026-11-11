@@ -283,8 +283,15 @@ function valeurs(stage, year, metric) {
   if (metric === 'boites') { hSrc = histValParAn.value.boites; lSrc = liveValParAn.value.boites }
   else if (metric === 'ca') { hSrc = histValParAn.value.ca; lSrc = liveValParAn.value.ca }
   else { hSrc = ((perimSel.value.length || partSel.value) ? histLotsParAn.value : histParAn.value); lSrc = liveParAn.value }
-  const h = (hSrc[stage] && hSrc[stage][year]) ? hSrc[stage][year] : null
+  let h = (hSrc[stage] && hSrc[stage][year]) ? hSrc[stage][year] : null
   const l = (lSrc[stage] && lSrc[stage][year]) ? lSrc[stage][year] : null
+  // Repli années passées : l'historique « lots » importé est agrégé (production_historique) et n'a pas
+  // le détail au lot ventilable par zone/partenaire. Si un filtre vide une année passée, on réaffiche
+  // l'historique global pour ne pas masquer la tendance pluriannuelle.
+  if (metric === 'lots' && (perimSel.value.length || partSel.value) && year < anneeCourante && (!h || !h.some(v => v > 0))) {
+    const agg = (histParAn.value[stage] && histParAn.value[stage][year]) ? histParAn.value[stage][year] : null
+    if (agg && agg.some(v => v > 0)) h = agg
+  }
   if (year < anneeCourante) return h || Array(12).fill(0)                 // années passées : historique importé
   const hh = h || Array(12).fill(0), ll = l || Array(12).fill(0)
   return hh.map((v, i) => v > 0 ? v : ll[i])                              // année en cours : historique à ce jour, sinon temps réel
@@ -976,6 +983,7 @@ onMounted(charger)
           <MiniChart v-if="seriesChart.length" :series="seriesChart" :labels="MOIS" :show-switch="true" :show-values="true" :value-format="fmtValChart" :current-index="moisCourant" :current-serie="idxSerieAnneeCourante" clickable @pick="ouvrirBarrePA" />
           <p v-else class="empty">Sélectionne au moins une année pour afficher le graphe.</p>
         </div>
+        <p v-if="partSel" class="pa-filter-note">Filtre partenaire : <b>{{ partSel }}</b> · les années passées sans détail au lot conservent l'historique global (non ventilable par partenaire).</p>
       </section>
       <section class="card ytd-card">
         <div class="card-head">
@@ -1357,6 +1365,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-part-tg { grid-template-columns: repeat(3, 1fr); }
 .pa-part-tg button { text-align: center; font-size: 10px; padding: 6px 4px; }
 .pa-part-tg .pa-part-all { grid-column: 1 / -1; }
+.pa-filter-note { margin: 8px 2px 0; font-size: 11.5px; color: #7c3aed; background: #faf5ff; border: 1px solid #ede9fe; border-radius: 8px; padding: 7px 11px; }
 .pa-part-tg button:hover { border-color: #ddd6fe; background: #faf5ff; }
 .pa-part-tg button.on { background: #7c3aed; border-color: #7c3aed; color: #fff; box-shadow: 0 2px 6px rgba(124,58,237,.28); }
 .side-reset { float: right; color: #7c3aed; cursor: pointer; font-size: 9.5px; font-weight: 800; letter-spacing: 0; text-transform: none; }
