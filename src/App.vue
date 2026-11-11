@@ -1,12 +1,21 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, provide, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { supabase } from './supabase'
 import { MODULES, MODULE_COLOR, moduleDe } from './navigation.js'
 
 const session = ref(null)
 const role = ref(null)
 const route = useRoute()
+const router = useRouter()
+// Boutons façon fenêtre sur toutes les pages : réduire / agrandir (plein écran focus) / fermer
+const focusMode = ref(false)
+function winAgrandir() { focusMode.value = true }
+function winReduire() { focusMode.value = false }
+function winFermer() { if (window.history.length > 1) router.back(); else router.push('/') }
+function onFocusKey(e) { if (e.key === 'Escape' && focusMode.value) focusMode.value = false }
+onMounted(() => window.addEventListener('keydown', onFocusKey))
+onUnmounted(() => window.removeEventListener('keydown', onFocusKey))
 const navRef = ref(null)
 const themeRef = ref(null)
 const openMenu = ref(null)
@@ -256,7 +265,7 @@ async function signOut() {
 
 <template>
   <RouterView v-if="estLogin" />
-  <div v-else class="app-shell" :class="{ masquee: sidebarMasquee }">
+  <div v-else class="app-shell" :class="{ masquee: sidebarMasquee, focus: focusMode }">
     <div class="side-reveal" aria-hidden="true"></div>
     <aside class="sidebar" :class="{ open: sidebarOpen }">
       <div class="side-brand">
@@ -336,7 +345,17 @@ async function signOut() {
           <button type="button" class="tb-signout" @click="signOut" title="Déconnexion" aria-label="Déconnexion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v9" /><path d="M6.5 6.6a8 8 0 1 0 11 0" /></svg></button>
         </template>
         <RouterLink v-else to="/login" class="tb-acct" @click="sidebarOpen = false">Connexion</RouterLink>
+        <div class="win-ctrls">
+          <button class="win-b" @click="winReduire" :disabled="!focusMode" title="Réduire">−</button>
+          <button class="win-b" :class="{ on: focusMode }" @click="winAgrandir" title="Agrandir (plein écran)">☐</button>
+          <button class="win-b win-x" @click="winFermer" title="Fermer (page précédente)">✕</button>
+        </div>
       </header>
+      <div v-if="focusMode" class="win-float">
+        <button class="win-b" @click="winReduire" title="Réduire (quitter le plein écran — Échap)">−</button>
+        <button class="win-b on" @click="winReduire" title="Plein écran actif">☐</button>
+        <button class="win-b win-x" @click="winFermer" title="Fermer (page précédente)">✕</button>
+      </div>
       <main :style="{ zoom: zoom / 100 * 0.7 }">
         <RouterView :key="route.fullPath + '::' + refreshTick" />
       </main>
@@ -610,6 +629,23 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .online-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .online-moi { font-size: 10px; font-weight: 700; color: #22c55e; background: rgba(34,197,94,.15); padding: 1px 6px; border-radius: 999px; flex: none; }
 .app-topbar { display: flex; align-items: center; gap: 8px; padding: env(safe-area-inset-top, 0px) 14px 0; min-height: 54px; background: var(--topbar); color: var(--topbar-text); position: sticky; top: 0; z-index: 40; box-shadow: 0 2px 10px rgba(0,0,0,.14); flex-wrap: wrap; }
+/* Boutons façon fenêtre (réduire / agrandir / fermer) */
+.win-ctrls { display: flex; align-items: center; gap: 2px; margin-left: 6px; }
+.win-b { width: 34px; height: 30px; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--topbar-muted); border: 0; border-radius: 7px; cursor: pointer; font-size: 14px; line-height: 1; transition: background .15s, color .15s; }
+.win-b:hover:not(:disabled) { background: rgba(255,255,255,.14); color: #fff; }
+.win-b:disabled { opacity: .35; cursor: default; }
+.win-b.on { color: #fff; background: rgba(255,255,255,.18); }
+.win-b.win-x:hover:not(:disabled) { background: #dc2626; color: #fff; }
+.win-float { position: fixed; top: 10px; right: 12px; z-index: 120; display: flex; gap: 2px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 3px; box-shadow: 0 6px 20px rgba(16,24,40,.18); }
+.win-float .win-b { color: #475569; }
+.win-float .win-b:hover { background: #f1f5f9; color: #0f172a; }
+.win-float .win-b.on { background: #e2e8f0; color: #0f172a; }
+.win-float .win-b.win-x:hover { background: #dc2626; color: #fff; }
+.app-shell.focus .sidebar, .app-shell.focus .side-reveal, .app-shell.focus .app-topbar { display: none; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .win-float { background: #161f33; border-color: #2a3650; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .win-float .win-b { color: #c7d2e5; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .win-float .win-b:hover { background: #243049; color: #fff; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .win-float .win-b.on { background: #243049; color: #fff; }
 .app-topbar .burger { display: none; background: none; border: 0; color: var(--topbar-text); font-size: 22px; cursor: pointer; padding: 4px; line-height: 1; }
 .app-shell.masquee .app-topbar .burger { display: inline-flex; }
 .tb-brand { display: none; }
