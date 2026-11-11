@@ -950,7 +950,7 @@ onMounted(charger)
         <div class="side-sec" v-if="partenairesDispo.length">
           <div class="side-lbl">Partenaire <span v-if="partSel" class="side-reset" @click="partSel = ''">↺ tous</span></div>
           <div class="pa-atelier-tg pa-part-tg">
-            <button type="button" :class="{ on: !partSel }" @click="partSel = ''">Tous les partenaires</button>
+            <button type="button" class="pa-part-all" :class="{ on: !partSel }" @click="partSel = ''">Tous les partenaires</button>
             <button v-for="p in partenairesDispo" :key="p" type="button" :class="{ on: partSel === p }" @click="partSel = (partSel === p ? '' : p)">{{ p }}</button>
           </div>
         </div>
@@ -1355,8 +1355,9 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-atelier-tg button { border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 6px 4px; font: inherit; font-size: 10px; font-weight: 600; color: #64748b; cursor: pointer; white-space: normal; text-align: center; line-height: 1.2; transition: all .12s; }
 .pa-atelier-tg button:hover { border-color: #99f6e4; background: #f0fdfa; }
 .pa-atelier-tg button.on { background: #0f766e; border-color: #0f766e; color: #fff; box-shadow: 0 2px 6px rgba(15,118,110,.28); }
-.pa-part-tg { grid-template-columns: 1fr; }
-.pa-part-tg button { text-align: left; font-size: 10.5px; padding: 7px 9px; }
+.pa-part-tg { grid-template-columns: repeat(3, 1fr); }
+.pa-part-tg button { text-align: center; font-size: 10px; padding: 6px 4px; }
+.pa-part-tg .pa-part-all { grid-column: 1 / -1; }
 .pa-part-tg button:hover { border-color: #ddd6fe; background: #faf5ff; }
 .pa-part-tg button.on { background: #7c3aed; border-color: #7c3aed; color: #fff; box-shadow: 0 2px 6px rgba(124,58,237,.28); }
 .side-reset { float: right; color: #7c3aed; cursor: pointer; font-size: 9.5px; font-weight: 800; letter-spacing: 0; text-transform: none; }
