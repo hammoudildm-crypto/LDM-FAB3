@@ -442,8 +442,10 @@ const condData = computed(() => condRaw.value
 
 const annees = computed(() => {
   const s = new Set()
-  fabRaw.value.forEach(o => { const y = anYear(o.date_fin_fabrication); if (y) s.add(y) })
-  condRaw.value.forEach(c => { const y = anYear(c.date_conditionnement); if (y) s.add(y) })
+  const maxY = new Date().getFullYear() + 1
+  const ok = (y) => y && y >= 2000 && y <= maxY          // ignore les années aberrantes (ex. 32025, faute de saisie)
+  fabRaw.value.forEach(o => { const y = anYear(o.date_fin_fabrication); if (ok(y)) s.add(y) })
+  condRaw.value.forEach(c => { const y = anYear(c.date_conditionnement); if (ok(y)) s.add(y) })
   s.add(new Date().getFullYear())
   return [...s].sort((a, b) => b - a)
 })
