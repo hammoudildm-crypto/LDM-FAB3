@@ -585,6 +585,14 @@ const syntheseAtelier = computed(() => {
   }
   return out
 })
+// Quand un partenaire est sélectionné : quantités par mois et par année (atelier + mesure courants)
+const partMoisTable = computed(() => {
+  if (!partSel.value) return null
+  const years = ANNEES_COMP.filter(y => anneesActives.value.has(y))
+  const data = {}, totaux = {}
+  for (const y of years) { const s = valeurs(atelierSel.value, y, metrique.value); data[y] = s; totaux[y] = s.reduce((a, x) => a + x, 0) }
+  return { years, data, totaux }
+})
 const ofById = computed(() => { const m = {}; for (const o of ofs.value) m[o.id] = o; return m })
 const modalPA = ref(null)   // { mois, annee }
 const paAgrandi = ref(false)
@@ -1036,6 +1044,25 @@ onMounted(charger)
               <div class="synth-stat"><span class="synth-lbl synth-dn">▼ Mois le plus faible</span><span class="synth-val">{{ s.worst.mois }}<em>{{ fmtMetrique(s.worst.val) }}</em></span></div>
             </div>
           </div>
+        </div>
+      </section>
+      <section v-if="partMoisTable" class="card">
+        <div class="card-head">
+          <h2 class="card-title">{{ partSel }} — {{ atelierSel }} par mois · {{ metriqueUnite }}</h2>
+        </div>
+        <div class="table-scroll">
+          <table class="ytd-tbl">
+            <thead><tr><th>Mois</th><th v-for="y in partMoisTable.years" :key="y" class="ta-r" :class="{ cur: y === anneeCourante }">{{ y }}</th></tr></thead>
+            <tbody>
+              <tr v-for="(m, i) in MOIS_LONG" :key="m">
+                <td class="ytd-at">{{ m }}</td>
+                <td v-for="y in partMoisTable.years" :key="y" class="ta-r" :class="{ cur: y === anneeCourante }">{{ partMoisTable.data[y][i] ? fmtMetrique(partMoisTable.data[y][i]) : '—' }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="ytd-tot"><td class="ytd-at">Total</td><td v-for="y in partMoisTable.years" :key="y" class="ta-r" :class="{ cur: y === anneeCourante }">{{ fmtMetrique(partMoisTable.totaux[y]) }}</td></tr>
+            </tfoot>
+          </table>
         </div>
       </section>
         </div>
