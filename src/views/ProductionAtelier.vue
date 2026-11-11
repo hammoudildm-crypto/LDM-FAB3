@@ -1038,6 +1038,9 @@ onMounted(charger)
           </div>
         </div>
       </section>
+        </div>
+      </div>
+
       <section class="card ytd-card">
         <div class="card-head">
           <h2 class="card-title">Cumul à date — janvier à {{ MOIS_LONG[moisCourant].toLowerCase() }}</h2>
@@ -1065,8 +1068,6 @@ onMounted(charger)
           </table>
         </div>
       </section>
-        </div>
-      </div>
 
       <div class="pa-row2">
       <section class="card">
