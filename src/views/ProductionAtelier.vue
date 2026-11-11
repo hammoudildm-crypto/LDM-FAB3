@@ -119,13 +119,15 @@ async function charger() {
   if (!rc.error) conds.value = rc.data || []
   const rh = await fetchAllPaged(() => supabase.from('production_historique').select('annee, mois, etape, nb_lots'))
   if (!rh.error) hist.value = rh.data || []
-  const ro = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, date_fin_fabrication, boites_fabriquees, produits(code_pf, designation, taille_lot, pcsu, forme)').eq('actif', true))
+  let ro = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, date_fin_fabrication, boites_fabriquees, produits(code_pf, designation, taille_lot, pcsu, forme, donneurs_ordre(nom, code))').eq('actif', true))
+  if (ro.error && /donneur/i.test(ro.error.message || '')) ro = await fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, date_fin_fabrication, boites_fabriquees, produits(code_pf, designation, taille_lot, pcsu, forme)').eq('actif', true))
   if (!ro.error) ofs.value = ro.data || []
   const rhl = await fetchAllPaged(() => supabase.from('historique_lots_phases')
     .select('numero_lot, code_pf, designation, phase, date_fin'))
   if (!rhl.error) histLots.value = rhl.data || []
-  const rpd = await fetchAllPaged(() => supabase.from('produits').select('code_pf, taille_lot, pcsu, forme'))
-  if (!rpd.error) { const m = {}; for (const p of (rpd.data || [])) m[p.code_pf] = { taille: Number(p.taille_lot || 0), pcsu: Number(p.pcsu || 0), forme: p.forme || '' }; produitsMap.value = m }
+  let rpd = await fetchAllPaged(() => supabase.from('produits').select('code_pf, taille_lot, pcsu, forme, donneurs_ordre(nom, code)'))
+  if (rpd.error && /donneur/i.test(rpd.error.message || '')) rpd = await fetchAllPaged(() => supabase.from('produits').select('code_pf, taille_lot, pcsu, forme'))
+  if (!rpd.error) { const m = {}; for (const p of (rpd.data || [])) m[p.code_pf] = { taille: Number(p.taille_lot || 0), pcsu: Number(p.pcsu || 0), forme: p.forme || '', part: p.donneurs_ordre ? p.donneurs_ordre.nom : '' }; produitsMap.value = m }
   // Drapeau hormonal par code produit (tolérant : si la colonne n'existe pas encore)
   const rhm = await supabase.from('produits').select('code_pf, hormonal')
   const hmm = {}
@@ -549,18 +551,19 @@ const lotsMoisPA = computed(() => {
   const ph = atelierSel.value, y = m.annee
   const dansMois = (d) => { if (!d) return false; const dt = new Date(d); return dt.getFullYear() === y && dt.getMonth() === m.mois }
   const parLot = new Map()
-  const push = (lot, code, desig, src, qte = null, pcsu = 0) => {
+  const push = (lot, code, desig, src, qte = null, pcsu = 0, part = '') => {
     if (lot == null) return
     const k = String(lot).trim()
     if (!k || parLot.has(k)) return
-    parLot.set(k, { lot: k, code: code || '—', desig: desig || '', src, qte, pcsu })
+    parLot.set(k, { lot: k, code: code || '—', desig: desig || '', src, qte, pcsu, part: part || '' })
   }
   const pushOf = (id, src) => {
     const o = ofById.value[id]
     if (!o) return
     const qte = Number(o.produits ? o.produits.taille_lot : 0) || Number(o.boites_fabriquees) || null
     const pcsu = Number(o.produits ? o.produits.pcsu : 0) || 0
-    push(o.numero_lot, o.produits ? o.produits.code_pf : null, o.produits ? o.produits.designation : null, src, qte, pcsu)
+    const part = o.produits && o.produits.donneurs_ordre ? o.produits.donneurs_ordre.nom : ''
+    push(o.numero_lot, o.produits ? o.produits.code_pf : null, o.produits ? o.produits.designation : null, src, qte, pcsu, part)
   }
   if (ph === 'Conditionnement') {
     for (const c of conds.value) if (dansMois(c.date_fin || c.date_conditionnement)) pushOf(c.ordre_id, 'live')
@@ -568,7 +571,7 @@ const lotsMoisPA = computed(() => {
     for (const o of ofs.value) if (dansMois(o.date_fin_fabrication)) pushOf(o.id, 'live')
   } else {
     for (const sp of phases.value) if (normPhase(sp.phase) === ph && dansMois(sp.date_phase)) pushOf(sp.ordre_id, 'live')
-    for (const h of histLots.value) if (normPhase(h.phase) === ph && dansMois(h.date_fin)) { const pr = produitsMap.value[h.code_pf]; push(h.numero_lot, h.code_pf, h.designation, 'hist', pr ? (Number(pr.taille) || null) : null, pr ? (Number(pr.pcsu) || 0) : 0) }
+    for (const h of histLots.value) if (normPhase(h.phase) === ph && dansMois(h.date_fin)) { const pr = produitsMap.value[h.code_pf]; push(h.numero_lot, h.code_pf, h.designation, 'hist', pr ? (Number(pr.taille) || null) : null, pr ? (Number(pr.pcsu) || 0) : 0, pr ? (pr.part || '') : '') }
   }
   return [...parLot.values()].sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
 })
@@ -588,6 +591,24 @@ const produitsMoisPA = computed(() => {
   const totQte = liste.reduce((s, e) => s + e.qte, 0)
   for (const e of liste) e.pct = totQte > 0 ? Math.round(e.qte / totQte * 100) : 0
   liste.sort((a, b) => b.qte - a.qte || b.lots - a.lots)
+  return { liste, totLots: liste.reduce((s, e) => s + e.lots, 0), totQte, totCa: liste.reduce((s, e) => s + e.ca, 0) }
+})
+// Analyse par partenaire (donneur d'ordre) : regroupe les lots du mois par donneur d'ordre
+const partenairesMoisPA = computed(() => {
+  const map = new Map()
+  for (const l of lotsMoisPA.value) {
+    const key = (l.part && l.part.trim()) ? l.part.trim() : '— Sans donneur d\'ordre'
+    if (!map.has(key)) map.set(key, { nom: key, sans: !(l.part && l.part.trim()), lots: 0, qte: 0, ca: 0 })
+    const e = map.get(key)
+    e.lots += 1
+    const q = Number(l.qte) || 0
+    e.qte += q
+    e.ca += q * (Number(l.pcsu) || 0)
+  }
+  const liste = [...map.values()]
+  const totQte = liste.reduce((s, e) => s + e.qte, 0)
+  for (const e of liste) e.pct = totQte > 0 ? Math.round(e.qte / totQte * 100) : 0
+  liste.sort((a, b) => (a.sans - b.sans) || b.qte - a.qte || b.lots - a.lots)
   return { liste, totLots: liste.reduce((s, e) => s + e.lots, 0), totQte, totCa: liste.reduce((s, e) => s + e.ca, 0) }
 })
 const valeurBarrePA = computed(() => {
@@ -1103,6 +1124,22 @@ onMounted(charger)
               </tbody>
               <tfoot><tr><td>Total</td><td class="r">{{ produitsMoisPA.totLots }}</td><td class="r">{{ fmt(produitsMoisPA.totQte) }}</td><td class="r">{{ fmtDA(produitsMoisPA.totCa) }}</td><td class="r">100%</td></tr></tfoot>
             </table>
+
+            <div class="pa-sub-h">Analyse par partenaire <span class="pa-sub-n">{{ partenairesMoisPA.liste.length }}</span></div>
+            <table class="pa-prodtbl">
+              <thead><tr><th>Donneur d'ordre</th><th class="r">Lots</th><th class="r">Boîtes</th><th class="r">CA</th><th class="r">Part</th></tr></thead>
+              <tbody>
+                <tr v-for="(p, i) in partenairesMoisPA.liste" :key="'part' + i">
+                  <td class="pp-prod"><b :class="{ 'pp-sans': p.sans }">{{ p.nom }}</b></td>
+                  <td class="r">{{ p.lots }}</td>
+                  <td class="r">{{ p.qte ? fmt(p.qte) : '—' }}</td>
+                  <td class="r">{{ p.ca ? fmtDA(p.ca) : '—' }}</td>
+                  <td class="r pp-part"><span class="pp-bar pp-bar-part"><span :style="{ width: p.pct + '%' }"></span></span>{{ p.pct }}%</td>
+                </tr>
+              </tbody>
+              <tfoot><tr><td>Total</td><td class="r">{{ partenairesMoisPA.totLots }}</td><td class="r">{{ fmt(partenairesMoisPA.totQte) }}</td><td class="r">{{ fmtDA(partenairesMoisPA.totCa) }}</td><td class="r">100%</td></tr></tfoot>
+            </table>
+
             <div class="pa-sub-h">Détail des lots <span class="pa-sub-n">{{ lotsMoisPA.length }}</span></div>
             <table class="pa-table">
               <tbody>
@@ -1110,6 +1147,7 @@ onMounted(charger)
                   <td class="pa-lot">{{ l.lot }}</td>
                   <td class="pa-code">{{ l.code }}</td>
                   <td class="pa-des">{{ l.desig }}</td>
+                  <td class="pa-part-c">{{ l.part || '—' }}</td>
                   <td class="pa-qte">{{ l.qte != null ? fmt(l.qte) + ' bts' : '—' }}</td>
                 </tr>
               </tbody>
@@ -1261,6 +1299,9 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-lot { font-family: ui-monospace, monospace; font-weight: 700; white-space: nowrap; }
 .pa-code { font-family: ui-monospace, monospace; font-weight: 600; color: #0f766e; white-space: nowrap; }
 .pa-des { color: #475569; }
+.pa-part-c { color: #7c3aed; font-weight: 600; white-space: nowrap; }
+.pp-bar-part > span { background: #7c3aed; }
+.pp-sans { color: #94a3b8; font-weight: 600; }
 .pa-note { font-size: 12.5px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; padding: 8px 10px; border-radius: 7px; margin: 10px 0 0; }
 .proj-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 7px 10px; margin-top: 0; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
 .proj-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
