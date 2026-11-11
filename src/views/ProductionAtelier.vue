@@ -133,7 +133,9 @@ async function charger() {
   const hmm = {}
   if (!rhm.error && rhm.data) for (const p of rhm.data) if (p.hormonal) hmm[p.code_pf] = true
   hormonalParCode.value = hmm
-  const rpl = await fetchAllPaged(() => supabase.from('plan_production')
+  let rpl = await fetchAllPaged(() => supabase.from('plan_production')
+    .select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot, pcsu, donneurs_ordre(nom))'))
+  if (rpl.error && /donneur/i.test(rpl.error.message || '')) rpl = await fetchAllPaged(() => supabase.from('plan_production')
     .select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot, pcsu)'))
   if (!rpl.error) planRows.value = rpl.data || []   // table absente -> on reste sur le temps réel
   const req = await fetchAllPaged(() => supabase.from('equipements').select('id, nom, type, code').eq('actif', true))
@@ -148,7 +150,7 @@ const liveParAn = computed(() => {
   const ajouter = (ph, ordreId, d) => {
     if (/^(granulation|s[ée]chage)$/i.test(String(ph).trim())) ph = 'Granulation et Séchage'
     if (!d || ordreId == null || !PHASES.includes(ph)) return
-    if (!zoneMatchLive(ordreId)) return
+    if (!zoneMatchLive(ordreId) || !partMatchLive(ordreId)) return
     const dt = new Date(d), y = dt.getFullYear(), mo = dt.getMonth()
     if (!m[ph]) m[ph] = {}
     if (!m[ph][y]) m[ph][y] = Array(12).fill(0)
@@ -203,20 +205,30 @@ function toggleZone(k) { const i = perimSel.value.indexOf(k); if (i >= 0) perimS
 function zoneSel(k) { return perimSel.value.includes(k) }
 function zoneMatchLive(ordreId) { if (!perimSel.value.length) return true; const v = ofValMap.value[ordreId]; return v ? perimSel.value.includes(v.zone) : false }
 function zoneMatchCode(code, desig) { if (!perimSel.value.length) return true; const pm = produitsMap.value[code]; return perimSel.value.includes(zoneCD(pm ? pm.forme : '', code, desig)) }
+// --- Filtre par partenaire (donneur d'ordre), sélection unique ---
+const partSel = ref('')
+function partMatchLive(ordreId) { if (!partSel.value) return true; const v = ofValMap.value[ordreId]; return !!v && v.part === partSel.value }
+function partMatchCode(code) { if (!partSel.value) return true; const pm = produitsMap.value[code]; return !!pm && (pm.part || '') === partSel.value }
+const partenairesDispo = computed(() => {
+  const s = new Set()
+  for (const o of ofs.value) { const p = o.produits; if (p && p.donneurs_ordre && p.donneurs_ordre.nom) s.add(p.donneurs_ordre.nom) }
+  for (const h of histLots.value) { const pm = produitsMap.value[h.code_pf]; if (pm && pm.part) s.add(pm.part) }
+  return [...s].sort((a, b) => a.localeCompare(b))
+})
 const zonesDispo = computed(() => {
   const s = new Set()
   for (const o of ofs.value) { const p = o.produits; if (p) s.add(zoneCD(p.forme, p.code_pf, p.designation)) }
   for (const h of histLots.value) { const pm = produitsMap.value[h.code_pf]; s.add(zoneCD(pm ? pm.forme : '', h.code_pf, h.designation)) }
   return ZONES.filter(z => s.has(z.key))
 })
-const ofValMap = computed(() => { const m = {}; for (const o of ofs.value) { const p = o.produits || {}; m[o.id] = { taille: Number(p.taille_lot || 0), pcsu: Number(p.pcsu || 0), zone: zoneCD(p.forme, p.code_pf, p.designation) } } return m })
+const ofValMap = computed(() => { const m = {}; for (const o of ofs.value) { const p = o.produits || {}; m[o.id] = { taille: Number(p.taille_lot || 0), pcsu: Number(p.pcsu || 0), zone: zoneCD(p.forme, p.code_pf, p.designation), part: p.donneurs_ordre ? p.donneurs_ordre.nom : '' } } return m })
 // Matrices BOÎTES & CA en temps réel (suivi + conditionnement + OF), valeur = taille_lot (boîtes) / taille_lot × pcsu (CA)
 const liveValParAn = computed(() => {
   const boites = {}, ca = {}, vus = {}
   const add = (ph, ordreId, d) => {
     if (/^(granulation|s[ée]chage)$/i.test(String(ph).trim())) ph = 'Granulation et Séchage'
     if (!d || ordreId == null || !PHASES.includes(ph)) return
-    if (!zoneMatchLive(ordreId)) return
+    if (!zoneMatchLive(ordreId) || !partMatchLive(ordreId)) return
     const v = ofValMap.value[ordreId]; if (!v) return
     const dt = new Date(d); if (isNaN(dt)) return
     const y = dt.getFullYear(), mo = dt.getMonth(), cle = ph + '|' + y + '|' + mo
@@ -237,7 +249,7 @@ const histValParAn = computed(() => {
   for (const h of histLots.value) {
     let ph = h.phase; if (/^(granulation|s[ée]chage)$/i.test(String(ph).trim())) ph = 'Granulation et Séchage'
     if (!h.date_fin || !PHASES.includes(ph)) continue
-    if (!zoneMatchCode(h.code_pf, h.designation)) continue
+    if (!zoneMatchCode(h.code_pf, h.designation) || !partMatchCode(h.code_pf)) continue
     const prod = produitsMap.value[h.code_pf]; if (!prod) continue
     const dt = new Date(h.date_fin); if (isNaN(dt)) continue
     const y = dt.getFullYear(), mo = dt.getMonth(), cle = ph + '|' + y + '|' + mo, key = h.numero_lot || h.code_pf
@@ -255,7 +267,7 @@ const histLotsParAn = computed(() => {
   for (const h of histLots.value) {
     let ph = h.phase; if (/^(granulation|s[ée]chage)$/i.test(String(ph).trim())) ph = 'Granulation et Séchage'
     if (!h.date_fin || !PHASES.includes(ph)) continue
-    if (!zoneMatchCode(h.code_pf, h.designation)) continue
+    if (!zoneMatchCode(h.code_pf, h.designation) || !partMatchCode(h.code_pf)) continue
     const dt = new Date(h.date_fin); if (isNaN(dt)) continue
     const y = dt.getFullYear(), mo = dt.getMonth(), cle = ph + '|' + y + '|' + mo, key = h.numero_lot || h.code_pf
     if (!m[ph]) m[ph] = {}; if (!m[ph][y]) m[ph][y] = Array(12).fill(0)
@@ -270,7 +282,7 @@ function valeurs(stage, year, metric) {
   let hSrc, lSrc
   if (metric === 'boites') { hSrc = histValParAn.value.boites; lSrc = liveValParAn.value.boites }
   else if (metric === 'ca') { hSrc = histValParAn.value.ca; lSrc = liveValParAn.value.ca }
-  else { hSrc = (perimSel.value.length ? histLotsParAn.value : histParAn.value); lSrc = liveParAn.value }
+  else { hSrc = ((perimSel.value.length || partSel.value) ? histLotsParAn.value : histParAn.value); lSrc = liveParAn.value }
   const h = (hSrc[stage] && hSrc[stage][year]) ? hSrc[stage][year] : null
   const l = (lSrc[stage] && lSrc[stage][year]) ? lSrc[stage][year] : null
   if (year < anneeCourante) return h || Array(12).fill(0)                 // années passées : historique importé
@@ -389,6 +401,7 @@ const planParAtelier = computed(() => {
     if (Number(r.annee) !== anneeCourante) continue
     const pr = r.produits
     if (!pr || !pr.id) continue
+    if (partSel.value && (!pr.donneurs_ordre || pr.donneurs_ordre.nom !== partSel.value)) continue
     if (!parProduit[pr.id]) parProduit[pr.id] = { boites: 0, gamme: Array.isArray(pr.gamme) ? pr.gamme : [], taille: Number(pr.taille_lot || 0), pcsu: Number(pr.pcsu || 0) }
     parProduit[pr.id].boites += Number(r.quantite_planifiee || 0)
   }
@@ -414,6 +427,7 @@ const planParAtelierMois = computed(() => {
   for (const r of planRows.value) {
     if (Number(r.annee) !== anneeCourante) continue
     const pr = r.produits; if (!pr || !pr.id) continue
+    if (partSel.value && (!pr.donneurs_ordre || pr.donneurs_ordre.nom !== partSel.value)) continue
     const mi = Number(r.mois) - 1; if (mi < 0 || mi > 11) continue
     if (!parProduit[pr.id]) parProduit[pr.id] = { gamme: Array.isArray(pr.gamme) ? pr.gamme : [], taille: Number(pr.taille_lot || 0), pcsu: Number(pr.pcsu || 0), mois: Array(12).fill(0) }
     parProduit[pr.id].mois[mi] += Number(r.quantite_planifiee || 0)
@@ -563,6 +577,7 @@ const lotsMoisPA = computed(() => {
     const qte = Number(o.produits ? o.produits.taille_lot : 0) || Number(o.boites_fabriquees) || null
     const pcsu = Number(o.produits ? o.produits.pcsu : 0) || 0
     const part = o.produits && o.produits.donneurs_ordre ? o.produits.donneurs_ordre.nom : ''
+    if (partSel.value && part !== partSel.value) return
     push(o.numero_lot, o.produits ? o.produits.code_pf : null, o.produits ? o.produits.designation : null, src, qte, pcsu, part)
   }
   if (ph === 'Conditionnement') {
@@ -571,7 +586,7 @@ const lotsMoisPA = computed(() => {
     for (const o of ofs.value) if (dansMois(o.date_fin_fabrication)) pushOf(o.id, 'live')
   } else {
     for (const sp of phases.value) if (normPhase(sp.phase) === ph && dansMois(sp.date_phase)) pushOf(sp.ordre_id, 'live')
-    for (const h of histLots.value) if (normPhase(h.phase) === ph && dansMois(h.date_fin)) { const pr = produitsMap.value[h.code_pf]; push(h.numero_lot, h.code_pf, h.designation, 'hist', pr ? (Number(pr.taille) || null) : null, pr ? (Number(pr.pcsu) || 0) : 0, pr ? (pr.part || '') : '') }
+    for (const h of histLots.value) if (normPhase(h.phase) === ph && dansMois(h.date_fin)) { const pr = produitsMap.value[h.code_pf]; if (partSel.value && (!pr || (pr.part || '') !== partSel.value)) continue; push(h.numero_lot, h.code_pf, h.designation, 'hist', pr ? (Number(pr.taille) || null) : null, pr ? (Number(pr.pcsu) || 0) : 0, pr ? (pr.part || '') : '') }
   }
   return [...parLot.values()].sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
 })
@@ -664,6 +679,7 @@ const planTotals = computed(() => {
   for (const r of planRows.value) {
     if (Number(r.annee) !== anneeCourante) continue
     const pr = r.produits; if (!pr) continue
+    if (partSel.value && (!pr.donneurs_ordre || pr.donneurs_ordre.nom !== partSel.value)) continue
     const b = Number(r.quantite_planifiee || 0)
     const taille = Number(pr.taille_lot || 0), pcsu = Number(pr.pcsu || 0)
     const l = taille > 0 ? b / taille : 0, c = b * pcsu
@@ -929,6 +945,13 @@ onMounted(charger)
           <div class="side-lbl">Atelier</div>
           <div class="pa-atelier-tg">
             <button v-for="ph in PHASES" :key="ph" type="button" :class="{ on: atelierSel === ph }" @click="atelierSel = ph">{{ ph }}</button>
+          </div>
+        </div>
+        <div class="side-sec" v-if="partenairesDispo.length">
+          <div class="side-lbl">Partenaire <span v-if="partSel" class="side-reset" @click="partSel = ''">↺ tous</span></div>
+          <div class="pa-atelier-tg pa-part-tg">
+            <button type="button" :class="{ on: !partSel }" @click="partSel = ''">Tous les partenaires</button>
+            <button v-for="p in partenairesDispo" :key="p" type="button" :class="{ on: partSel === p }" @click="partSel = (partSel === p ? '' : p)">{{ p }}</button>
           </div>
         </div>
         <div class="side-sec">
@@ -1332,6 +1355,12 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-atelier-tg button { border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 6px 4px; font: inherit; font-size: 10px; font-weight: 600; color: #64748b; cursor: pointer; white-space: normal; text-align: center; line-height: 1.2; transition: all .12s; }
 .pa-atelier-tg button:hover { border-color: #99f6e4; background: #f0fdfa; }
 .pa-atelier-tg button.on { background: #0f766e; border-color: #0f766e; color: #fff; box-shadow: 0 2px 6px rgba(15,118,110,.28); }
+.pa-part-tg { grid-template-columns: 1fr; }
+.pa-part-tg button { text-align: left; font-size: 10.5px; padding: 7px 9px; }
+.pa-part-tg button:hover { border-color: #ddd6fe; background: #faf5ff; }
+.pa-part-tg button.on { background: #7c3aed; border-color: #7c3aed; color: #fff; box-shadow: 0 2px 6px rgba(124,58,237,.28); }
+.side-reset { float: right; color: #7c3aed; cursor: pointer; font-size: 9.5px; font-weight: 800; letter-spacing: 0; text-transform: none; }
+.side-reset:hover { text-decoration: underline; }
 
 /* ===== Design moderne ===== */
 .kpi { border-radius: 13px; border-top: 3px solid #14b8a6; box-shadow: 0 4px 14px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.04); background: linear-gradient(158deg, #ffffff, #fbfcff); transition: box-shadow .2s ease, transform .2s ease; padding: 10px 13px; }
