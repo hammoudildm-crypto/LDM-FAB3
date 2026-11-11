@@ -1,5 +1,6 @@
 <script setup>
 import { computed, inject } from 'vue'
+import { useRoute } from 'vue-router'
 
 // Palette d'accents par page (cohérente avec le tableau de bord)
 const TONES = {
@@ -12,20 +13,11 @@ const props = defineProps({
   tone: { type: String, default: 'teal' } // clé de TONES ou hex direct
 })
 const accent = computed(() => TONES[props.tone] || props.tone)
-// Boutons façon fenêtre (réduire / agrandir / fermer), fournis par App.vue — propres à chaque page
-const focusMode = inject('focusMode', null)
-const fenetreCtrl = inject('fenetreCtrl', null)
-// Ouvrir la page courante dans une vraie fenêtre système séparée (plusieurs fenêtres en même temps)
-function ouvrirNouvelleFenetre() {
-  try {
-    const aw = screen.availWidth || 1440, ah = screen.availHeight || 900
-    const w = Math.min(1500, aw - 80), h = Math.min(920, ah - 80)
-    const left = Math.max(0, Math.round((aw - w) / 2 + (Math.random() * 90 - 45)))
-    const top = Math.max(0, Math.round((ah - h) / 2 + (Math.random() * 90 - 45)))
-    const win = window.open(location.href, 'ldmfab_' + Date.now(), `popup,width=${Math.round(w)},height=${Math.round(h)},left=${left},top=${top}`)
-    if (!win) window.open(location.href, '_blank')
-  } catch (e) { window.open(location.href, '_blank') }
-}
+// Ouvrir la page courante en fenêtre flottante dans l'app (déplaçable, sans rechargement)
+const route = useRoute()
+const ouvrirFenetre = inject('ouvrirFenetre', null)
+const dansFenetre = inject('dansFenetreFlottante', false)   // vrai si CE PageHeader est déjà dans une fenêtre
+function popOut() { if (ouvrirFenetre) ouvrirFenetre(route.fullPath, props.title, accent.value) }
 </script>
 
 <template>
@@ -36,15 +28,11 @@ function ouvrirNouvelleFenetre() {
     </div>
     <div class="ph-end">
       <div class="ph-actions"><slot /></div>
-      <div class="ph-win">
-        <button class="ph-win-b ph-win-new" @click="ouvrirNouvelleFenetre" title="Ouvrir cette page dans une nouvelle fenêtre">
+      <div v-if="!dansFenetre && ouvrirFenetre" class="ph-win">
+        <button class="ph-win-b ph-win-new" @click="popOut" title="Ouvrir cette page en fenêtre flottante">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7.5" width="12" height="11" rx="1.6"/><path d="M8 7.5V6a2 2 0 0 1 2-2h8.5a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2H16"/></svg>
+          <span class="ph-win-txt">Fenêtre</span>
         </button>
-        <template v-if="fenetreCtrl">
-          <button class="ph-win-b" :disabled="!focusMode" @click="fenetreCtrl.reduire()" title="Réduire">−</button>
-          <button class="ph-win-b" :class="{ on: focusMode }" @click="fenetreCtrl.agrandir()" title="Agrandir (plein écran — Échap pour quitter)">☐</button>
-          <button class="ph-win-b ph-win-x" @click="fenetreCtrl.fermer()" title="Fermer (page précédente)">✕</button>
-        </template>
       </div>
     </div>
   </header>
@@ -57,16 +45,13 @@ function ouvrirNouvelleFenetre() {
 .ph-sub { margin: 6px 0 0; color: #64748b; font-size: 14px; max-width: 900px; }
 .ph-end { display: flex; align-items: center; gap: 14px; }
 .ph-actions { display: flex; align-items: flex-end; gap: 12px; }
-.ph-win { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
-.ph-win-b { width: 32px; height: 28px; display: inline-flex; align-items: center; justify-content: center; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 7px; cursor: pointer; font-size: 13px; line-height: 1; transition: all .15s; }
-.ph-win-b:hover:not(:disabled) { background: #e2e8f0; color: #0f172a; }
-.ph-win-b:disabled { opacity: .4; cursor: default; }
-.ph-win-b.on { background: #0f766e; border-color: #0f766e; color: #fff; }
-.ph-win-new { margin-right: 5px; }
-.ph-win-new:hover { background: #0f766e; border-color: #0f766e; color: #fff; }
-.ph-win-x:hover:not(:disabled) { background: #dc2626; border-color: #dc2626; color: #fff; }
-html:is([data-theme="sombre"], [data-theme="minuit"]) .ph-win-b { background: #1e293b; border-color: #334155; color: #cbd5e1; }
-html:is([data-theme="sombre"], [data-theme="minuit"]) .ph-win-b:hover:not(:disabled) { background: #334155; color: #fff; }
+.ph-win { display: flex; align-items: center; flex-shrink: 0; }
+.ph-win-b { height: 30px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; background: #f0fdfa; color: #0f766e; border: 1px solid #99f6e4; border-radius: 8px; cursor: pointer; font-size: 12.5px; font-weight: 700; line-height: 1; transition: all .15s; }
+.ph-win-b:hover { background: #0f766e; border-color: #0f766e; color: #fff; }
+.ph-win-txt { white-space: nowrap; }
+@media (max-width: 640px) { .ph-win-txt { display: none; } .ph-win-b { padding: 0 9px; } }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .ph-win-b { background: #0e2a29; border-color: #115e59; color: #5eead4; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .ph-win-b:hover { background: #0f766e; color: #fff; }
 .ph-actions :deep(select) { font-size: 14px; padding: 8px 13px; border: 1px solid #cbd5e1; border-radius: 9px; background: #fff; font-weight: 600; color: #1b2733; cursor: pointer; min-width: 110px; }
 html[data-theme="sombre"] .ph-sub { color: #94a3b8; }
 @media (max-width: 640px) { .ph-title { font-size: 22px; } }

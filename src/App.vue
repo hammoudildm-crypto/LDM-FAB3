@@ -3,22 +3,17 @@ import { ref, computed, onMounted, onUnmounted, provide, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from './supabase'
 import { MODULES, MODULE_COLOR, moduleDe } from './navigation.js'
+import { useFenetres } from './useFenetres'
+import GestionnaireFenetres from './components/GestionnaireFenetres.vue'
 
 const session = ref(null)
 const role = ref(null)
 const route = useRoute()
 const router = useRouter()
-// Boutons façon fenêtre sur toutes les pages : réduire / agrandir (plein écran focus) / fermer
-const focusMode = ref(false)
-function winAgrandir() { focusMode.value = true }
-function winReduire() { focusMode.value = false }
-function winFermer() { if (window.history.length > 1) router.back(); else router.push('/') }
-function onFocusKey(e) { if (e.key === 'Escape' && focusMode.value) focusMode.value = false }
-onMounted(() => window.addEventListener('keydown', onFocusKey))
-onUnmounted(() => window.removeEventListener('keydown', onFocusKey))
-// Les boutons fenêtre vivent dans l'en-tête de chaque page (PageHeader), pas sur la barre de l'app.
-provide('focusMode', focusMode)
-provide('fenetreCtrl', { agrandir: winAgrandir, reduire: winReduire, fermer: winFermer })
+// Fenêtres flottantes dans l'app (MDI) : ouvrir une page en fenêtre déplaçable/redimensionnable, sans rechargement
+const { ouvrir: ouvrirFenetre } = useFenetres()
+provide('ouvrirFenetre', ouvrirFenetre)
+const lanceurOuvert = ref(false)
 const navRef = ref(null)
 const themeRef = ref(null)
 const openMenu = ref(null)
@@ -268,7 +263,7 @@ async function signOut() {
 
 <template>
   <RouterView v-if="estLogin" />
-  <div v-else class="app-shell" :class="{ masquee: sidebarMasquee, focus: focusMode }">
+  <div v-else class="app-shell" :class="{ masquee: sidebarMasquee }">
     <div class="side-reveal" aria-hidden="true"></div>
     <aside class="sidebar" :class="{ open: sidebarOpen }">
       <div class="side-brand">
@@ -343,6 +338,9 @@ async function signOut() {
         </div>
         <button class="zoom-btn solo" @click="refreshTick++" title="Actualiser les données">⟳</button>
         <button class="zoom-btn solo cloche" @click.stop="alertesOuvertes = !alertesOuvertes" :title="(alertes.length || 'Aucune') + ' alerte(s) de validité'">🔔<span v-if="alertes.length" class="cloche-badge">{{ alertes.length }}</span></button>
+        <div class="tb-item">
+          <button class="tb-icon" :class="{ actif: lanceurOuvert }" @click.stop="lanceurOuvert = !lanceurOuvert" title="Ouvrir une page en fenêtre flottante">⊞</button>
+        </div>
         <template v-if="session">
           <RouterLink to="/compte" class="tb-acct" @click="sidebarOpen = false" title="Mon compte">Compte<span v-if="role" class="role-badge" :class="'r-' + role">{{ roleLabel }}</span></RouterLink>
           <button type="button" class="tb-signout" @click="signOut" title="Déconnexion" aria-label="Déconnexion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v9" /><path d="M6.5 6.6a8 8 0 1 0 11 0" /></svg></button>
@@ -353,6 +351,19 @@ async function signOut() {
         <RouterView :key="route.fullPath + '::' + refreshTick" />
       </main>
     </div>
+    <GestionnaireFenetres />
+    <Teleport to="body">
+      <div v-if="lanceurOuvert" class="fl-back" @click="lanceurOuvert = false"></div>
+      <div v-if="lanceurOuvert" class="fl-drop">
+        <div class="fl-head">Ouvrir en fenêtre flottante</div>
+        <div class="fl-scroll">
+          <div v-for="m in MODULES" :key="m.key" class="fl-mod">
+            <div class="fl-mod-h" :style="{ color: m.c }">{{ m.label }}</div>
+            <button v-for="l in m.links" :key="l[0]" class="fl-link" @click="ouvrirFenetre(l[0], l[1], m.c); lanceurOuvert = false">{{ l[1] }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -622,8 +633,20 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .online-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .online-moi { font-size: 10px; font-weight: 700; color: #22c55e; background: rgba(34,197,94,.15); padding: 1px 6px; border-radius: 999px; flex: none; }
 .app-topbar { display: flex; align-items: center; gap: 8px; padding: env(safe-area-inset-top, 0px) 14px 0; min-height: 54px; background: var(--topbar); color: var(--topbar-text); position: sticky; top: 0; z-index: 40; box-shadow: 0 2px 10px rgba(0,0,0,.14); flex-wrap: wrap; }
-/* Mode plein écran (focus) : la page occupe tout l'espace, piloté par les boutons fenêtre de l'en-tête de page */
-.app-shell.focus .sidebar, .app-shell.focus .side-reveal, .app-shell.focus .app-topbar { display: none; }
+/* Lanceur de fenêtres flottantes (barre du haut) */
+.tb-icon.actif { background: rgba(255,255,255,.18); color: #fff; }
+.fl-back { position: fixed; inset: 0; z-index: 2900; background: transparent; }
+.fl-drop { position: fixed; top: 58px; right: 12px; z-index: 3000; width: 330px; max-width: 88vw; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 18px 46px rgba(2,8,23,.26); overflow: hidden; }
+.fl-head { padding: 11px 14px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #64748b; border-bottom: 1px solid #eef2f6; }
+.fl-scroll { max-height: 64vh; overflow-y: auto; padding: 4px 6px 8px; }
+.fl-mod { padding: 3px 0; }
+.fl-mod-h { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; padding: 7px 8px 3px; }
+.fl-link { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 7px; padding: 7px 10px; font: inherit; font-size: 13px; font-weight: 600; color: #1b2733; cursor: pointer; }
+.fl-link:hover { background: #f1f5f9; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .fl-drop { background: #161f33; border-color: #2a3650; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .fl-head { color: #94a3b8; border-bottom-color: #2a3650; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .fl-link { color: #e6edf6; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .fl-link:hover { background: #243049; }
 .app-topbar .burger { display: none; background: none; border: 0; color: var(--topbar-text); font-size: 22px; cursor: pointer; padding: 4px; line-height: 1; }
 .app-shell.masquee .app-topbar .burger { display: inline-flex; }
 .tb-brand { display: none; }
