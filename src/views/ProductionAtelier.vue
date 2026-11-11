@@ -125,6 +125,23 @@ async function charger() {
   const rhl = await fetchAllPaged(() => supabase.from('historique_lots_phases')
     .select('numero_lot, code_pf, designation, phase, date_fin'))
   if (!rhl.error) histLots.value = rhl.data || []
+  // Historique réalisé embarqué (journal « SUIVI PAR ATELIER » 2022→2025) — fusionné à l'historique en base.
+  // Les boîtes/CA et le partenaire sont calculés ensuite via l'identification en cours (produits actuels).
+  try {
+    const rj = await fetch(`${import.meta.env.BASE_URL}historique_realise.json`, { cache: 'force-cache' })
+    if (rj.ok) {
+      const j = await rj.json(), ph = j.p || [], dm = j.d || {}
+      const vus = new Set(histLots.value.map(h => (h.numero_lot || '') + '|' + (h.phase || '')))
+      const add = []
+      for (const a of (j.r || [])) {
+        const phase = ph[a[2]] || '', k = String(a[0]) + '|' + phase
+        if (!phase || vus.has(k)) continue
+        vus.add(k)
+        add.push({ numero_lot: String(a[0]), code_pf: a[1], designation: dm[a[1]] || '', phase, date_fin: a[3] })
+      }
+      if (add.length) histLots.value = histLots.value.concat(add)
+    }
+  } catch (e) { /* asset indisponible : on garde l'historique en base */ }
   let rpd = await fetchAllPaged(() => supabase.from('produits').select('code_pf, taille_lot, pcsu, forme, donneurs_ordre(nom, code)'))
   if (rpd.error && /donneur/i.test(rpd.error.message || '')) rpd = await fetchAllPaged(() => supabase.from('produits').select('code_pf, taille_lot, pcsu, forme'))
   if (!rpd.error) { const m = {}; for (const p of (rpd.data || [])) m[p.code_pf] = { taille: Number(p.taille_lot || 0), pcsu: Number(p.pcsu || 0), forme: p.forme || '', part: p.donneurs_ordre ? p.donneurs_ordre.nom : '' }; produitsMap.value = m }
