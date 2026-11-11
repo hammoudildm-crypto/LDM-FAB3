@@ -15,6 +15,17 @@ const accent = computed(() => TONES[props.tone] || props.tone)
 // Boutons façon fenêtre (réduire / agrandir / fermer), fournis par App.vue — propres à chaque page
 const focusMode = inject('focusMode', null)
 const fenetreCtrl = inject('fenetreCtrl', null)
+// Ouvrir la page courante dans une vraie fenêtre système séparée (plusieurs fenêtres en même temps)
+function ouvrirNouvelleFenetre() {
+  try {
+    const aw = screen.availWidth || 1440, ah = screen.availHeight || 900
+    const w = Math.min(1500, aw - 80), h = Math.min(920, ah - 80)
+    const left = Math.max(0, Math.round((aw - w) / 2 + (Math.random() * 90 - 45)))
+    const top = Math.max(0, Math.round((ah - h) / 2 + (Math.random() * 90 - 45)))
+    const win = window.open(location.href, 'ldmfab_' + Date.now(), `popup,width=${Math.round(w)},height=${Math.round(h)},left=${left},top=${top}`)
+    if (!win) window.open(location.href, '_blank')
+  } catch (e) { window.open(location.href, '_blank') }
+}
 </script>
 
 <template>
@@ -25,10 +36,15 @@ const fenetreCtrl = inject('fenetreCtrl', null)
     </div>
     <div class="ph-end">
       <div class="ph-actions"><slot /></div>
-      <div v-if="fenetreCtrl" class="ph-win">
-        <button class="ph-win-b" :disabled="!focusMode" @click="fenetreCtrl.reduire()" title="Réduire">−</button>
-        <button class="ph-win-b" :class="{ on: focusMode }" @click="fenetreCtrl.agrandir()" title="Agrandir (plein écran — Échap pour quitter)">☐</button>
-        <button class="ph-win-b ph-win-x" @click="fenetreCtrl.fermer()" title="Fermer (page précédente)">✕</button>
+      <div class="ph-win">
+        <button class="ph-win-b ph-win-new" @click="ouvrirNouvelleFenetre" title="Ouvrir cette page dans une nouvelle fenêtre">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7.5" width="12" height="11" rx="1.6"/><path d="M8 7.5V6a2 2 0 0 1 2-2h8.5a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2H16"/></svg>
+        </button>
+        <template v-if="fenetreCtrl">
+          <button class="ph-win-b" :disabled="!focusMode" @click="fenetreCtrl.reduire()" title="Réduire">−</button>
+          <button class="ph-win-b" :class="{ on: focusMode }" @click="fenetreCtrl.agrandir()" title="Agrandir (plein écran — Échap pour quitter)">☐</button>
+          <button class="ph-win-b ph-win-x" @click="fenetreCtrl.fermer()" title="Fermer (page précédente)">✕</button>
+        </template>
       </div>
     </div>
   </header>
@@ -46,6 +62,8 @@ const fenetreCtrl = inject('fenetreCtrl', null)
 .ph-win-b:hover:not(:disabled) { background: #e2e8f0; color: #0f172a; }
 .ph-win-b:disabled { opacity: .4; cursor: default; }
 .ph-win-b.on { background: #0f766e; border-color: #0f766e; color: #fff; }
+.ph-win-new { margin-right: 5px; }
+.ph-win-new:hover { background: #0f766e; border-color: #0f766e; color: #fff; }
 .ph-win-x:hover:not(:disabled) { background: #dc2626; border-color: #dc2626; color: #fff; }
 html:is([data-theme="sombre"], [data-theme="minuit"]) .ph-win-b { background: #1e293b; border-color: #334155; color: #cbd5e1; }
 html:is([data-theme="sombre"], [data-theme="minuit"]) .ph-win-b:hover:not(:disabled) { background: #334155; color: #fff; }
