@@ -282,7 +282,14 @@ function valeurs(stage, year, metric) {
   let hSrc, lSrc
   if (metric === 'boites') { hSrc = histValParAn.value.boites; lSrc = liveValParAn.value.boites }
   else if (metric === 'ca') { hSrc = histValParAn.value.ca; lSrc = liveValParAn.value.ca }
-  else { hSrc = ((perimSel.value.length || partSel.value) ? histLotsParAn.value : histParAn.value); lSrc = liveParAn.value }
+  else {
+    // 'lots' : priorité au détail au lot réel (historique_lots_phases) s'il existe pour ce stage/année,
+    // sinon compteurs agrégés (production_historique). Le détail permet la ventilation zone/partenaire.
+    const lot = histLotsParAn.value
+    const dispo = !!(lot[stage] && lot[stage][year] && lot[stage][year].some(v => v > 0))
+    hSrc = (dispo || perimSel.value.length || partSel.value) ? lot : histParAn.value
+    lSrc = liveParAn.value
+  }
   let h = (hSrc[stage] && hSrc[stage][year]) ? hSrc[stage][year] : null
   const l = (lSrc[stage] && lSrc[stage][year]) ? lSrc[stage][year] : null
   // Repli années passées : l'historique « lots » importé est agrégé (production_historique) et n'a pas
