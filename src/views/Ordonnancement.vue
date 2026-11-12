@@ -30,7 +30,8 @@
         <div class="add-field">
           <label>Optimisation</label>
           <select v-model="prioMode">
-            <option value="valeur">Valeur au plus tôt (optimal)</option>
+            <option value="echeance">Échéance la plus proche (EDD)</option>
+            <option value="valeur">Valeur au plus tôt</option>
             <option value="ca">CA total décroissant</option>
             <option value="manuelle">Priorités manuelles</option>
           </select>
@@ -71,8 +72,8 @@
         <span class="import-hint">depuis « Disponibilité des produits par atelier »</span>
       </div>
       <div class="add-import">
-        <button class="btn-import excel" @click="declencherImportPlan">⬆ Importer le plan (Excel)</button>
-        <span class="import-hint">fichier avec colonnes « Code » + « Taille » (ou « Quantité ») — somme des boîtes par produit</span>
+        <button class="btn-import excel" @click="declencherImportPlan">⬆ Importer le plan conditionnement (Excel)</button>
+        <span class="import-hint">colonnes « Code », « Taille », « Début est. » → ordonnancement fabrication au lot par échéance</span>
         <input ref="fichierPlan" type="file" accept=".xlsx,.xls,.csv" style="display:none" @change="importerPlanExcel" />
       </div>
       <p v-if="msgImport" class="msg-import">{{ msgImport }}</p>
@@ -83,10 +84,11 @@
     <!-- Groupes ajoutés -->
     <section v-if="groupes.length" class="card">
       <div class="card-head-row">
-        <h2 class="card-title">Produits ({{ groupes.length }}) · {{ lotsDeployes.length }} lots au total</h2>
+        <h2 class="card-title">{{ groupes.length > 60 ? 'Plan importé' : 'Produits' }} — {{ apercuProduits.length }} produit(s) · {{ lotsDeployes.length }} lot(s)</h2>
         <button class="btn-reset" @click="remiseAZero">Remise à zéro</button>
       </div>
-      <div class="tbl-wrap">
+      <!-- Vue éditable (peu de lots) -->
+      <div v-if="groupes.length <= 60" class="tbl-wrap">
         <table class="grid">
           <thead><tr><th class="ta-c">Prio.</th><th>Produit</th><th class="ta-r">Boîtes (total)</th><th class="ta-r">Lots</th><th>Gamme</th><th class="ta-r">CA</th><th></th></tr></thead>
           <tbody>
@@ -103,10 +105,58 @@
           <tfoot><tr class="tot"><td></td><td>Total</td><td></td><td class="ta-r">{{ lotsDeployes.length }}</td><td></td><td class="ta-r">{{ fmtDA(totalCA) }}</td><td></td></tr></tfoot>
         </table>
       </div>
+      <!-- Aperçu agrégé (beaucoup de lots importés) -->
+      <div v-else class="tbl-wrap">
+        <table class="grid">
+          <thead><tr><th>Produit</th><th class="ta-r">Lots</th><th class="ta-r">Boîtes</th><th class="ta-c">1ʳᵉ échéance</th></tr></thead>
+          <tbody>
+            <tr v-for="a in apercuProduits" :key="a.produitId">
+              <td><strong>{{ a.code }}</strong> <span class="lot-desig">{{ a.desig }}</span></td>
+              <td class="ta-r">{{ a.nbLots }}</td>
+              <td class="ta-r">{{ fmt(a.boites) }}</td>
+              <td class="ta-c">{{ a.ech ? fmtDate(new Date(a.ech + 'T00:00:00')) : '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Respect des échéances de conditionnement (mode fabrication par échéance) -->
+    <section v-if="planning.length && fabSeul" class="card ech-card">
+      <div class="card-head-row">
+        <h2 class="card-title">⏱ Fabrication par échéance de conditionnement</h2>
+        <span class="obj-strat ech-strat">Fab prête avant le début de conditionnement</span>
+      </div>
+      <div class="obj-kpis">
+        <div class="obj-kpi"><div class="ok-v">{{ resultatEcheance.total }}</div><div class="ok-l">Lots planifiés</div></div>
+        <div class="obj-kpi"><div class="ok-v" style="color:#047857">{{ resultatEcheance.nTemps }}</div><div class="ok-l">À temps</div></div>
+        <div class="obj-kpi" :class="{ 'ok-warn': resultatEcheance.nRetard > 0 }"><div class="ok-v">{{ resultatEcheance.nRetard }}</div><div class="ok-l">En retard</div></div>
+        <div class="obj-kpi"><div class="ok-v">{{ resultatEcheance.total ? Math.round(resultatEcheance.nTemps / resultatEcheance.total * 100) : 100 }} %</div><div class="ok-l">Taux à temps</div></div>
+      </div>
+      <div v-if="resultatEcheance.retards.length" class="ech-retards">
+        <div class="ech-rh">Lots en retard ({{ resultatEcheance.nRetard }}) — fabrication finie après le début de conditionnement</div>
+        <div class="tbl-wrap">
+          <table class="grid">
+            <thead><tr><th>Produit / Lot</th><th class="ta-r">Boîtes</th><th class="ta-c">Fin fabrication</th><th class="ta-c">Début cond. (échéance)</th><th class="ta-r">Retard</th></tr></thead>
+            <tbody>
+              <tr v-for="(r, i) in resultatEcheance.retards.slice(0, 50)" :key="i">
+                <td><strong>{{ r.code }}</strong> <span class="lot-desig">{{ r.desig }}</span><span v-if="r.numeroLot" class="lot-num">Lot {{ r.numeroLot }}</span></td>
+                <td class="ta-r">{{ fmt(r.boites) }}</td>
+                <td class="ta-c">{{ fmtDate(r.fin) }}</td>
+                <td class="ta-c">{{ fmtDate(r.echeance) }}</td>
+                <td class="ta-r ech-retard">+{{ r.retard }} j</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-if="resultatEcheance.retards.length > 50" class="muted" style="margin-top:6px">… et {{ resultatEcheance.retards.length - 50 }} autre(s). Avance la date de départ, ajoute une ligne, ou réduis la charge pour résorber les retards.</p>
+      </div>
+      <p v-else class="ech-ok">✓ Tous les lots sont fabriqués à temps pour leur conditionnement, avec la date de départ et la capacité actuelles.</p>
+      <p class="obj-note">Priorité <strong>échéance la plus proche (EDD)</strong> : les lots dont le conditionnement démarre le plus tôt sont fabriqués en premier, selon les <strong>temps de gamme</strong> et la <strong>disponibilité des équipements de fabrication</strong>. Le détail par atelier (entrée/sortie) est ci-dessous.</p>
     </section>
 
     <!-- Ordonnancement optimal (objectif de livraison) -->
-    <section v-if="planning.length" class="card objectif-card">
+    <section v-if="planning.length && !fabSeul" class="card objectif-card">
       <div class="card-head-row">
         <h2 class="card-title">🎯 Ordonnancement optimal — objectif de livraison</h2>
         <span class="obj-strat">{{ prioMode === 'valeur' ? 'Valeur au plus tôt (CA ÷ durée)' : prioMode === 'ca' ? 'CA total décroissant' : 'Priorités manuelles' }}</span>
@@ -154,7 +204,7 @@
     </section>
 
     <!-- Affectation des équipements (machines identiques) -->
-    <section v-if="groupes.length && aDesChoix" class="card">
+    <section v-if="groupes.length && aDesChoix && groupes.length <= 60" class="card">
       <h2 class="card-title">Affectation des équipements</h2>
       <p class="muted aff-intro">Pour les phases où plusieurs équipements identiques existent, choisis lequel utilise le produit. « Auto » = le simulateur prend le plus tôt disponible.</p>
       <div v-for="g in groupesDetail" :key="g.id" class="aff-prod">
@@ -336,6 +386,7 @@ const prioMode = ref('valeur')   // 'valeur' (WSPT : CA ÷ durée, livrer la val
 const prioAutoCA = computed(() => prioMode.value !== 'manuelle')
 const optimisationCond = ref(true)   // alimentation continue du conditionnement (anti-rupture) — actif par défaut
 const condSeul = ref(false)
+const fabSeul = ref(false)           // fabrication seule : on ordonnance la fab pour tenir l'échéance de conditionnement (import plan)
 const preferCampagne = ref(0.5)
 const hpj = ref(24)
 const selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref('')
@@ -411,7 +462,7 @@ function gammeProduit(produitId) {
   const g = (p && Array.isArray(p.gamme)) ? p.gamme : []
   const keys = []
   for (const n of g) { const k = phaseKeyFromName(n); if (k && k !== 'conditionnement' && !keys.includes(k)) keys.push(k) }
-  keys.push('conditionnement')
+  if (!fabSeul.value) keys.push('conditionnement')   // fabrication seule : on n'ordonnance pas le conditionnement
   return keys
 }
 function gammeNoms(produitId) { return gammeProduit(produitId).map(k => PHASE_NOM[k]).join(' → ') }
@@ -512,6 +563,12 @@ function chargerXLSX() {
   return xlsxPromise
 }
 function declencherImportPlan() { msgImport.value = ''; if (fichierPlan.value) fichierPlan.value.click() }
+const toDateImp = (v) => {
+  if (v instanceof Date && !isNaN(v)) return v
+  if (typeof v === 'number') { const d = new Date(Math.round((v - 25569) * 86400000)); return isNaN(d) ? null : d }
+  if (typeof v === 'string') { const s = v.trim(); const m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/); if (m) { let y = +m[3]; if (y < 100) y += 2000; const d = new Date(y, +m[2] - 1, +m[1]); return isNaN(d) ? null : d } const d = new Date(s); return isNaN(d) ? null : d }
+  return null
+}
 async function importerPlanExcel(e) {
   const file = e.target.files && e.target.files[0]; if (e.target) e.target.value = ''
   if (!file) return
@@ -523,51 +580,41 @@ async function importerPlanExcel(e) {
     const norm = (s) => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim()
     const parCode = {}
     for (const p of produits.value) if (p.code_pf) parCode[String(p.code_pf).trim().toLowerCase()] = p.id
-    const agg = {}; const nonReconnus = new Set()
-    // Détection : on privilégie la colonne « Taille » (= boîtes à livrer, feuilles conditionnement/OTC).
-    // Si aucune feuille n'a « Taille », on retombe sur « Quantité/Qté/Boîtes ». On ignore ainsi « Qté réelle » (fabrication).
-    const sheetsInfo = []
+    // Feuilles « besoin conditionnement » : Code + Taille + Début est. (échéance). Au lot (N° Lot).
+    const feuilles = []
     for (const sn of wb.SheetNames) {
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, blankrows: false })
       if (!rows.length) continue
       for (let r = 0; r < Math.min(rows.length, 15); r++) {
         const head = (rows[r] || []).map(norm)
-        const c = head.indexOf('code'); if (c < 0) continue
-        let q = head.indexOf('taille'); let kind = 'taille'
-        if (q < 0) { q = head.findIndex(h => h.startsWith('quantit') || h === 'boites' || h === 'qte' || h.startsWith('qte')); kind = 'qte' }
-        if (q < 0) continue
-        sheetsInfo.push({ rows, hi: r, iCode: c, iQte: q, kind }); break
+        const iCode = head.indexOf('code'); const iTaille = head.indexOf('taille')
+        const iDebut = head.findIndex(h => h.startsWith('debut est'))
+        if (iCode >= 0 && iTaille >= 0 && iDebut >= 0) { const iLot = head.findIndex(h => h.includes('lot')); feuilles.push({ rows, hi: r, iCode, iTaille, iDebut, iLot }); break }
       }
     }
-    const hasTaille = sheetsInfo.some(s => s.kind === 'taille')
-    const used = hasTaille ? sheetsInfo.filter(s => s.kind === 'taille') : sheetsInfo
-    for (const S of used) {
-      for (let i = S.hi + 1; i < S.rows.length; i++) {
-        const row = S.rows[i]; if (!row) continue
-        const code = String(row[S.iCode] == null ? '' : row[S.iCode]).trim(); if (!code) continue
-        const q = Number(String(row[S.iQte] == null ? '' : row[S.iQte]).replace(/\s/g, '').replace(',', '.'))
-        if (!q || isNaN(q)) continue
+    if (!feuilles.length) { msgImport.value = 'Aucune feuille de conditionnement reconnue (colonnes attendues : « Code », « Taille », « Début est. »).'; return }
+    let nAjout = 0; const nonReconnus = new Set(); const dejaLots = new Set(groupes.value.map(g => g.numeroLot).filter(Boolean))
+    for (const F of feuilles) {
+      for (let i = F.hi + 1; i < F.rows.length; i++) {
+        const row = F.rows[i]; if (!row) continue
+        const code = String(row[F.iCode] == null ? '' : row[F.iCode]).trim(); if (!code) continue
+        const t = Number(String(row[F.iTaille] == null ? '' : row[F.iTaille]).replace(/\s/g, '').replace(',', '.')); if (!t || isNaN(t) || t <= 0) continue
         const pid = parCode[code.toLowerCase()]
         if (!pid) { if (nonReconnus.size < 10) nonReconnus.add(code); continue }
-        if (!agg[pid]) agg[pid] = 0
-        agg[pid] += q
+        const p = prodById.value[pid]; if (!p) continue
+        const numeroLot = F.iLot >= 0 && row[F.iLot] != null ? String(row[F.iLot]).trim() : null
+        if (numeroLot && dejaLots.has(numeroLot)) continue
+        if (numeroLot) dejaLots.add(numeroLot)
+        const d = toDateImp(row[F.iDebut]); const ds = d ? d.toISOString().slice(0, 10) : null
+        groupes.value.push({ id: seq++, ofId: null, numeroLot, produitId: p.id, totalBoites: Math.round(t), boitesParLot: Math.round(t), nbLots: 1, priorite: groupes.value.length + 1, dateFixe: null, dateEcheance: ds })
+        nAjout++
       }
     }
-    const ids = Object.keys(agg)
-    if (!ids.length) { msgImport.value = 'Aucune ligne reconnue (attendu : une colonne « Code » + une colonne « Taille » ou « Quantité »).' + (nonReconnus.size ? ' Codes non trouvés au référentiel : ' + [...nonReconnus].join(', ') : ''); return }
-    let nAjout = 0
-    for (const pid of ids) {
-      const p = prodById.value[pid]; if (!p) continue
-      const total = Math.round(agg[pid]); if (total <= 0) continue
-      if (groupes.value.some(g => g.produitId == p.id && !g.ofId)) continue
-      const tl = Number(p.taille_lot) || 0
-      let bpl = tl > 0 ? tl : total
-      let nb = bpl > 0 ? Math.ceil(total / bpl) : 1
-      if (nb > 60) { nb = 60; bpl = Math.ceil(total / 60) }
-      groupes.value.push({ id: seq++, ofId: null, numeroLot: null, produitId: p.id, totalBoites: total, boitesParLot: bpl, nbLots: nb, priorite: groupes.value.length + 1, dateFixe: null })
-      nAjout++
-    }
-    msgImport.value = nAjout ? (nAjout + ' produit(s) importé(s) du plan (somme des boîtes par produit).' + (nonReconnus.size ? ' Codes non reconnus : ' + [...nonReconnus].join(', ') : '')) : 'Produits déjà présents, rien à ajouter.'
+    // Mode : ordonnancement fabrication par échéance de conditionnement
+    fabSeul.value = true
+    optimisationCond.value = false
+    prioMode.value = 'echeance'
+    msgImport.value = nAjout ? (nAjout + ' lot(s) importé(s) — ordonnancement de la FABRICATION par échéance (début de conditionnement). Vérifie les retards éventuels.' + (nonReconnus.size ? ' Codes non reconnus : ' + [...nonReconnus].join(', ') : '')) : 'Aucun lot reconnu (ou déjà importés).'
   } catch (err) { msgImport.value = 'Import impossible : ' + (err.message || err) }
 }
 // Durée de production estimée d'un groupe (jours) = somme des durées de phases sur l'équipement le plus rapide.
@@ -587,12 +634,15 @@ function dureeGroupe(g) {
 //  - 'valeur' : WSPT — on sert d'abord la plus forte valeur par jour de production (CA ÷ durée) → maximise le CA livré au plus tôt
 //  - 'ca'     : CA total décroissant
 //  - 'manuelle': priorités saisies
+const echVal = (g) => g.dateEcheance ? new Date(g.dateEcheance + 'T00:00:00').getTime() : Infinity
 const prioriteEffective = computed(() => {
   const m = {}
   if (prioMode.value === 'manuelle') { for (const g of groupes.value) m[g.id] = Number(g.priorite) || 999; return m }
-  const ranked = [...groupes.value].sort((a, b) => prioMode.value === 'valeur'
-    ? (caDe(b) / dureeGroupe(b)) - (caDe(a) / dureeGroupe(a))
-    : caDe(b) - caDe(a))
+  const ranked = [...groupes.value].sort((a, b) => {
+    if (prioMode.value === 'echeance') return (echVal(a) - echVal(b)) || (caDe(b) - caDe(a))   // EDD : échéance la plus proche d'abord
+    if (prioMode.value === 'valeur') return (caDe(b) / dureeGroupe(b)) - (caDe(a) / dureeGroupe(a))
+    return caDe(b) - caDe(a)
+  })
   ranked.forEach((g, i) => { m[g.id] = i + 1 })
   return m
 })
@@ -849,6 +899,34 @@ const ordoParAtelier = computed(() => {
   return list.sort((a, b) => a.phase.localeCompare(b.phase) || String(a.equip).localeCompare(String(b.equip)))
 })
 
+// Aperçu agrégé par produit (affichage quand beaucoup de lots importés)
+const apercuProduits = computed(() => {
+  const m = {}
+  for (const g of groupes.value) {
+    const p = prodById.value[g.produitId] || {}
+    if (!m[g.produitId]) m[g.produitId] = { produitId: g.produitId, code: p.code_pf || '?', desig: p.designation || '', nbLots: 0, boites: 0, ech: null }
+    m[g.produitId].nbLots += g.nbLots || 1
+    m[g.produitId].boites += Number(g.totalBoites) || 0
+    if (g.dateEcheance && (!m[g.produitId].ech || g.dateEcheance < m[g.produitId].ech)) m[g.produitId].ech = g.dateEcheance
+  }
+  return Object.values(m).sort((a, b) => (a.ech || 'zzzz').localeCompare(b.ech || 'zzzz') || a.code.localeCompare(b.code))
+})
+// Respect des échéances : fin de fabrication vs début de conditionnement (échéance), par lot
+const resultatEcheance = computed(() => {
+  const gById = {}; for (const g of groupes.value) gById[g.id] = g
+  const list = []
+  for (const r of planning.value) {
+    const gid = Math.floor(r.id / 1000); const g = gById[gid]; if (!g || !g.dateEcheance) continue
+    const finIdx = r.finFab != null ? r.finFab : (r.finCond != null ? r.finCond : 0)
+    const finDate = dateIdx(finIdx)
+    const ech = new Date(g.dateEcheance + 'T00:00:00')
+    const retard = (finDate && ech) ? Math.round((finDate - ech) / 86400000) : null
+    list.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, boites: r.boites, fin: finDate, echeance: ech, retard, enRetard: retard != null && retard > 0 })
+  }
+  const retards = list.filter(x => x.enRetard).sort((a, b) => b.retard - a.retard)
+  return { total: list.length, nRetard: retards.length, nTemps: list.length - retards.length, retards }
+})
+
 const colonnes = computed(() => {
   const used = new Set()
   for (const r of planning.value) for (const k in r.phases) used.add(k)
@@ -1020,6 +1098,12 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .slider-pc { width: 170px; accent-color: #0f766e; }
 .slider-lbl { font-size: 11px; color: #64748b; margin-top: 3px; }
 .objectif-card { border: 1px solid #c7d2fe; background: linear-gradient(180deg, #f5f7ff, #fff); }
+.ech-card { border: 1px solid #fbcfe8; background: linear-gradient(180deg, #fdf4ff, #fff); }
+.ech-strat { color: #a21caf; background: #fae8ff; border-color: #f5d0fe; }
+.ech-retards { margin-top: 12px; }
+.ech-rh { font-size: 13px; font-weight: 800; color: #b91c1c; margin-bottom: 7px; }
+.ech-retard { color: #dc2626; font-weight: 800; white-space: nowrap; }
+.ech-ok { margin-top: 10px; font-size: 13px; font-weight: 700; color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 9px 12px; }
 .obj-strat { font-size: 12px; font-weight: 700; color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 999px; padding: 3px 11px; white-space: nowrap; }
 .obj-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 14px; }
 .obj-kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 11px 13px; border-left: 4px solid #4338ca; }
