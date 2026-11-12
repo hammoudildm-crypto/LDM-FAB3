@@ -13,7 +13,7 @@ const catSel = ref('')
 const formOuvert = ref(false)
 const erreur = ref('')
 const message = ref('')
-const nouv = reactive({ nom: '', categorie: '', unite: 'unité', stock_actuel: 0, seuil_alerte: 0 })
+const nouv = reactive({ nom: '', reference: '', categorie: '', unite: 'unité', prix_unitaire: 0, stock_actuel: 0, seuil_alerte: 0 })
 const mvtModal = ref(null)
 const editModal = ref(null)
 
@@ -39,21 +39,25 @@ const mvtsAffiches = computed(() => mouvements.value.slice(0, 40))
 function etatClass(c) { const s = Number(c.stock_actuel), se = Number(c.seuil_alerte); if (s <= 0) return 'rupture'; if (s <= se) return 'alerte'; return 'ok' }
 function etatLabel(c) { const s = Number(c.stock_actuel), se = Number(c.seuil_alerte); if (s <= 0) return 'Rupture'; if (s <= se) return 'À commander'; return 'OK' }
 const fmt = (n) => Number(n || 0).toLocaleString('fr-FR')
+const valeurDe = (c) => (Number(c.stock_actuel) || 0) * (Number(c.prix_unitaire) || 0)
+const fmtDA = (n) => Number(Math.round(n) || 0).toLocaleString('fr-FR') + ' DA'
+const valeurTotale = computed(() => consommables.value.reduce((s, c) => s + valeurDe(c), 0))
+const valeurFiltree = computed(() => filtres.value.reduce((s, c) => s + valeurDe(c), 0))
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : '—'
 const nomDe = (id) => { const c = consommables.value.find(x => x.id === id); return c ? c.nom : '—' }
 const labelType = (t) => t === 'entree' ? 'Entrée' : t === 'sortie' ? 'Sortie' : 'Ajustement'
 
 async function ajouter() {
   const nom = (nouv.nom || '').trim(); if (!nom) { erreur.value = 'Le nom est requis.'; return }
-  const r = await supabase.from('consommables').insert({ nom, categorie: nouv.categorie || null, unite: nouv.unite || 'unité', stock_actuel: Number(nouv.stock_actuel) || 0, seuil_alerte: Number(nouv.seuil_alerte) || 0 })
+  const r = await supabase.from('consommables').insert({ nom, reference: nouv.reference || null, categorie: nouv.categorie || null, unite: nouv.unite || 'unité', prix_unitaire: Number(nouv.prix_unitaire) || 0, stock_actuel: Number(nouv.stock_actuel) || 0, seuil_alerte: Number(nouv.seuil_alerte) || 0 })
   if (r.error) { erreur.value = r.error.message; return }
-  Object.assign(nouv, { nom: '', categorie: '', unite: 'unité', stock_actuel: 0, seuil_alerte: 0 })
+  Object.assign(nouv, { nom: '', reference: '', categorie: '', unite: 'unité', prix_unitaire: 0, stock_actuel: 0, seuil_alerte: 0 })
   formOuvert.value = false; message.value = 'Consommable ajouté.'; await charger()
 }
 function editer(c) { editModal.value = { ...c } }
 async function validerEdit() {
   const e = editModal.value
-  const r = await supabase.from('consommables').update({ nom: e.nom, categorie: e.categorie || null, unite: e.unite || 'unité', reference: e.reference || null, seuil_alerte: Number(e.seuil_alerte) || 0, stock_actuel: Number(e.stock_actuel) || 0 }).eq('id', e.id)
+  const r = await supabase.from('consommables').update({ nom: e.nom, categorie: e.categorie || null, unite: e.unite || 'unité', reference: e.reference || null, prix_unitaire: Number(e.prix_unitaire) || 0, seuil_alerte: Number(e.seuil_alerte) || 0, stock_actuel: Number(e.stock_actuel) || 0 }).eq('id', e.id)
   if (r.error) { erreur.value = r.error.message; return }
   editModal.value = null; message.value = 'Consommable modifié.'; await charger()
 }
@@ -89,6 +93,7 @@ async function validerMvt() {
       <div class="kpi"><div class="kpi-v">{{ consommables.length }}</div><div class="kpi-l">Références</div></div>
       <div class="kpi alerte"><div class="kpi-v">{{ nbAlerte }}</div><div class="kpi-l">En alerte (≤ seuil)</div></div>
       <div class="kpi rupture"><div class="kpi-v">{{ nbRupture }}</div><div class="kpi-l">Ruptures (stock 0)</div></div>
+      <div class="kpi valeur"><div class="kpi-v">{{ fmtDA(valeurTotale) }}</div><div class="kpi-l">Valeur du stock</div></div>
       <div class="kpi"><div class="kpi-v">{{ mvtMois }}</div><div class="kpi-l">Mouvements ce mois</div></div>
     </div>
 
@@ -104,8 +109,10 @@ async function validerMvt() {
 
       <div v-if="formOuvert && peutEditer" class="add-form">
         <input v-model="nouv.nom" class="f-nom" placeholder="Nom (ex. Sac polyéthylène 50 L)" @keyup.enter="ajouter" />
+        <input v-model="nouv.reference" class="f-code" placeholder="Code article" />
         <input v-model="nouv.categorie" list="cats" placeholder="Catégorie" />
         <input v-model="nouv.unite" list="unites" placeholder="Unité" />
+        <input v-model.number="nouv.prix_unitaire" type="number" step="0.01" placeholder="Prix U. (DA)" />
         <input v-model.number="nouv.stock_actuel" type="number" placeholder="Stock initial" />
         <input v-model.number="nouv.seuil_alerte" type="number" placeholder="Seuil alerte" />
         <button class="btn" @click="ajouter">Enregistrer</button>
@@ -116,13 +123,16 @@ async function validerMvt() {
 
       <div class="tbl-scroll">
         <table class="tbl">
-          <thead><tr><th>Consommable</th><th>Catégorie</th><th>Unité</th><th class="r">Stock</th><th class="r">Seuil</th><th>État</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
+          <thead><tr><th>Consommable</th><th>Code</th><th>Catégorie</th><th>Unité</th><th class="r">Stock</th><th class="r">Prix U.</th><th class="r">Valeur</th><th class="r">Seuil</th><th>État</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
           <tbody>
             <tr v-for="c in filtres" :key="c.id">
-              <td class="nom">{{ c.nom }}<span v-if="c.reference" class="ref">{{ c.reference }}</span></td>
+              <td class="nom">{{ c.nom }}</td>
+              <td class="code">{{ c.reference || '—' }}</td>
               <td>{{ c.categorie || '—' }}</td>
               <td class="unit">{{ c.unite }}</td>
               <td class="r stock" :class="etatClass(c)">{{ fmt(c.stock_actuel) }}</td>
+              <td class="r prix">{{ c.prix_unitaire ? fmtDA(c.prix_unitaire) : '—' }}</td>
+              <td class="r val">{{ valeurDe(c) ? fmtDA(valeurDe(c)) : '—' }}</td>
               <td class="r seuil">{{ fmt(c.seuil_alerte) }}</td>
               <td><span class="badge" :class="etatClass(c)">{{ etatLabel(c) }}</span></td>
               <td v-if="peutEditer" class="r act">
@@ -132,8 +142,11 @@ async function validerMvt() {
                 <button class="mini danger" @click="supprimer(c)" title="Supprimer">✕</button>
               </td>
             </tr>
-            <tr v-if="!filtres.length"><td :colspan="peutEditer ? 7 : 6" class="vide">Aucun consommable. Clique « ＋ Ajouter » pour commencer.</td></tr>
+            <tr v-if="!filtres.length"><td :colspan="peutEditer ? 10 : 9" class="vide">Aucun consommable. Clique « ＋ Ajouter » pour commencer.</td></tr>
           </tbody>
+          <tfoot v-if="filtres.length">
+            <tr class="tot"><td colspan="6">Total valeur du stock</td><td class="r val">{{ fmtDA(valeurFiltree) }}</td><td :colspan="peutEditer ? 3 : 2"></td></tr>
+          </tfoot>
         </table>
       </div>
     </section>
@@ -179,7 +192,8 @@ async function validerMvt() {
           <label>Nom<input v-model="editModal.nom" /></label>
           <label>Catégorie<input v-model="editModal.categorie" list="cats" /></label>
           <label>Unité<input v-model="editModal.unite" list="unites" /></label>
-          <label>Référence<input v-model="editModal.reference" placeholder="(optionnel)" /></label>
+          <label>Code article<input v-model="editModal.reference" placeholder="(optionnel)" /></label>
+          <label>Prix unitaire (DA)<input v-model.number="editModal.prix_unitaire" type="number" step="0.01" /></label>
           <label>Seuil d'alerte<input v-model.number="editModal.seuil_alerte" type="number" /></label>
           <label>Stock actuel (correction)<input v-model.number="editModal.stock_actuel" type="number" /></label>
         </div>
@@ -201,6 +215,7 @@ async function validerMvt() {
 .kpi-l { font-size: 12px; color: #64748b; font-weight: 600; margin-top: 3px; }
 .kpi.alerte { border-left-color: #d97706; } .kpi.alerte .kpi-v { color: #b45309; }
 .kpi.rupture { border-left-color: #dc2626; } .kpi.rupture .kpi-v { color: #dc2626; }
+.kpi.valeur { border-left-color: #0d9488; } .kpi.valeur .kpi-v { color: #0f766e; font-size: 20px; }
 
 .tb { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .search { flex: 1 1 240px; min-width: 200px; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 14px; }
@@ -213,6 +228,12 @@ async function validerMvt() {
 .add-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 11px; margin-bottom: 12px; }
 .add-form input { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; width: 130px; }
 .add-form .f-nom { flex: 1 1 220px; width: auto; min-width: 200px; }
+.add-form .f-code { width: 120px; }
+.tbl td.code { font-family: ui-monospace, monospace; font-size: 12px; color: #475569; }
+.tbl td.prix, .tbl td.val { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tbl td.val { font-weight: 700; color: #0f766e; }
+.tbl tfoot .tot td { border-top: 2px solid #e2e8f0; font-weight: 800; background: #f8fafc; color: #0f172a; }
+.tbl tfoot .tot .val { color: #0f766e; }
 
 .tbl-scroll { overflow-x: auto; }
 .tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }

@@ -12,6 +12,7 @@ create table if not exists public.consommables (
   unite text default 'unité',
   stock_actuel numeric not null default 0,
   seuil_alerte numeric not null default 0,
+  prix_unitaire numeric not null default 0,
   reference text,
   actif boolean not null default true,
   created_at timestamptz default now()
