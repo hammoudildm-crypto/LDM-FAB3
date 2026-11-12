@@ -6,8 +6,11 @@ import PageHeader from '../components/PageHeader.vue'
 const peutEditer = inject('peutEditer', ref(true))
 const CATS_SUGG = ['Nettoyage', 'Protection / EPI', 'Emballage', 'Étiquetage', 'Divers']
 
+function ymd(d) { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}` }
 const consommables = ref([])
 const mouvements = ref([])
+const sorties = ref([])                               // sorties des ~6 derniers mois (pour la consommation)
+const moisSel = ref(ymd(new Date()).slice(0, 7))      // mois analysé (YYYY-MM)
 const recherche = ref('')
 const catSel = ref('')
 const formOuvert = ref(false)
@@ -23,6 +26,9 @@ async function charger() {
   if (rc.error) erreur.value = rc.error.message; else consommables.value = rc.data || []
   const rm = await supabase.from('mouvements_consommables').select('*').order('date_mvt', { ascending: false }).order('id', { ascending: false }).limit(100)
   if (!rm.error) mouvements.value = rm.data || []
+  const depuis = new Date(); depuis.setMonth(depuis.getMonth() - 5); depuis.setDate(1)
+  const rs = await supabase.from('mouvements_consommables').select('consommable_id,quantite,date_mvt').eq('type', 'sortie').gte('date_mvt', ymd(depuis))
+  if (!rs.error) sorties.value = rs.data || []
 }
 onMounted(charger)
 
@@ -46,6 +52,39 @@ const valeurFiltree = computed(() => filtres.value.reduce((s, c) => s + valeurDe
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : '—'
 const nomDe = (id) => { const c = consommables.value.find(x => x.id === id); return c ? c.nom : '—' }
 const labelType = (t) => t === 'entree' ? 'Entrée' : t === 'sortie' ? 'Sortie' : 'Ajustement'
+
+// ---- Consommation (sorties de stock) : mensuelle & journalière ----
+const consoById = computed(() => { const m = {}; for (const c of consommables.value) m[c.id] = c; return m })
+const prixDe = (id) => Number(consoById.value[id]?.prix_unitaire) || 0
+const moisLabel = (ym) => { if (!ym) return '—'; const [y, mo] = ym.split('-').map(Number); return new Date(y, mo - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) }
+const ajKey = computed(() => ymd(new Date()))
+const curYM = computed(() => ajKey.value.slice(0, 7))
+const moisDispo = computed(() => { const s = new Set(sorties.value.map(m => (m.date_mvt || '').slice(0, 7)).filter(Boolean)); s.add(curYM.value); return [...s].sort().reverse() })
+const sortiesMois = computed(() => sorties.value.filter(m => (m.date_mvt || '').slice(0, 7) === moisSel.value))
+const consoAujVal = computed(() => sorties.value.filter(m => m.date_mvt === ajKey.value).reduce((s, m) => s + (Number(m.quantite) || 0) * prixDe(m.consommable_id), 0))
+const consoAujNb = computed(() => sorties.value.filter(m => m.date_mvt === ajKey.value).length)
+const consoMoisVal = computed(() => sortiesMois.value.reduce((s, m) => s + (Number(m.quantite) || 0) * prixDe(m.consommable_id), 0))
+const joursRefMois = computed(() => { const [y, mo] = moisSel.value.split('-').map(Number); return moisSel.value === curYM.value ? new Date().getDate() : new Date(y, mo, 0).getDate() })
+const consoMoyJour = computed(() => joursRefMois.value > 0 ? consoMoisVal.value / joursRefMois.value : 0)
+const consoParArticle = computed(() => {
+  const m = {}
+  for (const s of sortiesMois.value) {
+    const c = consoById.value[s.consommable_id]; if (!c) continue
+    if (!m[s.consommable_id]) m[s.consommable_id] = { id: s.consommable_id, nom: c.nom, unite: c.unite, qte: 0, valeur: 0, jours: new Set() }
+    const q = Number(s.quantite) || 0, o = m[s.consommable_id]
+    o.qte += q; o.valeur += q * prixDe(s.consommable_id); o.jours.add(s.date_mvt)
+  }
+  return Object.values(m).map(o => ({ id: o.id, nom: o.nom, unite: o.unite, qte: o.qte, valeur: o.valeur, nbJours: o.jours.size, moyJour: joursRefMois.value > 0 ? o.qte / joursRefMois.value : 0 })).sort((a, b) => b.valeur - a.valeur || b.qte - a.qte)
+})
+const consoJour = computed(() => {
+  const [y, mo] = moisSel.value.split('-').map(Number)
+  const nb = new Date(y, mo, 0).getDate(), byDay = {}
+  for (const s of sortiesMois.value) { const d = Number((s.date_mvt || '').slice(8, 10)); if (!d) continue; byDay[d] = (byDay[d] || 0) + (Number(s.quantite) || 0) * prixDe(s.consommable_id) }
+  const jours = []; let max = 0, tot = 0
+  const auj = moisSel.value === curYM.value ? new Date().getDate() : -1
+  for (let d = 1; d <= nb; d++) { const v = byDay[d] || 0; if (v > max) max = v; tot += v; jours.push({ jour: d, val: v, auj: d === auj }) }
+  return { jours, max, tot }
+})
 
 async function ajouter() {
   const nom = (nouv.nom || '').trim(); if (!nom) { erreur.value = 'Le nom est requis.'; return }
@@ -146,6 +185,51 @@ async function validerMvt() {
           </tbody>
           <tfoot v-if="filtres.length">
             <tr class="tot"><td colspan="6">Total valeur du stock</td><td class="r val">{{ fmtDA(valeurFiltree) }}</td><td :colspan="peutEditer ? 3 : 2"></td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="conso-head">
+        <h2 class="card-title">Consommation — {{ moisLabel(moisSel) }}</h2>
+        <select v-model="moisSel" class="mois-sel">
+          <option v-for="ym in moisDispo" :key="ym" :value="ym">{{ moisLabel(ym) }}</option>
+        </select>
+      </div>
+
+      <div class="kpi-row conso-kpi">
+        <div class="kpi"><div class="kpi-v">{{ fmtDA(consoAujVal) }}</div><div class="kpi-l">Consommation aujourd'hui ({{ consoAujNb }} sortie{{ consoAujNb > 1 ? 's' : '' }})</div></div>
+        <div class="kpi"><div class="kpi-v">{{ fmtDA(consoMoisVal) }}</div><div class="kpi-l">Consommation du mois</div></div>
+        <div class="kpi"><div class="kpi-v">{{ fmtDA(consoMoyJour) }}</div><div class="kpi-l">Moyenne par jour ({{ joursRefMois }} j)</div></div>
+      </div>
+
+      <h3 class="conso-sub">Consommation journalière</h3>
+      <p v-if="!consoJour.tot" class="vide-p">Aucune sortie enregistrée sur ce mois.</p>
+      <div v-else class="daybars">
+        <div v-for="d in consoJour.jours" :key="d.jour" class="daybar" :class="{ auj: d.auj }"
+             :title="d.jour + ' ' + moisLabel(moisSel) + ' : ' + fmtDA(d.val)">
+          <div class="db-fill" :style="{ height: (consoJour.max > 0 ? Math.max(2, Math.round(d.val / consoJour.max * 100)) : 0) + '%' }"></div>
+          <span class="db-lbl">{{ d.jour }}</span>
+        </div>
+      </div>
+
+      <h3 class="conso-sub">Consommation par consommable</h3>
+      <div class="tbl-scroll">
+        <table class="tbl">
+          <thead><tr><th>Consommable</th><th class="r">Qté du mois</th><th class="r">Moyenne/jour</th><th class="r">Jours actifs</th><th class="r">Valeur</th></tr></thead>
+          <tbody>
+            <tr v-for="a in consoParArticle" :key="a.id">
+              <td class="nom">{{ a.nom }}</td>
+              <td class="r"><strong>{{ fmt(a.qte) }}</strong> <span class="u">{{ a.unite }}</span></td>
+              <td class="r">{{ fmt(Math.round(a.moyJour * 10) / 10) }} <span class="u">{{ a.unite }}</span></td>
+              <td class="r">{{ a.nbJours }}</td>
+              <td class="r val">{{ a.valeur ? fmtDA(a.valeur) : '—' }}</td>
+            </tr>
+            <tr v-if="!consoParArticle.length"><td colspan="5" class="vide">Aucune consommation sur ce mois.</td></tr>
+          </tbody>
+          <tfoot v-if="consoParArticle.length">
+            <tr class="tot"><td>Total valeur</td><td class="r"></td><td class="r"></td><td class="r"></td><td class="r val">{{ fmtDA(consoMoisVal) }}</td></tr>
           </tfoot>
         </table>
       </div>
@@ -259,6 +343,20 @@ async function validerMvt() {
 .mtag.entree { background: #dcfce7; color: #166534; } .mtag.sortie { background: #fef3c7; color: #92400e; } .mtag.ajustement { background: #e2e8f0; color: #475569; }
 .q-in { color: #15803d; font-weight: 700; } .q-out { color: #b45309; font-weight: 700; }
 .motif { color: #475569; }
+
+.conso-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.conso-head .card-title { margin: 0; }
+.mois-sel { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13.5px; font-weight: 700; color: #334155; background: #fff; text-transform: capitalize; cursor: pointer; }
+.conso-kpi { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 4px; }
+.conso-sub { margin: 18px 0 10px; font-size: 12px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: .04em; }
+.vide-p { color: #94a3b8; font-size: 13px; margin: 6px 0 0; }
+.daybars { display: flex; align-items: flex-end; gap: 3px; height: 130px; padding: 6px 2px 0; overflow-x: auto; border-bottom: 1px solid #f1f5f9; }
+.daybar { flex: 1 0 15px; min-width: 15px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
+.db-fill { width: 68%; min-height: 2px; background: #f59e0b; border-radius: 3px 3px 0 0; transition: height .2s; }
+.daybar:hover .db-fill { background: #b45309; }
+.daybar.auj .db-fill { background: #0d9488; }
+.db-lbl { font-size: 9.5px; color: #94a3b8; font-weight: 700; }
+.tbl td .u { font-size: 11px; color: #94a3b8; font-weight: 600; }
 
 .modal-back { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
 .modal { background: #fff; border-radius: 14px; width: 420px; max-width: 94vw; box-shadow: 0 24px 60px rgba(2,8,23,.3); overflow: hidden; }
