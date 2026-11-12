@@ -27,9 +27,13 @@
           <label>Week-end</label>
           <label class="wk"><input type="checkbox" v-model="skipWeekend" /> Ne pas travailler le week-end</label>
         </div>
-        <div class="add-field chk-wk">
-          <label>Priorité</label>
-          <label class="wk"><input type="checkbox" v-model="prioAutoCA" /> Automatique par CA le plus élevé</label>
+        <div class="add-field">
+          <label>Optimisation</label>
+          <select v-model="prioMode">
+            <option value="valeur">Valeur au plus tôt (optimal)</option>
+            <option value="ca">CA total décroissant</option>
+            <option value="manuelle">Priorités manuelles</option>
+          </select>
         </div>
         <div class="add-field chk-wk">
           <label>Conditionnement</label>
@@ -94,6 +98,36 @@
           <tfoot><tr class="tot"><td></td><td>Total</td><td></td><td class="ta-r">{{ lotsDeployes.length }}</td><td></td><td class="ta-r">{{ fmtDA(totalCA) }}</td><td></td></tr></tfoot>
         </table>
       </div>
+    </section>
+
+    <!-- Ordonnancement optimal (objectif de livraison) -->
+    <section v-if="planning.length" class="card objectif-card">
+      <div class="card-head-row">
+        <h2 class="card-title">🎯 Ordonnancement optimal — objectif de livraison</h2>
+        <span class="obj-strat">{{ prioMode === 'valeur' ? 'Valeur au plus tôt (CA ÷ durée)' : prioMode === 'ca' ? 'CA total décroissant' : 'Priorités manuelles' }}</span>
+      </div>
+      <div class="obj-kpis">
+        <div class="obj-kpi"><div class="ok-v">{{ fmtDA(objectifResultat.totalCA) }}</div><div class="ok-l">CA total livré</div></div>
+        <div class="obj-kpi"><div class="ok-v">{{ fmt(objectifResultat.totalBoites) }}</div><div class="ok-l">Boîtes à livrer</div></div>
+        <div class="obj-kpi"><div class="ok-v">{{ fmtDate(objectifResultat.dateFin) }}</div><div class="ok-l">Objectif terminé le</div></div>
+        <div class="obj-kpi"><div class="ok-v">{{ objectifResultat.list.length }}</div><div class="ok-l">Produits</div></div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="grid">
+          <thead><tr><th class="ta-c">Ordre</th><th>Produit</th><th class="ta-r">Boîtes</th><th class="ta-r">CA</th><th class="ta-c">Livré le</th><th class="ta-r">CA cumulé</th></tr></thead>
+          <tbody>
+            <tr v-for="(it, i) in objectifResultat.list" :key="it.gid">
+              <td class="ta-c obj-rang">{{ i + 1 }}</td>
+              <td><strong>{{ it.code }}</strong> <span class="lot-desig">{{ it.desig }}</span></td>
+              <td class="ta-r">{{ fmt(it.boites) }}</td>
+              <td class="ta-r">{{ fmtDA(it.ca) }}</td>
+              <td class="ta-c obj-date">{{ fmtDate(it.dateLivr) }}</td>
+              <td class="ta-r obj-cum">{{ fmtDA(it.cumCA) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="obj-note">Ordre optimisé pour <strong>livrer la valeur au plus tôt</strong> : chaque produit est servi selon sa valeur par jour de production (CA ÷ durée), dans la limite de la disponibilité des ateliers. « Livré le » = fin de la dernière phase du produit.</p>
     </section>
 
     <!-- Affectation des équipements (machines identiques) -->
@@ -245,7 +279,8 @@ const produits = ref([]), equipements = ref([]), cadences = ref([]), ofs = ref([
 const groupes = ref([])   // { id, produitId, boites, nbLots }
 const dateDepart = ref(new Date().toISOString().slice(0, 10))
 const skipWeekend = ref(true)
-const prioAutoCA = ref(true)
+const prioMode = ref('valeur')   // 'valeur' (WSPT : CA ÷ durée, livrer la valeur au plus tôt) | 'ca' (CA total) | 'manuelle'
+const prioAutoCA = computed(() => prioMode.value !== 'manuelle')
 const optimisationCond = ref(false)
 const condSeul = ref(false)
 const preferCampagne = ref(0.5)
@@ -277,7 +312,7 @@ onMounted(async () => {
 })
 
 // Sauvegarde automatique à chaque changement
-watch([groupes, dateDepart, skipWeekend, hpj, prioAutoCA], sauvegarderLocal, { deep: true })
+watch([groupes, dateDepart, skipWeekend, hpj, prioMode], sauvegarderLocal, { deep: true })
 
 function phaseDeType(type) {
   const t = (type || '').toLowerCase()
@@ -353,7 +388,7 @@ function sauvegarderLocal() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
       groupes: groupes.value, dateDepart: dateDepart.value, skipWeekend: skipWeekend.value,
-      hpj: hpj.value, prioAutoCA: prioAutoCA.value, seq
+      hpj: hpj.value, prioMode: prioMode.value, seq
     }))
   } catch (e) { /* stockage indisponible */ }
 }
@@ -365,7 +400,8 @@ function chargerLocal() {
     if (d.dateDepart) dateDepart.value = d.dateDepart
     if (typeof d.skipWeekend === 'boolean') skipWeekend.value = d.skipWeekend
     if (d.hpj) hpj.value = d.hpj
-    if (typeof d.prioAutoCA === 'boolean') prioAutoCA.value = d.prioAutoCA
+    if (d.prioMode) prioMode.value = d.prioMode
+    else if (typeof d.prioAutoCA === 'boolean') prioMode.value = d.prioAutoCA ? 'ca' : 'manuelle'   // rétro-compat
     if (d.seq) seq = Math.max(seq, Number(d.seq) || 1)
   } catch (e) { /* ignore */ }
 }
@@ -406,15 +442,30 @@ function importerLotsEnCours() {
   if (plusTot && plusTot < dateDepart.value) dateDepart.value = plusTot
   msgImport.value = nP ? (nP + ' lot(s) importé(s)' + (condSeul.value ? ' — vrac à conditionner' : ' — calés sur leur date de lancement') + '.') : 'Rien à importer (déjà importés, ou aucun lot disponible).'
 }
-// Priorité effective : automatique par CA décroissant, ou manuelle
+// Durée de production estimée d'un groupe (jours) = somme des durées de phases sur l'équipement le plus rapide.
+function dureeGroupe(g) {
+  const seqPh = gammeProduit(g.produitId)
+  let total = 0
+  for (const k of seqPh) {
+    const compat = equipements.value.filter(e => phaseDeType(e.type) === k && cadMap.value[e.id + '|' + g.produitId] > 0)
+    if (!compat.length) continue
+    let best = Infinity
+    for (const e of compat) { const d = dureeJours(e, g.produitId, g.totalBoites); if (d < best) best = d }
+    if (best < Infinity) total += best
+  }
+  return Math.max(1, total)
+}
+// Priorité effective :
+//  - 'valeur' : WSPT — on sert d'abord la plus forte valeur par jour de production (CA ÷ durée) → maximise le CA livré au plus tôt
+//  - 'ca'     : CA total décroissant
+//  - 'manuelle': priorités saisies
 const prioriteEffective = computed(() => {
   const m = {}
-  if (prioAutoCA.value) {
-    const ranked = [...groupes.value].sort((a, b) => caDe(b) - caDe(a))
-    ranked.forEach((g, i) => { m[g.id] = i + 1 })
-  } else {
-    for (const g of groupes.value) m[g.id] = Number(g.priorite) || 999
-  }
+  if (prioMode.value === 'manuelle') { for (const g of groupes.value) m[g.id] = Number(g.priorite) || 999; return m }
+  const ranked = [...groupes.value].sort((a, b) => prioMode.value === 'valeur'
+    ? (caDe(b) / dureeGroupe(b)) - (caDe(a) / dureeGroupe(a))
+    : caDe(b) - caDe(a))
+  ranked.forEach((g, i) => { m[g.id] = i + 1 })
   return m
 })
 
@@ -597,6 +648,27 @@ const tauxAlim = computed(() => { const r = resultatSimu.value; return r.condSpa
 const condNettoyages = computed(() => resultatSimu.value.nettoyages || 0)
 const condJoursNett = computed(() => resultatSimu.value.joursNett || 0)
 
+// Récap « ordonnancement optimal » de l'objectif : par produit, date de livraison (fin de la dernière phase) + CA cumulé dans l'ordre de livraison.
+const objectifResultat = computed(() => {
+  const byG = {}
+  for (const r of planning.value) {
+    const gid = Math.floor(r.id / 1000)
+    const fin = r.finCond != null ? r.finCond : (r.finFab != null ? r.finFab : 0)
+    if (!byG[gid]) byG[gid] = { gid, fin: 0, boites: 0 }
+    byG[gid].fin = Math.max(byG[gid].fin, fin)
+    byG[gid].boites += r.boites
+  }
+  const list = Object.values(byG).map(x => {
+    const g = groupes.value.find(gr => gr.id === x.gid) || {}
+    const p = prodById.value[g.produitId] || {}
+    return { gid: x.gid, code: p.code_pf || '?', desig: p.designation || '', boites: x.boites, ca: x.boites * (Number(p.pcsu) || 0), finIdx: x.fin, dateLivr: dateIdx(x.fin) }
+  }).sort((a, b) => (a.finIdx - b.finIdx) || (b.ca - a.ca))
+  let cum = 0
+  for (const it of list) { cum += it.ca; it.cumCA = cum }
+  const finMax = list.reduce((mx, x) => Math.max(mx, x.finIdx), 0)
+  return { list, totalCA: cum, totalBoites: list.reduce((s, x) => s + x.boites, 0), dateFin: dateIdx(finMax) }
+})
+
 const colonnes = computed(() => {
   const used = new Set()
   for (const r of planning.value) for (const k in r.phases) used.add(k)
@@ -765,6 +837,16 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .opt-banner { font-size: 13px; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
 .slider-pc { width: 170px; accent-color: #0f766e; }
 .slider-lbl { font-size: 11px; color: #64748b; margin-top: 3px; }
+.objectif-card { border: 1px solid #c7d2fe; background: linear-gradient(180deg, #f5f7ff, #fff); }
+.obj-strat { font-size: 12px; font-weight: 700; color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 999px; padding: 3px 11px; white-space: nowrap; }
+.obj-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 14px; }
+.obj-kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 11px 13px; border-left: 4px solid #4338ca; }
+.ok-v { font-size: 19px; font-weight: 800; color: #0f172a; line-height: 1.15; }
+.ok-l { font-size: 11.5px; color: #64748b; font-weight: 600; margin-top: 2px; }
+.obj-rang { font-weight: 800; color: #4338ca; }
+.obj-date { font-weight: 700; color: #0f172a; white-space: nowrap; }
+.obj-cum { font-weight: 800; color: #4338ca; }
+.obj-note { font-size: 12px; color: #64748b; margin: 10px 2px 0; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 8px; padding: 8px 11px; }
 .cond-atelier { margin-bottom: 18px; }
 .ca-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 12px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px 8px 0 0; flex-wrap: wrap; }
 .ca-head strong { font-size: 14px; color: #0f766e; }
