@@ -90,6 +90,8 @@ const consoJour = computed(() => {
 const MOIS_COURTS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 const metrique = ref('valeur')   // 'valeur' (DA) | 'qte'
 const anneeSel = ref(String(new Date().getFullYear()))
+const artSel = ref('')           // '' = tous les articles, sinon id (string)
+const consommablesTries = computed(() => [...consommables.value].sort((a, b) => (a.nom || '').localeCompare(b.nom || '')))
 const anneesDispo = computed(() => { const s = new Set(sorties.value.map(m => (m.date_mvt || '').slice(0, 4)).filter(Boolean)); s.add(String(new Date().getFullYear())); return [...s].sort().reverse() })
 const evolutionAnnee = computed(() => {
   const an = anneeSel.value, parArt = {}
@@ -101,7 +103,8 @@ const evolutionAnnee = computed(() => {
     const q = Number(s.quantite) || 0, o = parArt[s.consommable_id]
     o.qteMois[mo] += q; o.mois[mo] += q * prixDe(s.consommable_id); o.total += q * prixDe(s.consommable_id); o.totalQte += q
   }
-  const arr = Object.values(parArt)
+  let arr = Object.values(parArt)
+  if (artSel.value) arr = arr.filter(o => String(o.id) === artSel.value)
   for (const o of arr) { o.serie = metrique.value === 'qte' ? o.qteMois : o.mois; o.max = Math.max(...o.serie, 0); o.totAff = metrique.value === 'qte' ? o.totalQte : o.total }
   return arr.sort((a, b) => b.total - a.total)
 })
@@ -111,6 +114,18 @@ const evolutionTotaux = computed(() => {
   return { mois, max: Math.max(...mois, 1), total: mois.reduce((s, x) => s + x, 0) }
 })
 function cellStyle(v, max) { if (!v || max <= 0) return {}; const a = Math.min(0.85, 0.12 + v / max * 0.73); return { background: `rgba(180,83,9,${a.toFixed(3)})`, color: a > 0.5 ? '#fff' : '#7c2d12', fontWeight: 700 } }
+
+// ---- Couverture de stock (jours) = stock ÷ consommation journalière moyenne (fenêtre glissante) ----
+const AVG_FENETRE = 90
+const consoRecente = computed(() => {
+  const lim = ymd(new Date(Date.now() - AVG_FENETRE * 86400000)), m = {}
+  for (const s of sorties.value) if ((s.date_mvt || '') >= lim) m[s.consommable_id] = (m[s.consommable_id] || 0) + (Number(s.quantite) || 0)
+  return m
+})
+const moyJourDe = (id) => (consoRecente.value[id] || 0) / AVG_FENETRE
+function couvertureJours(c) { const a = moyJourDe(c.id); return a > 0 ? (Number(c.stock_actuel) || 0) / a : null }
+function couvClass(c) { const j = couvertureJours(c); if (j === null) return 'couv-none'; if (j < 7) return 'couv-bas'; if (j < 21) return 'couv-moy'; return 'couv-ok' }
+function couvLabel(c) { const j = couvertureJours(c); return j === null ? '—' : Math.round(j) + ' j' }
 
 async function ajouter() {
   const nom = (nouv.nom || '').trim(); if (!nom) { erreur.value = 'Le nom est requis.'; return }
@@ -188,7 +203,7 @@ async function validerMvt() {
 
       <div class="tbl-scroll">
         <table class="tbl">
-          <thead><tr><th>Consommable</th><th>Code</th><th>Catégorie</th><th>Unité</th><th class="r">Stock</th><th class="r">Prix U.</th><th class="r">Valeur</th><th class="r">Seuil</th><th>État</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
+          <thead><tr><th>Consommable</th><th>Code</th><th>Catégorie</th><th>Unité</th><th class="r">Stock</th><th class="r">Prix U.</th><th class="r">Valeur</th><th class="r">Seuil</th><th class="r">Couverture</th><th>État</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
           <tbody>
             <tr v-for="c in filtres" :key="c.id">
               <td class="nom">{{ c.nom }}</td>
@@ -199,6 +214,7 @@ async function validerMvt() {
               <td class="r prix">{{ c.prix_unitaire ? fmtDA(c.prix_unitaire) : '—' }}</td>
               <td class="r val">{{ valeurDe(c) ? fmtDA(valeurDe(c)) : '—' }}</td>
               <td class="r seuil">{{ fmt(c.seuil_alerte) }}</td>
+              <td class="r couv" :class="couvClass(c)" :title="'Consommation moyenne : ' + fmt(Math.round(moyJourDe(c.id) * 10) / 10) + ' ' + c.unite + '/jour (90 j)'">{{ couvLabel(c) }}</td>
               <td><span class="badge" :class="etatClass(c)">{{ etatLabel(c) }}</span></td>
               <td v-if="peutEditer" class="r act">
                 <button class="mini in" @click="ouvrirMvt(c, 'entree')" title="Entrée de stock">＋</button>
@@ -207,10 +223,10 @@ async function validerMvt() {
                 <button class="mini danger" @click="supprimer(c)" title="Supprimer">✕</button>
               </td>
             </tr>
-            <tr v-if="!filtres.length"><td :colspan="peutEditer ? 10 : 9" class="vide">Aucun consommable. Clique « ＋ Ajouter » pour commencer.</td></tr>
+            <tr v-if="!filtres.length"><td :colspan="peutEditer ? 11 : 10" class="vide">Aucun consommable. Clique « ＋ Ajouter » pour commencer.</td></tr>
           </tbody>
           <tfoot v-if="filtres.length">
-            <tr class="tot"><td colspan="6">Total valeur du stock</td><td class="r val">{{ fmtDA(valeurFiltree) }}</td><td :colspan="peutEditer ? 3 : 2"></td></tr>
+            <tr class="tot"><td colspan="6">Total valeur du stock</td><td class="r val">{{ fmtDA(valeurFiltree) }}</td><td :colspan="peutEditer ? 4 : 3"></td></tr>
           </tfoot>
         </table>
       </div>
@@ -269,6 +285,10 @@ async function validerMvt() {
             <button :class="{ on: metrique === 'valeur' }" @click="metrique = 'valeur'">Valeur (DA)</button>
             <button :class="{ on: metrique === 'qte' }" @click="metrique = 'qte'">Quantité</button>
           </div>
+          <select v-model="artSel" class="mois-sel art-sel">
+            <option value="">Tous les articles</option>
+            <option v-for="c in consommablesTries" :key="c.id" :value="String(c.id)">{{ c.nom }}</option>
+          </select>
           <select v-model="anneeSel" class="mois-sel">
             <option v-for="a in anneesDispo" :key="a" :value="a">{{ a }}</option>
           </select>
@@ -440,6 +460,9 @@ async function validerMvt() {
 .evo-tbl th.mo { min-width: 50px; }
 .evo-tbl .cell { font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; }
 .evo-tbl tfoot .tot td { border-top: 2px solid #e2e8f0; font-weight: 800; background: #f8fafc; color: #0f172a; font-variant-numeric: tabular-nums; }
+.art-sel { max-width: 220px; text-transform: none; }
+.tbl td.couv { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.couv-ok { color: #15803d; } .couv-moy { color: #b45309; } .couv-bas { color: #dc2626; } .couv-none { color: #cbd5e1; }
 
 .modal-back { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
 .modal { background: #fff; border-radius: 14px; width: 420px; max-width: 94vw; box-shadow: 0 24px 60px rgba(2,8,23,.3); overflow: hidden; }
