@@ -26,7 +26,7 @@ async function charger() {
   if (rc.error) erreur.value = rc.error.message; else consommables.value = rc.data || []
   const rm = await supabase.from('mouvements_consommables').select('*').order('date_mvt', { ascending: false }).order('id', { ascending: false }).limit(100)
   if (!rm.error) mouvements.value = rm.data || []
-  const depuis = new Date(); depuis.setMonth(depuis.getMonth() - 5); depuis.setDate(1)
+  const depuis = new Date(new Date().getFullYear() - 1, 0, 1)   // 1er janv. de l'an dernier → couvre l'évolution annuelle
   const rs = await supabase.from('mouvements_consommables').select('consommable_id,quantite,date_mvt').eq('type', 'sortie').gte('date_mvt', ymd(depuis))
   if (!rs.error) sorties.value = rs.data || []
 }
@@ -85,6 +85,32 @@ const consoJour = computed(() => {
   for (let d = 1; d <= nb; d++) { const v = byDay[d] || 0; if (v > max) max = v; tot += v; jours.push({ jour: d, val: v, auj: d === auj }) }
   return { jours, max, tot }
 })
+
+// ---- Évolution annuelle de la consommation par article (matrice article × 12 mois) ----
+const MOIS_COURTS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+const metrique = ref('valeur')   // 'valeur' (DA) | 'qte'
+const anneeSel = ref(String(new Date().getFullYear()))
+const anneesDispo = computed(() => { const s = new Set(sorties.value.map(m => (m.date_mvt || '').slice(0, 4)).filter(Boolean)); s.add(String(new Date().getFullYear())); return [...s].sort().reverse() })
+const evolutionAnnee = computed(() => {
+  const an = anneeSel.value, parArt = {}
+  for (const s of sorties.value) {
+    if ((s.date_mvt || '').slice(0, 4) !== an) continue
+    const c = consoById.value[s.consommable_id]; if (!c) continue
+    const mo = Number((s.date_mvt || '').slice(5, 7)) - 1; if (mo < 0 || mo > 11) continue
+    if (!parArt[s.consommable_id]) parArt[s.consommable_id] = { id: s.consommable_id, nom: c.nom, unite: c.unite, mois: new Array(12).fill(0), qteMois: new Array(12).fill(0), total: 0, totalQte: 0 }
+    const q = Number(s.quantite) || 0, o = parArt[s.consommable_id]
+    o.qteMois[mo] += q; o.mois[mo] += q * prixDe(s.consommable_id); o.total += q * prixDe(s.consommable_id); o.totalQte += q
+  }
+  const arr = Object.values(parArt)
+  for (const o of arr) { o.serie = metrique.value === 'qte' ? o.qteMois : o.mois; o.max = Math.max(...o.serie, 0); o.totAff = metrique.value === 'qte' ? o.totalQte : o.total }
+  return arr.sort((a, b) => b.total - a.total)
+})
+const evolutionTotaux = computed(() => {
+  const mois = new Array(12).fill(0)
+  for (const o of evolutionAnnee.value) for (let i = 0; i < 12; i++) mois[i] += o.mois[i]
+  return { mois, max: Math.max(...mois, 1), total: mois.reduce((s, x) => s + x, 0) }
+})
+function cellStyle(v, max) { if (!v || max <= 0) return {}; const a = Math.min(0.85, 0.12 + v / max * 0.73); return { background: `rgba(180,83,9,${a.toFixed(3)})`, color: a > 0.5 ? '#fff' : '#7c2d12', fontWeight: 700 } }
 
 async function ajouter() {
   const nom = (nouv.nom || '').trim(); if (!nom) { erreur.value = 'Le nom est requis.'; return }
@@ -236,6 +262,48 @@ async function validerMvt() {
     </section>
 
     <section class="card">
+      <div class="conso-head">
+        <h2 class="card-title">Évolution de la consommation — {{ anneeSel }}</h2>
+        <div class="evo-ctrl">
+          <div class="seg">
+            <button :class="{ on: metrique === 'valeur' }" @click="metrique = 'valeur'">Valeur (DA)</button>
+            <button :class="{ on: metrique === 'qte' }" @click="metrique = 'qte'">Quantité</button>
+          </div>
+          <select v-model="anneeSel" class="mois-sel">
+            <option v-for="a in anneesDispo" :key="a" :value="a">{{ a }}</option>
+          </select>
+        </div>
+      </div>
+
+      <p v-if="!evolutionAnnee.length" class="vide-p">Aucune sortie enregistrée sur {{ anneeSel }}.</p>
+      <template v-else>
+        <div class="monthbars">
+          <div v-for="(v, i) in evolutionTotaux.mois" :key="i" class="monthbar" :title="MOIS_COURTS[i] + ' ' + anneeSel + ' : ' + fmtDA(v)">
+            <div class="mb-fill" :style="{ height: (evolutionTotaux.max > 0 ? Math.max(2, Math.round(v / evolutionTotaux.max * 100)) : 0) + '%' }"></div>
+            <span class="mb-lbl">{{ MOIS_COURTS[i] }}</span>
+          </div>
+        </div>
+        <p class="evo-note">Barres = consommation totale mensuelle (valeur, DA). Tableau = {{ metrique === 'qte' ? 'quantités par article (unité de l\'article)' : 'valeur consommée par article (DA)' }}, mois par mois ; l'intensité de couleur suit le niveau de chaque ligne.</p>
+
+        <div class="tbl-scroll">
+          <table class="tbl evo-tbl">
+            <thead><tr><th>Consommable</th><th v-for="(m, i) in MOIS_COURTS" :key="i" class="r mo">{{ m }}</th><th class="r">Total {{ metrique === 'qte' ? '' : '(DA)' }}</th></tr></thead>
+            <tbody>
+              <tr v-for="o in evolutionAnnee" :key="o.id">
+                <td class="nom">{{ o.nom }}</td>
+                <td v-for="(v, i) in o.serie" :key="i" class="r cell" :style="cellStyle(v, o.max)">{{ v ? fmt(Math.round(v)) : '' }}</td>
+                <td class="r val">{{ metrique === 'qte' ? fmt(o.totAff) + ' ' + o.unite : fmtDA(o.totAff) }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="tot"><td>Total valeur</td><td v-for="(v, i) in evolutionTotaux.mois" :key="i" class="r">{{ v ? fmt(Math.round(v)) : '' }}</td><td class="r val">{{ fmtDA(evolutionTotaux.total) }}</td></tr>
+            </tfoot>
+          </table>
+        </div>
+      </template>
+    </section>
+
+    <section class="card">
       <h2 class="card-title">Derniers mouvements</h2>
       <div class="tbl-scroll">
         <table class="tbl">
@@ -357,6 +425,21 @@ async function validerMvt() {
 .daybar.auj .db-fill { background: #0d9488; }
 .db-lbl { font-size: 9.5px; color: #94a3b8; font-weight: 700; }
 .tbl td .u { font-size: 11px; color: #94a3b8; font-weight: 600; }
+
+.evo-ctrl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: #fff; color: #475569; font: inherit; font-size: 12.5px; font-weight: 700; padding: 7px 13px; cursor: pointer; }
+.seg button + button { border-left: 1px solid #e2e8f0; }
+.seg button.on { background: #b45309; color: #fff; }
+.monthbars { display: flex; align-items: flex-end; gap: 8px; height: 120px; padding: 6px 2px 0; }
+.monthbar { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+.mb-fill { width: 58%; min-height: 2px; background: #f59e0b; border-radius: 4px 4px 0 0; transition: height .2s; }
+.monthbar:hover .mb-fill { background: #b45309; }
+.mb-lbl { font-size: 10.5px; color: #94a3b8; font-weight: 700; }
+.evo-note { font-size: 12px; color: #94a3b8; margin: 10px 0 14px; }
+.evo-tbl th.mo { min-width: 50px; }
+.evo-tbl .cell { font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; }
+.evo-tbl tfoot .tot td { border-top: 2px solid #e2e8f0; font-weight: 800; background: #f8fafc; color: #0f172a; font-variant-numeric: tabular-nums; }
 
 .modal-back { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
 .modal { background: #fff; border-radius: 14px; width: 420px; max-width: 94vw; box-shadow: 0 24px 60px rgba(2,8,23,.3); overflow: hidden; }
