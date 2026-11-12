@@ -247,13 +247,21 @@
         <div class="ordo-at-h" :class="{ 'a-cond': a.cond }"><span class="ordo-ph">{{ a.phase }}</span><strong>{{ a.equip }}</strong><span v-if="a.cond && a.trouTotal > 0" class="ordo-rupt">⚠ {{ a.trouTotal }} j de rupture</span><span v-else-if="a.cond" class="ordo-cont">✓ alimenté en continu</span><span class="ordo-n">{{ a.lots.length }} lot(s)</span></div>
         <div class="tbl-wrap">
           <table class="grid">
-            <thead><tr><th>Produit / Lot</th><th class="ta-r">Boîtes</th><th class="ta-c">Date d'entrée</th><th class="ta-c">Date de sortie</th></tr></thead>
+            <thead><tr><th>Produit</th><th class="ta-c">N° Lot</th><th class="ta-r">Boîtes</th><th class="ta-c">Entrée fab.</th><th class="ta-c">Sortie fab.</th><th class="ta-c">Objectif conditionnement</th></tr></thead>
             <tbody>
               <tr v-for="(l, i) in a.lots" :key="i">
-                <td><span class="lot-dot" :style="{ background: l.couleur }"></span><strong>{{ l.code }}</strong> <span class="lot-desig">{{ l.desig }}</span><span v-if="l.numeroLot" class="lot-num">Lot {{ l.numeroLot }}</span></td>
+                <td><span class="lot-dot" :style="{ background: l.couleur }"></span><strong>{{ l.code }}</strong> <span class="lot-desig">{{ l.desig }}</span></td>
+                <td class="ta-c"><span v-if="l.numeroLot" class="lot-num">{{ l.numeroLot }}</span><span v-else class="muted">—</span></td>
                 <td class="ta-r">{{ fmt(l.boites) }}</td>
                 <td class="ta-c ordo-date"><span v-if="l.trou > 0" class="ordo-gap" title="Arrêt avant ce lot (rupture d'alimentation)">⚠ {{ l.trou }} j</span>{{ fmtDate(l.entree) }}</td>
-                <td class="ta-c ordo-date">{{ fmtDate(l.sortie) }}</td>
+                <td class="ta-c ordo-date" :class="{ 'sortie-late': l.enRetard }">{{ fmtDate(l.sortie) }}</td>
+                <td class="ta-c ordo-obj">
+                  <template v-if="l.echeance">
+                    <span class="obj-date" :class="{ 'obj-late': l.enRetard }" :title="l.enRetard ? 'Sortie fabrication après la date de conditionnement visée — risque de retard' : 'Date de début de conditionnement visée'">{{ fmtDate(l.echeance) }}</span>
+                    <span v-if="l.atelierCond" class="obj-atelier">→ {{ l.atelierCond }}</span>
+                  </template>
+                  <span v-else class="muted">—</span>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -630,6 +638,13 @@ function dureeGroupe(g) {
   }
   return Math.max(1, total)
 }
+// Atelier de conditionnement de destination d'un produit (ligne compatible la plus rapide).
+function atelierCondProduit(produitId) {
+  const compat = equipements.value.filter(e => phaseDeType(e.type) === 'conditionnement' && cadMap.value[e.id + '|' + produitId] > 0)
+  if (!compat.length) return null
+  compat.sort((a, b) => (cadMap.value[b.id + '|' + produitId] || 0) - (cadMap.value[a.id + '|' + produitId] || 0))
+  return compat[0].nom || compat[0].code || null
+}
 // Priorité effective :
 //  - 'valeur' : WSPT — on sert d'abord la plus forte valeur par jour de production (CA ÷ durée) → maximise le CA livré au plus tôt
 //  - 'ca'     : CA total décroissant
@@ -656,7 +671,7 @@ const lotsDeployes = computed(() => {
     let reste = g.totalBoites
     for (let i = 1; i <= g.nbLots; i++) {
       const b = Math.min(g.boitesParLot, reste); reste -= b
-      out.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, numeroLot: g.numeroLot, couleur: couleur(gi), prio: pe[g.id] || 999, dateFixe: g.dateFixe })
+      out.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, numeroLot: g.numeroLot, couleur: couleur(gi), prio: pe[g.id] || 999, dateFixe: g.dateFixe, dateEcheance: g.dateEcheance || null })
     }
   }
   return out
@@ -725,7 +740,7 @@ function simuler(lots) {
     const debutFab = fabK.length ? Math.min(...fabK.map(k => phases[k].start)) : null
     const finFab = fabK.length ? Math.max(...fabK.map(k => phases[k].end)) : null
     const cd = phases['conditionnement']
-    rows.push({ id: lt.id, num: lt.num, numeroLot: lt.numeroLot, code: p.code_pf, desig: p.designation, boites: lt.boites, couleur: lt.couleur, prio: lt.prio, phases, debutFab, finFab, finCond: cd ? cd.end : null })
+    rows.push({ id: lt.id, num: lt.num, numeroLot: lt.numeroLot, code: p.code_pf, desig: p.designation, boites: lt.boites, couleur: lt.couleur, prio: lt.prio, phases, debutFab, finFab, finCond: cd ? cd.end : null, dateEcheance: lt.dateEcheance || null, atelierCond: atelierCondProduit(lt.produitId) })
   }
   let fin = 0; for (const r of rows) for (const k in r.phases) fin = Math.max(fin, r.phases[k].end)
   const condByEq = {}
@@ -747,7 +762,7 @@ function ordreEntrelace() {
   const gs = groupes.value.map((g, gi) => ({ g, gi })).sort((a, b) => ((pe[a.g.id] || 999) - (pe[b.g.id] || 999)) || (a.gi - b.gi))
   const parG = gs.map(({ g, gi }) => {
     const arr = []; let reste = g.totalBoites
-    for (let i = 1; i <= g.nbLots; i++) { const b = Math.min(g.boitesParLot, reste); reste -= b; arr.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, numeroLot: g.numeroLot, couleur: couleur(gi), prio: pe[g.id] || 999, dateFixe: g.dateFixe }) }
+    for (let i = 1; i <= g.nbLots; i++) { const b = Math.min(g.boitesParLot, reste); reste -= b; arr.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, numeroLot: g.numeroLot, couleur: couleur(gi), prio: pe[g.id] || 999, dateFixe: g.dateFixe, dateEcheance: g.dateEcheance || null }) }
     return arr
   })
   const maxL = parG.reduce((m, a) => Math.max(m, a.length), 0)
@@ -887,7 +902,8 @@ const ordoParAtelier = computed(() => {
       if (dS < debut || dE > fin) continue   // ne garder que les lots qui touchent la plage
       const cle = (PHASE_NOM[k] || k) + '§' + ph.equip
       if (!byEq[cle]) byEq[cle] = { phase: PHASE_NOM[k] || k, equip: ph.equip, cond: k === 'conditionnement', lots: [] }
-      byEq[cle].lots.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, boites: r.boites, couleur: r.couleur, entree: dE, sortie: dS, startIdx: ph.start, endIdx: ph.end })
+      const ech = r.dateEcheance ? new Date(r.dateEcheance + 'T00:00:00') : null
+      byEq[cle].lots.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, boites: r.boites, couleur: r.couleur, entree: dE, sortie: dS, startIdx: ph.start, endIdx: ph.end, echeance: ech, atelierCond: r.atelierCond || null, enRetard: !!(ech && dS && dS > ech) })
     }
   }
   const list = Object.values(byEq)
@@ -1132,6 +1148,11 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .ordo-rupt { font-size: 11.5px; font-weight: 800; color: #b91c1c; background: #fee2e2; border-radius: 6px; padding: 2px 9px; }
 .ordo-cont { font-size: 11.5px; font-weight: 700; color: #047857; background: #d1fae5; border-radius: 6px; padding: 2px 9px; }
 .ordo-gap { display: inline-block; font-size: 10.5px; font-weight: 800; color: #b91c1c; background: #fee2e2; border-radius: 5px; padding: 1px 6px; margin-right: 6px; }
+.ordo-obj { white-space: nowrap; }
+.ordo-obj .obj-date { display: inline-block; font-weight: 800; font-size: 12.5px; color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 1px 8px; }
+.ordo-obj .obj-date.obj-late { color: #b91c1c; background: #fee2e2; border-color: #fecaca; }
+.ordo-obj .obj-atelier { display: block; font-size: 11px; font-weight: 700; color: #0f766e; margin-top: 3px; }
+.sortie-late { color: #b91c1c !important; }
 .ok-warn .ok-v { color: #dc2626; }
 .ok-warn { border-left-color: #dc2626 !important; }
 .cond-atelier { margin-bottom: 18px; }
