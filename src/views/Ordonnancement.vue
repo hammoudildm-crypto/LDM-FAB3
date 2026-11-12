@@ -181,8 +181,38 @@
       </ul>
     </section>
 
-    <!-- Planning daté -->
+    <!-- Ordonnancement par atelier (entrée → sortie) -->
     <section v-if="planning.length" class="card">
+      <div class="card-head-row">
+        <h2 class="card-title">Ordonnancement par atelier — {{ fmtDate(fenetreOrdo.debut) }} → {{ fmtDate(fenetreOrdo.fin) }}</h2>
+        <div class="plage-sel">
+          <button :class="{ on: plageMois === 1 }" @click="plageMois = 1">Mois en cours</button>
+          <button :class="{ on: plageMois === 2 }" @click="plageMois = 2">2 mois</button>
+          <button :class="{ on: plageMois === 3 }" @click="plageMois = 3">3 mois</button>
+        </div>
+      </div>
+      <p v-if="!ordoParAtelier.length" class="muted">Aucun lot planifié sur cette plage.</p>
+      <div v-for="a in ordoParAtelier" :key="a.phase + a.equip" class="ordo-atelier">
+        <div class="ordo-at-h"><span class="ordo-ph">{{ a.phase }}</span><strong>{{ a.equip }}</strong><span class="ordo-n">{{ a.lots.length }} lot(s)</span></div>
+        <div class="tbl-wrap">
+          <table class="grid">
+            <thead><tr><th>Produit / Lot</th><th class="ta-r">Boîtes</th><th class="ta-c">Date d'entrée</th><th class="ta-c">Date de sortie</th></tr></thead>
+            <tbody>
+              <tr v-for="(l, i) in a.lots" :key="i">
+                <td><span class="lot-dot" :style="{ background: l.couleur }"></span><strong>{{ l.code }}</strong> <span class="lot-desig">{{ l.desig }}</span><span v-if="l.numeroLot" class="lot-num">Lot {{ l.numeroLot }}</span></td>
+                <td class="ta-r">{{ fmt(l.boites) }}</td>
+                <td class="ta-c ordo-date">{{ fmtDate(l.entree) }}</td>
+                <td class="ta-c ordo-date">{{ fmtDate(l.sortie) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <button class="ordo-detail-tg" @click="detailOuvert = !detailOuvert">{{ detailOuvert ? '▾ Masquer' : '▸ Afficher' }} le détail (planning complet, Gantt, occupation)</button>
+    </section>
+
+    <!-- Planning daté -->
+    <section v-if="detailOuvert && planning.length" class="card">
       <h2 class="card-title">Planning — {{ fmtDate(dateIdx(0)) }} → {{ fmtDate(dateIdx(finGlobale)) }}</h2>
       <p v-if="optimisationCond" class="opt-banner">Stratégie : <strong>{{ strategieChoisie }}</strong> — temps mort <strong>{{ condIdle }} j</strong> · <strong>{{ condNettoyages }}</strong> nettoyage(s) (<strong>{{ condJoursNett }} j</strong>) · alimentation <strong>{{ (tauxAlim * 100).toFixed(0) }} %</strong>.</p>
       <div class="tbl-wrap">
@@ -220,7 +250,7 @@
     </section>
 
     <!-- Vue Gantt -->
-    <section v-if="planning.length" class="card">
+    <section v-if="detailOuvert && planning.length" class="card">
       <h2 class="card-title">Vue Gantt — enchaînement des lots</h2>
       <div class="gantt" :style="gridStyle">
         <div class="g-axis-row">
@@ -244,7 +274,7 @@
     </section>
 
     <!-- Occupation des équipements (fabrication + conditionnement) -->
-    <section v-if="occParEquip.length" class="card">
+    <section v-if="detailOuvert && occParEquip.length" class="card">
       <h2 class="card-title">Occupation des équipements sur la période</h2>
 
       <template v-for="grp in [{ t: 'Fabrication', list: occFabrication }, { t: 'Conditionnement', list: occConditionnement }]" :key="grp.t">
@@ -786,6 +816,34 @@ const repartitionFab = computed(() => {
   return list
 })
 
+// --- Ordonnancement par atelier (date d'entrée → date de sortie) sur une fenêtre de mois ---
+const plageMois = ref(1)          // 1 = mois en cours (par défaut), 2, 3
+const detailOuvert = ref(false)   // Gantt / planning complet / occupation en repli
+const fenetreOrdo = computed(() => {
+  const now = new Date()
+  const debut = new Date(now.getFullYear(), now.getMonth(), 1)
+  const fin = new Date(now.getFullYear(), now.getMonth() + plageMois.value, 0, 23, 59, 59)   // dernier jour de (mois courant + plageMois - 1)
+  return { debut, fin }
+})
+const ordoParAtelier = computed(() => {
+  const { debut, fin } = fenetreOrdo.value
+  const byEq = {}
+  for (const r of planning.value) {
+    for (const k in r.phases) {
+      const ph = r.phases[k]
+      const dE = dateIdx(ph.start), dS = dateIdx(ph.end)
+      if (!dE || !dS) continue
+      if (dS < debut || dE > fin) continue   // ne garder que les lots qui touchent la plage
+      const cle = (PHASE_NOM[k] || k) + '§' + ph.equip
+      if (!byEq[cle]) byEq[cle] = { phase: PHASE_NOM[k] || k, equip: ph.equip, lots: [] }
+      byEq[cle].lots.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, boites: r.boites, couleur: r.couleur, entree: dE, sortie: dS, startIdx: ph.start })
+    }
+  }
+  const list = Object.values(byEq)
+  for (const a of list) a.lots.sort((x, y) => x.startIdx - y.startIdx)
+  return list.sort((a, b) => a.phase.localeCompare(b.phase) || String(a.equip).localeCompare(String(b.equip)))
+})
+
 const colonnes = computed(() => {
   const used = new Set()
   for (const r of planning.value) for (const k in r.phases) used.add(k)
@@ -970,6 +1028,17 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .obj-rep-h { font-size: 13px; font-weight: 800; color: #4338ca; margin-bottom: 7px; }
 .rep-bar { display: inline-block; width: 70px; height: 7px; background: #eef2ff; border-radius: 999px; overflow: hidden; vertical-align: middle; margin-right: 7px; }
 .rep-bar > span { display: block; height: 100%; background: #6366f1; border-radius: 999px; }
+.plage-sel { display: flex; gap: 4px; flex-wrap: wrap; }
+.plage-sel button { padding: 6px 12px; border: 1px solid #c7d2fe; background: #fff; color: #4338ca; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.plage-sel button:hover { background: #eef2ff; }
+.plage-sel button.on { background: #4338ca; border-color: #4338ca; color: #fff; }
+.ordo-atelier { margin-top: 14px; border: 1px solid #e8edf3; border-radius: 10px; overflow: hidden; }
+.ordo-at-h { display: flex; align-items: center; gap: 9px; padding: 9px 13px; background: #f5f7ff; border-bottom: 1px solid #e8edf3; font-size: 13.5px; }
+.ordo-ph { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #6366f1; background: #eef2ff; border-radius: 6px; padding: 2px 8px; }
+.ordo-n { margin-left: auto; font-size: 11.5px; font-weight: 700; color: #64748b; }
+.ordo-date { font-weight: 700; color: #0f172a; white-space: nowrap; }
+.ordo-detail-tg { margin-top: 14px; background: #f8fafc; border: 1px dashed #cbd5e1; color: #475569; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 700; padding: 8px 14px; cursor: pointer; }
+.ordo-detail-tg:hover { background: #eef2f6; }
 .cond-atelier { margin-bottom: 18px; }
 .ca-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 12px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px 8px 0 0; flex-wrap: wrap; }
 .ca-head strong { font-size: 14px; color: #0f766e; }
