@@ -70,6 +70,11 @@
         <button class="btn-import" @click="importerLotsEnCours">↓ Importer {{ condSeul ? 'le vrac prêt à conditionner' : 'les lots en cours' }} ({{ nbLotsEnCours }} lots · {{ nbProduitsImport }} produits)</button>
         <span class="import-hint">depuis « Disponibilité des produits par atelier »</span>
       </div>
+      <div class="add-import">
+        <button class="btn-import excel" @click="declencherImportPlan">⬆ Importer le plan (Excel)</button>
+        <span class="import-hint">fichier avec colonnes « Code » + « Taille » (ou « Quantité ») — somme des boîtes par produit</span>
+        <input ref="fichierPlan" type="file" accept=".xlsx,.xls,.csv" style="display:none" @change="importerPlanExcel" />
+      </div>
       <p v-if="msgImport" class="msg-import">{{ msgImport }}</p>
       <p v-if="chargement" class="muted">Chargement…</p>
       <p v-else-if="selProduit && !gammeProduit(selProduit).length" class="muted warn">Aucune phase cadencée trouvée pour ce produit (gamme ou cadences manquantes).</p>
@@ -459,6 +464,81 @@ function importerLotsEnCours() {
   if (plusTot && plusTot < dateDepart.value) dateDepart.value = plusTot
   msgImport.value = nP ? (nP + ' lot(s) importé(s)' + (condSeul.value ? ' — vrac à conditionner' : ' — calés sur leur date de lancement') + '.') : 'Rien à importer (déjà importés, ou aucun lot disponible).'
 }
+
+// --- Import du plan depuis un fichier Excel (colonnes Code + Taille/Quantité) ---
+const fichierPlan = ref(null)
+let xlsxPromise = null
+function chargerXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX)
+  if (xlsxPromise) return xlsxPromise
+  xlsxPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+    s.onload = () => resolve(window.XLSX)
+    s.onerror = () => reject(new Error('Chargement de la librairie Excel impossible (hors ligne ?)'))
+    document.head.appendChild(s)
+  })
+  return xlsxPromise
+}
+function declencherImportPlan() { msgImport.value = ''; if (fichierPlan.value) fichierPlan.value.click() }
+async function importerPlanExcel(e) {
+  const file = e.target.files && e.target.files[0]; if (e.target) e.target.value = ''
+  if (!file) return
+  msgImport.value = 'Lecture du plan…'
+  try {
+    const XLSX = await chargerXLSX()
+    const buf = await file.arrayBuffer()
+    const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true })
+    const norm = (s) => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim()
+    const parCode = {}
+    for (const p of produits.value) if (p.code_pf) parCode[String(p.code_pf).trim().toLowerCase()] = p.id
+    const agg = {}; const nonReconnus = new Set()
+    // Détection : on privilégie la colonne « Taille » (= boîtes à livrer, feuilles conditionnement/OTC).
+    // Si aucune feuille n'a « Taille », on retombe sur « Quantité/Qté/Boîtes ». On ignore ainsi « Qté réelle » (fabrication).
+    const sheetsInfo = []
+    for (const sn of wb.SheetNames) {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, blankrows: false })
+      if (!rows.length) continue
+      for (let r = 0; r < Math.min(rows.length, 15); r++) {
+        const head = (rows[r] || []).map(norm)
+        const c = head.indexOf('code'); if (c < 0) continue
+        let q = head.indexOf('taille'); let kind = 'taille'
+        if (q < 0) { q = head.findIndex(h => h.startsWith('quantit') || h === 'boites' || h === 'qte' || h.startsWith('qte')); kind = 'qte' }
+        if (q < 0) continue
+        sheetsInfo.push({ rows, hi: r, iCode: c, iQte: q, kind }); break
+      }
+    }
+    const hasTaille = sheetsInfo.some(s => s.kind === 'taille')
+    const used = hasTaille ? sheetsInfo.filter(s => s.kind === 'taille') : sheetsInfo
+    for (const S of used) {
+      for (let i = S.hi + 1; i < S.rows.length; i++) {
+        const row = S.rows[i]; if (!row) continue
+        const code = String(row[S.iCode] == null ? '' : row[S.iCode]).trim(); if (!code) continue
+        const q = Number(String(row[S.iQte] == null ? '' : row[S.iQte]).replace(/\s/g, '').replace(',', '.'))
+        if (!q || isNaN(q)) continue
+        const pid = parCode[code.toLowerCase()]
+        if (!pid) { if (nonReconnus.size < 10) nonReconnus.add(code); continue }
+        if (!agg[pid]) agg[pid] = 0
+        agg[pid] += q
+      }
+    }
+    const ids = Object.keys(agg)
+    if (!ids.length) { msgImport.value = 'Aucune ligne reconnue (attendu : une colonne « Code » + une colonne « Taille » ou « Quantité »).' + (nonReconnus.size ? ' Codes non trouvés au référentiel : ' + [...nonReconnus].join(', ') : ''); return }
+    let nAjout = 0
+    for (const pid of ids) {
+      const p = prodById.value[pid]; if (!p) continue
+      const total = Math.round(agg[pid]); if (total <= 0) continue
+      if (groupes.value.some(g => g.produitId == p.id && !g.ofId)) continue
+      const tl = Number(p.taille_lot) || 0
+      let bpl = tl > 0 ? tl : total
+      let nb = bpl > 0 ? Math.ceil(total / bpl) : 1
+      if (nb > 60) { nb = 60; bpl = Math.ceil(total / 60) }
+      groupes.value.push({ id: seq++, ofId: null, numeroLot: null, produitId: p.id, totalBoites: total, boitesParLot: bpl, nbLots: nb, priorite: groupes.value.length + 1, dateFixe: null })
+      nAjout++
+    }
+    msgImport.value = nAjout ? (nAjout + ' produit(s) importé(s) du plan (somme des boîtes par produit).' + (nonReconnus.size ? ' Codes non reconnus : ' + [...nonReconnus].join(', ') : '')) : 'Produits déjà présents, rien à ajouter.'
+  } catch (err) { msgImport.value = 'Import impossible : ' + (err.message || err) }
+}
 // Durée de production estimée d'un groupe (jours) = somme des durées de phases sur l'équipement le plus rapide.
 function dureeGroupe(g) {
   const seqPh = gammeProduit(g.produitId)
@@ -838,6 +918,8 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .add-import { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
 .btn-import { background: #ecfeff; color: #0e7490; border: 1px solid #67e8f9; border-radius: 9px; font: inherit; font-size: 13.5px; font-weight: 600; padding: 8px 16px; cursor: pointer; }
 .btn-import:hover { background: #cffafe; }
+.btn-import.excel { background: #ecfdf5; color: #047857; border-color: #6ee7b7; }
+.btn-import.excel:hover { background: #d1fae5; }
 .import-hint { font-size: 12px; color: #64748b; font-style: italic; }
 .msg-import { font-size: 13px; color: #15803d; margin-top: 8px; font-weight: 600; }
 .warn-card { border-color: #fcd34d; background: #fffbeb; }
