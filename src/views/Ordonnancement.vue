@@ -114,7 +114,7 @@
       </div>
       <div class="tbl-wrap">
         <table class="grid">
-          <thead><tr><th class="ta-c">Ordre</th><th>Produit</th><th class="ta-r">Boîtes</th><th class="ta-r">CA</th><th class="ta-c">Livré le</th><th class="ta-r">CA cumulé</th></tr></thead>
+          <thead><tr><th class="ta-c">Ordre</th><th>Produit</th><th class="ta-r">Boîtes</th><th class="ta-r">CA</th><th class="ta-c">Fin cond. · livrable</th><th class="ta-r">CA cumulé</th></tr></thead>
           <tbody>
             <tr v-for="(it, i) in objectifResultat.list" :key="it.gid">
               <td class="ta-c obj-rang">{{ i + 1 }}</td>
@@ -127,7 +127,24 @@
           </tbody>
         </table>
       </div>
-      <p class="obj-note">Ordre optimisé pour <strong>livrer la valeur au plus tôt</strong> : chaque produit est servi selon sa valeur par jour de production (CA ÷ durée), dans la limite de la disponibilité des ateliers. « Livré le » = fin de la dernière phase du produit.</p>
+      <div v-if="repartitionFab.length" class="obj-rep">
+        <div class="obj-rep-h">Répartition de la fabrication sur les ateliers libres</div>
+        <div class="tbl-wrap">
+          <table class="grid">
+            <thead><tr><th>Phase</th><th>Atelier / équipement</th><th class="ta-r">Lots</th><th class="ta-r">Jours occupés</th><th class="ta-r">Part charge</th></tr></thead>
+            <tbody>
+              <tr v-for="(r, i) in repartitionFab" :key="i">
+                <td>{{ r.phase }}</td>
+                <td><strong>{{ r.equip }}</strong></td>
+                <td class="ta-r">{{ r.lots }}</td>
+                <td class="ta-r">{{ r.jours }} j</td>
+                <td class="ta-r"><span class="rep-bar"><span :style="{ width: r.pct + '%' }"></span></span>{{ r.pct }} %</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p class="obj-note">Ordre optimisé pour <strong>livrer la valeur au plus tôt</strong> (CA ÷ durée), dans la limite de la disponibilité des ateliers. <strong>« Fin cond. · livrable »</strong> = date estimée de fin de conditionnement du produit (le vrac devient livrable une fois conditionné). La fabrication est affectée automatiquement à l'<strong>atelier compatible le plus tôt libre</strong> (répartition ci‑dessus) ; « Objectif terminé le » = fin de conditionnement du dernier produit.<span v-if="objectifResultat.sansCond"> ⚠ {{ objectifResultat.sansCond }} produit(s) sans phase de conditionnement planifiée (date = fin de fabrication).</span></p>
     </section>
 
     <!-- Affectation des équipements (machines identiques) -->
@@ -666,7 +683,27 @@ const objectifResultat = computed(() => {
   let cum = 0
   for (const it of list) { cum += it.ca; it.cumCA = cum }
   const finMax = list.reduce((mx, x) => Math.max(mx, x.finIdx), 0)
-  return { list, totalCA: cum, totalBoites: list.reduce((s, x) => s + x.boites, 0), dateFin: dateIdx(finMax) }
+  const sansCond = list.filter(x => x.finIdx === 0 || x.finIdx == null).length
+  return { list, totalCA: cum, totalBoites: list.reduce((s, x) => s + x.boites, 0), dateFin: dateIdx(finMax), sansCond }
+})
+
+// Répartition de la charge de FABRICATION sur les ateliers libres : par équipement utilisé, lots & jours affectés.
+const repartitionFab = computed(() => {
+  const m = {}
+  for (const r of planning.value) {
+    for (const k in r.phases) {
+      if (k === 'conditionnement') continue
+      const ph = r.phases[k]
+      const cle = (PHASE_NOM[k] || k) + ' · ' + ph.equip
+      if (!m[cle]) m[cle] = { phase: PHASE_NOM[k] || k, equip: ph.equip, lots: 0, jours: 0 }
+      m[cle].lots += 1
+      m[cle].jours += (ph.end - ph.start + 1)
+    }
+  }
+  const list = Object.values(m).sort((a, b) => a.phase.localeCompare(b.phase) || b.jours - a.jours)
+  const totJours = list.reduce((s, x) => s + x.jours, 0)
+  for (const x of list) x.pct = totJours > 0 ? Math.round(x.jours / totJours * 100) : 0
+  return list
 })
 
 const colonnes = computed(() => {
@@ -847,6 +884,10 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .obj-date { font-weight: 700; color: #0f172a; white-space: nowrap; }
 .obj-cum { font-weight: 800; color: #4338ca; }
 .obj-note { font-size: 12px; color: #64748b; margin: 10px 2px 0; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 8px; padding: 8px 11px; }
+.obj-rep { margin-top: 14px; }
+.obj-rep-h { font-size: 13px; font-weight: 800; color: #4338ca; margin-bottom: 7px; }
+.rep-bar { display: inline-block; width: 70px; height: 7px; background: #eef2ff; border-radius: 999px; overflow: hidden; vertical-align: middle; margin-right: 7px; }
+.rep-bar > span { display: block; height: 100%; background: #6366f1; border-radius: 999px; }
 .cond-atelier { margin-bottom: 18px; }
 .ca-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 12px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px 8px 0 0; flex-wrap: wrap; }
 .ca-head strong { font-size: 14px; color: #0f766e; }
