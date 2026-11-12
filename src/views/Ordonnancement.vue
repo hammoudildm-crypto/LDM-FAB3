@@ -37,7 +37,7 @@
         </div>
         <div class="add-field chk-wk">
           <label>Conditionnement</label>
-          <label class="wk"><input type="checkbox" v-model="optimisationCond" /> Optimiser l'alimentation (éviter les temps morts)</label>
+          <label class="wk"><input type="checkbox" v-model="optimisationCond" /> Alimentation continue du conditionnement (éviter les ruptures)</label>
         </div>
         <div class="add-field chk-wk">
           <label>Périmètre</label>
@@ -115,7 +115,8 @@
         <div class="obj-kpi"><div class="ok-v">{{ fmtDA(objectifResultat.totalCA) }}</div><div class="ok-l">CA total livré</div></div>
         <div class="obj-kpi"><div class="ok-v">{{ fmt(objectifResultat.totalBoites) }}</div><div class="ok-l">Boîtes à livrer</div></div>
         <div class="obj-kpi"><div class="ok-v">{{ fmtDate(objectifResultat.dateFin) }}</div><div class="ok-l">Objectif terminé le</div></div>
-        <div class="obj-kpi"><div class="ok-v">{{ objectifResultat.list.length }}</div><div class="ok-l">Produits</div></div>
+        <div class="obj-kpi" v-if="optimisationCond"><div class="ok-v">{{ (tauxAlim * 100).toFixed(0) }} %</div><div class="ok-l">Alimentation cond.</div></div>
+        <div class="obj-kpi" v-if="optimisationCond" :class="{ 'ok-warn': condIdle > 0 }"><div class="ok-v">{{ condIdle }} j</div><div class="ok-l">Temps mort cond. (ruptures)</div></div>
       </div>
       <div class="tbl-wrap">
         <table class="grid">
@@ -149,7 +150,7 @@
           </table>
         </div>
       </div>
-      <p class="obj-note">Ordre optimisé pour <strong>livrer la valeur au plus tôt</strong> (CA ÷ durée), dans la limite de la disponibilité des ateliers. <strong>« Fin cond. · livrable »</strong> = date estimée de fin de conditionnement du produit (le vrac devient livrable une fois conditionné). La fabrication est affectée automatiquement à l'<strong>atelier compatible le plus tôt libre</strong> (répartition ci‑dessus) ; « Objectif terminé le » = fin de conditionnement du dernier produit.<span v-if="objectifResultat.sansCond"> ⚠ {{ objectifResultat.sansCond }} produit(s) sans phase de conditionnement planifiée (date = fin de fabrication).</span></p>
+      <p class="obj-note">Ordre optimisé pour <strong>livrer la valeur au plus tôt</strong> (CA ÷ durée), dans la limite de la disponibilité des ateliers. <strong>« Fin cond. · livrable »</strong> = date estimée de fin de conditionnement du produit (le vrac devient livrable une fois conditionné). La fabrication est affectée automatiquement à l'<strong>atelier compatible le plus tôt libre</strong> (répartition ci‑dessus) ; « Objectif terminé le » = fin de conditionnement du dernier produit.<span v-if="optimisationCond"> La fabrication est <strong>entrelacée pour alimenter le conditionnement en continu</strong> (stratégie « {{ strategieChoisie }} ») et éviter les ruptures des lignes de conditionnement.</span><span v-if="objectifResultat.sansCond"> ⚠ {{ objectifResultat.sansCond }} produit(s) sans phase de conditionnement planifiée (date = fin de fabrication).</span></p>
     </section>
 
     <!-- Affectation des équipements (machines identiques) -->
@@ -193,7 +194,7 @@
       </div>
       <p v-if="!ordoParAtelier.length" class="muted">Aucun lot planifié sur cette plage.</p>
       <div v-for="a in ordoParAtelier" :key="a.phase + a.equip" class="ordo-atelier">
-        <div class="ordo-at-h"><span class="ordo-ph">{{ a.phase }}</span><strong>{{ a.equip }}</strong><span class="ordo-n">{{ a.lots.length }} lot(s)</span></div>
+        <div class="ordo-at-h" :class="{ 'a-cond': a.cond }"><span class="ordo-ph">{{ a.phase }}</span><strong>{{ a.equip }}</strong><span v-if="a.cond && a.trouTotal > 0" class="ordo-rupt">⚠ {{ a.trouTotal }} j de rupture</span><span v-else-if="a.cond" class="ordo-cont">✓ alimenté en continu</span><span class="ordo-n">{{ a.lots.length }} lot(s)</span></div>
         <div class="tbl-wrap">
           <table class="grid">
             <thead><tr><th>Produit / Lot</th><th class="ta-r">Boîtes</th><th class="ta-c">Date d'entrée</th><th class="ta-c">Date de sortie</th></tr></thead>
@@ -201,7 +202,7 @@
               <tr v-for="(l, i) in a.lots" :key="i">
                 <td><span class="lot-dot" :style="{ background: l.couleur }"></span><strong>{{ l.code }}</strong> <span class="lot-desig">{{ l.desig }}</span><span v-if="l.numeroLot" class="lot-num">Lot {{ l.numeroLot }}</span></td>
                 <td class="ta-r">{{ fmt(l.boites) }}</td>
-                <td class="ta-c ordo-date">{{ fmtDate(l.entree) }}</td>
+                <td class="ta-c ordo-date"><span v-if="l.trou > 0" class="ordo-gap" title="Arrêt avant ce lot (rupture d'alimentation)">⚠ {{ l.trou }} j</span>{{ fmtDate(l.entree) }}</td>
                 <td class="ta-c ordo-date">{{ fmtDate(l.sortie) }}</td>
               </tr>
             </tbody>
@@ -333,7 +334,7 @@ const dateDepart = ref(new Date().toISOString().slice(0, 10))
 const skipWeekend = ref(true)
 const prioMode = ref('valeur')   // 'valeur' (WSPT : CA ÷ durée, livrer la valeur au plus tôt) | 'ca' (CA total) | 'manuelle'
 const prioAutoCA = computed(() => prioMode.value !== 'manuelle')
-const optimisationCond = ref(false)
+const optimisationCond = ref(true)   // alimentation continue du conditionnement (anti-rupture) — actif par défaut
 const condSeul = ref(false)
 const preferCampagne = ref(0.5)
 const hpj = ref(24)
@@ -835,12 +836,16 @@ const ordoParAtelier = computed(() => {
       if (!dE || !dS) continue
       if (dS < debut || dE > fin) continue   // ne garder que les lots qui touchent la plage
       const cle = (PHASE_NOM[k] || k) + '§' + ph.equip
-      if (!byEq[cle]) byEq[cle] = { phase: PHASE_NOM[k] || k, equip: ph.equip, lots: [] }
-      byEq[cle].lots.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, boites: r.boites, couleur: r.couleur, entree: dE, sortie: dS, startIdx: ph.start })
+      if (!byEq[cle]) byEq[cle] = { phase: PHASE_NOM[k] || k, equip: ph.equip, cond: k === 'conditionnement', lots: [] }
+      byEq[cle].lots.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, boites: r.boites, couleur: r.couleur, entree: dE, sortie: dS, startIdx: ph.start, endIdx: ph.end })
     }
   }
   const list = Object.values(byEq)
-  for (const a of list) a.lots.sort((x, y) => x.startIdx - y.startIdx)
+  for (const a of list) {
+    a.lots.sort((x, y) => x.startIdx - y.startIdx)
+    let prevEnd = null; a.trouTotal = 0
+    for (const l of a.lots) { l.trou = (prevEnd != null && l.startIdx > prevEnd + 1) ? (l.startIdx - prevEnd - 1) : 0; a.trouTotal += l.trou; prevEnd = l.endIdx }
+  }
   return list.sort((a, b) => a.phase.localeCompare(b.phase) || String(a.equip).localeCompare(String(b.equip)))
 })
 
@@ -1039,6 +1044,12 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .ordo-date { font-weight: 700; color: #0f172a; white-space: nowrap; }
 .ordo-detail-tg { margin-top: 14px; background: #f8fafc; border: 1px dashed #cbd5e1; color: #475569; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 700; padding: 8px 14px; cursor: pointer; }
 .ordo-detail-tg:hover { background: #eef2f6; }
+.ordo-at-h.a-cond { background: #ecfdf5; border-bottom-color: #a7f3d0; }
+.ordo-rupt { font-size: 11.5px; font-weight: 800; color: #b91c1c; background: #fee2e2; border-radius: 6px; padding: 2px 9px; }
+.ordo-cont { font-size: 11.5px; font-weight: 700; color: #047857; background: #d1fae5; border-radius: 6px; padding: 2px 9px; }
+.ordo-gap { display: inline-block; font-size: 10.5px; font-weight: 800; color: #b91c1c; background: #fee2e2; border-radius: 5px; padding: 1px 6px; margin-right: 6px; }
+.ok-warn .ok-v { color: #dc2626; }
+.ok-warn { border-left-color: #dc2626 !important; }
 .cond-atelier { margin-bottom: 18px; }
 .ca-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 12px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px 8px 0 0; flex-wrap: wrap; }
 .ca-head strong { font-size: 14px; color: #0f766e; }
