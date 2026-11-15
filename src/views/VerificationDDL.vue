@@ -250,6 +250,30 @@ const repartitionAttente = computed(() => {
   }
   return { propres, triage, deviation, deux }
 })
+// Répartition des DDL en attente (affichés) par vérificateur, groupée par périmètre.
+// Permet de CONFIRMER visuellement que l'attribution auto est équilibrée et dans l'ordre.
+const repartitionParVerif = computed(() => {
+  const cnt = {}
+  for (const v of supDispo.value) cnt[v] = 0
+  let nonAttribue = 0
+  for (const l of attente.value) {
+    const v = (l.ddl_verificateur || '').trim()
+    if (!v) { nonAttribue++; continue }
+    cnt[v] = (cnt[v] || 0) + 1
+  }
+  const groupes = {}
+  for (const v of Object.keys(cnt)) {
+    const p = (supPerim.value[v] || '').trim() || 'Sans périmètre'
+    ;(groupes[p] = groupes[p] || []).push({ nom: v, n: cnt[v], dispo: supDispo.value.includes(v) })
+  }
+  const out = Object.entries(groupes).map(([perimetre, vs]) => {
+    vs.sort((a, b) => a.nom.localeCompare(b.nom))
+    const ns = vs.map(x => x.n)
+    const max = Math.max(...ns, 0), min = ns.length ? Math.min(...ns) : 0
+    return { perimetre, vs, total: ns.reduce((s, x) => s + x, 0), max, equilibre: (max - min) <= 1 }
+  }).sort((a, b) => a.perimetre.localeCompare(b.perimetre))
+  return { groupes: out, nonAttribue, total: attente.value.length, nbVerif: supDispo.value.length }
+})
 // Filtre optionnel : null = tout, sinon 'propres' | 'triage' | 'deviation'
 const filtreAttente = ref(null)
 function basculerFiltreAttente(v) { filtreAttente.value = filtreAttente.value === v ? null : v }
@@ -579,6 +603,26 @@ async function devalider(l) {
           <button type="button" class="ar-chip ar-dev" :class="{ on: filtreAttente === 'deviation' }" @click="basculerFiltreAttente('deviation')" title="Déviation fabrication déclarée — cliquer pour filtrer">
             <b>{{ repartitionAttente.deviation }}</b> avec déviation</button>
           <span v-if="repartitionAttente.deux" class="ar-note">dont {{ repartitionAttente.deux }} cumulant les deux</span>
+        </div>
+        <div v-if="attente.length && repartitionParVerif.nbVerif" class="verif-rep">
+          <div class="vr-head">
+            <span class="vr-title">Répartition par vérificateur</span>
+            <span class="vr-sub">au moins chargé, dans l'ordre alphabétique de chaque périmètre</span>
+            <button v-if="peutEditer" type="button" class="vr-btn" @click="repartir(false)" title="Relancer l'attribution automatique équilibrée">↻ Répartir</button>
+          </div>
+          <div class="vr-groups">
+            <div v-for="g in repartitionParVerif.groupes" :key="g.perimetre" class="vr-grp">
+              <div class="vr-grp-h"><span class="vr-perim">{{ g.perimetre }}</span><span class="vr-bal" :class="g.equilibre ? 'ok' : 'warn'">{{ g.equilibre ? '✓ équilibré' : '⚠ écart' }}</span></div>
+              <ul class="vr-list">
+                <li v-for="v in g.vs" :key="v.nom" :class="{ 'vr-off': !v.dispo }">
+                  <span class="vr-nom">{{ v.nom }}<span v-if="!v.dispo" class="vr-indispo"> (indispo.)</span></span>
+                  <span class="vr-bar"><span :style="{ width: (g.max ? v.n / g.max * 100 : 0) + '%' }"></span></span>
+                  <b class="vr-n">{{ v.n }}</b>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <p v-if="repartitionParVerif.nonAttribue" class="vr-na">⚠ {{ repartitionParVerif.nonAttribue }} dossier(s) non encore attribué(s) — clique « ↻ Répartir ».</p>
         </div>
         <div class="v3-mid-scroll">
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
@@ -989,6 +1033,29 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .ar-tri { color: #b45309; border-color: #fde68a; }
 .ar-dev { color: #b91c1c; border-color: #fecaca; }
 .ar-note { font-size: 10px; color: #94a3b8; font-weight: 600; }
+
+/* Répartition par vérificateur (confirmation de l'équilibre) */
+.verif-rep { border: 1px solid #e8edf3; background: #f8fafc; border-radius: 9px; padding: 9px 11px; margin: 0 0 9px; }
+.vr-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.vr-title { font-size: 12px; font-weight: 800; color: #0f172a; }
+.vr-sub { font-size: 10.5px; color: #94a3b8; font-weight: 600; flex: 1 1 auto; }
+.vr-btn { border: 1px solid #cbd5e1; background: #fff; color: #0f766e; border-radius: 7px; padding: 3px 10px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.vr-btn:hover { background: #0f766e; border-color: #0f766e; color: #fff; }
+.vr-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 14px; }
+.vr-grp { background: #fff; border: 1px solid #eef2f6; border-radius: 8px; padding: 7px 9px; }
+.vr-grp-h { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 5px; }
+.vr-perim { font-size: 11px; font-weight: 800; color: #334155; text-transform: capitalize; }
+.vr-bal { font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+.vr-bal.ok { background: #dcfce7; color: #166534; } .vr-bal.warn { background: #fef3c7; color: #92400e; }
+.vr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.vr-list li { display: grid; grid-template-columns: 1fr 48px 20px; align-items: center; gap: 7px; font-size: 11.5px; }
+.vr-list li.vr-off { opacity: .55; }
+.vr-nom { font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vr-indispo { font-weight: 600; color: #94a3b8; font-size: 10px; }
+.vr-bar { height: 7px; background: #eef2f6; border-radius: 4px; overflow: hidden; }
+.vr-bar > span { display: block; height: 100%; background: #0d9488; border-radius: 4px; min-width: 0; }
+.vr-n { text-align: right; font-variant-numeric: tabular-nums; color: #0f766e; }
+.vr-na { margin: 7px 0 0; font-size: 11px; font-weight: 700; color: #b45309; }
 /* Lots en cours de triage (fabrication) */
 tr.ddl-triage td { background: #fef3c7; }
 tr.ddl-triage:not(.ddl-deviation) .mono::after { content: ' 🔍 triage'; color: #b45309; font-size: .6em; font-weight: 700; white-space: nowrap; }
