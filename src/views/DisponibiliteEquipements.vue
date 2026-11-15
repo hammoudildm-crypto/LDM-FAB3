@@ -702,6 +702,10 @@ function toggleDev(label, n) { if (!n) return; atelierOuvert.value = null; devOu
 // Dépliage de TOUS les lots d'un atelier (clic sur la ligne de l'atelier)
 const atelierOuvert = ref(null)
 function toggleAtelier(label, n) { if (!n) return; devOuvert.value = null; atelierOuvert.value = atelierOuvert.value === label ? null : label }
+// Pliage des bandeaux d'indicateurs (File de production + Qualité) pour optimiser l'affichage ;
+// le choix est mémorisé localement. Le « Détail par atelier » reste toujours visible.
+const kpisOuvert = ref((() => { try { return localStorage.getItem('dispo-kpis-plies') !== '1' } catch (e) { return true } })())
+function toggleKpis() { kpisOuvert.value = !kpisOuvert.value; try { localStorage.setItem('dispo-kpis-plies', kpisOuvert.value ? '0' : '1') } catch (e) {} }
 const devLotsTous = computed(() => {
   const out = []
   for (const r of qualiteParAtelier.value) for (const l of r.devLots) out.push({ ...l, atelier: r.label })
@@ -1480,7 +1484,11 @@ onMounted(async () => {
           <p class="prodq-note">Plan = PDP · Réalisation = boîtes fabriquées (date de fin de fabrication). CA nominal (boîtes × prix de cession).</p>
         </section>
         <section class="qual-box">
-          <h3 class="qual-h">Charge, triage et déviations par atelier</h3>
+          <h3 class="qual-h qual-h-clic" @click="toggleKpis" :title="kpisOuvert ? 'Masquer les indicateurs' : 'Afficher les indicateurs'">
+            <span class="qual-caret">{{ kpisOuvert ? '▾' : '▸' }}</span>Charge, triage et déviations par atelier
+            <span class="qual-fold">{{ kpisOuvert ? 'Masquer les indicateurs' : 'Afficher les indicateurs' }}</span>
+          </h3>
+          <div v-show="kpisOuvert">
           <p class="qual-sub">File de production</p>
           <div class="kpi-grid qual-kpis">
             <div class="kpi" :class="{ 'kpi-clic': k.to }" v-for="(k, i) in kpisFile" :key="'f' + i" @click="k.to && router.push({ path: k.to })" @keydown.enter="k.to && router.push({ path: k.to })" :role="k.to ? 'button' : null" :tabindex="k.to ? 0 : null" :title="k.to ? 'Ouvrir le détail' : ''">
@@ -1494,6 +1502,7 @@ onMounted(async () => {
               <div class="kpi-top"><span class="kpi-ic" :style="k.tint"><svg viewBox="0 0 24 24" v-html="k.ic"></svg></span><div class="kpi-val" :class="{ 'kpi-val-sm': k.small }">{{ k.v }}</div></div>
               <div class="kpi-lbl">{{ k.l }}<span v-if="k.to" class="kpi-arrow">→</span></div>
             </div>
+          </div>
           </div>
             <p class="qual-sub">Détail par atelier</p>
             <table v-if="qualiteParAtelier.length" class="qual-tbl">
@@ -2062,6 +2071,11 @@ onMounted(async () => {
 /* Qualité — triage et déviations */
 .qual-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .qual-h { margin: 0 0 12px; font-size: 15px; font-weight: 800; color: #0f172a; }
+.qual-h-clic { display: flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; }
+.qual-h-clic:hover { color: #0e7490; }
+.qual-caret { display: inline-flex; width: 18px; justify-content: center; color: #0e7490; font-size: 12px; }
+.qual-fold { margin-left: auto; font-size: 11.5px; font-weight: 700; color: #64748b; background: #f1f5f9; border-radius: 999px; padding: 3px 11px; white-space: nowrap; }
+.qual-h-clic:hover .qual-fold { background: #e0f2fe; color: #0e7490; }
 .prodq-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 6px; }
 .pqk-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 11px 14px; background: #fff; }
 .pqk-plan { border-top: 3px solid #94a3b8; }
