@@ -1863,7 +1863,7 @@ onMounted(async () => {
 .de-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
 .de-head h1 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
 .sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
-.annee-sel { font-size: 13px; color: #475569; display: flex; flex-direction: column; gap: 4px; }
+.annee-sel { font-size: 13px; color: #475569; display: flex; flex-direction: row; align-items: center; gap: 8px; white-space: nowrap; }
 .annee-sel select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: #fff; }
 .err { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; }
 .muted { color: #94a3b8; }
