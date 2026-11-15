@@ -525,6 +525,27 @@ async function devalider(l) {
       <button v-if="perimSel.length" type="button" class="zpf-reset" @click="perimSel = []">Tous</button>
     </div>
 
+    <section v-if="attente.length && repartitionParVerif.nbVerif" class="card verif-rep-card">
+      <div class="vr-head">
+        <span class="vr-title">Répartition par vérificateur <span class="vr-count">· {{ repartitionParVerif.total }} en attente</span></span>
+        <span class="vr-sub">au moins chargé, dans l'ordre alphabétique de chaque périmètre</span>
+        <button v-if="peutEditer" type="button" class="vr-btn" @click="repartir(false)" title="Relancer l'attribution automatique équilibrée">↻ Répartir</button>
+      </div>
+      <div class="vr-groups">
+        <div v-for="g in repartitionParVerif.groupes" :key="g.perimetre" class="vr-grp">
+          <div class="vr-grp-h"><span class="vr-perim">{{ g.perimetre }}</span><span class="vr-bal" :class="g.equilibre ? 'ok' : 'warn'">{{ g.equilibre ? '✓ équilibré' : '⚠ écart' }}</span></div>
+          <ul class="vr-list">
+            <li v-for="v in g.vs" :key="v.nom" :class="{ 'vr-off': !v.dispo }">
+              <span class="vr-nom">{{ v.nom }}<span v-if="!v.dispo" class="vr-indispo"> (indispo.)</span></span>
+              <span class="vr-bar"><span :style="{ width: (g.max ? v.n / g.max * 100 : 0) + '%' }"></span></span>
+              <b class="vr-n">{{ v.n }}</b>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <p v-if="repartitionParVerif.nonAttribue" class="vr-na">⚠ {{ repartitionParVerif.nonAttribue }} dossier(s) non encore attribué(s) — clique « ↻ Répartir ».</p>
+    </section>
+
     <section class="card plan-ddl plan-ddl-top">
       <h3 class="card-title">Plan de vérification DDL<span v-if="anneeSel"> — {{ anneeSel }}</span> <span class="pddl-src">· basé sur le PDP</span></h3>
       <div class="pddl-top-row">
@@ -603,26 +624,6 @@ async function devalider(l) {
           <button type="button" class="ar-chip ar-dev" :class="{ on: filtreAttente === 'deviation' }" @click="basculerFiltreAttente('deviation')" title="Déviation fabrication déclarée — cliquer pour filtrer">
             <b>{{ repartitionAttente.deviation }}</b> avec déviation</button>
           <span v-if="repartitionAttente.deux" class="ar-note">dont {{ repartitionAttente.deux }} cumulant les deux</span>
-        </div>
-        <div v-if="attente.length && repartitionParVerif.nbVerif" class="verif-rep">
-          <div class="vr-head">
-            <span class="vr-title">Répartition par vérificateur</span>
-            <span class="vr-sub">au moins chargé, dans l'ordre alphabétique de chaque périmètre</span>
-            <button v-if="peutEditer" type="button" class="vr-btn" @click="repartir(false)" title="Relancer l'attribution automatique équilibrée">↻ Répartir</button>
-          </div>
-          <div class="vr-groups">
-            <div v-for="g in repartitionParVerif.groupes" :key="g.perimetre" class="vr-grp">
-              <div class="vr-grp-h"><span class="vr-perim">{{ g.perimetre }}</span><span class="vr-bal" :class="g.equilibre ? 'ok' : 'warn'">{{ g.equilibre ? '✓ équilibré' : '⚠ écart' }}</span></div>
-              <ul class="vr-list">
-                <li v-for="v in g.vs" :key="v.nom" :class="{ 'vr-off': !v.dispo }">
-                  <span class="vr-nom">{{ v.nom }}<span v-if="!v.dispo" class="vr-indispo"> (indispo.)</span></span>
-                  <span class="vr-bar"><span :style="{ width: (g.max ? v.n / g.max * 100 : 0) + '%' }"></span></span>
-                  <b class="vr-n">{{ v.n }}</b>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <p v-if="repartitionParVerif.nonAttribue" class="vr-na">⚠ {{ repartitionParVerif.nonAttribue }} dossier(s) non encore attribué(s) — clique « ↻ Répartir ».</p>
         </div>
         <div class="v3-mid-scroll">
         <div v-if="!attente.length" class="empty">Aucun DDL en attente. 🎉</div>
@@ -1034,10 +1035,11 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .ar-dev { color: #b91c1c; border-color: #fecaca; }
 .ar-note { font-size: 10px; color: #94a3b8; font-weight: 600; }
 
-/* Répartition par vérificateur (confirmation de l'équilibre) */
-.verif-rep { border: 1px solid #e8edf3; background: #f8fafc; border-radius: 9px; padding: 9px 11px; margin: 0 0 9px; }
-.vr-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.vr-title { font-size: 12px; font-weight: 800; color: #0f172a; }
+/* Répartition par vérificateur (confirmation de l'équilibre) — carte en haut de page */
+.verif-rep-card { border-left: 4px solid #0f766e; }
+.vr-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.vr-title { font-size: 14px; font-weight: 800; color: #0f172a; }
+.vr-count { font-size: 11px; font-weight: 700; color: #94a3b8; }
 .vr-sub { font-size: 10.5px; color: #94a3b8; font-weight: 600; flex: 1 1 auto; }
 .vr-btn { border: 1px solid #cbd5e1; background: #fff; color: #0f766e; border-radius: 7px; padding: 3px 10px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .vr-btn:hover { background: #0f766e; border-color: #0f766e; color: #fff; }
