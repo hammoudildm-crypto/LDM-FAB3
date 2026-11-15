@@ -953,7 +953,7 @@ onMounted(chargerTout)
 .rdt-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
 .rdt-head h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
 .sub { margin: 4px 0 0; color: #64748b; font-size: 14px; }
-.annee-sel { display: flex; flex-direction: column; font-size: 11px; font-weight: 600; color: #64748b; gap: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.annee-sel { display: flex; flex-direction: row; align-items: center; font-size: 11px; font-weight: 600; color: #64748b; gap: 8px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
 .annee-sel select { font-size: 14px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-weight: 600; color: #1b2733; min-width: 110px; }
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .loading { color: #64748b; font-size: 14px; padding: 8px 2px; }
