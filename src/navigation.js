@@ -24,7 +24,7 @@ export const MODULES = [
     links: [['/suivi', 'Suivi fab. & Saisie TRS'], ['/conditionnement', 'Conditionnement'], ['/calcul-pesee', 'Calcul de pesée (API / excipient)'], ['/dossier-ebmr', 'Dossier de lot (eBMR)'], ['/passation', 'Passation de consigne']] },
   { key: 'magasin', label: 'Magasin — Consommables', c: '#b45309',
     icon: `<g ${S}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></g>`,
-    links: [['/consommables', 'Gestion des consommables']] },
+    links: [['/consommables', 'Gestion des consommables'], ['/consommables-tdb', 'Tableau de bord consommables']] },
   { key: 'ddl', label: 'Qualité — DDL', c: '#f43f5e',
     icon: `<g ${S}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></g>`,
     links: [['/verification-ddl', 'DDL Fab — Production'], ['/verification-ddl-aq', 'DDL Fab — AQ'], ['/verification-ddl-cond', 'DDL Conditionnement'], ['/qualite', 'Déviations / CAPA / Changements'], ['/audit', "Journal d'audit"]] },

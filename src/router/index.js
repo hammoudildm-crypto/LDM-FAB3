@@ -57,6 +57,7 @@ import FormationExigences from '../views/FormationExigences.vue'
 import CalculPesee from '../views/CalculPesee.vue'
 import FormationPlanning from '../views/FormationPlanning.vue'
 import Consommables from '../views/Consommables.vue'
+import ConsommablesTableauBord from '../views/ConsommablesTableauBord.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Hub },
@@ -113,6 +114,7 @@ const routes = [
   { path: '/cadences', name: 'cadences', component: Cadences , meta: { role: 'admin' } },
   { path: '/passation', name: 'passation', component: PassationConsigne },
   { path: '/consommables', name: 'consommables', component: Consommables },
+  { path: '/consommables-tdb', name: 'consommables-tdb', component: ConsommablesTableauBord },
   { path: '/compte', name: 'compte', component: MonCompte },
   { path: '/login', name: 'login', component: Login },
   { path: '/:pathMatch(.*)*', redirect: '/' },
