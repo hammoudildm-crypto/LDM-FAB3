@@ -609,6 +609,19 @@ function ouvrirBarrePA(i, si) {
   if (y == null) return
   modalPA.value = { mois: i, annee: y }
 }
+// Navigation mois précédent / suivant dans le modal (bornée : 4 ans en arrière → mois en cours)
+const paIdx = (o) => o.annee * 12 + o.mois
+const PA_MIN = paIdx({ annee: anneeCourante - 4, mois: 0 })
+const PA_MAX = computed(() => paIdx({ annee: anneeCourante, mois: moisCourant }))
+const canPrevPA = computed(() => !!modalPA.value && paIdx(modalPA.value) > PA_MIN)
+const canNextPA = computed(() => !!modalPA.value && paIdx(modalPA.value) < PA_MAX.value)
+function naviguerMoisPA(delta) {
+  const m = modalPA.value; if (!m) return
+  const n = paIdx(m) + delta
+  if (n < PA_MIN || n > PA_MAX.value) return
+  modalPA.value = { mois: ((n % 12) + 12) % 12, annee: Math.floor(n / 12) }
+  if (paModalEl.value) { const b = paModalEl.value.querySelector('.pa-md-body'); if (b) b.scrollTop = 0 }
+}
 // Lots du mois : TEMPS RÉEL (base) + HISTORIQUE importé (TDB), fusionnés par n° de lot.
 //  - Livraison Vrac   -> date de fin de FABRICATION (ordres_fabrication)
 //  - Conditionnement  -> date de fin de CONDITIONNEMENT
@@ -1204,7 +1217,11 @@ onMounted(charger)
     <div v-if="modalPA" class="modal-overlay" @click="modalPA = null">
       <div class="pa-modal" :class="{ 'pa-modal-xl': paAgrandi }" ref="paModalEl" @click.stop>
         <div class="pa-md-head">
-          <h3>{{ atelierSel }} — {{ MOIS_LONG[modalPA.mois] }} {{ modalPA.annee }}</h3>
+          <div class="pa-md-nav">
+            <button class="pa-md-arw" :disabled="!canPrevPA" @click="naviguerMoisPA(-1)" title="Mois précédent">‹</button>
+            <h3>{{ atelierSel }} — {{ MOIS_LONG[modalPA.mois] }} {{ modalPA.annee }}</h3>
+            <button class="pa-md-arw" :disabled="!canNextPA" @click="naviguerMoisPA(1)" title="Mois suivant">›</button>
+          </div>
           <div class="pa-md-actions">
             <button class="pa-md-ico" :title="paAgrandi ? 'Réduire la fenêtre' : 'Agrandir la fenêtre'" @click="basculerTaille()"><span class="pa-md-ico-g">{{ paAgrandi ? '⤡' : '⤢' }}</span>{{ paAgrandi ? 'Réduire' : 'Agrandir' }}</button>
             <button class="pa-md-x" @click="modalPA = null">✕</button>
@@ -1379,6 +1396,10 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-modal.pa-modal-xl { width: min(1100px, 100%); max-height: 94vh; }
 .pa-md-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px 10px; }
 .pa-md-head h3 { margin: 0; font-size: 15.5px; }
+.pa-md-nav { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pa-md-arw { flex: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 18px; line-height: 1; color: #0f766e; cursor: pointer; transition: all .12s; }
+.pa-md-arw:hover:not(:disabled) { background: #0f766e; border-color: #0f766e; color: #fff; }
+.pa-md-arw:disabled { color: #cbd5e1; cursor: default; }
 .pa-md-actions { display: flex; align-items: center; gap: 6px; flex: none; }
 .pa-md-ico { display: inline-flex; align-items: center; gap: 5px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 10px; font: inherit; font-size: 11.5px; font-weight: 700; color: #475569; cursor: pointer; white-space: nowrap; transition: all .12s; }
 .pa-md-ico:hover { background: #e2e8f0; color: #0f766e; }
