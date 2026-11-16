@@ -740,7 +740,7 @@ async function devalider(l) {
 /* Une seule rangée, trois colonnes de hauteur identique. Avec deux rangées, les cartes
    de gauche et de droite se calaient sur des rangées dictées par la liste centrale,
    ce qui creusait un vide entre les deux graphes. */
-.verif-3col { display: grid; gap: 8px; grid-template-columns: 1fr 1.7fr; align-items: start;
+.verif-3col { display: grid; gap: 8px; grid-template-columns: 1fr 1.7fr; align-items: stretch;
   grid-template-areas: "left att"; }
 .z-left { grid-area: left; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .z-left > .card { margin: 0; min-width: 0; }
