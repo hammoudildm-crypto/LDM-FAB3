@@ -455,16 +455,12 @@ function regWeekend(d, weAll, requis) {
 //  - ven./sam. : uniquement sur réquisition (2×8 06h–22h par défaut, 3×8 possible)
 function ouvertRegime(d, regimeEq, weAll, requis) {
   const j = d.getDay(), h = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600
-  const jour = (reg) => reg === '3x8' ? true : (reg === '2x8' ? (h >= 6 && h < 22) : false)
-  if (j === 5) return jour(regWeekend(d, weAll, requis))
+  // Jeu. 22h→ven. 06h et ven. 22h→sam. 06h : toujours OFF
+  if (j === 4 && h >= 22) return false
+  if (j === 5) return !!regWeekend(d, weAll, requis) && h >= 6 && h < 22
   if (j === 6) {
-    const rs = regWeekend(d, weAll, requis)
-    if (h >= 22) return regimeEq === '3x8' || rs === '3x8'   // reprise de la semaine (poste de nuit)
-    return jour(rs)
-  }
-  if (j === 4 && h >= 22) {                                  // jeudi 22h : fin de semaine
-    const v = new Date(d); v.setDate(v.getDate() + 1)
-    return regWeekend(v, weAll, requis) === '3x8'
+    if (h >= 22) return regimeEq === '3x8'                   // reprise de la semaine (poste de nuit)
+    return !!regWeekend(d, weAll, requis) && h >= 6
   }
   return regimeEq === '3x8' ? true : (h >= 6 && h < 22)
 }
