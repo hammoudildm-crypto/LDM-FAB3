@@ -442,14 +442,41 @@ function buildMaintList(arr) {
   }
   return out
 }
-function regJour(d, regimeEq, weAll, requis) {
-  const j = d.getDay()
-  if (j === 5 || j === 6) {
-    // Week-end (ven./sam.) : réquisition en 2 shifts 06h00–22h00 (2×8)
-    if (weAll) return '2x8'
-    return (requis && requis.get(isoL(d))) || null
+// Régime d'un jour de week-end (ven.=5 / sam.=6) : '2x8', '3x8' ou null (chômé)
+function regWeekend(d, weAll, requis) {
+  // Réquisition week-end : 2 shifts 06h00–22h00 (2×8)
+  if (weAll) return '2x8'
+  return (requis && requis.get(isoL(d))) || null
+}
+// Semaine de travail : du samedi 22h00 au jeudi 22h00.
+//  - 3×8 : continu du sam. 22h00 au jeu. 22h00
+//  - 2×8 : 06h00–22h00 du dimanche au jeudi
+//  - ven./sam. : uniquement sur réquisition (2×8 06h–22h par défaut, 3×8 possible)
+function ouvertRegime(d, regimeEq, weAll, requis) {
+  const j = d.getDay(), h = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600
+  const jour = (reg) => reg === '3x8' ? true : (reg === '2x8' ? (h >= 6 && h < 22) : false)
+  if (j === 5) return jour(regWeekend(d, weAll, requis))
+  if (j === 6) {
+    const rs = regWeekend(d, weAll, requis)
+    if (h >= 22) return regimeEq === '3x8' || rs === '3x8'   // reprise de la semaine (poste de nuit)
+    return jour(rs)
   }
-  return regimeEq
+  if (j === 4 && h >= 22) {                                  // jeudi 22h : fin de semaine
+    const v = new Date(d); v.setDate(v.getDate() + 1)
+    return regWeekend(v, weAll, requis) === '3x8'
+  }
+  return regimeEq === '3x8' ? true : (h >= 6 && h < 22)
+}
+// Prochaine bascule possible (00h, 06h, 22h ou début/fin d'arrêt maintenance)
+function prochaineBascule(d) {
+  const t = d.getTime(); let best = Infinity
+  for (const hh of [0, 6, 22]) {
+    const c = new Date(d); c.setHours(hh, 0, 0, 0)
+    if (c.getTime() <= t) c.setDate(c.getDate() + 1)
+    if (c.getTime() < best) best = c.getTime()
+  }
+  for (const m of maintCourant) { if (m.debut > t && m.debut < best) best = m.debut; if (m.fin > t && m.fin < best) best = m.fin }
+  return new Date(best)
 }
 function buildRequisMap(arr, regimeEq) {
   const m = new Map()
@@ -459,38 +486,24 @@ function buildRequisMap(arr, regimeEq) {
   }
   return m
 }
-// Prochain instant ouvré (régime variable par jour)
+// Prochain instant ouvré
 function prochainOuvre(d, regimeEq, weAll, requis) {
-  const c = new Date(d); let g = 0
+  let c = new Date(d); let g = 0
   while (g++ < 5000) {
-    const m = maintA(c); if (m) { c.setTime(m.fin); continue }
-    const reg = regJour(c, regimeEq, weAll, requis)
-    if (!reg) { c.setDate(c.getDate() + 1); c.setHours(0, 0, 0, 0); continue }
-    if (reg === '2x8') {
-      const h = c.getHours() + c.getMinutes() / 60
-      if (h < 6) { c.setHours(6, 0, 0, 0); continue }
-      if (h >= 22) { c.setDate(c.getDate() + 1); c.setHours(0, 0, 0, 0); continue }
-    }
-    return c
+    if (estOuvre(c, regimeEq, weAll, requis)) return c
+    c = prochaineBascule(c)
   }
   return c
 }
-// Fin de la plage ouvrée courante (régime variable par jour)
+// Fin de la plage ouvrée courante
 function finOuvre(d, regimeEq, weAll, requis) {
-  let c = new Date(d); let g = 0; let fin = null
-  while (g++ < 40) {
-    const reg = regJour(c, regimeEq, weAll, requis)
-    if (!reg) { fin = c; break }
-    if (reg === '2x8') { const f = new Date(c); f.setHours(22, 0, 0, 0); fin = f; break }
-    const lend = new Date(c); lend.setDate(lend.getDate() + 1); lend.setHours(0, 0, 0, 0)
-    const regL = regJour(lend, regimeEq, weAll, requis)
-    if (regL === '3x8') { c = lend; continue }
-    fin = lend; break
+  let c = new Date(d); let g = 0
+  while (g++ < 5000) {
+    const nb = prochaineBascule(c)
+    if (!estOuvre(nb, regimeEq, weAll, requis)) return nb
+    c = nb
   }
-  if (!fin) fin = c
-  const t = d.getTime()
-  for (const m of maintCourant) { if (m.debut > t && m.debut < fin.getTime()) fin = new Date(m.debut) }
-  return fin
+  return c
 }
 // Place une tâche de durée dureeH selon régime + jours ouvrés -> segments + fin
 function placer(start, dureeH, regime, weAll, requis) {
@@ -522,10 +535,7 @@ function placerLot(start, dureeH, regime, weAll, requis, noSplit) {
 // Instant ouvré ? (régime variable par jour)
 function estOuvre(d, regimeEq, weAll, requis) {
   if (maintA(d)) return false
-  const reg = regJour(d, regimeEq, weAll, requis)
-  if (!reg) return false
-  if (reg === '2x8') { const h = d.getHours() + d.getMinutes() / 60; if (h < 6 || h >= 22) return false }
-  return true
+  return ouvertRegime(d, regimeEq, weAll, requis)
 }
 // Début de la plage ouvrée qui se termine à 'd'
 function debutPlageAvant(d, regime, weAll, requis) {
