@@ -14,7 +14,7 @@
       <span class="lg"><i class="sw sw-lot"></i>Lot (couleur = produit)</span>
       <span class="lg"><i class="sw sw-gen"></i>Nettoyage général (NG)</span>
       <span class="lg"><i class="sw sw-part"></i>Nettoyage partiel (NP)</span>
-      <span class="lg"><i class="sw sw-nuit"></i>OFF nuit 22h–06h (2×8)</span>
+      <span class="lg"><i class="sw sw-nuit"></i>OFF (nuit 22h–06h / week-end chômé)</span>
     </div>
 
     <section v-if="!chargement && planning.length" class="card recap">
@@ -115,10 +115,8 @@
             <template v-if="!weOn(row.eq.id)">
               <div v-for="d in joursWeekend" :key="'w'+d.i" class="g-weekend" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
             </template>
-            <!-- bandes OFF nuit (22h–06h) pour les équipements en 2×8 -->
-            <template v-if="(regimeEquip[row.eq.id] || '3x8') === '2x8'">
-              <div v-for="n in nuitsOff" :key="'n'+n.i" class="g-nuit" :style="{ left: n.left + 'px', width: n.w + 'px' }" title="OFF nuit — 22h à 06h (régime 2×8)"></div>
-            </template>
+            <!-- bandes OFF (hors plage de travail : nuits selon 2×8/3×8, week-end chômé) -->
+            <div v-for="(n, ni) in (offBands[row.eq.id] || [])" :key="'off'+ni" class="g-nuit" :style="{ left: n.left + 'px', width: n.w + 'px' }" title="OFF — hors plage de travail"></div>
             <div v-for="d in jourDepart" :key="'dep'+d.i" class="g-depart" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
             <div v-for="(m, mi) in (maintEquip[row.eq.id] || [])" :key="'mnt'+mi" class="g-maint" :class="{ 'g-maint-curr': m.type === 'curr', 'g-maint-tech': m.type === 'tech', 'g-maint-autre': m.type === 'autre' }" :style="maintStyle(m)" :title="maintLibelle(m) + ' — ' + m.dureeH + ' h'"><span class="g-maint-lbl">{{ maintAbrev(m) }}</span></div>
             <div v-if="posMaintenant != null" class="g-now" :style="{ left: posMaintenant + 'px' }"></div>
@@ -790,16 +788,32 @@ const jours = computed(() => {
 })
 const joursWeekend = computed(() => jours.value.filter(d => d.weekend))
 const jourDepart = computed(() => jours.value.filter(d => d.depart))
-// Bandes « OFF nuit » 22h→06h (8 h), affichées sur les équipements en régime 2×8
-const nuitsOff = computed(() => {
-  const out = []
-  let cur = new Date(dateDepart.value + 'T22:00:00')   // = t0 : première nuit
-  const end = finGlobale.value
-  for (let i = 0; cur < end && i < 400; i++) {
-    out.push({ i: cur.getTime(), left: ((cur - t0.value) / 3600000) * pxH.value, w: 8 * pxH.value })
-    cur = new Date(cur.getTime() + 86400000)
+// Bandes « OFF » (hors plage de travail) par équipement, dérivées du régime réel :
+// 3×8 = continu sam. 22h → jeu. 22h ; ven./sam. en 2×8 (06h–22h) si week-end travaillé ;
+// 2×8 = 06h–22h. Les bandes collent donc exactement à l'ordonnancement (ouvertRegime).
+const offBands = computed(() => {
+  const map = {}
+  const end = finGlobale.value, t0t = t0.value.getTime()
+  for (const row of planning.value) {
+    const regime = regimeEquip[row.eq.id] || '3x8'
+    const weAll = !!weekendEquip[row.eq.id]
+    const requis = buildRequisMap(requisEquip[row.eq.id], regime)
+    const bands = []
+    let c = new Date(t0.value), g = 0
+    while (c < end && g++ < 4000) {
+      const tc = c.getTime(); let best = Infinity
+      for (const hh of [0, 6, 22]) { const x = new Date(c); x.setHours(hh, 0, 0, 0); if (x.getTime() <= tc) x.setDate(x.getDate() + 1); if (x.getTime() < best) best = x.getTime() }
+      const segEnd = Math.min(best, end.getTime())
+      if (!ouvertRegime(c, regime, weAll, requis)) {
+        const last = bands[bands.length - 1]
+        if (last && last._end === tc) { last._end = segEnd; last.w = ((segEnd - last._start) / 3600000) * pxH.value }
+        else bands.push({ _start: tc, _end: segEnd, left: ((tc - t0t) / 3600000) * pxH.value, w: ((segEnd - tc) / 3600000) * pxH.value })
+      }
+      c = new Date(best)
+    }
+    map[row.eq.id] = bands
   }
-  return out
+  return map
 })
 const maintenant = ref(new Date())
 let timerNow = null
