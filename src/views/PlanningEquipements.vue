@@ -125,7 +125,7 @@
                    :title="t.type === 'lot' ? (titre(t) + '  •  glisser horizontalement pour décaler ce lot  •  double-clic pour réinitialiser') : titre(t)"
                    @mousedown="t.type === 'lot' ? debutDragTemps($event, row.eq.id, t.uid) : null"
                    @dblclick="t.type === 'lot' ? resetDecal(row.eq.id, t.uid) : null">
-                <span v-if="j === 0" class="g-lbl">{{ t.type === 'lot' ? (t.prod.code_pf + (t.turbNo ? ' T' + t.turbNo : '')) : (t.type.startsWith('gen') ? 'NG' : 'NP') }}</span>
+                <span v-if="j === 0" class="g-lbl">{{ t.type === 'lot' ? (t.prod.code_pf + (t.lot ? ' · ' + t.lot : '') + (t.turbNo ? ' T' + t.turbNo : '')) : (t.type.startsWith('gen') ? 'NG' : 'NP') }}</span>
               </div>
             </template>
           </div>
