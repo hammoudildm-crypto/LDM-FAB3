@@ -577,7 +577,6 @@ async function devalider(l) {
     <div class="verif-3col">
       <div class="z-left">
       <section class="card z-graph1">
-        <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
         <div class="obj-strip">
           <div class="obj-strip-top">
             <span class="obj-strip-t">Objectif du mois — {{ MOIS[moisCourant - 1] }} <span class="obj-strip-sub">(PDP)</span></span>
@@ -585,6 +584,7 @@ async function devalider(l) {
           </div>
           <div v-if="tauxMois != null" class="bar-track"><div class="bar-fill" :class="tauxMois >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxMois) + '%' }"></div></div>
         </div>
+        <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
         <MiniChart pref-key="ddl-verifies-mois" :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
         <p v-if="!verifParMois.some(v => v)" class="empty">Aucun DDL vérifié<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
       </section>
