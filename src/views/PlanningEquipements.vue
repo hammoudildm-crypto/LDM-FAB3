@@ -105,13 +105,13 @@
             <div class="g-eqnom">{{ row.eq.nom }}</div>
             <div v-if="enCoursEquip[row.eq.id]" class="g-eqcours" :title="'En cours : ' + enCoursEquip[row.eq.id].code + ' — ' + enCoursEquip[row.eq.id].desig + ' · lot ' + enCoursEquip[row.eq.id].lot + ' · ' + enCoursEquip[row.eq.id].phase">▶ {{ enCoursEquip[row.eq.id].code }} · lot {{ enCoursEquip[row.eq.id].lot }} · {{ enCoursEquip[row.eq.id].phase }}</div>
             <div class="g-eqfin">fin : {{ fmtJH(row.fin) }}</div>
-            <label class="g-eqwe" @click.stop><input type="checkbox" v-model="weekendEquip[row.eq.id]" @change="sauverPanier(row.eq.id)" /> week-ends (2×8)</label>
+            <label class="g-eqwe" @click.stop><input type="checkbox" :checked="weOn(row.eq.id)" @change="weekendEquip[row.eq.id] = $event.target.checked; sauverPanier(row.eq.id)" /> week-ends (2×8)</label>
           </div>
           <div class="g-track" :style="{ width: totalW + 'px' }">
             <!-- bandes jours -->
             <div v-for="d in jours" :key="'b'+d.i" class="g-dband" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
             <!-- bandes week-end (si l'équipement ne travaille pas le week-end) -->
-            <template v-if="!weekendEquip[row.eq.id]">
+            <template v-if="!weOn(row.eq.id)">
               <div v-for="d in joursWeekend" :key="'w'+d.i" class="g-weekend" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
             </template>
             <div v-for="d in jourDepart" :key="'dep'+d.i" class="g-depart" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
@@ -155,7 +155,7 @@
             </select>
           </label>
         </div>
-        <div class="pan-requis" v-if="!weekendEquip[panierOuvert.id]">
+        <div class="pan-requis" v-if="!weOn(panierOuvert.id)">
           <div class="pan-req-head">Réquisitions week-end (date + régime) :</div>
           <div class="pan-req-list">
             <span v-for="req in (requisEquip[panierOuvert.id] || [])" :key="req.d || req" class="pan-req-chip">{{ req.d || req }} <b>{{ (req.r || '2x8') === '2x8' ? '2×8' : '3×8' }}</b> <button @click="retirerRequis(req.d || req)">✕</button></span>
@@ -224,7 +224,8 @@ const pxH = ref(4)         // pixels par heure (zoom)
 const filtreTexte = ref('')
 const filtrePhase = ref('')
 const filtreAvecPlan = ref(false)
-const weekendEquip = reactive({}) // par équipement : true = tous les week-ends inclus
+const weekendEquip = reactive({}) // par équipement : true = tous les week-ends inclus (défaut : inclus)
+const weOn = (id) => weekendEquip[id] !== false
 const regimeEquip = reactive({})  // par équipement : '2x8' ou '3x8'
 const requisEquip = reactive({})  // par équipement : dates week-end travaillées
 const maintEquip = reactive({})   // par équipement : arrêts [{type,debut,dureeH}]
@@ -271,7 +272,7 @@ onMounted(async () => {
       let lotsArr = [], reg = null, req = null
       const pr = row.produits
       if (Array.isArray(pr)) lotsArr = pr
-      else if (pr && typeof pr === 'object') { lotsArr = Array.isArray(pr.lots) ? pr.lots : []; reg = pr.regime; req = pr.requis; if (typeof pr.weekend === 'boolean') weekendEquip[row.equipement_id] = pr.weekend; if (Array.isArray(pr.maint)) maintEquip[row.equipement_id] = pr.maint }
+      else if (pr && typeof pr === 'object') { lotsArr = Array.isArray(pr.lots) ? pr.lots : []; reg = pr.regime; req = pr.requis; if (typeof pr.we === 'boolean') weekendEquip[row.equipement_id] = pr.we; if (Array.isArray(pr.maint)) maintEquip[row.equipement_id] = pr.maint }
       const flat = []
       for (const x of lotsArr) {
         if (x && typeof x === 'object' && x.ordreId) flat.push({ ordreId: x.ordreId, lot: x.lot, pid: x.pid, decalage: Number(x.decalage) || 0, dateDebut: x.dateDebut || '' })
@@ -623,7 +624,7 @@ function dropSur(eqId, uid) {
 const panierErreur = ref('')
 async function sauverPanier(id) {
   try {
-    const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: { lots: panierEquip[id] || [], regime: regimeEquip[id] || '3x8', requis: requisEquip[id] || [], weekend: !!weekendEquip[id], maint: maintEquip[id] || [] }, updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
+    const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: { lots: panierEquip[id] || [], regime: regimeEquip[id] || '3x8', requis: requisEquip[id] || [], we: weOn(id), maint: maintEquip[id] || [] }, updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
     panierErreur.value = r.error ? ('Panier non sauvegardé : ' + r.error.message + ' — crée la table planning_panier (voir SQL).') : ''
   } catch (e) { panierErreur.value = 'Panier non sauvegardé : ' + String(e) }
   sauverLocal()
@@ -631,7 +632,7 @@ async function sauverPanier(id) {
 function sauverLocal() {
   try {
     localStorage.setItem('pe_state', JSON.stringify({
-      panier: panierEquip, regime: regimeEquip, requis: requisEquip, weekend: weekendEquip, maint: maintEquip,
+      panier: panierEquip, regime: regimeEquip, requis: requisEquip, we: weekendEquip, maint: maintEquip,
       ft: filtreTexte.value, fp: filtrePhase.value, fap: filtreAvecPlan.value, px: pxH.value
     }))
   } catch (e) {}
@@ -643,7 +644,7 @@ function chargerLocal() {
     if (st.panier) Object.assign(panierEquip, st.panier)
     if (st.regime) Object.assign(regimeEquip, st.regime)
     if (st.requis) Object.assign(requisEquip, st.requis)
-    if (st.weekend) Object.assign(weekendEquip, st.weekend)
+    if (st.we) Object.assign(weekendEquip, st.we)
     if (st.maint) Object.assign(maintEquip, st.maint)
     if (st.ft != null) filtreTexte.value = st.ft
     if (st.fp != null) filtrePhase.value = st.fp
@@ -690,7 +691,7 @@ const planning = computed(() => {
   const equipsFab = equipements.value.filter(e => estFab(e.type))
   const paramsEq = (eq) => ({
     regime: regimeEquip[eq.id] || '3x8',
-    weAll: !!weekendEquip[eq.id],
+    weAll: weOn(eq.id),
     requis: buildRequisMap(requisEquip[eq.id], regimeEquip[eq.id] || '3x8'),
     vdlt: (eq.vdlt != null && eq.vdlt !== '') ? Number(eq.vdlt) : vdlt.value,
     vdlp: (eq.vdlp != null && eq.vdlp !== '') ? Number(eq.vdlp) : vdlp.value,
