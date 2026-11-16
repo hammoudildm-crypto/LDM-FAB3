@@ -14,6 +14,7 @@
       <span class="lg"><i class="sw sw-lot"></i>Lot (couleur = produit)</span>
       <span class="lg"><i class="sw sw-gen"></i>Nettoyage général (NG)</span>
       <span class="lg"><i class="sw sw-part"></i>Nettoyage partiel (NP)</span>
+      <span class="lg"><i class="sw sw-nuit"></i>OFF nuit 22h–06h (2×8)</span>
     </div>
 
     <section v-if="!chargement && planning.length" class="card recap">
@@ -113,6 +114,10 @@
             <!-- bandes week-end (si l'équipement ne travaille pas le week-end) -->
             <template v-if="!weOn(row.eq.id)">
               <div v-for="d in joursWeekend" :key="'w'+d.i" class="g-weekend" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
+            </template>
+            <!-- bandes OFF nuit (22h–06h) pour les équipements en 2×8 -->
+            <template v-if="(regimeEquip[row.eq.id] || '3x8') === '2x8'">
+              <div v-for="n in nuitsOff" :key="'n'+n.i" class="g-nuit" :style="{ left: n.left + 'px', width: n.w + 'px' }" title="OFF nuit — 22h à 06h (régime 2×8)"></div>
             </template>
             <div v-for="d in jourDepart" :key="'dep'+d.i" class="g-depart" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
             <div v-for="(m, mi) in (maintEquip[row.eq.id] || [])" :key="'mnt'+mi" class="g-maint" :class="{ 'g-maint-curr': m.type === 'curr', 'g-maint-tech': m.type === 'tech', 'g-maint-autre': m.type === 'autre' }" :style="maintStyle(m)" :title="maintLibelle(m) + ' — ' + m.dureeH + ' h'"><span class="g-maint-lbl">{{ maintAbrev(m) }}</span></div>
@@ -785,6 +790,17 @@ const jours = computed(() => {
 })
 const joursWeekend = computed(() => jours.value.filter(d => d.weekend))
 const jourDepart = computed(() => jours.value.filter(d => d.depart))
+// Bandes « OFF nuit » 22h→06h (8 h), affichées sur les équipements en régime 2×8
+const nuitsOff = computed(() => {
+  const out = []
+  let cur = new Date(dateDepart.value + 'T22:00:00')   // = t0 : première nuit
+  const end = finGlobale.value
+  for (let i = 0; cur < end && i < 400; i++) {
+    out.push({ i: cur.getTime(), left: ((cur - t0.value) / 3600000) * pxH.value, w: 8 * pxH.value })
+    cur = new Date(cur.getTime() + 86400000)
+  }
+  return out
+})
 const maintenant = ref(new Date())
 let timerNow = null
 onMounted(() => { timerNow = setInterval(() => { maintenant.value = new Date() }, 60000) })
@@ -877,6 +893,7 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .sw-lot { background: #dbeafe; border: 1px solid #3b82f6; }
 .sw-gen { background: #7f1d1d; }
 .sw-part { background: #cbd5e1; }
+.sw-nuit { background: repeating-linear-gradient(45deg, rgba(30,41,59,.12), rgba(30,41,59,.12) 3px, rgba(30,41,59,.28) 3px, rgba(30,41,59,.28) 6px); border: 1px solid #cbd5e1; }
 
 .gantt-card { padding: 0; overflow: hidden; }
 .gantt { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 320px); }
@@ -898,6 +915,7 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .g-track { position: relative; height: 44px; }
 .g-dband { position: absolute; top: 0; bottom: 0; border-left: 1px solid #f1f5f9; box-sizing: border-box; z-index: 0; }
 .g-weekend { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #e9edf3 6px, #e9edf3 12px); z-index: 0; }
+.g-nuit { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, rgba(30,41,59,.07), rgba(30,41,59,.07) 5px, rgba(30,41,59,.14) 5px, rgba(30,41,59,.14) 10px); z-index: 0; pointer-events: none; }
 .g-depart { position: absolute; top: 0; bottom: 0; background: rgba(91, 155, 213, 0.10); border-left: 2px solid #5B9BD5; z-index: 0; box-sizing: border-box; }
 .g-dcol-dep { background: rgba(91, 155, 213, 0.08); }
 .g-dep-lbl { color: #2A4A85; font-weight: 800; }
