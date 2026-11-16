@@ -105,7 +105,7 @@
             <div class="g-eqnom">{{ row.eq.nom }}</div>
             <div v-if="enCoursEquip[row.eq.id]" class="g-eqcours" :title="'En cours : ' + enCoursEquip[row.eq.id].code + ' — ' + enCoursEquip[row.eq.id].desig + ' · lot ' + enCoursEquip[row.eq.id].lot + ' · ' + enCoursEquip[row.eq.id].phase">▶ {{ enCoursEquip[row.eq.id].code }} · lot {{ enCoursEquip[row.eq.id].lot }} · {{ enCoursEquip[row.eq.id].phase }}</div>
             <div class="g-eqfin">fin : {{ fmtJH(row.fin) }}</div>
-            <label class="g-eqwe" @click.stop><input type="checkbox" v-model="weekendEquip[row.eq.id]" @change="sauverPanier(row.eq.id)" /> week-ends</label>
+            <label class="g-eqwe" @click.stop><input type="checkbox" v-model="weekendEquip[row.eq.id]" @change="sauverPanier(row.eq.id)" /> week-ends (2×8)</label>
           </div>
           <div class="g-track" :style="{ width: totalW + 'px' }">
             <!-- bandes jours -->
@@ -158,12 +158,12 @@
         <div class="pan-requis" v-if="!weekendEquip[panierOuvert.id]">
           <div class="pan-req-head">Réquisitions week-end (date + régime) :</div>
           <div class="pan-req-list">
-            <span v-for="req in (requisEquip[panierOuvert.id] || [])" :key="req.d || req" class="pan-req-chip">{{ req.d || req }} <b>{{ (req.r || '3x8') === '2x8' ? '2×8' : '3×8' }}</b> <button @click="retirerRequis(req.d || req)">✕</button></span>
+            <span v-for="req in (requisEquip[panierOuvert.id] || [])" :key="req.d || req" class="pan-req-chip">{{ req.d || req }} <b>{{ (req.r || '2x8') === '2x8' ? '2×8' : '3×8' }}</b> <button @click="retirerRequis(req.d || req)">✕</button></span>
             <span v-if="!(requisEquip[panierOuvert.id] || []).length" class="pan-none">Aucune.</span>
           </div>
           <div class="pan-req-add">
             <input type="date" v-model="requisDate" class="pan-reqdate" />
-            <select v-model="requisRegime" class="pan-reqreg"><option value="3x8">3×8</option><option value="2x8">2×8</option></select>
+            <select v-model="requisRegime" class="pan-reqreg"><option value="2x8">2×8 (06h–22h)</option><option value="3x8">3×8</option></select>
             <button class="vue-btn" @click="ajouterRequis">Ajouter</button>
           </div>
         </div>
@@ -445,7 +445,8 @@ function buildMaintList(arr) {
 function regJour(d, regimeEq, weAll, requis) {
   const j = d.getDay()
   if (j === 5 || j === 6) {
-    if (weAll) return regimeEq
+    // Week-end (ven./sam.) : réquisition en 2 shifts 06h00–22h00 (2×8)
+    if (weAll) return '2x8'
     return (requis && requis.get(isoL(d))) || null
   }
   return regimeEq
@@ -453,8 +454,8 @@ function regJour(d, regimeEq, weAll, requis) {
 function buildRequisMap(arr, regimeEq) {
   const m = new Map()
   for (const x of (arr || [])) {
-    if (x && typeof x === 'object' && x.d) m.set(x.d, x.r || regimeEq)
-    else if (typeof x === 'string') m.set(x, regimeEq)
+    if (x && typeof x === 'object' && x.d) m.set(x.d, x.r || '2x8')
+    else if (typeof x === 'string') m.set(x, '2x8')
   }
   return m
 }
@@ -648,7 +649,7 @@ function viderPanier() { if (!panierOuvert.value) return; if (!confirm('Vider le
 function ajouterLot(l) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; if (!panierEquip[id].some(i => i.ordreId === l.id)) panierEquip[id].push({ ordreId: l.id, lot: l.lot, pid: l.pid }); sauverPanier(id) }
 function retirerLot(idx) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; const a = panierEquip[id]; if (a) { a.splice(idx, 1); sauverPanier(id) } }
 const requisDate = ref('')
-const requisRegime = ref('3x8')
+const requisRegime = ref('2x8')
 function setRegime(v) { if (!panierOuvert.value) return; regimeEquip[panierOuvert.value.id] = v; sauverPanier(panierOuvert.value.id) }
 function ajouterRequis() { if (!panierOuvert.value || !requisDate.value) return; const id = panierOuvert.value.id; if (!requisEquip[id]) requisEquip[id] = []; const d = requisDate.value; if (!requisEquip[id].some(x => (typeof x === 'object' ? x.d : x) === d)) requisEquip[id].push({ d, r: requisRegime.value }); requisEquip[id].sort((a, b) => ((a && a.d) || a).localeCompare((b && b.d) || b)); requisDate.value = ''; sauverPanier(id) }
 function retirerRequis(dt) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; requisEquip[id] = (requisEquip[id] || []).filter(x => (typeof x === 'object' ? x.d : x) !== dt); sauverPanier(id) }
