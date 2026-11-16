@@ -602,28 +602,6 @@ async function devalider(l) {
           <div class="bar-track"><div class="bar-fill" :class="tauxMois >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxMois) + '%' }"></div></div>
         </div>
       </section>
-      <section class="card z-taux">
-        <div class="sup-head">
-          <h3 class="card-title">Taux de vérification par vérificateur</h3>
-          <div class="sup-filtre">
-            <button class="btn-filtre" type="button" @click="filtreSupOuvert = !filtreSupOuvert">Vérificateurs<span v-if="supSuivis.length"> ({{ supSuivis.length }})</span> ▾</button>
-            <div v-if="filtreSupOuvert" class="sup-backdrop" @click="filtreSupOuvert = false"></div>
-            <div v-if="filtreSupOuvert" class="sup-menu">
-              <label class="sup-opt"><input type="checkbox" :checked="!supSuivis.length" @change="supSuivis = []" /> Tous</label>
-              <label v-for="sup in superviseurs" :key="sup" class="sup-opt"><input type="checkbox" :value="sup" v-model="supSuivis" /> {{ sup }}</label>
-            </div>
-          </div>
-        </div>
-        <p class="hint">DDL envoyés à l'AQ ÷ DDL qui lui sont assignés</p>
-        <div v-if="!parSuperviseurFiltre.length" class="empty">Aucun vérificateur pour ce filtre.</div>
-        <div v-for="s in parSuperviseurFiltre" :key="s.nom" class="prog-row">
-          <div class="prog-head">
-            <span class="prog-nom">{{ s.nom }}</span>
-            <span class="prog-pct" :class="{ warn: s.taux < 100 }">{{ s.verifies }}/{{ s.assignes }} · {{ s.taux.toFixed(0) }}%</span>
-          </div>
-          <div class="bar-track"><div class="bar-fill" :class="s.taux >= 100 ? 'ok' : 'part'" :style="{ width: s.taux + '%' }"></div></div>
-        </div>
-      </section>
       </div>
 
       <section class="card v3-mid z-attente">
