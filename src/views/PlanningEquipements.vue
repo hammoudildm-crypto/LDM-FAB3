@@ -76,6 +76,7 @@
         </select>
       </label></div>
       <div class="p-grp"><label class="chk-inline"><input type="checkbox" v-model="filtreAvecPlan" /> Avec planning</label></div>
+      <div class="p-grp"><label class="chk-inline" title="Un lot qui ne tient pas avant une plage OFF (nuit/week-end) est reporté au prochain créneau où il tient d'un seul tenant, au lieu d'être coupé."><input type="checkbox" v-model="lotsInsecables" @change="majInsecables" /> Ne pas couper les lots sur l'OFF</label></div>
     </section>
       <div class="pe-gantt-wrap">
     <div v-if="chargement" class="empty">Chargement…</div>
@@ -226,6 +227,10 @@ const annee = ref(today.getFullYear())
 const pxH = ref(4)         // pixels par heure (zoom)
 const filtreTexte = ref('')
 const filtrePhase = ref('')
+// Option : ne pas couper un lot sur les heures OFF — le reporter à la fenêtre
+// de travail suivante où il tient d'un seul tenant (insécable). Mémorisé localement.
+const lotsInsecables = ref((() => { try { return localStorage.getItem('pe_insecables') !== '0' } catch (e) { return true } })())
+function majInsecables() { try { localStorage.setItem('pe_insecables', lotsInsecables.value ? '1' : '0') } catch (e) {} }
 const filtreAvecPlan = ref(false)
 const weekendEquip = reactive({}) // par équipement : true = tous les week-ends inclus (défaut : inclus)
 const weOn = (id) => weekendEquip[id] !== false
@@ -722,7 +727,8 @@ const planning = computed(() => {
           const kg = poidsLotKg(prod)
           dRun = (cN > 0 && kg > 0) ? Math.max(0.25, (kg / nbTurb) / cN) : Math.max(0.25, dLotFull / nbTurb)
         }
-        const noWeekend = (ph === 2 || ph === 4 || ph === 7)  // granulation, mélange, pelliculage
+        // Insécable : granulation/mélange/pelliculage toujours, ou option globale pour tous les lots
+        const noWeekend = lotsInsecables.value || (ph === 2 || ph === 4 || ph === 7)
         let finLot = null
         for (let k = 1; k <= nbTurb; k++) {
           let cursor = eqCursor[eq.id]
