@@ -9,14 +9,14 @@ const CATS_SUGG = ['Nettoyage', 'Protection / EPI', 'Emballage', 'Étiquetage', 
 function ymd(d) { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}` }
 const consommables = ref([])
 const mouvements = ref([])
-const sorties = ref([])                               // sorties des ~6 derniers mois (pour la consommation)
+const sorties = ref([])                               // sorties (consommation fab) des ~12 derniers mois
 const moisSel = ref(ymd(new Date()).slice(0, 7))      // mois analysé (YYYY-MM)
 const recherche = ref('')
 const catSel = ref('')
 const formOuvert = ref(false)
 const erreur = ref('')
 const message = ref('')
-const nouv = reactive({ nom: '', reference: '', categorie: '', unite: 'unité', prix_unitaire: 0, stock_actuel: 0, seuil_alerte: 0 })
+const nouv = reactive({ nom: '', reference: '', categorie: '', unite: 'unité', prix_unitaire: 0, stock_mp: 0, stock_fab: 0, seuil_mp: 0, seuil_fab: 0 })
 const mvtModal = ref(null)
 const editModal = ref(null)
 
@@ -32,28 +32,38 @@ async function charger() {
 }
 onMounted(charger)
 
+// ---- Accès stocks par emplacement ----
+const sMp = (c) => Number(c.stock_mp) || 0
+const sFab = (c) => Number(c.stock_fab) || 0
+const seMp = (c) => Number(c.seuil_mp) || 0
+const seFab = (c) => Number(c.seuil_fab) || 0
+const totalStock = (c) => sMp(c) + sFab(c)
+function etatEmpl(stock, seuil) { if (stock <= 0) return 'rupture'; if (stock <= seuil) return 'alerte'; return 'ok' }
+const etatMp = (c) => etatEmpl(sMp(c), seMp(c))
+const etatFab = (c) => etatEmpl(sFab(c), seFab(c))
+
 const categories = computed(() => [...new Set(consommables.value.map(c => c.categorie).filter(Boolean))].sort((a, b) => a.localeCompare(b)))
 const filtres = computed(() => {
   const q = recherche.value.trim().toLowerCase()
   return consommables.value.filter(c => (!catSel.value || c.categorie === catSel.value) && (!q || (c.nom || '').toLowerCase().includes(q) || (c.reference || '').toLowerCase().includes(q)))
 })
-const nbAlerte = computed(() => consommables.value.filter(c => Number(c.stock_actuel) > 0 && Number(c.stock_actuel) <= Number(c.seuil_alerte)).length)
-const nbRupture = computed(() => consommables.value.filter(c => Number(c.stock_actuel) <= 0).length)
+const nbAlerte = computed(() => consommables.value.filter(c => etatMp(c) === 'alerte' || etatFab(c) === 'alerte').length)
+const nbRupture = computed(() => consommables.value.filter(c => etatMp(c) === 'rupture' || etatFab(c) === 'rupture').length)
 const mvtMois = computed(() => { const n = new Date(); return mouvements.value.filter(m => { const d = new Date(m.date_mvt); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear() }).length })
 const mvtsAffiches = computed(() => mouvements.value.slice(0, 40))
 
-function etatClass(c) { const s = Number(c.stock_actuel), se = Number(c.seuil_alerte); if (s <= 0) return 'rupture'; if (s <= se) return 'alerte'; return 'ok' }
-function etatLabel(c) { const s = Number(c.stock_actuel), se = Number(c.seuil_alerte); if (s <= 0) return 'Rupture'; if (s <= se) return 'À commander'; return 'OK' }
 const fmt = (n) => Number(n || 0).toLocaleString('fr-FR')
-const valeurDe = (c) => (Number(c.stock_actuel) || 0) * (Number(c.prix_unitaire) || 0)
 const fmtDA = (n) => Number(Math.round(n) || 0).toLocaleString('fr-FR') + ' DA'
-const valeurTotale = computed(() => consommables.value.reduce((s, c) => s + valeurDe(c), 0))
+const valeurDe = (c) => totalStock(c) * (Number(c.prix_unitaire) || 0)
+const valeurMp = computed(() => consommables.value.reduce((s, c) => s + sMp(c) * (Number(c.prix_unitaire) || 0), 0))
+const valeurFab = computed(() => consommables.value.reduce((s, c) => s + sFab(c) * (Number(c.prix_unitaire) || 0), 0))
 const valeurFiltree = computed(() => filtres.value.reduce((s, c) => s + valeurDe(c), 0))
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : '—'
 const nomDe = (id) => { const c = consommables.value.find(x => x.id === id); return c ? c.nom : '—' }
-const labelType = (t) => t === 'entree' ? 'Entrée' : t === 'sortie' ? 'Sortie' : 'Ajustement'
+const labelType = (t) => t === 'entree' ? 'Entrée' : t === 'sortie' ? 'Sortie' : t === 'transfert' ? 'Transfert' : 'Ajustement'
+function emplLabel(m) { if (m.type === 'transfert') return 'MP → Fab'; return m.emplacement === 'mp' ? 'Stock MP' : m.emplacement === 'fab' ? 'Fabrication' : '—' }
 
-// ---- Consommation (sorties de stock) : mensuelle & journalière ----
+// ---- Consommation (sorties de stock = consommation fabrication) : mensuelle & journalière ----
 const consoById = computed(() => { const m = {}; for (const c of consommables.value) m[c.id] = c; return m })
 const prixDe = (id) => Number(consoById.value[id]?.prix_unitaire) || 0
 const moisLabel = (ym) => { if (!ym) return '—'; const [y, mo] = ym.split('-').map(Number); return new Date(y, mo - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) }
@@ -115,7 +125,7 @@ const evolutionTotaux = computed(() => {
 })
 function cellStyle(v, max) { if (!v || max <= 0) return {}; const a = Math.min(0.85, 0.12 + v / max * 0.73); return { background: `rgba(180,83,9,${a.toFixed(3)})`, color: a > 0.5 ? '#fff' : '#7c2d12', fontWeight: 700 } }
 
-// ---- Couverture de stock (jours) = stock ÷ consommation journalière moyenne (fenêtre glissante) ----
+// ---- Couverture de stock (jours) = stock ÷ consommation journalière moyenne (fenêtre 90 j) ----
 const AVG_FENETRE = 90
 const consoRecente = computed(() => {
   const lim = ymd(new Date(Date.now() - AVG_FENETRE * 86400000)), m = {}
@@ -123,21 +133,22 @@ const consoRecente = computed(() => {
   return m
 })
 const moyJourDe = (id) => (consoRecente.value[id] || 0) / AVG_FENETRE
-function couvertureJours(c) { const a = moyJourDe(c.id); return a > 0 ? (Number(c.stock_actuel) || 0) / a : null }
-function couvClass(c) { const j = couvertureJours(c); if (j === null) return 'couv-none'; if (j < 7) return 'couv-bas'; if (j < 21) return 'couv-moy'; return 'couv-ok' }
-function couvLabel(c) { const j = couvertureJours(c); return j === null ? '—' : Math.round(j) + ' j' }
+const couvFabJ = (c) => { const a = moyJourDe(c.id); return a > 0 ? sFab(c) / a : null }
+const couvMpJ = (c) => { const a = moyJourDe(c.id); return a > 0 ? sMp(c) / a : null }
+function couvClass(j) { if (j === null) return 'couv-none'; if (j < 7) return 'couv-bas'; if (j < 21) return 'couv-moy'; return 'couv-ok' }
+function couvLabel(j) { return j === null ? '—' : Math.round(j) + ' j' }
 
 async function ajouter() {
   const nom = (nouv.nom || '').trim(); if (!nom) { erreur.value = 'Le nom est requis.'; return }
-  const r = await supabase.from('consommables').insert({ nom, reference: nouv.reference || null, categorie: nouv.categorie || null, unite: nouv.unite || 'unité', prix_unitaire: Number(nouv.prix_unitaire) || 0, stock_actuel: Number(nouv.stock_actuel) || 0, seuil_alerte: Number(nouv.seuil_alerte) || 0 })
+  const r = await supabase.from('consommables').insert({ nom, reference: nouv.reference || null, categorie: nouv.categorie || null, unite: nouv.unite || 'unité', prix_unitaire: Number(nouv.prix_unitaire) || 0, stock_mp: Number(nouv.stock_mp) || 0, stock_fab: Number(nouv.stock_fab) || 0, seuil_mp: Number(nouv.seuil_mp) || 0, seuil_fab: Number(nouv.seuil_fab) || 0 })
   if (r.error) { erreur.value = r.error.message; return }
-  Object.assign(nouv, { nom: '', reference: '', categorie: '', unite: 'unité', prix_unitaire: 0, stock_actuel: 0, seuil_alerte: 0 })
+  Object.assign(nouv, { nom: '', reference: '', categorie: '', unite: 'unité', prix_unitaire: 0, stock_mp: 0, stock_fab: 0, seuil_mp: 0, seuil_fab: 0 })
   formOuvert.value = false; message.value = 'Consommable ajouté.'; await charger()
 }
 function editer(c) { editModal.value = { ...c } }
 async function validerEdit() {
   const e = editModal.value
-  const r = await supabase.from('consommables').update({ nom: e.nom, categorie: e.categorie || null, unite: e.unite || 'unité', reference: e.reference || null, prix_unitaire: Number(e.prix_unitaire) || 0, seuil_alerte: Number(e.seuil_alerte) || 0, stock_actuel: Number(e.stock_actuel) || 0 }).eq('id', e.id)
+  const r = await supabase.from('consommables').update({ nom: e.nom, categorie: e.categorie || null, unite: e.unite || 'unité', reference: e.reference || null, prix_unitaire: Number(e.prix_unitaire) || 0, seuil_mp: Number(e.seuil_mp) || 0, seuil_fab: Number(e.seuil_fab) || 0, stock_mp: Number(e.stock_mp) || 0, stock_fab: Number(e.stock_fab) || 0 }).eq('id', e.id)
   if (r.error) { erreur.value = r.error.message; return }
   editModal.value = null; message.value = 'Consommable modifié.'; await charger()
 }
@@ -148,14 +159,25 @@ async function supprimer(c) {
   message.value = 'Consommable supprimé.'; await charger()
 }
 
-function ouvrirMvt(c, type) { mvtModal.value = { consommable_id: c.id, nom: c.nom, unite: c.unite, type, quantite: 0, date_mvt: new Date().toISOString().slice(0, 10), atelier: '', motif: '', stockAvant: Number(c.stock_actuel) || 0 } }
-const stockApres = computed(() => { const m = mvtModal.value; if (!m) return 0; const q = Number(m.quantite) || 0; return m.type === 'sortie' ? m.stockAvant - q : m.type === 'entree' ? m.stockAvant + q : q })
+// ---- Mouvements : entrée (→ MP), transfert (MP → Fab), sortie (← Fab) ----
+function ouvrirMvt(c, type) {
+  mvtModal.value = { consommable_id: c.id, nom: c.nom, unite: c.unite, type, quantite: 0, date_mvt: new Date().toISOString().slice(0, 10), atelier: '', motif: '', mpAvant: sMp(c), fabAvant: sFab(c) }
+}
+const qMvt = computed(() => Number(mvtModal.value?.quantite) || 0)
+const mpApres = computed(() => { const m = mvtModal.value; if (!m) return 0; return m.type === 'entree' ? m.mpAvant + qMvt.value : m.type === 'transfert' ? m.mpAvant - qMvt.value : m.mpAvant })
+const fabApres = computed(() => { const m = mvtModal.value; if (!m) return 0; return m.type === 'sortie' ? m.fabAvant - qMvt.value : m.type === 'transfert' ? m.fabAvant + qMvt.value : m.fabAvant })
+const mvtTitre = computed(() => { const m = mvtModal.value; if (!m) return ''; return m.type === 'entree' ? 'Entrée — Stock MP' : m.type === 'sortie' ? 'Sortie — Fabrication' : 'Transfert — MP → Fabrication' })
 async function validerMvt() {
-  const m = mvtModal.value; const q = Number(m.quantite) || 0
+  const m = mvtModal.value; const q = qMvt.value
   if (q <= 0) { erreur.value = 'Quantité invalide.'; return }
-  const ri = await supabase.from('mouvements_consommables').insert({ consommable_id: m.consommable_id, type: m.type, quantite: q, date_mvt: m.date_mvt, atelier: m.atelier || null, motif: m.motif || null })
+  const empl = m.type === 'entree' ? 'mp' : 'fab'
+  const ri = await supabase.from('mouvements_consommables').insert({ consommable_id: m.consommable_id, type: m.type, quantite: q, date_mvt: m.date_mvt, atelier: m.atelier || null, motif: m.motif || null, emplacement: empl })
   if (ri.error) { erreur.value = ri.error.message; return }
-  const ru = await supabase.from('consommables').update({ stock_actuel: stockApres.value }).eq('id', m.consommable_id)
+  const upd = {}
+  if (m.type === 'entree') upd.stock_mp = mpApres.value
+  else if (m.type === 'sortie') upd.stock_fab = fabApres.value
+  else { upd.stock_mp = mpApres.value; upd.stock_fab = fabApres.value }
+  const ru = await supabase.from('consommables').update(upd).eq('id', m.consommable_id)
   if (ru.error) erreur.value = ru.error.message
   mvtModal.value = null; message.value = 'Mouvement enregistré.'; await charger()
 }
@@ -164,7 +186,7 @@ async function validerMvt() {
 <template>
   <div class="conso-page">
     <PageHeader title="Gestion des consommables" tone="#b45309"
-      subtitle="Stock, entrées/sorties et alertes des consommables (sacs polyéthylène, torchons, gants, bavettes…)." />
+      subtitle="Deux emplacements de stock par consommable : Stock MP (magasin) et Fabrication. Flux réception → MP → transfert → fabrication → consommation." />
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="message" class="ok" @click="message = ''">{{ message }}</p>
@@ -172,9 +194,9 @@ async function validerMvt() {
     <div class="kpi-row">
       <div class="kpi"><div class="kpi-v">{{ consommables.length }}</div><div class="kpi-l">Références</div></div>
       <div class="kpi alerte"><div class="kpi-v">{{ nbAlerte }}</div><div class="kpi-l">En alerte (≤ seuil)</div></div>
-      <div class="kpi rupture"><div class="kpi-v">{{ nbRupture }}</div><div class="kpi-l">Ruptures (stock 0)</div></div>
-      <div class="kpi valeur"><div class="kpi-v">{{ fmtDA(valeurTotale) }}</div><div class="kpi-l">Valeur du stock</div></div>
-      <div class="kpi"><div class="kpi-v">{{ mvtMois }}</div><div class="kpi-l">Mouvements ce mois</div></div>
+      <div class="kpi rupture"><div class="kpi-v">{{ nbRupture }}</div><div class="kpi-l">Ruptures (un emplacement vide)</div></div>
+      <div class="kpi valeur"><div class="kpi-v">{{ fmtDA(valeurMp) }}</div><div class="kpi-l">Valeur Stock MP</div></div>
+      <div class="kpi valeur2"><div class="kpi-v">{{ fmtDA(valeurFab) }}</div><div class="kpi-l">Valeur Fabrication</div></div>
     </div>
 
     <section class="card">
@@ -193,8 +215,10 @@ async function validerMvt() {
         <input v-model="nouv.categorie" list="cats" placeholder="Catégorie" />
         <input v-model="nouv.unite" list="unites" placeholder="Unité" />
         <input v-model.number="nouv.prix_unitaire" type="number" step="0.01" placeholder="Prix U. (DA)" />
-        <input v-model.number="nouv.stock_actuel" type="number" placeholder="Stock initial" />
-        <input v-model.number="nouv.seuil_alerte" type="number" placeholder="Seuil alerte" />
+        <input v-model.number="nouv.stock_mp" type="number" placeholder="Stock MP" />
+        <input v-model.number="nouv.stock_fab" type="number" placeholder="Stock Fab." />
+        <input v-model.number="nouv.seuil_mp" type="number" placeholder="Seuil MP" />
+        <input v-model.number="nouv.seuil_fab" type="number" placeholder="Seuil Fab." />
         <button class="btn" @click="ajouter">Enregistrer</button>
         <button class="btn ghost" @click="formOuvert = false">Annuler</button>
       </div>
@@ -203,22 +227,26 @@ async function validerMvt() {
 
       <div class="tbl-scroll">
         <table class="tbl">
-          <thead><tr><th>Consommable</th><th>Code</th><th>Catégorie</th><th>Unité</th><th class="r">Stock</th><th class="r">Prix U.</th><th class="r">Valeur</th><th class="r">Seuil</th><th class="r">Couverture</th><th>État</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
+          <thead><tr><th>Consommable</th><th>Code</th><th>Catégorie</th><th>Unité</th><th class="r">Stock MP</th><th class="r">Stock Fab.</th><th class="r">Total</th><th class="r">Prix U.</th><th class="r">Valeur</th><th class="r">Couverture</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
           <tbody>
             <tr v-for="c in filtres" :key="c.id">
               <td class="nom">{{ c.nom }}</td>
               <td class="code">{{ c.reference || '—' }}</td>
               <td>{{ c.categorie || '—' }}</td>
               <td class="unit">{{ c.unite }}</td>
-              <td class="r stock" :class="etatClass(c)">{{ fmt(c.stock_actuel) }}</td>
+              <td class="r stock2" :class="etatMp(c)"><b>{{ fmt(sMp(c)) }}</b><span class="sub">seuil {{ fmt(seMp(c)) }}</span></td>
+              <td class="r stock2" :class="etatFab(c)"><b>{{ fmt(sFab(c)) }}</b><span class="sub">seuil {{ fmt(seFab(c)) }}</span></td>
+              <td class="r tot-stock">{{ fmt(totalStock(c)) }}</td>
               <td class="r prix">{{ c.prix_unitaire ? fmtDA(c.prix_unitaire) : '—' }}</td>
               <td class="r val">{{ valeurDe(c) ? fmtDA(valeurDe(c)) : '—' }}</td>
-              <td class="r seuil">{{ fmt(c.seuil_alerte) }}</td>
-              <td class="r couv" :class="couvClass(c)" :title="'Consommation moyenne : ' + fmt(Math.round(moyJourDe(c.id) * 10) / 10) + ' ' + c.unite + '/jour (90 j)'">{{ couvLabel(c) }}</td>
-              <td><span class="badge" :class="etatClass(c)">{{ etatLabel(c) }}</span></td>
+              <td class="r couv2" :title="'Consommation moyenne : ' + fmt(Math.round(moyJourDe(c.id) * 10) / 10) + ' ' + c.unite + '/jour (90 j)'">
+                <span :class="couvClass(couvFabJ(c))">Fab {{ couvLabel(couvFabJ(c)) }}</span>
+                <span :class="couvClass(couvMpJ(c))">MP {{ couvLabel(couvMpJ(c)) }}</span>
+              </td>
               <td v-if="peutEditer" class="r act">
-                <button class="mini in" @click="ouvrirMvt(c, 'entree')" title="Entrée de stock">＋</button>
-                <button class="mini out" @click="ouvrirMvt(c, 'sortie')" title="Sortie de stock">－</button>
+                <button class="mini in" @click="ouvrirMvt(c, 'entree')" title="Entrée au Stock MP">＋</button>
+                <button class="mini tr" @click="ouvrirMvt(c, 'transfert')" title="Transfert MP → Fabrication">⇄</button>
+                <button class="mini out" @click="ouvrirMvt(c, 'sortie')" title="Sortie (consommation) depuis la Fabrication">－</button>
                 <button class="mini" @click="editer(c)" title="Modifier">✎</button>
                 <button class="mini danger" @click="supprimer(c)" title="Supprimer">✕</button>
               </td>
@@ -226,7 +254,7 @@ async function validerMvt() {
             <tr v-if="!filtres.length"><td :colspan="peutEditer ? 11 : 10" class="vide">Aucun consommable. Clique « ＋ Ajouter » pour commencer.</td></tr>
           </tbody>
           <tfoot v-if="filtres.length">
-            <tr class="tot"><td colspan="6">Total valeur du stock</td><td class="r val">{{ fmtDA(valeurFiltree) }}</td><td :colspan="peutEditer ? 4 : 3"></td></tr>
+            <tr class="tot"><td colspan="8">Total valeur du stock (MP + Fabrication)</td><td class="r val">{{ fmtDA(valeurFiltree) }}</td><td :colspan="peutEditer ? 2 : 1"></td></tr>
           </tfoot>
         </table>
       </div>
@@ -327,17 +355,18 @@ async function validerMvt() {
       <h2 class="card-title">Derniers mouvements</h2>
       <div class="tbl-scroll">
         <table class="tbl">
-          <thead><tr><th>Date</th><th>Consommable</th><th>Type</th><th class="r">Qté</th><th>Atelier / service</th><th>Motif</th></tr></thead>
+          <thead><tr><th>Date</th><th>Consommable</th><th>Type</th><th>Emplacement</th><th class="r">Qté</th><th>Atelier / service</th><th>Motif</th></tr></thead>
           <tbody>
             <tr v-for="m in mvtsAffiches" :key="m.id">
               <td>{{ fmtDate(m.date_mvt) }}</td>
               <td class="nom">{{ nomDe(m.consommable_id) }}</td>
               <td><span class="mtag" :class="m.type">{{ labelType(m.type) }}</span></td>
-              <td class="r" :class="m.type === 'sortie' ? 'q-out' : 'q-in'">{{ m.type === 'sortie' ? '−' : '+' }}{{ fmt(m.quantite) }}</td>
+              <td class="empl">{{ emplLabel(m) }}</td>
+              <td class="r" :class="m.type === 'sortie' ? 'q-out' : m.type === 'entree' ? 'q-in' : 'q-tr'">{{ m.type === 'sortie' ? '−' : m.type === 'entree' ? '+' : '⇄' }}{{ fmt(m.quantite) }}</td>
               <td>{{ m.atelier || '—' }}</td>
               <td class="motif">{{ m.motif || '—' }}</td>
             </tr>
-            <tr v-if="!mvtsAffiches.length"><td colspan="6" class="vide">Aucun mouvement enregistré.</td></tr>
+            <tr v-if="!mvtsAffiches.length"><td colspan="7" class="vide">Aucun mouvement enregistré.</td></tr>
           </tbody>
         </table>
       </div>
@@ -345,13 +374,19 @@ async function validerMvt() {
 
     <div v-if="mvtModal" class="modal-back" @click.self="mvtModal = null">
       <div class="modal">
-        <div class="modal-h" :class="mvtModal.type"><span>{{ mvtModal.type === 'entree' ? 'Entrée de stock' : 'Sortie de stock' }} — {{ mvtModal.nom }}</span><button class="x" @click="mvtModal = null">✕</button></div>
+        <div class="modal-h" :class="mvtModal.type"><span>{{ mvtTitre }} — {{ mvtModal.nom }}</span><button class="x" @click="mvtModal = null">✕</button></div>
         <div class="modal-b">
           <label>Quantité ({{ mvtModal.unite }})<input v-model.number="mvtModal.quantite" type="number" min="0" /></label>
           <label>Date<input v-model="mvtModal.date_mvt" type="date" /></label>
-          <label>Atelier / service<input v-model="mvtModal.atelier" placeholder="(optionnel)" /></label>
+          <label v-if="mvtModal.type !== 'entree'">Atelier / service<input v-model="mvtModal.atelier" placeholder="(optionnel)" /></label>
           <label>Motif<input v-model="mvtModal.motif" placeholder="(optionnel)" /></label>
-          <p class="modal-info">Stock : <b>{{ fmt(mvtModal.stockAvant) }}</b> → après : <b :class="stockApres < 0 ? 'neg' : ''">{{ fmt(stockApres) }}</b></p>
+          <p v-if="mvtModal.type === 'entree'" class="modal-info">Stock MP : <b>{{ fmt(mvtModal.mpAvant) }}</b> → après : <b>{{ fmt(mpApres) }}</b></p>
+          <p v-else-if="mvtModal.type === 'sortie'" class="modal-info">Stock Fab. : <b>{{ fmt(mvtModal.fabAvant) }}</b> → après : <b :class="fabApres < 0 ? 'neg' : ''">{{ fmt(fabApres) }}</b></p>
+          <p v-else class="modal-info">
+            Stock MP : <b>{{ fmt(mvtModal.mpAvant) }}</b> → <b :class="mpApres < 0 ? 'neg' : ''">{{ fmt(mpApres) }}</b><br>
+            Fabrication : <b>{{ fmt(mvtModal.fabAvant) }}</b> → <b>{{ fmt(fabApres) }}</b>
+            <span v-if="mpApres < 0" class="modal-warn">Quantité supérieure au stock MP disponible.</span>
+          </p>
         </div>
         <div class="modal-f"><button class="btn ghost" @click="mvtModal = null">Annuler</button><button class="btn" @click="validerMvt">Valider</button></div>
       </div>
@@ -366,8 +401,12 @@ async function validerMvt() {
           <label>Unité<input v-model="editModal.unite" list="unites" /></label>
           <label>Code article<input v-model="editModal.reference" placeholder="(optionnel)" /></label>
           <label>Prix unitaire (DA)<input v-model.number="editModal.prix_unitaire" type="number" step="0.01" /></label>
-          <label>Seuil d'alerte<input v-model.number="editModal.seuil_alerte" type="number" /></label>
-          <label>Stock actuel (correction)<input v-model.number="editModal.stock_actuel" type="number" /></label>
+          <div class="modal-grid2">
+            <label>Stock MP (correction)<input v-model.number="editModal.stock_mp" type="number" /></label>
+            <label>Stock Fab. (correction)<input v-model.number="editModal.stock_fab" type="number" /></label>
+            <label>Seuil MP<input v-model.number="editModal.seuil_mp" type="number" /></label>
+            <label>Seuil Fab.<input v-model.number="editModal.seuil_fab" type="number" /></label>
+          </div>
         </div>
         <div class="modal-f"><button class="btn ghost" @click="editModal = null">Annuler</button><button class="btn" @click="validerEdit">Enregistrer</button></div>
       </div>
@@ -388,6 +427,7 @@ async function validerMvt() {
 .kpi.alerte { border-left-color: #d97706; } .kpi.alerte .kpi-v { color: #b45309; }
 .kpi.rupture { border-left-color: #dc2626; } .kpi.rupture .kpi-v { color: #dc2626; }
 .kpi.valeur { border-left-color: #0d9488; } .kpi.valeur .kpi-v { color: #0f766e; font-size: 20px; }
+.kpi.valeur2 { border-left-color: #6366f1; } .kpi.valeur2 .kpi-v { color: #4f46e5; font-size: 20px; }
 
 .tb { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .search { flex: 1 1 240px; min-width: 200px; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 14px; }
@@ -398,7 +438,7 @@ async function validerMvt() {
 .btn { background: #b45309; color: #fff; border: 0; padding: 9px 16px; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .btn.ghost { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
 .add-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 11px; margin-bottom: 12px; }
-.add-form input { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; width: 130px; }
+.add-form input { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 13px; width: 110px; }
 .add-form .f-nom { flex: 1 1 220px; width: auto; min-width: 200px; }
 .add-form .f-code { width: 120px; }
 .tbl td.code { font-family: ui-monospace, monospace; font-size: 12px; color: #475569; }
@@ -413,23 +453,29 @@ async function validerMvt() {
 .tbl td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; }
 .tbl th.r, .tbl td.r { text-align: right; }
 .tbl td.nom { font-weight: 700; color: #0f172a; }
-.tbl td .ref { display: block; font-size: 11px; font-weight: 500; color: #94a3b8; font-family: ui-monospace, monospace; }
 .tbl td.unit { color: #64748b; }
-.tbl td.seuil { color: #64748b; }
-.stock { font-weight: 800; font-variant-numeric: tabular-nums; }
-.stock.ok { color: #0f172a; } .stock.alerte { color: #b45309; } .stock.rupture { color: #dc2626; }
+.stock2 { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stock2 b { font-weight: 800; display: block; }
+.stock2 .sub { font-size: 10px; font-weight: 600; color: #94a3b8; }
+.stock2.ok b { color: #0f172a; } .stock2.alerte b { color: #b45309; } .stock2.rupture b { color: #dc2626; }
+.stock2.alerte { background: #fffbeb; } .stock2.rupture { background: #fef2f2; }
+.tot-stock { font-weight: 800; font-variant-numeric: tabular-nums; color: #0f172a; }
+.couv2 { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.couv2 span { display: block; font-size: 11.5px; font-weight: 700; }
+.couv-ok { color: #15803d; } .couv-moy { color: #b45309; } .couv-bas { color: #dc2626; } .couv-none { color: #cbd5e1; }
 .badge { font-size: 11px; font-weight: 800; padding: 2px 9px; border-radius: 999px; }
-.badge.ok { background: #dcfce7; color: #166534; } .badge.alerte { background: #fef3c7; color: #92400e; } .badge.rupture { background: #fee2e2; color: #b91c1c; }
 .act { white-space: nowrap; }
 .mini { width: 28px; height: 26px; border: 1px solid #e2e8f0; background: #f8fafc; color: #475569; border-radius: 6px; cursor: pointer; font-size: 13px; margin-left: 3px; }
 .mini:hover { background: #eef2f6; }
 .mini.in { color: #15803d; border-color: #bbf7d0; } .mini.in:hover { background: #dcfce7; }
+.mini.tr { color: #4f46e5; border-color: #c7d2fe; } .mini.tr:hover { background: #e0e7ff; }
 .mini.out { color: #b45309; border-color: #fde68a; } .mini.out:hover { background: #fef3c7; }
 .mini.danger { color: #dc2626; } .mini.danger:hover { background: #fee2e2; border-color: #fecaca; }
 .vide { text-align: center; color: #94a3b8; padding: 22px; }
 .mtag { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 6px; }
-.mtag.entree { background: #dcfce7; color: #166534; } .mtag.sortie { background: #fef3c7; color: #92400e; } .mtag.ajustement { background: #e2e8f0; color: #475569; }
-.q-in { color: #15803d; font-weight: 700; } .q-out { color: #b45309; font-weight: 700; }
+.mtag.entree { background: #dcfce7; color: #166534; } .mtag.sortie { background: #fef3c7; color: #92400e; } .mtag.ajustement { background: #e2e8f0; color: #475569; } .mtag.transfert { background: #e0e7ff; color: #4338ca; }
+.empl { color: #475569; font-weight: 600; font-size: 12.5px; }
+.q-in { color: #15803d; font-weight: 700; } .q-out { color: #b45309; font-weight: 700; } .q-tr { color: #4f46e5; font-weight: 700; }
 .motif { color: #475569; }
 
 .conso-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -461,18 +507,18 @@ async function validerMvt() {
 .evo-tbl .cell { font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; }
 .evo-tbl tfoot .tot td { border-top: 2px solid #e2e8f0; font-weight: 800; background: #f8fafc; color: #0f172a; font-variant-numeric: tabular-nums; }
 .art-sel { max-width: 220px; text-transform: none; }
-.tbl td.couv { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.couv-ok { color: #15803d; } .couv-moy { color: #b45309; } .couv-bas { color: #dc2626; } .couv-none { color: #cbd5e1; }
 
 .modal-back { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
-.modal { background: #fff; border-radius: 14px; width: 420px; max-width: 94vw; box-shadow: 0 24px 60px rgba(2,8,23,.3); overflow: hidden; }
+.modal { background: #fff; border-radius: 14px; width: 440px; max-width: 94vw; box-shadow: 0 24px 60px rgba(2,8,23,.3); overflow: hidden; }
 .modal-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 16px; background: #f1f5f9; font-weight: 800; font-size: 14px; color: #0f172a; }
-.modal-h.entree { background: #dcfce7; } .modal-h.sortie { background: #fef3c7; }
+.modal-h.entree { background: #dcfce7; } .modal-h.sortie { background: #fef3c7; } .modal-h.transfert { background: #e0e7ff; }
 .modal-h .x { background: none; border: 0; font-size: 18px; color: #64748b; cursor: pointer; }
 .modal-b { padding: 16px; display: flex; flex-direction: column; gap: 11px; }
 .modal-b label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: #475569; }
 .modal-b input { padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 14px; }
-.modal-info { margin: 2px 0 0; font-size: 13px; color: #475569; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 8px; padding: 8px 11px; }
+.modal-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+.modal-info { margin: 2px 0 0; font-size: 13px; color: #475569; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 8px; padding: 8px 11px; line-height: 1.6; }
 .modal-info .neg { color: #dc2626; }
+.modal-warn { display: block; color: #b91c1c; font-weight: 700; font-size: 12px; margin-top: 4px; }
 .modal-f { display: flex; justify-content: flex-end; gap: 8px; padding: 13px 16px; border-top: 1px solid #eef2f6; }
 </style>

@@ -28,9 +28,17 @@ const fmtDA = (n) => Number(Math.round(n) || 0).toLocaleString('fr-FR') + ' DA'
 const fmtDAc = (n) => { const v = Number(n) || 0; return v >= 1e6 ? (v / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' M DA' : v >= 1e3 ? Math.round(v / 1e3).toLocaleString('fr-FR') + ' k DA' : Math.round(v) + ' DA' }
 const consoById = computed(() => { const m = {}; for (const c of consommables.value) m[c.id] = c; return m })
 const prixDe = (id) => Number(consoById.value[id]?.prix_unitaire) || 0
-const valeurDe = (c) => (Number(c.stock_actuel) || 0) * (Number(c.prix_unitaire) || 0)
-function etatClass(c) { const s = Number(c.stock_actuel), se = Number(c.seuil_alerte); if (s <= 0) return 'rupture'; if (s <= se) return 'alerte'; return 'ok' }
-function etatLabel(c) { const s = Number(c.stock_actuel), se = Number(c.seuil_alerte); if (s <= 0) return 'Rupture'; if (s <= se) return 'À commander'; return 'OK' }
+// Deux emplacements : Stock MP (magasin) + Stock Fab (fabrication).
+const sMp = (c) => Number(c.stock_mp) || 0
+const sFab = (c) => Number(c.stock_fab) || 0
+const seuilTot = (c) => (Number(c.seuil_mp) || 0) + (Number(c.seuil_fab) || 0)
+const totalStock = (c) => sMp(c) + sFab(c)
+function etatEmpl(stock, seuil) { if (stock <= 0) return 'rupture'; if (stock <= seuil) return 'alerte'; return 'ok' }
+const valeurDe = (c) => totalStock(c) * (Number(c.prix_unitaire) || 0)
+const valeurMp = computed(() => consommables.value.reduce((s, c) => s + sMp(c) * (Number(c.prix_unitaire) || 0), 0))
+const valeurFab = computed(() => consommables.value.reduce((s, c) => s + sFab(c) * (Number(c.prix_unitaire) || 0), 0))
+function etatClass(c) { const em = etatEmpl(sMp(c), Number(c.seuil_mp) || 0), ef = etatEmpl(sFab(c), Number(c.seuil_fab) || 0); if (em === 'rupture' || ef === 'rupture') return 'rupture'; if (em === 'alerte' || ef === 'alerte') return 'alerte'; return 'ok' }
+function etatLabel(c) { const e = etatClass(c); return e === 'rupture' ? 'Rupture' : e === 'alerte' ? 'À commander' : 'OK' }
 const ajKey = computed(() => ymd(new Date()))
 const curYM = computed(() => ajKey.value.slice(0, 7))
 const moisPrecYM = computed(() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return ymd(d).slice(0, 7) })
@@ -44,16 +52,16 @@ const consoRecente = computed(() => {
   return m
 })
 const moyJourDe = (id) => (consoRecente.value[id] || 0) / AVG_FENETRE
-function couvertureJours(c) { const a = moyJourDe(c.id); return a > 0 ? (Number(c.stock_actuel) || 0) / a : null }
+function couvertureJours(c) { const a = moyJourDe(c.id); return a > 0 ? totalStock(c) / a : null }
 function couvClass(j) { if (j === null) return 'couv-none'; if (j < 7) return 'couv-bas'; if (j < 21) return 'couv-moy'; return 'couv-ok' }
 function couvLabel(j) { return j === null ? '—' : Math.round(j) + ' j' }
 
 // ---- KPI principaux ----
 const nbRef = computed(() => consommables.value.length)
 const valeurStock = computed(() => consommables.value.reduce((s, c) => s + valeurDe(c), 0))
-const nbOk = computed(() => consommables.value.filter(c => { const s = Number(c.stock_actuel), se = Number(c.seuil_alerte); return s > 0 && s > se }).length)
-const nbAlerte = computed(() => consommables.value.filter(c => { const s = Number(c.stock_actuel); return s > 0 && s <= Number(c.seuil_alerte) }).length)
-const nbRupture = computed(() => consommables.value.filter(c => Number(c.stock_actuel) <= 0).length)
+const nbOk = computed(() => consommables.value.filter(c => etatClass(c) === 'ok').length)
+const nbAlerte = computed(() => consommables.value.filter(c => etatClass(c) === 'alerte').length)
+const nbRupture = computed(() => consommables.value.filter(c => etatClass(c) === 'rupture').length)
 const tauxDispo = computed(() => nbRef.value > 0 ? Math.round(nbOk.value / nbRef.value * 100) : 0)
 const nbCouvCrit = computed(() => consommables.value.filter(c => { const j = couvertureJours(c); return j !== null && j < 7 }).length)
 
@@ -105,12 +113,12 @@ const etatRepartition = computed(() => {
 // Stock dormant : valeur > 0 et aucune sortie sur 12 mois
 const dormants = computed(() => consommables.value
   .filter(c => valeurDe(c) > 0 && !(conso12.value.map[c.id] > 0))
-  .map(c => ({ nom: c.nom, stock: c.stock_actuel, unite: c.unite, val: valeurDe(c) }))
+  .map(c => ({ nom: c.nom, stock: totalStock(c), unite: c.unite, val: valeurDe(c) }))
   .sort((a, b) => b.val - a.val))
 const dormantVal = computed(() => dormants.value.reduce((s, x) => s + x.val, 0))
 
 // À réapprovisionner : hors stock OK, ou couverture < 21 j
-function qConseillee(c) { const cible = Math.max(moyJourDe(c.id) * 30, Number(c.seuil_alerte) || 0); const q = Math.ceil(cible - (Number(c.stock_actuel) || 0)); return q > 0 ? q : 0 }
+function qConseillee(c) { const cible = Math.max(moyJourDe(c.id) * 30, seuilTot(c)); const q = Math.ceil(cible - totalStock(c)); return q > 0 ? q : 0 }
 const reappro = computed(() => consommables.value
   .map(c => ({ c, couv: couvertureJours(c), moy: moyJourDe(c.id), etat: etatClass(c), qConseil: qConseillee(c) }))
   .filter(x => x.etat !== 'ok' || (x.couv !== null && x.couv < 21))
@@ -129,10 +137,10 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
     <!-- KPI principaux -->
     <div class="kpi-row">
       <div class="kpi"><div class="kpi-v">{{ fmt(nbRef) }}</div><div class="kpi-l">Références</div></div>
-      <div class="kpi valeur"><div class="kpi-v">{{ fmtDA(valeurStock) }}</div><div class="kpi-l">Valeur du stock</div></div>
+      <div class="kpi valeur"><div class="kpi-v">{{ fmtDA(valeurStock) }}</div><div class="kpi-l">Valeur du stock<span class="kpi-split">MP {{ fmtDAc(valeurMp) }} · Fab {{ fmtDAc(valeurFab) }}</span></div></div>
       <div class="kpi dispo"><div class="kpi-v">{{ tauxDispo }} %</div><div class="kpi-l">Taux de disponibilité</div></div>
       <div class="kpi alerte"><div class="kpi-v">{{ nbAlerte }}</div><div class="kpi-l">À commander (≤ seuil)</div></div>
-      <div class="kpi rupture"><div class="kpi-v">{{ nbRupture }}</div><div class="kpi-l">Ruptures (stock 0)</div></div>
+      <div class="kpi rupture"><div class="kpi-v">{{ nbRupture }}</div><div class="kpi-l">Ruptures (un emplacement vide)</div></div>
       <div class="kpi crit"><div class="kpi-v">{{ nbCouvCrit }}</div><div class="kpi-l">Couverture critique (&lt; 7 j)</div></div>
     </div>
 
@@ -232,13 +240,14 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
       <p class="vide-p" v-if="!reappro.length">Aucun réapprovisionnement urgent. Tous les stocks sont au-dessus du seuil et couvrent plus de 21 jours. 👍</p>
       <div v-else class="tbl-scroll">
         <table class="tbl">
-          <thead><tr><th>Consommable</th><th>Catégorie</th><th class="r">Stock</th><th class="r">Seuil</th><th class="r">Conso/j (90 j)</th><th class="r">Couverture</th><th class="r">Qté conseillée (30 j)</th><th>État</th></tr></thead>
+          <thead><tr><th>Consommable</th><th>Catégorie</th><th class="r">Stock MP</th><th class="r">Stock Fab.</th><th class="r">Total</th><th class="r">Conso/j (90 j)</th><th class="r">Couverture</th><th class="r">Qté conseillée (30 j)</th><th>État</th></tr></thead>
           <tbody>
             <tr v-for="x in reappro" :key="x.c.id">
               <td class="nom">{{ x.c.nom }}</td>
               <td>{{ x.c.categorie || '—' }}</td>
-              <td class="r stock" :class="x.etat">{{ fmt(x.c.stock_actuel) }} <span class="u">{{ x.c.unite }}</span></td>
-              <td class="r seuil">{{ fmt(x.c.seuil_alerte) }}</td>
+              <td class="r">{{ fmt(sMp(x.c)) }}</td>
+              <td class="r">{{ fmt(sFab(x.c)) }}</td>
+              <td class="r stock" :class="x.etat">{{ fmt(totalStock(x.c)) }} <span class="u">{{ x.c.unite }}</span></td>
               <td class="r">{{ fmt(Math.round(x.moy * 10) / 10) }}</td>
               <td class="r couv" :class="couvClass(x.couv)">{{ couvLabel(x.couv) }}</td>
               <td class="r qte"><b v-if="x.qConseil">{{ fmt(x.qConseil) }} {{ x.c.unite }}</b><span v-else>—</span></td>
@@ -265,6 +274,7 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; border-left: 4px solid #b45309; }
 .kpi-v { font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1.15; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .kpi-l { font-size: 12px; color: #64748b; font-weight: 600; margin-top: 4px; }
+.kpi-split { display: block; font-size: 10.5px; font-weight: 700; color: #94a3b8; margin-top: 2px; }
 .kpi.valeur { border-left-color: #0d9488; } .kpi.valeur .kpi-v { color: #0f766e; }
 .kpi.dispo { border-left-color: #16a34a; } .kpi.dispo .kpi-v { color: #15803d; }
 .kpi.alerte { border-left-color: #d97706; } .kpi.alerte .kpi-v { color: #b45309; }
