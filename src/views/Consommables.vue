@@ -4,6 +4,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
+const peutSupprimer = inject('peutSupprimer', ref(true))   // suppression réservée à l'admin
 const CATS_SUGG = ['Nettoyage', 'Protection / EPI', 'Emballage', 'Étiquetage', 'Divers']
 
 function ymd(d) { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}` }
@@ -153,6 +154,7 @@ async function validerEdit() {
   editModal.value = null; message.value = 'Consommable modifié.'; await charger()
 }
 async function supprimer(c) {
+  if (!peutSupprimer.value) { erreur.value = 'Suppression réservée à l’administrateur.'; return }
   if (!confirm('Supprimer « ' + c.nom + ' » et son historique de mouvements ?')) return
   const r = await supabase.from('consommables').delete().eq('id', c.id)
   if (r.error) { erreur.value = r.error.message; return }
@@ -248,7 +250,7 @@ async function validerMvt() {
                 <button class="mini tr" @click="ouvrirMvt(c, 'transfert')" title="Transfert MP → Fabrication">⇄</button>
                 <button class="mini out" @click="ouvrirMvt(c, 'sortie')" title="Sortie (consommation) depuis la Fabrication">－</button>
                 <button class="mini" @click="editer(c)" title="Modifier">✎</button>
-                <button class="mini danger" @click="supprimer(c)" title="Supprimer">✕</button>
+                <button v-if="peutSupprimer" class="mini danger" @click="supprimer(c)" title="Supprimer">✕</button>
               </td>
             </tr>
             <tr v-if="!filtres.length"><td :colspan="peutEditer ? 11 : 10" class="vide">Aucun consommable. Clique « ＋ Ajouter » pour commencer.</td></tr>
