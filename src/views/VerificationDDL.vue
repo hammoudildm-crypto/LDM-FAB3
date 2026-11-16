@@ -746,7 +746,7 @@ async function devalider(l) {
 .z-left > .card { margin: 0; min-width: 0; }
 /* Chaque graphe prend sa hauteur naturelle (pas de découpe). */
 .z-graph1, .z-graph2 { flex: 0 0 auto; display: flex; flex-direction: column; }
-.z-attente { grid-area: att; min-width: 0; min-height: 0; max-height: 640px; }
+.z-attente { grid-area: att; min-width: 0; min-height: 0; max-height: min(1040px, calc(100vh - 140px)); }
 .z-objtop { flex: 0 0 auto; }
 .z-objtop .card-title { margin-bottom: 8px; }
 .obj-strip-top { display: flex; align-items: baseline; justify-content: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
