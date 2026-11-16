@@ -576,14 +576,14 @@ async function devalider(l) {
 
     <div class="verif-3col">
       <div class="z-left">
-      <section class="card z-graph1">
-        <div class="obj-strip">
-          <div class="obj-strip-top">
-            <span class="obj-strip-t">Objectif du mois — {{ MOIS[moisCourant - 1] }} <span class="obj-strip-sub">(PDP)</span></span>
-            <span class="obj-strip-nums"><b class="ok">{{ fmt(verifMois) }}</b> / {{ fmt(objectifMois) }} vérifiés<span v-if="tauxMois != null" class="obj-strip-pct" :class="tauxMois >= 100 ? 'ok' : 'part'">{{ tauxMois }}%</span></span>
-          </div>
-          <div v-if="tauxMois != null" class="bar-track"><div class="bar-fill" :class="tauxMois >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxMois) + '%' }"></div></div>
+      <section class="card z-objtop">
+        <h3 class="card-title">Objectif du mois — {{ MOIS[moisCourant - 1] }} <span class="obj-strip-sub">(PDP)</span></h3>
+        <div class="obj-strip-top">
+          <span class="obj-strip-nums"><b class="ok">{{ fmt(verifMois) }}</b> / {{ fmt(objectifMois) }} vérifiés<span v-if="tauxMois != null" class="obj-strip-pct" :class="tauxMois >= 100 ? 'ok' : 'part'">{{ tauxMois }}%</span></span>
         </div>
+        <div v-if="tauxMois != null" class="bar-track"><div class="bar-fill" :class="tauxMois >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxMois) + '%' }"></div></div>
+      </section>
+      <section class="card z-graph1">
         <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
         <MiniChart pref-key="ddl-verifies-mois" :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
         <p v-if="!verifParMois.some(v => v)" class="empty">Aucun DDL vérifié<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
@@ -751,8 +751,9 @@ async function devalider(l) {
 .z-graph1, .z-graph2 { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .z-graph1 :deep(.mc), .z-graph2 :deep(.mc) { flex: 1 1 auto; min-height: 0; }
 .z-attente { grid-area: att; min-width: 0; min-height: 0; }
-.obj-strip { background: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 8px; padding: 7px 10px; margin: 0 0 10px; }
-.obj-strip-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.z-objtop { flex: 0 0 auto; }
+.z-objtop .card-title { margin-bottom: 8px; }
+.obj-strip-top { display: flex; align-items: baseline; justify-content: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .obj-strip-t { font-size: 12px; font-weight: 800; color: #0f172a; }
 .obj-strip-sub { font-weight: 600; color: #94a3b8; font-size: 10.5px; }
 .obj-strip-nums { font-size: 12px; font-weight: 700; color: #475569; font-variant-numeric: tabular-nums; }
