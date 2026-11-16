@@ -740,17 +740,13 @@ async function devalider(l) {
 /* Une seule rangée, trois colonnes de hauteur identique. Avec deux rangées, les cartes
    de gauche et de droite se calaient sur des rangées dictées par la liste centrale,
    ce qui creusait un vide entre les deux graphes. */
-.verif-3col { display: grid; gap: 8px; grid-template-columns: 1fr 1.7fr; align-items: stretch;
-  grid-template-areas: "left att";
-  /* Hauteur de rangée calée sur la colonne de gauche : deux cartes de graphe empilées.
-     Valeur fixe et non dépendante de la fenêtre, pour que l'alignement soit stable. */
-  grid-auto-rows: 400px; }
-.z-left { grid-area: left; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.verif-3col { display: grid; gap: 8px; grid-template-columns: 1fr 1.7fr; align-items: start;
+  grid-template-areas: "left att"; }
+.z-left { grid-area: left; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .z-left > .card { margin: 0; min-width: 0; }
-/* Les graphes se partagent la hauteur de la colonne. */
-.z-graph1, .z-graph2 { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.z-graph1 :deep(.mc), .z-graph2 :deep(.mc) { flex: 1 1 auto; min-height: 0; }
-.z-attente { grid-area: att; min-width: 0; min-height: 0; }
+/* Chaque graphe prend sa hauteur naturelle (pas de découpe). */
+.z-graph1, .z-graph2 { flex: 0 0 auto; display: flex; flex-direction: column; }
+.z-attente { grid-area: att; min-width: 0; min-height: 0; max-height: 640px; }
 .z-objtop { flex: 0 0 auto; }
 .z-objtop .card-title { margin-bottom: 8px; }
 .obj-strip-top { display: flex; align-items: baseline; justify-content: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
