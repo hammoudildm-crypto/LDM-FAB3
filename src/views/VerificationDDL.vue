@@ -578,6 +578,13 @@ async function devalider(l) {
       <div class="z-left">
       <section class="card z-graph1">
         <h3 class="card-title">Dossiers vérifiés par mois<span v-if="anneeSel"> — {{ anneeSel }}</span></h3>
+        <div class="obj-strip">
+          <div class="obj-strip-top">
+            <span class="obj-strip-t">Objectif du mois — {{ MOIS[moisCourant - 1] }} <span class="obj-strip-sub">(PDP)</span></span>
+            <span class="obj-strip-nums"><b class="ok">{{ fmt(verifMois) }}</b> / {{ fmt(objectifMois) }} vérifiés<span v-if="tauxMois != null" class="obj-strip-pct" :class="tauxMois >= 100 ? 'ok' : 'part'">{{ tauxMois }}%</span></span>
+          </div>
+          <div v-if="tauxMois != null" class="bar-track"><div class="bar-fill" :class="tauxMois >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxMois) + '%' }"></div></div>
+        </div>
         <MiniChart pref-key="ddl-verifies-mois" :labels="MOIS" :format="v => v" :value-format="v => v || ''" show-values :series="[{ label: 'DDL vérifiés', color: '#0f766e', data: verifParMois }]" />
         <p v-if="!verifParMois.some(v => v)" class="empty">Aucun DDL vérifié<span v-if="anneeSel"> en {{ anneeSel }}</span>.</p>
       </section>
@@ -589,20 +596,6 @@ async function devalider(l) {
       </section>
       </div>
 
-      <div class="z-side">
-      <section class="card plan-ddl z-objectif">
-        <h3 class="card-title">Objectif du mois — {{ MOIS[moisCourant - 1] }}</h3>
-        <p class="hint">DDL à vérifier ce mois (PDP)</p>
-        <div class="pddl-grid">
-          <div class="pddl-row"><span class="pddl-lbl">Objectif</span><span class="pddl-val">{{ fmt(objectifMois) }}</span></div>
-          <div class="pddl-row"><span class="pddl-lbl">Vérifiés ce mois</span><span class="pddl-val ok">{{ fmt(verifMois) }}</span></div>
-        </div>
-        <div v-if="tauxMois != null" class="pddl-progress">
-          <div class="pddl-bar-head"><span>Taux de vérification</span><span>{{ tauxMois }}%</span></div>
-          <div class="bar-track"><div class="bar-fill" :class="tauxMois >= 100 ? 'ok' : 'part'" :style="{ width: Math.min(100, tauxMois) + '%' }"></div></div>
-        </div>
-      </section>
-      </div>
 
       <section class="card v3-mid z-attente">
         <h3 class="card-title">DDL en attente de vérification ({{ nbAttente }}) <span class="z-auto-note">· attribution par périmètre automatique</span></h3>
@@ -747,8 +740,8 @@ async function devalider(l) {
 /* Une seule rangée, trois colonnes de hauteur identique. Avec deux rangées, les cartes
    de gauche et de droite se calaient sur des rangées dictées par la liste centrale,
    ce qui creusait un vide entre les deux graphes. */
-.verif-3col { display: grid; gap: 8px; grid-template-columns: 0.85fr 1.7fr 0.7fr; align-items: stretch;
-  grid-template-areas: "left att side";
+.verif-3col { display: grid; gap: 8px; grid-template-columns: 1fr 1.7fr; align-items: stretch;
+  grid-template-areas: "left att";
   /* Hauteur de rangée calée sur la colonne de gauche : deux cartes de graphe empilées.
      Valeur fixe et non dépendante de la fenêtre, pour que l'alignement soit stable. */
   grid-auto-rows: 400px; }
@@ -758,6 +751,14 @@ async function devalider(l) {
 .z-graph1, .z-graph2 { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .z-graph1 :deep(.mc), .z-graph2 :deep(.mc) { flex: 1 1 auto; min-height: 0; }
 .z-attente { grid-area: att; min-width: 0; min-height: 0; }
+.obj-strip { background: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 8px; padding: 7px 10px; margin: 0 0 10px; }
+.obj-strip-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.obj-strip-t { font-size: 12px; font-weight: 800; color: #0f172a; }
+.obj-strip-sub { font-weight: 600; color: #94a3b8; font-size: 10.5px; }
+.obj-strip-nums { font-size: 12px; font-weight: 700; color: #475569; font-variant-numeric: tabular-nums; }
+.obj-strip-nums b.ok { color: #0f766e; }
+.obj-strip-pct { margin-left: 8px; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; }
+.obj-strip-pct.ok { background: #dcfce7; color: #166534; } .obj-strip-pct.part { background: #fef3c7; color: #92400e; }
 /* Objectif et Taux dans une même zone : Taux se place juste sous Objectif,
    sans subir la hauteur de la colonne des graphes. */
 .z-side { grid-area: side; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
@@ -775,7 +776,7 @@ async function devalider(l) {
 
 /* Tablette : deux colonnes, la liste passe pleine largeur. */
 @media (max-width: 1200px) {
-  .verif-3col { grid-template-columns: 1fr 1fr; grid-template-areas: "side side" "att att" "left left"; grid-auto-rows: auto; }
+  .verif-3col { grid-template-columns: 1fr 1fr; grid-template-areas: "att att" "left left"; grid-auto-rows: auto; }
   .z-left { flex-direction: row; }
   .z-left > .card { flex: 1 1 0; }
   .z-side { flex-direction: row; align-items: start; }
