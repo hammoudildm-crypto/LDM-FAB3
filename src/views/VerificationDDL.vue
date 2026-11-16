@@ -253,18 +253,23 @@ const repartitionAttente = computed(() => {
 // Répartition des DDL en attente (affichés) par vérificateur, groupée par périmètre.
 // Permet de CONFIRMER visuellement que l'attribution auto est équilibrée et dans l'ordre.
 const repartitionParVerif = computed(() => {
-  const cnt = {}
-  for (const v of supDispo.value) cnt[v] = 0
+  const cnt = {}, totCnt = {}
+  for (const v of supDispo.value) { cnt[v] = 0; totCnt[v] = 0 }
   let nonAttribue = 0
   for (const l of attente.value) {
     const v = (l.ddl_verificateur || '').trim()
     if (!v) { nonAttribue++; continue }
     cnt[v] = (cnt[v] || 0) + 1
   }
+  // Total de tous les dossiers attribués à chaque vérificateur (toutes situations confondues)
+  for (const l of lots.value) {
+    const v = (l.ddl_verificateur || '').trim()
+    if (v) totCnt[v] = (totCnt[v] || 0) + 1
+  }
   const groupes = {}
   for (const v of Object.keys(cnt)) {
     const p = (supPerim.value[v] || '').trim() || 'Sans périmètre'
-    ;(groupes[p] = groupes[p] || []).push({ nom: v, n: cnt[v], dispo: supDispo.value.includes(v) })
+    ;(groupes[p] = groupes[p] || []).push({ nom: v, n: cnt[v], tot: totCnt[v] || 0, dispo: supDispo.value.includes(v) })
   }
   const out = Object.entries(groupes).map(([perimetre, vs]) => {
     vs.sort((a, b) => a.nom.localeCompare(b.nom))
@@ -535,10 +540,17 @@ async function devalider(l) {
         <div v-for="g in repartitionParVerif.groupes" :key="g.perimetre" class="vr-grp">
           <div class="vr-grp-h"><span class="vr-perim">{{ g.perimetre }}</span><span class="vr-bal" :class="g.equilibre ? 'ok' : 'warn'">{{ g.equilibre ? '✓ équilibré' : '⚠ écart' }}</span></div>
           <ul class="vr-list">
+            <li class="vr-hd">
+              <span>Vérificateur</span>
+              <span class="vr-bar-hd"></span>
+              <span class="vr-col" title="Dossiers en attente de vérification">Attente</span>
+              <span class="vr-col" title="Total des dossiers attribués (toutes situations)">Total</span>
+            </li>
             <li v-for="v in g.vs" :key="v.nom" :class="{ 'vr-off': !v.dispo }">
               <span class="vr-nom">{{ v.nom }}<span v-if="!v.dispo" class="vr-indispo"> (indispo.)</span></span>
               <span class="vr-bar"><span :style="{ width: (g.max ? v.n / g.max * 100 : 0) + '%' }"></span></span>
               <b class="vr-n">{{ v.n }}</b>
+              <b class="vr-tot">{{ v.tot }}</b>
             </li>
           </ul>
         </div>
@@ -1050,8 +1062,11 @@ table.mini th { font-size: 8px; padding: 2px 4px; }
 .vr-bal { font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
 .vr-bal.ok { background: #dcfce7; color: #166534; } .vr-bal.warn { background: #fef3c7; color: #92400e; }
 .vr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.vr-list li { display: grid; grid-template-columns: 1fr 48px 20px; align-items: center; gap: 7px; font-size: 11.5px; }
+.vr-list li { display: grid; grid-template-columns: 1fr 46px 46px 40px; align-items: center; gap: 7px; font-size: 11.5px; }
 .vr-list li.vr-off { opacity: .55; }
+.vr-list li.vr-hd { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; padding-bottom: 2px; border-bottom: 1px solid #eef2f6; margin-bottom: 2px; }
+.vr-hd .vr-col { text-align: right; }
+.vr-tot { text-align: right; font-variant-numeric: tabular-nums; color: #334155; }
 .vr-nom { font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vr-indispo { font-weight: 600; color: #94a3b8; font-size: 10px; }
 .vr-bar { height: 7px; background: #eef2f6; border-radius: 4px; overflow: hidden; }
