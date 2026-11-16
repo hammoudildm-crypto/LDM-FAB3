@@ -796,7 +796,7 @@ const offBands = computed(() => {
   const end = finGlobale.value, t0t = t0.value.getTime()
   for (const row of planning.value) {
     const regime = regimeEquip[row.eq.id] || '3x8'
-    const weAll = !!weekendEquip[row.eq.id]
+    const weAll = weOn(row.eq.id)
     const requis = buildRequisMap(requisEquip[row.eq.id], regime)
     const bands = []
     let c = new Date(t0.value), g = 0
