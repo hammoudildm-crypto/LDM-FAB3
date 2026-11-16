@@ -528,12 +528,16 @@ function placer(start, dureeH, regime, weAll, requis) {
 function placerLot(start, dureeH, regime, weAll, requis, noSplit) {
   let sdeb = prochainOuvre(new Date(start), regime, weAll, requis)
   if (noSplit) {
-    let g = 0
-    while (g++ < 120) {
+    let report0 = null, g = 0
+    while (g++ < 200) {
       const pl = placer(sdeb, dureeH, regime, weAll, requis)
-      if (pl.segments.length <= 1) return pl        // contigu -> OK
-      sdeb = new Date(pl.segments[1].start)          // décalage à la fenêtre suivante
+      if (pl.segments.length <= 1) return pl          // tient d'un seul bloc -> OK
+      if (!report0) report0 = new Date(pl.segments[1].start)   // 1re ouverture de poste après un OFF
+      sdeb = new Date(pl.segments[1].start)            // décalage à la fenêtre suivante
     }
+    // Lot plus long que toute fenêtre de travail : démarrer à la 1re ouverture de poste
+    // suivante (pas à cheval sur l'OFF dès le départ), puis laisser couper.
+    if (report0) return placer(report0, dureeH, regime, weAll, requis)
   }
   return placer(sdeb, dureeH, regime, weAll, requis)
 }
