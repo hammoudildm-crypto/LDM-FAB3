@@ -7,8 +7,9 @@ function ymd(d) { const x = new Date(d); return `${x.getFullYear()}-${String(x.g
 const MOIS_COURTS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
 const consommables = ref([])
-const sorties = ref([])   // type=sortie depuis le 1er janv. de l'an dernier
-const entrees = ref([])   // type=entree, même fenêtre
+const sorties = ref([])     // type=sortie depuis le 1er janv. de l'an dernier
+const entrees = ref([])     // type=entree, même fenêtre
+const transferts = ref([])  // type=transfert (MP → Fab), même fenêtre
 const erreur = ref('')
 
 async function charger() {
@@ -18,7 +19,7 @@ async function charger() {
   consommables.value = rc.data || []
   const depuis = new Date(new Date().getFullYear() - 1, 0, 1)
   const rm = await supabase.from('mouvements_consommables').select('consommable_id,quantite,date_mvt,type').gte('date_mvt', ymd(depuis))
-  if (!rm.error) { const all = rm.data || []; sorties.value = all.filter(m => m.type === 'sortie'); entrees.value = all.filter(m => m.type === 'entree') }
+  if (!rm.error) { const all = rm.data || []; sorties.value = all.filter(m => m.type === 'sortie'); entrees.value = all.filter(m => m.type === 'entree'); transferts.value = all.filter(m => m.type === 'transfert') }
 }
 onMounted(charger)
 
@@ -31,9 +32,13 @@ const prixDe = (id) => Number(consoById.value[id]?.prix_unitaire) || 0
 // Deux emplacements : Stock MP (magasin) + Stock Fab (fabrication).
 const sMp = (c) => Number(c.stock_mp) || 0
 const sFab = (c) => Number(c.stock_fab) || 0
-const seuilTot = (c) => (Number(c.seuil_mp) || 0) + (Number(c.seuil_fab) || 0)
+const seMp = (c) => Number(c.seuil_mp) || 0
+const seFab = (c) => Number(c.seuil_fab) || 0
+const seuilTot = (c) => seMp(c) + seFab(c)
 const totalStock = (c) => sMp(c) + sFab(c)
 function etatEmpl(stock, seuil) { if (stock <= 0) return 'rupture'; if (stock <= seuil) return 'alerte'; return 'ok' }
+const etatMp = (c) => etatEmpl(sMp(c), seMp(c))
+const etatFab = (c) => etatEmpl(sFab(c), seFab(c))
 const valeurDe = (c) => totalStock(c) * (Number(c.prix_unitaire) || 0)
 const valeurMp = computed(() => consommables.value.reduce((s, c) => s + sMp(c) * (Number(c.prix_unitaire) || 0), 0))
 const valeurFab = computed(() => consommables.value.reduce((s, c) => s + sFab(c) * (Number(c.prix_unitaire) || 0), 0))
@@ -64,11 +69,19 @@ const nbAlerte = computed(() => consommables.value.filter(c => etatClass(c) === 
 const nbRupture = computed(() => consommables.value.filter(c => etatClass(c) === 'rupture').length)
 const tauxDispo = computed(() => nbRef.value > 0 ? Math.round(nbOk.value / nbRef.value * 100) : 0)
 const nbCouvCrit = computed(() => consommables.value.filter(c => { const j = couvertureJours(c); return j !== null && j < 7 }).length)
+// Alertes par emplacement (seuils séparés)
+const nbFabSec = computed(() => consommables.value.filter(c => sFab(c) <= 0).length)
+const nbFabAlerte = computed(() => consommables.value.filter(c => etatFab(c) === 'alerte').length)
+const nbFabRupture = computed(() => consommables.value.filter(c => etatFab(c) === 'rupture').length)
+const nbMpAlerte = computed(() => consommables.value.filter(c => etatMp(c) === 'alerte').length)
+const nbMpRupture = computed(() => consommables.value.filter(c => etatMp(c) === 'rupture').length)
 
 // ---- Consommation mensuelle (valeur) ----
 function valByMonth(rows) { const m = {}; for (const r of rows) { const k = (r.date_mvt || '').slice(0, 7); if (!k) continue; m[k] = (m[k] || 0) + (Number(r.quantite) || 0) * prixDe(r.consommable_id) } return m }
 const sortiesParMois = computed(() => valByMonth(sorties.value))
 const entreesParMois = computed(() => valByMonth(entrees.value))
+const transfertsParMois = computed(() => valByMonth(transferts.value))
+const transfertMois = computed(() => transfertsParMois.value[curYM.value] || 0)
 const consoMois = computed(() => sortiesParMois.value[curYM.value] || 0)
 const consoMoisPrec = computed(() => sortiesParMois.value[moisPrecYM.value] || 0)
 const entreeMois = computed(() => entreesParMois.value[curYM.value] || 0)
@@ -119,8 +132,18 @@ const dormantVal = computed(() => dormants.value.reduce((s, x) => s + x.val, 0))
 
 // À réapprovisionner : hors stock OK, ou couverture < 21 j
 function qConseillee(c) { const cible = Math.max(moyJourDe(c.id) * 30, seuilTot(c)); const q = Math.ceil(cible - totalStock(c)); return q > 0 ? q : 0 }
+// Besoin au niveau fabrication (pour couvrir 30 j ou atteindre le seuil Fab)
+function besoinFab(c) { const cible = Math.max(moyJourDe(c.id) * 30, seFab(c)); return Math.max(0, Math.ceil(cible - sFab(c))) }
+// Action conseillée selon le flux : transférer depuis le MP si possible, sinon commander
+function actionReappro(c) {
+  const bf = besoinFab(c)
+  if (bf > 0 && sMp(c) >= bf) return { type: 'transfert', qte: bf, label: 'Transférer', unite: c.unite }
+  const qc = qConseillee(c)
+  if (bf > 0 || etatMp(c) !== 'ok' || qc > 0) return { type: 'commande', qte: Math.max(qc, bf), label: 'Commander', unite: c.unite }
+  return { type: 'none', qte: 0, label: '—', unite: c.unite }
+}
 const reappro = computed(() => consommables.value
-  .map(c => ({ c, couv: couvertureJours(c), moy: moyJourDe(c.id), etat: etatClass(c), qConseil: qConseillee(c) }))
+  .map(c => ({ c, couv: couvertureJours(c), moy: moyJourDe(c.id), etat: etatClass(c), qConseil: qConseillee(c), action: actionReappro(c) }))
   .filter(x => x.etat !== 'ok' || (x.couv !== null && x.couv < 21))
   .sort((a, b) => (a.couv === null ? 1e9 : a.couv) - (b.couv === null ? 1e9 : b.couv)))
 
@@ -130,7 +153,7 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
 <template>
   <div class="tdb-conso">
     <PageHeader title="Tableau de bord — Consommables" tone="#b45309"
-      subtitle="Indicateurs de gestion du magasin consommables : stock, disponibilité, consommation, rotation et réapprovisionnement." />
+      subtitle="Deux stocks (Stock MP + Fabrication) : disponibilité, consommation, rotation, transferts et réapprovisionnement." />
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
 
@@ -141,6 +164,7 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
       <div class="kpi dispo"><div class="kpi-v">{{ tauxDispo }} %</div><div class="kpi-l">Taux de disponibilité</div></div>
       <div class="kpi alerte"><div class="kpi-v">{{ nbAlerte }}</div><div class="kpi-l">À commander (≤ seuil)</div></div>
       <div class="kpi rupture"><div class="kpi-v">{{ nbRupture }}</div><div class="kpi-l">Ruptures (un emplacement vide)</div></div>
+      <div class="kpi sec"><div class="kpi-v">{{ nbFabSec }}</div><div class="kpi-l">Fabrication à sec (stock Fab 0)</div></div>
       <div class="kpi crit"><div class="kpi-v">{{ nbCouvCrit }}</div><div class="kpi-l">Couverture critique (&lt; 7 j)</div></div>
     </div>
 
@@ -154,7 +178,8 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
       <div class="kpi"><div class="kpi-v">{{ fmtDA(trend12.moyenne) }}</div><div class="kpi-l">Conso. moyenne / mois (12 mois)</div></div>
       <div class="kpi"><div class="kpi-v">{{ fmtDA(conso12.tot) }}</div><div class="kpi-l">Consommation sur 12 mois</div></div>
       <div class="kpi rot"><div class="kpi-v">{{ rotation.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }} ×</div><div class="kpi-l">Rotation du stock / an</div></div>
-      <div class="kpi"><div class="kpi-v">{{ fmtDA(entreeMois) }}</div><div class="kpi-l">Entrées — {{ moisLabel(curYM) }}</div></div>
+      <div class="kpi"><div class="kpi-v">{{ fmtDA(entreeMois) }}</div><div class="kpi-l">Entrées MP — {{ moisLabel(curYM) }}</div></div>
+      <div class="kpi transf"><div class="kpi-v">{{ fmtDA(transfertMois) }}</div><div class="kpi-l">Transférés vers Fab — {{ moisLabel(curYM) }}</div></div>
       <div class="kpi dormant"><div class="kpi-v">{{ fmtDA(dormantVal) }}</div><div class="kpi-l">Stock dormant ({{ dormants.length }} art.)</div></div>
     </div>
 
@@ -170,6 +195,10 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
             <li><span class="dot ru"></span>Rupture<b>{{ etatRepartition.ru }}</b></li>
             <li class="tot"><span class="dot none"></span>Total références<b>{{ etatRepartition.tot }}</b></li>
           </ul>
+        </div>
+        <div class="empl-split">
+          <div class="es-row"><span class="es-t">Stock MP</span><span class="es-v"><b class="es-al">{{ nbMpAlerte }}</b> à commander · <b class="es-ru">{{ nbMpRupture }}</b> rupture</span></div>
+          <div class="es-row"><span class="es-t">Fabrication</span><span class="es-v"><b class="es-al">{{ nbFabAlerte }}</b> bas · <b class="es-ru">{{ nbFabRupture }}</b> à sec</span></div>
         </div>
       </section>
 
@@ -240,7 +269,7 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
       <p class="vide-p" v-if="!reappro.length">Aucun réapprovisionnement urgent. Tous les stocks sont au-dessus du seuil et couvrent plus de 21 jours. 👍</p>
       <div v-else class="tbl-scroll">
         <table class="tbl">
-          <thead><tr><th>Consommable</th><th>Catégorie</th><th class="r">Stock MP</th><th class="r">Stock Fab.</th><th class="r">Total</th><th class="r">Conso/j (90 j)</th><th class="r">Couverture</th><th class="r">Qté conseillée (30 j)</th><th>État</th></tr></thead>
+          <thead><tr><th>Consommable</th><th>Catégorie</th><th class="r">Stock MP</th><th class="r">Stock Fab.</th><th class="r">Total</th><th class="r">Conso/j (90 j)</th><th class="r">Couverture</th><th>Action conseillée</th><th>État</th></tr></thead>
           <tbody>
             <tr v-for="x in reappro" :key="x.c.id">
               <td class="nom">{{ x.c.nom }}</td>
@@ -250,7 +279,10 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
               <td class="r stock" :class="x.etat">{{ fmt(totalStock(x.c)) }} <span class="u">{{ x.c.unite }}</span></td>
               <td class="r">{{ fmt(Math.round(x.moy * 10) / 10) }}</td>
               <td class="r couv" :class="couvClass(x.couv)">{{ couvLabel(x.couv) }}</td>
-              <td class="r qte"><b v-if="x.qConseil">{{ fmt(x.qConseil) }} {{ x.c.unite }}</b><span v-else>—</span></td>
+              <td class="act-cell">
+                <span v-if="x.action.type !== 'none'" class="act-badge" :class="x.action.type">{{ x.action.label }} <b>{{ fmt(x.action.qte) }}</b> {{ x.action.unite }}</span>
+                <span v-else class="muted">—</span>
+              </td>
               <td><span class="badge" :class="x.etat">{{ etatLabel(x.c) }}</span></td>
             </tr>
           </tbody>
@@ -283,6 +315,8 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
 .kpi.conso { border-left-color: #b45309; }
 .kpi.rot { border-left-color: #7c3aed; } .kpi.rot .kpi-v { color: #6d28d9; }
 .kpi.dormant { border-left-color: #64748b; } .kpi.dormant .kpi-v { color: #475569; }
+.kpi.sec { border-left-color: #dc2626; } .kpi.sec .kpi-v { color: #dc2626; }
+.kpi.transf { border-left-color: #6366f1; } .kpi.transf .kpi-v { color: #4f46e5; }
 .pill { font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
 .pill.up { background: #fef3c7; color: #b45309; } .pill.down { background: #dcfce7; color: #15803d; }
 
@@ -301,6 +335,11 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
 .donut-legend li.tot { border-bottom: 0; color: #64748b; }
 .dot { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
 .dot.ok { background: #16a34a; } .dot.al { background: #f59e0b; } .dot.ru { background: #dc2626; } .dot.none { background: #e2e8f0; }
+.empl-split { margin-top: 14px; border-top: 1px solid #f1f5f9; padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.es-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.es-t { font-weight: 800; color: #334155; }
+.es-v { color: #64748b; font-weight: 600; }
+.es-al { color: #b45309; } .es-ru { color: #dc2626; }
 
 /* Barres horizontales (catégories, top) */
 .hbars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
@@ -344,4 +383,9 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
 .couv-ok { color: #15803d; } .couv-moy { color: #b45309; } .couv-bas { color: #dc2626; } .couv-none { color: #cbd5e1; }
 .badge { font-size: 11px; font-weight: 800; padding: 2px 9px; border-radius: 999px; }
 .badge.ok { background: #dcfce7; color: #166534; } .badge.alerte { background: #fef3c7; color: #92400e; } .badge.rupture { background: #fee2e2; color: #b91c1c; }
+.act-cell { white-space: nowrap; }
+.act-badge { font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.act-badge.transfert { background: #e0e7ff; color: #4338ca; }
+.act-badge.commande { background: #fef3c7; color: #92400e; }
+.act-badge b { font-weight: 800; }
 </style>
