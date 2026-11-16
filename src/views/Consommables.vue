@@ -393,7 +393,7 @@ async function validerMvt() {
     </div>
 
     <div v-if="editModal" class="modal-back" @click.self="editModal = null">
-      <div class="modal">
+      <div class="modal modal-lg">
         <div class="modal-h"><span>Modifier — {{ editModal.nom }}</span><button class="x" @click="editModal = null">✕</button></div>
         <div class="modal-b">
           <label>Nom<input v-model="editModal.nom" /></label>
@@ -510,6 +510,7 @@ async function validerMvt() {
 
 .modal-back { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
 .modal { background: #fff; border-radius: 14px; width: 440px; max-width: 94vw; box-shadow: 0 24px 60px rgba(2,8,23,.3); overflow: hidden; }
+.modal.modal-lg { width: 620px; }
 .modal-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 16px; background: #f1f5f9; font-weight: 800; font-size: 14px; color: #0f172a; }
 .modal-h.entree { background: #dcfce7; } .modal-h.sortie { background: #fef3c7; } .modal-h.transfert { background: #e0e7ff; }
 .modal-h .x { background: none; border: 0; font-size: 18px; color: #64748b; cursor: pointer; }
