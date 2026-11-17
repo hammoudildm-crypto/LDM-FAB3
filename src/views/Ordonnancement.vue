@@ -42,7 +42,7 @@
     <!-- Résumé du plan -->
     <section v-if="groupes.length" class="card plan-sum">
       <div class="card-head-row">
-        <h2 class="card-title">Plan — {{ nbProduits }} produit(s) · {{ groupesFab.length }} lot(s) à fabriquer<span v-if="nbConditionnes > 0" class="plan-excl"> · {{ nbConditionnes }} déjà conditionné(s) exclu(s)</span><span v-if="nbFinisExclus > 0" class="plan-excl"> · {{ nbFinisExclus }} fini(s) — capacité avancée</span></h2>
+        <h2 class="card-title">Plan — {{ nbProduits }} produit(s) · {{ groupesFab.length }} lot(s) à fabriquer<span v-if="nbConditionnes > 0" class="plan-excl"> · {{ nbConditionnes }} déjà conditionné(s) exclu(s)</span><span v-if="nbFinisExclus > 0" class="plan-excl"> · {{ nbFinisExclus }} étape(s) faite(s) — capacité avancée</span></h2>
         <button class="btn-reset" @click="remiseAZero">Remise à zéro</button>
       </div>
     </section>
@@ -71,7 +71,7 @@
       <div class="card-head-row">
         <h2 class="card-title">Planning de fabrication par équipement</h2>
         <div class="head-ctrls">
-          <label class="av-chk" title="Les lots déjà fabriqués libèrent leur capacité ; les lots planifiés les jours/mois suivants remontent pour les remplacer, selon la capacité de chaque équipement.">
+          <label class="av-chk" title="Chaque étape déjà faite (par lot et par atelier) libère la capacité de son équipement ; les étapes planifiées les jours/mois suivants remontent pour la combler.">
             <input type="checkbox" v-model="avancer" /> Avancer le restant
           </label>
           <div class="range-sel">
@@ -82,7 +82,7 @@
           </div>
         </div>
       </div>
-      <p class="muted" style="margin:0 0 14px"><template v-if="avancer">Les lots déjà fabriqués sont retirés et <strong>la capacité libérée avance les lots suivants</strong>. </template>Pastille : <span class="leg-dot st-ok"></span> à temps · <span class="leg-dot st-tight"></span> tendu · <span class="leg-dot st-late"></span> en retard<template v-if="!avancer"> · <span class="leg-sq lot-done-leg"></span> lot terminé (grisé)</template>.</p>
+      <p class="muted" style="margin:0 0 14px"><template v-if="avancer">Les étapes déjà faites (par lot et par atelier) sont retirées et <strong>la capacité libérée avance les étapes suivantes</strong>. </template>Pastille : <span class="leg-dot st-ok"></span> à temps · <span class="leg-dot st-tight"></span> tendu · <span class="leg-dot st-late"></span> en retard<template v-if="!avancer"> · <span class="leg-sq lot-done-leg"></span> étape terminée (grisée)</template>.</p>
       <div v-if="!planParAtelierVue.length" class="muted">Aucun lot à fabriquer sur cette période.</div>
       <div v-for="a in planParAtelierVue" :key="a.phase + a.equip" class="eq-board">
         <div class="eq-head">
@@ -239,7 +239,7 @@ function gammeProduit(produitId) {
 const ajd = computed(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}` })
 const groupesFab = computed(() => groupes.value.filter(g => !g.dateEcheance || String(g.dateEcheance) >= ajd.value))
 const nbConditionnes = computed(() => groupes.value.length - groupesFab.value.length)
-const nbFinisExclus = computed(() => { if (!avancer.value) return 0; const rm = lotReelMap.value; return groupesFab.value.filter(g => { if (!g.numeroLot) return false; const sr = rm[String(g.numeroLot).trim()]; return sr && sr.fini }).length })
+const nbFinisExclus = computed(() => { if (!avancer.value) return 0; let n = 0; for (const g of groupesFab.value) { if (!g.numeroLot) continue; const lot = String(g.numeroLot).trim(); for (const k of gammeProduit(g.produitId)) if (etapeFini(lot, k)) n++ } return n })
 const nbProduits = computed(() => new Set(groupesFab.value.map(g => g.produitId)).size)
 
 function ajouter() {
@@ -410,6 +410,7 @@ function simuler(lots) {
     let prevEnd = lt.dateFixe ? Math.max(-1, idxDeDate(lt.dateFixe) - 1) : -1
     const phases = {}
     for (const k of seqPh) {
+      if (avancer.value && lt.numeroLot && etapeFini(String(lt.numeroLot).trim(), k)) continue   // étape déjà faite sur son atelier → ne consomme plus de capacité
       const compat = equipements.value.filter(e => phaseDeType(e.type) === k && cadMap.value[e.id + '|' + lt.produitId] > 0)
       if (!compat.length) continue
       let eq = null, si = -1, libre = Infinity
@@ -488,14 +489,14 @@ const planParAtelier = computed(() => {
       const ph = r.phases[k]
       const cle = (PHASE_NOM[k] || k) + '§' + ph.equip
       if (!by[cle]) by[cle] = { phase: PHASE_NOM[k] || k, equip: ph.equip, lots: [] }
-      by[cle].lots.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, boites: r.boites, couleur: r.couleur, entree: dateIdx(ph.start), sortie: dateIdx(ph.end), startIdx: ph.start, endIdx: ph.end, besoin: r.dateEcheance ? new Date(r.dateEcheance + 'T00:00:00') : null })
+      by[cle].lots.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, phaseKey: k, boites: r.boites, couleur: r.couleur, entree: dateIdx(ph.start), sortie: dateIdx(ph.end), startIdx: ph.start, endIdx: ph.end, besoin: r.dateEcheance ? new Date(r.dateEcheance + 'T00:00:00') : null })
     }
   }
   const list = Object.values(by)
   for (const a of list) {
     a.lots.sort((x, y) => x.startIdx - y.startIdx)
     let prevEnd = null; a.busy = 0
-    for (const l of a.lots) { l.gap = (prevEnd != null && l.startIdx > prevEnd + 1) ? (l.startIdx - prevEnd - 1) : 0; a.busy += l.endIdx - l.startIdx + 1; prevEnd = l.endIdx; l.margeJ = (l.besoin && l.sortie) ? Math.round((l.besoin - l.sortie) / 86400000) : null; l.late = l.margeJ != null && l.margeJ < 0; l.statut = l.margeJ == null ? 'st-none' : (l.margeJ < 0 ? 'st-late' : (l.margeJ <= 2 ? 'st-tight' : 'st-ok')); const sr = l.numeroLot ? lotReelMap.value[String(l.numeroLot).trim()] : null; l.fini = !!(sr && sr.fini); l.enCours = !!(sr && sr.enCours) }
+    for (const l of a.lots) { l.gap = (prevEnd != null && l.startIdx > prevEnd + 1) ? (l.startIdx - prevEnd - 1) : 0; a.busy += l.endIdx - l.startIdx + 1; prevEnd = l.endIdx; l.margeJ = (l.besoin && l.sortie) ? Math.round((l.besoin - l.sortie) / 86400000) : null; l.late = l.margeJ != null && l.margeJ < 0; l.statut = l.margeJ == null ? 'st-none' : (l.margeJ < 0 ? 'st-late' : (l.margeJ <= 2 ? 'st-tight' : 'st-ok')); const lot = (l.numeroLot && l.phaseKey) ? String(l.numeroLot).trim() : null; const er = lot ? etapeReelMap.value[lot + '|' + l.phaseKey] : null; l.fini = lot ? etapeFini(lot, l.phaseKey) : false; l.enCours = !l.fini && !!(er && er.enCours) }
     a.premier = a.lots.length ? a.lots[0].entree : null
     a.dernier = a.lots.length ? a.lots[a.lots.length - 1].sortie : null
   }
@@ -542,6 +543,23 @@ const eqById = computed(() => { const m = {}; for (const e of equipements.value)
 const ofById = computed(() => { const m = {}; for (const o of ofs.value) { const pr = o.produits || prodById.value[o.produit_id] || {}; m[o.id] = { lot: o.numero_lot || '—', code: pr.code_pf || '?', desig: pr.designation || '' } } return m })
 // Statut réel d'un lot (par N° de lot) : terminé si la fabrication est finie.
 const lotReelMap = computed(() => { const m = {}; for (const o of ofs.value) { if (!o.numero_lot) continue; const k = String(o.numero_lot).trim(); const fini = !!o.date_fin_fabrication; m[k] = { fini, enCours: !fini && (!!o.date_lancement || /cours|lanc|demarr/i.test(o.statut || '')) } } return m })
+// Statut réel par ÉTAPE (phase) d'un lot — fin de l'étape sur son atelier (historique des opérations).
+const etapeReelMap = computed(() => {
+  const ofLot = {}; for (const o of ofs.value) if (o.numero_lot) ofLot[o.id] = String(o.numero_lot).trim()
+  const m = {}
+  for (const r of suiviPhases.value) {
+    const lot = ofLot[r.ordre_id]; if (!lot) continue
+    const k = phaseKeyFromName(r.phase); if (!k || k === 'conditionnement') continue
+    const fini = !!r.date_phase || /termin|fini|clotur|achev/i.test(r.statut || '')
+    const enCours = !fini && (!!r.date_debut || /cours|lanc|demarr/i.test(r.statut || ''))
+    const key = lot + '|' + k, prev = m[key]
+    if (!prev) m[key] = { fini, enCours }
+    else if (fini) { prev.fini = true; prev.enCours = false } else if (enCours && !prev.fini) prev.enCours = true
+  }
+  return m
+})
+// Une étape est faite si son suivi de phase est terminé, ou si l'OF entier est fini (repli).
+function etapeFini(lot, k) { const e = etapeReelMap.value[lot + '|' + k]; if (e && e.fini) return true; const w = lotReelMap.value[lot]; return !!(w && w.fini) }
 function phaseCourtNom(p) { const k = phaseKeyFromName(p); return k ? PHASE_NOM[k] : p }
 function realStatut(s) { const t = (s || '').toLowerCase(); if (/termin|fini|clotur|achev/.test(t)) return 're-fin'; if (/cours|encours|en_cours|lanc|demarr/.test(t)) return 're-enc'; return 're-oth' }
 function realStatutTxt(s) { const c = realStatut(s); return c === 're-fin' ? 'Terminé' : c === 're-enc' ? 'En cours' : (s || '—') }
