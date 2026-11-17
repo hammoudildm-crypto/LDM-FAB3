@@ -78,7 +78,8 @@
           <thead>
             <tr>
               <th class="ta-c">#</th>
-              <th>Produit / Lot</th>
+              <th>Produit</th>
+              <th class="ta-c">N° Lot</th>
               <th class="ta-r">Boîtes</th>
               <th class="ta-c">Besoin cond.</th>
               <th class="ta-c">Atelier cond.</th>
@@ -94,8 +95,8 @@
               <td class="ta-c ordo-rang">{{ i + 1 }}</td>
               <td>
                 <strong>{{ r.code }}</strong> <span class="lot-desig">{{ r.desig }}</span>
-                <span v-if="r.numeroLot" class="lot-num">Lot {{ r.numeroLot }}</span>
               </td>
+              <td class="ta-c"><span v-if="r.numeroLot" class="lot-num">{{ r.numeroLot }}</span><span v-else class="muted">—</span></td>
               <td class="ta-r">{{ fmt(r.boites) }}</td>
               <td class="ta-c">{{ r.besoin ? fmtDate(r.besoin) : '—' }}</td>
               <td class="ta-c lot-desig">{{ r.atelierCond || '—' }}</td>
