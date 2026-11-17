@@ -158,6 +158,22 @@
       <p class="obj-note">Priorité <strong>échéance la plus proche (EDD)</strong> : les lots dont le conditionnement démarre le plus tôt sont fabriqués en premier, selon les <strong>temps de gamme</strong> et la <strong>disponibilité des équipements de fabrication</strong>. Le détail par atelier (entrée/sortie) est ci-dessous.</p>
     </section>
 
+    <section v-if="planning.length && fabSeul && chargeAteliers.rows.length" class="card charge-card">
+      <div class="card-head-row">
+        <h2 class="card-title">📊 Charge par atelier — {{ fmtDate(fenetreOrdo.debut) }} → {{ fmtDate(fenetreOrdo.fin) }}</h2>
+        <span class="obj-strat">{{ chargeAteliers.dispo }} jours ouvrés dans la fenêtre</span>
+      </div>
+      <p class="muted" style="margin:0 0 12px">Taux d'occupation de chaque atelier sur la période. L'atelier le plus chargé est le <strong>goulot</strong> — c'est lui qui cadence le débit. Au-delà de ~85 %, prévois une réquisition week-end ou un lissage.</p>
+      <div class="charge-list">
+        <div v-for="(a, i) in chargeAteliers.rows" :key="i" class="charge-row" :class="{ 'charge-bottleneck': i === 0 }">
+          <div class="ch-lbl"><span class="ch-phase">{{ a.phase }}</span> <span class="ch-eq">{{ a.equip }}</span><span v-if="i === 0" class="ch-gl">goulot</span></div>
+          <div class="ch-track"><div class="ch-fill" :class="chargeClass(a.occ)" :style="{ width: Math.min(100, a.occ) + '%' }"></div></div>
+          <div class="ch-pct">{{ a.occ }} %</div>
+          <div class="ch-meta">{{ a.nbLots }} lot{{ a.nbLots > 1 ? 's' : '' }} · {{ a.busy }} j occupé{{ a.busy > 1 ? 's' : '' }}<span v-if="a.trou"> · {{ a.trou }} j creux</span></div>
+        </div>
+      </div>
+    </section>
+
     <!-- Ordonnancement optimal (objectif de livraison) -->
     <section v-if="planning.length && !fabSeul" class="card objectif-card">
       <div class="card-head-row">
@@ -918,6 +934,24 @@ const ordoParAtelier = computed(() => {
   return list.sort((a, b) => a.phase.localeCompare(b.phase) || String(a.equip).localeCompare(String(b.equip)))
 })
 
+// Charge (taux d'occupation) par atelier sur la fenêtre — pour repérer le goulot.
+const chargeAteliers = computed(() => {
+  const { debut, fin } = fenetreOrdo.value
+  const jo = joursOuvres.value
+  let dispo = 0
+  for (const d of jo) if (d >= debut && d <= fin) dispo++
+  const rows = ordoParAtelier.value.map(a => {
+    let busy = 0
+    for (const l of a.lots) {
+      const s = Math.max(0, l.startIdx), e = Math.min(l.endIdx, jo.length - 1)
+      for (let i = s; i <= e; i++) { const d = jo[i]; if (d && d >= debut && d <= fin) busy++ }
+    }
+    return { phase: a.phase, equip: a.equip, cond: a.cond, nbLots: a.lots.length, busy, trou: a.trouTotal || 0, occ: dispo > 0 ? Math.round(busy / dispo * 100) : 0 }
+  }).sort((x, y) => y.occ - x.occ || y.busy - x.busy)
+  return { rows, dispo }
+})
+function chargeClass(o) { if (o >= 100) return 'ch-over'; if (o >= 85) return 'ch-high'; if (o >= 50) return 'ch-mid'; return 'ch-low' }
+
 // Aperçu agrégé par produit (affichage quand beaucoup de lots importés)
 const apercuProduits = computed(() => {
   const m = {}
@@ -1133,6 +1167,17 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .row-late td { background: #fef2f2; }
 .ok-tendu .ok-v { color: #b45309; }
 .ok-tendu { border-left-color: #d97706 !important; }
+.charge-list { display: flex; flex-direction: column; gap: 9px; }
+.charge-row { display: grid; grid-template-columns: minmax(170px, 1.3fr) minmax(120px, 2fr) 46px; align-items: center; gap: 10px 12px; }
+.charge-row .ch-meta { grid-column: 1 / -1; font-size: 11px; color: #94a3b8; font-weight: 600; margin-top: -4px; }
+.charge-bottleneck { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 8px 10px; margin: -2px 0; }
+.ch-lbl { font-size: 13px; font-weight: 700; color: #0f172a; min-width: 0; }
+.ch-lbl .ch-eq { color: #64748b; font-weight: 600; }
+.ch-gl { margin-left: 7px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #c2410c; background: #ffedd5; border-radius: 999px; padding: 1px 7px; }
+.ch-track { height: 11px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+.ch-fill { height: 100%; border-radius: 6px; transition: width .3s; }
+.ch-fill.ch-over { background: #dc2626; } .ch-fill.ch-high { background: #f59e0b; } .ch-fill.ch-mid { background: #0d9488; } .ch-fill.ch-low { background: #94a3b8; }
+.ch-pct { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 13px; color: #0f172a; }
 .ech-ok { margin-top: 10px; font-size: 13px; font-weight: 700; color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 9px 12px; }
 .obj-strat { font-size: 12px; font-weight: 700; color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 999px; padding: 3px 11px; white-space: nowrap; }
 .obj-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 14px; }
