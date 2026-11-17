@@ -66,6 +66,20 @@
       <p v-else class="risk-txt">✓ <strong>Tous les lots sont fabriqués à temps</strong> pour leur besoin conditionnement, avec la date de départ et la capacité actuelles.</p>
     </section>
 
+    <!-- Occupation des ateliers de fabrication (vue d'ensemble, en haut) -->
+    <section v-if="planning.length && chargeSimple.rows.length" class="card">
+      <h2 class="card-title">Occupation des ateliers de fabrication</h2>
+      <p class="muted" style="margin:0 0 12px">Taux d'occupation de chaque atelier sur l'horizon du plan ({{ chargeSimple.horizon }} jours). L'atelier le plus chargé est le <strong>goulot</strong> : c'est lui qui cadence le débit.</p>
+      <div class="charge-list">
+        <div v-for="(a, i) in chargeSimple.rows" :key="i" class="charge-row" :class="{ 'charge-bottleneck': i === 0 }">
+          <div class="ch-lbl"><span class="ch-phase">{{ a.phase }}</span> <span class="ch-eq">{{ a.equip }}</span><span v-if="i === 0" class="ch-gl">goulot</span></div>
+          <div class="ch-track"><div class="ch-fill" :class="chargeClass(a.occ)" :style="{ width: Math.min(100, a.occ) + '%' }"></div></div>
+          <div class="ch-pct">{{ a.occ }} %</div>
+          <div class="ch-meta">{{ a.lots }} lot{{ a.lots > 1 ? 's' : '' }} · {{ a.busy }} j occupé{{ a.busy > 1 ? 's' : '' }}</div>
+        </div>
+      </div>
+    </section>
+
     <!-- Ordonnancement proposé (table combinée) -->
     <section v-if="planning.length" class="card">
       <h2 class="card-title">Ordonnancement proposé — par besoin conditionnement</h2>
@@ -118,10 +132,10 @@
       </p>
     </section>
 
-    <!-- Plan prévisionnel par atelier de fabrication -->
+    <!-- Planning prévisionnel par équipement -->
     <section v-if="planParAtelier.length" class="card">
-      <h2 class="card-title">Plan prévisionnel par atelier de fabrication</h2>
-      <p class="muted" style="margin:0 0 14px">Pour chaque atelier, les lots à fabriquer dans l'ordre, avec les dates d'entrée et de sortie prévues selon l'ordonnancement.</p>
+      <h2 class="card-title">Planning prévisionnel par équipement</h2>
+      <p class="muted" style="margin:0 0 14px">Pour chaque équipement, les lots à fabriquer dans l'ordre, avec les dates d'entrée et de sortie prévues selon l'ordonnancement.</p>
       <div v-for="a in planParAtelier" :key="a.phase + a.equip" class="atelier-bloc">
         <div class="at-head">
           <div class="at-id"><span class="at-phase">{{ a.phase }}</span><strong class="at-eq">{{ a.equip }}</strong></div>
@@ -142,20 +156,6 @@
               </tr>
             </tbody>
           </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- Charge par atelier (goulot) -->
-    <section v-if="planning.length && chargeSimple.rows.length" class="card">
-      <h2 class="card-title">Charge par atelier — repérer le goulot</h2>
-      <p class="muted" style="margin:0 0 12px">Taux d'occupation de chaque atelier sur l'horizon du plan ({{ chargeSimple.horizon }} jours). L'atelier le plus chargé est le <strong>goulot</strong> : c'est lui qui cadence le débit.</p>
-      <div class="charge-list">
-        <div v-for="(a, i) in chargeSimple.rows" :key="i" class="charge-row" :class="{ 'charge-bottleneck': i === 0 }">
-          <div class="ch-lbl"><span class="ch-phase">{{ a.phase }}</span> <span class="ch-eq">{{ a.equip }}</span><span v-if="i === 0" class="ch-gl">goulot</span></div>
-          <div class="ch-track"><div class="ch-fill" :class="chargeClass(a.occ)" :style="{ width: Math.min(100, a.occ) + '%' }"></div></div>
-          <div class="ch-pct">{{ a.occ }} %</div>
-          <div class="ch-meta">{{ a.lots }} lot{{ a.lots > 1 ? 's' : '' }} · {{ a.busy }} j occupé{{ a.busy > 1 ? 's' : '' }}</div>
         </div>
       </div>
     </section>
