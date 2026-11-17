@@ -320,6 +320,7 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
       </section>
     </div>
 
+    <div class="grid2">
     <!-- Consommation du mois -->
     <section class="card">
       <div class="conso-head">
@@ -412,6 +413,7 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
         </div>
       </template>
     </section>
+    </div>
 
     <!-- À réapprovisionner -->
     <section class="card">
