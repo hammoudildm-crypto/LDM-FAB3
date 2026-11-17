@@ -67,17 +67,26 @@
     </section>
 
     <!-- Planning de fabrication par équipement (files de lots) -->
-    <section v-if="planParAtelier.length" class="card">
+    <section v-if="planParAtelier.length || suiviPhases.length" class="card">
       <div class="card-head-row">
         <h2 class="card-title">Planning de fabrication par équipement</h2>
-        <div class="range-sel">
-          <button :class="{ on: horizonSel === 0 }" @click="horizonSel = 0">Tout</button>
-          <button :class="{ on: horizonSel === 1 }" @click="horizonSel = 1">Mois en cours</button>
-          <button :class="{ on: horizonSel === 2 }" @click="horizonSel = 2">2 mois</button>
-          <button :class="{ on: horizonSel === 3 }" @click="horizonSel = 3">3 mois</button>
+        <div class="head-ctrls">
+          <div class="range-sel mode-sel">
+            <button :class="{ on: vueMode === 'prev' }" @click="vueMode = 'prev'">Prévision</button>
+            <button :class="{ on: vueMode === 'real' }" @click="vueMode = 'real'">Réalisation</button>
+          </div>
+          <div class="range-sel">
+            <button :class="{ on: horizonSel === 0 }" @click="horizonSel = 0">Tout</button>
+            <button :class="{ on: horizonSel === 1 }" @click="horizonSel = 1">Mois en cours</button>
+            <button :class="{ on: horizonSel === 2 }" @click="horizonSel = 2">2 mois</button>
+            <button :class="{ on: horizonSel === 3 }" @click="horizonSel = 3">3 mois</button>
+          </div>
         </div>
       </div>
-      <p class="muted" style="margin:0 0 14px">Chaque équipement et sa file de lots dans l'ordre d'ordonnancement. Pastille : <span class="leg-dot st-ok"></span> à temps · <span class="leg-dot st-tight"></span> tendu (≤ 2 j) · <span class="leg-dot st-late"></span> en retard vs besoin conditionnement.</p>
+
+      <!-- PRÉVISION (ordonnancement) -->
+      <template v-if="vueMode === 'prev'">
+      <p class="muted" style="margin:0 0 14px">Ordonnancement prévisionnel. Pastille : <span class="leg-dot st-ok"></span> à temps · <span class="leg-dot st-tight"></span> tendu (≤ 2 j) · <span class="leg-dot st-late"></span> en retard vs besoin conditionnement.</p>
       <div v-if="!planParAtelierVue.length" class="muted">Aucun lot à fabriquer sur cette période.</div>
       <div v-for="a in planParAtelierVue" :key="a.phase + a.equip" class="eq-board">
         <div class="eq-head">
@@ -108,6 +117,32 @@
           </div>
         </div>
       </div>
+      </template>
+
+      <!-- RÉALISATION (réel) -->
+      <template v-else>
+      <p class="muted" style="margin:0 0 14px">Réalisation réelle — historique des opérations par équipement / atelier. Pastille : <span class="leg-dot re-fin"></span> terminé · <span class="leg-dot re-enc"></span> en cours.</p>
+      <div v-if="!realisationParEquip.length" class="muted">Aucune réalisation enregistrée sur cette période.</div>
+      <div v-for="a in realisationParEquip" :key="a.equip" class="eq-board">
+        <div class="eq-head">
+          <div class="eq-id"><span class="at-phase">{{ a.phase }}</span><strong>{{ a.equip }}</strong><span class="eq-atelier">{{ a.atelier }}</span></div>
+          <div v-if="a.nEnc" class="eq-occ re-enc-badge">{{ a.nEnc }} en cours</div>
+        </div>
+        <div class="eq-kpis">
+          <div class="eqk"><div class="eqk-l">Lots réalisés</div><div class="eqk-v">{{ a.nLots }}</div><div class="eqk-s">{{ a.nOps }} opération{{ a.nOps > 1 ? 's' : '' }}</div></div>
+          <div class="eqk"><div class="eqk-l">Terminés</div><div class="eqk-v">{{ a.nFin }}</div><div class="eqk-s">{{ a.nEnc }} en cours</div></div>
+          <div class="eqk"><div class="eqk-l">Période réelle</div><div class="eqk-v eqk-sm">{{ fmtDateShort(a.premier) }} → {{ fmtDateShort(a.dernier) }}</div><div class="eqk-s">historique</div></div>
+        </div>
+        <div class="lot-cards">
+          <div v-for="(o, i) in a.ops" :key="i" class="lot-card" :class="o.sc" :title="o.code + ' · ' + o.desig + '\nLot ' + (o.lot || '—') + '\n' + o.phase + ' : ' + (o.debut ? fmtDate(o.debut) : '?') + ' → ' + (o.fin ? fmtDate(o.fin) : '?') + '\nSortie ' + fmt(o.qteS)">
+            <div class="lc-top"><span class="lc-num">{{ o.lot || '—' }}</span><span class="lc-badge" :class="o.sc">{{ realStatutTxt(o.statut) }}</span></div>
+            <div class="lc-prod">{{ o.code }}</div>
+            <div class="lc-line">⚙ {{ phaseCourtNom(o.phase) }}</div>
+            <div class="lc-line">◷ {{ o.fin ? fmtDateShort(o.fin) : (o.debut ? fmtDateShort(o.debut) : '—') }}</div>
+          </div>
+        </div>
+      </div>
+      </template>
     </section>
 
     <!-- Occupation des ateliers de fabrication -->
@@ -149,6 +184,8 @@ const NOM_KEY = {}
 for (const [k, v] of Object.entries(PHASE_NOM)) NOM_KEY[v.toLowerCase()] = k
 
 const produits = ref([]), equipements = ref([]), cadences = ref([]), chargement = ref(true)
+const ateliers = ref([]), ofs = ref([]), suiviPhases = ref([])   // réalisation (historique des opérations + dispo par atelier)
+const vueMode = ref('prev')   // 'prev' = prévision (ordonnancement) | 'real' = réalisation (réel)
 const groupes = ref([])   // { id, produitId, totalBoites, boitesParLot, nbLots, numeroLot, dateFixe, dateEcheance }
 const dateDepart = ref(new Date().toISOString().slice(0, 10))
 const skipWeekend = ref(false)   // l'usine tourne 7 j/7 (3×8 semaine + 2×8 week-end)
@@ -167,12 +204,15 @@ async function fetchAllPaged(make) {
 }
 
 onMounted(async () => {
-  const [rp, re, rc] = await Promise.all([
+  const [rp, re, rc, ra, ro, rs] = await Promise.all([
     fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, pcsu, unites_par_boite, taille_lot, poids_lot_kg, gamme').eq('actif', true)),
     fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true)),
-    fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode'))
+    fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode')),
+    fetchAllPaged(() => supabase.from('ateliers').select('id, code, nom').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, produit_id, date_lancement, date_fin_fabrication, produits(code_pf, designation)').eq('actif', true)),
+    fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, quantite_entree, quantite_sortie, date_debut, date_phase, statut, equipement_id').eq('actif', true))
   ])
-  produits.value = rp; equipements.value = re; cadences.value = rc; chargement.value = false
+  produits.value = rp; equipements.value = re; cadences.value = rc; ateliers.value = ra; ofs.value = ro; suiviPhases.value = rs; chargement.value = false
   chargerLocal()
 })
 
@@ -521,6 +561,47 @@ const planParAtelierVue = computed(() => {
 function fmtDateShort(d) { return d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '' }
 function moisCourt(d) { return d ? d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) : '' }
 
+// --- Réalisation (réel) : historique des opérations par équipement / atelier ---
+const atelierById = computed(() => { const m = {}; for (const a of ateliers.value) m[a.id] = a.nom || a.code; return m })
+const eqById = computed(() => { const m = {}; for (const e of equipements.value) m[e.id] = e; return m })
+const ofById = computed(() => { const m = {}; for (const o of ofs.value) { const pr = o.produits || prodById.value[o.produit_id] || {}; m[o.id] = { lot: o.numero_lot || '—', code: pr.code_pf || '?', desig: pr.designation || '' } } return m })
+function phaseCourtNom(p) { const k = phaseKeyFromName(p); return k ? PHASE_NOM[k] : p }
+function realStatut(s) { const t = (s || '').toLowerCase(); if (/termin|fini|clotur|achev/.test(t)) return 're-fin'; if (/cours|encours|en_cours|lanc|demarr/.test(t)) return 're-enc'; return 're-oth' }
+function realStatutTxt(s) { const c = realStatut(s); return c === 're-fin' ? 'Terminé' : c === 're-enc' ? 'En cours' : (s || '—') }
+function dOp(o) { const d = o.fin || o.debut; return d ? d.getTime() : 0 }
+// Fenêtre réalisation : rétrospective (mois en cours / 2 / 3 derniers mois).
+const fenetreReal = computed(() => {
+  if (!horizonSel.value) return null
+  const n = new Date()
+  return { debut: new Date(n.getFullYear(), n.getMonth() - (horizonSel.value - 1), 1), fin: new Date(n.getFullYear(), n.getMonth() + 1, 0, 23, 59, 59) }
+})
+const realisationParEquip = computed(() => {
+  const f = fenetreReal.value
+  const byEq = {}
+  for (const r of suiviPhases.value) {
+    const eqId = r.equipement_id; if (!eqId) continue
+    const eq = eqById.value[eqId]; if (!eq) continue
+    const k = phaseDeType(eq.type); if (!k || k === 'conditionnement') continue   // fabrication seulement
+    const dRef = r.date_phase || r.date_debut; const dd = dRef ? new Date(dRef) : null
+    if (f && (!dd || dd < f.debut || dd > f.fin)) continue
+    if (!byEq[eqId]) byEq[eqId] = { equip: eq.nom || eq.code, atelier: atelierById.value[eq.atelier_id] || '—', phase: PHASE_NOM[k] || eq.type, ops: [] }
+    const of = ofById.value[r.ordre_id] || {}
+    byEq[eqId].ops.push({ lot: of.lot, code: of.code, desig: of.desig, phase: r.phase, debut: r.date_debut ? new Date(r.date_debut) : null, fin: r.date_phase ? new Date(r.date_phase) : null, qteS: Number(r.quantite_sortie) || 0, qteE: Number(r.quantite_entree) || 0, statut: r.statut, sc: realStatut(r.statut) })
+  }
+  const list = Object.values(byEq)
+  for (const a of list) {
+    a.ops.sort((x, y) => dOp(x) - dOp(y))
+    a.nLots = new Set(a.ops.map(o => o.lot)).size
+    a.nOps = a.ops.length
+    a.nEnc = a.ops.filter(o => o.sc === 're-enc').length
+    a.nFin = a.ops.filter(o => o.sc === 're-fin').length
+    const ds = a.ops.map(dOp).filter(Boolean)
+    a.premier = ds.length ? new Date(Math.min(...ds)) : null
+    a.dernier = ds.length ? new Date(Math.max(...ds)) : null
+  }
+  return list.sort((a, b) => String(a.atelier).localeCompare(String(b.atelier)) || (ORDRE_PH.indexOf(a.phase) - ORDRE_PH.indexOf(b.phase)) || String(a.equip).localeCompare(String(b.equip)))
+})
+
 // Phases de gamme sans équipement cadencé.
 const phasesManquantes = computed(() => {
   const out = [], seen = new Set()
@@ -655,6 +736,18 @@ table.grid td { padding: 7px 10px; border-bottom: 1px solid #eef1f6; color: #1f2
 .lc-prod { font-size: 10.5px; color: #475569; font-weight: 600; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lc-line { font-size: 10px; color: #64748b; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .lc-need.lc-late { color: #b91c1c; font-weight: 700; }
+/* Réalisation (réel) */
+.head-ctrls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.eq-atelier { font-size: 11px; color: #94a3b8; }
+.re-enc-badge { background: #dbeafe; color: #1d4ed8; }
+.lot-card.re-fin { border-left-color: #10b981; }
+.lot-card.re-enc { border-left-color: #3b82f6; background: #eff6ff; }
+.lot-card.re-oth { border-left-color: #cbd5e1; }
+.leg-dot.re-fin { background: #10b981; } .leg-dot.re-enc { background: #3b82f6; }
+.lc-badge { margin-left: auto; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+.lc-badge.re-fin { background: #dcfce7; color: #047857; }
+.lc-badge.re-enc { background: #dbeafe; color: #1d4ed8; }
+.lc-badge.re-oth { background: #f1f5f9; color: #64748b; }
 
 .warn-card { background: #fff7ed; border-color: #fed7aa; }
 .warn-txt { font-size: 12.5px; color: #9a3412; margin: 0 0 8px; }
