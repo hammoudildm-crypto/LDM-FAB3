@@ -129,7 +129,13 @@
                    :title="t.type === 'lot' ? (titre(t) + '  •  glisser horizontalement pour décaler ce lot  •  double-clic pour réinitialiser') : titre(t)"
                    @mousedown="t.type === 'lot' ? debutDragTemps($event, row.eq.id, t.uid) : null"
                    @dblclick="t.type === 'lot' ? resetDecal(row.eq.id, t.uid) : null">
-                <span v-if="j === 0" class="g-lbl">{{ t.type === 'lot' ? (t.prod.code_pf + (t.lot ? ' · ' + t.lot : '') + (t.turbNo ? ' T' + t.turbNo : '')) : (t.type.startsWith('gen') ? 'NG' : 'NP') }}</span>
+                <span v-if="j === 0" class="g-lbl" :class="{ 'g-lbl2': t.type === 'lot' }">
+                  <template v-if="t.type === 'lot'">
+                    <span class="g-lbl-nom">{{ t.prod.designation }}</span>
+                    <span class="g-lbl-code">{{ t.prod.code_pf }}{{ t.lot ? ' · ' + t.lot : '' }}{{ t.turbNo ? ' T' + t.turbNo : '' }}</span>
+                  </template>
+                  <template v-else>{{ t.type.startsWith('gen') ? 'NG' : 'NP' }}</template>
+                </span>
               </div>
             </template>
           </div>
@@ -960,6 +966,9 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .g-bar { position: absolute; top: 4px; height: 26px; border-radius: 4px; border: 1px solid; box-sizing: border-box; overflow: hidden; display: flex; align-items: center; cursor: default; z-index: 1; }
 .g-bar.g-lot, .g-bar.g-gen, .g-bar.g-genH, .g-bar.g-part { }
 .g-lbl { font-size: 8.5px; font-weight: 700; padding: 0 3px; white-space: nowrap; color: #1e293b; }
+.g-lbl2 { display: flex; flex-direction: column; justify-content: center; line-height: 1.15; overflow: hidden; }
+.g-lbl2 .g-lbl-nom { font-size: 8px; font-weight: 600; opacity: .82; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-lbl2 .g-lbl-code { font-size: 8.5px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .g-gen, .g-genH { background: #7f1d1d; border-color: #7f1d1d; }
 .g-gen .g-lbl, .g-genH .g-lbl { color: #fff; }
 .g-genH { background: repeating-linear-gradient(45deg, #7f1d1d, #7f1d1d 4px, #991b1b 4px, #991b1b 8px); }
