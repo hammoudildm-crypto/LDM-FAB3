@@ -618,10 +618,10 @@ async function importerPlanExcel(e) {
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, blankrows: false })
       if (!rows.length) continue
       for (let r = 0; r < Math.min(rows.length, 15); r++) {
-        const head = (rows[r] || []).map(norm)
+        const head = Array.from(rows[r] || [], norm)   // Array.from densifie (les cellules vides deviennent '')
         const iCode = head.indexOf('code'); const iTaille = head.indexOf('taille')
-        const iDebut = head.findIndex(h => h.startsWith('debut est'))
-        if (iCode >= 0 && iTaille >= 0 && iDebut >= 0) { const iLot = head.findIndex(h => h.includes('lot')); feuilles.push({ rows, hi: r, iCode, iTaille, iDebut, iLot }); break }
+        const iDebut = head.findIndex(h => (h || '').startsWith('debut est'))
+        if (iCode >= 0 && iTaille >= 0 && iDebut >= 0) { const iLot = head.findIndex(h => (h || '').includes('lot')); feuilles.push({ rows, hi: r, iCode, iTaille, iDebut, iLot }); break }
       }
     }
     if (!feuilles.length) { msgImport.value = 'Aucune feuille de conditionnement reconnue (colonnes attendues : « Code », « Taille », « Début est. »).'; return }
