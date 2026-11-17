@@ -36,6 +36,10 @@
             <option value="manuelle">Priorités manuelles</option>
           </select>
         </div>
+        <div class="add-field chk-wk" v-if="!condSeul">
+          <label>Campagnes</label>
+          <label class="wk"><input type="checkbox" v-model="grouperCampagnes" /> Regrouper les lots d'un même produit <span class="camp-ng">· {{ nbNettoyagesGen }} nettoyage{{ nbNettoyagesGen > 1 ? 's' : '' }} général{{ nbNettoyagesGen > 1 ? 'aux' : '' }}</span></label>
+        </div>
         <div class="add-field chk-wk">
           <label>Conditionnement</label>
           <label class="wk"><input type="checkbox" v-model="optimisationCond" /> Alimentation continue du conditionnement (éviter les ruptures)</label>
@@ -415,6 +419,7 @@ const optimisationCond = ref(true)   // alimentation continue du conditionnement
 const condSeul = ref(false)
 const fabSeul = ref(false)           // fabrication seule : on ordonnance la fab pour tenir l'échéance de conditionnement (import plan)
 const preferCampagne = ref(0.5)
+const grouperCampagnes = ref(false)   // fabrication : regrouper les lots d'un même produit (moins de NG)
 const hpj = ref(24)
 const selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref('')
 let seq = 1
@@ -672,13 +677,28 @@ const echVal = (g) => g.dateEcheance ? new Date(g.dateEcheance + 'T00:00:00').ge
 const prioriteEffective = computed(() => {
   const m = {}
   if (prioMode.value === 'manuelle') { for (const g of groupes.value) m[g.id] = Number(g.priorite) || 999; return m }
-  const ranked = [...groupes.value].sort((a, b) => {
+  let ranked = [...groupes.value].sort((a, b) => {
     if (prioMode.value === 'echeance') return (echVal(a) - echVal(b)) || (caDe(b) - caDe(a))   // EDD : échéance la plus proche d'abord
     if (prioMode.value === 'valeur') return (caDe(b) / dureeGroupe(b)) - (caDe(a) / dureeGroupe(a))
     return caDe(b) - caDe(a)
   })
+  // Regroupement en campagnes : on cluster les lots d'un même produit (produits ordonnés
+  // par leur lot le plus prioritaire), pour enchaîner sans nettoyage général (NG) entre eux.
+  if (grouperCampagnes.value) {
+    const order = [], byProd = new Map()
+    for (const g of ranked) { if (!byProd.has(g.produitId)) { byProd.set(g.produitId, []); order.push(g.produitId) } byProd.get(g.produitId).push(g) }
+    ranked = order.flatMap(pid => byProd.get(pid))
+  }
   ranked.forEach((g, i) => { m[g.id] = i + 1 })
   return m
+})
+// Nombre de nettoyages généraux (changements de produit) impliqués par l'ordre courant.
+const nbNettoyagesGen = computed(() => {
+  const pe = prioriteEffective.value
+  const ordered = [...groupes.value].sort((a, b) => ((pe[a.id] || 999) - (pe[b.id] || 999)))
+  let ng = 0, last = null
+  for (const g of ordered) { if (g.produitId !== last) ng++; last = g.produitId }
+  return ng
 })
 
 // Déploiement en lots individuels (numérotés par produit).
@@ -1178,6 +1198,7 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .ch-fill { height: 100%; border-radius: 6px; transition: width .3s; }
 .ch-fill.ch-over { background: #dc2626; } .ch-fill.ch-high { background: #f59e0b; } .ch-fill.ch-mid { background: #0d9488; } .ch-fill.ch-low { background: #94a3b8; }
 .ch-pct { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 13px; color: #0f172a; }
+.camp-ng { font-weight: 700; color: #b45309; font-size: 11.5px; }
 .ech-ok { margin-top: 10px; font-size: 13px; font-weight: 700; color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 9px 12px; }
 .obj-strat { font-size: 12px; font-weight: 700; color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 999px; padding: 3px 11px; white-space: nowrap; }
 .obj-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 14px; }
