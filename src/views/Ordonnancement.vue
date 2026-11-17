@@ -132,30 +132,27 @@
       </p>
     </section>
 
-    <!-- Planning prévisionnel par équipement -->
+    <!-- Planning de fabrication par équipement (timeline) -->
     <section v-if="planParAtelier.length" class="card">
-      <h2 class="card-title">Planning prévisionnel par équipement</h2>
-      <p class="muted" style="margin:0 0 14px">Pour chaque équipement, les lots à fabriquer dans l'ordre, avec les dates d'entrée et de sortie prévues selon l'ordonnancement.</p>
-      <div v-for="a in planParAtelier" :key="a.phase + a.equip" class="atelier-bloc">
-        <div class="at-head">
-          <div class="at-id"><span class="at-phase">{{ a.phase }}</span><strong class="at-eq">{{ a.equip }}</strong></div>
-          <div class="at-meta">{{ a.lots.length }} lot{{ a.lots.length > 1 ? 's' : '' }} · {{ a.busy }} j occupé{{ a.busy > 1 ? 's' : '' }} · {{ fmtDate(a.premier) }} → {{ fmtDate(a.dernier) }}</div>
+      <h2 class="card-title">Planning de fabrication par équipement</h2>
+      <p class="muted" style="margin:0 0 14px">Une ligne par équipement, une barre par lot, placée selon l'ordonnancement. Référence = date de besoin conditionnement (repère rouge en haut de la barre) ; barre entourée de rouge = fabrication finie <strong>après</strong> le besoin. Survole une barre pour le détail (dates, lot).</p>
+      <div class="gantt">
+        <div class="g-axis">
+          <div class="g-axis-sp"></div>
+          <div class="g-axis-track">
+            <div v-for="t in axisTicks" :key="t.i" class="g-tick" :style="{ left: t.left }"><span>{{ t.label }}</span></div>
+          </div>
         </div>
-        <div class="tbl-wrap">
-          <table class="grid">
-            <thead><tr><th class="ta-c">#</th><th>Produit</th><th class="ta-c">N° Lot</th><th class="ta-r">Boîtes</th><th class="ta-c">Entrée</th><th class="ta-c">Sortie</th><th class="ta-c">Besoin cond.</th></tr></thead>
-            <tbody>
-              <tr v-for="(l, i) in a.lots" :key="i">
-                <td class="ta-c">{{ i + 1 }}</td>
-                <td><span class="lot-dot" :style="{ background: l.couleur }"></span><strong>{{ l.code }}</strong> <span class="lot-desig">{{ l.desig }}</span></td>
-                <td class="ta-c"><span v-if="l.numeroLot" class="lot-num">{{ l.numeroLot }}</span><span v-else class="muted">—</span></td>
-                <td class="ta-r">{{ fmt(l.boites) }}</td>
-                <td class="ta-c ordo-date"><span v-if="l.gap > 0" class="at-gap" title="Atelier libre avant ce lot">⋯ {{ l.gap }} j</span>{{ fmtDate(l.entree) }}</td>
-                <td class="ta-c ordo-date">{{ fmtDate(l.sortie) }}</td>
-                <td class="ta-c">{{ l.besoin ? fmtDate(l.besoin) : '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
+        <div v-for="a in planParAtelier" :key="a.phase + a.equip" class="g-row">
+          <div class="g-eqlbl"><span class="at-phase">{{ a.phase }}</span><strong>{{ a.equip }}</strong></div>
+          <div class="g-track">
+            <div v-for="(l, i) in a.lots" :key="'b' + i" class="g-bar" :class="{ 'g-late': l.late }"
+                 :style="{ left: pct(l.startIdx), width: pctW(l.startIdx, l.endIdx), background: l.couleur }"
+                 :title="l.code + ' · ' + l.desig + '\nLot ' + (l.numeroLot || '—') + ' · ' + fmt(l.boites) + ' boîtes\nFab : ' + fmtDate(l.entree) + ' → ' + fmtDate(l.sortie) + '\nBesoin cond. : ' + (l.besoin ? fmtDate(l.besoin) : '—')">
+              <span class="g-bar-t">{{ l.code }}<template v-if="l.numeroLot"> ·{{ l.numeroLot }}</template></span>
+            </div>
+            <div v-for="(l, i) in a.lots" :key="'n' + i" v-show="l.besoinIdx != null" class="g-need" :style="{ left: pct(l.besoinIdx) }" :title="'Besoin cond. ' + (l.besoin ? fmtDate(l.besoin) : '')"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -517,11 +514,20 @@ const planParAtelier = computed(() => {
   for (const a of list) {
     a.lots.sort((x, y) => x.startIdx - y.startIdx)
     let prevEnd = null; a.busy = 0
-    for (const l of a.lots) { l.gap = (prevEnd != null && l.startIdx > prevEnd + 1) ? (l.startIdx - prevEnd - 1) : 0; a.busy += l.endIdx - l.startIdx + 1; prevEnd = l.endIdx }
+    for (const l of a.lots) { l.gap = (prevEnd != null && l.startIdx > prevEnd + 1) ? (l.startIdx - prevEnd - 1) : 0; a.busy += l.endIdx - l.startIdx + 1; prevEnd = l.endIdx; l.late = !!(l.besoin && l.sortie && l.sortie > l.besoin); l.besoinIdx = l.besoin ? Math.max(0, idxAvant(l.besoin)) : null }
     a.premier = a.lots.length ? a.lots[0].entree : null
     a.dernier = a.lots.length ? a.lots[a.lots.length - 1].sortie : null
   }
   return list.sort((a, b) => (ORDRE_PH.indexOf(a.phase) - ORDRE_PH.indexOf(b.phase)) || String(a.equip).localeCompare(String(b.equip)))
+})
+// Positionnement des barres sur la timeline (en % de l'horizon du plan).
+function pct(idx) { const per = finGlobale.value + 1; return (per > 0 ? (idx / per) * 100 : 0) + '%' }
+function pctW(s, e) { const per = finGlobale.value + 1; return (per > 0 ? ((e - s + 1) / per) * 100 : 0) + '%' }
+const axisTicks = computed(() => {
+  const per = finGlobale.value + 1; if (per <= 0) return []
+  const step = Math.max(1, Math.round(per / 8)); const out = []
+  for (let i = 0; i < per; i += step) { const d = dateIdx(i); out.push({ i, left: (i / per) * 100 + '%', label: d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '' }) }
+  return out
 })
 
 // Phases de gamme sans équipement cadencé.
@@ -612,15 +618,24 @@ table.grid td { padding: 7px 10px; border-bottom: 1px solid #eef1f6; color: #1f2
 .ch-pct { font-size: 12px; font-weight: 700; color: #1a2233; text-align: right; }
 .ch-meta { font-size: 11px; color: #94a3b8; white-space: nowrap; }
 
-.atelier-bloc { margin-bottom: 18px; border: 1px solid #eef1f6; border-radius: 10px; overflow: hidden; }
-.at-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; background: #f8fafc; border-bottom: 1px solid #eef1f6; flex-wrap: wrap; }
-.at-id { display: flex; align-items: center; gap: 8px; }
 .at-phase { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #0f766e; background: #ecfdf5; border-radius: 5px; padding: 2px 7px; }
-.at-eq { font-size: 13.5px; color: #1a2233; }
-.at-meta { font-size: 11.5px; color: #64748b; }
-.atelier-bloc .tbl-wrap table.grid th { background: #fff; }
 .lot-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
-.at-gap { display: inline-block; margin-right: 6px; font-size: 10px; color: #94a3b8; }
+
+/* Timeline planning par équipement */
+.gantt { border: 1px solid #eef1f6; border-radius: 10px; overflow: hidden; }
+.g-axis { display: grid; grid-template-columns: 172px 1fr; border-bottom: 1px solid #eef1f6; background: #f8fafc; }
+.g-axis-track { position: relative; height: 22px; }
+.g-tick { position: absolute; top: 4px; transform: translateX(-50%); font-size: 10px; color: #94a3b8; }
+.g-tick span { white-space: nowrap; }
+.g-row { display: grid; grid-template-columns: 172px 1fr; border-bottom: 1px solid #f1f4f9; min-height: 30px; }
+.g-row:last-child { border-bottom: none; }
+.g-eqlbl { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-right: 1px solid #eef1f6; background: #fff; overflow: hidden; }
+.g-eqlbl strong { font-size: 11.5px; color: #1a2233; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-track { position: relative; min-height: 30px; }
+.g-bar { position: absolute; top: 5px; height: 20px; border-radius: 4px; display: flex; align-items: center; padding: 0 5px; overflow: hidden; min-width: 3px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); cursor: default; }
+.g-bar.g-late { outline: 2px solid #b91c1c; outline-offset: -2px; }
+.g-bar-t { font-size: 10px; color: #fff; font-weight: 600; white-space: nowrap; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
+.g-need { position: absolute; top: 1px; height: 8px; width: 0; border-left: 2px solid #b91c1c; opacity: .65; }
 
 .warn-card { background: #fff7ed; border-color: #fed7aa; }
 .warn-txt { font-size: 12.5px; color: #9a3412; margin: 0 0 8px; }
