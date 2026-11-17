@@ -197,13 +197,14 @@
       </div>
       <div class="tbl-wrap">
         <table class="grid">
-          <thead><tr><th class="ta-c">Ordre</th><th>Produit</th><th class="ta-r">Boîtes</th><th class="ta-r">CA</th><th class="ta-c">Fin cond. · livrable</th><th class="ta-r">CA cumulé</th></tr></thead>
+          <thead><tr><th class="ta-c">Ordre</th><th>Produit</th><th class="ta-r">Boîtes</th><th class="ta-r">CA</th><th class="ta-c">Fin fabrication</th><th class="ta-c">Fin cond. · livrable</th><th class="ta-r">CA cumulé</th></tr></thead>
           <tbody>
             <tr v-for="(it, i) in objectifResultat.list" :key="it.gid">
               <td class="ta-c obj-rang">{{ i + 1 }}</td>
               <td><strong>{{ it.code }}</strong> <span class="lot-desig">{{ it.desig }}</span></td>
               <td class="ta-r">{{ fmt(it.boites) }}</td>
               <td class="ta-r">{{ fmtDA(it.ca) }}</td>
+              <td class="ta-c obj-fabdate">{{ it.dateFinFab ? fmtDate(it.dateFinFab) : '—' }}</td>
               <td class="ta-c obj-date">{{ fmtDate(it.dateLivr) }}</td>
               <td class="ta-r obj-cum">{{ fmtDA(it.cumCA) }}</td>
             </tr>
@@ -227,7 +228,7 @@
           </table>
         </div>
       </div>
-      <p class="obj-note">Ordre optimisé pour <strong>livrer la valeur au plus tôt</strong> (CA ÷ durée), dans la limite de la disponibilité des ateliers. <strong>« Fin cond. · livrable »</strong> = date estimée de fin de conditionnement du produit (le vrac devient livrable une fois conditionné). La fabrication est affectée automatiquement à l'<strong>atelier compatible le plus tôt libre</strong> (répartition ci‑dessus) ; « Objectif terminé le » = fin de conditionnement du dernier produit.<span v-if="optimisationCond"> La fabrication est <strong>entrelacée pour alimenter le conditionnement en continu</strong> (stratégie « {{ strategieChoisie }} ») et éviter les ruptures des lignes de conditionnement.</span><span v-if="objectifResultat.sansCond"> ⚠ {{ objectifResultat.sansCond }} produit(s) sans phase de conditionnement planifiée (date = fin de fabrication).</span></p>
+      <p class="obj-note">Ordre optimisé pour <strong>livrer la valeur au plus tôt</strong> (CA ÷ durée), dans la limite de la disponibilité des ateliers. <strong>« Fin fabrication »</strong> = date estimée de fin de fabrication selon les temps de gamme ; <strong>« Fin cond. · livrable »</strong> = date estimée de fin de conditionnement du produit (le vrac devient livrable une fois conditionné). La fabrication est affectée automatiquement à l'<strong>atelier compatible le plus tôt libre</strong> (répartition ci‑dessus) ; « Objectif terminé le » = fin de conditionnement du dernier produit.<span v-if="optimisationCond"> La fabrication est <strong>entrelacée pour alimenter le conditionnement en continu</strong> (stratégie « {{ strategieChoisie }} ») et éviter les ruptures des lignes de conditionnement.</span><span v-if="objectifResultat.sansCond"> ⚠ {{ objectifResultat.sansCond }} produit(s) sans phase de conditionnement planifiée (date = fin de fabrication).</span></p>
     </section>
 
     <!-- Affectation des équipements (machines identiques) -->
@@ -897,14 +898,15 @@ const objectifResultat = computed(() => {
   for (const r of planning.value) {
     const gid = Math.floor(r.id / 1000)
     const fin = r.finCond != null ? r.finCond : (r.finFab != null ? r.finFab : 0)
-    if (!byG[gid]) byG[gid] = { gid, fin: 0, boites: 0 }
+    if (!byG[gid]) byG[gid] = { gid, fin: 0, finFab: null, boites: 0 }
     byG[gid].fin = Math.max(byG[gid].fin, fin)
+    if (r.finFab != null) byG[gid].finFab = Math.max(byG[gid].finFab ?? 0, r.finFab)
     byG[gid].boites += r.boites
   }
   const list = Object.values(byG).map(x => {
     const g = groupes.value.find(gr => gr.id === x.gid) || {}
     const p = prodById.value[g.produitId] || {}
-    return { gid: x.gid, code: p.code_pf || '?', desig: p.designation || '', boites: x.boites, ca: x.boites * (Number(p.pcsu) || 0), finIdx: x.fin, dateLivr: dateIdx(x.fin) }
+    return { gid: x.gid, code: p.code_pf || '?', desig: p.designation || '', boites: x.boites, ca: x.boites * (Number(p.pcsu) || 0), finIdx: x.fin, dateLivr: dateIdx(x.fin), dateFinFab: x.finFab != null ? dateIdx(x.finFab) : null }
   }).sort((a, b) => (a.finIdx - b.finIdx) || (b.ca - a.ca))
   let cum = 0
   for (const it of list) { cum += it.ca; it.cumCA = cum }
@@ -1218,6 +1220,7 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .ok-l { font-size: 11.5px; color: #64748b; font-weight: 600; margin-top: 2px; }
 .obj-rang { font-weight: 800; color: #4338ca; }
 .obj-date { font-weight: 700; color: #0f172a; white-space: nowrap; }
+.obj-fabdate { font-weight: 700; color: #0f766e; white-space: nowrap; }
 .obj-cum { font-weight: 800; color: #4338ca; }
 .obj-note { font-size: 12px; color: #64748b; margin: 10px 2px 0; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 8px; padding: 8px 11px; }
 .obj-rep { margin-top: 14px; }
