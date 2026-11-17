@@ -66,72 +66,6 @@
       <p v-else class="risk-txt">✓ <strong>Tous les lots sont fabriqués à temps</strong> pour leur besoin conditionnement, avec la date de départ et la capacité actuelles.</p>
     </section>
 
-    <!-- Occupation des ateliers de fabrication (vue d'ensemble, en haut) -->
-    <section v-if="planning.length && chargeSimple.rows.length" class="card">
-      <h2 class="card-title">Occupation des ateliers de fabrication</h2>
-      <p class="muted" style="margin:0 0 12px">Taux d'occupation de chaque atelier sur l'horizon du plan ({{ chargeSimple.horizon }} jours). L'atelier le plus chargé est le <strong>goulot</strong> : c'est lui qui cadence le débit.</p>
-      <div class="charge-list">
-        <div v-for="(a, i) in chargeSimple.rows" :key="i" class="charge-row" :class="{ 'charge-bottleneck': i === 0 }">
-          <div class="ch-lbl"><span class="ch-phase">{{ a.phase }}</span> <span class="ch-eq">{{ a.equip }}</span><span v-if="i === 0" class="ch-gl">goulot</span></div>
-          <div class="ch-track"><div class="ch-fill" :class="chargeClass(a.occ)" :style="{ width: Math.min(100, a.occ) + '%' }"></div></div>
-          <div class="ch-pct">{{ a.occ }} %</div>
-          <div class="ch-meta">{{ a.lots }} lot{{ a.lots > 1 ? 's' : '' }} · {{ a.busy }} j occupé{{ a.busy > 1 ? 's' : '' }}</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Ordonnancement proposé (table combinée) -->
-    <section v-if="planning.length" class="card">
-      <h2 class="card-title">Ordonnancement proposé — par besoin conditionnement</h2>
-      <p class="muted" style="margin:0 0 12px">
-        Ordre = besoin le plus proche d'abord (EDD). <strong>Durée fab</strong> = temps de gamme selon la cadence atelier.
-        <strong>Limite début</strong> = dernière date pour lancer la fabrication sans dépasser le besoin (rétro-planning). <strong>Marge</strong> = jours entre la fin de fabrication proposée et le besoin.
-      </p>
-      <div class="tbl-wrap">
-        <table class="grid">
-          <thead>
-            <tr>
-              <th class="ta-c">#</th>
-              <th>Produit</th>
-              <th class="ta-c">N° Lot</th>
-              <th class="ta-r">Boîtes</th>
-              <th class="ta-c">Besoin cond.</th>
-              <th class="ta-c">Atelier cond.</th>
-              <th class="ta-r">Durée fab</th>
-              <th class="ta-c">Début fab proposé</th>
-              <th class="ta-c">Fin fab proposée</th>
-              <th class="ta-c">Limite début</th>
-              <th class="ta-r">Marge</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(r, i) in tableauOrdo" :key="i" :class="{ 'row-late': r.enRetard }">
-              <td class="ta-c ordo-rang">{{ i + 1 }}</td>
-              <td>
-                <strong>{{ r.code }}</strong> <span class="lot-desig">{{ r.desig }}</span>
-              </td>
-              <td class="ta-c"><span v-if="r.numeroLot" class="lot-num">{{ r.numeroLot }}</span><span v-else class="muted">—</span></td>
-              <td class="ta-r">{{ fmt(r.boites) }}</td>
-              <td class="ta-c">{{ r.besoin ? fmtDate(r.besoin) : '—' }}</td>
-              <td class="ta-c lot-desig">{{ r.atelierCond || '—' }}</td>
-              <td class="ta-r">{{ r.dureeJ }} j</td>
-              <td class="ta-c ordo-date">{{ r.debut ? fmtDate(r.debut) : '—' }}</td>
-              <td class="ta-c ordo-date" :class="{ 'sortie-late': r.enRetard }">{{ r.fin ? fmtDate(r.fin) : '—' }}</td>
-              <td class="ta-c ordo-limite">
-                <span v-if="r.echPassee" class="lim-pass" title="Le besoin est déjà passé — lot en retard dès le départ">dépassée</span>
-                <span v-else-if="r.dateLimite" :class="{ 'lim-tight': r.limiteDepassee }" :title="r.limiteDepassee ? 'Début proposé après la date limite — risque de retard' : 'Dernière date pour démarrer à temps'">{{ fmtDate(r.dateLimite) }}</span>
-                <span v-else class="muted">—</span>
-              </td>
-              <td class="ta-r"><span class="marge" :class="margeClass(r.marge)">{{ margeTxt(r.marge) }}</span></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="muted" style="margin-top:8px">
-        <span class="marge m-late">rouge</span> = en retard (fab finie après le besoin) · <span class="marge m-tight">orange</span> = tendu (≤ 2 j) · <span class="marge m-ok">vert</span> = confortable.
-      </p>
-    </section>
-
     <!-- Planning de fabrication par équipement (files de lots) -->
     <section v-if="planParAtelier.length" class="card">
       <div class="card-head-row">
@@ -160,6 +94,20 @@
               <div class="lc-line lc-need" :class="{ 'lc-late': l.late }">◷ besoin {{ l.besoin ? fmtDateShort(l.besoin) : '—' }}</div>
             </div>
           </template>
+        </div>
+      </div>
+    </section>
+
+    <!-- Occupation des ateliers de fabrication -->
+    <section v-if="planning.length && chargeSimple.rows.length" class="card">
+      <h2 class="card-title">Occupation des ateliers de fabrication</h2>
+      <p class="muted" style="margin:0 0 12px">Taux d'occupation de chaque atelier sur l'horizon du plan ({{ chargeSimple.horizon }} jours). L'atelier le plus chargé est le <strong>goulot</strong> : c'est lui qui cadence le débit.</p>
+      <div class="charge-list">
+        <div v-for="(a, i) in chargeSimple.rows" :key="i" class="charge-row" :class="{ 'charge-bottleneck': i === 0 }">
+          <div class="ch-lbl"><span class="ch-phase">{{ a.phase }}</span> <span class="ch-eq">{{ a.equip }}</span><span v-if="i === 0" class="ch-gl">goulot</span></div>
+          <div class="ch-track"><div class="ch-fill" :class="chargeClass(a.occ)" :style="{ width: Math.min(100, a.occ) + '%' }"></div></div>
+          <div class="ch-pct">{{ a.occ }} %</div>
+          <div class="ch-meta">{{ a.lots }} lot{{ a.lots > 1 ? 's' : '' }} · {{ a.busy }} j occupé{{ a.busy > 1 ? 's' : '' }}</div>
         </div>
       </div>
     </section>
