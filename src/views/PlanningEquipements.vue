@@ -32,9 +32,9 @@
       </div>
       <div class="synth-eq" v-if="synthEquip.length">
         <table class="synth-tbl">
-          <thead><tr><th>Équipement</th><th class="right">Lots</th><th class="right">NG</th><th class="right">NP</th><th class="right">MP</th><th class="right">MC</th><th class="right">AT</th><th class="right">Autre</th><th>Régime</th><th class="right">Fin</th></tr></thead>
+          <thead><tr><th>Équipement</th><th class="right">Lots</th><th class="right">NG</th><th class="right">NP</th><th class="right">MP</th><th class="right">MC</th><th class="right">AT</th><th class="right">Autre</th><th>Occupation</th><th>Régime</th><th class="right">Fin</th></tr></thead>
           <tbody>
-            <tr v-for="e in synthEquip" :key="e.id">
+            <tr v-for="e in synthEquip" :key="e.id" :class="{ 'synth-goulot': String(e.id) === String(goulotId) }">
               <td>{{ e.code }} <span class="synth-nom">{{ e.nom }}</span></td>
               <td class="right">{{ e.lots }}</td>
               <td class="right">{{ e.ng }}</td>
@@ -43,6 +43,11 @@
               <td class="right">{{ e.mc || '—' }}</td>
               <td class="right">{{ e.at || '—' }}</td>
               <td class="right">{{ e.au || '—' }}</td>
+              <td class="synth-occ-cell">
+                <span class="so-bar"><span class="so-fill" :class="chargeClass((chargeMap[e.id] || {}).occ || 0)" :style="{ width: Math.min(100, (chargeMap[e.id] || {}).occ || 0) + '%' }"></span></span>
+                <b class="so-pct">{{ (chargeMap[e.id] || {}).occ || 0 }}%</b>
+                <span v-if="String(e.id) === String(goulotId)" class="so-gl">goulot</span>
+              </td>
               <td>{{ e.regime === '2x8' ? '2×8' : '3×8' }}</td>
               <td class="right nowrap">{{ fmtJH(e.fin) }}</td>
             </tr>
@@ -831,6 +836,30 @@ const offBands = computed(() => {
   }
   return map
 })
+
+// Charge (taux d'occupation) par équipement sur la fenêtre du plan — pour repérer le goulot.
+const chargeMap = computed(() => {
+  const end = finGlobale.value, endMs = end.getTime(), m = {}
+  for (const row of planning.value) {
+    const regime = regimeEquip[row.eq.id] || '3x8', weAll = weOn(row.eq.id)
+    const requis = buildRequisMap(requisEquip[row.eq.id], regime)
+    let dispoH = 0, c = new Date(t0.value), g = 0
+    while (c < end && g++ < 8000) {
+      const tc = c.getTime(); let best = Infinity
+      for (const hh of [0, 6, 22]) { const x = new Date(c); x.setHours(hh, 0, 0, 0); if (x.getTime() <= tc) x.setDate(x.getDate() + 1); if (x.getTime() < best) best = x.getTime() }
+      const segEnd = Math.min(best, endMs)
+      if (ouvertRegime(c, regime, weAll, requis)) dispoH += (segEnd - tc) / 3600000
+      c = new Date(best)
+    }
+    let busyH = 0
+    for (const t of row.tasks) for (const s of t.segments) busyH += (new Date(s.end) - new Date(s.start)) / 3600000
+    m[row.eq.id] = { dispoH, busyH, occ: dispoH > 0 ? Math.round(busyH / dispoH * 100) : 0 }
+  }
+  return m
+})
+const goulotId = computed(() => { let best = null, bo = -1; for (const id in chargeMap.value) { const o = chargeMap.value[id].occ; if (o > bo) { bo = o; best = id } } return best })
+function chargeClass(o) { if (o >= 100) return 'ch-over'; if (o >= 85) return 'ch-high'; if (o >= 50) return 'ch-mid'; return 'ch-low' }
+
 const maintenant = ref(new Date())
 let timerNow = null
 onMounted(() => { timerNow = setInterval(() => { maintenant.value = new Date() }, 60000) })
@@ -983,6 +1012,13 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .synth-tbl th.right, .synth-tbl td.right { text-align: right; }
 .synth-tbl td { padding: 3px 8px; border-bottom: 1px solid #f1f5f9; color: #1b2733; white-space: nowrap; }
 .synth-nom { color: #94a3b8; font-size: 10px; }
+.synth-occ-cell { min-width: 150px; }
+.synth-occ-cell .so-bar { display: inline-block; width: 70px; height: 8px; background: #f1f5f9; border-radius: 5px; overflow: hidden; vertical-align: middle; margin-right: 6px; }
+.synth-occ-cell .so-fill { display: block; height: 100%; border-radius: 5px; }
+.so-fill.ch-over { background: #dc2626; } .so-fill.ch-high { background: #f59e0b; } .so-fill.ch-mid { background: #0d9488; } .so-fill.ch-low { background: #94a3b8; }
+.synth-occ-cell .so-pct { font-variant-numeric: tabular-nums; font-weight: 800; }
+.so-gl { margin-left: 6px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #c2410c; background: #ffedd5; border-radius: 999px; padding: 1px 6px; }
+.synth-goulot td { background: #fff7ed; }
 .rc { display: flex; flex-direction: column; }
 .rc-v { font-size: 18px; font-weight: 800; color: #0f172a; }
 .rc-l { font-size: 10px; color: #64748b; }
