@@ -69,7 +69,7 @@
     <!-- Planning de fabrication par équipement (files de lots) -->
     <section v-if="planParAtelier.length || suiviPhases.length" class="card">
       <div class="card-head-row">
-        <h2 class="card-title">Planning de fabrication par équipement</h2>
+        <h2 class="card-title">Planning de fabrication par atelier</h2>
         <div class="head-ctrls">
           <label class="av-chk" title="Chaque étape déjà faite (par lot et par atelier) libère la capacité de son équipement ; les étapes planifiées les jours/mois suivants remontent pour la combler.">
             <input type="checkbox" v-model="avancer" /> Avancer le restant
@@ -84,9 +84,9 @@
       </div>
       <p class="muted" style="margin:0 0 14px"><template v-if="avancer">Les étapes déjà faites (par lot et par atelier) sont retirées et <strong>la capacité libérée avance les étapes suivantes</strong>. </template>Pastille : <span class="leg-dot st-ok"></span> à temps · <span class="leg-dot st-tight"></span> tendu · <span class="leg-dot st-late"></span> en retard<template v-if="!avancer"> · <span class="leg-sq lot-done-leg"></span> étape terminée (grisée)</template>.</p>
       <div v-if="!planParAtelierVue.length" class="muted">Aucun lot à fabriquer sur cette période.</div>
-      <div v-for="a in planParAtelierVue" :key="a.phase + a.equip" class="eq-board">
+      <div v-for="a in planParAtelierVue" :key="a.lieu + '§' + a.phase" class="eq-board">
         <div class="eq-head">
-          <div class="eq-id"><span class="at-phase">{{ a.phase }}</span><strong>{{ a.equip }}</strong></div>
+          <div class="eq-id"><span class="at-phase">{{ a.phase }}</span><strong>{{ a.lieu }}</strong><span v-if="a.atelierVrai && a.equipsList.length" class="eq-machines">{{ a.equipsList.join(' · ') }}</span></div>
           <div class="eq-occ" :class="chargeClass(a.occ)">Occupation {{ a.occ }} %</div>
         </div>
         <div class="eq-kpis">
@@ -418,7 +418,7 @@ function simuler(lots) {
       const duree = dureeJours(eq, lt.produitId, lt.boites)
       const start = Math.max(prevEnd + 1, slotsDe(eq)[si] || 0)
       const end = start + duree - 1
-      phases[k] = { start, end, equip: eq.nom || eq.code }
+      phases[k] = { start, end, equip: eq.nom || eq.code, eqId: eq.id, slots: Math.max(1, Math.floor(Number(eq.nb_machines) || 1)) }
       slotsDe(eq)[si] = end + 1
       prevEnd = end
     }
@@ -487,9 +487,15 @@ const planParAtelier = computed(() => {
   for (const r of planning.value) {
     for (const k in r.phases) {
       const ph = r.phases[k]
-      const cle = (PHASE_NOM[k] || k) + '§' + ph.equip
-      if (!by[cle]) by[cle] = { phase: PHASE_NOM[k] || k, equip: ph.equip, lots: [] }
-      by[cle].lots.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, phaseKey: k, boites: r.boites, couleur: r.couleur, entree: dateIdx(ph.start), sortie: dateIdx(ph.end), startIdx: ph.start, endIdx: ph.end, besoin: r.dateEcheance ? new Date(r.dateEcheance + 'T00:00:00') : null })
+      const eq = eqById.value[ph.eqId]
+      const atel = (eq && eq.atelier_id != null) ? atelierById.value[eq.atelier_id] : null
+      const lieu = atel || ph.equip   // atelier de l'équipement, sinon l'équipement lui-même
+      const phaseNom = PHASE_NOM[k] || k
+      const cle = lieu + '§' + phaseNom
+      if (!by[cle]) by[cle] = { phase: phaseNom, lieu, equip: lieu, atelierVrai: !!atel, equips: new Set(), slotsSet: {}, lots: [] }
+      by[cle].equips.add(ph.equip)
+      by[cle].slotsSet[ph.eqId] = ph.slots || 1
+      by[cle].lots.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, phaseKey: k, equip: ph.equip, boites: r.boites, couleur: r.couleur, entree: dateIdx(ph.start), sortie: dateIdx(ph.end), startIdx: ph.start, endIdx: ph.end, besoin: r.dateEcheance ? new Date(r.dateEcheance + 'T00:00:00') : null })
     }
   }
   const list = Object.values(by)
@@ -499,8 +505,10 @@ const planParAtelier = computed(() => {
     for (const l of a.lots) { l.gap = (prevEnd != null && l.startIdx > prevEnd + 1) ? (l.startIdx - prevEnd - 1) : 0; a.busy += l.endIdx - l.startIdx + 1; prevEnd = l.endIdx; l.margeJ = (l.besoin && l.sortie) ? Math.round((l.besoin - l.sortie) / 86400000) : null; l.late = l.margeJ != null && l.margeJ < 0; l.statut = l.margeJ == null ? 'st-none' : (l.margeJ < 0 ? 'st-late' : (l.margeJ <= 2 ? 'st-tight' : 'st-ok')); const lot = (l.numeroLot && l.phaseKey) ? String(l.numeroLot).trim() : null; const er = lot ? etapeReelMap.value[lot + '|' + l.phaseKey] : null; l.fini = lot ? etapeFini(lot, l.phaseKey) : false; l.enCours = !l.fini && !!(er && er.enCours) }
     a.premier = a.lots.length ? a.lots[0].entree : null
     a.dernier = a.lots.length ? a.lots[a.lots.length - 1].sortie : null
+    a.equipsList = [...a.equips]
+    a.nbSlots = Object.values(a.slotsSet).reduce((s, n) => s + n, 0) || 1
   }
-  return list.sort((a, b) => (ORDRE_PH.indexOf(a.phase) - ORDRE_PH.indexOf(b.phase)) || String(a.equip).localeCompare(String(b.equip)))
+  return list.sort((a, b) => (ORDRE_PH.indexOf(a.phase) - ORDRE_PH.indexOf(b.phase)) || String(a.lieu).localeCompare(String(b.lieu)))
 })
 // Filtre d'horizon (comme ORBIT : mois en cours / 2 / 3 mois) + regroupement par équipement.
 const horizonSel = ref(0)
@@ -515,7 +523,7 @@ const planParAtelierVue = computed(() => {
   let list = planParAtelier.value
   if (f) list = list.map(a => ({ ...a, lots: a.lots.filter(l => l.sortie >= f.debut && l.entree <= f.fin) })).filter(a => a.lots.length)
   return list.map(a => {
-    const lots = a.lots
+    const lots = a.lots; const nbSlots = a.nbSlots || 1
     const boites = lots.reduce((s, l) => s + (l.boites || 0), 0)
     const busy = lots.reduce((s, l) => s + (l.endIdx - l.startIdx + 1), 0)
     const nLate = lots.filter(l => l.statut === 'st-late' && !l.fini).length
@@ -531,7 +539,7 @@ const planParAtelierVue = computed(() => {
       let pm = null; for (const l of g.lots) { const m = l.entree ? (l.entree.getMonth() + '-' + l.entree.getFullYear()) : null; l.moisBreak = (pm != null && m !== pm); pm = m }
       return g
     })
-    return { phase: a.phase, equip: a.equip, lots, boites, busy, occ: horizon > 0 ? Math.round(busy / horizon * 100) : 0, nLate, nTight, nFini, premier, dernier, nProd: produits.length, produits }
+    return { phase: a.phase, equip: a.equip, lieu: a.lieu, atelierVrai: a.atelierVrai, equipsList: a.equipsList || [], lots, boites, busy, occ: horizon > 0 ? Math.round(busy / (horizon * nbSlots) * 100) : 0, nLate, nTight, nFini, premier, dernier, nProd: produits.length, produits }
   })
 })
 function fmtDateShort(d) { return d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '' }
@@ -736,6 +744,8 @@ table.grid td { padding: 7px 10px; border-bottom: 1px solid #eef1f6; color: #1f2
 .av-chk { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #334155; white-space: nowrap; cursor: pointer; background: #f1f5f9; border-radius: 8px; padding: 5px 10px; }
 .av-chk input { accent-color: #0f766e; }
 .eq-atelier { font-size: 11px; color: #94a3b8; }
+.eq-machines { font-size: 11px; color: #94a3b8; }
+.eq-machines::before { content: '⚙ '; }
 .re-enc-badge { background: #dbeafe; color: #1d4ed8; }
 .lot-card.re-fin { border-left-color: #10b981; }
 .lot-card.re-enc { border-left-color: #3b82f6; background: #eff6ff; }
