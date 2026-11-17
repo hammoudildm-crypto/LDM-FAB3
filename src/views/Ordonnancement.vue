@@ -131,27 +131,30 @@
         <div class="obj-kpi"><div class="ok-v">{{ resultatEcheance.total }}</div><div class="ok-l">Lots planifiés</div></div>
         <div class="obj-kpi"><div class="ok-v" style="color:#047857">{{ resultatEcheance.nTemps }}</div><div class="ok-l">À temps</div></div>
         <div class="obj-kpi" :class="{ 'ok-warn': resultatEcheance.nRetard > 0 }"><div class="ok-v">{{ resultatEcheance.nRetard }}</div><div class="ok-l">En retard</div></div>
+        <div class="obj-kpi" :class="{ 'ok-tendu': resultatEcheance.nTendus > 0 }"><div class="ok-v">{{ resultatEcheance.nTendus }}</div><div class="ok-l">À surveiller (≤ 2 j)</div></div>
         <div class="obj-kpi"><div class="ok-v">{{ resultatEcheance.total ? Math.round(resultatEcheance.nTemps / resultatEcheance.total * 100) : 100 }} %</div><div class="ok-l">Taux à temps</div></div>
       </div>
-      <div v-if="resultatEcheance.retards.length" class="ech-retards">
-        <div class="ech-rh">Lots en retard ({{ resultatEcheance.nRetard }}) — fabrication finie après le début de conditionnement</div>
+      <p v-if="!resultatEcheance.nRetard" class="ech-ok">✓ Tous les lots sont fabriqués à temps pour leur conditionnement, avec la date de départ et la capacité actuelles.</p>
+      <div v-if="resultatEcheance.lignes.length" class="ech-retards">
+        <div class="ech-rh">Faisabilité par lot — marge entre la fin de fabrication et le début de conditionnement (du plus tendu au plus confortable)</div>
         <div class="tbl-wrap">
           <table class="grid">
-            <thead><tr><th>Produit / Lot</th><th class="ta-r">Boîtes</th><th class="ta-c">Fin fabrication</th><th class="ta-c">Début cond. (échéance)</th><th class="ta-r">Retard</th></tr></thead>
+            <thead><tr><th>Produit / Lot</th><th class="ta-r">Boîtes</th><th class="ta-c">Fin fabrication</th><th class="ta-c">Début cond. (échéance)</th><th class="ta-c">Atelier cond.</th><th class="ta-r">Marge</th></tr></thead>
             <tbody>
-              <tr v-for="(r, i) in resultatEcheance.retards.slice(0, 50)" :key="i">
+              <tr v-for="(r, i) in resultatEcheance.lignes.slice(0, 80)" :key="i" :class="{ 'row-late': r.marge != null && r.marge < 0 }">
                 <td><strong>{{ r.code }}</strong> <span class="lot-desig">{{ r.desig }}</span><span v-if="r.numeroLot" class="lot-num">Lot {{ r.numeroLot }}</span></td>
                 <td class="ta-r">{{ fmt(r.boites) }}</td>
                 <td class="ta-c">{{ fmtDate(r.fin) }}</td>
                 <td class="ta-c">{{ fmtDate(r.echeance) }}</td>
-                <td class="ta-r ech-retard">+{{ r.retard }} j</td>
+                <td class="ta-c lot-desig">{{ r.atelierCond || '—' }}</td>
+                <td class="ta-r"><span class="marge" :class="margeClass(r.marge)">{{ r.marge == null ? '—' : (r.marge > 0 ? '+' + r.marge + ' j' : (r.marge === 0 ? 'juste' : r.marge + ' j')) }}</span></td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p v-if="resultatEcheance.retards.length > 50" class="muted" style="margin-top:6px">… et {{ resultatEcheance.retards.length - 50 }} autre(s). Avance la date de départ, ajoute une ligne, ou réduis la charge pour résorber les retards.</p>
+        <p v-if="resultatEcheance.lignes.length > 80" class="muted" style="margin-top:6px">… {{ resultatEcheance.lignes.length - 80 }} autre(s) lot(s) — les plus tendus sont en haut.</p>
+        <p class="muted" style="margin-top:6px">Marge = jours entre la fin de fabrication et le début de conditionnement. <span class="marge m-late">rouge</span> = en retard, <span class="marge m-tight">orange</span> = à surveiller (≤ 2 j), <span class="marge m-ok">vert</span> = confortable. Pour résorber un retard : avance la date de départ, réquisitionne le week-end, ou réduis la charge.</p>
       </div>
-      <p v-else class="ech-ok">✓ Tous les lots sont fabriqués à temps pour leur conditionnement, avec la date de départ et la capacité actuelles.</p>
       <p class="obj-note">Priorité <strong>échéance la plus proche (EDD)</strong> : les lots dont le conditionnement démarre le plus tôt sont fabriqués en premier, selon les <strong>temps de gamme</strong> et la <strong>disponibilité des équipements de fabrication</strong>. Le détail par atelier (entrée/sortie) est ci-dessous.</p>
     </section>
 
@@ -937,11 +940,15 @@ const resultatEcheance = computed(() => {
     const finDate = dateIdx(finIdx)
     const ech = new Date(g.dateEcheance + 'T00:00:00')
     const retard = (finDate && ech) ? Math.round((finDate - ech) / 86400000) : null
-    list.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, boites: r.boites, fin: finDate, echeance: ech, retard, enRetard: retard != null && retard > 0 })
+    const marge = retard != null ? -retard : null   // jours d'avance ; négatif = retard
+    list.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, boites: r.boites, fin: finDate, echeance: ech, retard, marge, atelierCond: r.atelierCond || null, enRetard: retard != null && retard > 0 })
   }
   const retards = list.filter(x => x.enRetard).sort((a, b) => b.retard - a.retard)
-  return { total: list.length, nRetard: retards.length, nTemps: list.length - retards.length, retards }
+  const lignes = [...list].sort((a, b) => (a.marge == null ? 1e9 : a.marge) - (b.marge == null ? 1e9 : b.marge))
+  const nTendus = list.filter(x => x.marge != null && x.marge >= 0 && x.marge <= 2).length
+  return { total: list.length, nRetard: retards.length, nTemps: list.length - retards.length, nTendus, retards, lignes }
 })
+function margeClass(m) { if (m == null) return ''; if (m < 0) return 'm-late'; if (m <= 2) return 'm-tight'; return 'm-ok' }
 
 const colonnes = computed(() => {
   const used = new Set()
@@ -1117,8 +1124,15 @@ const totalCA = computed(() => groupesDetail.value.reduce((s, g) => s + g.ca, 0)
 .ech-card { border: 1px solid #fbcfe8; background: linear-gradient(180deg, #fdf4ff, #fff); }
 .ech-strat { color: #a21caf; background: #fae8ff; border-color: #f5d0fe; }
 .ech-retards { margin-top: 12px; }
-.ech-rh { font-size: 13px; font-weight: 800; color: #b91c1c; margin-bottom: 7px; }
+.ech-rh { font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 7px; }
 .ech-retard { color: #dc2626; font-weight: 800; white-space: nowrap; }
+.marge { font-weight: 800; white-space: nowrap; padding: 1px 8px; border-radius: 999px; font-size: 12px; }
+.marge.m-late { color: #b91c1c; background: #fee2e2; }
+.marge.m-tight { color: #92400e; background: #fef3c7; }
+.marge.m-ok { color: #166534; background: #dcfce7; }
+.row-late td { background: #fef2f2; }
+.ok-tendu .ok-v { color: #b45309; }
+.ok-tendu { border-left-color: #d97706 !important; }
 .ech-ok { margin-top: 10px; font-size: 13px; font-weight: 700; color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 9px 12px; }
 .obj-strat { font-size: 12px; font-weight: 700; color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 999px; padding: 3px 11px; white-space: nowrap; }
 .obj-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 14px; }
