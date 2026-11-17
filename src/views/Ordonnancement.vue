@@ -132,27 +132,34 @@
       </p>
     </section>
 
-    <!-- Planning de fabrication par équipement (timeline) -->
+    <!-- Planning de fabrication par équipement (files de lots) -->
     <section v-if="planParAtelier.length" class="card">
-      <h2 class="card-title">Planning de fabrication par équipement</h2>
-      <p class="muted" style="margin:0 0 14px">Une ligne par équipement, une barre par lot, placée selon l'ordonnancement. Référence = date de besoin conditionnement (repère rouge en haut de la barre) ; barre entourée de rouge = fabrication finie <strong>après</strong> le besoin. Survole une barre pour le détail (dates, lot).</p>
-      <div class="gantt">
-        <div class="g-axis">
-          <div class="g-axis-sp"></div>
-          <div class="g-axis-track">
-            <div v-for="t in axisTicks" :key="t.i" class="g-tick" :style="{ left: t.left }"><span>{{ t.label }}</span></div>
-          </div>
+      <div class="card-head-row">
+        <h2 class="card-title">Planning de fabrication par équipement</h2>
+        <div class="range-sel">
+          <button :class="{ on: horizonSel === 0 }" @click="horizonSel = 0">Tout</button>
+          <button :class="{ on: horizonSel === 1 }" @click="horizonSel = 1">Mois en cours</button>
+          <button :class="{ on: horizonSel === 2 }" @click="horizonSel = 2">2 mois</button>
+          <button :class="{ on: horizonSel === 3 }" @click="horizonSel = 3">3 mois</button>
         </div>
-        <div v-for="a in planParAtelier" :key="a.phase + a.equip" class="g-row">
-          <div class="g-eqlbl"><span class="at-phase">{{ a.phase }}</span><strong>{{ a.equip }}</strong></div>
-          <div class="g-track">
-            <div v-for="(l, i) in a.lots" :key="'b' + i" class="g-bar" :class="{ 'g-late': l.late }"
-                 :style="{ left: pct(l.startIdx), width: pctW(l.startIdx, l.endIdx), background: l.couleur }"
-                 :title="l.code + ' · ' + l.desig + '\nLot ' + (l.numeroLot || '—') + ' · ' + fmt(l.boites) + ' boîtes\nFab : ' + fmtDate(l.entree) + ' → ' + fmtDate(l.sortie) + '\nBesoin cond. : ' + (l.besoin ? fmtDate(l.besoin) : '—')">
-              <span class="g-bar-t">{{ l.code }}<template v-if="l.numeroLot"> ·{{ l.numeroLot }}</template></span>
+      </div>
+      <p class="muted" style="margin:0 0 14px">Chaque équipement et sa file de lots dans l'ordre d'ordonnancement. Pastille : <span class="leg-dot st-ok"></span> à temps · <span class="leg-dot st-tight"></span> tendu (≤ 2 j) · <span class="leg-dot st-late"></span> en retard vs besoin conditionnement.</p>
+      <div v-if="!planParAtelierVue.length" class="muted">Aucun lot à fabriquer sur cette période.</div>
+      <div v-for="a in planParAtelierVue" :key="a.phase + a.equip" class="eq-board">
+        <div class="eq-head">
+          <div class="eq-id"><span class="at-phase">{{ a.phase }}</span><strong>{{ a.equip }}</strong></div>
+          <div class="eq-meta">{{ a.lots.length }} lot{{ a.lots.length > 1 ? 's' : '' }} · {{ fmtDateShort(a.lots[0].entree) }} → {{ fmtDateShort(a.lots[a.lots.length - 1].sortie) }}</div>
+        </div>
+        <div class="lot-cards">
+          <template v-for="(l, i) in a.lots" :key="i">
+            <div v-if="l.moisBreak" class="mois-sep">{{ moisCourt(l.entree) }}</div>
+            <div class="lot-card" :class="l.statut" :title="l.code + ' · ' + l.desig + '\nLot ' + (l.numeroLot || '—') + ' · ' + fmt(l.boites) + ' boîtes\nFab : ' + fmtDate(l.entree) + ' → ' + fmtDate(l.sortie) + '\nBesoin cond. : ' + (l.besoin ? fmtDate(l.besoin) : '—') + (l.margeJ != null ? ' (marge ' + l.margeJ + ' j)' : '')">
+              <div class="lc-top"><span class="lc-idx">{{ i + 1 }}</span><span class="lc-num">{{ l.numeroLot || '—' }}</span><span class="lc-dot" :class="l.statut"></span></div>
+              <div class="lc-prod">{{ l.code }}</div>
+              <div class="lc-line">⚙ {{ fmtDateShort(l.entree) }} → {{ fmtDateShort(l.sortie) }}</div>
+              <div class="lc-line lc-need" :class="{ 'lc-late': l.late }">◷ besoin {{ l.besoin ? fmtDateShort(l.besoin) : '—' }}</div>
             </div>
-            <div v-for="(l, i) in a.lots" :key="'n' + i" v-show="l.besoinIdx != null" class="g-need" :style="{ left: pct(l.besoinIdx) }" :title="'Besoin cond. ' + (l.besoin ? fmtDate(l.besoin) : '')"></div>
-          </div>
+          </template>
         </div>
       </div>
     </section>
@@ -514,21 +521,28 @@ const planParAtelier = computed(() => {
   for (const a of list) {
     a.lots.sort((x, y) => x.startIdx - y.startIdx)
     let prevEnd = null; a.busy = 0
-    for (const l of a.lots) { l.gap = (prevEnd != null && l.startIdx > prevEnd + 1) ? (l.startIdx - prevEnd - 1) : 0; a.busy += l.endIdx - l.startIdx + 1; prevEnd = l.endIdx; l.late = !!(l.besoin && l.sortie && l.sortie > l.besoin); l.besoinIdx = l.besoin ? Math.max(0, idxAvant(l.besoin)) : null }
+    for (const l of a.lots) { l.gap = (prevEnd != null && l.startIdx > prevEnd + 1) ? (l.startIdx - prevEnd - 1) : 0; a.busy += l.endIdx - l.startIdx + 1; prevEnd = l.endIdx; l.margeJ = (l.besoin && l.sortie) ? Math.round((l.besoin - l.sortie) / 86400000) : null; l.late = l.margeJ != null && l.margeJ < 0; l.statut = l.margeJ == null ? 'st-none' : (l.margeJ < 0 ? 'st-late' : (l.margeJ <= 2 ? 'st-tight' : 'st-ok')) }
     a.premier = a.lots.length ? a.lots[0].entree : null
     a.dernier = a.lots.length ? a.lots[a.lots.length - 1].sortie : null
   }
   return list.sort((a, b) => (ORDRE_PH.indexOf(a.phase) - ORDRE_PH.indexOf(b.phase)) || String(a.equip).localeCompare(String(b.equip)))
 })
-// Positionnement des barres sur la timeline (en % de l'horizon du plan).
-function pct(idx) { const per = finGlobale.value + 1; return (per > 0 ? (idx / per) * 100 : 0) + '%' }
-function pctW(s, e) { const per = finGlobale.value + 1; return (per > 0 ? ((e - s + 1) / per) * 100 : 0) + '%' }
-const axisTicks = computed(() => {
-  const per = finGlobale.value + 1; if (per <= 0) return []
-  const step = Math.max(1, Math.round(per / 8)); const out = []
-  for (let i = 0; i < per; i += step) { const d = dateIdx(i); out.push({ i, left: (i / per) * 100 + '%', label: d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '' }) }
-  return out
+// Filtre d'horizon (comme ORBIT : mois en cours / 2 / 3 mois) + regroupement par équipement.
+const horizonSel = ref(0)
+const fenetre = computed(() => {
+  if (!horizonSel.value) return null
+  const n = new Date()
+  return { debut: new Date(n.getFullYear(), n.getMonth(), 1), fin: new Date(n.getFullYear(), n.getMonth() + horizonSel.value, 0, 23, 59, 59) }
 })
+const planParAtelierVue = computed(() => {
+  const f = fenetre.value
+  let list = planParAtelier.value
+  if (f) list = list.map(a => ({ ...a, lots: a.lots.filter(l => l.sortie >= f.debut && l.entree <= f.fin) })).filter(a => a.lots.length)
+  for (const a of list) { let pm = null; for (const l of a.lots) { const m = l.entree ? (l.entree.getMonth() + '-' + l.entree.getFullYear()) : null; l.moisBreak = (pm != null && m !== pm); pm = m } }
+  return list
+})
+function fmtDateShort(d) { return d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '' }
+function moisCourt(d) { return d ? d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) : '' }
 
 // Phases de gamme sans équipement cadencé.
 const phasesManquantes = computed(() => {
@@ -621,21 +635,32 @@ table.grid td { padding: 7px 10px; border-bottom: 1px solid #eef1f6; color: #1f2
 .at-phase { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #0f766e; background: #ecfdf5; border-radius: 5px; padding: 2px 7px; }
 .lot-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 
-/* Timeline planning par équipement */
-.gantt { border: 1px solid #eef1f6; border-radius: 10px; overflow: hidden; }
-.g-axis { display: grid; grid-template-columns: 172px 1fr; border-bottom: 1px solid #eef1f6; background: #f8fafc; }
-.g-axis-track { position: relative; height: 22px; }
-.g-tick { position: absolute; top: 4px; transform: translateX(-50%); font-size: 10px; color: #94a3b8; }
-.g-tick span { white-space: nowrap; }
-.g-row { display: grid; grid-template-columns: 172px 1fr; border-bottom: 1px solid #f1f4f9; min-height: 30px; }
-.g-row:last-child { border-bottom: none; }
-.g-eqlbl { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-right: 1px solid #eef1f6; background: #fff; overflow: hidden; }
-.g-eqlbl strong { font-size: 11.5px; color: #1a2233; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.g-track { position: relative; min-height: 30px; }
-.g-bar { position: absolute; top: 5px; height: 20px; border-radius: 4px; display: flex; align-items: center; padding: 0 5px; overflow: hidden; min-width: 3px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); cursor: default; }
-.g-bar.g-late { outline: 2px solid #b91c1c; outline-offset: -2px; }
-.g-bar-t { font-size: 10px; color: #fff; font-weight: 600; white-space: nowrap; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
-.g-need { position: absolute; top: 1px; height: 8px; width: 0; border-left: 2px solid #b91c1c; opacity: .65; }
+/* Planning par équipement — files de lots (style tableau de production) */
+.range-sel { display: inline-flex; background: #f1f5f9; border-radius: 8px; padding: 2px; gap: 2px; }
+.range-sel button { border: none; background: transparent; font-size: 11.5px; font-weight: 600; color: #64748b; padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+.range-sel button.on { background: #fff; color: #0f766e; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
+.leg-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: middle; margin: 0 1px; }
+.leg-dot.st-ok { background: #10b981; } .leg-dot.st-tight { background: #f59e0b; } .leg-dot.st-late { background: #ef4444; }
+.eq-board { border: 1px solid #eef1f6; border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
+.eq-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; background: #f8fafc; border-bottom: 1px solid #eef1f6; }
+.eq-id { display: flex; align-items: center; gap: 8px; }
+.eq-id strong { font-size: 13px; color: #1a2233; }
+.eq-meta { font-size: 11px; color: #64748b; white-space: nowrap; }
+.lot-cards { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px; align-items: stretch; }
+.mois-sep { display: flex; align-items: center; font-size: 10px; font-weight: 700; color: #0f766e; background: #ecfdf5; border-radius: 5px; padding: 2px 7px; text-transform: capitalize; }
+.lot-card { width: 128px; border: 1px solid #e6e9f0; border-left-width: 3px; border-radius: 8px; padding: 7px 9px; background: #fff; cursor: default; }
+.lot-card.st-ok { border-left-color: #10b981; }
+.lot-card.st-tight { border-left-color: #f59e0b; }
+.lot-card.st-late { border-left-color: #ef4444; background: #fef2f2; }
+.lot-card.st-none { border-left-color: #cbd5e1; }
+.lc-top { display: flex; align-items: center; gap: 5px; }
+.lc-idx { font-size: 10px; color: #94a3b8; font-weight: 700; }
+.lc-num { font-size: 14px; font-weight: 800; color: #1a2233; letter-spacing: -.01em; }
+.lc-dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; }
+.lc-dot.st-ok { background: #10b981; } .lc-dot.st-tight { background: #f59e0b; } .lc-dot.st-late { background: #ef4444; }
+.lc-prod { font-size: 10.5px; color: #475569; font-weight: 600; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lc-line { font-size: 10px; color: #64748b; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.lc-need.lc-late { color: #b91c1c; font-weight: 700; }
 
 .warn-card { background: #fff7ed; border-color: #fed7aa; }
 .warn-txt { font-size: 12.5px; color: #9a3412; margin: 0 0 8px; }
