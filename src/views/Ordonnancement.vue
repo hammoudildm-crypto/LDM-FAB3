@@ -42,7 +42,7 @@
     <!-- Résumé du plan -->
     <section v-if="groupes.length" class="card plan-sum">
       <div class="card-head-row">
-        <h2 class="card-title">Plan — {{ nbProduits }} produit(s) · {{ groupesFab.length }} lot(s) à fabriquer<span v-if="nbConditionnes > 0" class="plan-excl"> · {{ nbConditionnes }} déjà conditionné(s) exclu(s)</span></h2>
+        <h2 class="card-title">Plan — {{ nbProduits }} produit(s) · {{ groupesFab.length }} lot(s) à fabriquer<span v-if="nbConditionnes > 0" class="plan-excl"> · {{ nbConditionnes }} déjà conditionné(s) exclu(s)</span><span v-if="nbFinisExclus > 0" class="plan-excl"> · {{ nbFinisExclus }} fini(s) — capacité avancée</span></h2>
         <button class="btn-reset" @click="remiseAZero">Remise à zéro</button>
       </div>
     </section>
@@ -70,14 +70,19 @@
     <section v-if="planParAtelier.length || suiviPhases.length" class="card">
       <div class="card-head-row">
         <h2 class="card-title">Planning de fabrication par équipement</h2>
-        <div class="range-sel">
-          <button :class="{ on: horizonSel === 0 }" @click="horizonSel = 0">Tout</button>
-          <button :class="{ on: horizonSel === 1 }" @click="horizonSel = 1">Mois en cours</button>
-          <button :class="{ on: horizonSel === 2 }" @click="horizonSel = 2">2 mois</button>
-          <button :class="{ on: horizonSel === 3 }" @click="horizonSel = 3">3 mois</button>
+        <div class="head-ctrls">
+          <label class="av-chk" title="Les lots déjà fabriqués libèrent leur capacité ; les lots planifiés les jours/mois suivants remontent pour les remplacer, selon la capacité de chaque équipement.">
+            <input type="checkbox" v-model="avancer" /> Avancer le restant
+          </label>
+          <div class="range-sel">
+            <button :class="{ on: horizonSel === 0 }" @click="horizonSel = 0">Tout</button>
+            <button :class="{ on: horizonSel === 1 }" @click="horizonSel = 1">Mois en cours</button>
+            <button :class="{ on: horizonSel === 2 }" @click="horizonSel = 2">2 mois</button>
+            <button :class="{ on: horizonSel === 3 }" @click="horizonSel = 3">3 mois</button>
+          </div>
         </div>
       </div>
-      <p class="muted" style="margin:0 0 14px">Prévision et réel sur la même vue. Pastille : <span class="leg-dot st-ok"></span> à temps · <span class="leg-dot st-tight"></span> tendu · <span class="leg-dot st-late"></span> en retard · <span class="leg-sq lot-done-leg"></span> lot terminé (grisé).</p>
+      <p class="muted" style="margin:0 0 14px"><template v-if="avancer">Les lots déjà fabriqués sont retirés et <strong>la capacité libérée avance les lots suivants</strong>. </template>Pastille : <span class="leg-dot st-ok"></span> à temps · <span class="leg-dot st-tight"></span> tendu · <span class="leg-dot st-late"></span> en retard<template v-if="!avancer"> · <span class="leg-sq lot-done-leg"></span> lot terminé (grisé)</template>.</p>
       <div v-if="!planParAtelierVue.length" class="muted">Aucun lot à fabriquer sur cette période.</div>
       <div v-for="a in planParAtelierVue" :key="a.phase + a.equip" class="eq-board">
         <div class="eq-head">
@@ -151,6 +156,7 @@ for (const [k, v] of Object.entries(PHASE_NOM)) NOM_KEY[v.toLowerCase()] = k
 const produits = ref([]), equipements = ref([]), cadences = ref([]), chargement = ref(true)
 const ateliers = ref([]), ofs = ref([]), suiviPhases = ref([])   // réalisation (historique des opérations + dispo par atelier)
 const vueMode = ref('prev')   // 'prev' = prévision (ordonnancement) | 'real' = réalisation (réel)
+const avancer = ref(true)     // avancer le restant : les lots déjà fabriqués libèrent leur capacité, les lots suivants remontent
 const groupes = ref([])   // { id, produitId, totalBoites, boitesParLot, nbLots, numeroLot, dateFixe, dateEcheance }
 const dateDepart = ref(new Date().toISOString().slice(0, 10))
 const skipWeekend = ref(false)   // l'usine tourne 7 j/7 (3×8 semaine + 2×8 week-end)
@@ -181,7 +187,7 @@ onMounted(async () => {
   chargerLocal()
 })
 
-watch([groupes, dateDepart, skipWeekend], sauvegarderLocal, { deep: true })
+watch([groupes, dateDepart, skipWeekend, avancer], sauvegarderLocal, { deep: true })
 
 function phaseDeType(type) {
   const t = (type || '').toLowerCase()
@@ -233,6 +239,7 @@ function gammeProduit(produitId) {
 const ajd = computed(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}` })
 const groupesFab = computed(() => groupes.value.filter(g => !g.dateEcheance || String(g.dateEcheance) >= ajd.value))
 const nbConditionnes = computed(() => groupes.value.length - groupesFab.value.length)
+const nbFinisExclus = computed(() => { if (!avancer.value) return 0; const rm = lotReelMap.value; return groupesFab.value.filter(g => { if (!g.numeroLot) return false; const sr = rm[String(g.numeroLot).trim()]; return sr && sr.fini }).length })
 const nbProduits = computed(() => new Set(groupesFab.value.map(g => g.produitId)).size)
 
 function ajouter() {
@@ -248,7 +255,7 @@ function ajouter() {
 // --- Persistance locale ---
 const LS_KEY = 'ldm_ordo_scenario_v2'
 function sauvegarderLocal() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify({ groupes: groupes.value, dateDepart: dateDepart.value, skipWeekend: skipWeekend.value, seq })) } catch (e) {}
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ groupes: groupes.value, dateDepart: dateDepart.value, skipWeekend: skipWeekend.value, avancer: avancer.value, seq })) } catch (e) {}
 }
 function chargerLocal() {
   try {
@@ -257,6 +264,7 @@ function chargerLocal() {
     if (Array.isArray(d.groupes)) groupes.value = d.groupes
     if (d.dateDepart) dateDepart.value = d.dateDepart
     if (typeof d.skipWeekend === 'boolean') skipWeekend.value = d.skipWeekend
+    if (typeof d.avancer === 'boolean') avancer.value = d.avancer
     if (d.seq) seq = Math.max(seq, Number(d.seq) || 1)
   } catch (e) {}
 }
@@ -381,6 +389,7 @@ const lotsDeployes = computed(() => {
   const out = []
   const ordered = groupesFab.value.map((g, gi) => ({ g, gi })).sort((a, b) => (echVal(a.g) - echVal(b.g)) || (a.gi - b.gi))
   for (const { g, gi } of ordered) {
+    if (avancer.value && g.numeroLot) { const sr = lotReelMap.value[String(g.numeroLot).trim()]; if (sr && sr.fini) continue }   // lot déjà fabriqué : capacité libérée, on laisse remonter les suivants
     let reste = g.totalBoites
     for (let i = 1; i <= g.nbLots; i++) {
       const b = Math.min(g.boitesParLot, reste); reste -= b
@@ -705,7 +714,9 @@ table.grid td { padding: 7px 10px; border-bottom: 1px solid #eef1f6; color: #1f2
 .lc-line { font-size: 10px; color: #64748b; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .lc-need.lc-late { color: #b91c1c; font-weight: 700; }
 /* Réalisation (réel) */
-.head-ctrls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.head-ctrls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.av-chk { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #334155; white-space: nowrap; cursor: pointer; background: #f1f5f9; border-radius: 8px; padding: 5px 10px; }
+.av-chk input { accent-color: #0f766e; }
 .eq-atelier { font-size: 11px; color: #94a3b8; }
 .re-enc-badge { background: #dbeafe; color: #1d4ed8; }
 .lot-card.re-fin { border-left-color: #10b981; }
