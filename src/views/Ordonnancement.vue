@@ -118,6 +118,34 @@
       </p>
     </section>
 
+    <!-- Plan prévisionnel par atelier de fabrication -->
+    <section v-if="planParAtelier.length" class="card">
+      <h2 class="card-title">Plan prévisionnel par atelier de fabrication</h2>
+      <p class="muted" style="margin:0 0 14px">Pour chaque atelier, les lots à fabriquer dans l'ordre, avec les dates d'entrée et de sortie prévues selon l'ordonnancement.</p>
+      <div v-for="a in planParAtelier" :key="a.phase + a.equip" class="atelier-bloc">
+        <div class="at-head">
+          <div class="at-id"><span class="at-phase">{{ a.phase }}</span><strong class="at-eq">{{ a.equip }}</strong></div>
+          <div class="at-meta">{{ a.lots.length }} lot{{ a.lots.length > 1 ? 's' : '' }} · {{ a.busy }} j occupé{{ a.busy > 1 ? 's' : '' }} · {{ fmtDate(a.premier) }} → {{ fmtDate(a.dernier) }}</div>
+        </div>
+        <div class="tbl-wrap">
+          <table class="grid">
+            <thead><tr><th class="ta-c">#</th><th>Produit</th><th class="ta-c">N° Lot</th><th class="ta-r">Boîtes</th><th class="ta-c">Entrée</th><th class="ta-c">Sortie</th><th class="ta-c">Besoin cond.</th></tr></thead>
+            <tbody>
+              <tr v-for="(l, i) in a.lots" :key="i">
+                <td class="ta-c">{{ i + 1 }}</td>
+                <td><span class="lot-dot" :style="{ background: l.couleur }"></span><strong>{{ l.code }}</strong> <span class="lot-desig">{{ l.desig }}</span></td>
+                <td class="ta-c"><span v-if="l.numeroLot" class="lot-num">{{ l.numeroLot }}</span><span v-else class="muted">—</span></td>
+                <td class="ta-r">{{ fmt(l.boites) }}</td>
+                <td class="ta-c ordo-date"><span v-if="l.gap > 0" class="at-gap" title="Atelier libre avant ce lot">⋯ {{ l.gap }} j</span>{{ fmtDate(l.entree) }}</td>
+                <td class="ta-c ordo-date">{{ fmtDate(l.sortie) }}</td>
+                <td class="ta-c">{{ l.besoin ? fmtDate(l.besoin) : '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- Charge par atelier (goulot) -->
     <section v-if="planning.length && chargeSimple.rows.length" class="card">
       <h2 class="card-title">Charge par atelier — repérer le goulot</h2>
@@ -468,6 +496,29 @@ const chargeSimple = computed(() => {
 })
 function chargeClass(o) { if (o >= 100) return 'ch-over'; if (o >= 85) return 'ch-high'; if (o >= 50) return 'ch-mid'; return 'ch-low' }
 
+// Plan prévisionnel par atelier : pour chaque équipement, les lots dans l'ordre (entrée → sortie).
+const ORDRE_PH = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage', 'Pelliculage']
+const planParAtelier = computed(() => {
+  const by = {}
+  for (const r of planning.value) {
+    for (const k in r.phases) {
+      const ph = r.phases[k]
+      const cle = (PHASE_NOM[k] || k) + '§' + ph.equip
+      if (!by[cle]) by[cle] = { phase: PHASE_NOM[k] || k, equip: ph.equip, lots: [] }
+      by[cle].lots.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, boites: r.boites, couleur: r.couleur, entree: dateIdx(ph.start), sortie: dateIdx(ph.end), startIdx: ph.start, endIdx: ph.end, besoin: r.dateEcheance ? new Date(r.dateEcheance + 'T00:00:00') : null })
+    }
+  }
+  const list = Object.values(by)
+  for (const a of list) {
+    a.lots.sort((x, y) => x.startIdx - y.startIdx)
+    let prevEnd = null; a.busy = 0
+    for (const l of a.lots) { l.gap = (prevEnd != null && l.startIdx > prevEnd + 1) ? (l.startIdx - prevEnd - 1) : 0; a.busy += l.endIdx - l.startIdx + 1; prevEnd = l.endIdx }
+    a.premier = a.lots.length ? a.lots[0].entree : null
+    a.dernier = a.lots.length ? a.lots[a.lots.length - 1].sortie : null
+  }
+  return list.sort((a, b) => (ORDRE_PH.indexOf(a.phase) - ORDRE_PH.indexOf(b.phase)) || String(a.equip).localeCompare(String(b.equip)))
+})
+
 // Phases de gamme sans équipement cadencé.
 const phasesManquantes = computed(() => {
   const out = [], seen = new Set()
@@ -554,6 +605,16 @@ table.grid td { padding: 7px 10px; border-bottom: 1px solid #eef1f6; color: #1f2
 .ch-fill.ch-over { background: #b91c1c; } .ch-fill.ch-high { background: #ea580c; } .ch-fill.ch-mid { background: #0f766e; } .ch-fill.ch-low { background: #94a3b8; }
 .ch-pct { font-size: 12px; font-weight: 700; color: #1a2233; text-align: right; }
 .ch-meta { font-size: 11px; color: #94a3b8; white-space: nowrap; }
+
+.atelier-bloc { margin-bottom: 18px; border: 1px solid #eef1f6; border-radius: 10px; overflow: hidden; }
+.at-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; background: #f8fafc; border-bottom: 1px solid #eef1f6; flex-wrap: wrap; }
+.at-id { display: flex; align-items: center; gap: 8px; }
+.at-phase { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #0f766e; background: #ecfdf5; border-radius: 5px; padding: 2px 7px; }
+.at-eq { font-size: 13.5px; color: #1a2233; }
+.at-meta { font-size: 11.5px; color: #64748b; }
+.atelier-bloc .tbl-wrap table.grid th { background: #fff; }
+.lot-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.at-gap { display: inline-block; margin-right: 6px; font-size: 10px; color: #94a3b8; }
 
 .warn-card { background: #fff7ed; border-color: #fed7aa; }
 .warn-txt { font-size: 12.5px; color: #9a3412; margin: 0 0 8px; }
