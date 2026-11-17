@@ -82,18 +82,30 @@
       <div v-for="a in planParAtelierVue" :key="a.phase + a.equip" class="eq-board">
         <div class="eq-head">
           <div class="eq-id"><span class="at-phase">{{ a.phase }}</span><strong>{{ a.equip }}</strong></div>
-          <div class="eq-meta">{{ a.lots.length }} lot{{ a.lots.length > 1 ? 's' : '' }} · {{ fmtDateShort(a.lots[0].entree) }} → {{ fmtDateShort(a.lots[a.lots.length - 1].sortie) }}</div>
+          <div class="eq-occ" :class="chargeClass(a.occ)">Occupation {{ a.occ }} %</div>
         </div>
-        <div class="lot-cards">
-          <template v-for="(l, i) in a.lots" :key="i">
-            <div v-if="l.moisBreak" class="mois-sep">{{ moisCourt(l.entree) }}</div>
-            <div class="lot-card" :class="l.statut" :title="l.code + ' · ' + l.desig + '\nLot ' + (l.numeroLot || '—') + ' · ' + fmt(l.boites) + ' boîtes\nFab : ' + fmtDate(l.entree) + ' → ' + fmtDate(l.sortie) + '\nBesoin cond. : ' + (l.besoin ? fmtDate(l.besoin) : '—') + (l.margeJ != null ? ' (marge ' + l.margeJ + ' j)' : '')">
-              <div class="lc-top"><span class="lc-idx">{{ i + 1 }}</span><span class="lc-num">{{ l.numeroLot || '—' }}</span><span class="lc-dot" :class="l.statut"></span></div>
-              <div class="lc-prod">{{ l.code }}</div>
-              <div class="lc-line">⚙ {{ fmtDateShort(l.entree) }} → {{ fmtDateShort(l.sortie) }}</div>
-              <div class="lc-line lc-need" :class="{ 'lc-late': l.late }">◷ besoin {{ l.besoin ? fmtDateShort(l.besoin) : '—' }}</div>
-            </div>
-          </template>
+        <div class="eq-kpis">
+          <div class="eqk"><div class="eqk-l">Lots à fabriquer</div><div class="eqk-v">{{ a.lots.length }}</div><div class="eqk-s">{{ fmt(a.boites) }} boîtes</div></div>
+          <div class="eqk"><div class="eqk-l">Produits</div><div class="eqk-v">{{ a.nProd }}</div><div class="eqk-s">campagne{{ a.nProd > 1 ? 's' : '' }}</div></div>
+          <div class="eqk"><div class="eqk-l">Période</div><div class="eqk-v eqk-sm">{{ fmtDateShort(a.premier) }} → {{ fmtDateShort(a.dernier) }}</div><div class="eqk-s">{{ a.busy }} j occupés</div></div>
+          <div class="eqk" :class="{ 'eqk-bad': a.nLate > 0 }"><div class="eqk-l">En retard</div><div class="eqk-v">{{ a.nLate }}</div><div class="eqk-s">{{ a.nTight }} tendu{{ a.nTight > 1 ? 's' : '' }}</div></div>
+        </div>
+        <div v-for="p in a.produits" :key="p.code" class="prod-group">
+          <div class="pg-label">
+            <span class="pg-bar" :style="{ background: p.couleur }"></span>
+            <div class="pg-txt"><strong>{{ p.code }}</strong> <span class="lot-desig">{{ p.desig }}</span><div class="pg-sub">{{ p.lots.length }} lot{{ p.lots.length > 1 ? 's' : '' }} · {{ fmt(p.boites) }} bts · {{ fmtDateShort(p.premier) }} → {{ fmtDateShort(p.dernier) }}</div></div>
+          </div>
+          <div class="lot-cards">
+            <template v-for="(l, i) in p.lots" :key="i">
+              <div v-if="l.moisBreak" class="mois-sep">{{ moisCourt(l.entree) }}</div>
+              <div class="lot-card" :class="l.statut" :title="p.code + ' · ' + l.desig + '\nLot ' + (l.numeroLot || '—') + ' · ' + fmt(l.boites) + ' boîtes\nFab : ' + fmtDate(l.entree) + ' → ' + fmtDate(l.sortie) + '\nBesoin cond. : ' + (l.besoin ? fmtDate(l.besoin) : '—') + (l.margeJ != null ? ' (marge ' + l.margeJ + ' j)' : '')">
+                <div class="lc-top"><span class="lc-idx">{{ i + 1 }}</span><span class="lc-num">{{ l.numeroLot || '—' }}</span><span class="lc-dot" :class="l.statut"></span></div>
+                <div class="lc-prod">{{ fmt(l.boites) }} bts</div>
+                <div class="lc-line">⚙ {{ fmtDateShort(l.entree) }} → {{ fmtDateShort(l.sortie) }}</div>
+                <div class="lc-line lc-need" :class="{ 'lc-late': l.late }">◷ {{ l.besoin ? fmtDateShort(l.besoin) : '—' }}</div>
+              </div>
+            </template>
+          </div>
         </div>
       </div>
     </section>
@@ -484,10 +496,27 @@ const fenetre = computed(() => {
 })
 const planParAtelierVue = computed(() => {
   const f = fenetre.value
+  const horizon = finGlobale.value + 1
   let list = planParAtelier.value
   if (f) list = list.map(a => ({ ...a, lots: a.lots.filter(l => l.sortie >= f.debut && l.entree <= f.fin) })).filter(a => a.lots.length)
-  for (const a of list) { let pm = null; for (const l of a.lots) { const m = l.entree ? (l.entree.getMonth() + '-' + l.entree.getFullYear()) : null; l.moisBreak = (pm != null && m !== pm); pm = m } }
-  return list
+  return list.map(a => {
+    const lots = a.lots
+    const boites = lots.reduce((s, l) => s + (l.boites || 0), 0)
+    const busy = lots.reduce((s, l) => s + (l.endIdx - l.startIdx + 1), 0)
+    const nLate = lots.filter(l => l.statut === 'st-late').length
+    const nTight = lots.filter(l => l.statut === 'st-tight').length
+    const premier = lots.length ? lots[0].entree : null
+    const dernier = lots.length ? lots[lots.length - 1].sortie : null
+    // Regroupement par produit (campagne), dans l'ordre d'apparition.
+    const byP = new Map()
+    for (const l of lots) { if (!byP.has(l.code)) byP.set(l.code, { code: l.code, desig: l.desig, couleur: l.couleur, lots: [], boites: 0 }); const g = byP.get(l.code); g.lots.push(l); g.boites += l.boites || 0 }
+    const produits = [...byP.values()].map(g => {
+      g.premier = g.lots[0].entree; g.dernier = g.lots[g.lots.length - 1].sortie
+      let pm = null; for (const l of g.lots) { const m = l.entree ? (l.entree.getMonth() + '-' + l.entree.getFullYear()) : null; l.moisBreak = (pm != null && m !== pm); pm = m }
+      return g
+    })
+    return { phase: a.phase, equip: a.equip, lots, boites, busy, occ: horizon > 0 ? Math.round(busy / horizon * 100) : 0, nLate, nTight, premier, dernier, nProd: produits.length, produits }
+  })
 })
 function fmtDateShort(d) { return d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '' }
 function moisCourt(d) { return d ? d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) : '' }
@@ -593,8 +622,25 @@ table.grid td { padding: 7px 10px; border-bottom: 1px solid #eef1f6; color: #1f2
 .eq-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; background: #f8fafc; border-bottom: 1px solid #eef1f6; }
 .eq-id { display: flex; align-items: center; gap: 8px; }
 .eq-id strong { font-size: 13px; color: #1a2233; }
-.eq-meta { font-size: 11px; color: #64748b; white-space: nowrap; }
+.eq-occ { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 6px; white-space: nowrap; }
+.eq-occ.ch-over, .eq-occ.ch-high { background: #fef2f2; color: #b91c1c; }
+.eq-occ.ch-mid { background: #ecfdf5; color: #047857; }
+.eq-occ.ch-low { background: #f1f5f9; color: #64748b; }
+.eq-kpis { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px; background: #fcfdfe; border-bottom: 1px solid #eef1f6; }
+.eqk { flex: 1 1 120px; min-width: 108px; border: 1px solid #eef1f6; border-radius: 8px; padding: 7px 10px; background: #fff; }
+.eqk-bad { background: #fef2f2; border-color: #fecaca; }
+.eqk-l { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; }
+.eqk-v { font-size: 17px; font-weight: 800; color: #1a2233; margin-top: 1px; }
+.eqk-v.eqk-sm { font-size: 12px; font-variant-numeric: tabular-nums; }
+.eqk-s { font-size: 10px; color: #94a3b8; margin-top: 1px; }
+.prod-group { display: grid; grid-template-columns: 200px 1fr; border-bottom: 1px solid #f1f4f9; }
+.prod-group:last-child { border-bottom: none; }
+.pg-label { display: flex; gap: 8px; padding: 10px 12px; border-right: 1px solid #eef1f6; background: #fff; }
+.pg-bar { width: 3px; border-radius: 2px; flex: 0 0 3px; }
+.pg-txt strong { font-size: 12px; color: #1a2233; }
+.pg-sub { font-size: 10px; color: #94a3b8; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .lot-cards { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px; align-items: stretch; }
+@media (max-width: 720px) { .prod-group { grid-template-columns: 1fr; } .pg-label { border-right: none; border-bottom: 1px solid #eef1f6; } }
 .mois-sep { display: flex; align-items: center; font-size: 10px; font-weight: 700; color: #0f766e; background: #ecfdf5; border-radius: 5px; padding: 2px 7px; text-transform: capitalize; }
 .lot-card { width: 128px; border: 1px solid #e6e9f0; border-left-width: 3px; border-radius: 8px; padding: 7px 9px; background: #fff; cursor: default; }
 .lot-card.st-ok { border-left-color: #10b981; }
