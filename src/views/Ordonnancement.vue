@@ -42,7 +42,7 @@
     <!-- Résumé du plan -->
     <section v-if="groupes.length" class="card plan-sum">
       <div class="card-head-row">
-        <h2 class="card-title">Plan — {{ nbProduits }} produit(s) · {{ groupes.length }} lot(s)</h2>
+        <h2 class="card-title">Plan — {{ nbProduits }} produit(s) · {{ groupesFab.length }} lot(s) à fabriquer<span v-if="nbConditionnes > 0" class="plan-excl"> · {{ nbConditionnes }} déjà conditionné(s) exclu(s)</span></h2>
         <button class="btn-reset" @click="remiseAZero">Remise à zéro</button>
       </div>
     </section>
@@ -259,7 +259,12 @@ function gammeProduit(produitId) {
   for (const n of g) { const k = phaseKeyFromName(n); if (k && k !== 'conditionnement' && !keys.includes(k)) keys.push(k) }
   return keys
 }
-const nbProduits = computed(() => new Set(groupes.value.map(g => g.produitId)).size)
+// Exclusion des lots déjà conditionnés : si le début de conditionnement est passé,
+// le vrac est fait → le lot n'entre pas dans le planning de fabrication.
+const ajd = computed(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}` })
+const groupesFab = computed(() => groupes.value.filter(g => !g.dateEcheance || String(g.dateEcheance) >= ajd.value))
+const nbConditionnes = computed(() => groupes.value.length - groupesFab.value.length)
+const nbProduits = computed(() => new Set(groupesFab.value.map(g => g.produitId)).size)
 
 function ajouter() {
   if (!selProduit.value || !(Number(selBoites.value) > 0)) return
@@ -405,7 +410,7 @@ function idxAvant(d) { const a = joursOuvres.value; let res = -1; for (let i = 0
 const echVal = (g) => g.dateEcheance ? new Date(g.dateEcheance + 'T00:00:00').getTime() : Infinity
 const lotsDeployes = computed(() => {
   const out = []
-  const ordered = groupes.value.map((g, gi) => ({ g, gi })).sort((a, b) => (echVal(a.g) - echVal(b.g)) || (a.gi - b.gi))
+  const ordered = groupesFab.value.map((g, gi) => ({ g, gi })).sort((a, b) => (echVal(a.g) - echVal(b.g)) || (a.gi - b.gi))
   for (const { g, gi } of ordered) {
     let reste = g.totalBoites
     for (let i = 1; i <= g.nbLots; i++) {
@@ -450,7 +455,7 @@ const finGlobale = computed(() => { let m = 0; for (const r of planning.value) f
 
 // Table combinée : ordre proposé + risque par lot.
 const tableauOrdo = computed(() => {
-  const gById = {}; for (const g of groupes.value) gById[g.id] = g
+  const gById = {}; for (const g of groupesFab.value) gById[g.id] = g
   const rows = []
   for (const r of planning.value) {
     const g = gById[Math.floor(r.id / 1000)]; if (!g) continue
@@ -522,7 +527,7 @@ const planParAtelier = computed(() => {
 // Phases de gamme sans équipement cadencé.
 const phasesManquantes = computed(() => {
   const out = [], seen = new Set()
-  for (const g of groupes.value) {
+  for (const g of groupesFab.value) {
     const p = prodById.value[g.produitId] || {}
     for (const k of gammeProduit(g.produitId)) {
       const ok = equipements.value.some(e => phaseDeType(e.type) === k && cadMap.value[e.id + '|' + g.produitId] > 0)
@@ -562,6 +567,7 @@ const phasesManquantes = computed(() => {
 .msg-import { margin: 10px 0 0; font-size: 12.5px; color: #0f766e; font-weight: 500; }
 .btn-reset { background: #fff; color: #b91c1c; border: 1px solid #fecaca; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .plan-sum { padding: 14px 20px; }
+.plan-excl { font-weight: 500; color: #94a3b8; font-size: 12.5px; }
 
 .kpi-line { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
 .kpi-mini { flex: 1 1 140px; background: #fff; border: 1px solid #e6e9f0; border-radius: 12px; padding: 12px 14px; text-align: center; }
