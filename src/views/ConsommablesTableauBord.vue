@@ -58,6 +58,63 @@ const consoRecente = computed(() => {
 })
 const moyJourDe = (id) => (consoRecente.value[id] || 0) / AVG_FENETRE
 function couvertureJours(c) { const a = moyJourDe(c.id); return a > 0 ? totalStock(c) / a : null }
+
+// ---- Consommation du mois sélectionné (journalière + par article) ----
+const moisSel = ref(curYM.value)
+const moisDispo = computed(() => { const s = new Set(sorties.value.map(m => (m.date_mvt || '').slice(0, 7)).filter(Boolean)); s.add(curYM.value); return [...s].sort().reverse() })
+const sortiesMois = computed(() => sorties.value.filter(m => (m.date_mvt || '').slice(0, 7) === moisSel.value))
+const joursRefMois = computed(() => { const [y, mo] = moisSel.value.split('-').map(Number); return moisSel.value === curYM.value ? new Date().getDate() : new Date(y, mo, 0).getDate() })
+const consoAujVal = computed(() => sorties.value.filter(m => m.date_mvt === ajKey.value).reduce((s, m) => s + (Number(m.quantite) || 0) * prixDe(m.consommable_id), 0))
+const consoAujNb = computed(() => sorties.value.filter(m => m.date_mvt === ajKey.value).length)
+const consoMoisVal = computed(() => sortiesMois.value.reduce((s, m) => s + (Number(m.quantite) || 0) * prixDe(m.consommable_id), 0))
+const consoMoyJour = computed(() => joursRefMois.value > 0 ? consoMoisVal.value / joursRefMois.value : 0)
+const consoParArticle = computed(() => {
+  const m = {}
+  for (const s of sortiesMois.value) {
+    const c = consoById.value[s.consommable_id]; if (!c) continue
+    if (!m[s.consommable_id]) m[s.consommable_id] = { id: s.consommable_id, nom: c.nom, unite: c.unite, qte: 0, valeur: 0, jours: new Set() }
+    const q = Number(s.quantite) || 0, o = m[s.consommable_id]
+    o.qte += q; o.valeur += q * prixDe(s.consommable_id); o.jours.add(s.date_mvt)
+  }
+  return Object.values(m).map(o => ({ id: o.id, nom: o.nom, unite: o.unite, qte: o.qte, valeur: o.valeur, nbJours: o.jours.size, moyJour: joursRefMois.value > 0 ? o.qte / joursRefMois.value : 0 })).sort((a, b) => b.valeur - a.valeur || b.qte - a.qte)
+})
+const consoJour = computed(() => {
+  const [y, mo] = moisSel.value.split('-').map(Number)
+  const nb = new Date(y, mo, 0).getDate(), byDay = {}
+  for (const s of sortiesMois.value) { const d = Number((s.date_mvt || '').slice(8, 10)); if (!d) continue; byDay[d] = (byDay[d] || 0) + (Number(s.quantite) || 0) * prixDe(s.consommable_id) }
+  const jours = []; let max = 0, tot = 0
+  const auj = moisSel.value === curYM.value ? new Date().getDate() : -1
+  for (let d = 1; d <= nb; d++) { const v = byDay[d] || 0; if (v > max) max = v; tot += v; jours.push({ jour: d, val: v, auj: d === auj }) }
+  return { jours, max, tot }
+})
+
+// ---- Évolution annuelle par article (matrice article × 12 mois) ----
+const metrique = ref('valeur')
+const anneeSel = ref(String(new Date().getFullYear()))
+const artSel = ref('')
+const consommablesTries = computed(() => [...consommables.value].sort((a, b) => (a.nom || '').localeCompare(b.nom || '')))
+const anneesDispo = computed(() => { const s = new Set(sorties.value.map(m => (m.date_mvt || '').slice(0, 4)).filter(Boolean)); s.add(String(new Date().getFullYear())); return [...s].sort().reverse() })
+const evolutionAnnee = computed(() => {
+  const an = anneeSel.value, parArt = {}
+  for (const s of sorties.value) {
+    if ((s.date_mvt || '').slice(0, 4) !== an) continue
+    const c = consoById.value[s.consommable_id]; if (!c) continue
+    const mo = Number((s.date_mvt || '').slice(5, 7)) - 1; if (mo < 0 || mo > 11) continue
+    if (!parArt[s.consommable_id]) parArt[s.consommable_id] = { id: s.consommable_id, nom: c.nom, unite: c.unite, mois: new Array(12).fill(0), qteMois: new Array(12).fill(0), total: 0, totalQte: 0 }
+    const q = Number(s.quantite) || 0, o = parArt[s.consommable_id]
+    o.qteMois[mo] += q; o.mois[mo] += q * prixDe(s.consommable_id); o.total += q * prixDe(s.consommable_id); o.totalQte += q
+  }
+  let arr = Object.values(parArt)
+  if (artSel.value) arr = arr.filter(o => String(o.id) === artSel.value)
+  for (const o of arr) { o.serie = metrique.value === 'qte' ? o.qteMois : o.mois; o.max = Math.max(...o.serie, 0); o.totAff = metrique.value === 'qte' ? o.totalQte : o.total }
+  return arr.sort((a, b) => b.total - a.total)
+})
+const evolutionTotaux = computed(() => {
+  const mois = new Array(12).fill(0)
+  for (const o of evolutionAnnee.value) for (let i = 0; i < 12; i++) mois[i] += o.mois[i]
+  return { mois, max: Math.max(...mois, 1), total: mois.reduce((s, x) => s + x, 0) }
+})
+function cellStyle(v, max) { if (!v || max <= 0) return {}; const a = Math.min(0.85, 0.12 + v / max * 0.73); return { background: `rgba(180,83,9,${a.toFixed(3)})`, color: a > 0.5 ? '#fff' : '#7c2d12', fontWeight: 700 } }
 function couvClass(j) { if (j === null) return 'couv-none'; if (j < 7) return 'couv-bas'; if (j < 21) return 'couv-moy'; return 'couv-ok' }
 function couvLabel(j) { return j === null ? '—' : Math.round(j) + ' j' }
 
@@ -263,6 +320,99 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
       </section>
     </div>
 
+    <!-- Consommation du mois -->
+    <section class="card">
+      <div class="conso-head">
+        <h2 class="card-title">Consommation — {{ moisLabel(moisSel) }}</h2>
+        <select v-model="moisSel" class="mois-sel">
+          <option v-for="ym in moisDispo" :key="ym" :value="ym">{{ moisLabel(ym) }}</option>
+        </select>
+      </div>
+
+      <div class="kpi-row conso-kpi">
+        <div class="kpi"><div class="kpi-v">{{ fmtDA(consoAujVal) }}</div><div class="kpi-l">Consommation aujourd'hui ({{ consoAujNb }} sortie{{ consoAujNb > 1 ? 's' : '' }})</div></div>
+        <div class="kpi"><div class="kpi-v">{{ fmtDA(consoMoisVal) }}</div><div class="kpi-l">Consommation du mois</div></div>
+        <div class="kpi"><div class="kpi-v">{{ fmtDA(consoMoyJour) }}</div><div class="kpi-l">Moyenne par jour ({{ joursRefMois }} j)</div></div>
+      </div>
+
+      <h3 class="conso-sub">Consommation journalière</h3>
+      <p v-if="!consoJour.tot" class="vide-p">Aucune sortie enregistrée sur ce mois.</p>
+      <div v-else class="daybars">
+        <div v-for="d in consoJour.jours" :key="d.jour" class="daybar" :class="{ auj: d.auj }"
+             :title="d.jour + ' ' + moisLabel(moisSel) + ' : ' + fmtDA(d.val)">
+          <div class="db-fill" :style="{ height: (consoJour.max > 0 ? Math.max(2, Math.round(d.val / consoJour.max * 100)) : 0) + '%' }"></div>
+          <span class="db-lbl">{{ d.jour }}</span>
+        </div>
+      </div>
+
+      <h3 class="conso-sub">Consommation par consommable</h3>
+      <div class="tbl-scroll">
+        <table class="tbl">
+          <thead><tr><th>Consommable</th><th class="r">Qté du mois</th><th class="r">Moyenne/jour</th><th class="r">Jours actifs</th><th class="r">Valeur</th></tr></thead>
+          <tbody>
+            <tr v-for="a in consoParArticle" :key="a.id">
+              <td class="nom">{{ a.nom }}</td>
+              <td class="r"><strong>{{ fmt(a.qte) }}</strong> <span class="u">{{ a.unite }}</span></td>
+              <td class="r">{{ fmt(Math.round(a.moyJour * 10) / 10) }} <span class="u">{{ a.unite }}</span></td>
+              <td class="r">{{ a.nbJours }}</td>
+              <td class="r val">{{ a.valeur ? fmtDA(a.valeur) : '—' }}</td>
+            </tr>
+            <tr v-if="!consoParArticle.length"><td colspan="5" class="vide">Aucune consommation sur ce mois.</td></tr>
+          </tbody>
+          <tfoot v-if="consoParArticle.length">
+            <tr class="tot"><td>Total valeur</td><td class="r"></td><td class="r"></td><td class="r"></td><td class="r val">{{ fmtDA(consoMoisVal) }}</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- Évolution annuelle -->
+    <section class="card">
+      <div class="conso-head">
+        <h2 class="card-title">Évolution de la consommation — {{ anneeSel }}</h2>
+        <div class="evo-ctrl">
+          <div class="seg">
+            <button :class="{ on: metrique === 'valeur' }" @click="metrique = 'valeur'">Valeur (DA)</button>
+            <button :class="{ on: metrique === 'qte' }" @click="metrique = 'qte'">Quantité</button>
+          </div>
+          <select v-model="artSel" class="mois-sel art-sel">
+            <option value="">Tous les articles</option>
+            <option v-for="c in consommablesTries" :key="c.id" :value="String(c.id)">{{ c.nom }}</option>
+          </select>
+          <select v-model="anneeSel" class="mois-sel">
+            <option v-for="a in anneesDispo" :key="a" :value="a">{{ a }}</option>
+          </select>
+        </div>
+      </div>
+
+      <p v-if="!evolutionAnnee.length" class="vide-p">Aucune sortie enregistrée sur {{ anneeSel }}.</p>
+      <template v-else>
+        <div class="monthbars">
+          <div v-for="(v, i) in evolutionTotaux.mois" :key="i" class="monthbar" :title="MOIS_COURTS[i] + ' ' + anneeSel + ' : ' + fmtDA(v)">
+            <div class="mb-fill" :style="{ height: (evolutionTotaux.max > 0 ? Math.max(2, Math.round(v / evolutionTotaux.max * 100)) : 0) + '%' }"></div>
+            <span class="mb-lbl">{{ MOIS_COURTS[i] }}</span>
+          </div>
+        </div>
+        <p class="evo-note">Barres = consommation totale mensuelle (valeur, DA). Tableau = {{ metrique === 'qte' ? 'quantités par article (unité de l\'article)' : 'valeur consommée par article (DA)' }}, mois par mois ; l'intensité de couleur suit le niveau de chaque ligne.</p>
+
+        <div class="tbl-scroll">
+          <table class="tbl evo-tbl">
+            <thead><tr><th>Consommable</th><th v-for="(m, i) in MOIS_COURTS" :key="i" class="r mo">{{ m }}</th><th class="r">Total {{ metrique === 'qte' ? '' : '(DA)' }}</th></tr></thead>
+            <tbody>
+              <tr v-for="o in evolutionAnnee" :key="o.id">
+                <td class="nom">{{ o.nom }}</td>
+                <td v-for="(v, i) in o.serie" :key="i" class="r cell" :style="cellStyle(v, o.max)">{{ v ? fmt(Math.round(v)) : '' }}</td>
+                <td class="r val">{{ metrique === 'qte' ? fmt(o.totAff) + ' ' + o.unite : fmtDA(o.totAff) }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="tot"><td>Total valeur</td><td v-for="(v, i) in evolutionTotaux.mois" :key="i" class="r">{{ v ? fmt(Math.round(v)) : '' }}</td><td class="r val">{{ fmtDA(evolutionTotaux.total) }}</td></tr>
+            </tfoot>
+          </table>
+        </div>
+      </template>
+    </section>
+
     <!-- À réapprovisionner -->
     <section class="card">
       <h2 class="card-title">À réapprovisionner <span class="sub-count" v-if="reappro.length">— {{ reappro.length }} article{{ reappro.length > 1 ? 's' : '' }}</span></h2>
@@ -377,6 +527,34 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
 .tbl td .u { font-size: 11px; color: #94a3b8; font-weight: 600; }
 .tbl td.seuil { color: #64748b; }
 .tbl td.qte b { color: #b45309; }
+.tbl tfoot .tot td { border-top: 2px solid #e2e8f0; font-weight: 800; background: #f8fafc; color: #0f172a; }
+.tbl tfoot .tot .val { color: #0f766e; }
+.vide { text-align: center; color: #94a3b8; padding: 22px; }
+/* Consommation mensuelle + évolution (déplacées depuis Consommables) */
+.mois-sel { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13.5px; font-weight: 700; color: #334155; background: #fff; text-transform: capitalize; cursor: pointer; }
+.art-sel { max-width: 220px; text-transform: none; }
+.conso-kpi { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 4px; }
+.conso-sub { margin: 18px 0 10px; font-size: 12px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: .04em; }
+.daybars { display: flex; align-items: flex-end; gap: 3px; height: 130px; padding: 6px 2px 0; overflow-x: auto; border-bottom: 1px solid #f1f5f9; }
+.daybar { flex: 1 0 15px; min-width: 15px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
+.db-fill { width: 68%; min-height: 2px; background: #f59e0b; border-radius: 3px 3px 0 0; transition: height .2s; }
+.daybar:hover .db-fill { background: #b45309; }
+.daybar.auj .db-fill { background: #0d9488; }
+.db-lbl { font-size: 9.5px; color: #94a3b8; font-weight: 700; }
+.evo-ctrl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: #fff; color: #475569; font: inherit; font-size: 12.5px; font-weight: 700; padding: 7px 13px; cursor: pointer; }
+.seg button + button { border-left: 1px solid #e2e8f0; }
+.seg button.on { background: #b45309; color: #fff; }
+.monthbars { display: flex; align-items: flex-end; gap: 8px; height: 120px; padding: 6px 2px 0; }
+.monthbar { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+.mb-fill { width: 58%; min-height: 2px; background: #f59e0b; border-radius: 4px 4px 0 0; transition: height .2s; }
+.monthbar:hover .mb-fill { background: #b45309; }
+.mb-lbl { font-size: 10.5px; color: #94a3b8; font-weight: 700; }
+.evo-note { font-size: 12px; color: #94a3b8; margin: 10px 0 14px; }
+.evo-tbl th.mo { min-width: 50px; }
+.evo-tbl .cell { font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; }
+.evo-tbl tfoot .tot td { border-top: 2px solid #e2e8f0; font-weight: 800; background: #f8fafc; color: #0f172a; font-variant-numeric: tabular-nums; }
 .stock { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stock.ok { color: #0f172a; } .stock.alerte { color: #b45309; } .stock.rupture { color: #dc2626; }
 .couv { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
