@@ -40,6 +40,10 @@
           <label>Campagnes</label>
           <label class="wk"><input type="checkbox" v-model="grouperCampagnes" /> Regrouper les lots d'un même produit <span class="camp-ng">· {{ nbNettoyagesGen }} nettoyage{{ nbNettoyagesGen > 1 ? 's' : '' }} général{{ nbNettoyagesGen > 1 ? 'aux' : '' }}</span></label>
         </div>
+        <div class="add-field chk-wk" v-if="aEcheances">
+          <label>Affichage</label>
+          <label class="wk"><input type="checkbox" v-model="restantSeul" /> Restant seulement <span class="camp-ng">· {{ groupesVue.length }}/{{ groupes.length }} lot(s)</span></label>
+        </div>
         <div class="add-field chk-wk">
           <label>Conditionnement</label>
           <label class="wk"><input type="checkbox" v-model="optimisationCond" /> Alimentation continue du conditionnement (éviter les ruptures)</label>
@@ -420,6 +424,13 @@ const condSeul = ref(false)
 const fabSeul = ref(false)           // fabrication seule : on ordonnance la fab pour tenir l'échéance de conditionnement (import plan)
 const preferCampagne = ref(0.5)
 const grouperCampagnes = ref(false)   // fabrication : regrouper les lots d'un même produit (moins de NG)
+const restantSeul = ref(false)        // n'ordonnancer que le restant du plan (échéance ≥ aujourd'hui)
+const aEcheances = computed(() => groupes.value.some(g => g.dateEcheance))
+const groupesVue = computed(() => {
+  if (!restantSeul.value) return groupes.value
+  const n = new Date(); const t = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+  return groupes.value.filter(g => !g.dateEcheance || String(g.dateEcheance) >= t)
+})
 const hpj = ref(24)
 const selProduit = ref(''), rechercheProduit = ref(''), selBoites = ref('')
 let seq = 1
@@ -676,8 +687,8 @@ function atelierCondProduit(produitId) {
 const echVal = (g) => g.dateEcheance ? new Date(g.dateEcheance + 'T00:00:00').getTime() : Infinity
 const prioriteEffective = computed(() => {
   const m = {}
-  if (prioMode.value === 'manuelle') { for (const g of groupes.value) m[g.id] = Number(g.priorite) || 999; return m }
-  let ranked = [...groupes.value].sort((a, b) => {
+  if (prioMode.value === 'manuelle') { for (const g of groupesVue.value) m[g.id] = Number(g.priorite) || 999; return m }
+  let ranked = [...groupesVue.value].sort((a, b) => {
     if (prioMode.value === 'echeance') return (echVal(a) - echVal(b)) || (caDe(b) - caDe(a))   // EDD : échéance la plus proche d'abord
     if (prioMode.value === 'valeur') return (caDe(b) / dureeGroupe(b)) - (caDe(a) / dureeGroupe(a))
     return caDe(b) - caDe(a)
@@ -695,7 +706,7 @@ const prioriteEffective = computed(() => {
 // Nombre de nettoyages généraux (changements de produit) impliqués par l'ordre courant.
 const nbNettoyagesGen = computed(() => {
   const pe = prioriteEffective.value
-  const ordered = [...groupes.value].sort((a, b) => ((pe[a.id] || 999) - (pe[b.id] || 999)))
+  const ordered = [...groupesVue.value].sort((a, b) => ((pe[a.id] || 999) - (pe[b.id] || 999)))
   let ng = 0, last = null
   for (const g of ordered) { if (g.produitId !== last) ng++; last = g.produitId }
   return ng
@@ -705,7 +716,7 @@ const nbNettoyagesGen = computed(() => {
 const lotsDeployes = computed(() => {
   const out = []
   const pe = prioriteEffective.value
-  const ordered = groupes.value.map((g, gi) => ({ g, gi })).sort((a, b) => ((pe[a.g.id] || 999) - (pe[b.g.id] || 999)) || (a.gi - b.gi))
+  const ordered = groupesVue.value.map((g, gi) => ({ g, gi })).sort((a, b) => ((pe[a.g.id] || 999) - (pe[b.g.id] || 999)) || (a.gi - b.gi))
   for (const { g, gi } of ordered) {
     let reste = g.totalBoites
     for (let i = 1; i <= g.nbLots; i++) {
@@ -798,7 +809,7 @@ function simuler(lots) {
 // Ordre entrelacé : round-robin des lots entre produits (respecte l'ordre de priorité des produits)
 function ordreEntrelace() {
   const pe = prioriteEffective.value
-  const gs = groupes.value.map((g, gi) => ({ g, gi })).sort((a, b) => ((pe[a.g.id] || 999) - (pe[b.g.id] || 999)) || (a.gi - b.gi))
+  const gs = groupesVue.value.map((g, gi) => ({ g, gi })).sort((a, b) => ((pe[a.g.id] || 999) - (pe[b.g.id] || 999)) || (a.gi - b.gi))
   const parG = gs.map(({ g, gi }) => {
     const arr = []; let reste = g.totalBoites
     for (let i = 1; i <= g.nbLots; i++) { const b = Math.min(g.boitesParLot, reste); reste -= b; arr.push({ id: g.id * 1000 + i, groupeId: g.id, produitId: g.produitId, boites: b, num: i, numeroLot: g.numeroLot, couleur: couleur(gi), prio: pe[g.id] || 999, dateFixe: g.dateFixe, dateEcheance: g.dateEcheance || null }) }
@@ -975,7 +986,7 @@ function chargeClass(o) { if (o >= 100) return 'ch-over'; if (o >= 85) return 'c
 // Aperçu agrégé par produit (affichage quand beaucoup de lots importés)
 const apercuProduits = computed(() => {
   const m = {}
-  for (const g of groupes.value) {
+  for (const g of groupesVue.value) {
     const p = prodById.value[g.produitId] || {}
     if (!m[g.produitId]) m[g.produitId] = { produitId: g.produitId, code: p.code_pf || '?', desig: p.designation || '', nbLots: 0, boites: 0, ech: null }
     m[g.produitId].nbLots += g.nbLots || 1
@@ -986,7 +997,7 @@ const apercuProduits = computed(() => {
 })
 // Respect des échéances : fin de fabrication vs début de conditionnement (échéance), par lot
 const resultatEcheance = computed(() => {
-  const gById = {}; for (const g of groupes.value) gById[g.id] = g
+  const gById = {}; for (const g of groupesVue.value) gById[g.id] = g
   const list = []
   for (const r of planning.value) {
     const gid = Math.floor(r.id / 1000); const g = gById[gid]; if (!g || !g.dateEcheance) continue
