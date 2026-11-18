@@ -36,18 +36,19 @@
       <div class="gr-split">
         <div class="gr-tblbox">
           <table class="gr-tbl">
-            <thead><tr><th>Tamis (micromètre)</th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu %</th><th class="r">Passant cumulé %</th><th class="r">Refus cumulé %</th><th></th></tr></thead>
+            <thead><tr><th>Tamis (micromètre)</th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu (g)</th><th class="r">Retenu %</th><th class="r">Passant cumulé %</th><th class="r">Refus cumulé %</th><th></th></tr></thead>
             <tbody>
               <tr v-for="(s, i) in sieves" :key="i">
                 <td><input v-model.number="s.taille" type="number" min="0" step="any" class="gr-in" /></td>
                 <td class="r"><input v-model.number="s.brut" type="number" min="0" step="any" class="gr-in r" placeholder="0" /></td>
                 <td class="r"><input v-model.number="s.net" type="number" min="0" step="any" class="gr-in r" placeholder="0" /></td>
+                <td class="r reten">{{ retenuTxt(s) }}</td>
                 <td class="r">{{ pct1(pctOf(s)) }}</td>
                 <td class="r pass">{{ pct1(passantCumOf(s)) }}</td>
                 <td class="r refus">{{ pct1(refusCumOf(s)) }}</td>
                 <td class="act"><button @click="sieves.splice(i, 1)" title="Retirer">✕</button></td>
               </tr>
-              <tr class="somme"><td>SOMME</td><td class="r">{{ fmt2(totalBrut) }}</td><td class="r">{{ fmt2(total) }}</td><td class="r">{{ total > 0 ? '100,0' : '0' }}%</td><td></td><td></td><td></td></tr>
+              <tr class="somme"><td>SOMME</td><td class="r">{{ fmt2(totalBrut) }}</td><td class="r">{{ fmt2(totalNet) }}</td><td class="r">{{ fmt2(total) }}</td><td class="r">{{ total > 0 ? '100,0' : '0' }}%</td><td></td><td></td><td></td></tr>
             </tbody>
           </table>
           <button class="btn ghost sm" @click="sieves.push({ taille: null, brut: null, net: null })">＋ Ajouter un tamis</button>
@@ -136,10 +137,13 @@ function reset() {
 }
 
 // ---- Granulométrie ----
-const total = computed(() => sieves.reduce((s, r) => s + (Number(r.net) || 0), 0))
+const retenuG = (r) => (Number(r.brut) || 0) - (Number(r.net) || 0)
+const total = computed(() => sieves.reduce((s, r) => s + retenuG(r), 0))
 const totalBrut = computed(() => sieves.reduce((s, r) => s + (Number(r.brut) || 0), 0))
-function pctOf(r) { const t = total.value; return t > 0 ? (Number(r.net) || 0) / t * 100 : 0 }
-function refusCumOf(r) { const t = total.value; if (!(t > 0)) return 0; let s = 0; const d = Number(r.taille) || 0; for (const x of sieves) if ((Number(x.taille) || 0) >= d) s += (Number(x.net) || 0); return s / t * 100 }
+const totalNet = computed(() => sieves.reduce((s, r) => s + (Number(r.net) || 0), 0))
+function retenuTxt(r) { const hb = !(r.brut === '' || r.brut == null), hn = !(r.net === '' || r.net == null); return (hb || hn) ? fmt2(retenuG(r)) : '—' }
+function pctOf(r) { const t = total.value; return t > 0 ? retenuG(r) / t * 100 : 0 }
+function refusCumOf(r) { const t = total.value; if (!(t > 0)) return 0; let s = 0; const d = Number(r.taille) || 0; for (const x of sieves) if ((Number(x.taille) || 0) >= d) s += retenuG(x); return s / t * 100 }
 function passantCumOf(r) { return 100 - refusCumOf(r) }
 const pct1 = (v) => (total.value > 0 ? v.toFixed(1).replace('.', ',') + '%' : '—')
 const fmt2 = (v) => (Number(v) || 0).toFixed(2).replace('.', ',')
@@ -252,7 +256,12 @@ async function chargerAnalyse(id) {
   lotLabel.value = a.libelle || ''
   dateAnalyse.value = a.date_analyse || ''
   masse.value = (a.masse == null) ? null : Number(a.masse)
-  if (Array.isArray(a.tamis) && a.tamis.length) sieves.splice(0, sieves.length, ...a.tamis.map(s => ({ taille: s.taille, brut: (s.brut != null ? s.brut : null), net: (s.net != null ? s.net : (s.retenu != null ? s.retenu : null)) })))
+  if (Array.isArray(a.tamis) && a.tamis.length) sieves.splice(0, sieves.length, ...a.tamis.map(s => {
+    const hasBN = (s.brut != null) || (s.net != null)
+    return hasBN
+      ? { taille: s.taille, brut: (s.brut != null ? s.brut : null), net: (s.net != null ? s.net : null) }
+      : { taille: s.taille, brut: (s.retenu != null ? s.retenu : null), net: null }
+  }))
   if (Array.isArray(a.taps) && a.taps.length) taps.splice(0, taps.length, ...a.taps.map(t => ({ label: t.label, v: t.v })))
   message.value = 'Analyse du lot ' + (a.numero_lot || '—') + ' chargée.'
 }
@@ -310,7 +319,7 @@ function exporterPDF() {
   const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const pr = produits.value.find(x => String(x.id) === produitSel.value)
   const titreProd = pr ? pr.code_pf + ' — ' + pr.designation : (lotLabel.value || '')
-  const tamisRows = sieves.map(s => '<tr><td>' + esc(s.taille) + '</td><td class="r">' + ((s.brut == null || s.brut === '') ? '—' : esc(s.brut)) + '</td><td class="r">' + ((s.net == null || s.net === '') ? '—' : esc(s.net)) + '</td><td class="r">' + pct1(pctOf(s)) + '</td><td class="r">' + pct1(passantCumOf(s)) + '</td><td class="r">' + pct1(refusCumOf(s)) + '</td></tr>').join('')
+  const tamisRows = sieves.map(s => '<tr><td>' + esc(s.taille) + '</td><td class="r">' + ((s.brut == null || s.brut === '') ? '—' : esc(s.brut)) + '</td><td class="r">' + ((s.net == null || s.net === '') ? '—' : esc(s.net)) + '</td><td class="r">' + retenuTxt(s) + '</td><td class="r">' + pct1(pctOf(s)) + '</td><td class="r">' + pct1(passantCumOf(s)) + '</td><td class="r">' + pct1(refusCumOf(s)) + '</td></tr>').join('')
   const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Granulométrie ' + esc(numeroLot.value || '') + '</title>' +
     '<style>*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:24px;font-size:12px}' +
     'h1{font-size:18px;margin:0 0 2px}h2{font-size:13px;color:#7c3aed;border-bottom:2px solid #eee;padding-bottom:4px;margin:18px 0 8px}' +
@@ -323,9 +332,9 @@ function exporterPDF() {
     '<p class="sub">' + esc(titreProd) + (numeroLot.value ? ' · Lot ' + esc(numeroLot.value) : '') + (pr && lotLabel.value ? ' · ' + esc(lotLabel.value) : '') + '</p>' +
     '<div class="meta"><div><b>Date d\'analyse :</b> ' + esc(frDate(dateAnalyse.value)) + '</div><div><b>Masse échantillon :</b> ' + (masse.value != null ? esc(masse.value) + ' g' : '—') + '</div></div>' +
     '<h2>Tamisage</h2>' +
-    '<table><thead><tr><th>Tamis (micromètre)</th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu %</th><th class="r">Passant cum. %</th><th class="r">Refus cum. %</th></tr></thead><tbody>' +
+    '<table><thead><tr><th>Tamis (micromètre)</th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu (g)</th><th class="r">Retenu %</th><th class="r">Passant cum. %</th><th class="r">Refus cum. %</th></tr></thead><tbody>' +
     tamisRows +
-    '<tr><td><b>SOMME</b></td><td class="r"><b>' + fmt2(totalBrut.value) + '</b></td><td class="r"><b>' + fmt2(total.value) + '</b></td><td class="r"><b>' + (total.value > 0 ? '100,0%' : '—') + '</b></td><td></td><td></td></tr></tbody></table>' +
+    '<tr><td><b>SOMME</b></td><td class="r"><b>' + fmt2(totalBrut.value) + '</b></td><td class="r"><b>' + fmt2(totalNet.value) + '</b></td><td class="r"><b>' + fmt2(total.value) + '</b></td><td class="r"><b>' + (total.value > 0 ? '100,0%' : '—') + '</b></td><td></td><td></td></tr></tbody></table>' +
     '<div class="kv"><div><b>D10 :</b> ' + dTxt(d10.value) + '</div><div><b>D50 (médian) :</b> ' + dTxt(d50.value) + '</div><div><b>D90 :</b> ' + dTxt(d90.value) + '</div><div><b>Span :</b> ' + (span.value != null ? span.value.toFixed(2) : '—') + '</div></div>' +
     '<h2>Distribution</h2>' + svgString() +
     '<h2>Densité &amp; compressibilité</h2>' +
@@ -362,6 +371,7 @@ function exporterPDF() {
 .gr-tbl td { padding: 3px 7px; border-bottom: 1px solid #f4f6f9; font-variant-numeric: tabular-nums; }
 .gr-tbl td.pass { color: #0891b2; font-weight: 700; }
 .gr-tbl td.refus { color: #c2410c; }
+.gr-tbl td.reten { color: #0f172a; font-weight: 700; background: #f8fafc; }
 .gr-tbl tr.somme td { font-weight: 800; background: #0f172a; color: #fff; border: none; }
 .gr-in { width: 62px; padding: 4px 5px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 12.5px; }
 .gr-in.r { text-align: right; }
