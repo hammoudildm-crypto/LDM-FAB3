@@ -36,7 +36,7 @@
       <div class="gr-split">
         <div class="gr-tblbox">
           <table class="gr-tbl">
-            <thead><tr><th>Tamis (µm)</th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu (g)</th><th class="r">Retenu %</th><th class="r">Passant cumulé %</th><th class="r">Refus cumulé %</th><th></th></tr></thead>
+            <thead><tr><th>Tamis <span class="u">(µm)</span></th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu (g)</th><th class="r">Retenu %</th><th class="r">Passant cumulé %</th><th class="r">Refus cumulé %</th><th></th></tr></thead>
             <tbody>
               <tr v-for="(s, i) in sieves" :key="i">
                 <td><input v-model.number="s.taille" type="number" min="0" step="any" class="gr-in" /></td>
@@ -385,7 +385,7 @@ function exporterPDF() {
     '<p class="sub">' + esc(titreProd) + (numeroLot.value ? ' · Lot ' + esc(numeroLot.value) : '') + (pr && lotLabel.value ? ' · ' + esc(lotLabel.value) : '') + '</p>' +
     '<div class="meta"><div><b>Date d\'analyse :</b> ' + esc(frDate(dateAnalyse.value)) + '</div><div><b>Masse échantillon :</b> ' + (masse.value != null ? esc(masse.value) + ' g' : '—') + '</div></div>' +
     '<h2>Tamisage</h2>' +
-    '<table><thead><tr><th>Tamis (µm)</th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu (g)</th><th class="r">Retenu %</th><th class="r">Passant cum. %</th><th class="r">Refus cum. %</th></tr></thead><tbody>' +
+    '<table><thead><tr><th>Tamis <span style="text-transform:none">(µm)</span></th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu (g)</th><th class="r">Retenu %</th><th class="r">Passant cum. %</th><th class="r">Refus cum. %</th></tr></thead><tbody>' +
     tamisRows +
     '<tr><td><b>SOMME</b></td><td class="r"><b>' + fmt2(totalBrut.value) + '</b></td><td class="r"><b>' + fmt2(totalNet.value) + '</b></td><td class="r"><b>' + fmt2(total.value) + '</b></td><td class="r"><b>' + (total.value > 0 ? '100,0%' : '—') + '</b></td><td></td><td></td></tr></tbody></table>' +
     '<div class="kv"><div><b>D10 :</b> ' + dTxt(d10.value) + '</div><div><b>D50 (médian) :</b> ' + dTxt(d50.value) + '</div><div><b>D90 :</b> ' + dTxt(d90.value) + '</div><div><b>Span :</b> ' + (span.value != null ? span.value.toFixed(2) : '—') + '</div></div>' +
@@ -502,6 +502,7 @@ const comparTable = computed(() => lotsCompares.value.map((L, i) => ({
 .gr-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .gr-tbl th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; font-weight: 700; padding: 5px 7px; border-bottom: 2px solid #eef2f6; }
 .gr-tbl th.r, .gr-tbl td.r { text-align: right; }
+.gr-tbl th .u { text-transform: none; }
 .gr-tbl td { padding: 3px 7px; border-bottom: 1px solid #f4f6f9; font-variant-numeric: tabular-nums; }
 .gr-tbl td.pass { color: #0891b2; font-weight: 700; }
 .gr-tbl td.refus { color: #c2410c; }
