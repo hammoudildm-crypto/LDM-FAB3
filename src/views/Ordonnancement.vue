@@ -47,6 +47,9 @@
           <label class="av-chk" title="Chaque étape déjà faite (par lot et par atelier) libère la capacité de son équipement ; les étapes planifiées les jours/mois suivants remontent pour la combler.">
             <input type="checkbox" v-model="avancer" /> Avancer le restant
           </label>
+          <label class="av-chk" title="Dès qu'une machine se libère, on y place le prochain lot disponible — en avançant des lots des mois suivants — pour combler les temps morts et tendre vers 100% d'occupation.">
+            <input type="checkbox" v-model="produireAvance" /> Produire en avance
+          </label>
           <div class="range-sel">
             <button :class="{ on: horizonSel === 0 }" @click="horizonSel = 0">Tout</button>
             <button :class="{ on: horizonSel === 1 }" @click="horizonSel = 1">Mois en cours</button>
@@ -210,6 +213,7 @@ const produits = ref([]), equipements = ref([]), cadences = ref([]), chargement 
 const ateliers = ref([]), ofs = ref([]), suiviPhases = ref([])   // réalisation (historique des opérations + dispo par atelier)
 const vueMode = ref('prev')   // 'prev' = prévision (ordonnancement) | 'real' = réalisation (réel)
 const avancer = ref(true)     // avancer le restant : les lots déjà fabriqués libèrent leur capacité, les lots suivants remontent
+const produireAvance = ref(true)   // produire en avance : combler les temps morts des équipements avec les lots suivants
 const groupes = ref([])   // { id, produitId, totalBoites, boitesParLot, nbLots, numeroLot, dateFixe, dateEcheance }
 const dateDepart = ref(new Date().toISOString().slice(0, 10))
 const skipWeekend = ref(false)   // l'usine tourne 7 j/7 (3×8 semaine + 2×8 week-end)
@@ -240,7 +244,7 @@ onMounted(async () => {
   chargerLocal()
 })
 
-watch([groupes, dateDepart, skipWeekend, avancer], sauvegarderLocal, { deep: true })
+watch([groupes, dateDepart, skipWeekend, avancer, produireAvance], sauvegarderLocal, { deep: true })
 
 function phaseDeType(type) {
   const t = (type || '').toLowerCase()
@@ -308,7 +312,7 @@ function ajouter() {
 // --- Persistance locale ---
 const LS_KEY = 'ldm_ordo_scenario_v2'
 function sauvegarderLocal() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify({ groupes: groupes.value, dateDepart: dateDepart.value, skipWeekend: skipWeekend.value, avancer: avancer.value, seq })) } catch (e) {}
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ groupes: groupes.value, dateDepart: dateDepart.value, skipWeekend: skipWeekend.value, avancer: avancer.value, produireAvance: produireAvance.value, seq })) } catch (e) {}
 }
 function chargerLocal() {
   try {
@@ -318,6 +322,7 @@ function chargerLocal() {
     if (d.dateDepart) dateDepart.value = d.dateDepart
     if (typeof d.skipWeekend === 'boolean') skipWeekend.value = d.skipWeekend
     if (typeof d.avancer === 'boolean') avancer.value = d.avancer
+    if (typeof d.produireAvance === 'boolean') produireAvance.value = d.produireAvance
     if (d.seq) seq = Math.max(seq, Number(d.seq) || 1)
   } catch (e) {}
 }
@@ -482,7 +487,52 @@ function simuler(lots) {
   }
   return rows
 }
-const planning = computed(() => simuler(lotsDeployes.value))
+// Ordonnanceur « flux » (produire en avance) : dès qu'une machine se libère, on y place le lot disponible
+// qui peut démarrer le plus tôt (départage par échéance). Les temps morts sont comblés par les lots suivants.
+function simulerFlux(lots) {
+  const slots = {}
+  const slotsDe = (e) => { if (!slots[e.id]) slots[e.id] = new Array(Math.max(1, Math.floor(Number(e.nb_machines) || 1))).fill(0); return slots[e.id] }
+  const compatCache = {}
+  const getCompat = (produitId, k) => { const key = produitId + '|' + k; if (!compatCache[key]) compatCache[key] = equipements.value.filter(e => phaseDeType(e.type) === k && cadMap.value[e.id + '|' + produitId] > 0); return compatCache[key] }
+  const L = lots.map(lt => {
+    let seq = gammeProduit(lt.produitId)
+    if (avancer.value && lt.numeroLot) { const ln = String(lt.numeroLot).trim(); seq = seq.filter(k => !etapeFini(ln, k)) }
+    return { lt, seq, idx: 0, ready: lt.dateFixe ? idxDeDate(lt.dateFixe) : 0, phases: {}, ech: lt.dateEcheance ? new Date(lt.dateEcheance + 'T00:00:00').getTime() : Infinity }
+  })
+  let remaining = L.reduce((s, o) => s + o.seq.length, 0), guard = 0
+  while (remaining > 0 && guard < 300000) {
+    guard++
+    let best = null
+    for (const o of L) {
+      if (o.idx >= o.seq.length) continue
+      const k = o.seq[o.idx]
+      const compat = getCompat(o.lt.produitId, k)
+      if (!compat.length) { o.idx++; remaining--; continue }
+      let eq = null, si = -1, start = Infinity
+      for (const e of compat) { const arr = slotsDe(e); for (let i = 0; i < arr.length; i++) { const s = Math.max(o.ready, arr[i]); if (s < start) { start = s; eq = e; si = i } } }
+      if (!eq) continue
+      if (!best || start < best.start || (start === best.start && (o.ech < best.ech || (o.ech === best.ech && o.lt.id < best.o.lt.id)))) best = { o, k, eq, si, start, ech: o.ech }
+    }
+    if (!best) break
+    const dur = dureeJours(best.eq, best.o.lt.produitId, best.o.lt.boites)
+    const start = best.start, end = start + dur - 1
+    best.o.phases[best.k] = { start, end, equip: best.eq.nom || best.eq.code, eqId: best.eq.id, slots: Math.max(1, Math.floor(Number(best.eq.nb_machines) || 1)), cad: cadMap.value[best.eq.id + '|' + best.o.lt.produitId] || 0 }
+    slotsDe(best.eq)[best.si] = end + 1
+    best.o.ready = end + 1
+    best.o.idx++
+    remaining--
+  }
+  const rows = []
+  for (const o of L) {
+    const p = prodById.value[o.lt.produitId] || {}
+    const ks = Object.keys(o.phases)
+    const debutFab = ks.length ? Math.min(...ks.map(k => o.phases[k].start)) : null
+    const finFab = ks.length ? Math.max(...ks.map(k => o.phases[k].end)) : null
+    rows.push({ id: o.lt.id, num: o.lt.num, numeroLot: o.lt.numeroLot, produitId: o.lt.produitId, code: p.code_pf, desig: p.designation, boites: o.lt.boites, couleur: o.lt.couleur, phases: o.phases, debutFab, finFab, dateEcheance: o.lt.dateEcheance || null, atelierCond: atelierCondProduit(o.lt.produitId) })
+  }
+  return rows
+}
+const planning = computed(() => (produireAvance.value ? simulerFlux : simuler)(lotsDeployes.value))
 const finGlobale = computed(() => { let m = 0; for (const r of planning.value) for (const k in r.phases) m = Math.max(m, r.phases[k].end); return m })
 
 // Table combinée : ordre proposé + risque par lot.
