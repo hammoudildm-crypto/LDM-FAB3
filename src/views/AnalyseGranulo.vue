@@ -60,7 +60,7 @@
         </div>
 
         <div class="gr-chartbox">
-          <div class="gr-chart-t">Histogramme & courbe cumulative</div>
+          <div class="gr-chart-t">Histogramme & courbes cumulatives (passant / refus)</div>
           <svg v-if="chart.bars.length" :viewBox="'0 0 ' + CW + ' ' + CH" class="gr-svg" preserveAspectRatio="xMidYMid meet">
             <line v-for="g in [0,25,50,75,100]" :key="'g'+g" :x1="ML" :x2="CW-MR" :y1="yPct(g)" :y2="yPct(g)" class="gr-grid" />
             <text v-for="g in [0,25,50,75,100]" :key="'gl'+g" :x="CW-MR+4" :y="yPct(g)+3" class="gr-axr">{{ g }}</text>
@@ -68,13 +68,15 @@
             <rect v-for="(b, i) in chart.bars" :key="'b'+i" :x="b.x" :y="b.y" :width="b.w" :height="b.h" class="gr-bar" />
             <polyline :points="chart.poly" class="gr-line" />
             <circle v-for="(p, i) in chart.pts" :key="'p'+i" :cx="p.x" :cy="p.y" r="3" class="gr-dot" />
+            <polyline :points="chart.polyRefus" class="gr-line2" />
+            <circle v-for="(p, i) in chart.ptsRefus" :key="'pr'+i" :cx="p.x" :cy="p.y" r="3" class="gr-dot2" />
             <text v-for="(b, i) in chart.bars" :key="'x'+i" :x="b.x + b.w/2" :y="CH-MB+14" class="gr-xlab">{{ b.label }}</text>
             <text :x="ML-6" :y="MT-6" class="gr-cap gr-capl">% retenu</text>
-            <text :x="CW-MR+4" :y="MT-6" class="gr-cap gr-capr">% passant</text>
+            <text :x="CW-MR+4" :y="MT-6" class="gr-cap gr-capr">% cumulé</text>
             <text :x="(ML+CW-MR)/2" :y="CH-4" class="gr-cap" text-anchor="middle">Taille des particules (µm)</text>
           </svg>
           <p v-else class="gr-empty">Saisis les masses retenues par tamis pour tracer l'histogramme et la courbe cumulative.</p>
-          <div class="gr-leg"><span class="lg lg-bar"></span> % retenu par tamis <span class="lg lg-line"></span> passant cumulé (courbe en S)</div>
+          <div class="gr-leg"><span class="lg lg-bar"></span> % retenu <span class="lg lg-line"></span> passant cumulé <span class="lg lg-line2"></span> refus cumulé (retenu cumulé)</div>
         </div>
       </div>
     </section>
@@ -158,13 +160,15 @@ const dTxt = (v) => v == null ? '—' : (Math.round(v) + ' µm')
 const yPct = (p) => MT + plotH - (p / 100) * plotH
 const chart = computed(() => {
   const rows = sortedRows.value; const n = rows.length
-  if (!n || !(total.value > 0)) return { bars: [], pts: [], poly: '', maxPct: 1 }
+  if (!n || !(total.value > 0)) return { bars: [], pts: [], poly: '', ptsRefus: [], polyRefus: '', maxPct: 1 }
   const maxPct = Math.max(1, ...rows.map(r => r.pct))
   const bw = plotW / n
   const bars = rows.map((r, i) => { const h = (r.pct / maxPct) * plotH; return { x: ML + i * bw + bw * 0.2, w: bw * 0.6, y: MT + plotH - h, h, label: r.taille, pct: r.pct } })
   const pts = rows.map((r, i) => ({ x: ML + i * bw + bw * 0.5, y: MT + plotH - (r.pass / 100) * plotH, p: r.pass }))
   const poly = pts.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ')
-  return { bars, pts, poly, maxPct }
+  const ptsRefus = rows.map((r, i) => ({ x: ML + i * bw + bw * 0.5, y: MT + plotH - ((100 - r.pass) / 100) * plotH, p: 100 - r.pass }))
+  const polyRefus = ptsRefus.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ')
+  return { bars, pts, poly, ptsRefus, polyRefus, maxPct }
 })
 
 // ---- Densité & compressibilité ----
@@ -295,6 +299,8 @@ function svgString() {
   for (const b of c.bars) s += '<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" fill="#f59e0b"/>'
   s += '<polyline points="' + c.poly + '" fill="none" stroke="#0891b2" stroke-width="2"/>'
   for (const p of c.pts) s += '<circle cx="' + p.x + '" cy="' + p.y + '" r="3" fill="#0891b2"/>'
+  s += '<polyline points="' + c.polyRefus + '" fill="none" stroke="#c2410c" stroke-width="2" stroke-dasharray="5 3"/>'
+  for (const p of c.ptsRefus) s += '<circle cx="' + p.x + '" cy="' + p.y + '" r="3" fill="#c2410c"/>'
   for (const b of c.bars) s += '<text x="' + (b.x + b.w / 2) + '" y="' + (CH - MB + 14) + '" font-size="8.5" fill="#64748b" text-anchor="middle">' + b.label + '</text>'
   return s + '</svg>'
 }
@@ -381,6 +387,9 @@ function exporterPDF() {
 .gr-leg { font-size: 11px; color: #64748b; margin-top: 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .lg { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
 .lg-bar { background: #f59e0b; } .lg-line { width: 16px; height: 0; border-top: 2px solid #0891b2; border-radius: 0; }
+.lg-line2 { width: 16px; height: 0; border-top: 2px dashed #c2410c; border-radius: 0; }
+.gr-line2 { fill: none; stroke: #c2410c; stroke-width: 2; stroke-dasharray: 5 3; }
+.gr-dot2 { fill: #c2410c; }
 
 .gr-dens { display: flex; flex-direction: column; gap: 14px; }
 .gr-f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: #475569; }
