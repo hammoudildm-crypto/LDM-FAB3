@@ -67,6 +67,56 @@
     </section>
 
     <!-- Planning de fabrication par équipement (files de lots) -->
+    <!-- Ordre de priorité de fabrication (démonstration de la logique) -->
+    <section v-if="planning.length" class="card">
+      <h2 class="card-title">Ordre de priorité de fabrication — par date de début conditionnement</h2>
+      <p class="muted" style="margin:0 0 14px">Règle : la fabrication est priorisée selon la <strong>date de début de conditionnement estimée la plus proche</strong> (EDD). Le lot dont le conditionnement démarre le plus tôt est fabriqué en premier ; cet ordre alimente la planification des ateliers ci-dessous.</p>
+
+      <div class="logic-flow">
+        <div class="lf-step"><span class="lf-n">1</span><div class="lf-txt"><strong>Besoin conditionnement</strong><span>Date de début de conditionnement estimée (importée) de chaque lot.</span></div></div>
+        <div class="lf-arrow">→</div>
+        <div class="lf-step"><span class="lf-n">2</span><div class="lf-txt"><strong>Priorité (EDD)</strong><span>Tri par échéance la plus proche : plus le besoin est tôt, plus la priorité est haute.</span></div></div>
+        <div class="lf-arrow">→</div>
+        <div class="lf-step"><span class="lf-n">3</span><div class="lf-txt"><strong>Placement ateliers</strong><span>Chaque lot est placé sur ses ateliers selon la cadence et la capacité.</span></div></div>
+        <div class="lf-arrow">→</div>
+        <div class="lf-step"><span class="lf-n">4</span><div class="lf-txt"><strong>Risque</strong><span>Marge = fin de fabrication vs besoin ; en retard si la fabrication finit après.</span></div></div>
+      </div>
+
+      <div class="tbl-wrap">
+        <table class="grid">
+          <thead>
+            <tr>
+              <th class="ta-c">Priorité</th>
+              <th>Produit</th>
+              <th class="ta-c">N° Lot</th>
+              <th class="ta-r">Boîtes</th>
+              <th class="ta-c">Début conditionnement<br><span class="th-sub">besoin — référence</span></th>
+              <th class="ta-r">Durée fab</th>
+              <th class="ta-c">Limite début fab</th>
+              <th class="ta-c">Début fab planifié</th>
+              <th class="ta-c">Fin fab planifiée</th>
+              <th class="ta-r">Marge</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(r, i) in tableauOrdo" :key="i" :class="{ 'row-late': r.enRetard }">
+              <td class="ta-c ordo-rang">{{ i + 1 }}</td>
+              <td><strong>{{ r.code }}</strong> <span class="lot-desig">{{ r.desig }}</span></td>
+              <td class="ta-c"><span v-if="r.numeroLot" class="lot-num">{{ r.numeroLot }}</span><span v-else class="muted">—</span></td>
+              <td class="ta-r">{{ fmt(r.boites) }}</td>
+              <td class="ta-c ordo-date ordo-besoin">{{ r.besoin ? fmtDate(r.besoin) : '—' }}</td>
+              <td class="ta-r">{{ r.dureeJ }} j</td>
+              <td class="ta-c ordo-limite"><span v-if="r.echPassee" class="lim-pass" title="Besoin déjà passé — en retard dès le départ">dépassée</span><span v-else-if="r.dateLimite" :class="{ 'lim-tight': r.limiteDepassee }" :title="r.limiteDepassee ? 'Début planifié après la limite — risque' : 'Dernière date pour démarrer à temps'">{{ fmtDate(r.dateLimite) }}</span><span v-else class="muted">—</span></td>
+              <td class="ta-c ordo-date">{{ r.debut ? fmtDate(r.debut) : '—' }}</td>
+              <td class="ta-c ordo-date" :class="{ 'sortie-late': r.enRetard }">{{ r.fin ? fmtDate(r.fin) : '—' }}</td>
+              <td class="ta-r"><span class="marge" :class="margeClass(r.marge)">{{ margeTxt(r.marge) }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin-top:8px"><span class="marge m-late">rouge</span> en retard · <span class="marge m-tight">orange</span> tendu (≤ 2 j) · <span class="marge m-ok">vert</span> confortable. <strong>Limite début fab</strong> = besoin − durée fab (rétro-planning) : au-delà, l'objectif ne peut plus être tenu.</p>
+    </section>
+
     <section v-if="planParAtelier.length || suiviPhases.length" class="card">
       <div class="card-head-row">
         <h2 class="card-title">Planning de fabrication par atelier</h2>
@@ -661,6 +711,16 @@ const phasesManquantes = computed(() => {
 .risk-bad { background: #fef2f2; border-color: #fecaca; }
 .risk-txt { margin: 0; font-size: 13px; color: #334155; line-height: 1.5; }
 
+.logic-flow { display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; margin: 0 0 16px; }
+.lf-step { flex: 1 1 180px; min-width: 160px; display: flex; gap: 9px; align-items: flex-start; background: #f8fafc; border: 1px solid #eef1f6; border-radius: 10px; padding: 10px 12px; }
+.lf-n { flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; background: #0f766e; color: #fff; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.lf-txt { display: flex; flex-direction: column; gap: 2px; }
+.lf-txt strong { font-size: 12.5px; color: #1a2233; }
+.lf-txt span { font-size: 11px; color: #64748b; line-height: 1.35; }
+.lf-arrow { align-self: center; color: #0f766e; font-weight: 800; font-size: 16px; }
+.th-sub { font-weight: 500; font-size: 10px; color: #0f766e; text-transform: none; }
+.ordo-besoin { font-weight: 700; color: #0f766e; }
+@media (max-width: 760px) { .lf-arrow { display: none; } }
 .tbl-wrap { overflow-x: auto; }
 table.grid { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 table.grid th { text-align: left; font-weight: 600; color: #475569; padding: 7px 10px; border-bottom: 2px solid #e6e9f0; white-space: nowrap; background: #f8fafc; }
