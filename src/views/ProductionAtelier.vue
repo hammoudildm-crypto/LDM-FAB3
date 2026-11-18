@@ -667,12 +667,13 @@ const produitsMoisPA = computed(() => {
   const map = new Map()
   for (const l of lotsMoisPA.value) {
     const key = (l.code && l.code !== '—') ? l.code : (l.desig || l.lot)
-    if (!map.has(key)) map.set(key, { code: l.code, desig: l.desig, lots: 0, qte: 0, ca: 0, fab: 0, theo: 0, rdts: [] })
+    if (!map.has(key)) map.set(key, { code: l.code, desig: l.desig, lots: 0, qte: 0, ca: 0, reel: 0, fab: 0, theo: 0, rdts: [] })
     const e = map.get(key)
     e.lots += 1
     const q = Number(l.qte) || 0
     e.qte += q
     e.ca += q * (Number(l.pcsu) || 0)
+    e.reel += Number(l.fab) || 0
     const theo = Number(l.theo) || 0, fab = Number(l.fab) || 0
     if (theo > 0 && fab > 0) { e.fab += fab; e.theo += theo; e.rdts.push(fab / theo * 100) }
   }
@@ -688,7 +689,7 @@ const produitsMoisPA = computed(() => {
   const totFab = liste.reduce((s, e) => s + e.fab, 0), totTheo = liste.reduce((s, e) => s + e.theo, 0)
   const allRdts = [].concat(...liste.map(e => e.rdts))
   return {
-    liste, totLots: liste.reduce((s, e) => s + e.lots, 0), totQte, totCa: liste.reduce((s, e) => s + e.ca, 0),
+    liste, totLots: liste.reduce((s, e) => s + e.lots, 0), totQte, totReel: liste.reduce((s, e) => s + e.reel, 0), totCa: liste.reduce((s, e) => s + e.ca, 0),
     totRdtFab: totTheo > 0 ? totFab / totTheo * 100 : null,
     totRdtMin: allRdts.length ? Math.min(...allRdts) : null,
     totRdtMax: allRdts.length ? Math.max(...allRdts) : null
@@ -1257,12 +1258,13 @@ onMounted(charger)
           <template v-else>
             <div class="pa-sub-h">Analyse par produit <span class="pa-sub-n">{{ produitsMoisPA.liste.length }}</span></div>
             <table class="pa-prodtbl">
-              <thead><tr><th>Produit</th><th class="r">Lots</th><th class="r">Boîtes</th><th class="r">CA</th><th class="r">Rdt fab.</th><th class="r">Rdt min</th><th class="r">Rdt max</th><th class="r">Part</th></tr></thead>
+              <thead><tr><th>Produit</th><th class="r">Lots</th><th class="r">Boîtes</th><th class="r">Boîtes réelles</th><th class="r">CA</th><th class="r">Rdt fab.</th><th class="r">Rdt min</th><th class="r">Rdt max</th><th class="r">Part</th></tr></thead>
               <tbody>
                 <tr v-for="(p, i) in produitsMoisPA.liste" :key="'pp' + i">
                   <td class="pp-prod"><b>{{ p.code || '—' }}</b><span class="pp-des">{{ p.desig }}</span></td>
                   <td class="r">{{ p.lots }}</td>
                   <td class="r">{{ p.qte ? fmt(p.qte) : '—' }}</td>
+                  <td class="r pp-reel">{{ p.reel ? fmt(p.reel) : '—' }}</td>
                   <td class="r">{{ p.ca ? fmtDA(p.ca) : '—' }}</td>
                   <td class="r pp-rdt">{{ pctR(p.rdtFab) }}</td>
                   <td class="r">{{ pctR(p.rdtMin) }}</td>
@@ -1270,7 +1272,7 @@ onMounted(charger)
                   <td class="r pp-part"><span class="pp-bar"><span :style="{ width: p.pct + '%' }"></span></span>{{ p.pct }}%</td>
                 </tr>
               </tbody>
-              <tfoot><tr><td>Total</td><td class="r">{{ produitsMoisPA.totLots }}</td><td class="r">{{ fmt(produitsMoisPA.totQte) }}</td><td class="r">{{ fmtDA(produitsMoisPA.totCa) }}</td><td class="r pp-rdt">{{ pctR(produitsMoisPA.totRdtFab) }}</td><td class="r">{{ pctR(produitsMoisPA.totRdtMin) }}</td><td class="r">{{ pctR(produitsMoisPA.totRdtMax) }}</td><td class="r">100%</td></tr></tfoot>
+              <tfoot><tr><td>Total</td><td class="r">{{ produitsMoisPA.totLots }}</td><td class="r">{{ fmt(produitsMoisPA.totQte) }}</td><td class="r pp-reel">{{ fmt(produitsMoisPA.totReel) }}</td><td class="r">{{ fmtDA(produitsMoisPA.totCa) }}</td><td class="r pp-rdt">{{ pctR(produitsMoisPA.totRdtFab) }}</td><td class="r">{{ pctR(produitsMoisPA.totRdtMin) }}</td><td class="r">{{ pctR(produitsMoisPA.totRdtMax) }}</td><td class="r">100%</td></tr></tfoot>
             </table>
 
             <div class="pa-sub-h">Analyse par partenaire <span class="pa-sub-n">{{ partenairesMoisPA.liste.length }}</span></div>
@@ -1447,6 +1449,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pp-des { color: #94a3b8; margin-left: 6px; font-size: 11.5px; }
 .pp-part { white-space: nowrap; color: #475569; font-weight: 700; }
 .pa-prodtbl td.pp-rdt { font-weight: 800; color: #0f172a; }
+.pa-prodtbl td.pp-reel { font-weight: 700; color: #0f766e; }
 .pp-bar { display: inline-block; width: 42px; height: 6px; background: #eef2f6; border-radius: 3px; overflow: hidden; vertical-align: middle; margin-right: 6px; }
 .pp-bar > span { display: block; height: 100%; background: #0f766e; border-radius: 3px; }
 .pa-lot { font-family: ui-monospace, monospace; font-weight: 700; white-space: nowrap; }
