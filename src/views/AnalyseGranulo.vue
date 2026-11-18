@@ -4,8 +4,28 @@
       subtitle="Analyse par tamisage (histogramme + courbe cumulative, D10/D50/D90) et densité apparente / tassée (Hausner, Carr)." />
 
     <section class="card">
+      <p v-if="erreur" class="gr-alert">⚠ {{ erreur }}</p>
+      <p v-if="message" class="gr-ok">✓ {{ message }}</p>
       <div class="gr-id">
-        <label>Échantillon / lot <input v-model="lotLabel" class="gr-lbl" placeholder="ex. DIAMICRON 60 MG — Lot 26820 (après lubrification)" /></label>
+        <label class="gr-grow">Produit (référentiel PQR)
+          <input v-model="rechercheProduit" class="gr-lbl" placeholder="🔍 filtrer un produit…" style="margin-bottom:5px" />
+          <select v-model="produitSel" class="gr-lbl">
+            <option value="">— aucun produit —</option>
+            <option v-for="pr in produitsFiltres" :key="pr.id" :value="String(pr.id)">{{ pr.code_pf }} — {{ pr.designation }}</option>
+          </select>
+        </label>
+        <label>N° de lot<input v-model="numeroLot" class="gr-lbl" placeholder="ex. 26820" /></label>
+        <label>Date d'analyse<input v-model="dateAnalyse" type="date" class="gr-lbl" /></label>
+        <label>Observations<input v-model="lotLabel" class="gr-lbl" placeholder="ex. après lubrification" /></label>
+      </div>
+      <div class="gr-actions">
+        <button class="btn" @click="enregistrer">💾 Enregistrer l'analyse</button>
+        <select v-model="histSel" class="gr-lbl gr-hist" @change="chargerAnalyse(histSel)">
+          <option value="">📂 Charger une analyse enregistrée…</option>
+          <option v-for="h in historique" :key="h.id" :value="String(h.id)">{{ h.numero_lot || 'sans lot' }} · {{ frDate(h.date_analyse) }} · {{ h.libelle || prodNom(h.produit_id) || '—' }}</option>
+        </select>
+        <button class="btn ghost" @click="reporterPQR">↗ Reporter vers PQR (D50 &amp; densité)</button>
+        <button class="btn ghost" @click="exporterPDF">🖨 Export PDF</button>
         <button class="btn ghost" @click="reset">↺ Réinitialiser</button>
       </div>
     </section>
@@ -88,8 +108,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import PageHeader from '../components/PageHeader.vue'
+import { supabase } from '../supabase'
 
 const CW = 720, CH = 300, ML = 46, MR = 46, MT = 20, MB = 40
 const plotW = CW - ML - MR, plotH = CH - MT - MB
@@ -105,6 +126,8 @@ const taps = reactive([{ label: 'V0', v: null }, { label: 'V10', v: null }, { la
 
 function reset() {
   lotLabel.value = ''; masse.value = null
+  numeroLot.value = ''; produitSel.value = ''; rechercheProduit.value = ''; histSel.value = ''
+  erreur.value = ''; message.value = ''
   for (const s of sieves) s.retenu = null
   for (const t of taps) t.v = null
 }
@@ -160,6 +183,156 @@ const flow = computed(() => {
   if (c <= 37) return { t: 'Très médiocre', c: '#dc2626' }
   return { t: 'Très mauvais', c: '#b91c1c' }
 })
+
+// ======================================================================
+//  Enregistrement par lot · historique · report PQR · export PDF
+// ======================================================================
+const erreur = ref(''), message = ref('')
+const produits = ref([]), produitSel = ref(''), rechercheProduit = ref('')
+const numeroLot = ref(''), dateAnalyse = ref(new Date().toISOString().slice(0, 10))
+const historique = ref([]), histSel = ref('')
+
+const tableAbsente = (m) => /relation|does not exist|schema cache|could not find the table|pgrst205/i.test(m || '')
+const normP = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+const produitsFiltres = computed(() => {
+  const q = normP(rechercheProduit.value).trim()
+  if (!q) return produits.value
+  return produits.value.filter(p => normP((p.code_pf || '') + ' ' + (p.designation || '')).includes(q))
+})
+function prodNom(id) { const p = produits.value.find(x => x.id === id); return p ? p.code_pf : '' }
+function frDate(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString('fr-FR') }
+
+onMounted(async () => {
+  const rp = await supabase.from('produits').select('id, code_pf, designation').order('code_pf')
+  if (!rp.error) produits.value = rp.data || []
+  await chargerHistorique()
+})
+
+async function chargerHistorique() {
+  const r = await supabase.from('granulo_analyses')
+    .select('id, produit_id, numero_lot, libelle, date_analyse')
+    .eq('actif', true).order('id', { ascending: false }).limit(100)
+  if (!r.error) historique.value = r.data || []
+}
+
+async function enregistrer() {
+  erreur.value = ''; message.value = ''
+  const payload = {
+    produit_id: produitSel.value ? Number(produitSel.value) : null,
+    numero_lot: (numeroLot.value || '').trim() || null,
+    libelle: lotLabel.value || null,
+    date_analyse: dateAnalyse.value || null,
+    masse: (masse.value === '' || masse.value == null) ? null : Number(masse.value),
+    tamis: sieves.map(s => ({ taille: Number(s.taille) || 0, retenu: (s.retenu === '' || s.retenu == null) ? null : Number(s.retenu) })),
+    taps: taps.map(t => ({ label: t.label, v: (t.v === '' || t.v == null) ? null : Number(t.v) })),
+    d10: d10.value, d50: d50.value, d90: d90.value,
+    dens_app: densApp.value, dens_tass: densTass.value, hausner: hausner.value, carr: carr.value
+  }
+  const r = await supabase.from('granulo_analyses').insert(payload).select('id').single()
+  if (r.error) { erreur.value = tableAbsente(r.error.message) ? 'Table absente — exécute la migration 008_granulometrie.sql dans Supabase.' : r.error.message; return }
+  message.value = 'Analyse enregistrée' + (numeroLot.value ? ' (lot ' + numeroLot.value + ')' : '') + '.'
+  histSel.value = ''
+  await chargerHistorique()
+}
+
+async function chargerAnalyse(id) {
+  if (!id) return
+  erreur.value = ''; message.value = ''
+  const r = await supabase.from('granulo_analyses').select('*').eq('id', Number(id)).single()
+  if (r.error) { erreur.value = r.error.message; return }
+  const a = r.data
+  produitSel.value = a.produit_id ? String(a.produit_id) : ''
+  numeroLot.value = a.numero_lot || ''
+  lotLabel.value = a.libelle || ''
+  dateAnalyse.value = a.date_analyse || ''
+  masse.value = (a.masse == null) ? null : Number(a.masse)
+  if (Array.isArray(a.tamis) && a.tamis.length) sieves.splice(0, sieves.length, ...a.tamis.map(s => ({ taille: s.taille, retenu: s.retenu })))
+  if (Array.isArray(a.taps) && a.taps.length) taps.splice(0, taps.length, ...a.taps.map(t => ({ label: t.label, v: t.v })))
+  message.value = 'Analyse du lot ' + (a.numero_lot || '—') + ' chargée.'
+}
+
+async function reporterPQR() {
+  erreur.value = ''; message.value = ''
+  const lot = (numeroLot.value || '').trim()
+  if (!lot) { erreur.value = 'Renseigne le N° de lot pour reporter la mesure vers PQR.'; return }
+  if (d50.value == null && densTass.value == null) { erreur.value = 'Aucune valeur à reporter : saisis les refus par tamis et/ou la densité.'; return }
+  const rp = await supabase.from('pqr_parametres').select('id, nom, phase').eq('actif', true)
+  if (rp.error) { erreur.value = tableAbsente(rp.error.message) ? 'Référentiel PQR indisponible (migrations PQR non exécutées).' : rp.error.message; return }
+  const pGran = (rp.data || []).find(p => normP(p.nom).includes('granulometr'))
+  const pDens = (rp.data || []).find(p => normP(p.nom).startsWith('densite'))
+  if (!pGran && !pDens) { erreur.value = 'Paramètres « Granulométrie » / « Densité » absents du référentiel PQR — ajoute-les dans Paramètres critiques.'; return }
+  const ro = await supabase.from('ordres_fabrication').select('id, produit_id, numero_lot').eq('numero_lot', lot).limit(1)
+  if (ro.error) { erreur.value = ro.error.message; return }
+  const of = (ro.data || [])[0]
+  if (!of) { erreur.value = 'Aucun OF trouvé pour le lot ' + lot + ' — la mesure PQR doit être rattachée à un ordre de fabrication.'; return }
+  const dmes = dateAnalyse.value || new Date().toISOString().slice(0, 10)
+  const mk = (p, val) => ({ of_id: of.id, numero_lot: lot, produit_id: of.produit_id, phase: p.phase, parametre_id: p.id, api: '', valeurs: [val], valeur: val, date_mesure: dmes })
+  const up = []
+  if (pGran && d50.value != null) up.push(mk(pGran, Math.round(d50.value)))
+  if (pDens && densTass.value != null) up.push(mk(pDens, Number(densTass.value.toFixed(3))))
+  if (!up.length) { erreur.value = 'Rien à reporter : le paramètre correspondant est absent ou la valeur n\'est pas calculée.'; return }
+  let r = await supabase.from('pqr_mesures').upsert(up, { onConflict: 'of_id,parametre_id,api' })
+  if (r.error && /api/i.test(r.error.message || '')) r = await supabase.from('pqr_mesures').upsert(up.map(({ api, ...x }) => x), { onConflict: 'of_id,parametre_id' })
+  if (r.error) { erreur.value = r.error.message; return }
+  const quoi = []
+  if (pGran && d50.value != null) quoi.push('Granulométrie = ' + Math.round(d50.value) + ' µm (D50)')
+  if (pDens && densTass.value != null) quoi.push('Densité = ' + densTass.value.toFixed(3) + ' g/mL (tassée)')
+  message.value = 'Reporté vers PQR / Saisie des mesures — lot ' + lot + ' : ' + quoi.join(' · ') + '.'
+}
+
+function svgString() {
+  const c = chart.value
+  if (!c.bars.length) return '<p style="color:#94a3b8;font-size:12px">Pas de données granulométriques.</p>'
+  let s = '<svg viewBox="0 0 ' + CW + ' ' + CH + '" width="100%" xmlns="http://www.w3.org/2000/svg">'
+  for (const g of [0, 25, 50, 75, 100]) {
+    const y = yPct(g)
+    s += '<line x1="' + ML + '" x2="' + (CW - MR) + '" y1="' + y + '" y2="' + y + '" stroke="#eef2f6"/>'
+    s += '<text x="' + (CW - MR + 4) + '" y="' + (y + 3) + '" font-size="9" fill="#94a3b8">' + g + '</text>'
+    s += '<text x="' + (ML - 6) + '" y="' + (y + 3) + '" font-size="9" fill="#94a3b8" text-anchor="end">' + Math.round(g / 100 * c.maxPct) + '</text>'
+  }
+  for (const b of c.bars) s += '<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" fill="#f59e0b"/>'
+  s += '<polyline points="' + c.poly + '" fill="none" stroke="#0891b2" stroke-width="2"/>'
+  for (const p of c.pts) s += '<circle cx="' + p.x + '" cy="' + p.y + '" r="3" fill="#0891b2"/>'
+  for (const b of c.bars) s += '<text x="' + (b.x + b.w / 2) + '" y="' + (CH - MB + 14) + '" font-size="8.5" fill="#64748b" text-anchor="middle">' + b.label + '</text>'
+  return s + '</svg>'
+}
+
+function exporterPDF() {
+  erreur.value = ''
+  const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const pr = produits.value.find(x => String(x.id) === produitSel.value)
+  const titreProd = pr ? pr.code_pf + ' — ' + pr.designation : (lotLabel.value || '')
+  const tamisRows = sieves.map(s => '<tr><td>' + esc(s.taille) + '</td><td class="r">' + ((s.retenu == null || s.retenu === '') ? '—' : esc(s.retenu)) + '</td><td class="r">' + pct1(pctOf(s)) + '</td><td class="r">' + pct1(passantCumOf(s)) + '</td><td class="r">' + pct1(refusCumOf(s)) + '</td></tr>').join('')
+  const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Granulométrie ' + esc(numeroLot.value || '') + '</title>' +
+    '<style>*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:24px;font-size:12px}' +
+    'h1{font-size:18px;margin:0 0 2px}h2{font-size:13px;color:#7c3aed;border-bottom:2px solid #eee;padding-bottom:4px;margin:18px 0 8px}' +
+    '.sub{color:#64748b;margin:0 0 12px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;margin-bottom:8px;font-size:12px}.meta b{color:#475569}' +
+    'table{width:100%;border-collapse:collapse;margin-bottom:6px}th,td{text-align:left;padding:4px 8px;border-bottom:1px solid #eef2f6}' +
+    'th{background:#faf5ff;color:#6b21a8;font-size:10px;text-transform:uppercase}td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}' +
+    '.kv{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 20px;margin-top:4px}.kv div{border-bottom:1px solid #f1f5f9;padding:4px 0}.kv b{color:#0f172a}' +
+    '.foot{margin-top:22px;color:#94a3b8;font-size:10px;border-top:1px solid #eee;padding-top:6px}@media print{body{margin:12mm}}</style></head><body>' +
+    '<h1>Analyse granulométrique &amp; densité</h1>' +
+    '<p class="sub">' + esc(titreProd) + (numeroLot.value ? ' · Lot ' + esc(numeroLot.value) : '') + (pr && lotLabel.value ? ' · ' + esc(lotLabel.value) : '') + '</p>' +
+    '<div class="meta"><div><b>Date d\'analyse :</b> ' + esc(frDate(dateAnalyse.value)) + '</div><div><b>Masse échantillon :</b> ' + (masse.value != null ? esc(masse.value) + ' g' : '—') + '</div></div>' +
+    '<h2>Tamisage</h2>' +
+    '<table><thead><tr><th>Tamis (µm)</th><th class="r">Refus (g)</th><th class="r">Retenu %</th><th class="r">Passant cum. %</th><th class="r">Refus cum. %</th></tr></thead><tbody>' +
+    tamisRows +
+    '<tr><td><b>SOMME</b></td><td class="r"><b>' + fmt2(total.value) + '</b></td><td class="r"><b>' + (total.value > 0 ? '100,0%' : '—') + '</b></td><td></td><td></td></tr></tbody></table>' +
+    '<div class="kv"><div><b>D10 :</b> ' + dTxt(d10.value) + '</div><div><b>D50 (médian) :</b> ' + dTxt(d50.value) + '</div><div><b>D90 :</b> ' + dTxt(d90.value) + '</div><div><b>Span :</b> ' + (span.value != null ? span.value.toFixed(2) : '—') + '</div></div>' +
+    '<h2>Distribution</h2>' + svgString() +
+    '<h2>Densité &amp; compressibilité</h2>' +
+    '<div class="kv"><div><b>Densité apparente (vrac) :</b> ' + (densApp.value != null ? densApp.value.toFixed(3) + ' g/mL' : '—') + '</div>' +
+    '<div><b>Densité tassée :</b> ' + (densTass.value != null ? densTass.value.toFixed(3) + ' g/mL' : '—') + '</div>' +
+    '<div><b>Indice de Hausner :</b> ' + (hausner.value != null ? hausner.value.toFixed(3) : '—') + '</div>' +
+    '<div><b>Indice de Carr :</b> ' + (carr.value != null ? carr.value.toFixed(1) + ' %' : '—') + '</div>' +
+    '<div><b>Aptitude à l\'écoulement :</b> ' + esc(flow.value.t) + '</div></div>' +
+    '<p class="foot">ProdTrack — LDM Groupe · Fiche générée le ' + esc(new Date().toLocaleDateString('fr-FR')) + '</p>' +
+    '</body></html>'
+  const w = window.open('', '_blank')
+  if (!w) { erreur.value = 'Autorise les pop-ups pour générer le PDF.'; return }
+  w.document.write(html); w.document.close(); w.focus()
+  setTimeout(() => { try { w.print() } catch (e) {} }, 350)
+}
 </script>
 
 <style scoped>
@@ -225,4 +398,12 @@ const flow = computed(() => {
 .gr-flow { display: flex; align-items: center; gap: 10px; border: 2px solid; border-radius: 10px; padding: 12px 16px; }
 .gr-flow span { flex: 1; font-size: 12.5px; font-weight: 600; }
 .gr-flow strong { font-size: 18px; }
+
+/* Identification + actions (enregistrement / historique / report PQR / PDF) */
+.gr-id label { min-width: 150px; flex: 1 1 150px; }
+.gr-grow { flex: 2 1 300px !important; min-width: 280px; }
+.gr-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px dashed #e2e8f0; }
+.gr-hist { min-width: 250px; cursor: pointer; font-weight: 600; color: #475569; }
+.gr-alert { margin: 0 0 12px; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 9px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+.gr-ok { margin: 0 0 12px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; padding: 9px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
 </style>
