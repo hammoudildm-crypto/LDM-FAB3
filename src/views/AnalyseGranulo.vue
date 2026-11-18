@@ -36,20 +36,21 @@
       <div class="gr-split">
         <div class="gr-tblbox">
           <table class="gr-tbl">
-            <thead><tr><th>Tamis (µm)</th><th class="r">Refus (g)</th><th class="r">Retenu %</th><th class="r">Passant cumulé %</th><th class="r">Refus cumulé %</th><th></th></tr></thead>
+            <thead><tr><th>Tamis (micromètre)</th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu %</th><th class="r">Passant cumulé %</th><th class="r">Refus cumulé %</th><th></th></tr></thead>
             <tbody>
               <tr v-for="(s, i) in sieves" :key="i">
                 <td><input v-model.number="s.taille" type="number" min="0" step="any" class="gr-in" /></td>
-                <td class="r"><input v-model.number="s.retenu" type="number" min="0" step="any" class="gr-in r" placeholder="0" /></td>
+                <td class="r"><input v-model.number="s.brut" type="number" min="0" step="any" class="gr-in r" placeholder="0" /></td>
+                <td class="r"><input v-model.number="s.net" type="number" min="0" step="any" class="gr-in r" placeholder="0" /></td>
                 <td class="r">{{ pct1(pctOf(s)) }}</td>
                 <td class="r pass">{{ pct1(passantCumOf(s)) }}</td>
                 <td class="r refus">{{ pct1(refusCumOf(s)) }}</td>
                 <td class="act"><button @click="sieves.splice(i, 1)" title="Retirer">✕</button></td>
               </tr>
-              <tr class="somme"><td>SOMME</td><td class="r">{{ fmt2(total) }}</td><td class="r">{{ total > 0 ? '100,0' : '0' }}%</td><td></td><td></td><td></td></tr>
+              <tr class="somme"><td>SOMME</td><td class="r">{{ fmt2(totalBrut) }}</td><td class="r">{{ fmt2(total) }}</td><td class="r">{{ total > 0 ? '100,0' : '0' }}%</td><td></td><td></td><td></td></tr>
             </tbody>
           </table>
-          <button class="btn ghost sm" @click="sieves.push({ taille: null, retenu: null })">＋ Ajouter un tamis</button>
+          <button class="btn ghost sm" @click="sieves.push({ taille: null, brut: null, net: null })">＋ Ajouter un tamis</button>
           <div class="gr-d">
             <div class="gr-dk"><span>D10</span><b>{{ dTxt(d10) }}</b></div>
             <div class="gr-dk"><span>D50 (médian)</span><b>{{ dTxt(d50) }}</b></div>
@@ -117,9 +118,9 @@ const plotW = CW - ML - MR, plotH = CH - MT - MB
 
 const lotLabel = ref('')
 const sieves = reactive([
-  { taille: 0, retenu: null }, { taille: 40, retenu: null }, { taille: 63, retenu: null },
-  { taille: 90, retenu: null }, { taille: 125, retenu: null }, { taille: 160, retenu: null },
-  { taille: 250, retenu: null }, { taille: 315, retenu: null }, { taille: 500, retenu: null }, { taille: 710, retenu: null }
+  { taille: 0, brut: null, net: null }, { taille: 40, brut: null, net: null }, { taille: 63, brut: null, net: null },
+  { taille: 90, brut: null, net: null }, { taille: 125, brut: null, net: null }, { taille: 160, brut: null, net: null },
+  { taille: 250, brut: null, net: null }, { taille: 315, brut: null, net: null }, { taille: 500, brut: null, net: null }, { taille: 710, brut: null, net: null }
 ])
 const masse = ref(null)
 const taps = reactive([{ label: 'V0', v: null }, { label: 'V10', v: null }, { label: 'V500', v: null }, { label: 'V1250', v: null }, { label: 'V2500', v: null }])
@@ -128,14 +129,15 @@ function reset() {
   lotLabel.value = ''; masse.value = null
   numeroLot.value = ''; produitSel.value = ''; rechercheProduit.value = ''; histSel.value = ''
   erreur.value = ''; message.value = ''
-  for (const s of sieves) s.retenu = null
+  for (const s of sieves) { s.brut = null; s.net = null }
   for (const t of taps) t.v = null
 }
 
 // ---- Granulométrie ----
-const total = computed(() => sieves.reduce((s, r) => s + (Number(r.retenu) || 0), 0))
-function pctOf(r) { const t = total.value; return t > 0 ? (Number(r.retenu) || 0) / t * 100 : 0 }
-function refusCumOf(r) { const t = total.value; if (!(t > 0)) return 0; let s = 0; const d = Number(r.taille) || 0; for (const x of sieves) if ((Number(x.taille) || 0) >= d) s += (Number(x.retenu) || 0); return s / t * 100 }
+const total = computed(() => sieves.reduce((s, r) => s + (Number(r.net) || 0), 0))
+const totalBrut = computed(() => sieves.reduce((s, r) => s + (Number(r.brut) || 0), 0))
+function pctOf(r) { const t = total.value; return t > 0 ? (Number(r.net) || 0) / t * 100 : 0 }
+function refusCumOf(r) { const t = total.value; if (!(t > 0)) return 0; let s = 0; const d = Number(r.taille) || 0; for (const x of sieves) if ((Number(x.taille) || 0) >= d) s += (Number(x.net) || 0); return s / t * 100 }
 function passantCumOf(r) { return 100 - refusCumOf(r) }
 const pct1 = (v) => (total.value > 0 ? v.toFixed(1).replace('.', ',') + '%' : '—')
 const fmt2 = (v) => (Number(v) || 0).toFixed(2).replace('.', ',')
@@ -223,7 +225,7 @@ async function enregistrer() {
     libelle: lotLabel.value || null,
     date_analyse: dateAnalyse.value || null,
     masse: (masse.value === '' || masse.value == null) ? null : Number(masse.value),
-    tamis: sieves.map(s => ({ taille: Number(s.taille) || 0, retenu: (s.retenu === '' || s.retenu == null) ? null : Number(s.retenu) })),
+    tamis: sieves.map(s => ({ taille: Number(s.taille) || 0, brut: (s.brut === '' || s.brut == null) ? null : Number(s.brut), net: (s.net === '' || s.net == null) ? null : Number(s.net) })),
     taps: taps.map(t => ({ label: t.label, v: (t.v === '' || t.v == null) ? null : Number(t.v) })),
     d10: d10.value, d50: d50.value, d90: d90.value,
     dens_app: densApp.value, dens_tass: densTass.value, hausner: hausner.value, carr: carr.value
@@ -246,7 +248,7 @@ async function chargerAnalyse(id) {
   lotLabel.value = a.libelle || ''
   dateAnalyse.value = a.date_analyse || ''
   masse.value = (a.masse == null) ? null : Number(a.masse)
-  if (Array.isArray(a.tamis) && a.tamis.length) sieves.splice(0, sieves.length, ...a.tamis.map(s => ({ taille: s.taille, retenu: s.retenu })))
+  if (Array.isArray(a.tamis) && a.tamis.length) sieves.splice(0, sieves.length, ...a.tamis.map(s => ({ taille: s.taille, brut: (s.brut != null ? s.brut : null), net: (s.net != null ? s.net : (s.retenu != null ? s.retenu : null)) })))
   if (Array.isArray(a.taps) && a.taps.length) taps.splice(0, taps.length, ...a.taps.map(t => ({ label: t.label, v: t.v })))
   message.value = 'Analyse du lot ' + (a.numero_lot || '—') + ' chargée.'
 }
@@ -302,7 +304,7 @@ function exporterPDF() {
   const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const pr = produits.value.find(x => String(x.id) === produitSel.value)
   const titreProd = pr ? pr.code_pf + ' — ' + pr.designation : (lotLabel.value || '')
-  const tamisRows = sieves.map(s => '<tr><td>' + esc(s.taille) + '</td><td class="r">' + ((s.retenu == null || s.retenu === '') ? '—' : esc(s.retenu)) + '</td><td class="r">' + pct1(pctOf(s)) + '</td><td class="r">' + pct1(passantCumOf(s)) + '</td><td class="r">' + pct1(refusCumOf(s)) + '</td></tr>').join('')
+  const tamisRows = sieves.map(s => '<tr><td>' + esc(s.taille) + '</td><td class="r">' + ((s.brut == null || s.brut === '') ? '—' : esc(s.brut)) + '</td><td class="r">' + ((s.net == null || s.net === '') ? '—' : esc(s.net)) + '</td><td class="r">' + pct1(pctOf(s)) + '</td><td class="r">' + pct1(passantCumOf(s)) + '</td><td class="r">' + pct1(refusCumOf(s)) + '</td></tr>').join('')
   const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Granulométrie ' + esc(numeroLot.value || '') + '</title>' +
     '<style>*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:24px;font-size:12px}' +
     'h1{font-size:18px;margin:0 0 2px}h2{font-size:13px;color:#7c3aed;border-bottom:2px solid #eee;padding-bottom:4px;margin:18px 0 8px}' +
@@ -315,9 +317,9 @@ function exporterPDF() {
     '<p class="sub">' + esc(titreProd) + (numeroLot.value ? ' · Lot ' + esc(numeroLot.value) : '') + (pr && lotLabel.value ? ' · ' + esc(lotLabel.value) : '') + '</p>' +
     '<div class="meta"><div><b>Date d\'analyse :</b> ' + esc(frDate(dateAnalyse.value)) + '</div><div><b>Masse échantillon :</b> ' + (masse.value != null ? esc(masse.value) + ' g' : '—') + '</div></div>' +
     '<h2>Tamisage</h2>' +
-    '<table><thead><tr><th>Tamis (µm)</th><th class="r">Refus (g)</th><th class="r">Retenu %</th><th class="r">Passant cum. %</th><th class="r">Refus cum. %</th></tr></thead><tbody>' +
+    '<table><thead><tr><th>Tamis (micromètre)</th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu %</th><th class="r">Passant cum. %</th><th class="r">Refus cum. %</th></tr></thead><tbody>' +
     tamisRows +
-    '<tr><td><b>SOMME</b></td><td class="r"><b>' + fmt2(total.value) + '</b></td><td class="r"><b>' + (total.value > 0 ? '100,0%' : '—') + '</b></td><td></td><td></td></tr></tbody></table>' +
+    '<tr><td><b>SOMME</b></td><td class="r"><b>' + fmt2(totalBrut.value) + '</b></td><td class="r"><b>' + fmt2(total.value) + '</b></td><td class="r"><b>' + (total.value > 0 ? '100,0%' : '—') + '</b></td><td></td><td></td></tr></tbody></table>' +
     '<div class="kv"><div><b>D10 :</b> ' + dTxt(d10.value) + '</div><div><b>D50 (médian) :</b> ' + dTxt(d50.value) + '</div><div><b>D90 :</b> ' + dTxt(d90.value) + '</div><div><b>Span :</b> ' + (span.value != null ? span.value.toFixed(2) : '—') + '</div></div>' +
     '<h2>Distribution</h2>' + svgString() +
     '<h2>Densité &amp; compressibilité</h2>' +
@@ -355,7 +357,7 @@ function exporterPDF() {
 .gr-tbl td.pass { color: #0891b2; font-weight: 700; }
 .gr-tbl td.refus { color: #c2410c; }
 .gr-tbl tr.somme td { font-weight: 800; background: #0f172a; color: #fff; border: none; }
-.gr-in { width: 76px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 12.5px; }
+.gr-in { width: 62px; padding: 4px 5px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 12.5px; }
 .gr-in.r { text-align: right; }
 .gr-tbl td.act button { border: 0; background: transparent; color: #cbd5e1; cursor: pointer; font-size: 13px; }
 .gr-tbl td.act button:hover { color: #ef4444; }
