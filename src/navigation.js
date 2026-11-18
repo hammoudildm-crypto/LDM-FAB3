@@ -21,7 +21,7 @@ export const MODULES = [
     links: [['/dispo-equipements', 'Disponibilité équipements'], ['/suivi-triage', 'Suivi triage'], ['/production-atelier', 'Production par atelier'], ['/suivi-trs', 'Suivi TRS'], ['/capacite', 'Capacité équipements'], ['/dossier', 'Dossier de lot'], ['/historique', 'Historique des opérations']] },
   { key: 'saisie', label: 'Saisie & exécution', c: '#14b8a6',
     icon: `<g ${S}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></g>`,
-    links: [['/suivi', 'Suivi fab. & Saisie TRS'], ['/conditionnement', 'Conditionnement'], ['/calcul-pesee', 'Calcul de pesée (API / excipient)'], ['/dossier-ebmr', 'Dossier de lot (eBMR)'], ['/passation', 'Passation de consigne']] },
+    links: [['/suivi', 'Suivi fab. & Saisie TRS'], ['/conditionnement', 'Conditionnement'], ['/calcul-pesee', 'Calcul de pesée (API / excipient)'], ['/granulometrie', 'Granulométrie & densité'], ['/dossier-ebmr', 'Dossier de lot (eBMR)'], ['/passation', 'Passation de consigne']] },
   { key: 'magasin', label: 'Magasin — Consommables', c: '#b45309',
     icon: `<g ${S}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></g>`,
     links: [['/consommables', 'Gestion des consommables'], ['/consommables-tdb', 'Tableau de bord consommables']] },

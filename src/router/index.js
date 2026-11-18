@@ -56,6 +56,7 @@ import FormationEnregistrements from '../views/FormationEnregistrements.vue'
 import FormationMatrice from '../views/FormationMatrice.vue'
 import FormationExigences from '../views/FormationExigences.vue'
 import CalculPesee from '../views/CalculPesee.vue'
+import AnalyseGranulo from '../views/AnalyseGranulo.vue'
 import FormationPlanning from '../views/FormationPlanning.vue'
 import Consommables from '../views/Consommables.vue'
 import ConsommablesTableauBord from '../views/ConsommablesTableauBord.vue'
@@ -89,6 +90,7 @@ const routes = [
   { path: '/formations-matrice', name: 'formations-matrice', component: FormationMatrice },
   { path: '/formations-exigences', name: 'formations-exigences', component: FormationExigences },
   { path: '/calcul-pesee', name: 'calcul-pesee', component: CalculPesee },
+  { path: '/granulometrie', name: 'granulometrie', component: AnalyseGranulo },
   { path: '/formations-planning', name: 'formations-planning', component: FormationPlanning },
   { path: '/ca', name: 'ca', component: ChiffreAffaires },
   { path: '/effectifs', name: 'effectifs', component: Effectifs },
