@@ -662,6 +662,12 @@ const lotsMoisPA = computed(() => {
   return [...parLot.values()].sort((a, b) => String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
 })
 // Analyse globale par produit : regroupe les lots du mois par produit (nb lots, boîtes, CA, part)
+// Garde-fou rendement : un lot n'entre dans les agrégats que si son rendement
+// reste dans une bande plausible (comme la page Rendement). Hors bande = saisie
+// incomplète (trop bas) ou théorique/boîtes erronées (trop haut) → écarté + signalé.
+const RDT_LO = 50, RDT_HI = 110
+function rdtLot(l) { return (Number(l.theo) > 0 && Number(l.fab) > 0) ? (Number(l.fab) / Number(l.theo) * 100) : null }
+function rdtAnomal(l) { const v = rdtLot(l); return v != null && (v < RDT_LO || v > RDT_HI) }
 const pctR = (v) => (v == null ? '—' : (Math.round(v * 10) / 10).toFixed(1).replace('.', ',') + ' %')
 const produitsMoisPA = computed(() => {
   const map = new Map()
@@ -675,7 +681,7 @@ const produitsMoisPA = computed(() => {
     e.ca += q * (Number(l.pcsu) || 0)
     e.reel += Number(l.fab) || 0
     const theo = Number(l.theo) || 0, fab = Number(l.fab) || 0
-    if (theo > 0 && fab > 0) { e.fab += fab; e.theo += theo; e.rdts.push(fab / theo * 100) }
+    if (theo > 0 && fab > 0) { const r = fab / theo * 100; if (r >= RDT_LO && r <= RDT_HI) { e.fab += fab; e.theo += theo; e.rdts.push(r) } }
   }
   const liste = [...map.values()]
   const totQte = liste.reduce((s, e) => s + e.qte, 0)
@@ -1300,7 +1306,7 @@ onMounted(charger)
                   <td class="pa-part-c">{{ l.part || '—' }}</td>
                   <td class="pa-qte">{{ l.qte != null ? fmt(l.qte) + ' bts' : '—' }}</td>
                   <td class="pa-reel-c">{{ l.fab ? fmt(l.fab) + ' bts' : '—' }}</td>
-                  <td class="pa-rdt-c">{{ pctR(l.theo > 0 && l.fab > 0 ? l.fab / l.theo * 100 : null) }}</td>
+                  <td class="pa-rdt-c" :class="{ 'pa-rdt-ko': rdtAnomal(l) }" :title="rdtAnomal(l) ? 'Rendement hors bande plausible (50–110 %) — vérifier la quantité théorique et les boîtes fabriquées de l\'OF' : ''">{{ pctR(rdtLot(l)) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -1442,6 +1448,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-qte { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: #0f766e; white-space: nowrap; }
 .pa-reel-c { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: #0369a1; white-space: nowrap; }
 .pa-rdt-c { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: #0f172a; white-space: nowrap; }
+.pa-rdt-c.pa-rdt-ko { color: #b91c1c; }
 .pa-sub-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; margin: 12px 0 6px; }
 .pa-sub-n { background: #f1f5f9; color: #475569; border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 700; margin-left: 4px; }
 .pa-prodtbl { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 2px; }
