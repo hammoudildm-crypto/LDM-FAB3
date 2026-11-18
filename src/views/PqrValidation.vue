@@ -20,6 +20,7 @@
       <div v-if="!produitSel" class="empty-card">Choisis un produit pour créer ou consulter son protocole de validation procédé.</div>
 
       <template v-else>
+        <div class="pv-top-actions"><button class="btn ghost" @click="exporterPDF">🖨 Exporter (PDF)</button></div>
         <!-- En-tête du protocole -->
         <div class="pv-grid">
           <label class="pv-f"><span>Référence</span><input v-model="protocole.reference" :disabled="!peutEditer" placeholder="PV-…" /></label>
@@ -67,7 +68,7 @@
         <h3 class="pv-sect">Lots de validation <span class="pv-sect-sub">{{ lotsConformes }}/{{ lots.length }} conforme(s) · objectif {{ protocole.nb_lots }} lot(s)</span></h3>
         <div class="pv-tbl-wrap">
           <table class="pqr-tbl pv-lots">
-            <thead><tr><th>#</th><th>N° lot</th><th class="r">Taille (bts)</th><th>Date fab.</th><th>Statut</th><th>Écarts / observations</th><th v-if="peutEditer" class="r">Act.</th></tr></thead>
+            <thead><tr><th>#</th><th>N° lot</th><th class="r">Taille (bts)</th><th>Date fab.</th><th>Statut</th><th>Conformité (mesures)</th><th>Écarts / observations</th><th v-if="peutEditer" class="r">Act.</th></tr></thead>
             <tbody>
               <tr v-for="(l, i) in lots" :key="l._k">
                 <td>{{ i + 1 }}</td>
@@ -75,12 +76,17 @@
                 <td class="r"><input v-model.number="l.taille_lot" type="number" min="0" :disabled="!peutEditer" class="pv-in pv-in-n" placeholder="—" /></td>
                 <td><input v-model="l.date_fabrication" type="date" :disabled="!peutEditer" class="pv-in" /></td>
                 <td><select v-model="l.statut" :disabled="!peutEditer" class="pv-in pv-st" :class="'st-' + l.statut"><option value="prevu">Prévu</option><option value="en_cours">En cours</option><option value="conforme">Conforme</option><option value="non_conforme">Non conforme</option></select></td>
+                <td><span class="pv-verdict" :class="'v-' + (verdictLot(l).v || 'none')" :title="verdictLot(l).detail || ''">{{ verdictTxt(verdictLot(l)) }}</span></td>
                 <td><input v-model="l.ecarts" :disabled="!peutEditer" class="pv-in pv-in-w" placeholder="—" /></td>
                 <td v-if="peutEditer" class="act"><button @click="retirerLot(i)" title="Retirer">🗑</button></td>
               </tr>
-              <tr v-if="!lots.length"><td :colspan="peutEditer ? 7 : 6" class="pv-empty">Aucun lot de validation.</td></tr>
+              <tr v-if="!lots.length"><td :colspan="peutEditer ? 8 : 7" class="pv-empty">Aucun lot de validation.</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="pv-lots-actions">
+          <button class="btn ghost" @click="verifierConformite(false)">🔎 Vérifier la conformité (mesures)</button>
+          <button v-if="peutEditer" class="btn ghost" @click="appliquerVerdicts">↳ Appliquer les verdicts aux statuts</button>
         </div>
         <div v-if="peutEditer" class="pv-lots-actions">
           <button class="btn ghost" @click="ajouterLot">＋ Ajouter un lot</button>
@@ -111,6 +117,7 @@ const specs = ref({})       // specs produit : parametre_id -> {min,cible,max,un
 const protocoleVide = () => ({ id: null, reference: '', approche: '', nature: '', nb_lots: 3, portee: '', criteres: '', responsable: '', statut: 'brouillon', date_protocole: '', conclusion: '' })
 const protocole = reactive(protocoleVide())
 const lots = ref([])
+const mesuresParLot = ref({})   // numero_lot -> { parametre_id -> [mesures] }
 const erreur = ref(''), message = ref('')
 let lotSeq = 1
 
@@ -147,7 +154,7 @@ const tableAbsente = (m) => /relation|does not exist|schema cache|could not find
 
 watch(produitSel, async (pid) => {
   erreur.value = ''; message.value = ''
-  Object.assign(protocole, protocoleVide()); lots.value = []; specs.value = {}
+  Object.assign(protocole, protocoleVide()); lots.value = []; specs.value = {}; mesuresParLot.value = {}
   if (!pid) return
   const rs = await supabase.from('pqr_specs_produit').select('*').eq('produit_id', Number(pid))
   if (!rs.error) { const by = {}; for (const sp of (rs.data || [])) by[sp.parametre_id] = { min: sp.limite_min, cible: sp.cible, max: sp.limite_max, unite: sp.unite }; specs.value = by }
@@ -158,6 +165,7 @@ watch(produitSel, async (pid) => {
     Object.assign(protocole, { id: proto.id, reference: proto.reference || '', approche: proto.approche || '', nature: proto.nature || '', nb_lots: proto.nb_lots || 3, portee: proto.portee || '', criteres: proto.criteres || '', responsable: proto.responsable || '', statut: proto.statut || 'brouillon', date_protocole: proto.date_protocole || '', conclusion: proto.conclusion || '' })
     const rl = await supabase.from('pqr_validation_lots').select('*').eq('protocole_id', proto.id).order('ordre')
     if (!rl.error) lots.value = (rl.data || []).map(l => ({ _k: lotSeq++, id: l.id, numero_lot: l.numero_lot || '', taille_lot: l.taille_lot, date_fabrication: l.date_fabrication || '', statut: l.statut || 'prevu', ecarts: l.ecarts || '' }))
+    await verifierConformite(true)
   }
 })
 
@@ -187,6 +195,92 @@ async function enregistrerLots() {
   const rows = lots.value.map((l, i) => ({ protocole_id: protocole.id, numero_lot: l.numero_lot || null, taille_lot: (l.taille_lot === '' || l.taille_lot == null) ? null : Number(l.taille_lot), date_fabrication: l.date_fabrication || null, statut: l.statut || 'prevu', ecarts: l.ecarts || null, ordre: i }))
   if (rows.length) { const ins = await supabase.from('pqr_validation_lots').insert(rows); if (ins.error) { erreur.value = ins.error.message; return } }
   message.value = 'Lots de validation enregistrés.'
+}
+
+// ---- Conformité calculée depuis les mesures réelles (pqr_mesures, par N° de lot) ----
+async function verifierConformite(silent) {
+  if (!silent) { erreur.value = ''; message.value = '' }
+  const nums = [...new Set(lots.value.map(l => (l.numero_lot || '').trim()).filter(Boolean))]
+  if (!nums.length) { mesuresParLot.value = {}; if (!silent) message.value = 'Aucun N° de lot renseigné dans les lots de validation.'; return }
+  const r = await supabase.from('pqr_mesures').select('numero_lot, parametre_id, valeurs, valeur').in('numero_lot', nums)
+  if (r.error) { if (!silent) erreur.value = r.error.message; return }
+  const by = {}
+  for (const m of (r.data || [])) { const ln = (m.numero_lot || '').trim(); if (!by[ln]) by[ln] = {}; if (!by[ln][m.parametre_id]) by[ln][m.parametre_id] = []; by[ln][m.parametre_id].push(m) }
+  mesuresParLot.value = by
+  if (!silent) { const nAvec = nums.filter(n => by[n]).length; message.value = 'Conformité calculée : mesures trouvées pour ' + nAvec + '/' + nums.length + ' lot(s).' }
+}
+function mesuresDe(lot) { return mesuresParLot.value[(lot.numero_lot || '').trim()] || null }
+function paramVals(rows) { if (!rows) return []; let out = []; for (const r of rows) { const v = (Array.isArray(r.valeurs) && r.valeurs.length) ? r.valeurs : (r.valeur != null ? [r.valeur] : []); out = out.concat(v) } return out.map(Number).filter(x => !isNaN(x)) }
+function paramConforme(p, rows) { const vals = paramVals(rows); if (!vals.length) return null; const mn = effMin(p), mx = effMax(p); const lo = (mn === '' || mn == null) ? -Infinity : Number(mn); const hi = (mx === '' || mx == null) ? Infinity : Number(mx); if (lo === -Infinity && hi === Infinity) return null; return vals.every(v => v >= lo && v <= hi) }
+function verdictLot(lot) {
+  const mp = mesuresDe(lot); if (!mp) return { v: null, detail: '' }
+  const nums = paramsProduit.value.filter(p => p.type !== 'bool')
+  let nbMes = 0, nbHors = 0; const hors = []
+  for (const p of nums) { const c = paramConforme(p, mp[p.id]); if (c === null) continue; nbMes++; if (!c) { nbHors++; hors.push(p.nom) } }
+  if (nbMes === 0) return { v: null, detail: '' }
+  let v = 'en_cours'
+  if (nbHors > 0) v = 'non_conforme'; else if (nbMes >= nums.length) v = 'conforme'
+  const detail = nbHors ? ('Hors spec : ' + hors.join(', ')) : (v === 'conforme' ? 'Tous les paramètres mesurés sont conformes' : (nbMes + '/' + nums.length + ' paramètres mesurés (conformes)'))
+  return { v, nbMes, nbHors, total: nums.length, detail }
+}
+function verdictTxt(r) { return r.v === 'conforme' ? '✓ Conforme' : r.v === 'non_conforme' ? '✗ ' + r.nbHors + ' hors spec' : r.v === 'en_cours' ? (r.nbMes + '/' + r.total + ' mesurés') : '—' }
+function appliquerVerdicts() {
+  let n = 0
+  for (const l of lots.value) { const r = verdictLot(l); if (r.v) { l.statut = r.v; n++ } }
+  message.value = n ? (n + ' statut(s) mis à jour depuis les mesures — pense à « Enregistrer les lots ».') : 'Aucun lot avec des mesures à appliquer (clique d\'abord « Vérifier la conformité »).'
+}
+
+// ---- Export PDF (impression navigateur) ----
+function frDate(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString('fr-FR') }
+function statutLotLabel(s) { return ({ prevu: 'Prévu', en_cours: 'En cours', conforme: 'Conforme', non_conforme: 'Non conforme' })[s] || s }
+function exporterPDF() {
+  erreur.value = ''
+  const pr = produits.value.find(x => String(x.id) === produitSel.value) || {}
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const approcheL = { prospective: 'Prospective', concurrente: 'Concurrente', retrospective: 'Rétrospective' }[protocole.approche] || '—'
+  const natureL = { initiale: 'Validation initiale', revalidation: 'Revalidation', transfert: 'Transfert' }[protocole.nature] || '—'
+  let paramHtml = ''
+  for (const ph of phasesAffichees.value) {
+    const rows = paramsDe(ph).map(p => {
+      const u = p.type === 'bool' ? '—' : (effUnite(p) || '—')
+      const mn = p.type === 'bool' ? '—' : fmt(effMin(p)), cb = p.type === 'bool' ? (p.etat_attendu ? 'Attendu ' + p.etat_attendu : 'ON/OFF') : fmt(effCible(p)), mx = p.type === 'bool' ? '—' : fmt(effMax(p))
+      return `<tr><td>${esc(p.nom)}</td><td>${esc(u)}</td><td class="r">${esc(mn)}</td><td class="r">${esc(cb)}</td><td class="r">${esc(mx)}</td></tr>`
+    }).join('')
+    paramHtml += `<tr class="ph"><td colspan="5">${esc(ph)}</td></tr>` + rows
+  }
+  const lotsHtml = lots.value.map((l, i) => {
+    const v = verdictLot(l); const vtxt = v.v === 'conforme' ? 'Conforme' : v.v === 'non_conforme' ? ('Non conforme (' + v.nbHors + ' hors spec)') : v.v === 'en_cours' ? 'Mesures partielles' : '—'
+    return `<tr><td>${i + 1}</td><td>${esc(l.numero_lot)}</td><td class="r">${(l.taille_lot != null && l.taille_lot !== '') ? esc(l.taille_lot) : '—'}</td><td>${esc(frDate(l.date_fabrication))}</td><td>${esc(statutLotLabel(l.statut))}</td><td>${esc(vtxt)}</td><td>${esc(l.ecarts)}</td></tr>`
+  }).join('')
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Protocole de validation — ${esc(pr.code_pf || '')}</title>
+<style>*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1b2733;margin:28px;font-size:12px}
+h1{font-size:18px;margin:0 0 2px}h2{font-size:13px;color:#7c3aed;border-bottom:2px solid #eee;padding-bottom:4px;margin:20px 0 8px}
+.sub{color:#64748b;margin:0 0 16px}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:2px 24px;margin-bottom:8px}.meta div{padding:3px 0;border-bottom:1px solid #f1f5f9}.meta b{color:#475569;display:inline-block;min-width:130px}
+table{width:100%;border-collapse:collapse;margin-bottom:8px}th,td{text-align:left;padding:5px 8px;border-bottom:1px solid #eef2f6}th{background:#faf5ff;color:#6b21a8;font-size:10px;text-transform:uppercase}
+td.r,th.r{text-align:right}tr.ph td{background:#f1f5f9;font-weight:700;text-transform:uppercase;font-size:10px;color:#475569}
+.box{border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;margin-bottom:8px;white-space:pre-wrap;min-height:22px}
+.sign{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px}.sign div{border-top:1px solid #94a3b8;padding-top:4px;font-size:11px;color:#64748b}
+@media print{body{margin:12mm}}</style></head><body>
+<h1>Protocole de validation de procédé</h1>
+<p class="sub">${esc(pr.code_pf || '')} — ${esc(pr.designation || '')}</p>
+<div class="meta">
+<div><b>Référence</b> ${esc(protocole.reference || '—')}</div><div><b>Statut</b> ${esc(statutLabel(protocole.statut))}</div>
+<div><b>Approche</b> ${esc(approcheL)}</div><div><b>Nature</b> ${esc(natureL)}</div>
+<div><b>Nombre de lots</b> ${esc(protocole.nb_lots)}</div><div><b>Date protocole</b> ${esc(frDate(protocole.date_protocole))}</div>
+<div><b>Responsable</b> ${esc(protocole.responsable || '—')}</div></div>
+<h2>Portée / objectif</h2><div class="box">${esc(protocole.portee || '—')}</div>
+<h2>Critères d'acceptation</h2><div class="box">${esc(protocole.criteres || '—')}</div>
+<h2>Paramètres critiques à valider</h2>
+<table><thead><tr><th>Paramètre</th><th>Unité</th><th class="r">Min</th><th class="r">Cible</th><th class="r">Max</th></tr></thead><tbody>${paramHtml || '<tr><td colspan="5">Aucun paramètre.</td></tr>'}</tbody></table>
+<h2>Lots de validation</h2>
+<table><thead><tr><th>#</th><th>N° lot</th><th class="r">Taille</th><th>Date fab.</th><th>Statut</th><th>Conformité (mesures)</th><th>Écarts</th></tr></thead><tbody>${lotsHtml || '<tr><td colspan="7">Aucun lot.</td></tr>'}</tbody></table>
+<h2>Conclusion</h2><div class="box">${esc(protocole.conclusion || '—')}</div>
+<div class="sign"><div>Rédigé par</div><div>Vérifié par</div><div>Approuvé par</div></div>
+</body></html>`
+  const w = window.open('', '_blank')
+  if (!w) { erreur.value = 'Autorise les pop-ups pour générer le PDF, puis réessaie.'; return }
+  w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { try { w.print() } catch (e) {} }, 350)
 }
 </script>
 
@@ -249,6 +343,12 @@ async function enregistrerLots() {
 .pv-st.st-en_cours { color: #854d0e; }
 .pv-st.st-prevu { color: #64748b; }
 .pv-empty { text-align: center; color: #94a3b8; padding: 18px; }
+.pv-top-actions { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.pv-verdict { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pv-verdict.v-conforme { background: #dcfce7; color: #166534; }
+.pv-verdict.v-non_conforme { background: #fee2e2; color: #b91c1c; }
+.pv-verdict.v-en_cours { background: #fef9c3; color: #854d0e; }
+.pv-verdict.v-none { background: #f1f5f9; color: #94a3b8; }
 .pv-lots-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .pv-concl { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; resize: vertical; }
 .pv-concl:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,85,247,.15); }
