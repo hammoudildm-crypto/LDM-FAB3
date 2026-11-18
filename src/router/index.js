@@ -50,6 +50,7 @@ import HistoriquePhases from '../views/HistoriquePhases.vue'
 import PqrParametres from '../views/PqrParametres.vue'
 import PqrSaisie from '../views/PqrSaisie.vue'
 import PqrDashboard from '../views/PqrDashboard.vue'
+import PqrValidation from '../views/PqrValidation.vue'
 import FormationReferentiel from '../views/FormationReferentiel.vue'
 import FormationEnregistrements from '../views/FormationEnregistrements.vue'
 import FormationMatrice from '../views/FormationMatrice.vue'
@@ -82,6 +83,7 @@ const routes = [
   { path: '/pqr-parametres', name: 'pqr-parametres', component: PqrParametres },
   { path: '/pqr-saisie', name: 'pqr-saisie', component: PqrSaisie },
   { path: '/pqr-tableau', name: 'pqr-tableau', component: PqrDashboard },
+  { path: '/pqr-validation', name: 'pqr-validation', component: PqrValidation },
   { path: '/formations', name: 'formations', component: FormationReferentiel },
   { path: '/formations-enreg', name: 'formations-enreg', component: FormationEnregistrements },
   { path: '/formations-matrice', name: 'formations-matrice', component: FormationMatrice },

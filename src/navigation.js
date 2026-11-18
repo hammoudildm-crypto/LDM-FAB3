@@ -33,7 +33,7 @@ export const MODULES = [
     links: [['/effectifs', 'Effectifs'], ['/organigramme', 'Organigramme'], ['/formations', 'Référentiel des formations'], ['/formations-exigences', 'Exigences par fonction'], ['/formations-planning', 'Planification & suivi'], ['/formations-enreg', 'Enregistrements'], ['/formations-matrice', 'Matrice & tableau de bord']] },
   { key: 'pqr', label: 'Revue qualité (PQR)', c: '#a855f7',
     icon: `<g ${S}><path d="M9 3h6"/><path d="M10 3v5.5L4.5 17a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 8.5V3"/><line x1="8.5" y1="14" x2="15.5" y2="14"/></g>`,
-    links: [['/pqr-parametres', 'Paramètres critiques'], ['/pqr-saisie', 'Saisie des mesures'], ['/pqr-tableau', 'Tableau de bord PQR']] },
+    links: [['/pqr-parametres', 'Paramètres critiques'], ['/pqr-validation', 'Protocole de validation'], ['/pqr-saisie', 'Saisie des mesures'], ['/pqr-tableau', 'Tableau de bord PQR']] },
   { key: 'pilotage', label: 'Pilotage', c: '#22c55e',
     icon: `<g ${S}><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></g>`,
     links: [['/tableau-de-bord', 'Tableau de bord'], ['/realisation-plan', 'Réalisation vs Plan'], ['/realisation-pdp', 'Réalisation PDP par phase'], ['/pdp-equipement', 'PDP par équipement'], ['/rendement', 'Rendement'], ['/ca', "Chiffre d'affaires"], ['/qse', 'Indicateurs QSE']] },
