@@ -88,6 +88,20 @@
       </div>
     </section>
 
+    <!-- Occupation des ateliers de fabrication -->
+    <section v-if="planning.length && chargeSimple.rows.length" class="card">
+      <h2 class="card-title">Occupation des ateliers de fabrication</h2>
+      <p class="muted" style="margin:0 0 12px">Taux d'occupation de chaque atelier sur l'horizon du plan ({{ chargeSimple.horizon }} jours). L'atelier le plus chargé est le <strong>goulot</strong> : c'est lui qui cadence le débit.</p>
+      <div class="charge-list">
+        <div v-for="(a, i) in chargeSimple.rows" :key="i" class="charge-row" :class="{ 'charge-bottleneck': i === 0 }">
+          <div class="ch-lbl"><span class="ch-phase">{{ a.phase }}</span> <span class="ch-eq">{{ a.equip }}</span><span v-if="i === 0" class="ch-gl">goulot</span></div>
+          <div class="ch-track"><div class="ch-fill" :class="chargeClass(a.occ)" :style="{ width: Math.min(100, a.occ) + '%' }"></div></div>
+          <div class="ch-pct">{{ a.occ }} %</div>
+          <div class="ch-meta">{{ a.lots }} lot{{ a.lots > 1 ? 's' : '' }} · {{ a.busy }} j occupé{{ a.busy > 1 ? 's' : '' }}</div>
+        </div>
+      </div>
+    </section>
+
     <!-- Résumé du plan -->
     <section v-if="groupes.length" class="card plan-sum">
       <div class="card-head-row">
@@ -163,20 +177,6 @@
         </table>
       </div>
       <p class="muted" style="margin-top:8px"><span class="marge m-late">rouge</span> en retard · <span class="marge m-tight">orange</span> tendu (≤ 2 j) · <span class="marge m-ok">vert</span> confortable. <strong>Limite début fab</strong> = besoin − durée fab (rétro-planning) : au-delà, l'objectif ne peut plus être tenu.</p>
-    </section>
-
-    <!-- Occupation des ateliers de fabrication -->
-    <section v-if="planning.length && chargeSimple.rows.length" class="card">
-      <h2 class="card-title">Occupation des ateliers de fabrication</h2>
-      <p class="muted" style="margin:0 0 12px">Taux d'occupation de chaque atelier sur l'horizon du plan ({{ chargeSimple.horizon }} jours). L'atelier le plus chargé est le <strong>goulot</strong> : c'est lui qui cadence le débit.</p>
-      <div class="charge-list">
-        <div v-for="(a, i) in chargeSimple.rows" :key="i" class="charge-row" :class="{ 'charge-bottleneck': i === 0 }">
-          <div class="ch-lbl"><span class="ch-phase">{{ a.phase }}</span> <span class="ch-eq">{{ a.equip }}</span><span v-if="i === 0" class="ch-gl">goulot</span></div>
-          <div class="ch-track"><div class="ch-fill" :class="chargeClass(a.occ)" :style="{ width: Math.min(100, a.occ) + '%' }"></div></div>
-          <div class="ch-pct">{{ a.occ }} %</div>
-          <div class="ch-meta">{{ a.lots }} lot{{ a.lots > 1 ? 's' : '' }} · {{ a.busy }} j occupé{{ a.busy > 1 ? 's' : '' }}</div>
-        </div>
-      </div>
     </section>
 
     <!-- Phases non planifiées (cadence manquante) -->
