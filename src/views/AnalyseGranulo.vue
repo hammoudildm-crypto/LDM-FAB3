@@ -36,7 +36,7 @@
       <div class="gr-split">
         <div class="gr-tblbox">
           <table class="gr-tbl">
-            <thead><tr><th>Tamis (micromètre)</th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu (g)</th><th class="r">Retenu %</th><th class="r">Passant cumulé %</th><th class="r">Refus cumulé %</th><th></th></tr></thead>
+            <thead><tr><th>Tamis (µm)</th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu (g)</th><th class="r">Retenu %</th><th class="r">Passant cumulé %</th><th class="r">Refus cumulé %</th><th></th></tr></thead>
             <tbody>
               <tr v-for="(s, i) in sieves" :key="i">
                 <td><input v-model.number="s.taille" type="number" min="0" step="any" class="gr-in" /></td>
@@ -332,7 +332,7 @@ function exporterPDF() {
     '<p class="sub">' + esc(titreProd) + (numeroLot.value ? ' · Lot ' + esc(numeroLot.value) : '') + (pr && lotLabel.value ? ' · ' + esc(lotLabel.value) : '') + '</p>' +
     '<div class="meta"><div><b>Date d\'analyse :</b> ' + esc(frDate(dateAnalyse.value)) + '</div><div><b>Masse échantillon :</b> ' + (masse.value != null ? esc(masse.value) + ' g' : '—') + '</div></div>' +
     '<h2>Tamisage</h2>' +
-    '<table><thead><tr><th>Tamis (micromètre)</th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu (g)</th><th class="r">Retenu %</th><th class="r">Passant cum. %</th><th class="r">Refus cum. %</th></tr></thead><tbody>' +
+    '<table><thead><tr><th>Tamis (µm)</th><th class="r">Brut (g)</th><th class="r">Net (g)</th><th class="r">Retenu (g)</th><th class="r">Retenu %</th><th class="r">Passant cum. %</th><th class="r">Refus cum. %</th></tr></thead><tbody>' +
     tamisRows +
     '<tr><td><b>SOMME</b></td><td class="r"><b>' + fmt2(totalBrut.value) + '</b></td><td class="r"><b>' + fmt2(totalNet.value) + '</b></td><td class="r"><b>' + fmt2(total.value) + '</b></td><td class="r"><b>' + (total.value > 0 ? '100,0%' : '—') + '</b></td><td></td><td></td></tr></tbody></table>' +
     '<div class="kv"><div><b>D10 :</b> ' + dTxt(d10.value) + '</div><div><b>D50 (médian) :</b> ' + dTxt(d50.value) + '</div><div><b>D90 :</b> ' + dTxt(d90.value) + '</div><div><b>Span :</b> ' + (span.value != null ? span.value.toFixed(2) : '—') + '</div></div>' +
