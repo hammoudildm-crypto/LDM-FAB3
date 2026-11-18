@@ -585,9 +585,11 @@ const planParAtelierVue = computed(() => {
     for (const l of lots) { if (!byP.has(l.code)) byP.set(l.code, { code: l.code, desig: l.desig, couleur: l.couleur, produitId: l.produitId, cad: l.cad || 0, lots: [], boites: 0 }); const g = byP.get(l.code); g.lots.push(l); g.boites += l.boites || 0 }
     const produits = [...byP.values()].map(g => {
       g.premier = g.lots[0].entree; g.dernier = g.lots[g.lots.length - 1].sortie
-      let pm = null; for (const l of g.lots) { const m = l.entree ? (l.entree.getMonth() + '-' + l.entree.getFullYear()) : null; l.moisBreak = (pm != null && m !== pm); pm = m }
+      g.besoinMin = g.lots.reduce((m, l) => (l.besoin && (!m || l.besoin < m)) ? l.besoin : m, null)
       return g
-    })
+    }).sort((a, b) => (a.premier ? a.premier.getTime() : 8.64e15) - (b.premier ? b.premier.getTime() : 8.64e15) || ((a.besoinMin ? a.besoinMin.getTime() : 8.64e15) - (b.besoinMin ? b.besoinMin.getTime() : 8.64e15)))
+    // Ruptures de mois calculées après tri, dans l'ordre d'affichage des lots de chaque campagne.
+    for (const g of produits) { let pm = null; for (const l of g.lots) { const m = l.entree ? (l.entree.getMonth() + '-' + l.entree.getFullYear()) : null; l.moisBreak = (pm != null && m !== pm); pm = m } }
     return { phase: a.phase, phaseKey: a.phaseKey, equip: a.equip, atelier: a.atelier, eqId: a.eqId, lots, boites, busy, occ: horizon > 0 ? Math.round(busy / (horizon * nbSlots) * 100) : 0, nLate, nTight, nFini, premier, dernier, nProd: produits.length, produits }
   })
 })
