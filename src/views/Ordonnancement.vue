@@ -42,7 +42,7 @@
     <!-- Planning de fabrication par atelier (en haut) -->
     <section v-if="planParAtelier.length || suiviPhases.length" class="card">
       <div class="card-head-row">
-        <h2 class="card-title">Planning de fabrication par atelier</h2>
+        <h2 class="card-title">Planning de fabrication par phase et équipement</h2>
         <div class="head-ctrls">
           <label class="av-chk" title="Chaque étape déjà faite (par lot et par atelier) libère la capacité de son équipement ; les étapes planifiées les jours/mois suivants remontent pour la combler.">
             <input type="checkbox" v-model="avancer" /> Avancer le restant
@@ -56,33 +56,36 @@
         </div>
       </div>
       <p class="muted" style="margin:0 0 14px"><template v-if="avancer">Les étapes déjà faites (par lot et par atelier) sont retirées et <strong>la capacité libérée avance les étapes suivantes</strong>. </template>Pastille : <span class="leg-dot st-ok"></span> à temps · <span class="leg-dot st-tight"></span> tendu · <span class="leg-dot st-late"></span> en retard<template v-if="!avancer"> · <span class="leg-sq lot-done-leg"></span> étape terminée (grisée)</template>.</p>
-      <div v-if="!planParAtelierVue.length" class="muted">Aucun lot à fabriquer sur cette période.</div>
-      <div v-for="a in planParAtelierVue" :key="a.lieu + '§' + a.phase" class="eq-board">
-        <div class="eq-head">
-          <div class="eq-id"><span class="at-phase">{{ a.phase }}</span><strong>{{ a.lieu }}</strong><span v-if="a.atelierVrai && a.equipsList.length" class="eq-machines">{{ a.equipsList.join(' · ') }}</span></div>
-          <div class="eq-occ" :class="chargeClass(a.occ)">Occupation {{ a.occ }} %</div>
-        </div>
-        <div class="eq-kpis">
-          <div class="eqk"><div class="eqk-l">Lots</div><div class="eqk-v">{{ a.lots.length }}</div><div class="eqk-s">{{ fmt(a.boites) }} bts<span v-if="a.nFini"> · {{ a.nFini }} fini(s)</span></div></div>
-          <div class="eqk"><div class="eqk-l">Produits</div><div class="eqk-v">{{ a.nProd }}</div><div class="eqk-s">campagne{{ a.nProd > 1 ? 's' : '' }}</div></div>
-          <div class="eqk"><div class="eqk-l">Période</div><div class="eqk-v eqk-sm">{{ fmtDateShort(a.premier) }} → {{ fmtDateShort(a.dernier) }}</div><div class="eqk-s">{{ a.busy }} j occupés</div></div>
-          <div class="eqk" :class="{ 'eqk-bad': a.nLate > 0 }"><div class="eqk-l">En retard</div><div class="eqk-v">{{ a.nLate }}</div><div class="eqk-s">{{ a.nTight }} tendu{{ a.nTight > 1 ? 's' : '' }}</div></div>
-        </div>
-        <div v-for="p in a.produits" :key="p.code" class="prod-group">
-          <div class="pg-label">
-            <span class="pg-bar" :style="{ background: p.couleur }"></span>
-            <div class="pg-txt"><strong>{{ p.code }}</strong> <span class="lot-desig">{{ p.desig }}</span><div class="pg-sub">{{ p.lots.length }} lot{{ p.lots.length > 1 ? 's' : '' }} · {{ fmt(p.boites) }} bts · {{ fmtDateShort(p.premier) }} → {{ fmtDateShort(p.dernier) }}</div></div>
+      <div v-if="!planParPhaseVue.length" class="muted">Aucun lot à fabriquer sur cette période.</div>
+      <div v-for="ph in planParPhaseVue" :key="ph.phase" class="phase-group">
+        <div class="phase-head"><span class="at-phase">{{ ph.phase }}</span><span class="ph-sub">{{ ph.equips.length }} équipement{{ ph.equips.length > 1 ? 's' : '' }} · {{ ph.nLots }} lot{{ ph.nLots > 1 ? 's' : '' }}</span></div>
+        <div v-for="a in ph.equips" :key="a.equip" class="eq-board">
+          <div class="eq-head">
+            <div class="eq-id"><strong>{{ a.equip }}</strong><span v-if="a.atelier" class="eq-atelier">{{ a.atelier }}</span></div>
+            <div class="eq-occ" :class="chargeClass(a.occ)">Occupation {{ a.occ }} %</div>
           </div>
-          <div class="lot-cards">
-            <template v-for="(l, i) in p.lots" :key="i">
-              <div v-if="l.moisBreak" class="mois-sep">{{ moisCourt(l.entree) }}</div>
-              <div class="lot-card" :class="[l.statut, { 'lot-done': l.fini, 'lot-enc': l.enCours && !l.fini }]" :title="p.code + ' · ' + l.desig + '\nLot ' + (l.numeroLot || '—') + ' · ' + fmt(l.boites) + ' boîtes\nFab : ' + fmtDate(l.entree) + ' → ' + fmtDate(l.sortie) + '\nBesoin cond. : ' + (l.besoin ? fmtDate(l.besoin) : '—') + (l.margeJ != null ? ' (marge ' + l.margeJ + ' j)' : '') + (l.fini ? '\n✓ Lot terminé' : (l.enCours ? '\n● En cours' : ''))">
-                <div class="lc-top"><span class="lc-idx">{{ i + 1 }}</span><span class="lc-num">{{ l.numeroLot || '—' }}</span><span v-if="l.fini" class="lc-fini" title="Lot terminé">✓</span><span v-else class="lc-dot" :class="[l.statut, { 'dot-enc': l.enCours }]"></span></div>
-                <div class="lc-prod">{{ fmt(l.boites) }} bts</div>
-                <div class="lc-line">⚙ {{ fmtDateShort(l.entree) }} → {{ fmtDateShort(l.sortie) }}</div>
-                <div class="lc-line lc-need" :class="{ 'lc-late': l.late && !l.fini }">◷ {{ l.besoin ? fmtDateShort(l.besoin) : '—' }}</div>
-              </div>
-            </template>
+          <div class="eq-kpis">
+            <div class="eqk"><div class="eqk-l">Lots</div><div class="eqk-v">{{ a.lots.length }}</div><div class="eqk-s">{{ fmt(a.boites) }} bts<span v-if="a.nFini"> · {{ a.nFini }} fini(s)</span></div></div>
+            <div class="eqk"><div class="eqk-l">Produits</div><div class="eqk-v">{{ a.nProd }}</div><div class="eqk-s">campagne{{ a.nProd > 1 ? 's' : '' }}</div></div>
+            <div class="eqk"><div class="eqk-l">Période</div><div class="eqk-v eqk-sm">{{ fmtDateShort(a.premier) }} → {{ fmtDateShort(a.dernier) }}</div><div class="eqk-s">{{ a.busy }} j occupés</div></div>
+            <div class="eqk" :class="{ 'eqk-bad': a.nLate > 0 }"><div class="eqk-l">En retard</div><div class="eqk-v">{{ a.nLate }}</div><div class="eqk-s">{{ a.nTight }} tendu{{ a.nTight > 1 ? 's' : '' }}</div></div>
+          </div>
+          <div v-for="p in a.produits" :key="p.code" class="prod-group">
+            <div class="pg-label">
+              <span class="pg-bar" :style="{ background: p.couleur }"></span>
+              <div class="pg-txt"><strong>{{ p.code }}</strong> <span class="lot-desig">{{ p.desig }}</span><div class="pg-sub">{{ p.lots.length }} lot{{ p.lots.length > 1 ? 's' : '' }} · {{ fmt(p.boites) }} bts<span v-if="p.cad" class="pg-cad"> · cadence {{ fmt(p.cad) }}/h</span> · {{ fmtDateShort(p.premier) }} → {{ fmtDateShort(p.dernier) }}</div></div>
+            </div>
+            <div class="lot-cards">
+              <template v-for="(l, i) in p.lots" :key="i">
+                <div v-if="l.moisBreak" class="mois-sep">{{ moisCourt(l.entree) }}</div>
+                <div class="lot-card" :class="[l.statut, { 'lot-done': l.fini, 'lot-enc': l.enCours && !l.fini }]" :title="p.code + ' · ' + l.desig + '\nLot ' + (l.numeroLot || '—') + ' · ' + fmt(l.boites) + ' boîtes\nCadence : ' + (l.cad ? fmt(l.cad) + '/h' : '—') + '\nFab : ' + fmtDate(l.entree) + ' → ' + fmtDate(l.sortie) + '\nBesoin cond. : ' + (l.besoin ? fmtDate(l.besoin) : '—') + (l.margeJ != null ? ' (marge ' + l.margeJ + ' j)' : '') + (l.fini ? '\n✓ Lot terminé' : (l.enCours ? '\n● En cours' : ''))">
+                  <div class="lc-top"><span class="lc-idx">{{ i + 1 }}</span><span class="lc-num">{{ l.numeroLot || '—' }}</span><span v-if="l.fini" class="lc-fini" title="Lot terminé">✓</span><span v-else class="lc-dot" :class="[l.statut, { 'dot-enc': l.enCours }]"></span></div>
+                  <div class="lc-prod">{{ fmt(l.boites) }} bts</div>
+                  <div class="lc-line">⚙ {{ fmtDateShort(l.entree) }} → {{ fmtDateShort(l.sortie) }}</div>
+                  <div class="lc-line lc-need" :class="{ 'lc-late': l.late && !l.fini }">◷ {{ l.besoin ? fmtDateShort(l.besoin) : '—' }}</div>
+                </div>
+              </template>
+            </div>
           </div>
         </div>
       </div>
@@ -468,14 +471,14 @@ function simuler(lots) {
       const duree = dureeJours(eq, lt.produitId, lt.boites)
       const start = Math.max(prevEnd + 1, slotsDe(eq)[si] || 0)
       const end = start + duree - 1
-      phases[k] = { start, end, equip: eq.nom || eq.code, eqId: eq.id, slots: Math.max(1, Math.floor(Number(eq.nb_machines) || 1)) }
+      phases[k] = { start, end, equip: eq.nom || eq.code, eqId: eq.id, slots: Math.max(1, Math.floor(Number(eq.nb_machines) || 1)), cad: cadMap.value[eq.id + '|' + lt.produitId] || 0 }
       slotsDe(eq)[si] = end + 1
       prevEnd = end
     }
     const ks = Object.keys(phases)
     const debutFab = ks.length ? Math.min(...ks.map(k => phases[k].start)) : null
     const finFab = ks.length ? Math.max(...ks.map(k => phases[k].end)) : null
-    rows.push({ id: lt.id, num: lt.num, numeroLot: lt.numeroLot, code: p.code_pf, desig: p.designation, boites: lt.boites, couleur: lt.couleur, phases, debutFab, finFab, dateEcheance: lt.dateEcheance || null, atelierCond: atelierCondProduit(lt.produitId) })
+    rows.push({ id: lt.id, num: lt.num, numeroLot: lt.numeroLot, produitId: lt.produitId, code: p.code_pf, desig: p.designation, boites: lt.boites, couleur: lt.couleur, phases, debutFab, finFab, dateEcheance: lt.dateEcheance || null, atelierCond: atelierCondProduit(lt.produitId) })
   }
   return rows
 }
@@ -539,13 +542,10 @@ const planParAtelier = computed(() => {
       const ph = r.phases[k]
       const eq = eqById.value[ph.eqId]
       const atel = (eq && eq.atelier_id != null) ? atelierById.value[eq.atelier_id] : null
-      const lieu = atel || ph.equip   // atelier de l'équipement, sinon l'équipement lui-même
       const phaseNom = PHASE_NOM[k] || k
-      const cle = lieu + '§' + phaseNom
-      if (!by[cle]) by[cle] = { phase: phaseNom, lieu, equip: lieu, atelierVrai: !!atel, equips: new Set(), slotsSet: {}, lots: [] }
-      by[cle].equips.add(ph.equip)
-      by[cle].slotsSet[ph.eqId] = ph.slots || 1
-      by[cle].lots.push({ code: r.code, desig: r.desig, numeroLot: r.numeroLot, phaseKey: k, equip: ph.equip, boites: r.boites, couleur: r.couleur, entree: dateIdx(ph.start), sortie: dateIdx(ph.end), startIdx: ph.start, endIdx: ph.end, besoin: r.dateEcheance ? new Date(r.dateEcheance + 'T00:00:00') : null })
+      const cle = ph.equip + '§' + phaseNom   // un bloc par équipement (dans sa phase)
+      if (!by[cle]) by[cle] = { phase: phaseNom, phaseKey: k, equip: ph.equip, eqId: ph.eqId, atelier: atel, slots: ph.slots || 1, lots: [] }
+      by[cle].lots.push({ code: r.code, desig: r.desig, produitId: r.produitId, numeroLot: r.numeroLot, phaseKey: k, equip: ph.equip, cad: ph.cad || 0, boites: r.boites, couleur: r.couleur, entree: dateIdx(ph.start), sortie: dateIdx(ph.end), startIdx: ph.start, endIdx: ph.end, besoin: r.dateEcheance ? new Date(r.dateEcheance + 'T00:00:00') : null })
     }
   }
   const list = Object.values(by)
@@ -555,10 +555,9 @@ const planParAtelier = computed(() => {
     for (const l of a.lots) { l.gap = (prevEnd != null && l.startIdx > prevEnd + 1) ? (l.startIdx - prevEnd - 1) : 0; a.busy += l.endIdx - l.startIdx + 1; prevEnd = l.endIdx; l.margeJ = (l.besoin && l.sortie) ? Math.round((l.besoin - l.sortie) / 86400000) : null; l.late = l.margeJ != null && l.margeJ < 0; l.statut = l.margeJ == null ? 'st-none' : (l.margeJ < 0 ? 'st-late' : (l.margeJ <= 2 ? 'st-tight' : 'st-ok')); const lot = (l.numeroLot && l.phaseKey) ? String(l.numeroLot).trim() : null; const er = lot ? etapeReelMap.value[lot + '|' + l.phaseKey] : null; l.fini = lot ? etapeFini(lot, l.phaseKey) : false; l.enCours = !l.fini && !!(er && er.enCours) }
     a.premier = a.lots.length ? a.lots[0].entree : null
     a.dernier = a.lots.length ? a.lots[a.lots.length - 1].sortie : null
-    a.equipsList = [...a.equips]
-    a.nbSlots = Object.values(a.slotsSet).reduce((s, n) => s + n, 0) || 1
+    a.nbSlots = a.slots || 1
   }
-  return list.sort((a, b) => (ORDRE_PH.indexOf(a.phase) - ORDRE_PH.indexOf(b.phase)) || String(a.lieu).localeCompare(String(b.lieu)))
+  return list.sort((a, b) => (ORDRE_PH.indexOf(a.phase) - ORDRE_PH.indexOf(b.phase)) || String(a.equip).localeCompare(String(b.equip)))
 })
 // Filtre d'horizon (comme ORBIT : mois en cours / 2 / 3 mois) + regroupement par équipement.
 const horizonSel = ref(0)
@@ -583,14 +582,20 @@ const planParAtelierVue = computed(() => {
     const dernier = lots.length ? lots[lots.length - 1].sortie : null
     // Regroupement par produit (campagne), dans l'ordre d'apparition.
     const byP = new Map()
-    for (const l of lots) { if (!byP.has(l.code)) byP.set(l.code, { code: l.code, desig: l.desig, couleur: l.couleur, lots: [], boites: 0 }); const g = byP.get(l.code); g.lots.push(l); g.boites += l.boites || 0 }
+    for (const l of lots) { if (!byP.has(l.code)) byP.set(l.code, { code: l.code, desig: l.desig, couleur: l.couleur, produitId: l.produitId, cad: l.cad || 0, lots: [], boites: 0 }); const g = byP.get(l.code); g.lots.push(l); g.boites += l.boites || 0 }
     const produits = [...byP.values()].map(g => {
       g.premier = g.lots[0].entree; g.dernier = g.lots[g.lots.length - 1].sortie
       let pm = null; for (const l of g.lots) { const m = l.entree ? (l.entree.getMonth() + '-' + l.entree.getFullYear()) : null; l.moisBreak = (pm != null && m !== pm); pm = m }
       return g
     })
-    return { phase: a.phase, equip: a.equip, lieu: a.lieu, atelierVrai: a.atelierVrai, equipsList: a.equipsList || [], lots, boites, busy, occ: horizon > 0 ? Math.round(busy / (horizon * nbSlots) * 100) : 0, nLate, nTight, nFini, premier, dernier, nProd: produits.length, produits }
+    return { phase: a.phase, phaseKey: a.phaseKey, equip: a.equip, atelier: a.atelier, eqId: a.eqId, lots, boites, busy, occ: horizon > 0 ? Math.round(busy / (horizon * nbSlots) * 100) : 0, nLate, nTight, nFini, premier, dernier, nProd: produits.length, produits }
   })
+})
+// Regroupement par PHASE : chaque phase → ses équipements (planning par équipement selon la cadence).
+const planParPhaseVue = computed(() => {
+  const by = new Map()
+  for (const a of planParAtelierVue.value) { if (!by.has(a.phase)) by.set(a.phase, { phase: a.phase, equips: [], nLots: 0 }); const g = by.get(a.phase); g.equips.push(a); g.nLots += a.lots.length }
+  return [...by.values()].sort((x, y) => ORDRE_PH.indexOf(x.phase) - ORDRE_PH.indexOf(y.phase))
 })
 function fmtDateShort(d) { return d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '' }
 function moisCourt(d) { return d ? d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) : '' }
@@ -762,6 +767,12 @@ table.grid td { padding: 7px 10px; border-bottom: 1px solid #eef1f6; color: #1f2
 .range-sel button.on { background: #fff; color: #0f766e; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
 .leg-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: middle; margin: 0 1px; }
 .leg-dot.st-ok { background: #10b981; } .leg-dot.st-tight { background: #f59e0b; } .leg-dot.st-late { background: #ef4444; }
+.phase-group { margin-bottom: 20px; }
+.phase-head { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 2px solid #e6e9f0; }
+.phase-head .at-phase { font-size: 12px; padding: 3px 10px; }
+.ph-sub { font-size: 11.5px; color: #94a3b8; }
+.phase-group .eq-board { margin-left: 10px; }
+.pg-cad { color: #0f766e; font-weight: 600; }
 .eq-board { border: 1px solid #eef1f6; border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
 .eq-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; background: #f8fafc; border-bottom: 1px solid #eef1f6; }
 .eq-id { display: flex; align-items: center; gap: 8px; }
