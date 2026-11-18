@@ -108,6 +108,59 @@
         </div>
       </div>
     </section>
+
+    <!-- COMPARAISON ENTRE LOTS -->
+    <section class="card">
+      <h2 class="card-title">Comparaison entre lots</h2>
+      <p class="gr-cmp-help">Coche au moins deux analyses enregistrées pour superposer leurs courbes de passant cumulé et comparer les indices.</p>
+      <div class="gr-cmp-pick">
+        <label v-for="h in historique" :key="h.id" class="gr-cmp-item" :class="{ on: comparo.includes(String(h.id)) }">
+          <input type="checkbox" :value="String(h.id)" v-model="comparo" @change="majComparaison" />
+          <span>{{ h.numero_lot || 'sans lot' }} · {{ frDate(h.date_analyse) }} · {{ h.libelle || prodNom(h.produit_id) || '—' }}</span>
+        </label>
+        <p v-if="!historique.length" class="gr-empty" style="padding:14px 4px">Aucune analyse enregistrée pour l'instant — enregistre des analyses pour pouvoir les comparer.</p>
+      </div>
+
+      <template v-if="comparData.lots.length">
+        <div class="gr-chartbox">
+          <div class="gr-chart-t">Courbes de passant cumulé superposées</div>
+          <svg :viewBox="'0 0 ' + CW + ' ' + CH" class="gr-svg" preserveAspectRatio="xMidYMid meet">
+            <line v-for="g in [0,25,50,75,100]" :key="'cg'+g" :x1="ML" :x2="CW-MR" :y1="yPct(g)" :y2="yPct(g)" class="gr-grid" />
+            <text v-for="g in [0,25,50,75,100]" :key="'cgl'+g" :x="ML-6" :y="yPct(g)+3" class="gr-axl">{{ g }}</text>
+            <template v-for="(s, si) in comparData.lots" :key="'cs'+si">
+              <polyline :points="s.poly" :style="{ stroke: s.color }" class="gr-cmp-line" />
+              <circle v-for="(p, pi) in s.pts" :key="'cp'+si+'-'+pi" :cx="p.x" :cy="p.y" r="2.6" :style="{ fill: s.color }" />
+            </template>
+            <text v-for="(t, ti) in comparData.xticks" :key="'cxt'+ti" :x="t.x" :y="CH-MB+14" class="gr-xlab">{{ t.v }}</text>
+            <text :x="ML-6" :y="MT-6" class="gr-cap gr-capl">% passant</text>
+            <text :x="(ML+CW-MR)/2" :y="CH-4" class="gr-cap" text-anchor="middle">Taille des particules (µm)</text>
+          </svg>
+          <div class="gr-cmp-leg">
+            <span v-for="(s, si) in comparData.lots" :key="'clg'+si" class="gr-cmp-lg"><i :style="{ background: s.color }"></i>{{ s.label }}</span>
+          </div>
+        </div>
+
+        <div class="gr-tblbox gr-cmp-tblbox">
+          <table class="gr-tbl gr-cmp-tbl">
+            <thead><tr><th>Lot</th><th class="r">D10</th><th class="r">D50</th><th class="r">D90</th><th class="r">Span</th><th class="r">D. app.</th><th class="r">D. tassée</th><th class="r">Hausner</th><th class="r">Carr</th><th>Écoulement</th></tr></thead>
+            <tbody>
+              <tr v-for="(L, i) in comparTable" :key="'ct'+i">
+                <td><span class="gr-cmp-dot" :style="{ background: L.color }"></span>{{ L.label }}</td>
+                <td class="r">{{ dTxt(L.d10) }}</td>
+                <td class="r">{{ dTxt(L.d50) }}</td>
+                <td class="r">{{ dTxt(L.d90) }}</td>
+                <td class="r">{{ L.span != null ? L.span.toFixed(2) : '—' }}</td>
+                <td class="r">{{ L.densApp != null ? L.densApp.toFixed(3) : '—' }}</td>
+                <td class="r">{{ L.densTass != null ? L.densTass.toFixed(3) : '—' }}</td>
+                <td class="r">{{ L.hausner != null ? L.hausner.toFixed(3) : '—' }}</td>
+                <td class="r">{{ L.carr != null ? L.carr.toFixed(1) + ' %' : '—' }}</td>
+                <td :style="{ color: L.flow.c, fontWeight: 700 }">{{ L.flow.t }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </template>
+    </section>
   </div>
 </template>
 
@@ -350,6 +403,87 @@ function exporterPDF() {
   w.document.write(html); w.document.close(); w.focus()
   setTimeout(() => { try { w.print() } catch (e) {} }, 350)
 }
+
+// ======================================================================
+//  Comparaison entre plusieurs lots
+// ======================================================================
+const palette = ['#0891b2', '#c2410c', '#7c3aed', '#16a34a', '#ca8a04', '#db2777', '#0ea5e9', '#65a30d']
+const comparo = ref([])
+const lotsCompares = ref([])
+
+function metricsFromTamis(tamis) {
+  const rows = (tamis || []).map(s => {
+    const hasBN = (s.brut != null) || (s.net != null)
+    const ret = hasBN ? ((Number(s.brut) || 0) - (Number(s.net) || 0)) : (Number(s.retenu) || 0)
+    return { taille: Number(s.taille) || 0, ret }
+  })
+  const tot = rows.reduce((a, r) => a + r.ret, 0)
+  const sorted = rows.map(r => {
+    let rc = 0; for (const x of rows) if (x.taille >= r.taille) rc += x.ret
+    return { taille: r.taille, pass: tot > 0 ? 100 - rc / tot * 100 : 0, pct: tot > 0 ? r.ret / tot * 100 : 0 }
+  }).sort((a, b) => a.taille - b.taille)
+  const dVal = (p) => {
+    if (!(tot > 0) || !sorted.length) return null
+    if (p <= sorted[0].pass) return sorted[0].taille
+    for (let i = 1; i < sorted.length; i++) { if (sorted[i].pass >= p) { const a = sorted[i - 1], b = sorted[i]; if (b.pass === a.pass) return b.taille; return a.taille + (b.taille - a.taille) * (p - a.pass) / (b.pass - a.pass) } }
+    return sorted[sorted.length - 1].taille
+  }
+  const d10c = dVal(10), d50c = dVal(50), d90c = dVal(90)
+  const span = (d10c != null && d50c && d90c && d50c > 0) ? (d90c - d10c) / d50c : null
+  return { sorted, total: tot, d10: d10c, d50: d50c, d90: d90c, span }
+}
+
+function flowCalc(c) {
+  if (c == null) return { t: '—', c: '#94a3b8' }
+  if (c <= 10) return { t: 'Excellent', c: '#16a34a' }
+  if (c <= 15) return { t: 'Bon', c: '#16a34a' }
+  if (c <= 20) return { t: 'Assez bon', c: '#65a30d' }
+  if (c <= 25) return { t: 'Passable', c: '#ca8a04' }
+  if (c <= 31) return { t: 'Médiocre', c: '#ea580c' }
+  if (c <= 37) return { t: 'Très médiocre', c: '#dc2626' }
+  return { t: 'Très mauvais', c: '#b91c1c' }
+}
+
+async function majComparaison() {
+  erreur.value = ''
+  const ids = comparo.value.map(Number)
+  if (!ids.length) { lotsCompares.value = []; return }
+  const r = await supabase.from('granulo_analyses').select('*').in('id', ids)
+  if (r.error) { erreur.value = r.error.message; return }
+  const byId = {}; for (const a of (r.data || [])) byId[a.id] = a
+  lotsCompares.value = ids.map(id => byId[id]).filter(Boolean).map(a => ({
+    id: a.id,
+    label: (a.numero_lot || 'sans lot') + (a.libelle ? ' (' + a.libelle + ')' : ''),
+    densApp: a.dens_app != null ? Number(a.dens_app) : null,
+    densTass: a.dens_tass != null ? Number(a.dens_tass) : null,
+    hausner: a.hausner != null ? Number(a.hausner) : null,
+    carr: a.carr != null ? Number(a.carr) : null,
+    m: metricsFromTamis(a.tamis)
+  }))
+}
+
+const comparData = computed(() => {
+  const lots = lotsCompares.value
+  if (!lots.length) return { lots: [], xMax: 1, xticks: [] }
+  let xMax = 0
+  for (const L of lots) for (const p of L.m.sorted) if (p.taille > xMax) xMax = p.taille
+  if (!(xMax > 0)) xMax = 1
+  const X = (t) => ML + (t / xMax) * plotW
+  const Y = (p) => MT + plotH - (p / 100) * plotH
+  const series = lots.map((L, i) => {
+    const pts = L.m.sorted.map(p => ({ x: X(p.taille), y: Y(p.pass) }))
+    return { label: L.label, color: palette[i % palette.length], pts, poly: pts.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ') }
+  })
+  const xticks = [0, 0.25, 0.5, 0.75, 1].map(f => ({ x: ML + f * plotW, v: Math.round(f * xMax) }))
+  return { lots: series, xMax, xticks }
+})
+
+const comparTable = computed(() => lotsCompares.value.map((L, i) => ({
+  label: L.label, color: palette[i % palette.length],
+  d10: L.m.d10, d50: L.m.d50, d90: L.m.d90, span: L.m.span,
+  densApp: L.densApp, densTass: L.densTass, hausner: L.hausner, carr: L.carr,
+  flow: flowCalc(L.carr)
+})))
 </script>
 
 <style scoped>
@@ -427,4 +561,19 @@ function exporterPDF() {
 .gr-hist { min-width: 250px; cursor: pointer; font-weight: 600; color: #475569; }
 .gr-alert { margin: 0 0 12px; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 9px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
 .gr-ok { margin: 0 0 12px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; padding: 9px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+
+/* Comparaison entre lots */
+.gr-cmp-help { font-size: 12.5px; color: #64748b; margin: 0 0 12px; }
+.gr-cmp-pick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.gr-cmp-item { display: flex; align-items: center; gap: 7px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 11px; font-size: 12.5px; color: #475569; cursor: pointer; background: #fff; }
+.gr-cmp-item.on { border-color: #a855f7; background: #faf5ff; color: #6b21a8; font-weight: 600; }
+.gr-cmp-item input { accent-color: #a855f7; cursor: pointer; }
+.gr-cmp-line { fill: none; stroke-width: 2.2; }
+.gr-cmp-leg { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 12px; color: #475569; }
+.gr-cmp-lg { display: flex; align-items: center; gap: 6px; }
+.gr-cmp-lg i { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
+.gr-cmp-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+.gr-cmp-tblbox { margin-top: 16px; overflow-x: auto; }
+.gr-cmp-tbl td, .gr-cmp-tbl th { white-space: nowrap; }
+.gr-cmp-tbl tbody tr:hover { background: #faf5ff; }
 </style>
