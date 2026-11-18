@@ -118,6 +118,42 @@
         <h3 class="pv-sect">Conclusion</h3>
         <textarea v-model="protocole.conclusion" :disabled="!peutEditer" rows="3" class="pv-concl" placeholder="Synthèse : procédé validé / non validé, écarts rencontrés, actions, références documentaires…"></textarea>
         <div v-if="peutEditer" class="pv-save"><button class="btn" @click="enregistrerProtocole">💾 Enregistrer le protocole</button></div>
+
+        <!-- Annexe : granulométrie & densité -->
+        <h3 class="pv-sect">Annexe — Résultats granulométrie &amp; densité <span class="pv-sect-sub">par lot de validation · analyses enregistrées (N° de lot correspondant)</span></h3>
+        <div v-if="!granuloLots.length" class="pqr-note">Aucune analyse granulométrie / densité enregistrée pour les N° de lot ci-dessus. Saisis-les dans « Granulométrie &amp; densité » et enregistre-les avec le même N° de lot, puis clique « Vérifier la conformité ».</div>
+        <div v-for="g in granuloLots" :key="g.numero_lot" class="pv-annex">
+          <div class="pv-annex-head">
+            <span class="pv-annex-lot">Lot {{ g.numero_lot }}</span>
+            <span v-if="g.libelle" class="pv-annex-lib">{{ g.libelle }}</span>
+            <span class="pv-annex-date">{{ frDate(g.date_analyse) }}</span>
+          </div>
+          <div class="pv-annex-body">
+            <div class="pv-annex-chart">
+              <svg v-if="g.chart.ok" :viewBox="'0 0 ' + GCW + ' ' + GCH" class="pv-svg" preserveAspectRatio="xMidYMid meet">
+                <line v-for="q in [0,25,50,75,100]" :key="'ag'+q" :x1="GML" :x2="GCW-GMR" :y1="gY(q)" :y2="gY(q)" class="pv-gl" />
+                <text v-for="q in [0,25,50,75,100]" :key="'agl'+q" :x="GML-5" :y="gY(q)+3" class="pv-axl">{{ q }}</text>
+                <rect v-for="(b,bi) in g.chart.bars" :key="'ab'+bi" :x="b.x" :y="b.y" :width="b.w" :height="b.h" class="pv-bar" />
+                <polyline :points="g.chart.poly" class="pv-line-pass" />
+                <polyline :points="g.chart.polyRefus" class="pv-line-refus" />
+                <text v-for="(b,bi) in g.chart.bars" :key="'ax'+bi" :x="b.x+b.w/2" :y="GCH-GMB+12" class="pv-xlab">{{ b.label }}</text>
+              </svg>
+              <p v-else class="pv-det-empty">Pas de données granulométriques.</p>
+              <div class="pv-annex-leg"><span class="lg lg-bar"></span>% retenu <span class="lg lg-pass"></span>passant cumulé <span class="lg lg-refus"></span>refus cumulé</div>
+            </div>
+            <div class="pv-annex-kpis">
+              <div class="pv-kpi"><span>D10</span><b>{{ dMic(g.d10) }}</b></div>
+              <div class="pv-kpi"><span>D50 médian</span><b>{{ dMic(g.d50) }}</b></div>
+              <div class="pv-kpi"><span>D90</span><b>{{ dMic(g.d90) }}</b></div>
+              <div class="pv-kpi"><span>Span</span><b>{{ g.span != null ? g.span.toFixed(2) : '—' }}</b></div>
+              <div class="pv-kpi"><span>Densité apparente</span><b>{{ g.densApp != null ? g.densApp.toFixed(3) : '—' }}<em>g/mL</em></b></div>
+              <div class="pv-kpi"><span>Densité tassée</span><b>{{ g.densTass != null ? g.densTass.toFixed(3) : '—' }}<em>g/mL</em></b></div>
+              <div class="pv-kpi"><span>Hausner</span><b>{{ g.hausner != null ? g.hausner.toFixed(3) : '—' }}</b></div>
+              <div class="pv-kpi"><span>Carr</span><b>{{ g.carr != null ? g.carr.toFixed(1) + ' %' : '—' }}</b></div>
+              <div class="pv-kpi pv-kpi-flow" :style="{ color: g.flow.c }"><span>Écoulement</span><b>{{ g.flow.t }}</b></div>
+            </div>
+          </div>
+        </div>
       </template>
     </section>
   </div>
@@ -140,6 +176,88 @@ const mesuresParLot = ref({})   // numero_lot -> { parametre_id -> [mesures] }
 const expanded = ref({})        // l._k -> détail déplié
 const erreur = ref(''), message = ref('')
 let lotSeq = 1
+
+// ---- Annexe : granulométrie & densité par lot de validation ----
+const granuloParLot = ref({})
+const GCW = 640, GCH = 230, GML = 42, GMR = 42, GMT = 16, GMB = 34
+const gPlotW = GCW - GML - GMR, gPlotH = GCH - GMT - GMB
+const gY = (p) => GMT + gPlotH - (p / 100) * gPlotH
+const dMic = (v) => (v == null ? '—' : (Math.round(v) + ' µm'))
+
+function flowCalc(c) {
+  if (c == null) return { t: '—', c: '#94a3b8' }
+  if (c <= 10) return { t: 'Excellent', c: '#16a34a' }
+  if (c <= 15) return { t: 'Bon', c: '#16a34a' }
+  if (c <= 20) return { t: 'Assez bon', c: '#65a30d' }
+  if (c <= 25) return { t: 'Passable', c: '#ca8a04' }
+  if (c <= 31) return { t: 'Médiocre', c: '#ea580c' }
+  if (c <= 37) return { t: 'Très médiocre', c: '#dc2626' }
+  return { t: 'Très mauvais', c: '#b91c1c' }
+}
+function buildChart(sorted, tot) {
+  const n = sorted.length
+  if (!n || !(tot > 0)) return { ok: false, bars: [], poly: '', polyRefus: '' }
+  const maxPct = Math.max(1, ...sorted.map(r => r.pct))
+  const bw = gPlotW / n
+  const bars = sorted.map((r, i) => { const h = (r.pct / maxPct) * gPlotH; return { x: GML + i * bw + bw * 0.2, w: bw * 0.6, y: GMT + gPlotH - h, h, label: r.taille } })
+  const pts = sorted.map((r, i) => ({ x: GML + i * bw + bw * 0.5, y: gY(r.pass) }))
+  const ptsRefus = sorted.map((r, i) => ({ x: GML + i * bw + bw * 0.5, y: gY(100 - r.pass) }))
+  return { ok: true, bars, poly: pts.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' '), polyRefus: ptsRefus.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ') }
+}
+function buildGranulo(a) {
+  const rowsRaw = (a.tamis || []).map(s => {
+    const hasBN = (s.brut != null) || (s.net != null)
+    const ret = hasBN ? ((Number(s.brut) || 0) - (Number(s.net) || 0)) : (Number(s.retenu) || 0)
+    return { taille: Number(s.taille) || 0, ret }
+  })
+  const tot = rowsRaw.reduce((x, r) => x + r.ret, 0)
+  const sorted = rowsRaw.map(r => {
+    let rc = 0; for (const x of rowsRaw) if (x.taille >= r.taille) rc += x.ret
+    return { taille: r.taille, pass: tot > 0 ? 100 - rc / tot * 100 : 0, pct: tot > 0 ? r.ret / tot * 100 : 0 }
+  }).sort((p, q) => p.taille - q.taille)
+  const dVal = (p) => {
+    if (!(tot > 0) || !sorted.length) return null
+    if (p <= sorted[0].pass) return sorted[0].taille
+    for (let i = 1; i < sorted.length; i++) { if (sorted[i].pass >= p) { const x = sorted[i - 1], y = sorted[i]; if (y.pass === x.pass) return y.taille; return x.taille + (y.taille - x.taille) * (p - x.pass) / (y.pass - x.pass) } }
+    return sorted[sorted.length - 1].taille
+  }
+  const d10 = dVal(10), d50 = dVal(50), d90 = dVal(90)
+  const span = (d10 != null && d50 && d90 && d50 > 0) ? (d90 - d10) / d50 : null
+  const carr = a.carr != null ? Number(a.carr) : null
+  return {
+    numero_lot: a.numero_lot, libelle: a.libelle, date_analyse: a.date_analyse,
+    d10, d50, d90, span,
+    densApp: a.dens_app != null ? Number(a.dens_app) : null,
+    densTass: a.dens_tass != null ? Number(a.dens_tass) : null,
+    hausner: a.hausner != null ? Number(a.hausner) : null,
+    carr, flow: flowCalc(carr),
+    chart: buildChart(sorted, tot)
+  }
+}
+async function chargerGranulo() {
+  const nums = [...new Set(lots.value.map(l => (l.numero_lot || '').trim()).filter(Boolean))]
+  if (!nums.length) { granuloParLot.value = {}; return }
+  const r = await supabase.from('granulo_analyses').select('*').in('numero_lot', nums).eq('actif', true).order('id', { ascending: false })
+  if (r.error) { granuloParLot.value = {}; return }
+  const by = {}
+  for (const a of (r.data || [])) { const ln = (a.numero_lot || '').trim(); if (ln && !by[ln]) by[ln] = buildGranulo(a) }
+  granuloParLot.value = by
+}
+const granuloLots = computed(() => {
+  const by = granuloParLot.value; const seen = new Set(); const out = []
+  for (const l of lots.value) { const ln = (l.numero_lot || '').trim(); if (ln && by[ln] && !seen.has(ln)) { seen.add(ln); out.push(by[ln]) } }
+  return out
+})
+function granuloSvgString(c) {
+  if (!c || !c.ok) return '<p style="color:#94a3b8;font-size:11px">Pas de données granulométriques enregistrées.</p>'
+  let s = '<svg viewBox="0 0 ' + GCW + ' ' + GCH + '" width="100%" style="max-width:520px;border:1px solid #eef2f6;border-radius:6px" xmlns="http://www.w3.org/2000/svg">'
+  for (const q of [0, 25, 50, 75, 100]) { const y = gY(q); s += '<line x1="' + GML + '" x2="' + (GCW - GMR) + '" y1="' + y + '" y2="' + y + '" stroke="#eef2f6"/><text x="' + (GML - 5) + '" y="' + (y + 3) + '" font-size="9" fill="#94a3b8" text-anchor="end">' + q + '</text>' }
+  for (const b of c.bars) s += '<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" fill="#f59e0b"/>'
+  s += '<polyline points="' + c.poly + '" fill="none" stroke="#0891b2" stroke-width="2"/>'
+  s += '<polyline points="' + c.polyRefus + '" fill="none" stroke="#c2410c" stroke-width="2" stroke-dasharray="5 3"/>'
+  for (const b of c.bars) s += '<text x="' + (b.x + b.w / 2) + '" y="' + (GCH - GMB + 12) + '" font-size="8" fill="#64748b" text-anchor="middle">' + b.label + '</text>'
+  return s + '</svg>'
+}
 
 const PHASES_LISTE = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Contrôle Qualité']
 const PHASES_PROD = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
@@ -174,7 +292,7 @@ const tableAbsente = (m) => /relation|does not exist|schema cache|could not find
 
 watch(produitSel, async (pid) => {
   erreur.value = ''; message.value = ''
-  Object.assign(protocole, protocoleVide()); lots.value = []; specs.value = {}; mesuresParLot.value = {}; expanded.value = {}
+  Object.assign(protocole, protocoleVide()); lots.value = []; specs.value = {}; mesuresParLot.value = {}; expanded.value = {}; granuloParLot.value = {}
   if (!pid) return
   const rs = await supabase.from('pqr_specs_produit').select('*').eq('produit_id', Number(pid))
   if (!rs.error) { const by = {}; for (const sp of (rs.data || [])) by[sp.parametre_id] = { min: sp.limite_min, cible: sp.cible, max: sp.limite_max, unite: sp.unite }; specs.value = by }
@@ -221,12 +339,13 @@ async function enregistrerLots() {
 async function verifierConformite(silent) {
   if (!silent) { erreur.value = ''; message.value = '' }
   const nums = [...new Set(lots.value.map(l => (l.numero_lot || '').trim()).filter(Boolean))]
-  if (!nums.length) { mesuresParLot.value = {}; if (!silent) message.value = 'Aucun N° de lot renseigné dans les lots de validation.'; return }
+  if (!nums.length) { mesuresParLot.value = {}; granuloParLot.value = {}; if (!silent) message.value = 'Aucun N° de lot renseigné dans les lots de validation.'; return }
   const r = await supabase.from('pqr_mesures').select('numero_lot, parametre_id, valeurs, valeur').in('numero_lot', nums)
   if (r.error) { if (!silent) erreur.value = r.error.message; return }
   const by = {}
   for (const m of (r.data || [])) { const ln = (m.numero_lot || '').trim(); if (!by[ln]) by[ln] = {}; if (!by[ln][m.parametre_id]) by[ln][m.parametre_id] = []; by[ln][m.parametre_id].push(m) }
   mesuresParLot.value = by
+  await chargerGranulo()
   let nApp = 0
   for (const l of lots.value) { const r = verdictLot(l); if (r.v) { l.statut = r.v; nApp++ } }   // statut forcé automatiquement depuis les mesures
   if (!silent) { const nAvec = nums.filter(n => by[n]).length; message.value = 'Conformité calculée : mesures pour ' + nAvec + '/' + nums.length + ' lot(s) · ' + nApp + ' statut(s) mis à jour.' }
@@ -280,6 +399,15 @@ function exporterPDF() {
     const v = verdictLot(l); const vtxt = v.v === 'conforme' ? 'Conforme' : v.v === 'non_conforme' ? ('Non conforme (' + v.nbHors + ' hors spec)') : v.v === 'en_cours' ? 'Mesures partielles' : '—'
     return `<tr><td>${i + 1}</td><td>${esc(l.numero_lot)}</td><td class="r">${(l.taille_lot != null && l.taille_lot !== '') ? esc(l.taille_lot) : '—'}</td><td>${esc(frDate(l.date_fabrication))}</td><td>${esc(statutLotLabel(l.statut))}</td><td>${esc(vtxt)}</td><td>${esc(l.ecarts)}</td></tr>`
   }).join('')
+  let annexeHtml = ''
+  for (const g of granuloLots.value) {
+    annexeHtml += `<h3 class="ann-lot">Lot ${esc(g.numero_lot)}${g.libelle ? ' — ' + esc(g.libelle) : ''} <span class="ann-date">${esc(frDate(g.date_analyse))}</span></h3>`
+      + granuloSvgString(g.chart)
+      + `<table class="ann-kpi"><tbody><tr><td><b>D10</b> ${dMic(g.d10)}</td><td><b>D50</b> ${dMic(g.d50)}</td><td><b>D90</b> ${dMic(g.d90)}</td><td><b>Span</b> ${g.span != null ? g.span.toFixed(2) : '—'}</td></tr>`
+      + `<tr><td><b>Densité app.</b> ${g.densApp != null ? g.densApp.toFixed(3) + ' g/mL' : '—'}</td><td><b>Densité tassée</b> ${g.densTass != null ? g.densTass.toFixed(3) + ' g/mL' : '—'}</td><td><b>Hausner</b> ${g.hausner != null ? g.hausner.toFixed(3) : '—'}</td><td><b>Carr</b> ${g.carr != null ? g.carr.toFixed(1) + ' %' : '—'}</td></tr>`
+      + `<tr><td colspan="4"><b>Écoulement</b> ${esc(g.flow.t)}</td></tr></tbody></table>`
+  }
+  const annexeSection = granuloLots.value.length ? `<h2>Annexe — Résultats granulométrie &amp; densité</h2>${annexeHtml}` : ''
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Protocole de validation — ${esc(pr.code_pf || '')}</title>
 <style>*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1b2733;margin:28px;font-size:12px}
 h1{font-size:18px;margin:0 0 2px}h2{font-size:13px;color:#7c3aed;border-bottom:2px solid #eee;padding-bottom:4px;margin:20px 0 8px}
@@ -289,6 +417,8 @@ table{width:100%;border-collapse:collapse;margin-bottom:8px}th,td{text-align:lef
 td.r,th.r{text-align:right}tr.ph td{background:#f1f5f9;font-weight:700;text-transform:uppercase;font-size:10px;color:#475569}
 .box{border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;margin-bottom:8px;white-space:pre-wrap;min-height:22px}
 .sign{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px}.sign div{border-top:1px solid #94a3b8;padding-top:4px;font-size:11px;color:#64748b}
+.ann-lot{font-size:12px;color:#0f172a;margin:16px 0 4px;font-weight:700;page-break-after:avoid}.ann-date{color:#94a3b8;font-weight:400;font-size:10px}
+.ann-kpi{width:auto;margin:4px 0 12px;page-break-inside:avoid}.ann-kpi td{border:0;padding:2px 16px 2px 0;font-size:11px;white-space:nowrap}.ann-kpi b{color:#475569}
 @media print{body{margin:12mm}}</style></head><body>
 <h1>Protocole de validation de procédé</h1>
 <p class="sub">${esc(pr.code_pf || '')} — ${esc(pr.designation || '')}</p>
@@ -304,6 +434,7 @@ td.r,th.r{text-align:right}tr.ph td{background:#f1f5f9;font-weight:700;text-tran
 <h2>Lots de validation</h2>
 <table><thead><tr><th>#</th><th>N° lot</th><th class="r">Taille</th><th>Date fab.</th><th>Statut</th><th>Conformité (mesures)</th><th>Écarts</th></tr></thead><tbody>${lotsHtml || '<tr><td colspan="7">Aucun lot.</td></tr>'}</tbody></table>
 <h2>Conclusion</h2><div class="box">${esc(protocole.conclusion || '—')}</div>
+${annexeSection}
 <div class="sign"><div>Rédigé par</div><div>Vérifié par</div><div>Approuvé par</div></div>
 </body></html>`
   const w = window.open('', '_blank')
@@ -398,4 +529,31 @@ td.r,th.r{text-align:right}tr.ph td{background:#f1f5f9;font-weight:700;text-tran
 .pv-lots-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .pv-concl { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; resize: vertical; }
 .pv-concl:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,85,247,.15); }
+
+/* Annexe granulométrie & densité */
+.pv-annex { border: 1px solid #e9d5ff; border-radius: 10px; padding: 14px; margin-top: 12px; background: #fdfaff; }
+.pv-annex-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.pv-annex-lot { font-size: 14px; font-weight: 800; color: #6b21a8; }
+.pv-annex-lib { font-size: 12px; color: #7c3aed; }
+.pv-annex-date { font-size: 11.5px; color: #94a3b8; margin-left: auto; }
+.pv-annex-body { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 860px) { .pv-annex-body { grid-template-columns: 1fr; } }
+.pv-svg { width: 100%; height: auto; background: #fff; border: 1px solid #eef2f6; border-radius: 8px; }
+.pv-gl { stroke: #eef2f6; stroke-width: 1; }
+.pv-axl { font-size: 9px; fill: #94a3b8; text-anchor: end; }
+.pv-xlab { font-size: 8px; fill: #64748b; text-anchor: middle; }
+.pv-bar { fill: #f59e0b; opacity: .9; }
+.pv-line-pass { fill: none; stroke: #0891b2; stroke-width: 2; }
+.pv-line-refus { fill: none; stroke: #c2410c; stroke-width: 2; stroke-dasharray: 5 3; }
+.pv-annex-leg { font-size: 11px; color: #64748b; margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pv-annex-leg .lg { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
+.pv-annex-leg .lg-bar { background: #f59e0b; }
+.pv-annex-leg .lg-pass { width: 16px; height: 0; border-top: 2px solid #0891b2; border-radius: 0; }
+.pv-annex-leg .lg-refus { width: 16px; height: 0; border-top: 2px dashed #c2410c; border-radius: 0; }
+.pv-annex-kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.pv-kpi { background: #fff; border: 1px solid #eef2f6; border-radius: 8px; padding: 8px 10px; }
+.pv-kpi span { display: block; font-size: 10px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.pv-kpi b { font-size: 16px; color: #0f172a; font-variant-numeric: tabular-nums; }
+.pv-kpi b em { font-size: 10px; color: #94a3b8; font-style: normal; font-weight: 500; margin-left: 3px; }
+.pv-kpi-flow b { font-size: 14px; }
 </style>
