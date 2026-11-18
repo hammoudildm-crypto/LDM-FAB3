@@ -1299,6 +1299,7 @@ onMounted(charger)
                   <td class="pa-des">{{ l.desig }}</td>
                   <td class="pa-part-c">{{ l.part || '—' }}</td>
                   <td class="pa-qte">{{ l.qte != null ? fmt(l.qte) + ' bts' : '—' }}</td>
+                  <td class="pa-rdt-c">{{ pctR(l.theo > 0 && l.fab > 0 ? l.fab / l.theo * 100 : null) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -1438,6 +1439,7 @@ table.grid tfoot td { border-top: 2px solid #e2e8f0; border-bottom: 0; backgroun
 .pa-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .pa-table td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; }
 .pa-qte { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: #0f766e; white-space: nowrap; }
+.pa-rdt-c { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: #0f172a; white-space: nowrap; }
 .pa-sub-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; margin: 12px 0 6px; }
 .pa-sub-n { background: #f1f5f9; color: #475569; border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 700; margin-left: 4px; }
 .pa-prodtbl { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 2px; }
