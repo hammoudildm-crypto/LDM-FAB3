@@ -31,6 +31,9 @@
         <div v-if="peutEditer && !params.length" style="margin-bottom:14px">
           <button class="btn" @click="chargerStandard">Charger le référentiel standard</button>
         </div>
+        <div v-if="peutEditer && params.length" style="margin-bottom:12px">
+          <button class="btn ghost" @click="ajouterManquants">＋ Ajouter les paramètres manquants du standard (granulométrie, densité…)</button>
+        </div>
 
         <div v-if="peutEditer" class="pqr-form">
           <select v-model="form.phase"><option value="">Phase —</option><option v-for="ph in PHASES_LISTE" :key="ph" :value="ph">{{ ph }}</option></select>
@@ -133,6 +136,8 @@ const STANDARD = [
   ['Granulation et Séchage', 'Température produit', '°C'],
   ['Granulation et Séchage', 'Humidité résiduelle (LOD)', '%'],
   ['Granulation et Séchage', 'Temps de granulation', 'min'],
+  ['Granulation et Séchage', 'Granulométrie', 'µm'],
+  ['Granulation et Séchage', 'Densité', 'g/mL'],
   ['Mélange', 'Temps de mélange', 'min'],
   ['Mélange', 'Vitesse', 'tr/min'],
   ['Mélange', 'Homogénéité (teneur)', '%'],
@@ -254,6 +259,19 @@ async function chargerStandard() {
   }
   if (r.error) { erreur.value = r.error.message; return }
   message.value = 'Référentiel standard chargé (' + rows.length + ' paramètres).'; await charger()
+}
+async function ajouterManquants() {
+  erreur.value = ''; message.value = ''
+  const existe = new Set(params.value.map(p => ((p.phase || '') + '|' + (p.nom || '')).toLowerCase()))
+  const manquants = STANDARD.filter(s => !existe.has(((s[0] || '') + '|' + (s[1] || '')).toLowerCase()))
+  if (!manquants.length) { message.value = 'Aucun paramètre standard manquant.'; return }
+  const perApi = new Set(['CQ Dosage', 'CQ Dissolution', 'CQ Uniformité de teneur'])
+  const base = params.value.length
+  const rows = manquants.map((s, i) => ({ phase: s[0], nom: s[1], unite: s[2] || null, ordre: base + i, par_api: perApi.has(s[1]) }))
+  let r = await supabase.from('pqr_parametres').insert(rows)
+  if (r.error && /par_api/.test(r.error.message || '')) r = await supabase.from('pqr_parametres').insert(rows.map(({ par_api, ...x }) => x))
+  if (r.error) { erreur.value = r.error.message; return }
+  message.value = manquants.length + ' paramètre(s) ajouté(s) : ' + manquants.map(s => s[1]).join(', ') + '.'; await charger()
 }
 async function enregistrerSpecs() {
   erreur.value = ''; message.value = ''
