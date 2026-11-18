@@ -1,6 +1,6 @@
 <template>
   <div class="gr-page">
-    <PageHeader title="Granulométrie & densité" tone="#0891b2"
+    <PageHeader title="Granulométrie & densité" tone="#a855f7"
       subtitle="Analyse par tamisage (histogramme + courbe cumulative, D10/D50/D90) et densité apparente / tassée (Hausner, Carr)." />
 
     <section class="card">
