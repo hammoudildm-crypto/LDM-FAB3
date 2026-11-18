@@ -174,7 +174,7 @@ const plotW = CW - ML - MR, plotH = CH - MT - MB
 
 const lotLabel = ref('')
 const sieves = reactive([
-  { taille: 0, brut: null, net: null }, { taille: 40, brut: null, net: null }, { taille: 63, brut: null, net: null },
+  { taille: 0, brut: null, net: null }, { taille: 50, brut: null, net: null }, { taille: 63, brut: null, net: null },
   { taille: 90, brut: null, net: null }, { taille: 125, brut: null, net: null }, { taille: 160, brut: null, net: null },
   { taille: 250, brut: null, net: null }, { taille: 315, brut: null, net: null }, { taille: 500, brut: null, net: null }, { taille: 710, brut: null, net: null }
 ])
