@@ -39,6 +39,55 @@
       <p v-if="chargement" class="muted">Chargement…</p>
     </section>
 
+    <!-- Planning de fabrication par atelier (en haut) -->
+    <section v-if="planParAtelier.length || suiviPhases.length" class="card">
+      <div class="card-head-row">
+        <h2 class="card-title">Planning de fabrication par atelier</h2>
+        <div class="head-ctrls">
+          <label class="av-chk" title="Chaque étape déjà faite (par lot et par atelier) libère la capacité de son équipement ; les étapes planifiées les jours/mois suivants remontent pour la combler.">
+            <input type="checkbox" v-model="avancer" /> Avancer le restant
+          </label>
+          <div class="range-sel">
+            <button :class="{ on: horizonSel === 0 }" @click="horizonSel = 0">Tout</button>
+            <button :class="{ on: horizonSel === 1 }" @click="horizonSel = 1">Mois en cours</button>
+            <button :class="{ on: horizonSel === 2 }" @click="horizonSel = 2">2 mois</button>
+            <button :class="{ on: horizonSel === 3 }" @click="horizonSel = 3">3 mois</button>
+          </div>
+        </div>
+      </div>
+      <p class="muted" style="margin:0 0 14px"><template v-if="avancer">Les étapes déjà faites (par lot et par atelier) sont retirées et <strong>la capacité libérée avance les étapes suivantes</strong>. </template>Pastille : <span class="leg-dot st-ok"></span> à temps · <span class="leg-dot st-tight"></span> tendu · <span class="leg-dot st-late"></span> en retard<template v-if="!avancer"> · <span class="leg-sq lot-done-leg"></span> étape terminée (grisée)</template>.</p>
+      <div v-if="!planParAtelierVue.length" class="muted">Aucun lot à fabriquer sur cette période.</div>
+      <div v-for="a in planParAtelierVue" :key="a.lieu + '§' + a.phase" class="eq-board">
+        <div class="eq-head">
+          <div class="eq-id"><span class="at-phase">{{ a.phase }}</span><strong>{{ a.lieu }}</strong><span v-if="a.atelierVrai && a.equipsList.length" class="eq-machines">{{ a.equipsList.join(' · ') }}</span></div>
+          <div class="eq-occ" :class="chargeClass(a.occ)">Occupation {{ a.occ }} %</div>
+        </div>
+        <div class="eq-kpis">
+          <div class="eqk"><div class="eqk-l">Lots</div><div class="eqk-v">{{ a.lots.length }}</div><div class="eqk-s">{{ fmt(a.boites) }} bts<span v-if="a.nFini"> · {{ a.nFini }} fini(s)</span></div></div>
+          <div class="eqk"><div class="eqk-l">Produits</div><div class="eqk-v">{{ a.nProd }}</div><div class="eqk-s">campagne{{ a.nProd > 1 ? 's' : '' }}</div></div>
+          <div class="eqk"><div class="eqk-l">Période</div><div class="eqk-v eqk-sm">{{ fmtDateShort(a.premier) }} → {{ fmtDateShort(a.dernier) }}</div><div class="eqk-s">{{ a.busy }} j occupés</div></div>
+          <div class="eqk" :class="{ 'eqk-bad': a.nLate > 0 }"><div class="eqk-l">En retard</div><div class="eqk-v">{{ a.nLate }}</div><div class="eqk-s">{{ a.nTight }} tendu{{ a.nTight > 1 ? 's' : '' }}</div></div>
+        </div>
+        <div v-for="p in a.produits" :key="p.code" class="prod-group">
+          <div class="pg-label">
+            <span class="pg-bar" :style="{ background: p.couleur }"></span>
+            <div class="pg-txt"><strong>{{ p.code }}</strong> <span class="lot-desig">{{ p.desig }}</span><div class="pg-sub">{{ p.lots.length }} lot{{ p.lots.length > 1 ? 's' : '' }} · {{ fmt(p.boites) }} bts · {{ fmtDateShort(p.premier) }} → {{ fmtDateShort(p.dernier) }}</div></div>
+          </div>
+          <div class="lot-cards">
+            <template v-for="(l, i) in p.lots" :key="i">
+              <div v-if="l.moisBreak" class="mois-sep">{{ moisCourt(l.entree) }}</div>
+              <div class="lot-card" :class="[l.statut, { 'lot-done': l.fini, 'lot-enc': l.enCours && !l.fini }]" :title="p.code + ' · ' + l.desig + '\nLot ' + (l.numeroLot || '—') + ' · ' + fmt(l.boites) + ' boîtes\nFab : ' + fmtDate(l.entree) + ' → ' + fmtDate(l.sortie) + '\nBesoin cond. : ' + (l.besoin ? fmtDate(l.besoin) : '—') + (l.margeJ != null ? ' (marge ' + l.margeJ + ' j)' : '') + (l.fini ? '\n✓ Lot terminé' : (l.enCours ? '\n● En cours' : ''))">
+                <div class="lc-top"><span class="lc-idx">{{ i + 1 }}</span><span class="lc-num">{{ l.numeroLot || '—' }}</span><span v-if="l.fini" class="lc-fini" title="Lot terminé">✓</span><span v-else class="lc-dot" :class="[l.statut, { 'dot-enc': l.enCours }]"></span></div>
+                <div class="lc-prod">{{ fmt(l.boites) }} bts</div>
+                <div class="lc-line">⚙ {{ fmtDateShort(l.entree) }} → {{ fmtDateShort(l.sortie) }}</div>
+                <div class="lc-line lc-need" :class="{ 'lc-late': l.late && !l.fini }">◷ {{ l.besoin ? fmtDateShort(l.besoin) : '—' }}</div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Résumé du plan -->
     <section v-if="groupes.length" class="card plan-sum">
       <div class="card-head-row">
@@ -66,7 +115,6 @@
       <p v-else class="risk-txt">✓ <strong>Tous les lots sont fabriqués à temps</strong> pour leur besoin conditionnement, avec la date de départ et la capacité actuelles.</p>
     </section>
 
-    <!-- Planning de fabrication par équipement (files de lots) -->
     <!-- Ordre de priorité de fabrication (démonstration de la logique) -->
     <section v-if="planning.length" class="card">
       <h2 class="card-title">Ordre de priorité de fabrication — par date de début conditionnement</h2>
@@ -115,54 +163,6 @@
         </table>
       </div>
       <p class="muted" style="margin-top:8px"><span class="marge m-late">rouge</span> en retard · <span class="marge m-tight">orange</span> tendu (≤ 2 j) · <span class="marge m-ok">vert</span> confortable. <strong>Limite début fab</strong> = besoin − durée fab (rétro-planning) : au-delà, l'objectif ne peut plus être tenu.</p>
-    </section>
-
-    <section v-if="planParAtelier.length || suiviPhases.length" class="card">
-      <div class="card-head-row">
-        <h2 class="card-title">Planning de fabrication par atelier</h2>
-        <div class="head-ctrls">
-          <label class="av-chk" title="Chaque étape déjà faite (par lot et par atelier) libère la capacité de son équipement ; les étapes planifiées les jours/mois suivants remontent pour la combler.">
-            <input type="checkbox" v-model="avancer" /> Avancer le restant
-          </label>
-          <div class="range-sel">
-            <button :class="{ on: horizonSel === 0 }" @click="horizonSel = 0">Tout</button>
-            <button :class="{ on: horizonSel === 1 }" @click="horizonSel = 1">Mois en cours</button>
-            <button :class="{ on: horizonSel === 2 }" @click="horizonSel = 2">2 mois</button>
-            <button :class="{ on: horizonSel === 3 }" @click="horizonSel = 3">3 mois</button>
-          </div>
-        </div>
-      </div>
-      <p class="muted" style="margin:0 0 14px"><template v-if="avancer">Les étapes déjà faites (par lot et par atelier) sont retirées et <strong>la capacité libérée avance les étapes suivantes</strong>. </template>Pastille : <span class="leg-dot st-ok"></span> à temps · <span class="leg-dot st-tight"></span> tendu · <span class="leg-dot st-late"></span> en retard<template v-if="!avancer"> · <span class="leg-sq lot-done-leg"></span> étape terminée (grisée)</template>.</p>
-      <div v-if="!planParAtelierVue.length" class="muted">Aucun lot à fabriquer sur cette période.</div>
-      <div v-for="a in planParAtelierVue" :key="a.lieu + '§' + a.phase" class="eq-board">
-        <div class="eq-head">
-          <div class="eq-id"><span class="at-phase">{{ a.phase }}</span><strong>{{ a.lieu }}</strong><span v-if="a.atelierVrai && a.equipsList.length" class="eq-machines">{{ a.equipsList.join(' · ') }}</span></div>
-          <div class="eq-occ" :class="chargeClass(a.occ)">Occupation {{ a.occ }} %</div>
-        </div>
-        <div class="eq-kpis">
-          <div class="eqk"><div class="eqk-l">Lots</div><div class="eqk-v">{{ a.lots.length }}</div><div class="eqk-s">{{ fmt(a.boites) }} bts<span v-if="a.nFini"> · {{ a.nFini }} fini(s)</span></div></div>
-          <div class="eqk"><div class="eqk-l">Produits</div><div class="eqk-v">{{ a.nProd }}</div><div class="eqk-s">campagne{{ a.nProd > 1 ? 's' : '' }}</div></div>
-          <div class="eqk"><div class="eqk-l">Période</div><div class="eqk-v eqk-sm">{{ fmtDateShort(a.premier) }} → {{ fmtDateShort(a.dernier) }}</div><div class="eqk-s">{{ a.busy }} j occupés</div></div>
-          <div class="eqk" :class="{ 'eqk-bad': a.nLate > 0 }"><div class="eqk-l">En retard</div><div class="eqk-v">{{ a.nLate }}</div><div class="eqk-s">{{ a.nTight }} tendu{{ a.nTight > 1 ? 's' : '' }}</div></div>
-        </div>
-        <div v-for="p in a.produits" :key="p.code" class="prod-group">
-          <div class="pg-label">
-            <span class="pg-bar" :style="{ background: p.couleur }"></span>
-            <div class="pg-txt"><strong>{{ p.code }}</strong> <span class="lot-desig">{{ p.desig }}</span><div class="pg-sub">{{ p.lots.length }} lot{{ p.lots.length > 1 ? 's' : '' }} · {{ fmt(p.boites) }} bts · {{ fmtDateShort(p.premier) }} → {{ fmtDateShort(p.dernier) }}</div></div>
-          </div>
-          <div class="lot-cards">
-            <template v-for="(l, i) in p.lots" :key="i">
-              <div v-if="l.moisBreak" class="mois-sep">{{ moisCourt(l.entree) }}</div>
-              <div class="lot-card" :class="[l.statut, { 'lot-done': l.fini, 'lot-enc': l.enCours && !l.fini }]" :title="p.code + ' · ' + l.desig + '\nLot ' + (l.numeroLot || '—') + ' · ' + fmt(l.boites) + ' boîtes\nFab : ' + fmtDate(l.entree) + ' → ' + fmtDate(l.sortie) + '\nBesoin cond. : ' + (l.besoin ? fmtDate(l.besoin) : '—') + (l.margeJ != null ? ' (marge ' + l.margeJ + ' j)' : '') + (l.fini ? '\n✓ Lot terminé' : (l.enCours ? '\n● En cours' : ''))">
-                <div class="lc-top"><span class="lc-idx">{{ i + 1 }}</span><span class="lc-num">{{ l.numeroLot || '—' }}</span><span v-if="l.fini" class="lc-fini" title="Lot terminé">✓</span><span v-else class="lc-dot" :class="[l.statut, { 'dot-enc': l.enCours }]"></span></div>
-                <div class="lc-prod">{{ fmt(l.boites) }} bts</div>
-                <div class="lc-line">⚙ {{ fmtDateShort(l.entree) }} → {{ fmtDateShort(l.sortie) }}</div>
-                <div class="lc-line lc-need" :class="{ 'lc-late': l.late && !l.fini }">◷ {{ l.besoin ? fmtDateShort(l.besoin) : '—' }}</div>
-              </div>
-            </template>
-          </div>
-        </div>
-      </div>
     </section>
 
     <!-- Occupation des ateliers de fabrication -->
