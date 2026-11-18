@@ -70,23 +70,42 @@
           <table class="pqr-tbl pv-lots">
             <thead><tr><th>#</th><th>N° lot</th><th class="r">Taille (bts)</th><th>Date fab.</th><th>Statut</th><th>Conformité (mesures)</th><th>Écarts / observations</th><th v-if="peutEditer" class="r">Act.</th></tr></thead>
             <tbody>
-              <tr v-for="(l, i) in lots" :key="l._k">
+              <template v-for="(l, i) in lots" :key="l._k">
+              <tr>
                 <td>{{ i + 1 }}</td>
                 <td><input v-model="l.numero_lot" :disabled="!peutEditer" class="pv-in" placeholder="N° lot" /></td>
                 <td class="r"><input v-model.number="l.taille_lot" type="number" min="0" :disabled="!peutEditer" class="pv-in pv-in-n" placeholder="—" /></td>
                 <td><input v-model="l.date_fabrication" type="date" :disabled="!peutEditer" class="pv-in" /></td>
                 <td><select v-model="l.statut" :disabled="!peutEditer" class="pv-in pv-st" :class="'st-' + l.statut"><option value="prevu">Prévu</option><option value="en_cours">En cours</option><option value="conforme">Conforme</option><option value="non_conforme">Non conforme</option></select></td>
-                <td><span class="pv-verdict" :class="'v-' + (verdictLot(l).v || 'none')" :title="verdictLot(l).detail || ''">{{ verdictTxt(verdictLot(l)) }}</span></td>
+                <td><span class="pv-verdict" :class="['v-' + (verdictLot(l).v || 'none'), { clickable: !!mesuresDe(l) }]" :title="mesuresDe(l) ? 'Clique pour le détail paramètre par paramètre' : (verdictLot(l).detail || '')" @click="mesuresDe(l) && toggleDetail(l)">{{ verdictTxt(verdictLot(l)) }}<span v-if="mesuresDe(l)" class="pv-chev">{{ expanded[l._k] ? '▴' : '▾' }}</span></span></td>
                 <td><input v-model="l.ecarts" :disabled="!peutEditer" class="pv-in pv-in-w" placeholder="—" /></td>
                 <td v-if="peutEditer" class="act"><button @click="retirerLot(i)" title="Retirer">🗑</button></td>
               </tr>
+              <tr v-if="expanded[l._k]" class="pv-detail-row">
+                <td :colspan="peutEditer ? 8 : 7">
+                  <div v-if="!detailLot(l).length" class="pv-det-empty">Aucune mesure rattachée au lot {{ l.numero_lot || '—' }}.</div>
+                  <table v-else class="pv-det-tbl">
+                    <thead><tr><th>Paramètre</th><th>Phase</th><th>Valeurs</th><th>Limites (min – max)</th><th>Verdict</th></tr></thead>
+                    <tbody>
+                      <tr v-for="d in detailLot(l)" :key="d.id" :class="{ 'det-hors': d.conforme === false }">
+                        <td class="det-nom">{{ d.nom }}</td>
+                        <td class="det-ph">{{ d.phase }}</td>
+                        <td>{{ d.vals.join(' · ') }} <span class="det-u">{{ d.unite }}</span></td>
+                        <td>{{ fmt(d.min) }} – {{ fmt(d.max) }}</td>
+                        <td><span class="det-v" :class="d.conforme === false ? 'nok' : (d.conforme === true ? 'ok' : 'na')">{{ d.conforme === false ? '✗ hors' : (d.conforme === true ? '✓ ok' : '—') }}</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+              </template>
               <tr v-if="!lots.length"><td :colspan="peutEditer ? 8 : 7" class="pv-empty">Aucun lot de validation.</td></tr>
             </tbody>
           </table>
         </div>
         <div class="pv-lots-actions">
           <button class="btn ghost" @click="verifierConformite(false)">🔎 Vérifier la conformité (mesures)</button>
-          <button v-if="peutEditer" class="btn ghost" @click="appliquerVerdicts">↳ Appliquer les verdicts aux statuts</button>
+          <span class="pv-auto-note">Les statuts sont mis à jour automatiquement depuis les mesures. Clique un verdict pour le détail.</span>
         </div>
         <div v-if="peutEditer" class="pv-lots-actions">
           <button class="btn ghost" @click="ajouterLot">＋ Ajouter un lot</button>
@@ -118,6 +137,7 @@ const protocoleVide = () => ({ id: null, reference: '', approche: '', nature: ''
 const protocole = reactive(protocoleVide())
 const lots = ref([])
 const mesuresParLot = ref({})   // numero_lot -> { parametre_id -> [mesures] }
+const expanded = ref({})        // l._k -> détail déplié
 const erreur = ref(''), message = ref('')
 let lotSeq = 1
 
@@ -154,7 +174,7 @@ const tableAbsente = (m) => /relation|does not exist|schema cache|could not find
 
 watch(produitSel, async (pid) => {
   erreur.value = ''; message.value = ''
-  Object.assign(protocole, protocoleVide()); lots.value = []; specs.value = {}; mesuresParLot.value = {}
+  Object.assign(protocole, protocoleVide()); lots.value = []; specs.value = {}; mesuresParLot.value = {}; expanded.value = {}
   if (!pid) return
   const rs = await supabase.from('pqr_specs_produit').select('*').eq('produit_id', Number(pid))
   if (!rs.error) { const by = {}; for (const sp of (rs.data || [])) by[sp.parametre_id] = { min: sp.limite_min, cible: sp.cible, max: sp.limite_max, unite: sp.unite }; specs.value = by }
@@ -207,7 +227,9 @@ async function verifierConformite(silent) {
   const by = {}
   for (const m of (r.data || [])) { const ln = (m.numero_lot || '').trim(); if (!by[ln]) by[ln] = {}; if (!by[ln][m.parametre_id]) by[ln][m.parametre_id] = []; by[ln][m.parametre_id].push(m) }
   mesuresParLot.value = by
-  if (!silent) { const nAvec = nums.filter(n => by[n]).length; message.value = 'Conformité calculée : mesures trouvées pour ' + nAvec + '/' + nums.length + ' lot(s).' }
+  let nApp = 0
+  for (const l of lots.value) { const r = verdictLot(l); if (r.v) { l.statut = r.v; nApp++ } }   // statut forcé automatiquement depuis les mesures
+  if (!silent) { const nAvec = nums.filter(n => by[n]).length; message.value = 'Conformité calculée : mesures pour ' + nAvec + '/' + nums.length + ' lot(s) · ' + nApp + ' statut(s) mis à jour.' }
 }
 function mesuresDe(lot) { return mesuresParLot.value[(lot.numero_lot || '').trim()] || null }
 function paramVals(rows) { if (!rows) return []; let out = []; for (const r of rows) { const v = (Array.isArray(r.valeurs) && r.valeurs.length) ? r.valeurs : (r.valeur != null ? [r.valeur] : []); out = out.concat(v) } return out.map(Number).filter(x => !isNaN(x)) }
@@ -224,10 +246,16 @@ function verdictLot(lot) {
   return { v, nbMes, nbHors, total: nums.length, detail }
 }
 function verdictTxt(r) { return r.v === 'conforme' ? '✓ Conforme' : r.v === 'non_conforme' ? '✗ ' + r.nbHors + ' hors spec' : r.v === 'en_cours' ? (r.nbMes + '/' + r.total + ' mesurés') : '—' }
-function appliquerVerdicts() {
-  let n = 0
-  for (const l of lots.value) { const r = verdictLot(l); if (r.v) { l.statut = r.v; n++ } }
-  message.value = n ? (n + ' statut(s) mis à jour depuis les mesures — pense à « Enregistrer les lots ».') : 'Aucun lot avec des mesures à appliquer (clique d\'abord « Vérifier la conformité »).'
+function toggleDetail(lot) { expanded.value = { ...expanded.value, [lot._k]: !expanded.value[lot._k] } }
+function detailLot(lot) {
+  const mp = mesuresDe(lot); if (!mp) return []
+  const out = []
+  for (const p of paramsProduit.value) {
+    if (p.type === 'bool') continue
+    const rows = mp[p.id]; const vals = paramVals(rows); if (!vals.length) continue
+    out.push({ id: p.id, nom: p.nom, phase: p.phase, vals, min: effMin(p), max: effMax(p), unite: effUnite(p), conforme: paramConforme(p, rows) })
+  }
+  return out
 }
 
 // ---- Export PDF (impression navigateur) ----
@@ -349,6 +377,24 @@ td.r,th.r{text-align:right}tr.ph td{background:#f1f5f9;font-weight:700;text-tran
 .pv-verdict.v-non_conforme { background: #fee2e2; color: #b91c1c; }
 .pv-verdict.v-en_cours { background: #fef9c3; color: #854d0e; }
 .pv-verdict.v-none { background: #f1f5f9; color: #94a3b8; }
+.pv-verdict.clickable { cursor: pointer; }
+.pv-verdict.clickable:hover { filter: brightness(.96); }
+.pv-chev { margin-left: 4px; font-size: 9px; opacity: .7; }
+.pv-auto-note { font-size: 11.5px; color: #94a3b8; align-self: center; }
+.pv-detail-row td { background: #faf5ff; padding: 10px 14px; }
+.pv-det-empty { font-size: 12px; color: #94a3b8; }
+.pv-det-tbl { width: 100%; border-collapse: collapse; font-size: 12px; background: #fff; border: 1px solid #eef2f6; border-radius: 8px; overflow: hidden; }
+.pv-det-tbl th { background: #fff; color: #94a3b8; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; font-weight: 700; padding: 5px 9px; border-bottom: 1px solid #eef2f6; text-align: left; }
+.pv-det-tbl td { padding: 5px 9px; border-bottom: 1px solid #f4f1fa; }
+.pv-det-tbl tr:last-child td { border-bottom: 0; }
+.pv-det-tbl tr.det-hors td { background: #fff5f5; }
+.det-nom { font-weight: 700; color: #0f172a; }
+.det-ph { color: #94a3b8; font-size: 11px; }
+.det-u { color: #94a3b8; font-size: 11px; }
+.det-v { font-weight: 700; font-size: 11px; padding: 1px 7px; border-radius: 999px; }
+.det-v.ok { background: #dcfce7; color: #166534; }
+.det-v.nok { background: #fee2e2; color: #b91c1c; }
+.det-v.na { background: #f1f5f9; color: #94a3b8; }
 .pv-lots-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .pv-concl { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; resize: vertical; }
 .pv-concl:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,85,247,.15); }
