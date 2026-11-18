@@ -521,14 +521,16 @@ const kpiOrdo = computed(() => {
 
 // Charge par atelier (occupation sur l'horizon) → goulot.
 const chargeSimple = computed(() => {
-  const horizon = finGlobale.value + 1
   const m = {}
+  let gmin = Infinity, gmax = -Infinity
   for (const r of planning.value) for (const k in r.phases) {
     const ph = r.phases[k]; const cle = (PHASE_NOM[k] || k) + '§' + ph.equip
-    if (!m[cle]) m[cle] = { phase: PHASE_NOM[k] || k, equip: ph.equip, busy: 0, lots: 0 }
+    if (ph.start < gmin) gmin = ph.start; if (ph.end > gmax) gmax = ph.end
+    if (!m[cle]) m[cle] = { phase: PHASE_NOM[k] || k, equip: ph.equip, busy: 0, lots: 0, slots: ph.slots || 1 }
     m[cle].busy += ph.end - ph.start + 1; m[cle].lots++
   }
-  const rows = Object.values(m).map(a => ({ ...a, occ: horizon > 0 ? Math.round(a.busy / horizon * 100) : 0 })).sort((x, y) => y.occ - x.occ || y.busy - x.busy)
+  const horizon = (gmax >= gmin) ? (gmax - gmin + 1) : 1
+  const rows = Object.values(m).map(a => ({ ...a, occ: horizon > 0 ? Math.min(100, Math.round(a.busy / (horizon * (a.slots || 1)) * 100)) : 0 })).sort((x, y) => y.occ - x.occ || y.busy - x.busy)
   return { rows, horizon }
 })
 function chargeClass(o) { if (o >= 100) return 'ch-over'; if (o >= 85) return 'ch-high'; if (o >= 50) return 'ch-mid'; return 'ch-low' }
@@ -568,9 +570,13 @@ const fenetre = computed(() => {
 })
 const planParAtelierVue = computed(() => {
   const f = fenetre.value
-  const horizon = finGlobale.value + 1
   let list = planParAtelier.value
   if (f) list = list.map(a => ({ ...a, lots: a.lots.filter(l => l.sortie >= f.debut && l.entree <= f.fin) })).filter(a => a.lots.length)
+  // Horizon d'occupation = jours ouvrés de la période réellement affichée (fenêtre choisie, sinon étendue des lots affichés).
+  let gmin = Infinity, gmax = -Infinity
+  for (const a of list) for (const l of a.lots) { if (l.startIdx < gmin) gmin = l.startIdx; if (l.endIdx > gmax) gmax = l.endIdx }
+  const spanDisp = (gmax >= gmin) ? (gmax - gmin + 1) : 1
+  const horizon = f ? (joursOuvres.value.filter(d => d >= f.debut && d <= f.fin).length || spanDisp) : spanDisp
   return list.map(a => {
     const lots = a.lots; const nbSlots = a.nbSlots || 1
     const boites = lots.reduce((s, l) => s + (l.boites || 0), 0)
@@ -590,7 +596,7 @@ const planParAtelierVue = computed(() => {
     }).sort((a, b) => (a.premier ? a.premier.getTime() : 8.64e15) - (b.premier ? b.premier.getTime() : 8.64e15) || ((a.besoinMin ? a.besoinMin.getTime() : 8.64e15) - (b.besoinMin ? b.besoinMin.getTime() : 8.64e15)))
     // Ruptures de mois calculées après tri, dans l'ordre d'affichage des lots de chaque campagne.
     for (const g of produits) { let pm = null; for (const l of g.lots) { const m = l.entree ? (l.entree.getMonth() + '-' + l.entree.getFullYear()) : null; l.moisBreak = (pm != null && m !== pm); pm = m } }
-    return { phase: a.phase, phaseKey: a.phaseKey, equip: a.equip, atelier: a.atelier, eqId: a.eqId, lots, boites, busy, occ: horizon > 0 ? Math.round(busy / (horizon * nbSlots) * 100) : 0, nLate, nTight, nFini, premier, dernier, nProd: produits.length, produits }
+    return { phase: a.phase, phaseKey: a.phaseKey, equip: a.equip, atelier: a.atelier, eqId: a.eqId, lots, boites, busy, occ: horizon > 0 ? Math.min(100, Math.round(busy / (horizon * nbSlots) * 100)) : 0, nLate, nTight, nFini, premier, dernier, nProd: produits.length, produits }
   })
 })
 // Regroupement par PHASE : chaque phase → ses équipements (planning par équipement selon la cadence).
