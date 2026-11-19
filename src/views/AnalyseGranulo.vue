@@ -125,7 +125,7 @@
     <!-- COMPARAISON ENTRE LOTS -->
     <section class="card">
       <h2 class="card-title">Comparaison entre lots</h2>
-      <p class="gr-cmp-help">Recherche puis coche au moins deux analyses enregistrées pour superposer leurs courbes de passant cumulé et comparer les indices.</p>
+      <p class="gr-cmp-help">Recherche un lot pour l'ajouter ; la liste n'affiche ensuite que les lots sélectionnés. Coche au moins deux lots pour superposer leurs courbes et comparer les indices.</p>
       <div class="gr-cmp-search">
         <input v-model="rechercheCompar" class="gr-lbl" placeholder="🔍 Rechercher un lot à comparer (N° lot, produit, libellé)…" />
         <button v-if="rechercheCompar" class="gr-cmp-clear" @click="rechercheCompar = ''" title="Effacer">✕</button>
@@ -138,7 +138,8 @@
           <button class="gr-cmp-del" @click.stop.prevent="supprimerAnalyse(h)" title="Supprimer cette analyse">🗑</button>
         </label>
         <p v-if="!historique.length" class="gr-empty" style="padding:14px 4px">Aucune analyse enregistrée pour l'instant — enregistre des analyses pour pouvoir les comparer.</p>
-        <p v-else-if="!historiqueFiltre.length" class="gr-empty" style="padding:14px 4px">Aucun lot ne correspond à « {{ rechercheCompar }} ».</p>
+        <p v-else-if="!historiqueFiltre.length && rechercheCompar" class="gr-empty" style="padding:14px 4px">Aucun lot ne correspond à « {{ rechercheCompar }} ».</p>
+        <p v-else-if="!historiqueFiltre.length" class="gr-empty" style="padding:14px 4px">🔍 Recherche un lot ci-dessus pour l'ajouter à la comparaison.</p>
       </div>
 
       <template v-if="comparData.lots.length">
@@ -499,7 +500,7 @@ const lotsCompares = ref([])
 const rechercheCompar = ref('')
 const historiqueFiltre = computed(() => {
   const q = normP(rechercheCompar.value).trim()
-  if (!q) return historique.value
+  if (!q) return historique.value.filter(h => comparo.value.includes(String(h.id)))
   return historique.value.filter(h => comparo.value.includes(String(h.id)) || normP((h.numero_lot || '') + ' ' + (h.libelle || '') + ' ' + (prodNom(h.produit_id) || '')).includes(q))
 })
 async function supprimerAnalyse(h) {
