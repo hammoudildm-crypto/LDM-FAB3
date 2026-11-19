@@ -190,6 +190,11 @@ async function enregistrer() {
   message.value = ''
   if (!lotId.value) { erreur.value = 'Choisis d\'abord un lot.'; return }
   const oid = lotId.value
+  // Anti-doublon : empêcher d'enregistrer deux fois la même étape (phase) pour un même lot.
+  if (!form.id && phases.value.some(p => p.phase === form.phase)) {
+    erreur.value = 'La phase « ' + form.phase + ' » est déjà enregistrée pour ce lot. Modifie la phase existante (bouton « Modifier ») plutôt que d\'en créer une seconde.'
+    return
+  }
   const statutPhase = form.date_phase ? 'Terminé' : (form.date_debut ? 'En cours' : 'À faire')
   const payload = {
     ordre_id: lotId.value,
