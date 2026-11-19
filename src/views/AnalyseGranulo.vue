@@ -109,6 +109,19 @@
       </div>
     </section>
 
+    <!-- INTERPRÉTATION DES RÉSULTATS -->
+    <section class="card" v-if="interpretation.length">
+      <h2 class="card-title">Interprétation des résultats</h2>
+      <p v-if="conclusion" class="gr-concl">{{ conclusion }}</p>
+      <ul class="gr-interp">
+        <li v-for="(it, i) in interpretation" :key="'it' + i" :style="{ borderColor: NIV[it.level] }">
+          <span class="gr-interp-dot" :style="{ background: NIV[it.level] }"></span>
+          <div><b>{{ it.titre }}</b><span>{{ it.texte }}</span></div>
+        </li>
+      </ul>
+      <p class="gr-interp-foot">Interprétation indicative générée à partir des résultats calculés (D50, span, taux de fines, indices de Carr / Hausner). Elle ne remplace pas l'évaluation du pharmacien / responsable qualité.</p>
+    </section>
+
     <!-- COMPARAISON ENTRE LOTS -->
     <section class="card">
       <h2 class="card-title">Comparaison entre lots</h2>
@@ -245,6 +258,71 @@ const flow = computed(() => {
   if (c <= 31) return { t: 'Médiocre', c: '#ea580c' }
   if (c <= 37) return { t: 'Très médiocre', c: '#dc2626' }
   return { t: 'Très mauvais', c: '#b91c1c' }
+})
+
+// ---- Interprétation automatique des résultats ----
+const NIV = { ok: '#16a34a', info: '#0891b2', warn: '#ca8a04', bad: '#dc2626' }
+const passantAt = (um) => {
+  if (!(total.value > 0)) return null
+  const pts = sortedRows.value
+  if (!pts.length) return null
+  if (um <= pts[0].taille) return pts[0].pass
+  for (let i = 1; i < pts.length; i++) { if (pts[i].taille >= um) { const a = pts[i - 1], b = pts[i]; if (b.taille === a.taille) return b.pass; return a.pass + (b.pass - a.pass) * (um - a.taille) / (b.taille - a.taille) } }
+  return pts[pts.length - 1].pass
+}
+const interpretation = computed(() => {
+  const items = []
+  const hasG = total.value > 0 && d50.value != null
+  const d = d50.value, sp = span.value, fines = passantAt(50)
+  if (hasG) {
+    let t, lvl
+    if (d < 50) { t = `Poudre très fine (D50 ${Math.round(d)} µm) — cohésive, écoulement souvent difficile et poussiérage possible.`; lvl = 'warn' }
+    else if (d < 150) { t = `Poudre fine (D50 ${Math.round(d)} µm) — convient à la plupart des mélanges ; surveiller l'écoulement.`; lvl = 'info' }
+    else if (d < 300) { t = `Granulométrie moyenne (D50 ${Math.round(d)} µm) — bon compromis entre écoulement et compressibilité.`; lvl = 'ok' }
+    else if (d < 500) { t = `Granulométrie grossière (D50 ${Math.round(d)} µm) — écoulement aisé, mais risque de ségrégation avec les fines.`; lvl = 'info' }
+    else { t = `Granulométrie très grossière (D50 ${Math.round(d)} µm) — écoulement aisé mais risque de ségrégation et d'uniformité de teneur.`; lvl = 'warn' }
+    items.push({ level: lvl, titre: 'Taille des particules', texte: t })
+  }
+  if (hasG && sp != null) {
+    let t, lvl
+    if (sp < 1) { t = `Distribution serrée (span ${sp.toFixed(2)}) — population homogène, faible risque de ségrégation.`; lvl = 'ok' }
+    else if (sp <= 2) { t = `Distribution modérée (span ${sp.toFixed(2)}) — étalement granulométrique acceptable.`; lvl = 'info' }
+    else { t = `Distribution large (span ${sp.toFixed(2)}) — population hétérogène, risque de ségrégation et de variabilité.`; lvl = 'warn' }
+    items.push({ level: lvl, titre: 'Largeur de distribution', texte: t })
+  }
+  if (hasG && fines != null) {
+    let t, lvl
+    if (fines > 30) { t = `Forte proportion de fines (${fines.toFixed(0)} % < 50 µm) — écoulement et uniformité de remplissage à surveiller, poussiérage.`; lvl = 'warn' }
+    else if (fines >= 10) { t = `Proportion modérée de fines (${fines.toFixed(0)} % < 50 µm) — acceptable.`; lvl = 'info' }
+    else { t = `Faible proportion de fines (${fines.toFixed(0)} % < 50 µm) — favorable à l'écoulement.`; lvl = 'ok' }
+    items.push({ level: lvl, titre: 'Taux de fines', texte: t })
+  }
+  if (carr.value != null) {
+    const cr = carr.value, hs = hausner.value
+    let lvl
+    if (cr <= 15) lvl = 'ok'; else if (cr <= 20) lvl = 'info'; else if (cr <= 25) lvl = 'warn'; else lvl = 'bad'
+    items.push({ level: lvl, titre: 'Aptitude à l\'écoulement', texte: `Indice de Carr ${cr.toFixed(1)} % · Hausner ${hs != null ? hs.toFixed(2) : '—'} → écoulement ${flow.value.t.toLowerCase()}.` })
+  }
+  if (densApp.value != null || densTass.value != null) {
+    items.push({ level: 'info', titre: 'Densité', texte: `Apparente ${densApp.value != null ? densApp.value.toFixed(3) + ' g/mL' : '—'} · tassée ${densTass.value != null ? densTass.value.toFixed(3) + ' g/mL' : '—'}.` })
+  }
+  return items
+})
+const conclusion = computed(() => {
+  if (!(total.value > 0) && carr.value == null) return ''
+  const parts = []
+  const d = d50.value, sp = span.value, cr = carr.value
+  if (d != null) parts.push(d < 150 ? 'poudre fine' : (d < 300 ? 'granulométrie moyenne' : 'granulométrie grossière'))
+  if (sp != null) parts.push(sp < 1 ? 'distribution homogène' : (sp <= 2 ? 'distribution modérée' : 'distribution large'))
+  if (cr != null) parts.push('écoulement ' + flow.value.t.toLowerCase())
+  let apt = ''
+  if (cr != null) {
+    const ecOk = cr <= 20, homog = sp == null || sp <= 2
+    if (ecOk && homog) apt = ' → lot adapté à une mise en forme (compression / remplissage) dans de bonnes conditions.'
+    else if (!ecOk) apt = ' → écoulement limitant : envisager un lubrifiant/glissant ou une granulation avant mise en forme.'
+    else apt = ' → hétérogénéité : risque de ségrégation, homogénéiser et contrôler l\'uniformité de teneur.'
+  }
+  return parts.join(', ') + apt
 })
 
 // ======================================================================
@@ -396,6 +474,7 @@ function exporterPDF() {
     '<div><b>Indice de Hausner :</b> ' + (hausner.value != null ? hausner.value.toFixed(3) : '—') + '</div>' +
     '<div><b>Indice de Carr :</b> ' + (carr.value != null ? carr.value.toFixed(1) + ' %' : '—') + '</div>' +
     '<div><b>Aptitude à l\'écoulement :</b> ' + esc(flow.value.t) + '</div></div>' +
+    (interpretation.value.length ? '<h2>Interprétation des résultats</h2>' + (conclusion.value ? '<p style="font-weight:600;margin:0 0 8px">' + esc(conclusion.value) + '</p>' : '') + '<ul style="margin:0;padding:0;list-style:none">' + interpretation.value.map(it => '<li style="border-left:3px solid ' + NIV[it.level] + ';padding:2px 0 2px 10px;margin:0 0 6px"><b>' + esc(it.titre) + '</b> — ' + esc(it.texte) + '</li>').join('') + '</ul>' : '') +
     '<p class="foot">ProdTrack — LDM Groupe · Fiche générée le ' + esc(new Date().toLocaleDateString('fr-FR')) + '</p>' +
     '</body></html>'
   const w = window.open('', '_blank')
@@ -577,4 +656,14 @@ const comparTable = computed(() => lotsCompares.value.map((L, i) => ({
 .gr-cmp-tblbox { margin-top: 16px; overflow-x: auto; }
 .gr-cmp-tbl td, .gr-cmp-tbl th { white-space: nowrap; }
 .gr-cmp-tbl tbody tr:hover { background: #faf5ff; }
+
+/* Interprétation des résultats */
+.gr-concl { font-size: 14px; font-weight: 700; color: #0f172a; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 12px 14px; margin: 0 0 14px; line-height: 1.5; }
+.gr-interp { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.gr-interp li { display: flex; gap: 10px; align-items: flex-start; border-left: 3px solid #cbd5e1; background: #fff; border-radius: 0 8px 8px 0; padding: 8px 12px; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
+.gr-interp-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex: 0 0 auto; }
+.gr-interp li div { display: flex; flex-direction: column; gap: 1px; }
+.gr-interp li b { font-size: 12.5px; color: #0f172a; }
+.gr-interp li span { font-size: 12.5px; color: #475569; line-height: 1.45; }
+.gr-interp-foot { font-size: 11px; color: #94a3b8; margin: 12px 0 0; font-style: italic; }
 </style>
