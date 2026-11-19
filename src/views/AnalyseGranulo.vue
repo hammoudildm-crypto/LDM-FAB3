@@ -357,6 +357,7 @@ const produitsFiltres = computed(() => {
 })
 function prodNom(id) { const p = produits.value.find(x => x.id === id); return p ? p.code_pf : '' }
 function prodLabel(id) { const p = produits.value.find(x => x.id === id); return p ? (p.code_pf + ' — ' + p.designation) : '' }
+function prodDesig(id) { const p = produits.value.find(x => x.id === id); return p ? p.designation : '' }
 function histLabel(h) {
   const parts = [h.numero_lot || 'sans lot', frDate(h.date_analyse)]
   const pl = prodLabel(h.produit_id); if (pl) parts.push(pl)
@@ -579,7 +580,7 @@ async function majComparaison() {
   const byId = {}; for (const a of (r.data || [])) byId[a.id] = a
   lotsCompares.value = ids.map(id => byId[id]).filter(Boolean).map(a => ({
     id: a.id,
-    label: (a.numero_lot || 'sans lot') + (a.libelle ? ' (' + a.libelle + ')' : ''),
+    label: (a.numero_lot || 'sans lot') + (prodDesig(a.produit_id) ? ' · ' + prodDesig(a.produit_id) : '') + (a.libelle ? ' (' + a.libelle + ')' : ''),
     densApp: a.dens_app != null ? Number(a.dens_app) : null,
     densTass: a.dens_tass != null ? Number(a.dens_tass) : null,
     hausner: a.hausner != null ? Number(a.hausner) : null,
