@@ -168,6 +168,21 @@
           </div>
         </div>
 
+        <div class="gr-chartbox">
+          <div class="gr-chart-t">Répartition des grains — % retenu par classe de tamis (une barre par lot)</div>
+          <svg :viewBox="'0 0 ' + CW + ' ' + CH" class="gr-svg" preserveAspectRatio="xMidYMid meet">
+            <line v-for="g in [0,25,50,75,100]" :key="'hg'+g" :x1="ML" :x2="CW-MR" :y1="yPct(g)" :y2="yPct(g)" class="gr-grid" />
+            <text v-for="g in [0,25,50,75,100]" :key="'hgl'+g" :x="ML-6" :y="yPct(g)+3" class="gr-axl">{{ Math.round(g / 100 * comparHistChart.maxPct) }}</text>
+            <rect v-for="(b, bi) in comparHistChart.bars" :key="'hb'+bi" :x="b.x" :y="b.y" :width="b.w" :height="b.h" :style="{ fill: b.color }" />
+            <text v-for="(l, li) in comparHistChart.labels" :key="'hx'+li" :x="l.x" :y="CH-MB+14" class="gr-xlab">{{ l.v }}</text>
+            <text :x="ML-6" :y="MT-6" class="gr-cap gr-capl">% retenu</text>
+            <text :x="(ML+CW-MR)/2" :y="CH-4" class="gr-cap" text-anchor="middle">Taille des particules (µm)</text>
+          </svg>
+          <div class="gr-cmp-leg">
+            <span v-for="(s, si) in comparData.lots" :key="'hlg'+si" class="gr-cmp-lg"><i :style="{ background: s.color }"></i>{{ s.label }}</span>
+          </div>
+        </div>
+
         <div class="gr-tblbox gr-cmp-tblbox">
           <table class="gr-tbl gr-cmp-tbl">
             <thead><tr><th>Lot</th><th class="r">D10</th><th class="r">D50</th><th class="r">D90</th><th class="r">Span</th><th class="r">D. app.</th><th class="r">D. tassée</th><th class="r">Hausner</th><th class="r">Carr</th><th>Écoulement</th></tr></thead>
@@ -604,6 +619,40 @@ const comparData = computed(() => {
   })
   const xticks = [0, 0.25, 0.5, 0.75, 1].map(f => ({ x: ML + f * plotW, v: Math.round(f * xMax) }))
   return { lots: series, xMax, xticks }
+})
+
+// Répartition des grains : histogramme groupé (% retenu par classe de tamis, une barre par lot)
+const comparHist = computed(() => {
+  const lots = lotsCompares.value
+  if (!lots.length) return { classes: [], maxPct: 1, n: 0 }
+  const sizes = new Set()
+  for (const L of lots) for (const p of L.m.sorted) sizes.add(p.taille)
+  const classes = [...sizes].sort((a, b) => a - b)
+  let maxPct = 1
+  const rows = classes.map(sz => {
+    const vals = lots.map(L => { const r = L.m.sorted.find(p => p.taille === sz); return r ? r.pct : 0 })
+    for (const v of vals) if (v > maxPct) maxPct = v
+    return { taille: sz, vals }
+  })
+  return { classes: rows, maxPct, n: lots.length }
+})
+const comparHistChart = computed(() => {
+  const h = comparHist.value
+  const C = h.classes.length
+  if (!C) return { bars: [], labels: [], maxPct: 1 }
+  const groupW = plotW / C
+  const n = Math.max(1, h.n)
+  const bw = (groupW * 0.76) / n
+  const bars = [], labels = []
+  h.classes.forEach((cl, ci) => {
+    const gx = ML + ci * groupW + groupW * 0.12
+    cl.vals.forEach((v, li) => {
+      const bh = (v / h.maxPct) * plotH
+      bars.push({ x: gx + li * bw, w: Math.max(1, bw * 0.92), y: MT + plotH - bh, h: bh, color: palette[li % palette.length] })
+    })
+    labels.push({ x: ML + ci * groupW + groupW / 2, v: cl.taille })
+  })
+  return { bars, labels, maxPct: h.maxPct }
 })
 
 const comparTable = computed(() => lotsCompares.value.map((L, i) => ({
