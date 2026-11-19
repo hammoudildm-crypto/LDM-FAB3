@@ -35,3 +35,16 @@ create index if not exists idx_pqr_val_lots_protocole on public.pqr_validation_l
 
 comment on table public.pqr_validation_protocoles is 'Protocole de validation des procédés de fabrication (PQR), un par produit.';
 comment on table public.pqr_validation_lots is 'Lots de validation rattachés à un protocole (3 lots consécutifs typiquement).';
+
+-- RLS (convention du projet : RLS activé + 4 policies to authenticated)
+alter table public.pqr_validation_protocoles enable row level security;
+create policy "pqr val proto sel" on public.pqr_validation_protocoles for select to authenticated using (true);
+create policy "pqr val proto ins" on public.pqr_validation_protocoles for insert to authenticated with check (true);
+create policy "pqr val proto upd" on public.pqr_validation_protocoles for update to authenticated using (true);
+create policy "pqr val proto del" on public.pqr_validation_protocoles for delete to authenticated using (true);
+
+alter table public.pqr_validation_lots enable row level security;
+create policy "pqr val lots sel" on public.pqr_validation_lots for select to authenticated using (true);
+create policy "pqr val lots ins" on public.pqr_validation_lots for insert to authenticated with check (true);
+create policy "pqr val lots upd" on public.pqr_validation_lots for update to authenticated using (true);
+create policy "pqr val lots del" on public.pqr_validation_lots for delete to authenticated using (true);
