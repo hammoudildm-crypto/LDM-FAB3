@@ -147,20 +147,24 @@
 
       <template v-if="comparData.lots.length">
         <div class="gr-chartbox">
-          <div class="gr-chart-t">Courbes de passant cumulé superposées</div>
+          <div class="gr-chart-t">Courbes cumulatives superposées — passant (trait plein) / refus (pointillé)</div>
           <svg :viewBox="'0 0 ' + CW + ' ' + CH" class="gr-svg" preserveAspectRatio="xMidYMid meet">
             <line v-for="g in [0,25,50,75,100]" :key="'cg'+g" :x1="ML" :x2="CW-MR" :y1="yPct(g)" :y2="yPct(g)" class="gr-grid" />
             <text v-for="g in [0,25,50,75,100]" :key="'cgl'+g" :x="ML-6" :y="yPct(g)+3" class="gr-axl">{{ g }}</text>
             <template v-for="(s, si) in comparData.lots" :key="'cs'+si">
               <polyline :points="s.poly" :style="{ stroke: s.color }" class="gr-cmp-line" />
+              <polyline :points="s.polyRefus" :style="{ stroke: s.color }" class="gr-cmp-line gr-cmp-line-r" />
               <circle v-for="(p, pi) in s.pts" :key="'cp'+si+'-'+pi" :cx="p.x" :cy="p.y" r="2.6" :style="{ fill: s.color }" />
+              <circle v-for="(p, pi) in s.ptsRefus" :key="'cpr'+si+'-'+pi" :cx="p.x" :cy="p.y" r="2.2" :style="{ fill: s.color }" opacity="0.65" />
             </template>
             <text v-for="(t, ti) in comparData.xticks" :key="'cxt'+ti" :x="t.x" :y="CH-MB+14" class="gr-xlab">{{ t.v }}</text>
-            <text :x="ML-6" :y="MT-6" class="gr-cap gr-capl">% passant</text>
+            <text :x="ML-6" :y="MT-6" class="gr-cap gr-capl">% cumulé</text>
             <text :x="(ML+CW-MR)/2" :y="CH-4" class="gr-cap" text-anchor="middle">Taille des particules (µm)</text>
           </svg>
           <div class="gr-cmp-leg">
             <span v-for="(s, si) in comparData.lots" :key="'clg'+si" class="gr-cmp-lg"><i :style="{ background: s.color }"></i>{{ s.label }}</span>
+            <span class="gr-cmp-lg gr-cmp-style"><i class="gr-lg-solid"></i>passant cumulé</span>
+            <span class="gr-cmp-lg gr-cmp-style"><i class="gr-lg-dash"></i>refus cumulé</span>
           </div>
         </div>
 
@@ -594,7 +598,8 @@ const comparData = computed(() => {
   const Y = (p) => MT + plotH - (p / 100) * plotH
   const series = lots.map((L, i) => {
     const pts = L.m.sorted.map(p => ({ x: X(p.taille), y: Y(p.pass) }))
-    return { label: L.label, color: palette[i % palette.length], pts, poly: pts.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ') }
+    const ptsRefus = L.m.sorted.map(p => ({ x: X(p.taille), y: Y(100 - p.pass) }))
+    return { label: L.label, color: palette[i % palette.length], pts, poly: pts.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' '), ptsRefus, polyRefus: ptsRefus.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ') }
   })
   const xticks = [0, 0.25, 0.5, 0.75, 1].map(f => ({ x: ML + f * plotW, v: Math.round(f * xMax) }))
   return { lots: series, xMax, xticks }
@@ -705,6 +710,10 @@ const comparTable = computed(() => lotsCompares.value.map((L, i) => ({
 .gr-cmp-del { border: none; background: transparent; cursor: pointer; font-size: 12px; line-height: 1; padding: 3px 4px; margin-left: 2px; border-radius: 6px; opacity: .5; }
 .gr-cmp-del:hover { opacity: 1; background: #fef2f2; }
 .gr-cmp-line { fill: none; stroke-width: 2.2; }
+.gr-cmp-line-r { stroke-dasharray: 5 3; opacity: .85; }
+.gr-cmp-style i { height: 0; border-radius: 0; background: transparent; }
+.gr-lg-solid { border-top: 2px solid #475569; }
+.gr-lg-dash { border-top: 2px dashed #475569; }
 .gr-cmp-leg { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 12px; color: #475569; }
 .gr-cmp-lg { display: flex; align-items: center; gap: 6px; }
 .gr-cmp-lg i { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
