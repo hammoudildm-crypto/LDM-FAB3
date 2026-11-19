@@ -135,6 +135,7 @@
         <label v-for="h in historiqueFiltre" :key="h.id" class="gr-cmp-item" :class="{ on: comparo.includes(String(h.id)) }">
           <input type="checkbox" :value="String(h.id)" v-model="comparo" @change="majComparaison" />
           <span>{{ h.numero_lot || 'sans lot' }} · {{ frDate(h.date_analyse) }} · {{ h.libelle || prodNom(h.produit_id) || '—' }}</span>
+          <button class="gr-cmp-del" @click.stop.prevent="supprimerAnalyse(h)" title="Supprimer cette analyse">🗑</button>
         </label>
         <p v-if="!historique.length" class="gr-empty" style="padding:14px 4px">Aucune analyse enregistrée pour l'instant — enregistre des analyses pour pouvoir les comparer.</p>
         <p v-else-if="!historiqueFiltre.length" class="gr-empty" style="padding:14px 4px">Aucun lot ne correspond à « {{ rechercheCompar }} ».</p>
@@ -501,6 +502,17 @@ const historiqueFiltre = computed(() => {
   if (!q) return historique.value
   return historique.value.filter(h => comparo.value.includes(String(h.id)) || normP((h.numero_lot || '') + ' ' + (h.libelle || '') + ' ' + (prodNom(h.produit_id) || '')).includes(q))
 })
+async function supprimerAnalyse(h) {
+  if (!window.confirm('Supprimer l\'analyse du lot ' + (h.numero_lot || '—') + ' (' + frDate(h.date_analyse) + (h.libelle ? ' · ' + h.libelle : '') + ') ?')) return
+  erreur.value = ''; message.value = ''
+  const r = await supabase.from('granulo_analyses').update({ actif: false }).eq('id', h.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  const k = String(h.id)
+  if (comparo.value.includes(k)) { comparo.value = comparo.value.filter(x => x !== k); await majComparaison() }
+  if (histSel.value === k) histSel.value = ''
+  message.value = 'Analyse supprimée (lot ' + (h.numero_lot || '—') + ').'
+  await chargerHistorique()
+}
 
 function metricsFromTamis(tamis) {
   const rows = (tamis || []).map(s => {
@@ -665,6 +677,8 @@ const comparTable = computed(() => lotsCompares.value.map((L, i) => ({
 .gr-cmp-item { display: flex; align-items: center; gap: 7px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 11px; font-size: 12.5px; color: #475569; cursor: pointer; background: #fff; }
 .gr-cmp-item.on { border-color: #a855f7; background: #faf5ff; color: #6b21a8; font-weight: 600; }
 .gr-cmp-item input { accent-color: #a855f7; cursor: pointer; }
+.gr-cmp-del { border: none; background: transparent; cursor: pointer; font-size: 12px; line-height: 1; padding: 3px 4px; margin-left: 2px; border-radius: 6px; opacity: .5; }
+.gr-cmp-del:hover { opacity: 1; background: #fef2f2; }
 .gr-cmp-line { fill: none; stroke-width: 2.2; }
 .gr-cmp-leg { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 12px; color: #475569; }
 .gr-cmp-lg { display: flex; align-items: center; gap: 6px; }
