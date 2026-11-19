@@ -20,10 +20,13 @@
       </div>
       <div class="gr-actions">
         <button class="btn" @click="enregistrer">💾 Enregistrer l'analyse</button>
-        <select v-model="histSel" class="gr-lbl gr-hist" @change="chargerAnalyse(histSel)">
-          <option value="">📂 Charger une analyse enregistrée…</option>
-          <option v-for="h in historique" :key="h.id" :value="String(h.id)">{{ h.numero_lot || 'sans lot' }} · {{ frDate(h.date_analyse) }} · {{ h.libelle || prodNom(h.produit_id) || '—' }}</option>
-        </select>
+        <div class="gr-charger">
+          <input v-model="rechercheCharger" class="gr-lbl gr-charger-in" placeholder="📂 Charger une analyse… (N° lot, produit)" @focus="chargerOuvert = true" @click="chargerOuvert = true" @blur="chargerOuvert = false" />
+          <ul v-if="chargerOuvert && historique.length" class="gr-charger-list">
+            <li v-if="!historiqueCharger.length" class="gr-charger-empty">Aucune analyse ne correspond.</li>
+            <li v-for="h in historiqueCharger" :key="h.id" @mousedown.prevent="selectCharger(h)">{{ histLabel(h) }}</li>
+          </ul>
+        </div>
         <button class="btn ghost" @click="reporterPQR">↗ Reporter vers PQR (D50 &amp; densité)</button>
         <button class="btn ghost" @click="exporterPDF">🖨 Export PDF</button>
         <button class="btn ghost" @click="reset">↺ Réinitialiser</button>
@@ -349,6 +352,21 @@ const produitsFiltres = computed(() => {
   return produits.value.filter(p => normP((p.code_pf || '') + ' ' + (p.designation || '')).includes(q))
 })
 function prodNom(id) { const p = produits.value.find(x => x.id === id); return p ? p.code_pf : '' }
+function prodLabel(id) { const p = produits.value.find(x => x.id === id); return p ? (p.code_pf + ' — ' + p.designation) : '' }
+function histLabel(h) {
+  const parts = [h.numero_lot || 'sans lot', frDate(h.date_analyse)]
+  const pl = prodLabel(h.produit_id); if (pl) parts.push(pl)
+  if (h.libelle) parts.push(h.libelle)
+  return parts.join(' · ')
+}
+// Combobox « Charger une analyse » (recherche + désignation produit)
+const rechercheCharger = ref(''), chargerOuvert = ref(false)
+const historiqueCharger = computed(() => {
+  const q = normP(rechercheCharger.value).trim()
+  if (!q) return historique.value
+  return historique.value.filter(h => normP((h.numero_lot || '') + ' ' + (h.libelle || '') + ' ' + prodLabel(h.produit_id)).includes(q))
+})
+function selectCharger(h) { chargerAnalyse(String(h.id)); rechercheCharger.value = ''; chargerOuvert.value = false }
 function frDate(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString('fr-FR') }
 
 onMounted(async () => {
@@ -664,6 +682,12 @@ const comparTable = computed(() => lotsCompares.value.map((L, i) => ({
 .gr-grow { flex: 2 1 300px !important; min-width: 280px; }
 .gr-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px dashed #e2e8f0; }
 .gr-hist { min-width: 250px; cursor: pointer; font-weight: 600; color: #475569; }
+.gr-charger { position: relative; }
+.gr-charger-in { min-width: 300px; }
+.gr-charger-list { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; width: max-content; min-width: 300px; max-width: 460px; max-height: 320px; overflow-y: auto; margin: 0; padding: 4px; list-style: none; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 12px 32px rgba(15, 23, 42, .14); }
+.gr-charger-list li { padding: 8px 10px; border-radius: 7px; font-size: 12.5px; color: #334155; cursor: pointer; }
+.gr-charger-list li:hover { background: #faf5ff; color: #6b21a8; }
+.gr-charger-empty, .gr-charger-empty:hover { color: #94a3b8; background: transparent; cursor: default; }
 .gr-alert { margin: 0 0 12px; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 9px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
 .gr-ok { margin: 0 0 12px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; padding: 9px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
 
