@@ -149,6 +149,7 @@
       </div>
 
       <template v-if="comparData.lots.length">
+        <div class="gr-cmp-exp"><button class="btn ghost" @click="exporterComparaisonPDF">🖨 Export PDF de la comparaison</button></div>
         <div class="gr-chartbox">
           <div class="gr-chart-t">Répartition des grains + courbes cumulatives — passant (trait plein) / refus (pointillé)</div>
           <svg :viewBox="'0 0 ' + CW + ' ' + CH" class="gr-svg" preserveAspectRatio="xMidYMid meet">
@@ -701,6 +702,65 @@ const comparChartCombo = computed(() => {
   return { bars, labels, series, maxPct }
 })
 
+function comparSvgString() {
+  const c = comparChartCombo.value
+  if (!c.series.length) return ''
+  let s = '<svg viewBox="0 0 ' + CW + ' ' + CH + '" width="100%" style="max-width:640px;border:1px solid #eef2f6;border-radius:6px" xmlns="http://www.w3.org/2000/svg">'
+  for (const g of [0, 25, 50, 75, 100]) {
+    const y = yPct(g)
+    s += '<line x1="' + ML + '" x2="' + (CW - MR) + '" y1="' + y + '" y2="' + y + '" stroke="#eef2f6"/>'
+    s += '<text x="' + (ML - 6) + '" y="' + (y + 3) + '" font-size="9" fill="#94a3b8" text-anchor="end">' + Math.round(g / 100 * c.maxPct) + '</text>'
+    s += '<text x="' + (CW - MR + 5) + '" y="' + (y + 3) + '" font-size="9" fill="#94a3b8" text-anchor="start">' + g + '</text>'
+  }
+  for (const b of c.bars) s += '<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" fill="' + b.color + '" opacity="0.4"/>'
+  for (const se of c.series) {
+    s += '<polyline points="' + se.poly + '" fill="none" stroke="' + se.color + '" stroke-width="2"/>'
+    s += '<polyline points="' + se.polyRefus + '" fill="none" stroke="' + se.color + '" stroke-width="2" stroke-dasharray="5 3"/>'
+  }
+  for (const l of c.labels) s += '<text x="' + l.x + '" y="' + (CH - MB + 12) + '" font-size="8" fill="#64748b" text-anchor="middle">' + l.v + '</text>'
+  s += '<text x="' + (ML - 6) + '" y="' + (MT - 6) + '" font-size="9" fill="#64748b">% retenu</text>'
+  s += '<text x="' + (CW - MR + 5) + '" y="' + (MT - 6) + '" font-size="9" fill="#64748b" text-anchor="start">% cumulé</text>'
+  s += '<text x="' + ((ML + CW - MR) / 2) + '" y="' + (CH - 3) + '" font-size="9" fill="#64748b" text-anchor="middle">Taille des particules (µm)</text>'
+  return s + '</svg>'
+}
+
+function exporterComparaisonPDF() {
+  erreur.value = ''
+  const lots = comparTable.value
+  if (!lots.length) { erreur.value = 'Sélectionne au moins un lot à comparer avant d\'exporter.'; return }
+  const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const legend = comparChartCombo.value.series.map(se => '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:11px"><i style="width:12px;height:12px;border-radius:3px;background:' + se.color + ';display:inline-block"></i>' + esc(se.label) + '</span>').join('')
+  const rows = lots.map(L => '<tr>'
+    + '<td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + L.color + ';margin-right:6px"></span>' + esc(L.label) + '</td>'
+    + '<td class="r">' + dTxt(L.d10) + '</td><td class="r">' + dTxt(L.d50) + '</td><td class="r">' + dTxt(L.d90) + '</td>'
+    + '<td class="r">' + (L.span != null ? L.span.toFixed(2) : '—') + '</td>'
+    + '<td class="r">' + (L.densApp != null ? L.densApp.toFixed(3) : '—') + '</td>'
+    + '<td class="r">' + (L.densTass != null ? L.densTass.toFixed(3) : '—') + '</td>'
+    + '<td class="r">' + (L.hausner != null ? L.hausner.toFixed(3) : '—') + '</td>'
+    + '<td class="r">' + (L.carr != null ? L.carr.toFixed(1) + ' %' : '—') + '</td>'
+    + '<td style="color:' + L.flow.c + ';font-weight:700">' + esc(L.flow.t) + '</td></tr>').join('')
+  const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Comparaison granulométrique</title>'
+    + '<style>*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:24px;font-size:12px}'
+    + 'h1{font-size:18px;margin:0 0 2px}h2{font-size:13px;color:#7c3aed;border-bottom:2px solid #eee;padding-bottom:4px;margin:16px 0 8px}'
+    + '.sub{color:#64748b;margin:0 0 12px}table{width:100%;border-collapse:collapse;margin-top:4px}'
+    + 'th,td{text-align:left;padding:4px 8px;border-bottom:1px solid #eef2f6;white-space:nowrap}th{background:#faf5ff;color:#6b21a8;font-size:10px;text-transform:uppercase}'
+    + 'td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}.leg{margin:8px 0}'
+    + '.foot{margin-top:20px;color:#94a3b8;font-size:10px;border-top:1px solid #eee;padding-top:6px}@media print{body{margin:12mm}}</style></head><body>'
+    + '<h1>Comparaison granulométrique &amp; densité</h1>'
+    + '<p class="sub">' + lots.length + ' lot(s) comparé(s) · ' + esc(new Date().toLocaleDateString('fr-FR')) + '</p>'
+    + '<h2>Répartition des grains + courbes cumulatives</h2>'
+    + comparSvgString()
+    + '<div class="leg">' + legend + '<span style="font-size:11px;color:#64748b">— trait plein : passant cumulé · pointillé : refus cumulé · barres : % retenu</span></div>'
+    + '<h2>Indices comparés</h2>'
+    + '<table><thead><tr><th>Lot</th><th class="r">D10</th><th class="r">D50</th><th class="r">D90</th><th class="r">Span</th><th class="r">D. app.</th><th class="r">D. tassée</th><th class="r">Hausner</th><th class="r">Carr</th><th>Écoulement</th></tr></thead><tbody>' + rows + '</tbody></table>'
+    + '<p class="foot">ProdTrack — LDM Groupe · Généré le ' + esc(new Date().toLocaleDateString('fr-FR')) + '</p>'
+    + '</body></html>'
+  const w = window.open('', '_blank')
+  if (!w) { erreur.value = 'Autorise les pop-ups pour générer le PDF.'; return }
+  w.document.write(html); w.document.close(); w.focus()
+  setTimeout(() => { try { w.print() } catch (e) {} }, 350)
+}
+
 const comparTable = computed(() => lotsCompares.value.map((L, i) => ({
   label: L.label, color: palette[i % palette.length],
   d10: L.m.d10, d50: L.m.d50, d90: L.m.d90, span: L.m.span,
@@ -803,6 +863,7 @@ const comparTable = computed(() => lotsCompares.value.map((L, i) => ({
 .gr-cmp-clear { border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; width: 32px; height: 32px; cursor: pointer; color: #64748b; font-size: 13px; flex: 0 0 auto; }
 .gr-cmp-clear:hover { background: #f8fafc; color: #0f172a; }
 .gr-cmp-count { font-size: 12px; font-weight: 700; color: #6b21a8; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 999px; padding: 4px 11px; white-space: nowrap; }
+.gr-cmp-exp { display: flex; justify-content: flex-end; margin-bottom: 10px; }
 .gr-cmp-pick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .gr-cmp-item { display: flex; align-items: center; gap: 7px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 11px; font-size: 12.5px; color: #475569; cursor: pointer; background: #fff; }
 .gr-cmp-item.on { border-color: #a855f7; background: #faf5ff; color: #6b21a8; font-weight: 600; }
