@@ -162,6 +162,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, inject, watch } from 'vue'
 import { supabase } from '../supabase'
+import { LOGO_HTML } from '../logo'
 import PageHeader from '../components/PageHeader.vue'
 
 const peutEditer = inject('peutEditer', ref(true))
@@ -420,6 +421,7 @@ td.r,th.r{text-align:right}tr.ph td{background:#f1f5f9;font-weight:700;text-tran
 .ann-lot{font-size:12px;color:#0f172a;margin:16px 0 4px;font-weight:700;page-break-after:avoid}.ann-date{color:#94a3b8;font-weight:400;font-size:10px}
 .ann-kpi{width:auto;margin:4px 0 12px;page-break-inside:avoid}.ann-kpi td{border:0;padding:2px 16px 2px 0;font-size:11px;white-space:nowrap}.ann-kpi b{color:#475569}
 @media print{body{margin:12mm}}</style></head><body>
+${LOGO_HTML}
 <h1>Protocole de validation de procédé</h1>
 <p class="sub">${esc(pr.code_pf || '')} — ${esc(pr.designation || '')}</p>
 <div class="meta">

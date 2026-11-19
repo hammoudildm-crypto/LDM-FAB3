@@ -203,6 +203,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import PageHeader from '../components/PageHeader.vue'
 import { supabase } from '../supabase'
+import { LOGO_HTML } from '../logo'
 
 const CW = 720, CH = 300, ML = 46, MR = 46, MT = 20, MB = 40
 const plotW = CW - ML - MR, plotH = CH - MT - MB
@@ -510,7 +511,7 @@ function exporterPDF() {
     'table{width:100%;border-collapse:collapse;margin-bottom:6px}th,td{text-align:left;padding:4px 8px;border-bottom:1px solid #eef2f6}' +
     'th{background:#faf5ff;color:#6b21a8;font-size:10px;text-transform:uppercase}td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}' +
     '.kv{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 20px;margin-top:4px}.kv div{border-bottom:1px solid #f1f5f9;padding:4px 0}.kv b{color:#0f172a}' +
-    '.foot{margin-top:22px;color:#94a3b8;font-size:10px;border-top:1px solid #eee;padding-top:6px}@media print{body{margin:12mm}}</style></head><body>' +
+    '.foot{margin-top:22px;color:#94a3b8;font-size:10px;border-top:1px solid #eee;padding-top:6px}@media print{body{margin:12mm}}</style></head><body>' + LOGO_HTML +
     '<h1>Analyse granulométrique &amp; densité</h1>' +
     '<p class="sub">' + esc(titreProd) + (numeroLot.value ? ' · Lot ' + esc(numeroLot.value) : '') + (pr && lotLabel.value ? ' · ' + esc(lotLabel.value) : '') + '</p>' +
     '<div class="meta"><div><b>Date d\'analyse :</b> ' + esc(frDate(dateAnalyse.value)) + '</div><div><b>Masse échantillon :</b> ' + (masse.value != null ? esc(masse.value) + ' g' : '—') + '</div></div>' +
@@ -745,7 +746,7 @@ function exporterComparaisonPDF() {
     + '.sub{color:#64748b;margin:0 0 12px}table{width:100%;border-collapse:collapse;margin-top:4px}'
     + 'th,td{text-align:left;padding:4px 8px;border-bottom:1px solid #eef2f6;white-space:nowrap}th{background:#faf5ff;color:#6b21a8;font-size:10px;text-transform:uppercase}'
     + 'td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}.leg{margin:8px 0}'
-    + '.foot{margin-top:20px;color:#94a3b8;font-size:10px;border-top:1px solid #eee;padding-top:6px}@media print{body{margin:12mm}}</style></head><body>'
+    + '.foot{margin-top:20px;color:#94a3b8;font-size:10px;border-top:1px solid #eee;padding-top:6px}@media print{body{margin:12mm}}</style></head><body>' + LOGO_HTML
     + '<h1>Comparaison granulométrique &amp; densité</h1>'
     + '<p class="sub">' + lots.length + ' lot(s) comparé(s) · ' + esc(new Date().toLocaleDateString('fr-FR')) + '</p>'
     + '<h2>Répartition des grains + courbes cumulatives</h2>'
