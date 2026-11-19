@@ -24,7 +24,10 @@
           <input v-model="rechercheCharger" class="gr-lbl gr-charger-in" placeholder="📂 Charger une analyse… (N° lot, produit)" @focus="chargerOuvert = true" @click="chargerOuvert = true" @blur="chargerOuvert = false" />
           <ul v-if="chargerOuvert && historique.length" class="gr-charger-list">
             <li v-if="!historiqueCharger.length" class="gr-charger-empty">Aucune analyse ne correspond.</li>
-            <li v-for="h in historiqueCharger" :key="h.id" @mousedown.prevent="selectCharger(h)">{{ histLabel(h) }}</li>
+            <li v-for="h in historiqueCharger" :key="h.id" class="gr-charger-row">
+              <span @mousedown.prevent="selectCharger(h)">{{ histLabel(h) }}</span>
+              <button class="gr-charger-del" @mousedown.prevent.stop="supprimerAnalyse(h)" title="Supprimer cette analyse">🗑</button>
+            </li>
           </ul>
         </div>
         <button class="btn ghost" @click="reporterPQR">↗ Reporter vers PQR (D50 &amp; densité)</button>
@@ -785,6 +788,10 @@ const comparTable = computed(() => lotsCompares.value.map((L, i) => ({
 .gr-charger-list { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; width: max-content; min-width: 300px; max-width: 460px; max-height: 320px; overflow-y: auto; margin: 0; padding: 4px; list-style: none; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 12px 32px rgba(15, 23, 42, .14); }
 .gr-charger-list li { padding: 8px 10px; border-radius: 7px; font-size: 12.5px; color: #334155; cursor: pointer; }
 .gr-charger-list li:hover { background: #faf5ff; color: #6b21a8; }
+.gr-charger-list li.gr-charger-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gr-charger-row span { flex: 1 1 auto; cursor: pointer; }
+.gr-charger-del { border: none; background: transparent; cursor: pointer; font-size: 12px; line-height: 1; padding: 3px 5px; border-radius: 6px; opacity: .5; flex: 0 0 auto; }
+.gr-charger-del:hover { opacity: 1; background: #fee2e2; }
 .gr-charger-empty, .gr-charger-empty:hover { color: #94a3b8; background: transparent; cursor: default; }
 .gr-alert { margin: 0 0 12px; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 9px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
 .gr-ok { margin: 0 0 12px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; padding: 9px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
