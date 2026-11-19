@@ -125,13 +125,19 @@
     <!-- COMPARAISON ENTRE LOTS -->
     <section class="card">
       <h2 class="card-title">Comparaison entre lots</h2>
-      <p class="gr-cmp-help">Coche au moins deux analyses enregistrées pour superposer leurs courbes de passant cumulé et comparer les indices.</p>
+      <p class="gr-cmp-help">Recherche puis coche au moins deux analyses enregistrées pour superposer leurs courbes de passant cumulé et comparer les indices.</p>
+      <div class="gr-cmp-search">
+        <input v-model="rechercheCompar" class="gr-lbl" placeholder="🔍 Rechercher un lot à comparer (N° lot, produit, libellé)…" />
+        <button v-if="rechercheCompar" class="gr-cmp-clear" @click="rechercheCompar = ''" title="Effacer">✕</button>
+        <span v-if="comparo.length" class="gr-cmp-count">{{ comparo.length }} sélectionné(s)</span>
+      </div>
       <div class="gr-cmp-pick">
-        <label v-for="h in historique" :key="h.id" class="gr-cmp-item" :class="{ on: comparo.includes(String(h.id)) }">
+        <label v-for="h in historiqueFiltre" :key="h.id" class="gr-cmp-item" :class="{ on: comparo.includes(String(h.id)) }">
           <input type="checkbox" :value="String(h.id)" v-model="comparo" @change="majComparaison" />
           <span>{{ h.numero_lot || 'sans lot' }} · {{ frDate(h.date_analyse) }} · {{ h.libelle || prodNom(h.produit_id) || '—' }}</span>
         </label>
         <p v-if="!historique.length" class="gr-empty" style="padding:14px 4px">Aucune analyse enregistrée pour l'instant — enregistre des analyses pour pouvoir les comparer.</p>
+        <p v-else-if="!historiqueFiltre.length" class="gr-empty" style="padding:14px 4px">Aucun lot ne correspond à « {{ rechercheCompar }} ».</p>
       </div>
 
       <template v-if="comparData.lots.length">
@@ -489,6 +495,12 @@ function exporterPDF() {
 const palette = ['#0891b2', '#c2410c', '#7c3aed', '#16a34a', '#ca8a04', '#db2777', '#0ea5e9', '#65a30d']
 const comparo = ref([])
 const lotsCompares = ref([])
+const rechercheCompar = ref('')
+const historiqueFiltre = computed(() => {
+  const q = normP(rechercheCompar.value).trim()
+  if (!q) return historique.value
+  return historique.value.filter(h => comparo.value.includes(String(h.id)) || normP((h.numero_lot || '') + ' ' + (h.libelle || '') + ' ' + (prodNom(h.produit_id) || '')).includes(q))
+})
 
 function metricsFromTamis(tamis) {
   const rows = (tamis || []).map(s => {
@@ -644,6 +656,11 @@ const comparTable = computed(() => lotsCompares.value.map((L, i) => ({
 
 /* Comparaison entre lots */
 .gr-cmp-help { font-size: 12.5px; color: #64748b; margin: 0 0 12px; }
+.gr-cmp-search { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.gr-cmp-search .gr-lbl { flex: 1 1 auto; max-width: 420px; }
+.gr-cmp-clear { border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; width: 32px; height: 32px; cursor: pointer; color: #64748b; font-size: 13px; flex: 0 0 auto; }
+.gr-cmp-clear:hover { background: #f8fafc; color: #0f172a; }
+.gr-cmp-count { font-size: 12px; font-weight: 700; color: #6b21a8; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 999px; padding: 4px 11px; white-space: nowrap; }
 .gr-cmp-pick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .gr-cmp-item { display: flex; align-items: center; gap: 7px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 11px; font-size: 12.5px; color: #475569; cursor: pointer; background: #fff; }
 .gr-cmp-item.on { border-color: #a855f7; background: #faf5ff; color: #6b21a8; font-weight: 600; }
