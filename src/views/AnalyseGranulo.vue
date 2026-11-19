@@ -403,9 +403,23 @@ async function enregistrer() {
     d10: d10.value, d50: d50.value, d90: d90.value,
     dens_app: densApp.value, dens_tass: densTass.value, hausner: hausner.value, carr: carr.value
   }
-  const r = await supabase.from('granulo_analyses').insert(payload).select('id').single()
-  if (r.error) { erreur.value = tableAbsente(r.error.message) ? 'Table absente — exécute la migration 008_granulometrie.sql dans Supabase.' : r.error.message; return }
-  message.value = 'Analyse enregistrée' + (numeroLot.value ? ' (lot ' + numeroLot.value + ')' : '') + '.'
+  // Anti-doublon : si une analyse active existe déjà pour le même N° lot + libellé + produit, on la met à jour au lieu d'en créer une seconde.
+  let cibleId = null
+  if (payload.numero_lot) {
+    const rc = await supabase.from('granulo_analyses').select('id, libelle, produit_id').eq('actif', true).eq('numero_lot', payload.numero_lot)
+    if (rc.error) { erreur.value = tableAbsente(rc.error.message) ? 'Table absente — exécute la migration 008_granulometrie.sql dans Supabase.' : rc.error.message; return }
+    const m = (rc.data || []).find(a => (a.libelle || '') === (payload.libelle || '') && (a.produit_id || null) === (payload.produit_id || null))
+    if (m) cibleId = m.id
+  }
+  if (cibleId) {
+    const r = await supabase.from('granulo_analyses').update(payload).eq('id', cibleId)
+    if (r.error) { erreur.value = r.error.message; return }
+    message.value = 'Analyse mise à jour' + (numeroLot.value ? ' (lot ' + numeroLot.value + ')' : '') + ' — aucun doublon créé.'
+  } else {
+    const r = await supabase.from('granulo_analyses').insert(payload).select('id').single()
+    if (r.error) { erreur.value = tableAbsente(r.error.message) ? 'Table absente — exécute la migration 008_granulometrie.sql dans Supabase.' : r.error.message; return }
+    message.value = 'Analyse enregistrée' + (numeroLot.value ? ' (lot ' + numeroLot.value + ')' : '') + '.'
+  }
   histSel.value = ''
   await chargerHistorique()
 }
