@@ -147,39 +147,27 @@
 
       <template v-if="comparData.lots.length">
         <div class="gr-chartbox">
-          <div class="gr-chart-t">Courbes cumulatives superposées — passant (trait plein) / refus (pointillé)</div>
+          <div class="gr-chart-t">Répartition des grains + courbes cumulatives — passant (trait plein) / refus (pointillé)</div>
           <svg :viewBox="'0 0 ' + CW + ' ' + CH" class="gr-svg" preserveAspectRatio="xMidYMid meet">
-            <line v-for="g in [0,25,50,75,100]" :key="'cg'+g" :x1="ML" :x2="CW-MR" :y1="yPct(g)" :y2="yPct(g)" class="gr-grid" />
-            <text v-for="g in [0,25,50,75,100]" :key="'cgl'+g" :x="ML-6" :y="yPct(g)+3" class="gr-axl">{{ g }}</text>
-            <template v-for="(s, si) in comparData.lots" :key="'cs'+si">
+            <line v-for="g in [0,25,50,75,100]" :key="'kg'+g" :x1="ML" :x2="CW-MR" :y1="yPct(g)" :y2="yPct(g)" class="gr-grid" />
+            <text v-for="g in [0,25,50,75,100]" :key="'kgl'+g" :x="ML-6" :y="yPct(g)+3" class="gr-axl">{{ Math.round(g / 100 * comparChartCombo.maxPct) }}</text>
+            <text v-for="g in [0,25,50,75,100]" :key="'kgr'+g" :x="CW-MR+5" :y="yPct(g)+3" class="gr-axl" style="text-anchor:start">{{ g }}</text>
+            <rect v-for="(b, bi) in comparChartCombo.bars" :key="'kb'+bi" :x="b.x" :y="b.y" :width="b.w" :height="b.h" :style="{ fill: b.color }" opacity="0.4" />
+            <template v-for="(s, si) in comparChartCombo.series" :key="'ks'+si">
               <polyline :points="s.poly" :style="{ stroke: s.color }" class="gr-cmp-line" />
               <polyline :points="s.polyRefus" :style="{ stroke: s.color }" class="gr-cmp-line gr-cmp-line-r" />
-              <circle v-for="(p, pi) in s.pts" :key="'cp'+si+'-'+pi" :cx="p.x" :cy="p.y" r="2.6" :style="{ fill: s.color }" />
-              <circle v-for="(p, pi) in s.ptsRefus" :key="'cpr'+si+'-'+pi" :cx="p.x" :cy="p.y" r="2.2" :style="{ fill: s.color }" opacity="0.65" />
+              <circle v-for="(p, pi) in s.pts" :key="'kp'+si+'-'+pi" :cx="p.x" :cy="p.y" r="2.4" :style="{ fill: s.color }" />
             </template>
-            <text v-for="(t, ti) in comparData.xticks" :key="'cxt'+ti" :x="t.x" :y="CH-MB+14" class="gr-xlab">{{ t.v }}</text>
-            <text :x="ML-6" :y="MT-6" class="gr-cap gr-capl">% cumulé</text>
+            <text v-for="(l, li) in comparChartCombo.labels" :key="'kx'+li" :x="l.x" :y="CH-MB+14" class="gr-xlab">{{ l.v }}</text>
+            <text :x="ML-6" :y="MT-6" class="gr-cap gr-capl">% retenu</text>
+            <text :x="CW-MR+5" :y="MT-6" class="gr-cap" style="text-anchor:start">% cumulé</text>
             <text :x="(ML+CW-MR)/2" :y="CH-4" class="gr-cap" text-anchor="middle">Taille des particules (µm)</text>
           </svg>
           <div class="gr-cmp-leg">
-            <span v-for="(s, si) in comparData.lots" :key="'clg'+si" class="gr-cmp-lg"><i :style="{ background: s.color }"></i>{{ s.label }}</span>
+            <span v-for="(s, si) in comparChartCombo.series" :key="'klg'+si" class="gr-cmp-lg"><i :style="{ background: s.color }"></i>{{ s.label }}</span>
             <span class="gr-cmp-lg gr-cmp-style"><i class="gr-lg-solid"></i>passant cumulé</span>
             <span class="gr-cmp-lg gr-cmp-style"><i class="gr-lg-dash"></i>refus cumulé</span>
-          </div>
-        </div>
-
-        <div class="gr-chartbox">
-          <div class="gr-chart-t">Répartition des grains — % retenu par classe de tamis (une barre par lot)</div>
-          <svg :viewBox="'0 0 ' + CW + ' ' + CH" class="gr-svg" preserveAspectRatio="xMidYMid meet">
-            <line v-for="g in [0,25,50,75,100]" :key="'hg'+g" :x1="ML" :x2="CW-MR" :y1="yPct(g)" :y2="yPct(g)" class="gr-grid" />
-            <text v-for="g in [0,25,50,75,100]" :key="'hgl'+g" :x="ML-6" :y="yPct(g)+3" class="gr-axl">{{ Math.round(g / 100 * comparHistChart.maxPct) }}</text>
-            <rect v-for="(b, bi) in comparHistChart.bars" :key="'hb'+bi" :x="b.x" :y="b.y" :width="b.w" :height="b.h" :style="{ fill: b.color }" />
-            <text v-for="(l, li) in comparHistChart.labels" :key="'hx'+li" :x="l.x" :y="CH-MB+14" class="gr-xlab">{{ l.v }}</text>
-            <text :x="ML-6" :y="MT-6" class="gr-cap gr-capl">% retenu</text>
-            <text :x="(ML+CW-MR)/2" :y="CH-4" class="gr-cap" text-anchor="middle">Taille des particules (µm)</text>
-          </svg>
-          <div class="gr-cmp-leg">
-            <span v-for="(s, si) in comparData.lots" :key="'hlg'+si" class="gr-cmp-lg"><i :style="{ background: s.color }"></i>{{ s.label }}</span>
+            <span class="gr-cmp-lg"><i class="gr-lg-sq"></i>% retenu (barres)</span>
           </div>
         </div>
 
@@ -655,6 +643,47 @@ const comparHistChart = computed(() => {
   return { bars, labels, maxPct: h.maxPct }
 })
 
+// Graphe combiné : barres (% retenu) + courbes cumulatives passant/refus par lot, sur le même axe des classes
+function passantAtLot(sorted, um) {
+  if (!sorted || !sorted.length) return 0
+  if (um <= sorted[0].taille) return sorted[0].pass
+  for (let i = 1; i < sorted.length; i++) { if (sorted[i].taille >= um) { const a = sorted[i - 1], b = sorted[i]; if (b.taille === a.taille) return b.pass; return a.pass + (b.pass - a.pass) * (um - a.taille) / (b.taille - a.taille) } }
+  return sorted[sorted.length - 1].pass
+}
+const comparChartCombo = computed(() => {
+  const lots = lotsCompares.value
+  if (!lots.length) return { bars: [], labels: [], series: [], maxPct: 1 }
+  const sizes = new Set()
+  for (const L of lots) for (const p of L.m.sorted) sizes.add(p.taille)
+  const classes = [...sizes].sort((a, b) => a - b)
+  const C = classes.length
+  if (!C) return { bars: [], labels: [], series: [], maxPct: 1 }
+  let maxPct = 1
+  for (const L of lots) for (const p of L.m.sorted) if (p.pct > maxPct) maxPct = p.pct
+  const groupW = plotW / C
+  const n = lots.length
+  const bw = (groupW * 0.76) / n
+  const center = (ci) => ML + ci * groupW + groupW / 2
+  const bars = [], labels = []
+  classes.forEach((sz, ci) => {
+    const gx = ML + ci * groupW + groupW * 0.12
+    lots.forEach((L, li) => {
+      const r = L.m.sorted.find(p => p.taille === sz)
+      const v = r ? r.pct : 0
+      const bh = (v / maxPct) * plotH
+      bars.push({ x: gx + li * bw, w: Math.max(1, bw * 0.92), y: MT + plotH - bh, h: bh, color: palette[li % palette.length] })
+    })
+    labels.push({ x: center(ci), v: sz })
+  })
+  const series = lots.map((L, li) => {
+    const col = palette[li % palette.length]
+    const ptsP = classes.map((sz, ci) => ({ x: center(ci), y: yPct(passantAtLot(L.m.sorted, sz)) }))
+    const ptsR = classes.map((sz, ci) => ({ x: center(ci), y: yPct(100 - passantAtLot(L.m.sorted, sz)) }))
+    return { label: L.label, color: col, pts: ptsP, poly: ptsP.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' '), polyRefus: ptsR.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ') }
+  })
+  return { bars, labels, series, maxPct }
+})
+
 const comparTable = computed(() => lotsCompares.value.map((L, i) => ({
   label: L.label, color: palette[i % palette.length],
   d10: L.m.d10, d50: L.m.d50, d90: L.m.d90, span: L.m.span,
@@ -764,6 +793,7 @@ const comparTable = computed(() => lotsCompares.value.map((L, i) => ({
 .gr-cmp-style i { height: 0; border-radius: 0; background: transparent; }
 .gr-lg-solid { border-top: 2px solid #475569; }
 .gr-lg-dash { border-top: 2px dashed #475569; }
+.gr-lg-sq { width: 13px; height: 10px; border-radius: 2px; background: #cbd5e1; opacity: .6; display: inline-block; }
 .gr-cmp-leg { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 12px; color: #475569; }
 .gr-cmp-lg { display: flex; align-items: center; gap: 6px; }
 .gr-cmp-lg i { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
