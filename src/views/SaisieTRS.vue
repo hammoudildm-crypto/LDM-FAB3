@@ -32,18 +32,22 @@ const form = reactive({
   temps_ouverture_min: 450,
   arret_panne_min: 0, arret_format_min: 0, arret_nettoyage_min: 0,
   arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
+  arret_vdlg_min: 0, arret_vdlp_min: 0,
   production_realisee: 0, rebuts: 0, retouches: 0, commentaire: ''
 })
 const colRetouche = ref(false)   // vrai une fois la migration 003 exécutée (colonne trs_postes.retouches)
+const colVdl = ref(false)        // vrai une fois la migration 009 exécutée (colonnes arret_vdlg_min / arret_vdlp_min)
 
 const MOTIFS = [
   ['arret_panne_min', 'Panne'], ['arret_format_min', 'Changement de format'],
   ['arret_nettoyage_min', 'Nettoyage'], ['arret_reglage_min', 'Réglage'],
+  ['arret_vdlg_min', 'Vide de ligne général (VDLG)'], ['arret_vdlp_min', 'Vide de ligne partiel (VDLP)'],
   ['arret_maintenance_min', 'Maintenance'], ['arret_attente_min', 'Attente (matière/perso.)'],
   ['arret_autre_min', 'Autre']
 ]
-// Nettoyage & Réglage sont sortis de la grille pour être alignés avec Retouches sur une même ligne
-const motifsGrille = MOTIFS.filter(m => !['arret_nettoyage_min', 'arret_reglage_min', 'arret_maintenance_min', 'arret_attente_min'].includes(m[0]))
+// Motifs sortis de la grille 2-colonnes pour être regroupés sur des lignes dédiées
+// (Nettoyage/Réglage, Vide de ligne général/partiel, Maintenance/Attente).
+const motifsGrille = MOTIFS.filter(m => !['arret_nettoyage_min', 'arret_reglage_min', 'arret_maintenance_min', 'arret_attente_min', 'arret_vdlg_min', 'arret_vdlp_min'].includes(m[0]))
 
 async function charger() {
   const re = await supabase.from('equipements').select('id, code, nom, type').eq('actif', true).order('code')
@@ -54,6 +58,8 @@ async function charger() {
   if (!rs.error) saisies.value = rs.data || []
   const pr = await supabase.from('trs_postes').select('retouches').limit(1)
   colRetouche.value = !pr.error
+  const pv = await supabase.from('trs_postes').select('arret_vdlg_min').limit(1)
+  colVdl.value = !pv.error
 }
 onMounted(charger)
 
@@ -142,7 +148,12 @@ async function enregistrer() {
     rebuts: Number(form.rebuts) || 0, commentaire: form.commentaire || null
   }
   if (colRetouche.value) payload.retouches = Number(form.retouches) || 0
-  for (const m of MOTIFS) payload[m[0]] = Number(form[m[0]]) || 0
+  for (const m of MOTIFS) {
+    // Tant que la migration 009 n'est pas exécutée, on n'envoie pas VDLG/VDLP
+    // (colonnes absentes) pour ne pas casser l'enregistrement.
+    if (!colVdl.value && (m[0] === 'arret_vdlg_min' || m[0] === 'arret_vdlp_min')) continue
+    payload[m[0]] = Number(form[m[0]]) || 0
+  }
   const r = await supabase.from('trs_postes').upsert(payload, { onConflict: 'equipement_id,date,poste' })
   if (r.error) { msg.value = r.error.message; return }
   const trsFige = pct(trs.value)
@@ -233,6 +244,10 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
           <div class="motifs">
             <label v-for="m in motifsGrille" :key="m[0]" class="fl">{{ m[1] }}<input type="number" min="0" v-model.number="form[m[0]]" /></label>
           </div>
+          <div class="duo">
+            <label class="fl vdl">Vide de ligne général (VDLG)<input type="number" min="0" v-model.number="form.arret_vdlg_min" title="Vide de ligne complet lors d'un changement de produit ou de campagne." /></label>
+            <label class="fl vdl">Vide de ligne partiel (VDLP)<input type="number" min="0" v-model.number="form.arret_vdlp_min" title="Vide de ligne entre lots d'un même produit." /></label>
+          </div>
           <div class="trio">
             <label class="fl hl">Nettoyage<input type="number" min="0" v-model.number="form.arret_nettoyage_min" /></label>
             <label class="fl">Réglage<input type="number" min="0" v-model.number="form.arret_reglage_min" /></label>
@@ -314,7 +329,9 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 .fl { margin-bottom: 10px; }
 .motifs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .trio { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 .fl.hl input { border-color: #0f766e; background: #f0fdfa; }
+.fl.vdl input { border-color: #6366f1; background: #eef2ff; }
 .sub { font-size: 13px; color: #64748b; margin-top: 8px; }
 .trs-box { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin: 14px 0; background: #f8fafc; }
 .trs-line { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; color: #475569; }
@@ -330,7 +347,7 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .right { text-align: right; }
 .nowrap { white-space: nowrap; }
 .empty { color: #94a3b8; text-align: center; padding: 16px; font-style: italic; }
-@media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } .motifs { grid-template-columns: 1fr; } .trio { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } .motifs { grid-template-columns: 1fr; } .trio { grid-template-columns: 1fr; } .duo { grid-template-columns: 1fr; } }
 .cad-inline { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; }
 .cad-inline-in { width: 110px; font-size: 13px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
 .cad-inline-sel { font-size: 13px; padding: 5px 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
