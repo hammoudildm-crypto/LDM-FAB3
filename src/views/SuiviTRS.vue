@@ -4,6 +4,7 @@ import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 import MiniChart from '../components/MiniChart.vue'
 import { ICONS, TINTS } from '../icons.js'
+import { LOGO_HTML } from '../logo'
 
 const postes = ref([])
 const cadences = ref([])
@@ -161,6 +162,64 @@ const labelsMotifs = computed(() => MOTIFS.map(mo => mo[2]))
 const pct = (x) => (x * 100).toFixed(1) + ' %'
 const fmt = (n) => n == null ? '0' : Math.round(Number(n)).toLocaleString('fr-FR')
 const heures = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' h'
+
+// Export PDF (fenêtre d'impression, logo ProdTrack) — reflète les filtres actifs.
+function exporterPDF() {
+  if (!parEquip.value.length) { msg.value = 'Rien à exporter sur cette période.'; return }
+  const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const dFr = (d) => { try { return new Date(d).toLocaleDateString('fr-FR') } catch (e) { return d } }
+  const g = global.value
+  const eqSel = equipList.value.find(e => e.id === equipFiltre.value)
+  const equipTxt = equipFiltre.value ? (equipFiltreCode.value + (eqSel && eqSel.nom ? ' — ' + eqSel.nom : '')) : 'Tous'
+  const prodTxt = produitFiltre.value ? produitFiltreLabel.value : 'Tous'
+
+  const kpis = [['TRS global', pct(g.trs), true], ['Disponibilité', pct(g.dispo), false], ['Performance', pct(g.perf), false], ['Qualité', pct(g.qualite), false]]
+    .map(k => '<div class="kpi' + (k[2] ? ' big' : '') + '"><div class="kv2">' + k[1] + '</div><div class="kl">' + k[0] + '</div></div>').join('')
+
+  const maxTrs = Math.max(1, ...parEquip.value.map(e => e.trs * 100))
+  const bars = parEquip.value.map(e => {
+    const v = e.trs * 100
+    return '<div class="bar"><span class="bl">' + esc(e.code) + (e.nom ? ' <i>' + esc(e.nom) + '</i>' : '') + '</span><span class="bt"><span class="bf" style="width:' + (v / maxTrs * 100).toFixed(1) + '%"></span></span><span class="bv">' + v.toFixed(1) + ' %</span></div>'
+  }).join('')
+
+  const eqRows = parEquip.value.map(e => '<tr><td><b>' + esc(e.code) + '</b> ' + esc(e.nom || '') + '</td><td class="r">' + heures(e.ouverture) + '</td><td class="r">' + heures(e.fonct) + '</td><td class="r">' + pct(e.dispo) + '</td><td class="r">' + pct(e.perf) + '</td><td class="r">' + pct(e.qualite) + '</td><td class="r"><b>' + pct(e.trs) + '</b></td><td class="r">' + heures(e.arrets.nettoyage) + '</td></tr>').join('')
+
+  const ta = totalArrets.value, ouv = pertes.value.ouverture
+  const perteRows = MOTIFS.map(mo => '<tr><td><span class="dot" style="background:' + mo[3] + '"></span>' + esc(mo[2]) + '</td><td class="r">' + heures(pertes.value[mo[0]]) + '</td><td class="r">' + (ta ? ((pertes.value[mo[0]] / ta) * 100).toFixed(1) : 0) + ' %</td><td class="r">' + (ouv ? ((pertes.value[mo[0]] / ouv) * 100).toFixed(1) : 0) + ' %</td></tr>').join('')
+
+  const moisData = {}
+  for (const s of postesFiltres.value) moisData[new Date(s.date).getMonth()] = true
+  const moisRows = MOIS.map((lbl, mo) => moisData[mo] ? '<tr><td>' + lbl + '</td><td class="r"><b>' + trsParMois.value[mo].toFixed(1) + ' %</b></td></tr>' : '').join('')
+
+  const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Suivi TRS ' + esc(dFr(du.value)) + '</title>' +
+    '<style>*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:24px;font-size:12px}' +
+    'h1{font-size:18px;margin:0 0 2px}h2{font-size:13px;color:#4338ca;border-bottom:2px solid #eee;padding-bottom:4px;margin:18px 0 10px}' +
+    '.sub{color:#64748b;margin:0 0 10px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;margin:0 0 12px;font-size:12px}.meta b{color:#475569}' +
+    '.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 0 6px}' +
+    '.kpi{border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px}.kv2{font-size:20px;font-weight:800}.kpi.big .kv2{color:#4338ca}.kl{font-size:11px;color:#64748b;margin-top:3px}' +
+    'table{width:100%;border-collapse:collapse;margin-bottom:6px}th,td{text-align:left;padding:4px 8px;border-bottom:1px solid #eef2f6}' +
+    'th{background:#eef2ff;color:#3730a3;font-size:10px;text-transform:uppercase}td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}' +
+    '.bar{display:grid;grid-template-columns:150px 1fr 60px;align-items:center;gap:8px;margin:3px 0}.bl{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bl i{font-weight:400;color:#94a3b8}' +
+    '.bt{background:#eef2f6;border-radius:5px;height:14px;overflow:hidden}.bf{display:block;height:100%;background:#4338ca;-webkit-print-color-adjust:exact;print-color-adjust:exact}.bv{font-size:11px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}' +
+    '.dot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '.foot{margin-top:22px;color:#94a3b8;font-size:10px;border-top:1px solid #eee;padding-top:6px}@media print{body{margin:12mm}}</style></head><body>' + LOGO_HTML +
+    '<h1>Suivi TRS</h1>' +
+    '<p class="sub">Rendement global des équipements · Disponibilité × Performance × Qualité</p>' +
+    '<div class="meta"><div><b>Période :</b> ' + esc(dFr(du.value)) + ' → ' + esc(dFr(au.value)) + '</div><div><b>Équipement :</b> ' + esc(equipTxt) + '</div><div><b>Produit :</b> ' + esc(prodTxt) + '</div><div><b>Postes analysés :</b> ' + postesFiltres.value.length + '</div></div>' +
+    '<div class="kpis">' + kpis + '</div>' +
+    '<h2>TRS par équipement</h2>' + bars +
+    '<h2>Détail par équipement</h2>' +
+    '<table><thead><tr><th>Équipement</th><th class="r">Ouverture</th><th class="r">Fonct.</th><th class="r">Dispo.</th><th class="r">Perf.</th><th class="r">Qualité</th><th class="r">TRS</th><th class="r">Nettoyage</th></tr></thead><tbody>' + eqRows + '</tbody></table>' +
+    '<h2>Détail des pertes de temps</h2>' +
+    '<table><thead><tr><th>Motif d\'arrêt</th><th class="r">Durée</th><th class="r">% des arrêts</th><th class="r">% ouverture</th></tr></thead><tbody>' + perteRows + '</tbody></table>' +
+    (moisRows ? '<h2>TRS par mois</h2><table><thead><tr><th>Mois</th><th class="r">TRS</th></tr></thead><tbody>' + moisRows + '</tbody></table>' : '') +
+    '<p class="foot">ProdTrack — LDM Groupe · Document généré le ' + esc(new Date().toLocaleDateString('fr-FR')) + '</p>' +
+    '</body></html>'
+  const w = window.open('', '_blank')
+  if (!w) { msg.value = 'Autorise les pop-ups pour générer le PDF.'; return }
+  w.document.write(html); w.document.close(); w.focus()
+  setTimeout(() => { try { w.print() } catch (e) {} }, 350)
+}
 </script>
 
 <template>
@@ -191,6 +250,9 @@ const heures = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigi
       <div v-if="!parEquip.length" class="empty">Aucune saisie TRS sur cette période<span v-if="produitFiltre || equipFiltre"> avec les filtres actuels</span>. Renseigne des postes dans « Saisie TRS ».</div>
 
       <template v-else>
+        <div class="toolbar">
+          <button type="button" class="btn-pdf" @click="exporterPDF">⬇ Télécharger en PDF</button>
+        </div>
         <div class="kpi-grid">
           <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.gauge || ICONS.activity"></svg></span><div class="kpi-val big">{{ pct(global.trs) }}</div></div><div class="kpi-lbl">TRS global (pondéré)</div></div>
           <div class="kpi"><div class="kpi-top"><div class="kpi-val">{{ pct(global.dispo) }}</div></div><div class="kpi-lbl">Disponibilité</div></div>
@@ -270,6 +332,9 @@ const heures = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigi
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .muted { color: #94a3b8; }
 .empty { color: #94a3b8; text-align: center; padding: 30px; font-style: italic; }
+.toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
+.btn-pdf { display: inline-flex; align-items: center; gap: 6px; background: #4338ca; color: #fff; border: none; border-radius: 9px; padding: 9px 16px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
+.btn-pdf:hover { background: #3730a3; }
 .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .kpi-top { display: flex; align-items: center; gap: 10px; }
