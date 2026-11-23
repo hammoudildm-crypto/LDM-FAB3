@@ -47,6 +47,7 @@
       <span class="lg"><i class="sw sw-gen"></i>Nettoyage général (NG)</span>
       <span class="lg"><i class="sw sw-part"></i>Nettoyage partiel (NP)</span>
       <span class="lg"><i class="sw sw-nuit"></i>OFF (nuit 22h–06h / week-end chômé)</span>
+      <template v-if="presentation"><span class="lg"><i class="sw sw-shm"></i>Matin 06–14</span><span class="lg"><i class="sw sw-sha"></i>Après-midi 14–22</span><span class="lg"><i class="sw sw-shn"></i>Nuit 22–06</span></template>
       <span class="lg"><i class="sw sw-termine"></i>✓ Terminé (dates réelles)</span>
       <span class="lg"><i class="sw sw-cours"></i>▶ En cours (avancement %)</span>
       <span class="lg"><i class="sw sw-plan"></i>Planifié</span>
@@ -167,9 +168,11 @@
           <div class="g-track g-timeline" :style="{ width: totalW + 'px' }">
             <div v-for="d in jours" :key="d.i" class="g-dcol" :class="{ 'g-dcol-dep': d.depart }" :style="{ left: d.left + 'px', width: d.w + 'px' }">
               <div class="g-dlbl">{{ d.label }}<span v-if="d.depart" class="g-dep-lbl"> ▸ Départ</span></div>
-              <div v-if="presentation" class="g-nightbar">
-                <span class="g-nb-n" :style="{ left: 0, width: (6 * pxH) + 'px' }"></span>
-                <span class="g-nb-n" :style="{ left: (22 * pxH) + 'px', width: (2 * pxH) + 'px' }"></span>
+              <div v-if="presentation" class="g-shbar">
+                <span class="g-sb g-sb-n" :style="{ left: 0, width: (6 * pxH) + 'px' }"><i v-if="6 * pxH >= 22">{{ 6 * pxH >= 100 ? 'Nuit 22–06' : (6 * pxH >= 34 ? 'Nuit' : 'N') }}</i></span>
+                <span class="g-sb g-sb-m" :style="{ left: (6 * pxH) + 'px', width: (8 * pxH) + 'px' }"><i v-if="8 * pxH >= 22">{{ 8 * pxH >= 120 ? 'Matin 06–14' : (8 * pxH >= 50 ? 'Matin' : 'M') }}</i></span>
+                <span class="g-sb g-sb-a" :style="{ left: (14 * pxH) + 'px', width: (8 * pxH) + 'px' }"><i v-if="8 * pxH >= 22">{{ 8 * pxH >= 130 ? 'Après-midi 14–22' : (8 * pxH >= 62 ? 'Après-midi' : 'AM') }}</i></span>
+                <span class="g-sb g-sb-n" :style="{ left: (22 * pxH) + 'px', width: (2 * pxH) + 'px' }"></span>
               </div>
               <div v-else class="g-shifts">
                 <span class="g-sh g-sh0" :style="{ width: (6 * pxH) + 'px' }"></span>
@@ -195,7 +198,7 @@
             <div class="g-eqfin">fin : {{ fmtJH(row.fin) }}</div>
             <label class="g-eqwe" @click.stop><input type="checkbox" :checked="weOn(row.eq.id)" @change="weekendEquip[row.eq.id] = $event.target.checked; sauverPanier(row.eq.id)" /> week-ends (2×8)</label>
           </div>
-          <div class="g-track" :style="{ width: totalW + 'px' }">
+          <div class="g-track" :style="[{ width: totalW + 'px' }, presentation ? fondShifts : null]">
             <!-- bandes jours -->
             <div v-for="d in jours" :key="'b'+d.i" class="g-dband" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
             <!-- bandes week-end (si l'équipement ne travaille pas le week-end) -->
@@ -1640,6 +1643,14 @@ const posMaintenant = computed(() => {
   return (px >= 0 && px <= totalW.value) ? px : null
 })
 
+// Fond des lignes en présentation : périmètre des 3 shifts de chaque jour, dégradés clairs
+// (nuit 22h–06h bleu, matin 06h–14h jaune, après-midi 14h–22h orange), répété toutes les 24 h
+// et calé sur minuit du 1er jour affiché.
+const DEG_SHIFTS = 'linear-gradient(to right, #e4e9ff 0%, #dde4ff 25%, #fffdf0 25%, #fdf0c4 58.333%, #fff8f0 58.333%, #fde3c8 91.667%, #eef1ff 91.667%, #e8edff 100%)'
+const fondShifts = computed(() => {
+  const j0 = jours.value[0]; const w = 24 * pxH.value
+  return { backgroundImage: DEG_SHIFTS, backgroundSize: w + 'px 100%', backgroundRepeat: 'repeat-x', backgroundPosition: (j0 ? j0.left : 0) + 'px 0' }
+})
 // ===== Mode présentation =====
 const H7 = 7 * 24 * 3600000
 const presentation = ref(false)
@@ -2554,4 +2565,16 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pe-ph.vide { opacity: .45; cursor: default; }
 .pe-ph.ph1 { border-left-color: #64748b; } .pe-ph.ph2 { border-left-color: #0d9488; } .pe-ph.ph3 { border-left-color: #0891b2; } .pe-ph.ph4 { border-left-color: #2563eb; }
 .pe-ph.ph5 { border-left-color: #7c3aed; } .pe-ph.ph6 { border-left-color: #4f46e5; } .pe-ph.ph7 { border-left-color: #d97706; }
+/* Périmètre des shifts (présentation) */
+.g-shbar { position: relative; height: 16px; margin-top: 3px; }
+.g-sb { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; border-right: 1px solid rgba(255,255,255,.9); box-sizing: border-box; }
+.g-sb i { font-style: normal; font-size: 10px; font-weight: 800; white-space: nowrap; letter-spacing: .02em; }
+.g-sb-m { background: linear-gradient(to right, #fffdf0, #fbe7a8); } .g-sb-m i { color: #854d0e; }
+.g-sb-a { background: linear-gradient(to right, #fff6ec, #fbd5ad); } .g-sb-a i { color: #9a3412; }
+.g-sb-n { background: linear-gradient(to right, #e7ecff, #cfd8ff); } .g-sb-n i { color: #3730a3; }
+.sw-shm { background: linear-gradient(to right, #fffdf0, #fbe7a8); border: 1px solid #f5d77a; }
+.sw-sha { background: linear-gradient(to right, #fff6ec, #fbd5ad); border: 1px solid #f6c08d; }
+.sw-shn { background: linear-gradient(to right, #e7ecff, #cfd8ff); border: 1px solid #b4c0f5; }
+.pe-pres .g-dband { border-left: 1px solid #cbd5e1; }
+.pe-pres .g-timeline, .pe-pres .g-dcol { height: 40px; }
 </style>
