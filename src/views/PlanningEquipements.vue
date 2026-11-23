@@ -109,9 +109,10 @@
             <div v-for="d in jours" :key="d.i" class="g-dcol" :class="{ 'g-dcol-dep': d.depart }" :style="{ left: d.left + 'px', width: d.w + 'px' }">
               <div class="g-dlbl">{{ d.label }}<span v-if="d.depart" class="g-dep-lbl"> ▸ Départ</span></div>
               <div class="g-shifts">
+                <span class="g-sh g-sh0" :style="{ width: (6 * pxH) + 'px' }"></span>
                 <span class="g-sh" :style="{ width: (8 * pxH) + 'px' }">06</span>
                 <span class="g-sh" :style="{ width: (8 * pxH) + 'px' }">14</span>
-                <span class="g-sh" :style="{ width: (8 * pxH) + 'px' }">22</span>
+                <span class="g-sh" :style="{ width: (2 * pxH) + 'px' }">22</span>
               </div>
             </div>
             <div v-if="posMaintenant != null" class="g-now-head" :style="{ left: posMaintenant + 'px' }"><span>{{ heureMaintenant }}</span></div>
@@ -1012,6 +1013,8 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .g-dlbl { font-size: 10px; font-weight: 700; color: #334155; padding: 2px 4px; white-space: nowrap; }
 .g-shifts { display: flex; }
 .g-sh { font-size: 8px; color: #94a3b8; border-left: 1px dashed #e2e8f0; padding-left: 2px; box-sizing: border-box; }
+.g-sh0 { border-left: none; padding-left: 0; }
+.g-shifts .g-sh { overflow: hidden; white-space: nowrap; }
 
 .g-row { display: flex; border-bottom: 1px solid #f1f5f9; }
 .g-eqcode { font-size: 11px; font-weight: 800; color: #0f172a; }
