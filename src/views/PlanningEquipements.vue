@@ -13,6 +13,7 @@
             <button type="button" class="pe-wk-nav" :disabled="semaineIdx >= nbSemaines - 1" @click="changerSemaine(1)" title="Semaine suivante">▶</button>
           </template>
         </div>
+        <button v-if="!presentation" type="button" class="pe-pdf-btn" @click="demarrerBoucle" title="Écran atelier : tous les équipements de fabrication en défilement automatique">⟳ Boucle</button>
         <button type="button" class="pe-pdf-btn" @click="exporterPDF" title="Exporter la vue affichée en PDF A3 paysage">🖨 PDF A3</button>
         <button type="button" class="pe-pres-btn" :class="{ on: presentation }" @click="basculerPresentation">{{ presentation ? '✕ Quitter la présentation' : '▶ Présentation' }}</button>
       </div>
@@ -243,6 +244,82 @@
       </table>
     </section>
 
+
+    <!-- ===== Mode BOUCLE (écran atelier) ===== -->
+    <div v-if="boucle" class="pb">
+      <div class="pb-top">
+        <div class="pb-titre">
+          <span class="pb-num" v-if="bPageCour.type === 'phase'">{{ bPageCour.num }}</span>
+          <h2>{{ bPageCour.titre }}</h2>
+          <span class="pb-sem">Semaine {{ bSemLib }}</span>
+        </div>
+        <div class="pb-ctl">
+          <span class="pb-h">{{ bHeure }}</span>
+          <span class="pb-pg">page {{ bPage + 1 }} / {{ bPages.length }}</span>
+          <button @click="bSuivante(-1)" title="Page précédente (←)">◀</button>
+          <button @click="bPause = !bPause" :title="bPause ? 'Reprendre (espace)' : 'Pause (espace)'">{{ bPause ? '▶' : '❚❚' }}</button>
+          <button @click="bSuivante(1)" title="Page suivante (→)">▶</button>
+          <select v-model.number="bDuree" title="Durée d'affichage par page"><option :value="10">10 s</option><option :value="20">20 s</option><option :value="30">30 s</option><option :value="60">60 s</option></select>
+          <button class="pb-x" @click="arreterBoucle" title="Quitter (Échap)">✕</button>
+        </div>
+      </div>
+      <div class="pb-prog"><div :style="{ width: Math.min(100, bEcoule / bDuree * 100) + '%' }" :class="{ pause: bPause }"></div></div>
+      <div class="pb-tabs">
+        <button v-for="ph in bPhases" :key="ph.k" :class="{ on: (bPageCour.type === 'synthese' ? 0 : bPageCour.ph) === ph.k }" @click="bAller(ph.idx)">{{ ph.lib }}</button>
+      </div>
+
+      <!-- Vue d'ensemble -->
+      <div v-if="bPageCour.type === 'synthese'" class="pb-syn">
+        <div class="pe-kpis">
+          <div class="pe-kpi"><span class="pe-kpi-l">Lots planifiés cette semaine</span><span class="pe-kpi-v">{{ bKpi.lots }}</span></div>
+          <div class="pe-kpi"><span class="pe-kpi-l">Équipements planifiés</span><span class="pe-kpi-v">{{ bKpi.actifs }} / {{ bKpi.total }}</span></div>
+          <div class="pe-kpi pe-kpi-ok"><span class="pe-kpi-l">Lots en cours</span><span class="pe-kpi-v">{{ bKpi.cours }}</span></div>
+          <div class="pe-kpi pe-kpi-warn"><span class="pe-kpi-l">Goulot de la semaine</span><span class="pe-kpi-v">{{ goulotLibB }}</span></div>
+        </div>
+        <div class="pb-occ">
+          <div v-for="x in bSynthese" :key="x.r.eq.id" class="pb-occ-l" :class="{ gl: String(x.r.eq.id) === String(goulotId) }">
+            <span class="pb-occ-ph">{{ PH_LIB_B[phaseOrdre(x.r.eq.type)] || '—' }}</span>
+            <span class="pb-occ-eq"><b>{{ x.r.eq.code }}</b> {{ x.r.eq.nom }}</span>
+            <span class="pb-occ-bar"><span class="so-prod" :style="{ width: Math.min(100, x.c.prodPct || 0) + '%' }"></span><span class="so-nett" :style="{ width: Math.max(0, Math.min(100 - (x.c.prodPct || 0), x.c.nettPct || 0)) + '%' }"></span></span>
+            <b class="pb-occ-pct" :class="'t-' + chargeClass(x.c.occ || 0)">{{ x.c.occ || 0 }} %</b>
+            <span class="pb-occ-c"><template v-if="x.cours.length">▶ {{ x.cours[0].lot }} · {{ x.cours[0].code }}</template><template v-else-if="!(x.c.busyH > 0)">libre</template></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page phase : cartes équipements -->
+      <div v-else class="pb-cartes">
+        <div v-for="r in bPageCour.rows" :key="r.eq.id" class="pb-carte" :class="{ libre: !(bCartes[r.eq.id] || {}).nbSem && !(enCoursListe[r.eq.id] || []).length }">
+          <div class="pb-c-g">
+            <div class="pb-c-code">{{ r.eq.code }} <span class="g-reg" :class="{ r2: (bCartes[r.eq.id] || {}).regime === '2x8' }">{{ (bCartes[r.eq.id] || {}).regime === '2x8' ? '2×8' : '3×8' }}</span></div>
+            <div class="pb-c-nom">{{ r.eq.nom }}</div>
+            <div class="pb-c-occ"><span class="pb-occ-bar"><span class="so-prod" :style="{ width: Math.min(100, (chargeMap[r.eq.id] || {}).prodPct || 0) + '%' }"></span><span class="so-nett" :style="{ width: Math.max(0, Math.min(100 - ((chargeMap[r.eq.id] || {}).prodPct || 0), (chargeMap[r.eq.id] || {}).nettPct || 0)) + '%' }"></span></span><b :class="'t-' + chargeClass((chargeMap[r.eq.id] || {}).occ || 0)">{{ (chargeMap[r.eq.id] || {}).occ || 0 }} %</b></div>
+          </div>
+          <div class="pb-c-d">
+            <div class="pb-c-info">
+              <span v-if="(enCoursListe[r.eq.id] || []).length" class="pb-cours">▶ En cours : <b>{{ enCoursListe[r.eq.id][0].lot }}</b> · {{ enCoursListe[r.eq.id][0].desig || enCoursListe[r.eq.id][0].code }}<span v-if="enCoursListe[r.eq.id][0].depuis"> · depuis {{ fmtDepuis(enCoursListe[r.eq.id][0].depuis) }}</span></span>
+              <span v-else-if="(bCartes[r.eq.id] || {}).nbSem" class="pb-att">Aucun lot en cours</span>
+              <span v-else class="pb-libre">Libre — aucun lot planifié cette semaine</span>
+              <span v-if="(bCartes[r.eq.id] || {}).prochain" class="pb-next">Prochain : <b>{{ bCartes[r.eq.id].prochain.lot }}</b> · {{ bCartes[r.eq.id].prochain.prod.designation }} · {{ fmtJH(bCartes[r.eq.id].prochain.segments[0].start) }}</span>
+              <span v-if="(bCartes[r.eq.id] || {}).nbSem" class="pb-nb">{{ bCartes[r.eq.id].nbSem }} lot(s) cette semaine</span>
+            </div>
+            <div class="pb-frise">
+              <div v-for="(o, oi) in (bCartes[r.eq.id] || {}).off || []" :key="'o' + oi" class="pb-off" :style="bStyle(o.a, o.b)"></div>
+              <div v-for="(o, oi) in bJours" :key="'j' + oi" class="pb-jl" :style="{ left: o.left + '%' }"><span>{{ o.lbl }}</span></div>
+              <div v-for="t in ((bCartes[r.eq.id] || {}).taches || [])" :key="'t' + t.uid + (t.turbNo || '') + t.type + t.start" class="pb-b" :class="'pb-' + t.type" :style="t.type === 'lot' ? bStyle(t.segments[0].start, t.end, t.prod) : bStyle(t.segments[0].start, t.end)">
+                <span v-if="t.type === 'lot'">{{ t.lot }}</span>
+              </div>
+              <div v-for="c in ((bCartes[r.eq.id] || {}).camps || [])" :key="c.key" class="pb-b pb-camp" :class="{ cours: c.enCours }" :style="bStyle(c.start, c.end, c.prod)">
+                <span v-for="(tk, ti) in c.ticks" :key="ti" class="g-camp-tick" :style="{ left: tk + '%' }"></span>
+                <span class="pb-camp-l"><b>{{ c.prod.code_pf }} · {{ c.n }} lots</b><em>{{ c.prod.designation }}</em></span>
+              </div>
+              <div class="pb-now" :style="{ left: bPct(maintenant) + '%' }"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pb-pied">LDM Groupe — Site El Khroub · ProdTrack · données actualisées à {{ bMaj ? bMaj.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—' }} · ← → pages · espace pause · Échap quitter</div>
+    </div>
     <!-- Récap -->
 
     <!-- Panier par équipement -->
@@ -364,9 +441,9 @@ async function fetchAllPaged(qb) {
   return { data: out }
 }
 
-onMounted(async () => {
+onMounted(async () => { chargerLocal(); await chargerDonnees(); demarrerBoucleSiUrl() })
+async function chargerDonnees() {
   try {
-    chargerLocal()
     const [rp, rc, re, rpr, rpan, rof, rsu] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produit_id')),
       fetchAllPaged(() => supabase.from('cadences_produit').select('cadence_nominale, unite_cadence, mode, equipement_id, produit_id')),
@@ -396,7 +473,7 @@ onMounted(async () => {
     nettoyerPanierTermines()
     nettoyerHistoriqueEquip()
   } catch (e) { erreur.value = String(e) } finally { chargement.value = false }
-})
+}
 
 // Années dispo
 const annees = computed(() => {
@@ -911,7 +988,7 @@ const lotsAjoutables = computed(() => {
   return (lotsAttentePhase.value[ph] || []).filter(l => !dans.has(l.id) && (!q || (l.lot + ' ' + l.code + ' ' + (l.desig || '')).toLowerCase().includes(q))).slice(0, 150)
 })
 
-const planning = computed(() => {
+const planCalc = computed(() => {
   const t0v = new Date(dateDepart.value + 'T22:00:00')
   const q = filtreTexte.value.trim().toLowerCase()
   const equipsFab = equipements.value.filter(e => estFab(e.type))
@@ -975,6 +1052,17 @@ const planning = computed(() => {
       }
     }
   }
+  return { eqTasks, eqCursor, t0v, equipsFab }
+})
+const trierEq = (a, b) => (phaseOrdre(a.type) - phaseOrdre(b.type)) || String(a.code).localeCompare(String(b.code))
+// Tous les équipements de fabrication actifs (sans filtre) — utilisé par la boucle et l'occupation
+const planningTous = computed(() => {
+  const { eqTasks, eqCursor, t0v, equipsFab } = planCalc.value
+  return [...equipsFab].sort(trierEq).map(eq => ({ eq, tasks: eqTasks[eq.id] || [], fin: eqCursor[eq.id] || new Date(t0v) }))
+})
+const planning = computed(() => {
+  const { eqTasks, eqCursor, t0v, equipsFab } = planCalc.value
+  const q = filtreTexte.value.trim().toLowerCase()
   // Lignes affichées (filtres)
   const rows = []
   const eqsSorted = equipsFab.filter(e => {
@@ -1074,6 +1162,7 @@ const occIdxEff = computed(() => {
 watch(periodeOcc, () => { occIdx.value = null })
 watch(occIdx, (v) => { if (v != null && v !== occIdxEff.value) occIdx.value = occIdxEff.value })
 const fenetreOcc = computed(() => {
+  if (boucle.value) return { a: semaineBoucle.value.a, b: semaineBoucle.value.b, mode: 'semaine' }
   if (presentation.value) {
     if (vuePres.value === 'semaine') return { a: debutSemaineVue.value, b: new Date(debutSemaineVue.value.getTime() + H7), mode: 'semaine' }
     return { a: t0.value, b: finGlobale.value, mode: 'plan' }
@@ -1092,7 +1181,7 @@ const periodeOccLib = computed(() => {
 const chargeMap = computed(() => {
   const A = fenetreOcc.value.a.getTime(), B = fenetreOcc.value.b.getTime(), m = {}
   const sauveMaint = maintCourant
-  for (const row of planning.value) {
+  for (const row of planningTous.value) {
     const regime = regimeEquip[row.eq.id] || '3x8', weAll = weOn(row.eq.id)
     const requis = buildRequisMap(requisEquip[row.eq.id], regime)
     maintCourant = buildMaintList(maintEquip[row.eq.id])
@@ -1119,7 +1208,7 @@ function occTitre(id) {
   const h = (x) => (Math.round(x * 10) / 10).toLocaleString('fr-FR') + ' h'
   return 'Période : ' + periodeOccLib.value + '\nProduction : ' + h(c.prodH) + ' (' + c.prodPct + ' %)\nNettoyage : ' + h(c.nettH) + ' (' + c.nettPct + ' %)\nDisponible : ' + h(c.dispoH) + ' = ' + h(c.ouvH) + ' ouvertes − ' + h(c.arretH) + ' d\'arrêts maintenance\nOccupation = (production + nettoyage) ÷ disponible = ' + c.occ + ' %'
 }
-const goulotId = computed(() => { let best = null, bo = -1; for (const id in chargeMap.value) { const o = chargeMap.value[id].occ; if (o > bo) { bo = o; best = id } } return best })
+const goulotId = computed(() => { let best = null, bo = -1; const vis = new Set((boucle.value ? planningTous.value : planning.value).map(r => String(r.eq.id))); for (const id in chargeMap.value) { if (!vis.has(String(id))) continue; const o = chargeMap.value[id].occ; if (o > bo) { bo = o; best = id } } return best })
 function chargeClass(o) { if (o >= 100) return 'ch-over'; if (o >= 85) return 'ch-high'; if (o >= 50) return 'ch-mid'; return 'ch-low' }
 
 const maintenant = ref(new Date())
@@ -1246,6 +1335,7 @@ const goulotLib = computed(() => {
   const o = (chargeMap.value[goulotId.value] || {}).occ
   return r ? (r.eq.code + ' · ' + (o || 0) + ' %') : '—'
 })
+const goulotLibB = computed(() => { const r = planningTous.value.find(x => String(x.eq.id) === String(goulotId.value)); return r ? r.eq.code + ' · ' + ((chargeMap.value[goulotId.value] || {}).occ || 0) + ' %' : '—' })
 const nbEnCours = computed(() => { let n = 0; for (const r of planning.value) n += (enCoursListe.value[r.eq.id] || []).length; return n })
 const libelleSemaine = computed(() => {
   const d = new Date(t0.value); const j = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
@@ -1253,6 +1343,112 @@ const libelleSemaine = computed(() => {
   const an = new Date(Date.UTC(j.getUTCFullYear(), 0, 1))
   return 'semaine ' + Math.ceil(((j - an) / 86400000 + 1) / 7) + ' — départ ' + d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 })
+
+// ===== Mode BOUCLE (écran atelier) =====
+// Une page « vue d'ensemble » puis une page par phase (découpée si trop d'équipements),
+// défilement automatique, données rechargées à chaque tour.
+const boucle = ref(false)
+const bPage = ref(0)
+const bPause = ref(false)
+const bEcoule = ref(0)
+const bDuree = ref((() => { try { return Number(localStorage.getItem('pe_boucle_s')) || 20 } catch (e) { return 20 } })())
+watch(bDuree, (v) => { try { localStorage.setItem('pe_boucle_s', String(v)) } catch (e) {} })
+const bParPage = ref(4)
+const bMaj = ref(null)
+let bTimer = null
+const PH_LIB_B = { 1: 'Pesée', 2: 'Granulation', 3: 'Séchage', 4: 'Mélange', 5: 'Compression', 6: 'Remplissage gélules', 7: 'Pelliculage' }
+const semaineBoucle = computed(() => {
+  const k = Math.floor((maintenant.value - debutSemaine0.value) / H7)
+  const a = new Date(debutSemaine0.value.getTime() + Math.max(0, k) * H7)
+  return { a, b: new Date(a.getTime() + H7) }
+})
+const bPages = computed(() => {
+  const pages = [{ type: 'synthese', titre: "Vue d'ensemble", ph: 0 }]
+  const parPh = {}
+  for (const r of planningTous.value) { const ph = phaseOrdre(r.eq.type); (parPh[ph] = parPh[ph] || []).push(r) }
+  for (const ph of Object.keys(parPh).map(Number).sort((a, b) => a - b)) {
+    const rows = parPh[ph], n = Math.max(1, bParPage.value), nbp = Math.ceil(rows.length / n)
+    for (let i = 0; i < nbp; i++) pages.push({ type: 'phase', ph, titre: (PH_LIB_B[ph] || 'Autres') + (nbp > 1 ? ' (' + (i + 1) + '/' + nbp + ')' : ''), rows: rows.slice(i * n, i * n + n), num: ph })
+  }
+  return pages
+})
+const bPhases = computed(() => { const seen = new Set(), out = []; bPages.value.forEach((p, i) => { const k = p.type === 'synthese' ? 0 : p.ph; if (!seen.has(k)) { seen.add(k); out.push({ k, idx: i, lib: p.type === 'synthese' ? "Vue d'ensemble" : (PH_LIB_B[p.ph] || 'Autres') }) } }); return out })
+const bPageCour = computed(() => bPages.value[Math.min(bPage.value, bPages.value.length - 1)] || bPages.value[0])
+function bCalcParPage() { const h = window.innerHeight || 900; bParPage.value = Math.max(2, Math.floor((h - 170) / 175)) }
+async function bSuivante(dir = 1) {
+  const n = bPages.value.length
+  let p = bPage.value + dir
+  if (p >= n) { p = 0; try { await chargerDonnees(); bMaj.value = new Date() } catch (e) {} }
+  if (p < 0) p = n - 1
+  bPage.value = p; bEcoule.value = 0
+}
+function bAller(i) { bPage.value = i; bEcoule.value = 0 }
+function demarrerBoucle() {
+  if (presentation.value) basculerPresentation()
+  boucle.value = true; bPage.value = 0; bEcoule.value = 0; bPause.value = false; bMaj.value = new Date(); bCalcParPage()
+  try { if (document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}) } catch (e) {}
+  clearInterval(bTimer)
+  bTimer = setInterval(() => { if (!boucle.value || bPause.value) return; bEcoule.value += 0.25; if (bEcoule.value >= bDuree.value) bSuivante(1) }, 250)
+}
+function arreterBoucle() {
+  boucle.value = false; clearInterval(bTimer); bTimer = null
+  try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {}) } catch (e) {}
+}
+function demarrerBoucleSiUrl() { try { if (/[?&]boucle=1/.test(window.location.hash + window.location.search)) demarrerBoucle() } catch (e) {} }
+function bClavier(e) {
+  if (!boucle.value) return
+  if (e.key === 'ArrowRight') { bSuivante(1); e.preventDefault() }
+  else if (e.key === 'ArrowLeft') { bSuivante(-1); e.preventDefault() }
+  else if (e.key === ' ') { bPause.value = !bPause.value; e.preventDefault() }
+  else if (e.key === 'Escape') arreterBoucle()
+}
+onMounted(() => { window.addEventListener('keydown', bClavier); window.addEventListener('resize', bCalcParPage) })
+onUnmounted(() => { window.removeEventListener('keydown', bClavier); window.removeEventListener('resize', bCalcParPage); clearInterval(bTimer) })
+// Contenu d'une carte équipement (semaine courante, positions en %)
+function bPct(d) { const { a, b } = semaineBoucle.value; return Math.max(0, Math.min(100, ((new Date(d) - a) / (b - a)) * 100)) }
+function bStyle(start, end, prod) {
+  const l = bPct(start), r = bPct(end), st = { left: l + '%', width: Math.max(0.3, r - l) + '%' }
+  if (prod) { const c = couleurProd(prod.code_pf); st.background = c.bg; st['--cd'] = c.bd }
+  return st
+}
+const bVisible = (start, end) => { const { a, b } = semaineBoucle.value; return new Date(end) > a && new Date(start) < b }
+const bCartes = computed(() => {
+  const m = {}, now = maintenant.value
+  if (!boucle.value) return m
+  const { a, b } = semaineBoucle.value
+  for (const r of planningTous.value) {
+    const cd = campagnesDe(r, new Set())
+    const regime = regimeEquip[r.eq.id] || '3x8', weAll = weOn(r.eq.id), requis = buildRequisMap(requisEquip[r.eq.id], regime)
+    const off = []; let c = new Date(a), g = 0
+    while (c < b && g++ < 3000) {
+      const nb = prochaineBascule(c), fin = new Date(Math.min(nb.getTime(), b.getTime()))
+      if (!ouvertRegime(c, regime, weAll, requis)) { const l = off[off.length - 1]; if (l && l.b.getTime() === c.getTime()) l.b = fin; else off.push({ a: new Date(c), b: fin }) }
+      c = fin
+    }
+    const prochain = r.tasks.find(t => t.type === 'lot' && t.segments[0].start > now && !lotEnCours(r.eq.id, t))
+    const nbSem = new Set(r.tasks.filter(t => t.type === 'lot' && bVisible(t.segments[0].start, t.end)).map(t => t.uid)).size
+    m[r.eq.id] = {
+      camps: cd.camps.filter(x => bVisible(x.start, x.end)),
+      taches: cd.tasks.filter(t => bVisible(t.segments[0].start, t.end)),
+      off, prochain, nbSem, regime
+    }
+  }
+  return m
+})
+const bSynthese = computed(() => planningTous.value.map(r => ({ r, c: chargeMap.value[r.eq.id] || {}, cours: enCoursListe.value[r.eq.id] || [] }))
+  .sort((x, y) => (y.c.occ || 0) - (x.c.occ || 0)))
+const bKpi = computed(() => {
+  const { a, b } = semaineBoucle.value
+  let lots = 0, actifs = 0, cours = 0
+  for (const r of planningTous.value) {
+    const n = new Set(r.tasks.filter(t => t.type === 'lot' && bVisible(t.segments[0].start, t.end)).map(t => t.uid)).size
+    lots += n; if (n) actifs++; cours += (enCoursListe.value[r.eq.id] || []).length
+  }
+  return { lots, actifs, total: planningTous.value.length, cours }
+})
+const bHeure = computed(() => maintenant.value.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))
+const bSemLib = computed(() => { const f = (d) => d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }); return f(semaineBoucle.value.a) + ' 22h → ' + f(semaineBoucle.value.b) + ' 22h' })
+const bJours = computed(() => { const out = []; const { a } = semaineBoucle.value; for (let i = 0; i < 7; i++) { const d = new Date(a.getTime() + (i * 24 + 2) * 3600000); d.setHours(0, 0, 0, 0); out.push({ lbl: d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit' }), left: bPct(d) }) } return out })
 
 // ===== Campagnes (présentation) =====
 // Lots consécutifs du même produit, séparés seulement par un NP (pas de NG, pas d'OFF entre eux)
@@ -1262,7 +1458,11 @@ function basculerCamp(k) { const s = new Set(campOuvertes.value); s.has(k) ? s.d
 const presData = computed(() => {
   if (!presentation.value) return {}
   const out = {}
-  for (const r of planning.value) {
+  for (const r of planning.value) out[r.eq.id] = campagnesDe(r, campOuvertes.value)
+  return out
+})
+function campagnesDe(r, ouv) {
+  {
     const T = r.tasks, tasks = [], camps = []
     let i = 0
     while (i < T.length) {
@@ -1278,7 +1478,7 @@ const presData = computed(() => {
         grp.push(nx); j += 2
       }
       const key = r.eq.id + ':' + grp[0].uid + ':' + (grp[0].turbNo || 0)
-      if (grp.length < 2 || campOuvertes.value.has(key)) {
+      if (grp.length < 2 || ouv.has(key)) {
         // lot isolé ou campagne dépliée : tâches individuelles (NP visibles si dépliée)
         for (let k = i; k < (grp.length < 2 ? i + 1 : j); k++) if (T[k].type === 'lot' || grp.length >= 2) tasks.push(T[k])
         if (grp.length >= 2) camps.push({ key, ouverte: true, prod: t.prod, start: grp[0].segments[0].start, end: grp[grp.length - 1].end, n: 0, uids: [], ticks: [], fantome: true })
@@ -1295,10 +1495,9 @@ const presData = computed(() => {
       })
       i = j
     }
-    out[r.eq.id] = { tasks, camps: camps.filter(c => !c.fantome), ouvertes: camps.filter(c => c.fantome) }
+    return { tasks, camps: camps.filter(c => !c.fantome), ouvertes: camps.filter(c => c.fantome) }
   }
-  return out
-})
+}
 const campW = (c) => ((c.end - c.start) / 3600000) * pxH.value
 function campStyle(c) {
   const col = couleurProd(c.prod.code_pf)
@@ -1705,4 +1904,64 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pe-pres .g-camp .g-lbl2 .g-lbl-nom { font-size: 10px; opacity: .85; }
 /* Lignes aussi larges que la frise : la colonne équipement reste collée à gauche quel que soit le défilement */
 .g-header, .g-row, .g-grp { width: max-content; min-width: 100%; }
+/* ===== Mode BOUCLE ===== */
+.pb { position: fixed; inset: 0; z-index: 2100; background: #f8fafc; display: flex; flex-direction: column; padding: 14px 22px 8px; overflow: hidden; color: #0f172a; }
+.pb-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.pb-titre { display: flex; align-items: center; gap: 12px; }
+.pb-titre h2 { margin: 0; font-size: 28px; font-weight: 800; }
+.pb-num { background: #0f766e; color: #fff; border-radius: 50%; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800; }
+.pb-sem { font-size: 14px; color: #64748b; font-weight: 600; }
+.pb-ctl { display: flex; align-items: center; gap: 6px; }
+.pb-ctl button, .pb-ctl select { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; height: 32px; min-width: 34px; font-size: 13px; cursor: pointer; color: #0f172a; }
+.pb-ctl .pb-x { background: #334155; color: #fff; border-color: #334155; }
+.pb-h { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; margin-right: 6px; }
+.pb-pg { font-size: 12px; color: #64748b; font-weight: 700; margin-right: 4px; }
+.pb-prog { height: 5px; background: #e2e8f0; border-radius: 3px; margin: 10px 0 8px; overflow: hidden; }
+.pb-prog div { height: 100%; background: #0f766e; transition: width .25s linear; }
+.pb-prog div.pause { background: #f59e0b; }
+.pb-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.pb-tabs button { background: #fff; border: 1px solid #e2e8f0; border-radius: 999px; padding: 4px 12px; font-size: 12.5px; font-weight: 700; color: #475569; cursor: pointer; }
+.pb-tabs button.on { background: #0f766e; color: #fff; border-color: #0f766e; }
+.pb-syn { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.pb-occ { flex: 1; overflow: hidden; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: min-content; gap: 4px 18px; align-content: start; }
+.pb-occ-l { display: grid; grid-template-columns: 110px minmax(0, 1fr) 150px 56px 170px; align-items: center; gap: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+.pb-occ-l.gl { border-color: #fdba74; background: #fff7ed; }
+.pb-occ-ph { font-size: 11px; font-weight: 800; color: #0f766e; text-transform: uppercase; letter-spacing: .03em; }
+.pb-occ-eq { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #64748b; }
+.pb-occ-eq b { color: #0f172a; }
+.pb-occ-bar { display: inline-flex; height: 10px; background: #f1f5f9; border-radius: 5px; overflow: hidden; width: 100%; }
+.pb-occ-pct { text-align: right; font-variant-numeric: tabular-nums; }
+.pb-occ-c { font-size: 12px; color: #15803d; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t-ch-over { color: #dc2626; } .t-ch-high { color: #c2410c; }
+.pb-cartes { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+.pb-jours { position: absolute; top: 0; left: 252px; right: 14px; height: 16px; }
+.pb-jours span { position: absolute; font-size: 12px; font-weight: 700; color: #475569; padding-left: 4px; white-space: nowrap; }
+.pb-carte { display: flex; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; min-height: 150px; overflow: hidden; }
+.pb-carte.libre { opacity: .7; }
+.pb-c-g { flex: 0 0 240px; width: 240px; padding: 12px 14px; border-right: 1px solid #f1f5f9; display: flex; flex-direction: column; gap: 4px; }
+.pb-c-code { font-size: 20px; font-weight: 800; }
+.pb-c-nom { font-size: 12.5px; color: #64748b; }
+.pb-c-occ { margin-top: auto; display: flex; align-items: center; gap: 8px; font-size: 18px; }
+.pb-c-d { flex: 1; min-width: 0; padding: 10px 14px 12px 0; display: flex; flex-direction: column; gap: 8px; }
+.pb-c-info { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 14px; padding-left: 12px; }
+.pb-cours { color: #15803d; font-weight: 700; background: #dcfce7; border-radius: 6px; padding: 2px 8px; }
+.pb-att { color: #64748b; font-weight: 600; }
+.pb-libre { color: #94a3b8; font-weight: 700; }
+.pb-next { color: #0f172a; }
+.pb-nb { color: #64748b; font-size: 12.5px; margin-left: auto; }
+.pb-frise { position: relative; flex: 1; min-height: 72px; margin-left: 12px; background: #fbfcfd; border-radius: 6px; }
+.pb-off { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, rgba(30,41,59,.06), rgba(30,41,59,.06) 5px, rgba(30,41,59,.13) 5px, rgba(30,41,59,.13) 10px); }
+.pb-jl { position: absolute; top: 0; bottom: 0; border-left: 1px solid #e2e8f0; }
+.pb-jl span { position: absolute; top: 1px; left: 4px; font-size: 10.5px; font-weight: 700; color: #94a3b8; white-space: nowrap; }
+.pb-c-occ b { white-space: nowrap; }
+.pb-c-occ .pb-occ-bar { flex: 1; }
+.pb-b { position: absolute; top: 18px; bottom: 6px; border-radius: 6px; overflow: hidden; color: #fff; font-size: 12px; font-weight: 800; display: flex; align-items: center; padding-left: 6px; white-space: nowrap; border-left: 4px solid var(--cd, transparent); box-sizing: border-box; }
+.pb-b.pb-gen, .pb-b.pb-genH { top: 40%; bottom: 40%; background: #7f1d1d; border: none; border-radius: 3px; padding: 0; }
+.pb-b.pb-part { display: none; }
+.pb-camp-l { position: relative; display: flex; flex-direction: column; line-height: 1.15; min-width: 0; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
+.pb-camp-l b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+.pb-camp-l em { font-style: normal; font-size: 11.5px; font-weight: 600; opacity: .92; overflow: hidden; text-overflow: ellipsis; }
+.pb-camp.cours { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #22c55e; }
+.pb-now { position: absolute; top: -4px; bottom: -4px; width: 2px; background: #ef4444; z-index: 3; }
+.pb-pied { font-size: 11px; color: #94a3b8; text-align: center; padding-top: 6px; }
 </style>
