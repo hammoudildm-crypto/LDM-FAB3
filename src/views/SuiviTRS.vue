@@ -27,7 +27,7 @@ const MOTIFS = [
 async function charger() {
   chargement.value = true; msg.value = ''
   const r = await supabase.from('trs_postes')
-    .select('*, equipements(code, nom), produits(code_pf)')
+    .select('*, equipements(code, nom), produits(code_pf, designation)')
     .eq('actif', true).gte('date', du.value).lte('date', au.value)
   if (r.error) { msg.value = r.error.message; chargement.value = false; return }
   postes.value = r.data || []
@@ -50,7 +50,31 @@ const equipList = computed(() => {
   return Object.values(m).sort((a, b) => String(a.code).localeCompare(String(b.code)))
 })
 const equipFiltreCode = computed(() => { const e = equipList.value.find(e => e.id === equipFiltre.value); return e ? e.code : '' })
-const postesFiltres = computed(() => equipFiltre.value ? postes.value.filter(s => s.equipement_id === equipFiltre.value) : postes.value)
+
+// Sélecteur produit recherchable (barre de recherche + liste filtrée) : restreint
+// toute l'analyse TRS au produit choisi, pour la démontrer produit par produit.
+const produitFiltre = ref('')
+const rechercheProd = ref('')
+const prodOuvert = ref(false)
+const normP = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+const produitList = computed(() => {
+  const m = {}
+  for (const s of postes.value) if (s.produit_id && !m[s.produit_id]) m[s.produit_id] = { id: s.produit_id, code: s.produits ? s.produits.code_pf : '?', desig: s.produits ? (s.produits.designation || '') : '' }
+  return Object.values(m).sort((a, b) => String(a.code).localeCompare(String(b.code)))
+})
+const produitListFiltree = computed(() => {
+  const q = normP(rechercheProd.value).trim()
+  if (!q) return produitList.value
+  return produitList.value.filter(p => normP(p.code + ' ' + p.desig).includes(q))
+})
+const produitFiltreLabel = computed(() => { const p = produitList.value.find(p => p.id === produitFiltre.value); return p ? (p.code + (p.desig ? ' — ' + p.desig : '')) : '' })
+function selectProduit(p) { produitFiltre.value = p.id; rechercheProd.value = p.code + (p.desig ? ' — ' + p.desig : ''); prodOuvert.value = false }
+function clearProduit() { produitFiltre.value = ''; rechercheProd.value = ''; prodOuvert.value = false }
+
+const postesFiltres = computed(() => postes.value.filter(s =>
+  (!equipFiltre.value || s.equipement_id === equipFiltre.value) &&
+  (!produitFiltre.value || s.produit_id === produitFiltre.value)
+))
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 const trsParMois = computed(() => {
   const parM = {}
@@ -145,6 +169,16 @@ const heures = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigi
       subtitle="TRS par équipement, décomposé Disponibilité / Performance / Qualité, sur la période.">
       <div class="periode">
         <label>Équipement <select v-model="equipFiltre"><option value="">Tous</option><option v-for="e in equipList" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option></select></label>
+        <label class="prod-pick">Produit
+          <div class="combo">
+            <input type="text" v-model="rechercheProd" placeholder="Tous — rechercher un produit…" @focus="prodOuvert = true" @input="prodOuvert = true" @blur="prodOuvert = false" />
+            <button v-if="produitFiltre || rechercheProd" type="button" class="combo-x" @mousedown.prevent="clearProduit" title="Effacer le filtre produit">×</button>
+            <ul v-if="prodOuvert && produitListFiltree.length" class="combo-list">
+              <li class="combo-all" @mousedown.prevent="clearProduit">Tous les produits</li>
+              <li v-for="p in produitListFiltree" :key="p.id" :class="{ sel: p.id === produitFiltre }" @mousedown.prevent="selectProduit(p)"><strong>{{ p.code }}</strong><span v-if="p.desig"> — {{ p.desig }}</span></li>
+            </ul>
+          </div>
+        </label>
         <label>Du <input type="date" v-model="du" @change="charger" /></label>
         <label>Au <input type="date" v-model="au" @change="charger" /></label>
       </div>
@@ -154,7 +188,7 @@ const heures = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigi
     <p v-if="chargement" class="muted">Chargement…</p>
 
     <template v-if="!chargement">
-      <div v-if="!parEquip.length" class="empty">Aucune saisie TRS sur cette période. Renseigne des postes dans « Saisie TRS ».</div>
+      <div v-if="!parEquip.length" class="empty">Aucune saisie TRS sur cette période<span v-if="produitFiltre || equipFiltre"> avec les filtres actuels</span>. Renseigne des postes dans « Saisie TRS ».</div>
 
       <template v-else>
         <div class="kpi-grid">
@@ -164,13 +198,15 @@ const heures = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigi
           <div class="kpi"><div class="kpi-top"><div class="kpi-val">{{ pct(global.qualite) }}</div></div><div class="kpi-lbl">Qualité</div></div>
         </div>
 
+        <div v-if="produitFiltre" class="flt-banner">Analyse TRS filtrée sur le produit <strong>{{ produitFiltreLabel }}</strong> — {{ parEquip.length }} équipement(s) concerné(s) sur la période.</div>
+
         <section class="card">
-          <h3 class="card-title">TRS par équipement</h3>
+          <h3 class="card-title">TRS par équipement<span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span></h3>
           <MiniChart :labels="labelsEquip" :format="v => v + ' %'" :value-format="v => v || ''" show-values :series="trsParEquipChart" />
         </section>
 
         <section class="card">
-          <h3 class="card-title clickable-title" @click="moisVisible = !moisVisible">TRS par mois<span v-if="equipFiltre"> — {{ equipFiltreCode }}</span> <span class="toggle-caret">{{ moisVisible ? '▾ masquer' : '▸ afficher' }}</span></h3>
+          <h3 class="card-title clickable-title" @click="moisVisible = !moisVisible">TRS par mois<span v-if="equipFiltre" class="flt"> — {{ equipFiltreCode }}</span><span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span> <span class="toggle-caret">{{ moisVisible ? '▾ masquer' : '▸ afficher' }}</span></h3>
           <MiniChart v-if="moisVisible" :labels="MOIS" :format="v => v + ' %'" :value-format="v => v || ''" show-values :series="[{ label: 'TRS %', color: '#0f766e', data: trsParMois }]" />
         </section>
 
@@ -215,9 +251,22 @@ const heures = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigi
 
 <style scoped>
 .strs-page { color: #1b2733; }
-.periode { display: flex; gap: 12px; }
+.periode { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
 .periode label { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 4px; }
 .periode input, .periode select { font-size: 14px; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 600; }
+/* Combobox produit recherchable */
+.combo { position: relative; }
+.combo input { min-width: 240px; width: 240px; padding-right: 28px; }
+.combo-x { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); border: none; background: #e2e8f0; color: #475569; width: 18px; height: 18px; border-radius: 50%; cursor: pointer; font-size: 14px; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; }
+.combo-x:hover { background: #cbd5e1; }
+.combo-list { position: absolute; z-index: 50; top: calc(100% + 4px); left: 0; margin: 0; padding: 4px; list-style: none; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 10px 24px rgba(16,24,40,.14); min-width: 280px; max-width: 420px; max-height: 280px; overflow-y: auto; }
+.combo-list li { padding: 7px 10px; border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 600; white-space: nowrap; color: #1b2733; }
+.combo-list li:hover { background: #eef2ff; }
+.combo-list li.sel { background: #e0e7ff; }
+.combo-list li.combo-all { color: #64748b; font-style: italic; border-radius: 0; border-bottom: 1px solid #f1f5f9; margin-bottom: 2px; }
+.combo-list li span { font-weight: 400; color: #64748b; }
+.flt-banner { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; font-size: 14px; }
+.card-title .flt { color: #4338ca; font-weight: 700; }
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .muted { color: #94a3b8; }
 .empty { color: #94a3b8; text-align: center; padding: 30px; font-style: italic; }
