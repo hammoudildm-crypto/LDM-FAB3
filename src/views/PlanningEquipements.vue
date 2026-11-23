@@ -136,6 +136,9 @@
         </select>
       </label></div>
       <div class="p-grp"><label class="chk-inline"><input type="checkbox" v-model="filtreAvecPlan" /> Avec planning</label></div>
+      <div class="p-grp">
+        <button type="button" class="vue-btn ctrl-btn" :class="{ ko: nbCtrl.err, wa: !nbCtrl.err && nbCtrl.warn }" @click="ctrlOuvert = true" title="Cadences en unités/h, fiches produit incomplètes, durées par défaut ou anormales">🔎 Contrôle des cadences<span v-if="nbCtrl.err" class="ctrl-n err">{{ nbCtrl.err }}</span><span v-if="nbCtrl.warn" class="ctrl-n warn">{{ nbCtrl.warn }}</span><span v-if="!nbCtrl.err && !nbCtrl.warn" class="ctrl-n ok">✓</span></button>
+      </div>
       <div class="p-grp p-sync">
         <div class="p-sync-t">Planification manuelle</div>
         <div class="p-sync-r" style="font-weight:600">Clique sur un équipement pour ouvrir son panier et y ajouter les lots en attente (à l'unité ou par campagne). L'ordre du panier est l'ordre de passage.</div>
@@ -331,6 +334,37 @@
         </div>
       </div>
       <div class="pb-pied">LDM Groupe — Site El Khroub · ProdTrack · données actualisées à {{ bMaj ? bMaj.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—' }} · ← → pages · espace pause · Échap quitter</div>
+    </div>
+
+    <!-- Contrôle des cadences -->
+    <div v-if="ctrlOuvert" class="pan-overlay" @click="ctrlOuvert = false">
+      <div class="pan-box ctrl-box" @click.stop>
+        <div class="pan-head">
+          <div><b>Contrôle des cadences</b> <span class="pan-nom">couples équipement / produit utilisés par le planning ou saisis dans les cadences</span></div>
+          <div class="pan-head-btns"><a href="#/cadences" class="pan-btn ctrl-lien" title="Page Cadences & paramètres par équipement">Ouvrir les cadences ↗</a><button class="pan-close" @click="ctrlOuvert = false">✕</button></div>
+        </div>
+        <div class="ctrl-res">
+          <span class="ctrl-n err">{{ nbCtrl.err }}</span> durée par défaut 8 h ·
+          <span class="ctrl-n warn">{{ nbCtrl.warn }}</span> durée anormale ·
+          <span class="ctrl-n info">{{ nbCtrl.info }}</span> converties depuis unités/h
+        </div>
+        <p class="pan-hint2">Durée d'un lot = poids du lot (taille × unités/boîte × poids unitaire) ÷ cadence en kg/h, ou nombre d'unités du lot ÷ cadence en unités/h. Pelliculage : ÷ nombre de turbines.</p>
+        <div v-if="!controleDonnees.length" class="pan-vide">✓ Aucune anomalie : toutes les cadences et fiches produit utilisées sont complètes.</div>
+        <table v-else class="synth-tbl ctrl-tbl">
+          <thead><tr><th></th><th>Équipement</th><th>Produit</th><th class="right">Lots planifiés</th><th class="right">Cadence</th><th class="right">Durée / lot</th><th>Problème</th></tr></thead>
+          <tbody>
+            <tr v-for="x in controleDonnees" :key="x.eq.id + '#' + x.prod.id" :class="'ctrl-' + x.niveau">
+              <td><span class="ctrl-n" :class="x.niveau">{{ x.niveau === 'err' ? '!' : (x.niveau === 'warn' ? '?' : 'i') }}</span></td>
+              <td><b>{{ x.eq.code }}</b> <span class="synth-nom">{{ x.eq.nom }}</span></td>
+              <td>{{ x.prod.designation }} <span class="synth-nom">{{ x.prod.code_pf }}</span></td>
+              <td class="right">{{ x.nbLots || '—' }}</td>
+              <td class="right nowrap">{{ x.cad ? (x.cad.cadence_nominale + ' ' + (x.cad.unite_cadence || 'kg/h')) : '—' }}</td>
+              <td class="right nowrap">{{ fmtH(x.h) }}<span v-if="x.nbT > 1" class="synth-nom"> ({{ fmtH(x.hTurb) }}/turbine)</span></td>
+              <td>{{ x.pb }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
     <!-- Récap -->
 
@@ -855,12 +889,27 @@ function nbTurbines(prod) {
   return 1
 }
 // Durée d'un lot (h) : cadence en Kg/h
-function dureeLotH(prod, cad) {
-  const c = Number(cad.cadence_nominale) || 0 // Kg/h
-  if (c <= 0) return 8 // repli : 8 h / lot
+// Unité de cadence : 'unites' (unités/h, cp/h, gél/h…) ou 'kg' (kg/h, par défaut en fabrication)
+function uniteCad(cad) { const u = String((cad && cad.unite_cadence) || '').toLowerCase(); return /unit|cp|comp|g[ée]l|caps|pi[eè]ce|u\/h/.test(u) ? 'unites' : 'kg' }
+const nbUnitesLot = (prod) => (Number(prod.taille_lot) || 0) * (Number(prod.unites_par_boite) || 0)
+// Durée d'un lot + origine du calcul (pour le contrôle des données)
+function dureeInfo(prod, cad) {
+  if (!cad) return { h: 8, src: 'defaut', raison: 'Pas de cadence pour ce produit sur cet équipement' }
+  const c = Number(cad.cadence_nominale) || 0
+  if (c <= 0) return { h: 8, src: 'defaut', raison: 'Cadence nulle' }
+  if (uniteCad(cad) === 'unites') {
+    const n = nbUnitesLot(prod)
+    if (n <= 0) return { h: 8, src: 'defaut', raison: 'Cadence en unités/h mais taille de lot ou unités/boîte manquante' }
+    return { h: n / c, src: 'unites', raison: '' }
+  }
   const kg = poidsLotKg(prod)
-  return kg > 0 ? kg / c : 8
+  if (kg <= 0) {
+    const manque = [!(Number(prod.taille_lot) > 0) && 'taille de lot', !(Number(prod.unites_par_boite) > 0) && 'unités/boîte', !(Number(prod.poids_unitaire_mg) > 0) && 'poids unitaire'].filter(Boolean).join(', ')
+    return { h: 8, src: 'defaut', raison: 'Fiche produit incomplète (' + manque + ')' }
+  }
+  return { h: kg / c, src: 'kg', raison: '' }
 }
+function dureeLotH(prod, cad) { return dureeInfo(prod, cad).h }
 
 const addH = (d, h) => new Date(d.getTime() + h * 3600000)
 
@@ -1300,11 +1349,7 @@ const planCalc = computed(() => {
         // Pelliculage : chaque turbine = un lot séparé
         let nbTurb = (ph === 7) ? nbTurbines(prod) : 1
         let dRun = dLotFull
-        if (nbTurb > 1) {
-          const cN = cad ? (Number(cad.cadence_nominale) || 0) : 0
-          const kg = poidsLotKg(prod)
-          dRun = (cN > 0 && kg > 0) ? Math.max(0.25, (kg / nbTurb) / cN) : Math.max(0.25, dLotFull / nbTurb)
-        }
+        if (nbTurb > 1) dRun = Math.max(0.25, dLotFull / nbTurb)
         // --- Lot TERMINÉ sur cette phase : affiché à ses dates réelles, ne consomme pas de capacité future
         if (E.etat === 'termine') {
           const dTot = dRun * nbTurb
@@ -1831,6 +1876,37 @@ function titreCamp(c) { return 'Campagne ' + c.prod.code_pf + ' — ' + c.prod.d
 // Libellé de lot selon la place : complet, 3 derniers chiffres, ou rien
 function lotCourt(lot, w) { const l = String(lot || '—'); if (w >= 52 || l.length <= 3) return l; return w >= 22 ? '…' + l.slice(-3) : '' }
 
+// ===== Contrôle des données de cadence =====
+// Couples équipement / produit utilisés par le planning (paniers) + cadences de fabrication saisies.
+const ctrlOuvert = ref(false)
+const controleDonnees = computed(() => {
+  const out = [], vus = new Set()
+  const eqFab = equipements.value.filter(e => estFab(e.type))
+  const eqById = {}; for (const e of eqFab) eqById[e.id] = e
+  const ajouter = (eq, prod, cad, nbLots) => {
+    const k = eq.id + '#' + prod.id; if (vus.has(k)) return; vus.add(k)
+    const d = dureeInfo(prod, cad)
+    const nbT = phaseOrdre(eq.type) === 7 ? nbTurbines(prod) : 1
+    let niveau = null, pb = ''
+    if (d.src === 'defaut') { niveau = 'err'; pb = d.raison + ' → durée par défaut 8 h' }
+    else if (d.src === 'unites') { niveau = 'info'; pb = 'Cadence en ' + (cad.unite_cadence || 'unités/h') + ' : convertie (unités du lot ÷ cadence)' }
+    if (!niveau && d.h < 0.25) { niveau = 'warn'; pb = 'Durée très courte (' + (Math.round(d.h * 60)) + ' min) : cadence trop élevée ou en mauvaise unité ?' }
+    if (!niveau && d.h > 48) { niveau = 'warn'; pb = 'Durée très longue (' + Math.round(d.h) + ' h) : cadence trop faible ou en mauvaise unité ?' }
+    if (!niveau) return
+    out.push({ niveau, eq, prod, cad, h: d.h, hTurb: d.h / nbT, nbT, pb, nbLots })
+  }
+  // 1) lots présents dans les paniers
+  const cpt = {}
+  for (const eqId in panierEquip) for (const it of (panierEquip[eqId] || [])) { if (it.exclu) continue; const k = eqId + '#' + it.pid; cpt[k] = (cpt[k] || 0) + 1 }
+  for (const k in cpt) { const [eqId, pid] = k.split('#'); const eq = eqById[eqId]; const prod = produitsById.value[pid]; if (!eq || !prod) continue; const cad = cadences.value.find(c => String(c.equipement_id) === String(eqId) && String(c.produit_id) === String(pid)); ajouter(eq, prod, cad, cpt[k]) }
+  // 2) toutes les cadences de fabrication saisies (même sans lot planifié)
+  for (const c of cadences.value) { const eq = eqById[c.equipement_id]; const prod = produitsById.value[c.produit_id]; if (eq && prod) ajouter(eq, prod, c, cpt[c.equipement_id + '#' + c.produit_id] || 0) }
+  const rang = { err: 0, warn: 1, info: 2 }
+  return out.sort((a, b) => (rang[a.niveau] - rang[b.niveau]) || (b.nbLots - a.nbLots) || String(a.eq.code).localeCompare(String(b.eq.code)))
+})
+const nbCtrl = computed(() => { const n = { err: 0, warn: 0, info: 0 }; for (const x of controleDonnees.value) n[x.niveau]++; return n })
+const fmtH = (h) => h < 1 ? Math.round(h * 60) + ' min' : (Math.round(h * 10) / 10).toLocaleString('fr-FR') + ' h'
+
 // Légende produits repliée : les plus fréquents d'abord ; détail de synthèse replié
 const NB_PROD_LEG = 8
 const legOuverte = ref(false)
@@ -2356,4 +2432,15 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pan-chip-ail { opacity: .55; border-style: dashed; }
 .pan-chip small { font-size: 9px; font-weight: 600; }
 .pan-warn { font-size: 11px; font-weight: 700; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 4px 8px; margin: 0 0 6px; }
+/* Contrôle des cadences */
+.ctrl-btn { width: 100%; display: flex; align-items: center; gap: 4px; justify-content: center; font-size: 10.5px !important; }
+.ctrl-btn.ko { border-color: #fca5a5; background: #fef2f2; color: #b91c1c; }
+.ctrl-btn.wa { border-color: #fcd34d; background: #fffbeb; color: #92400e; }
+.ctrl-n { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; font-size: 9.5px; font-weight: 800; color: #fff; }
+.ctrl-n.err { background: #dc2626; } .ctrl-n.warn { background: #d97706; } .ctrl-n.info { background: #0284c7; } .ctrl-n.ok { background: #16a34a; }
+.ctrl-box { width: 1100px; }
+.ctrl-res { font-size: 12px; color: #334155; margin: 4px 0 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ctrl-tbl td { white-space: normal; vertical-align: top; }
+.ctrl-err td { background: #fef2f2; } .ctrl-warn td { background: #fffbeb; }
+.ctrl-lien { text-decoration: none; color: #0f766e; font-weight: 700; }
 </style>
