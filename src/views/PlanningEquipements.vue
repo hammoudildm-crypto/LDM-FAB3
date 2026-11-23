@@ -123,7 +123,7 @@
           <div class="g-eqcol" :title="'Cliquer pour gérer le panier — ' + row.eq.nom" @click="ouvrirPanier(row.eq)">
             <div class="g-eqcode">{{ row.eq.code }} <span class="g-reg" :class="{ r2: (regimeEquip[row.eq.id] || '3x8') === '2x8' }">{{ (regimeEquip[row.eq.id] || '3x8') === '2x8' ? '2×8' : '3×8' }}</span> <span v-if="(panierEquip[row.eq.id] || []).length" class="g-pan">🧺 {{ (panierEquip[row.eq.id] || []).length }}</span></div>
             <div class="g-eqnom">{{ row.eq.nom }}</div>
-            <div v-if="enCoursEquip[row.eq.id]" class="g-eqcours" :title="'En cours : ' + enCoursEquip[row.eq.id].code + ' — ' + enCoursEquip[row.eq.id].desig + ' · lot ' + enCoursEquip[row.eq.id].lot + ' · ' + enCoursEquip[row.eq.id].phase">▶ {{ enCoursEquip[row.eq.id].code }} · lot {{ enCoursEquip[row.eq.id].lot }} · {{ enCoursEquip[row.eq.id].phase }}</div>
+            <div v-for="c in (enCoursListe[row.eq.id] || [])" :key="'ec' + c.ordreId" class="g-eqcours" :title="'En cours (règle Disponibilité) : ' + c.code + ' — ' + c.desig + ' · lot ' + c.lot + ' · ' + c.phase + (c.depuis ? ' · depuis le ' + fmtDepuis(c.depuis) : '')">▶ <b>{{ c.lot }}</b> · {{ c.code }}<span v-if="c.depuis" class="g-eqcours-d"> · {{ fmtDepuis(c.depuis) }}</span></div>
             <div class="g-eqfin">fin : {{ fmtJH(row.fin) }}</div>
             <label class="g-eqwe" @click.stop><input type="checkbox" :checked="weOn(row.eq.id)" @change="weekendEquip[row.eq.id] = $event.target.checked; sauverPanier(row.eq.id)" /> week-ends (2×8)</label>
           </div>
@@ -353,17 +353,78 @@ function nettoyerHistoriqueEquip() {
     if (garde.length !== arr.length) { maintEquip[eqId] = garde; sauverPanier(Number(eqId)) }
   }
 }
-// Lot en cours par équipement (suivi_phases 'En cours' + equipement_id)
-const enCoursEquip = computed(() => {
-  const m = {}
+// ===== Lot en cours par équipement — MÊME RÈGLE que « Disponibilité des produits par atelier » =====
+// Le lot est à sa PREMIÈRE phase de gamme non terminée ; il est « en cours » si cette phase est
+// « En cours » dans suivi_phases, sur l'équipement saisi pour cette phase.
+// Granulation / Séchage fusionnés : granulation terminée mais séchage saisi et non terminé => en cours.
+// Exclus : lots libérés / rejetés, non lancés, ou fabrication terminée.
+const DP_PHASE_NOM = { pesee: 'Pesée', granulation: 'Granulation', sechage: 'Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage Gélules', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
+const DP_NOM_KEY = {}
+for (const [k, v] of Object.entries(DP_PHASE_NOM)) DP_NOM_KEY[v.toLowerCase()] = k
+const DP_ORDRE = { pesee: 1, granulation: 2, sechage: 3, melange: 4, compression: 5, remplissage: 6, pelliculage: 7, conditionnement: 8 }
+const DP_CANON_FAB = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage']
+function dpPhaseKey(nom) {
+  const t = String(nom || '').trim().toLowerCase()
+  if (!t) return null
+  if (/granul|s[ée]ch/.test(t)) return 'granulation'
+  return DP_NOM_KEY[t] || null
+}
+const dpPhasesLot = computed(() => {
+  const m = {}, sechEtat = {}
   for (const sp of suivi.value) {
-    if (sp.statut !== 'En cours' || sp.equipement_id == null) continue
-    const o = ofsById.value[sp.ordre_id]; if (!o) continue
-    const prod = o.produits || {}
-    m[sp.equipement_id] = { lot: o.numero_lot || '—', code: prod.code_pf || '—', desig: prod.designation || '', phase: sp.phase || '' }
+    const id = sp.ordre_id, k = dpPhaseKey(sp.phase)
+    if (!k) continue
+    if (!m[id]) m[id] = {}
+    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut || null, equip: sp.equipement_id ?? null }
+    if (!m[id][k] || sp.statut === 'Terminé') m[id][k] = rec
+    const nl = String(sp.phase || '').toLowerCase()
+    if (/s[ée]ch/.test(nl) && !/granul/.test(nl)) {
+      if (!sechEtat[id]) sechEtat[id] = { present: false, termine: false }
+      sechEtat[id].present = true
+      if (sp.statut === 'Terminé') sechEtat[id].termine = true
+    }
+  }
+  for (const id in m) {
+    const g = m[id].granulation
+    if (g && g.statut === 'Terminé') {
+      const se = sechEtat[id]
+      const apres = m[id].compression || m[id].remplissage || m[id].pelliculage || m[id].conditionnement
+      if (se && se.present && !se.termine && !apres) m[id].granulation = { statut: 'En cours', date: g.date, equip: g.equip }
+    }
   }
   return m
 })
+// eqId -> [{ ordreId, lot, code, desig, phase, depuis }]
+const enCoursListe = computed(() => {
+  const m = {}
+  for (const o of ofs.value) {
+    if (o.statut === 'Libéré' || o.statut === 'Rejeté') continue
+    if (!o.date_lancement || o.date_fin_fabrication) continue
+    const pl = dpPhasesLot.value[o.id]
+    if (!pl || !Object.keys(pl).length) continue
+    const p = o.produits || {}
+    const gammeB = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : DP_CANON_FAB
+    const gamme = []; let pk = null
+    for (const ph of gammeB) { const k = dpPhaseKey(ph); if (!k || k === pk || k === 'conditionnement') continue; gamme.push(k); pk = k }
+    gamme.sort((a, b) => (DP_ORDRE[a] || 99) - (DP_ORDRE[b] || 99))
+    let kCur = null
+    for (const k of gamme) { const r = pl[k]; if (!r || r.statut !== 'Terminé') { kCur = k; break } }
+    if (!kCur) continue                                  // fabrication terminée -> plus sur un équipement de fab
+    const rCur = pl[kCur]
+    if (!rCur || rCur.statut !== 'En cours' || rCur.equip == null) continue
+    ;(m[rCur.equip] = m[rCur.equip] || []).push({ ordreId: o.id, lot: o.numero_lot || '—', code: p.code_pf || '—', desig: p.designation || '', phase: kCur === 'granulation' ? 'Granulation / Séchage' : DP_PHASE_NOM[kCur], depuis: rCur.date })
+  }
+  for (const k in m) m[k].sort((a, b) => String(a.depuis || '').localeCompare(String(b.depuis || '')))
+  return m
+})
+// 1er lot en cours par équipement (+ nombre total) — utilisé par la colonne équipement
+const enCoursEquip = computed(() => {
+  const m = {}
+  for (const id in enCoursListe.value) { const l = enCoursListe.value[id]; m[id] = { ...l[0], n: l.length } }
+  return m
+})
+const enCoursIds = computed(() => { const s = new Set(); for (const id in enCoursListe.value) for (const x of enCoursListe.value[id]) s.add(String(id) + '#' + x.ordreId); return s })
+const fmtDepuis = (d) => { if (!d) return ''; const x = new Date(d); return isNaN(x) ? String(d) : x.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) }
 // Statut de chaque phase (1..7) par OF, depuis suivi_phases
 const phasesLot = computed(() => {
   const m = {}
@@ -910,7 +971,7 @@ const prodFocus = ref('')
 // Largeur (px) d'un segment
 const segW = (seg) => ((seg.end - seg.start) / 3600000) * pxH.value
 // Lot en cours sur cet équipement (suivi_phases)
-function lotEnCours(eqId, t) { const c = enCoursEquip.value[eqId]; return !!(c && t.lot && String(c.lot) === String(t.lot)) }
+function lotEnCours(eqId, t) { return enCoursIds.value.has(String(eqId) + '#' + t.uid) }
 // Produits présents dans le planning (une couleur distincte par produit)
 const produitsPlanning = computed(() => {
   const m = {}
@@ -1045,6 +1106,7 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .g-eqcode { font-size: 11px; font-weight: 800; color: #0f172a; }
 .g-eqnom { font-size: 9.5px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-eqfin { font-size: 8.5px; color: #94a3b8; }
+.g-eqcours-d { font-weight: 600; opacity: .8; }
 .g-eqcours { font-size: 8px; color: #166534; font-weight: 700; background: #dcfce7; border-radius: 4px; padding: 1px 4px; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-eqwe { display: flex; align-items: center; gap: 3px; font-size: 8px; color: #64748b; margin-top: 1px; cursor: pointer; }
 .g-track { position: relative; height: 54px; }
