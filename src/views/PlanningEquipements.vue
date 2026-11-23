@@ -2508,4 +2508,19 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pe-pres .g-track { height: 66px; }
 .pe-pres .g-bar { top: 8px; height: 50px; }
 .pe-pres .g-bar.g-gen, .pe-pres .g-bar.g-genH, .pe-pres .g-bar.g-part { top: 27px; height: 12px; }
+/* Lignes encore plus hautes (colonne équipement) */
+.g-track { height: 104px; }
+.g-row, .g-eqcol { min-height: 104px; }
+.g-eqcode { font-size: 13px; }
+.g-eqnom { font-size: 10.5px; white-space: normal; line-height: 1.25; }
+.g-eqcours { font-size: 10px; padding: 2px 5px; }
+.g-eqfin, .g-eqwe { font-size: 9.5px; }
+.g-bar { top: 16px; height: 72px; }
+.g-bar.g-gen, .g-bar.g-genH, .g-bar.g-part { top: 34px; height: 36px; }
+.g-lbl2 .g-lbl-lot { font-size: 13.5px; }
+.g-lbl2 .g-lbl-nom { font-size: 11px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.pe-pres .g-track { height: 66px; }
+.pe-pres .g-row, .pe-pres .g-eqcol { min-height: 66px; }
+.pe-pres .g-bar { top: 8px; height: 50px; }
+.pe-pres .g-bar.g-gen, .pe-pres .g-bar.g-genH, .pe-pres .g-bar.g-part { top: 27px; height: 12px; }
 </style>
