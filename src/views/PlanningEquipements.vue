@@ -351,7 +351,7 @@
         <p class="pan-hint2">Durée d'un lot = poids du lot (taille × unités/boîte × poids unitaire) ÷ cadence en kg/h, ou nombre d'unités du lot ÷ cadence en unités/h. Pelliculage : ÷ nombre de turbines.</p>
         <div v-if="!controleDonnees.length" class="pan-vide">✓ Aucune anomalie : toutes les cadences et fiches produit utilisées sont complètes.</div>
         <table v-else class="synth-tbl ctrl-tbl">
-          <thead><tr><th></th><th>Équipement</th><th>Produit</th><th class="right">Lots planifiés</th><th class="right">Cadence</th><th class="right">Durée / lot</th><th>Problème</th></tr></thead>
+          <thead><tr><th></th><th>Équipement</th><th>Produit</th><th class="right">Lots planifiés</th><th class="right">Cadence</th><th class="right">Durée / lot</th><th>Calcul</th><th>Problème</th></tr></thead>
           <tbody>
             <tr v-for="x in controleDonnees" :key="x.eq.id + '#' + x.prod.id" :class="'ctrl-' + x.niveau">
               <td><span class="ctrl-n" :class="x.niveau">{{ x.niveau === 'err' ? '!' : (x.niveau === 'warn' ? '?' : 'i') }}</span></td>
@@ -360,6 +360,7 @@
               <td class="right">{{ x.nbLots || '—' }}</td>
               <td class="right nowrap">{{ x.cad ? (x.cad.cadence_nominale + ' ' + (x.cad.unite_cadence || 'kg/h')) : '—' }}</td>
               <td class="right nowrap">{{ fmtH(x.h) }}<span v-if="x.nbT > 1" class="synth-nom"> ({{ fmtH(x.hTurb) }}/turbine)</span></td>
+              <td class="ctrl-calc">{{ calculTxt(x.prod, x.cad) }}</td>
               <td>{{ x.pb }}</td>
             </tr>
           </tbody>
@@ -914,6 +915,15 @@ function dureeInfo(prod, cad) {
   return { h: kg / c, src: 'kg', raison: '' }
 }
 function dureeLotH(prod, cad) { return dureeInfo(prod, cad).h }
+const fmtN = (x, d = 1) => Number(x).toLocaleString('fr-FR', { maximumFractionDigits: d })
+// Explication lisible du calcul de durée
+function calculTxt(prod, cad) {
+  const d = dureeInfo(prod, cad)
+  const det = (Number(prod.taille_lot) || 0) + ' bts × ' + (Number(prod.unites_par_boite) || 0) + ' u/bt'
+  if (d.src === 'defaut') return 'durée par défaut 8 h (' + d.raison.toLowerCase() + ')'
+  if (d.src === 'unites') return det + ' = ' + fmtN(nbUnitesLot(prod), 0) + ' u ÷ ' + fmtN(cad.cadence_nominale) + ' u/h = ' + fmtN(d.h) + ' h'
+  return det + ' × ' + fmtN(prod.poids_unitaire_mg) + ' mg = ' + fmtN(poidsLotKg(prod)) + ' kg ÷ ' + fmtN(cad.cadence_nominale) + ' kg/h = ' + fmtN(d.h) + ' h'
+}
 
 const addH = (d, h) => new Date(d.getTime() + h * 3600000)
 
@@ -1350,6 +1360,7 @@ const planCalc = computed(() => {
         const readyPhase = lotReady[key] || new Date(t0v)  // fin de la phase précédente
         const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === item.pid)
         const dLotFull = cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8
+        const calc = calculTxt(prod, cad)
         // Pelliculage : chaque turbine = un lot séparé
         let nbTurb = (ph === 7) ? nbTurbines(prod) : 1
         let dRun = dLotFull
@@ -1360,7 +1371,7 @@ const planCalc = computed(() => {
           let deb = E.debut, fin = E.fin
           if (!deb && fin) deb = new Date(fin.getTime() - dTot * 3600000)
           if (deb && !fin) fin = placer(deb, dTot, P.regime, P.weAll, P.requis).end
-          if (deb && fin && afficherTermines.value) eqTasks[eq.id].push({ type: 'lot', etat: 'termine', prod, lot: item.lot, uid: item.ordreId, turbines: nbTurb, turbNo: null, segments: [{ start: deb, end: fin }], start: deb, end: fin })
+          if (deb && fin && afficherTermines.value) eqTasks[eq.id].push({ type: 'lot', etat: 'termine', calc, prod, lot: item.lot, uid: item.ordreId, turbines: nbTurb, turbNo: null, segments: [{ start: deb, end: fin }], start: deb, end: fin })
           if (fin) lotReady[key] = new Date(fin)
           eqLastPid[eq.id] = item.pid
           continue
@@ -1373,7 +1384,7 @@ const planCalc = computed(() => {
           let fin = pl.end, segs = pl.segments, depasse = false
           if (fin < maint) { fin = new Date(maint.getTime() + 15 * 60000); segs = [{ start: new Date(E.debut), end: fin }]; depasse = true }
           const prog = Math.max(0, Math.min(100, Math.round(((maint - E.debut) / Math.max(1, (pl.end - E.debut))) * 100)))
-          eqTasks[eq.id].push({ type: 'lot', etat: 'cours', prod, lot: item.lot, uid: item.ordreId, turbines: nbTurb, turbNo: null, segments: segs, start: segs[0].start, end: fin, prog, depasse })
+          eqTasks[eq.id].push({ type: 'lot', etat: 'cours', calc, prod, lot: item.lot, uid: item.ordreId, turbines: nbTurb, turbNo: null, segments: segs, start: segs[0].start, end: fin, prog, depasse })
           if (fin > eqCursor[eq.id]) eqCursor[eq.id] = new Date(fin)
           eqLastPid[eq.id] = item.pid
           lotReady[key] = new Date(fin)
@@ -1397,7 +1408,7 @@ const planCalc = computed(() => {
           const lotStart = plLot.segments[0].start
           eqTasks[eq.id].push({ type: cln, segments: plClean.segments, start: plClean.segments[0].start, end: plClean.end })
           if (cln === 'gen' || cln === 'genH') eqLastGen[eq.id] = new Date(plClean.end)
-          eqTasks[eq.id].push({ type: 'lot', etat: E.etat === 'cours' ? 'cours' : 'plan', prog: 0, prod, lot: item.lot, uid: item.ordreId, turbines: nbTurb, turbNo: (nbTurb > 1 ? k : null), segments: plLot.segments, start: lotStart, end: plLot.end, coupe: bloc.coupe })
+          eqTasks[eq.id].push({ type: 'lot', etat: E.etat === 'cours' ? 'cours' : 'plan', prog: 0, calc, prod, lot: item.lot, uid: item.ordreId, turbines: nbTurb, turbNo: (nbTurb > 1 ? k : null), segments: plLot.segments, start: lotStart, end: plLot.end, coupe: bloc.coupe })
           eqCursor[eq.id] = plLot.end; eqLastPid[eq.id] = item.pid
           finLot = plLot.end
         }
@@ -1984,7 +1995,8 @@ function titre(t) {
   const p = fmtJH(t.start) + ' → ' + fmtJH(t.end)
   if (t.type === 'lot' && t.coupe) return '⚠ LOT TROP LONG pour un poste : le lot dépasse la plage ouvrée, coupure inévitable sur l\'OFF  •  ' + t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + '  •  ' + p
   if (t.type === 'lot' && t.etat === 'termine') return '✓ TERMINÉ sur cette phase  •  ' + t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + '  •  réel : ' + p
-  if (t.type === 'lot' && t.etat === 'cours') return '▶ EN COURS (' + (t.depasse ? 'durée prévue dépassée' : t.prog + ' %') + ')  •  ' + t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + '  •  démarré ' + fmtJH(t.start) + ' → fin prévue ' + fmtJH(t.end)
+  if (t.type === 'lot' && t.etat === 'cours') return '▶ EN COURS (' + (t.depasse ? 'durée prévue dépassée' : t.prog + ' %') + ')  •  ' + t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + '  •  démarré ' + fmtJH(t.start) + ' → fin prévue ' + fmtJH(t.end) + (t.calc ? '\nDurée : ' + t.calc : '')
+  if (t.type === 'lot' && t.calc) return t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + (t.turbNo ? '  •  turbine ' + t.turbNo + '/' + t.turbines : '') + '  •  ' + p + '\nDurée : ' + t.calc + (t.turbines > 1 ? ' (÷ ' + t.turbines + ' turbines)' : '')
   if (t.type === 'lot') return t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + (t.turbNo ? '  •  turbine ' + t.turbNo + '/' + t.turbines : '') + '  •  ' + p
   if (t.type === 'gen') return 'Nettoyage général (début campagne)  •  ' + p
   if (t.type === 'genH') return 'Nettoyage général (holding dépassé)  •  ' + p
@@ -2449,4 +2461,5 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .ctrl-lien { text-decoration: none; color: #0f766e; font-weight: 700; }
 .pan-chip-amont { background: #f5f3ff; border-color: #c4b5fd; color: #5b21b6; }
 .pan-chip-amont:hover { background: #ede9fe; }
+.ctrl-calc { font-size: 10px; color: #475569; font-variant-numeric: tabular-nums; }
 </style>

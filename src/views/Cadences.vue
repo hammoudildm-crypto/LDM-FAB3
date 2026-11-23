@@ -210,9 +210,13 @@ function num(v, def) { const n = Number(v); return (v === null || v === undefine
 const atelierById = computed(() => { const m = {}; for (const a of ateliers.value) m[a.id] = a; return m })
 const produitsTries = computed(() => [...produits.value].sort((a, b) => String(a.code_pf || '').localeCompare(String(b.code_pf || ''), undefined, { numeric: true })))
 const vueMode = ref('matrice')
+// Index équipement#produit -> cadence (évite de parcourir toute la table pour chaque case :
+// 216 produits × 28 équipements bloquaient le navigateur)
+const cadIndex = computed(() => { const m = new Map(); for (const c of cadences.value) { const k = c.equipement_id + '#' + c.produit_id, v = Number(c.cadence_nominale) || 0; if (!m.has(k) || v > m.get(k)) m.set(k, v) } return m })
 function cadenceCell(pid, grp) {
   let v = 0
-  for (const e of grp.equips) { const c = cadences.value.find(c => c.equipement_id === e.id && c.produit_id === pid); if (c && Number(c.cadence_nominale) > v) v = Number(c.cadence_nominale) }
+  const idx = cadIndex.value
+  for (const e of grp.equips) { const x = idx.get(e.id + '#' + pid); if (x && x > v) v = x }
   return v
 }
 function uniteGroupe(grp) { return grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h' }
@@ -279,7 +283,7 @@ watch(vueMode, majUrl)
 const phasesSous = computed(() => {
   const m = {}
   for (const g of groupes.value) { const k = g.phase || 'autre'; (m[k] = m[k] || { k, l: PHASE_LBL[k] || 'Autres', groupes: [] }).groupes.push(g) }
-  return Object.values(m).sort((a, b) => (ORDRE_PH.indexOf(a.k) + 1 || 99) - (ORDRE_PH.indexOf(b.k) + 1 || 99)).map(x => ({ k: x.k, l: x.l, nEq: x.groupes.length, nProd: produits.value.filter(p => x.groupes.some(g => cadenceCell(p.id, g) > 0)).length }))
+  return Object.values(m).sort((a, b) => (ORDRE_PH.indexOf(a.k) + 1 || 99) - (ORDRE_PH.indexOf(b.k) + 1 || 99)).map(x => ({ k: x.k, l: x.l, nEq: x.groupes.length, nProd: (() => { const ids = new Set(x.groupes.flatMap(g => g.equips.map(e => e.id))); const ps = new Set(); for (const c of cadences.value) if (ids.has(c.equipement_id) && Number(c.cadence_nominale) > 0) ps.add(c.produit_id); return ps.size })() }))
 })
 // 1re sous-page par défaut
 onMounted(() => watch(phasesSous, (v) => { if (!phaseSel.value && !routeCad.query.phase && v.length) { phaseSel.value = v[0].k } }, { immediate: true }))   // après la définition de « groupes »
