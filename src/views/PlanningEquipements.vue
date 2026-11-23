@@ -133,6 +133,13 @@
         </select>
       </label></div>
       <div class="p-grp"><label class="chk-inline"><input type="checkbox" v-model="filtreAvecPlan" /> Avec planning</label></div>
+      <div class="p-grp p-sync">
+        <div class="p-sync-t">Alimentation automatique</div>
+        <button type="button" class="vue-btn p-sync-btn" @click="synchroniserPaniers" title="Remplir les paniers depuis la file « Disponibilité des produits par atelier »">⟳ Synchroniser avec Disponibilité</button>
+        <label class="chk-inline"><input type="checkbox" v-model="syncAuto" /> À l'ouverture de la page</label>
+        <label class="chk-inline"><input type="checkbox" v-model="syncNonLances" /> Inclure les OF non lancés</label>
+        <div v-if="syncInfo" class="p-sync-r">✓ {{ syncInfo.lots }} lots · +{{ syncInfo.ajout }} / −{{ syncInfo.retrait }}<span v-if="syncInfo.nonAff" class="p-sync-w" title="Phases sans équipement ayant une cadence pour le produit"> · ⚠ {{ syncInfo.nonAff }} sans cadence</span><br><small>{{ syncInfo.quand.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }}</small></div>
+      </div>
       <div class="p-grp"><label class="chk-inline"><input type="checkbox" v-model="afficherTermines" /> Afficher les lots terminés</label></div>
       <div class="p-grp regle-off" title="Règle appliquée à tous les lots : le lot doit être terminé avant le début de l'OFF (nuit / week-end / arrêt), sinon il démarre au poste ouvré suivant. Le nettoyage n'est pas concerné : il peut être fait avant l'OFF.">⛔ Un lot ne démarre que s'il est clôturé avant l'OFF (nettoyage possible avant l'OFF)</div>
     </section>
@@ -372,16 +379,19 @@
           </div>
         </div>
         <div class="pan-list">
-          <div v-for="(item, idx) in (panierEquip[panierOuvert.id] || [])" :key="item.ordreId" class="pan-item">
+          <div v-for="(item, idx) in (panierEquip[panierOuvert.id] || [])" :key="item.ordreId" class="pan-item" :class="{ 'pan-exclu': item.exclu }">
             <span class="pan-idx">{{ idx + 1 }}</span>
-            <span class="pan-pnom"><b>{{ item.lot }}</b> — {{ produitNom(item.pid) }}</span>
+            <span class="pan-src" :class="item.auto ? 'src-auto' : 'src-man'" :title="item.auto ? 'Ajouté par la synchronisation avec Disponibilité' : 'Ajouté à la main (conservé par la synchronisation)'">{{ item.auto ? 'auto' : 'manuel' }}</span>
+            <span class="pan-pnom"><b>{{ item.lot }}</b> — {{ produitNom(item.pid) }}<em v-if="item.exclu" class="pan-ex-l"> · exclu du planning</em></span>
+            <button class="pan-btn" :class="{ on: item.epingle }" @click="basculerEpingle(item)" :title="item.epingle ? 'Épinglé sur cet équipement — cliquer pour libérer' : 'Épingler sur cet équipement (la synchro ne le déplacera pas)'">📌</button>
+            <button class="pan-btn" :class="{ on: item.exclu }" @click="basculerExclu(item)" :title="item.exclu ? 'Rétablir dans le planning' : 'Exclure du planning (la synchro ne le remettra pas)'">⊘</button>
             <input type="datetime-local" v-model="item.dateDebut" class="pan-date" title="Date de début souhaitée (laisser vide = automatique)" @change="sauverPanier(panierOuvert.id)" />
             <button v-if="item.dateDebut" class="pan-btn" @click="item.dateDebut = ''; sauverPanier(panierOuvert.id)" title="Repasser en automatique">auto</button>
-            <button class="pan-btn del" @click="retirerLot(idx)">✕</button>
+            <button v-if="!item.auto" class="pan-btn del" @click="retirerLot(idx)" title="Retirer du panier">✕</button>
           </div>
           <div v-if="!(panierEquip[panierOuvert.id] || []).length" class="pan-vide">Aucun lot affecté à cet équipement.</div>
         </div>
-        <p class="pan-hint2">Lots en attente de cette phase. Réordonne/décale en les <b>glissant sur le Gantt</b>, ou fixe une <b>date de début</b> par lot ci-dessus.</p>
+        <p class="pan-hint2"><b>auto</b> = ajouté par la synchronisation avec Disponibilité · 📌 épingler sur cet équipement · ⊘ exclure du planning. Lots en attente de cette phase. Réordonne/décale en les <b>glissant sur le Gantt</b>, ou fixe une <b>date de début</b> par lot ci-dessus.</p>
         <div class="pan-add">
           <input v-model="rechProd" placeholder="Rechercher un lot (n°, produit)…" class="pan-search" />
           <div class="pan-prods">
@@ -455,7 +465,7 @@ async function chargerDonnees() {
       fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif, vdlt, vdlp, dht, reglage, postes').eq('actif', true)),
       fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, gamme').eq('actif', true)),
       fetchAllPaged(() => supabase.from('planning_panier').select('equipement_id, produits')),
-      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, date_lancement, date_fin_fabrication, produits(id, code_pf, designation, gamme, taille_lot, unites_par_boite, poids_unitaire_mg)')),
+      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, date_lancement, date_fin_fabrication, equipement_id, produits(id, code_pf, designation, gamme, taille_lot, unites_par_boite, poids_unitaire_mg)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut, equipement_id').eq('actif', true))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
@@ -469,14 +479,18 @@ async function chargerDonnees() {
       else if (pr && typeof pr === 'object') { lotsArr = Array.isArray(pr.lots) ? pr.lots : []; reg = pr.regime; req = pr.requis; if (typeof pr.we === 'boolean') weekendEquip[row.equipement_id] = pr.we; if (Array.isArray(pr.maint)) maintEquip[row.equipement_id] = pr.maint }
       const flat = []
       for (const x of lotsArr) {
-        if (x && typeof x === 'object' && x.ordreId) flat.push({ ordreId: x.ordreId, lot: x.lot, pid: x.pid, decalage: Number(x.decalage) || 0, dateDebut: x.dateDebut || '' })
+        if (x && typeof x === 'object' && x.ordreId) flat.push({ ordreId: x.ordreId, lot: x.lot, pid: x.pid, decalage: Number(x.decalage) || 0, dateDebut: x.dateDebut || '', auto: (x.auto === undefined || x.auto === null) ? null : !!x.auto, epingle: !!x.epingle, exclu: !!x.exclu })
       }
       panierEquip[row.equipement_id] = flat
       if (reg) regimeEquip[row.equipement_id] = reg
       if (Array.isArray(req)) requisEquip[row.equipement_id] = req
     }
+    // Holding times (requêtes tolérantes, comme Disponibilité)
+    try { const r1 = await supabase.from('produits').select('id, holding_time_jours'); const hm = {}; if (!r1.error && r1.data) for (const x of r1.data) if (x.holding_time_jours != null) hm[x.id] = Number(x.holding_time_jours); holdTimes.value = hm } catch (e) {}
+    try { const r2 = await supabase.from('produits').select('id, holding_times'); const hs = {}; if (!r2.error && r2.data) for (const x of r2.data) if (x.holding_times && typeof x.holding_times === 'object') hs[x.id] = x.holding_times; holdSteps.value = hs } catch (e) {}
     nettoyerPanierTermines()
     nettoyerHistoriqueEquip()
+    if (syncAuto.value) synchroniserPaniers()
   } catch (e) { erreur.value = String(e) } finally { chargement.value = false }
 }
 
@@ -560,6 +574,93 @@ const dpPhasesLot = computed(() => {
   }
   return m
 })
+// ===== Alimentation AUTOMATIQUE des paniers depuis la file « Disponibilité des produits par atelier » =====
+// Lots : OF non libérés / rejetés / à fabrication terminée, lancés ou non (option) ; pour chaque phase
+// RESTANTE de la gamme (1re non terminée et suivantes), le lot est affecté à un équipement de la phase
+// qui a une CADENCE pour ce produit :
+//   1) équipement saisi dans le suivi (en cours / terminé) ; 2) équipement réservé sur l'OF ;
+//   3) équipement où le lot est déjà (stabilité, 📌 épinglé) ; 4) sinon le moins chargé.
+// Ordre dans le panier : en cours, puis campagnes par produit (produit le plus urgent d'abord,
+// urgence = échéance holding time), puis échéance, puis n° de lot. Lots ajoutés à la main et 📌 conservés.
+const holdTimes = ref({})
+const holdSteps = ref({})
+const syncAuto = ref((() => { try { return localStorage.getItem('pe_sync_auto') !== '0' } catch (e) { return true } })())
+const syncNonLances = ref((() => { try { return localStorage.getItem('pe_sync_nl') !== '0' } catch (e) { return true } })())
+watch(syncAuto, (v) => { try { localStorage.setItem('pe_sync_auto', v ? '1' : '0') } catch (e) {} })
+watch(syncNonLances, (v) => { try { localStorage.setItem('pe_sync_nl', v ? '1' : '0') } catch (e) {} ; synchroniserPaniers() })
+const syncInfo = ref(null)
+const KEY_PH = { pesee: 1, granulation: 2, melange: 4, compression: 5, remplissage: 6, pelliculage: 7 }
+function holdJours(pid, k) { const st = holdSteps.value[pid]; if (st && k && st[k] != null) return Number(st[k]); return holdTimes.value[pid] != null ? holdTimes.value[pid] : null }
+function synchroniserPaniers() {
+  const equipsFab = equipements.value.filter(e => estFab(e.type))
+  const cadOk = new Set(cadences.value.filter(c => Number(c.cadence_nominale) > 0).map(c => c.equipement_id + '#' + c.produit_id))
+  const now = Date.now()
+  // charge courante (h) par équipement pour répartir
+  const charge = {}
+  const dureeSur = (eqId, pid) => { const prod = produitsById.value[pid]; const cad = cadences.value.find(c => c.equipement_id === eqId && c.produit_id === pid); return (prod && cad ? dureeLotH(prod, cad) : 8) + 2 }
+  // où est déjà chaque lot (par phase)
+  const ou = {}   // ordreId#ph -> { eqId, item }
+  for (const eqId in panierEquip) for (const it of (panierEquip[eqId] || [])) { const eq = equipsFab.find(e => String(e.id) === String(eqId)); if (eq) ou[it.ordreId + '#' + phaseOrdre(eq.type)] = { eqId: Number(eqId), item: it } }
+  const voulu = {}  // eqId -> [{ item, cle }]
+  let nonAff = 0, nbLots = 0
+  for (const o of ofs.value) {
+    if (o.statut === 'Libéré' || o.statut === 'Rejeté' || o.date_fin_fabrication) continue
+    if (!o.date_lancement && !syncNonLances.value) continue
+    const p = o.produits || {}; if (!p.id) continue
+    const gammeB = (Array.isArray(p.gamme) && p.gamme.length) ? p.gamme : GAMME_DEF
+    const phases = [...new Set(gammeB.map(phaseOrdre).filter(x => x >= 1 && x <= 7))].sort((a, b) => a - b)
+    const pl = dpPhasesLot.value[o.id] || {}
+    // phases restantes = à partir de la 1re non terminée (clé fusionnée granulation/séchage)
+    const statutPh = (ph) => (pl[PH_CLE[ph]] || {}).statut
+    let i0 = phases.findIndex(ph => statutPh(ph) !== 'Terminé'); if (i0 < 0) continue
+    const restantes = phases.slice(i0)
+    // échéance holding time (étape courante)
+    const kCur = PH_CLE[restantes[0]], kPrev = i0 > 0 ? PH_CLE[phases[i0 - 1]] : null
+    const datePrec = (kPrev && pl[kPrev] && (pl[kPrev].fin || pl[kPrev].date)) || o.date_lancement
+    const hj = holdJours(p.id, kCur)
+    const echeance = (datePrec && hj != null) ? new Date(datePrec).getTime() + hj * 86400000 : Infinity
+    nbLots++
+    restantes.forEach((ph, idx) => {
+      const cands = equipsFab.filter(e => phaseOrdre(e.type) === ph && cadOk.has(e.id + '#' + p.id))
+      if (!cands.length) { if (ph !== 3) nonAff++; return }
+      const rec = pl[PH_CLE[ph]]
+      const deja = ou[o.id + '#' + ph]
+      let cible = null
+      if (rec && rec.equip != null && (rec.statut === 'En cours' || rec.statut === 'Terminé') && cands.some(e => e.id === rec.equip)) cible = rec.equip
+      else if (deja && deja.item.epingle) cible = deja.eqId
+      else if (idx === 0 && o.equipement_id && cands.some(e => e.id === o.equipement_id)) cible = o.equipement_id
+      else if (deja && cands.some(e => e.id === deja.eqId)) cible = deja.eqId
+      else { let best = null, bc = Infinity; for (const e of cands) { const c = charge[e.id] || 0; if (c < bc) { bc = c; best = e.id } } cible = best }
+      charge[cible] = (charge[cible] || 0) + dureeSur(cible, p.id)
+      const ancien = deja && deja.eqId === cible ? deja.item : null
+      const item = ancien ? { ...ancien, auto: ancien.auto === false ? false : true } : { ordreId: o.id, lot: o.numero_lot || '—', pid: p.id, decalage: 0, dateDebut: '', auto: true }
+      item._cle = { cours: (rec && rec.statut === 'En cours') ? 0 : 1, ech: echeance, pid: p.id, lot: String(o.numero_lot || '') }
+      ;(voulu[cible] = voulu[cible] || []).push(item)
+    })
+  }
+  let ajout = 0, retrait = 0, modifies = 0
+  for (const eq of equipsFab) {
+    const ancien = panierEquip[eq.id] || []
+    const v = voulu[eq.id] || []
+    const vIds = new Set(v.map(x => x.ordreId))
+    // conservés hors synchro : ajoutés à la main (non auto), 📌 épinglés, exclus
+    const garder = ancien.filter(x => !vIds.has(x.ordreId) && (x.auto === false || x.epingle || x.exclu || etatLot(eq, x.ordreId).etat === 'termine'))   // terminés gardés pour l'affichage (retirés quand l'OF est fini)
+    // tri : en cours, puis campagnes (produit le plus urgent d'abord), puis échéance, puis n° de lot
+    const echProd = {}
+    for (const x of v) echProd[x._cle.pid] = Math.min(echProd[x._cle.pid] ?? Infinity, x._cle.ech)
+    v.sort((a, b) => (a._cle.cours - b._cle.cours) || ((echProd[a._cle.pid] - echProd[b._cle.pid]) || 0) || String(a._cle.pid).localeCompare(String(b._cle.pid)) || ((a._cle.ech - b._cle.ech) || 0) || a._cle.lot.localeCompare(b._cle.lot, undefined, { numeric: true }))
+    const nouveau = [...v.map(({ _cle, ...r }) => r), ...garder]
+    const avIds = new Set(ancien.map(x => x.ordreId)), apIds = new Set(nouveau.map(x => x.ordreId))
+    for (const id of apIds) if (!avIds.has(id)) ajout++
+    for (const id of avIds) if (!apIds.has(id)) retrait++
+    const sig = (arr) => JSON.stringify(arr.map(x => [x.ordreId, x.auto, x.epingle, x.exclu, x.dateDebut, x.decalage]))
+    if (sig(ancien) !== sig(nouveau)) { panierEquip[eq.id] = nouveau; sauverPanier(eq.id); modifies++ }
+  }
+  syncInfo.value = { quand: new Date(), lots: nbLots, ajout, retrait, nonAff, modifies }
+}
+function basculerEpingle(it) { it.epingle = !it.epingle; sauverPanier(panierOuvert.value.id) }
+function basculerExclu(it) { it.exclu = !it.exclu; sauverPanier(panierOuvert.value.id) }
+
 // Statut d'un lot sur la PHASE d'un équipement : 'termine' | 'cours' | 'plan' (+ dates réelles)
 const PH_CLE = { 1: 'pesee', 2: 'granulation', 3: 'granulation', 4: 'melange', 5: 'compression', 6: 'remplissage', 7: 'pelliculage' }
 function etatLot(eq, ordreId) {
@@ -980,7 +1081,7 @@ let uidCounter = 0
 function uidGen() { return 'l' + Date.now().toString(36) + (uidCounter++) }
 function ouvrirPanier(eq) { panierOuvert.value = eq; rechProd.value = '' }
 function viderPanier() { if (!panierOuvert.value) return; if (!confirm('Vider le panier de cet équipement ?')) return; const id = panierOuvert.value.id; panierEquip[id] = []; sauverPanier(id) }
-function ajouterLot(l) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; if (!panierEquip[id].some(i => i.ordreId === l.id)) panierEquip[id].push({ ordreId: l.id, lot: l.lot, pid: l.pid }); sauverPanier(id) }
+function ajouterLot(l) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; if (!panierEquip[id]) panierEquip[id] = []; if (!panierEquip[id].some(i => i.ordreId === l.id)) panierEquip[id].push({ ordreId: l.id, lot: l.lot, pid: l.pid, auto: false }); sauverPanier(id) }
 function retirerLot(idx) { if (!panierOuvert.value) return; const id = panierOuvert.value.id; const a = panierEquip[id]; if (a) { a.splice(idx, 1); sauverPanier(id) } }
 const requisDate = ref('')
 const requisRegime = ref('2x8')
@@ -1037,7 +1138,24 @@ const planCalc = computed(() => {
       for (const it of pan) etats[it.ordreId] = etatLot(eq, it.ordreId)
       const rang = { termine: 0, cours: 1, plan: 2 }
       const panTri = pan.map((it, i) => ({ it, i })).sort((a, b) => (rang[etats[a.it.ordreId].etat] - rang[etats[b.it.ordreId].etat]) || (etats[a.it.ordreId].etat === 'termine' ? ((etats[a.it.ordreId].debut || 0) - (etats[b.it.ordreId].debut || 0)) : 0) || (a.i - b.i)).map(x => x.it)
-      for (const item of panTri) {
+      // Choix du lot suivant : terminés / en cours d'abord (fixes), puis parmi les planifiés,
+      // les lots PRÊTS quand l'équipement se libère, dans l'ordre de priorité du panier ;
+      // si aucun n'est prêt, celui qui sera prêt le plus tôt.
+      const restants = panTri.filter(it => !it.exclu)
+      const pretA = (it) => { let r = lotReady[it.ordreId] || new Date(t0v); if (it.dateDebut) { const dd = new Date(it.dateDebut); if (!isNaN(dd) && dd > r) r = dd } return r.getTime() }
+      const suivant = () => {
+        if (etats[restants[0].ordreId].etat !== 'plan') return restants.shift()
+        const libre = eqCursor[eq.id].getTime() + 1800000
+        let iBest = -1
+        // continuer la campagne : un lot prêt du même produit que le dernier passé sur l'équipement
+        const lp = eqLastPid[eq.id]
+        if (lp != null) for (let i = 0; i < restants.length; i++) if (restants[i].pid === lp && pretA(restants[i]) <= libre) { iBest = i; break }
+        if (iBest < 0) for (let i = 0; i < restants.length; i++) if (pretA(restants[i]) <= libre) { iBest = i; break }
+        if (iBest < 0) { let b = Infinity; for (let i = 0; i < restants.length; i++) { const r = pretA(restants[i]); if (r < b) { b = r; iBest = i } } }
+        return restants.splice(Math.max(0, iBest), 1)[0]
+      }
+      while (restants.length) {
+        const item = suivant()
         const prod = produitsById.value[item.pid]; if (!prod) continue
         const E = etats[item.ordreId]
         const key = item.ordreId
@@ -1436,7 +1554,7 @@ function bCalcParPage() { const h = window.innerHeight || 900; bParPage.value = 
 async function bSuivante(dir = 1) {
   const n = bPages.value.length
   let p = bPage.value + dir
-  if (p >= n) { p = 0; try { await chargerDonnees(); bMaj.value = new Date() } catch (e) {} }
+  if (p >= n) { p = 0; try { await chargerDonnees(); bMaj.value = new Date() } catch (e) {} }   // chargerDonnees resynchronise si l'option est active
   if (p < 0) p = n - 1
   bPage.value = p; bEcoule.value = 0
 }
@@ -2055,4 +2173,15 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .g-eqcol, .g-grp-lbl { z-index: 8; }
 .g-header { z-index: 9; }
 .pb-b.pb-termine .pb-camp-l { text-shadow: none; }
+/* Alimentation automatique */
+.p-sync { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px; padding: 7px 8px; display: flex; flex-direction: column; gap: 5px; }
+.p-sync-t { font-size: 10px; font-weight: 800; color: #0f766e; text-transform: uppercase; letter-spacing: .04em; }
+.p-sync-btn { background: #0f766e !important; color: #fff !important; border-color: #0f766e !important; font-size: 10.5px !important; white-space: normal !important; }
+.p-sync-r { font-size: 10px; color: #0f766e; font-weight: 700; line-height: 1.35; }
+.p-sync-w { color: #b45309; }
+.pan-src { font-size: 9px; font-weight: 800; border-radius: 4px; padding: 1px 5px; text-transform: uppercase; }
+.src-auto { background: #ccfbf1; color: #0f766e; } .src-man { background: #fef3c7; color: #92400e; }
+.pan-btn.on { background: #0f766e; color: #fff; border-color: #0f766e; }
+.pan-exclu { opacity: .5; } .pan-exclu .pan-pnom b { text-decoration: line-through; }
+.pan-ex-l { font-style: normal; color: #b91c1c; font-size: 10.5px; }
 </style>
