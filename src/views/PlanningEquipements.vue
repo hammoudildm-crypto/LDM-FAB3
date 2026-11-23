@@ -130,7 +130,11 @@
           <div class="g-track g-timeline" :style="{ width: totalW + 'px' }">
             <div v-for="d in jours" :key="d.i" class="g-dcol" :class="{ 'g-dcol-dep': d.depart }" :style="{ left: d.left + 'px', width: d.w + 'px' }">
               <div class="g-dlbl">{{ d.label }}<span v-if="d.depart" class="g-dep-lbl"> ▸ Départ</span></div>
-              <div class="g-shifts">
+              <div v-if="presentation" class="g-nightbar">
+                <span class="g-nb-n" :style="{ left: 0, width: (6 * pxH) + 'px' }"></span>
+                <span class="g-nb-n" :style="{ left: (22 * pxH) + 'px', width: (2 * pxH) + 'px' }"></span>
+              </div>
+              <div v-else class="g-shifts">
                 <span class="g-sh g-sh0" :style="{ width: (6 * pxH) + 'px' }"></span>
                 <span class="g-sh" :style="{ width: (8 * pxH) + 'px' }">06</span>
                 <span class="g-sh" :style="{ width: (8 * pxH) + 'px' }">14</span>
@@ -167,18 +171,31 @@
             <div v-for="(m, mi) in (maintEquip[row.eq.id] || [])" :key="'mnt'+mi" class="g-maint" :class="{ 'g-maint-curr': m.type === 'curr', 'g-maint-tech': m.type === 'tech', 'g-maint-autre': m.type === 'autre' }" :style="maintStyle(m)" :title="maintLibelle(m) + ' — ' + m.dureeH + ' h'"><span class="g-maint-lbl">{{ maintAbrev(m) }}</span></div>
             <div v-if="posMaintenant != null" class="g-now" :style="{ left: posMaintenant + 'px' }"></div>
             <!-- barres (par segment) -->
-            <template v-for="(t, i) in row.tasks">
+            <!-- campagnes (présentation) -->
+            <div v-for="c in (presData[row.eq.id] || {}).camps || []" :key="c.key" class="g-bar g-lot g-camp"
+                 :class="{ 'g-dim': prodFocus && c.prod.code_pf !== prodFocus, 'g-focus': prodFocus && c.prod.code_pf === prodFocus, 'g-cours': c.enCours, 'g-suivi': lotSuivi && c.uids.includes(lotSuivi), 'g-dim2': lotSuivi && !c.uids.includes(lotSuivi) }"
+                 :style="campStyle(c)" :title="titreCamp(c)" @click="basculerCamp(c.key)">
+              <span v-for="(tk, ti) in c.ticks" :key="ti" class="g-camp-tick" :style="{ left: tk + '%' }"></span>
+              <span v-if="campW(c) >= 24" class="g-lbl g-lbl2">
+                <span class="g-lbl-lot"><b v-if="c.enCours" class="g-live">▶</b>{{ campW(c) >= 120 ? c.prod.code_pf + ' · ' + c.n + ' lots' : (campW(c) >= 60 ? c.n + ' lots' : '×' + c.n) }}</span>
+                <span v-if="campW(c) >= 120" class="g-lbl-nom">{{ c.premier }} → {{ c.dernier }}</span>
+              </span>
+            </div>
+            <div v-for="c in (presData[row.eq.id] || {}).ouvertes || []" :key="'o' + c.key" class="g-camp-open"
+                 :style="{ left: (((c.start - tAff) / 3600000) * pxH) + 'px', width: Math.max(8, ((c.end - c.start) / 3600000) * pxH) + 'px', '--c': couleurProd(c.prod.code_pf).bg }"
+                 title="Campagne dépliée — cliquer pour regrouper" @click="basculerCamp(c.key)"><span>▲ regrouper</span></div>
+            <template v-for="(t, i) in ((presData[row.eq.id] || {}).tasks || row.tasks)">
               <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar"
                    :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragTemps && t.type === 'lot' && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid, 'g-dim': prodFocus && (t.type !== 'lot' || t.prod.code_pf !== prodFocus), 'g-focus': prodFocus && t.type === 'lot' && t.prod.code_pf === prodFocus, 'g-cours': t.type === 'lot' && lotEnCours(row.eq.id, t), 'g-suite': j > 0, 'g-coupe': j < t.segments.length - 1, 'g-force': t.coupe, 'g-suivi': lotSuivi && t.type === 'lot' && t.uid === lotSuivi, 'g-dim2': lotSuivi && (t.type !== 'lot' || t.uid !== lotSuivi) }]"
                    :style="[barStyleSeg(seg, t), (t.type === 'lot' && dragTemps && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid) ? { transform: 'translateX(' + (dragTemps.deltaH * pxH) + 'px)', opacity: 0.75, zIndex: 6 } : null]"
                    :title="t.type === 'lot' ? (titre(t) + '  •  clic : suivre ce lot sur toutes ses phases  •  glisser pour décaler  •  double-clic pour réinitialiser') : titre(t)"
                    @mousedown="t.type === 'lot' ? debutDragTemps($event, row.eq.id, t.uid) : null"
                    @dblclick="t.type === 'lot' ? resetDecal(row.eq.id, t.uid) : null">
-                <span v-if="t.type === 'lot' && segW(seg) >= 18" class="g-lbl g-lbl2">
-                  <span class="g-lbl-lot"><b v-if="lotEnCours(row.eq.id, t) && j === 0" class="g-live">▶</b><template v-if="j > 0">↳ </template>{{ t.lot || '—' }}<em v-if="t.turbNo" class="g-turb">T{{ t.turbNo }}/{{ t.turbines }}</em></span>
+                <span v-if="t.type === 'lot' && segW(seg) >= 20" class="g-lbl g-lbl2">
+                  <span class="g-lbl-lot"><b v-if="lotEnCours(row.eq.id, t) && j === 0" class="g-live">▶</b><template v-if="j > 0">↳ </template>{{ lotCourt(t.lot, segW(seg)) }}<em v-if="t.turbNo && segW(seg) >= 70" class="g-turb">T{{ t.turbNo }}/{{ t.turbines }}</em></span>
                   <span v-if="segW(seg) >= 60" class="g-lbl-nom">{{ t.prod.designation }}</span>
                 </span>
-                <span v-else-if="t.type !== 'lot' && j === 0 && segW(seg) >= 14" class="g-lbl">{{ t.type.startsWith('gen') ? 'NG' : 'NP' }}</span>
+                <span v-else-if="t.type !== 'lot' && j === 0 && segW(seg) >= (presentation ? 30 : 14)" class="g-lbl">{{ t.type.startsWith('gen') ? 'NG' : 'NP' }}</span>
               </div>
             </template>
           </div>
@@ -862,7 +879,7 @@ function fmtMaint(dt) { const d = new Date(dt); return isNaN(d) ? dt : d.toLocal
 function maintAbrev(m) { const t = m.type; return t === 'curr' ? 'MC' : t === 'tech' ? 'AT' : t === 'autre' ? (m.label || 'Autre') : 'MP' }
 function maintNom(m) { const t = m.type; return t === 'curr' ? 'Curatif' : t === 'tech' ? 'Technique' : t === 'autre' ? (m.label || 'Autre') : 'Préventif' }
 function maintLibelle(m) { const t = m.type; return t === 'curr' ? 'Maintenance curative' : t === 'tech' ? 'Arrêt technique / essai / étalonnage' : t === 'autre' ? (m.label || 'Autre arrêt') : 'Maintenance préventive' }
-function maintStyle(m) { const deb = new Date(m.debut).getTime(); const left = ((deb - t0.value.getTime()) / 3600000) * pxH.value; const w = Math.max(2, (Number(m.dureeH) || 0) * pxH.value); return { left: left + 'px', width: w + 'px' } }
+function maintStyle(m) { const deb = new Date(m.debut).getTime(); const left = ((deb - tAff.value.getTime()) / 3600000) * pxH.value; const w = Math.max(2, (Number(m.dureeH) || 0) * pxH.value); return { left: left + 'px', width: w + 'px' } }
 function produitNom(pid) { const p = produitsById.value[pid]; return p ? (p.code_pf + ' — ' + p.designation) : String(pid) }
 const phaseOuvert = computed(() => panierOuvert.value ? phaseOrdre(panierOuvert.value.type) : null)
 const lotsAjoutables = computed(() => {
@@ -966,17 +983,21 @@ const finGlobale = computed(() => {
   for (const r of planning.value) if (r.fin > m) m = r.fin
   return m
 })
-const totalHeures = computed(() => Math.max(24, Math.ceil((finGlobale.value - t0.value) / 3600000) + 8))
+// Origine d'AFFICHAGE : en présentation Semaine, on remonte au samedi 22h de la 1re semaine
+// (le calcul du planning, lui, part toujours de la date de départ t0).
+const tAff = computed(() => (presentation.value && vuePres.value === 'semaine' && debutSemaine0.value < t0.value) ? debutSemaine0.value : t0.value)
+const finAff = computed(() => (presentation.value && vuePres.value === 'semaine') ? new Date(Math.max(finGlobale.value.getTime(), debutSemaine0.value.getTime() + nbSemaines.value * H7)) : finGlobale.value)
+const totalHeures = computed(() => Math.max(24, Math.ceil((finAff.value - tAff.value) / 3600000) + ((presentation.value && vuePres.value === 'semaine') ? 0 : 8)))
 const totalW = computed(() => totalHeures.value * pxH.value)
 
 // Jours (colonnes)
 const jours = computed(() => {
   const out = []
-  const start = new Date(t0.value); start.setHours(0, 0, 0, 0)
+  const start = new Date(tAff.value); start.setHours(0, 0, 0, 0)
   const n = Math.ceil(totalHeures.value / 24) + 1
   for (let i = 0; i < n; i++) {
     const d = new Date(start.getTime() + i * 86400000)
-    const left = ((d - t0.value) / 3600000) * pxH.value
+    const left = ((d - tAff.value) / 3600000) * pxH.value
     out.push({ i, left, w: 24 * pxH.value, weekend: d.getDay() === 5 || d.getDay() === 6, aujourdhui: isoL(d) === isoL(new Date()), depart: isoL(d) === dateDepart.value, label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }) })
   }
   return out
@@ -988,13 +1009,13 @@ const jourDepart = computed(() => jours.value.filter(d => d.depart))
 // 2×8 = 06h–22h. Les bandes collent donc exactement à l'ordonnancement (ouvertRegime).
 const offBands = computed(() => {
   const map = {}
-  const end = finGlobale.value, t0t = t0.value.getTime()
+  const end = finAff.value, t0t = tAff.value.getTime()
   for (const row of planning.value) {
     const regime = regimeEquip[row.eq.id] || '3x8'
     const weAll = weOn(row.eq.id)
     const requis = buildRequisMap(requisEquip[row.eq.id], regime)
     const bands = []
-    let c = new Date(t0.value), g = 0
+    let c = new Date(tAff.value), g = 0
     while (c < end && g++ < 4000) {
       const tc = c.getTime(); let best = Infinity
       for (const hh of [0, 6, 22]) { const x = new Date(c); x.setHours(hh, 0, 0, 0); if (x.getTime() <= tc) x.setDate(x.getDate() + 1); if (x.getTime() < best) best = x.getTime() }
@@ -1040,11 +1061,12 @@ onMounted(() => { timerNow = setInterval(() => { maintenant.value = new Date() }
 onUnmounted(() => { if (timerNow) clearInterval(timerNow) })
 const heureMaintenant = computed(() => maintenant.value.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))
 const posMaintenant = computed(() => {
-  const px = ((maintenant.value - t0.value) / 3600000) * pxH.value
+  const px = ((maintenant.value - tAff.value) / 3600000) * pxH.value
   return (px >= 0 && px <= totalW.value) ? px : null
 })
 
 // ===== Mode présentation =====
+const H7 = 7 * 24 * 3600000
 const presentation = ref(false)
 const ganttEl = ref(null)
 const vuePres = ref('semaine')   // 'semaine' | 'tout'
@@ -1064,7 +1086,6 @@ function basculerPresentation() {
   ajusterVueBientot()
 }
 // Semaine de travail : du samedi 22h00 au samedi suivant 22h00 (3×8 sam.→jeu. + week-end)
-const H7 = 7 * 24 * 3600000
 const debutSemaine0 = computed(() => { const d = new Date(t0.value); let g = 0; while (d.getDay() !== 6 && g++ < 7) d.setDate(d.getDate() - 1); d.setHours(22, 0, 0, 0); if (d > t0.value) d.setDate(d.getDate() - 7); return d })
 const nbSemaines = computed(() => Math.max(1, Math.ceil((finGlobale.value - debutSemaine0.value) / H7)))
 function semaineDe(d) { const k = Math.floor((new Date(d) - debutSemaine0.value) / H7); return Math.min(Math.max(0, k), nbSemaines.value - 1) }
@@ -1086,7 +1107,7 @@ function ajusterVue() {
   const w = largeurUtile(); if (w <= 100) return
   if (vuePres.value === 'semaine') {
     pxH.value = Math.round((w / 168) * 1000) / 1000
-    nextTick(() => { const el = ganttEl.value; if (el) el.scrollLeft = Math.max(0, ((debutSemaineVue.value - t0.value) / 3600000) * pxH.value) })
+    nextTick(() => { const el = ganttEl.value; if (el) el.scrollLeft = Math.max(0, ((debutSemaineVue.value - tAff.value) / 3600000) * pxH.value) })
   } else {
     pxH.value = Math.max(0.3, Math.round((w / totalHeures.value) * 1000) / 1000)
     nextTick(() => { if (ganttEl.value) ganttEl.value.scrollLeft = 0 })
@@ -1166,6 +1187,60 @@ const libelleSemaine = computed(() => {
   return 'semaine ' + Math.ceil(((j - an) / 86400000 + 1) / 7) + ' — départ ' + d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 })
 
+// ===== Campagnes (présentation) =====
+// Lots consécutifs du même produit, séparés seulement par un NP (pas de NG, pas d'OFF entre eux)
+// -> une barre unique ; les NP deviennent des traits. Clic sur la campagne : détail lot par lot.
+const campOuvertes = ref(new Set())
+function basculerCamp(k) { const s = new Set(campOuvertes.value); s.has(k) ? s.delete(k) : s.add(k); campOuvertes.value = s }
+const presData = computed(() => {
+  if (!presentation.value) return {}
+  const out = {}
+  for (const r of planning.value) {
+    const T = r.tasks, tasks = [], camps = []
+    let i = 0
+    while (i < T.length) {
+      const t = T[i]
+      if (t.type !== 'lot') { if (t.type !== 'part') tasks.push(t); i++; continue }
+      // construire la campagne
+      const grp = [t]; let j = i + 1
+      while (j + 1 < T.length && T[j].type === 'part' && T[j + 1].type === 'lot' && T[j + 1].prod.code_pf === t.prod.code_pf) {
+        const np = T[j], nx = T[j + 1], prev = grp[grp.length - 1]
+        const ecart = (nx.segments[0].start - prev.end) / 3600000
+        const dureeNp = (np.end - np.segments[0].start) / 3600000
+        if (np.segments.length > 1 || nx.segments.length > 1 || prev.segments.length > 1 || ecart > dureeNp + 0.25) break
+        grp.push(nx); j += 2
+      }
+      const key = r.eq.id + ':' + grp[0].uid + ':' + (grp[0].turbNo || 0)
+      if (grp.length < 2 || campOuvertes.value.has(key)) {
+        // lot isolé ou campagne dépliée : tâches individuelles (NP visibles si dépliée)
+        for (let k = i; k < (grp.length < 2 ? i + 1 : j); k++) if (T[k].type === 'lot' || grp.length >= 2) tasks.push(T[k])
+        if (grp.length >= 2) camps.push({ key, ouverte: true, prod: t.prod, start: grp[0].segments[0].start, end: grp[grp.length - 1].end, n: 0, uids: [], ticks: [], fantome: true })
+        i = grp.length < 2 ? i + 1 : j; continue
+      }
+      const start = grp[0].segments[0].start, end = grp[grp.length - 1].end, tot = end - start
+      const lots = [...new Set(grp.map(x => x.lot || x.uid))]
+      camps.push({
+        key, prod: t.prod, start, end, n: lots.length, nTaches: grp.length,
+        premier: grp[0].lot || '—', dernier: grp[grp.length - 1].lot || '—',
+        uids: grp.map(x => x.uid), enCours: grp.some(x => lotEnCours(r.eq.id, x)),
+        ticks: grp.slice(1).map(x => Math.round(((x.segments[0].start - start) / tot) * 10000) / 100),
+        lotsTxt: grp.map(x => (x.lot || '—') + (x.turbNo ? ' T' + x.turbNo : '')).join(', ')
+      })
+      i = j
+    }
+    out[r.eq.id] = { tasks, camps: camps.filter(c => !c.fantome), ouvertes: camps.filter(c => c.fantome) }
+  }
+  return out
+})
+const campW = (c) => ((c.end - c.start) / 3600000) * pxH.value
+function campStyle(c) {
+  const col = couleurProd(c.prod.code_pf)
+  return { left: (((c.start - tAff.value) / 3600000) * pxH.value) + 'px', width: Math.max(2, campW(c)) + 'px', background: col.bg, borderColor: col.bd, '--cd': col.bd }
+}
+function titreCamp(c) { return 'Campagne ' + c.prod.code_pf + ' — ' + c.prod.designation + '  •  ' + c.n + ' lot(s) : ' + c.lotsTxt + '  •  ' + fmtJH(c.start) + ' → ' + fmtJH(c.end) + '  •  clic : détail lot par lot' }
+// Libellé de lot selon la place : complet, 3 derniers chiffres, ou rien
+function lotCourt(lot, w) { const l = String(lot || '—'); if (w >= 52 || l.length <= 3) return l; return w >= 22 ? '…' + l.slice(-3) : '' }
+
 // Mise en évidence d'un produit (légende cliquable)
 const prodFocus = ref('')
 // Largeur (px) d'un segment
@@ -1193,7 +1268,7 @@ const couleurIndex = computed(() => {
 
 // Position des barres (par segment)
 function barStyleSeg(seg, t) {
-  const left = ((seg.start - t0.value) / 3600000) * pxH.value
+  const left = ((seg.start - tAff.value) / 3600000) * pxH.value
   const w = Math.max(2, ((seg.end - seg.start) / 3600000) * pxH.value)
   const s = { left: left + 'px', width: w + 'px' }
   if (t.type === 'lot') { const c = couleurProd(t.prod.code_pf); s.background = c.bg; s.borderColor = c.bd; s['--cd'] = c.bd }
@@ -1490,6 +1565,14 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pe-wk-lbl { font-size: 12px; font-weight: 800; color: #0f172a; min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
 .pe-pdf-btn { background: #fff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12px; font-weight: 700; padding: 6px 12px; cursor: pointer; }
 .pe-pdf-btn:hover { background: #f8fafc; }
+/* Campagnes + en-tête nuit */
+.g-camp { cursor: pointer; }
+.g-camp-tick { position: absolute; top: 4px; bottom: 4px; width: 0; border-left: 2px solid rgba(255,255,255,.75); z-index: 1; }
+.g-camp .g-lbl2 { position: relative; z-index: 2; }
+.g-camp-tick { opacity: .55; }
+.g-nightbar { position: relative; height: 6px; margin-top: 3px; background: #fef3c7; border-radius: 2px; }
+.g-nb-n { position: absolute; top: 0; bottom: 0; background: #334155; opacity: .55; }
+.pe-pres .g-timeline, .pe-pres .g-dcol { height: 34px; }
 /* ===== Mode présentation ===== */
 .pe-pres { position: fixed; inset: 0; z-index: 2000; background: #fff; overflow: auto; padding: 14px 20px; }
 .pe-pres .params-side, .pe-pres .pe-clean-notice, .pe-pres .alert { display: none; }
@@ -1522,4 +1605,12 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 @media (max-width: 900px) { .pe-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .pe-clean-notice { background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; padding: 7px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600; margin: 6px 0; display: inline-flex; align-items: center; gap: 8px; }
 .pe-clean-x { background: none; border: none; color: #047857; font-size: 16px; cursor: pointer; line-height: 1; }
+/* Présentation : nettoyages en bande fine (après les règles de taille du mode présentation) */
+.pe-pres .g-bar.g-gen, .pe-pres .g-bar.g-genH { top: 27px; height: 12px; border-radius: 3px; }
+.pe-pres .g-bar.g-gen .g-lbl, .pe-pres .g-bar.g-genH .g-lbl { font-size: 9px; line-height: 12px; }
+.pe-pres .g-bar.g-part { top: 27px; height: 12px; }
+.g-camp-open { position: absolute; top: 0; height: 7px; background: var(--c); opacity: .85; border-radius: 0 0 4px 4px; cursor: pointer; z-index: 6; }
+.g-camp-open span { display: none; position: absolute; top: 7px; left: 0; font-size: 10px; font-weight: 800; color: #fff; background: #0f172a; border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+.g-camp-open:hover { height: 9px; opacity: 1; }
+.g-camp-open:hover span { display: block; }
 </style>
