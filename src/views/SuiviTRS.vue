@@ -186,6 +186,8 @@ function exporterPDF() {
 
   const ta = totalArrets.value, ouv = pertes.value.ouverture
   const perteRows = MOTIFS.map(mo => '<tr><td><span class="dot" style="background:' + mo[3] + '"></span>' + esc(mo[2]) + '</td><td class="r">' + heures(pertes.value[mo[0]]) + '</td><td class="r">' + (ta ? ((pertes.value[mo[0]] / ta) * 100).toFixed(1) : 0) + ' %</td><td class="r">' + (ouv ? ((pertes.value[mo[0]] / ouv) * 100).toFixed(1) : 0) + ' %</td></tr>').join('')
+  const maxPerte = Math.max(1, ...MOTIFS.map(mo => pertes.value[mo[0]]))
+  const perteBars = MOTIFS.map(mo => '<div class="bar"><span class="bl">' + esc(mo[2]) + '</span><span class="bt"><span class="bf" style="width:' + (pertes.value[mo[0]] / maxPerte * 100).toFixed(1) + '%;background:' + mo[3] + '"></span></span><span class="bv">' + heures(pertes.value[mo[0]]) + '</span></div>').join('')
 
   const moisData = {}
   for (const s of postesFiltres.value) moisData[new Date(s.date).getMonth()] = true
@@ -210,8 +212,8 @@ function exporterPDF() {
     '<h2>TRS par équipement</h2>' + bars +
     '<h2>Détail par équipement</h2>' +
     '<table><thead><tr><th>Équipement</th><th class="r">Ouverture</th><th class="r">Fonct.</th><th class="r">Dispo.</th><th class="r">Perf.</th><th class="r">Qualité</th><th class="r">TRS</th><th class="r">Nettoyage</th></tr></thead><tbody>' + eqRows + '</tbody></table>' +
-    '<h2>Détail des pertes de temps</h2>' +
-    '<table><thead><tr><th>Motif d\'arrêt</th><th class="r">Durée</th><th class="r">% des arrêts</th><th class="r">% ouverture</th></tr></thead><tbody>' + perteRows + '</tbody></table>' +
+    '<h2>Détail des pertes de temps (tous équipements)</h2>' + perteBars +
+    '<table style="margin-top:10px"><thead><tr><th>Motif d\'arrêt</th><th class="r">Durée</th><th class="r">% des arrêts</th><th class="r">% ouverture</th></tr></thead><tbody>' + perteRows + '</tbody></table>' +
     (moisRows ? '<h2>TRS par mois</h2><table><thead><tr><th>Mois</th><th class="r">TRS</th></tr></thead><tbody>' + moisRows + '</tbody></table>' : '') +
     '<p class="foot">ProdTrack — LDM Groupe · Document généré le ' + esc(new Date().toLocaleDateString('fr-FR')) + '</p>' +
     '</body></html>'
