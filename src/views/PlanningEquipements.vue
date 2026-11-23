@@ -52,7 +52,21 @@
     </div>
 
     <section v-if="!chargement && planning.length && !presentation" class="card recap">
-      <h3>Synthèse</h3>
+      <div class="synth-head">
+        <h3>Synthèse</h3>
+        <div class="occ-per">
+          <span class="occ-per-t">Occupation sur :</span>
+          <button type="button" class="pe-wk-btn" :class="{ on: periodeOcc === 'semaine' }" @click="choisirPeriodeOcc('semaine')">Semaine</button>
+          <button type="button" class="pe-wk-btn" :class="{ on: periodeOcc === 'mois' }" @click="choisirPeriodeOcc('mois')">Mois</button>
+          <button type="button" class="pe-wk-btn" :class="{ on: periodeOcc === 'plan' }" @click="choisirPeriodeOcc('plan')">Plan complet</button>
+          <template v-if="periodeOcc !== 'plan'">
+            <button type="button" class="pe-wk-nav" @click="occIdx = occIdxEff - 1" :disabled="occIdxEff <= occIdxMin" title="Période précédente">◀</button>
+            <button type="button" class="pe-wk-nav" @click="occIdx = occIdxEff + 1" :disabled="occIdxEff >= occIdxMax" title="Période suivante">▶</button>
+          </template>
+          <span class="occ-per-lib">{{ periodeOccLib }}</span>
+          <span class="occ-leg"><i class="so-prod"></i>production <i class="so-nett"></i>nettoyage</span>
+        </div>
+      </div>
       <div class="recap-grid">
         <div class="rc"><span class="rc-v">{{ planning.length }}</span><span class="rc-l">Équipements planifiés</span></div>
         <div class="rc"><span class="rc-v">{{ totalLots }}</span><span class="rc-l">Lots ordonnancés</span></div>
@@ -66,7 +80,7 @@
       </div>
       <div class="synth-eq" v-if="synthEquip.length">
         <table class="synth-tbl">
-          <thead><tr><th>Équipement</th><th class="right">Lots</th><th class="right">NG</th><th class="right">NP</th><th class="right">MP</th><th class="right">MC</th><th class="right">AT</th><th class="right">Autre</th><th>Occupation</th><th>Régime</th><th class="right">Fin</th></tr></thead>
+          <thead><tr><th>Équipement</th><th class="right">Lots</th><th class="right">NG</th><th class="right">NP</th><th class="right">MP</th><th class="right">MC</th><th class="right">AT</th><th class="right">Autre</th><th>Occupation <span class="so-per">({{ periodeOccLib }})</span></th><th>Régime</th><th class="right">Fin</th></tr></thead>
           <tbody>
             <tr v-for="e in synthEquip" :key="e.id" :class="{ 'synth-goulot': String(e.id) === String(goulotId) }">
               <td>{{ e.code }} <span class="synth-nom">{{ e.nom }}</span></td>
@@ -77,9 +91,10 @@
               <td class="right">{{ e.mc || '—' }}</td>
               <td class="right">{{ e.at || '—' }}</td>
               <td class="right">{{ e.au || '—' }}</td>
-              <td class="synth-occ-cell">
-                <span class="so-bar"><span class="so-fill" :class="chargeClass((chargeMap[e.id] || {}).occ || 0)" :style="{ width: Math.min(100, (chargeMap[e.id] || {}).occ || 0) + '%' }"></span></span>
-                <b class="so-pct">{{ (chargeMap[e.id] || {}).occ || 0 }}%</b>
+              <td class="synth-occ-cell" :title="occTitre(e.id)">
+                <span class="so-bar so-bar2"><span class="so-prod" :style="{ width: Math.min(100, (chargeMap[e.id] || {}).prodPct || 0) + '%' }"></span><span class="so-nett" :style="{ width: Math.max(0, Math.min(100 - ((chargeMap[e.id] || {}).prodPct || 0), (chargeMap[e.id] || {}).nettPct || 0)) + '%' }"></span></span>
+                <b class="so-pct" :class="'t-' + chargeClass((chargeMap[e.id] || {}).occ || 0)">{{ (chargeMap[e.id] || {}).occ || 0 }}%</b>
+                <span class="so-det">prod. {{ (chargeMap[e.id] || {}).prodPct || 0 }}% · nett. {{ (chargeMap[e.id] || {}).nettPct || 0 }}%</span>
                 <span v-if="String(e.id) === String(goulotId)" class="so-gl">goulot</span>
               </td>
               <td>{{ e.regime === '2x8' ? '2×8' : '3×8' }}</td>
@@ -210,12 +225,17 @@
     <!-- Synthèse détaillée sous le Gantt (présentation) -->
     <section v-if="presentation && synthEquip.length" class="card recap pe-pres-synth">
       <table class="synth-tbl">
-        <thead><tr><th>Équipement</th><th class="right">Lots</th><th class="right">NG</th><th class="right">NP</th><th>Occupation</th><th>Régime</th><th class="right">Fin</th></tr></thead>
+        <thead><tr><th>Équipement</th><th class="right">Lots</th><th class="right">NG</th><th class="right">NP</th><th>Occupation <span class="so-per">({{ periodeOccLib }})</span></th><th>Régime</th><th class="right">Fin</th></tr></thead>
         <tbody>
           <tr v-for="e in synthEquip" :key="'p' + e.id" :class="{ 'synth-goulot': String(e.id) === String(goulotId) }">
             <td>{{ e.code }} <span class="synth-nom">{{ e.nom }}</span></td>
             <td class="right">{{ e.lots }}</td><td class="right">{{ e.ng }}</td><td class="right">{{ e.np }}</td>
-            <td class="synth-occ-cell"><span class="so-bar"><span class="so-fill" :class="chargeClass((chargeMap[e.id] || {}).occ || 0)" :style="{ width: Math.min(100, (chargeMap[e.id] || {}).occ || 0) + '%' }"></span></span><b class="so-pct">{{ (chargeMap[e.id] || {}).occ || 0 }}%</b></td>
+            <td class="synth-occ-cell" :title="occTitre(e.id)">
+                <span class="so-bar so-bar2"><span class="so-prod" :style="{ width: Math.min(100, (chargeMap[e.id] || {}).prodPct || 0) + '%' }"></span><span class="so-nett" :style="{ width: Math.max(0, Math.min(100 - ((chargeMap[e.id] || {}).prodPct || 0), (chargeMap[e.id] || {}).nettPct || 0)) + '%' }"></span></span>
+                <b class="so-pct" :class="'t-' + chargeClass((chargeMap[e.id] || {}).occ || 0)">{{ (chargeMap[e.id] || {}).occ || 0 }}%</b>
+                <span class="so-det">prod. {{ (chargeMap[e.id] || {}).prodPct || 0 }}% · nett. {{ (chargeMap[e.id] || {}).nettPct || 0 }}%</span>
+                <span v-if="String(e.id) === String(goulotId)" class="so-gl">goulot</span>
+              </td>
             <td>{{ e.regime === '2x8' ? '2×8' : '3×8' }}</td>
             <td class="right nowrap">{{ fmtJH(e.fin) }}</td>
           </tr>
@@ -1033,26 +1053,72 @@ const offBands = computed(() => {
   return map
 })
 
-// Charge (taux d'occupation) par équipement sur la fenêtre du plan — pour repérer le goulot.
+// ===== Taux d'occupation =====
+// Occupation = (heures de production + heures de nettoyage) ÷ heures DISPONIBLES, sur une PÉRIODE FIXE.
+//  - heures disponibles = heures ouvertes du régime (3×8 / 2×8 / week-ends / réquisitions)
+//    MOINS les arrêts maintenance (MP/MC/AT/autre) tombant sur ces heures ouvertes
+//  - production = lots ; nettoyage = NG + NP ; seules les heures comprises dans la période comptent
+// Période : semaine (sam. 22h → sam. 22h), mois civil ou plan complet (départ → fin du plan).
+// En présentation, la période suit la vue affichée (semaine affichée / plan complet).
+const periodeOcc = ref((() => { try { return localStorage.getItem('pe_occ_per') || 'semaine' } catch (e) { return 'semaine' } })())
+const occIdx = ref(null)
+function choisirPeriodeOcc(v) { periodeOcc.value = v; occIdx.value = null; try { localStorage.setItem('pe_occ_per', v) } catch (e) {} }
+const moisDe = (d) => d.getFullYear() * 12 + d.getMonth()
+const occIdxMin = computed(() => periodeOcc.value === 'mois' ? moisDe(t0.value) : 0)
+const occIdxMax = computed(() => periodeOcc.value === 'mois' ? moisDe(finGlobale.value) : nbSemaines.value - 1)
+const occIdxEff = computed(() => {
+  if (occIdx.value != null) return Math.min(Math.max(occIdx.value, occIdxMin.value), occIdxMax.value)
+  if (periodeOcc.value === 'mois') return Math.min(Math.max(moisDe(maintenant.value), occIdxMin.value), occIdxMax.value)
+  return semaineDe(maintenant.value)
+})
+watch(periodeOcc, () => { occIdx.value = null })
+watch(occIdx, (v) => { if (v != null && v !== occIdxEff.value) occIdx.value = occIdxEff.value })
+const fenetreOcc = computed(() => {
+  if (presentation.value) {
+    if (vuePres.value === 'semaine') return { a: debutSemaineVue.value, b: new Date(debutSemaineVue.value.getTime() + H7), mode: 'semaine' }
+    return { a: t0.value, b: finGlobale.value, mode: 'plan' }
+  }
+  if (periodeOcc.value === 'plan') return { a: t0.value, b: finGlobale.value, mode: 'plan' }
+  if (periodeOcc.value === 'mois') { const k = occIdxEff.value; return { a: new Date(Math.floor(k / 12), k % 12, 1), b: new Date(Math.floor(k / 12), k % 12 + 1, 1), mode: 'mois' } }
+  const a = new Date(debutSemaine0.value.getTime() + occIdxEff.value * H7)
+  return { a, b: new Date(a.getTime() + H7), mode: 'semaine' }
+})
+const periodeOccLib = computed(() => {
+  const f = fenetreOcc.value, fd = (d) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+  if (f.mode === 'plan') return 'plan complet ' + fd(f.a) + ' → ' + fd(f.b)
+  if (f.mode === 'mois') return f.a.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  return 'semaine du ' + fd(f.a) + ' 22h → ' + fd(f.b) + ' 22h'
+})
 const chargeMap = computed(() => {
-  const end = finGlobale.value, endMs = end.getTime(), m = {}
+  const A = fenetreOcc.value.a.getTime(), B = fenetreOcc.value.b.getTime(), m = {}
+  const sauveMaint = maintCourant
   for (const row of planning.value) {
     const regime = regimeEquip[row.eq.id] || '3x8', weAll = weOn(row.eq.id)
     const requis = buildRequisMap(requisEquip[row.eq.id], regime)
-    let dispoH = 0, c = new Date(t0.value), g = 0
-    while (c < end && g++ < 8000) {
-      const tc = c.getTime(); let best = Infinity
-      for (const hh of [0, 6, 22]) { const x = new Date(c); x.setHours(hh, 0, 0, 0); if (x.getTime() <= tc) x.setDate(x.getDate() + 1); if (x.getTime() < best) best = x.getTime() }
-      const segEnd = Math.min(best, endMs)
-      if (ouvertRegime(c, regime, weAll, requis)) dispoH += (segEnd - tc) / 3600000
-      c = new Date(best)
+    maintCourant = buildMaintList(maintEquip[row.eq.id])
+    let ouvH = 0, arretH = 0, c = new Date(A), g = 0
+    while (c.getTime() < B && g++ < 20000) {
+      const nb = prochaineBascule(c), tc = c.getTime(), fin = Math.min(nb.getTime(), B)
+      if (ouvertRegime(c, regime, weAll, requis)) { const h = (fin - tc) / 3600000; ouvH += h; if (maintA(c)) arretH += h }
+      c = new Date(fin)
     }
-    let busyH = 0
-    for (const t of row.tasks) for (const s of t.segments) busyH += (new Date(s.end) - new Date(s.start)) / 3600000
-    m[row.eq.id] = { dispoH, busyH, occ: dispoH > 0 ? Math.round(busyH / dispoH * 100) : 0 }
+    let prodH = 0, nettH = 0
+    for (const t of row.tasks) for (const sg of t.segments) {
+      const d = Math.max(0, (Math.min(new Date(sg.end).getTime(), B) - Math.max(new Date(sg.start).getTime(), A)) / 3600000)
+      if (t.type === 'lot') prodH += d; else nettH += d
+    }
+    const dispoH = Math.max(0, ouvH - arretH)
+    const pc = (x) => dispoH > 0 ? Math.round(x / dispoH * 100) : 0
+    m[row.eq.id] = { dispoH, ouvH, arretH, prodH, nettH, busyH: prodH + nettH, occ: pc(prodH + nettH), prodPct: pc(prodH), nettPct: pc(nettH) }
   }
+  maintCourant = sauveMaint
   return m
 })
+function occTitre(id) {
+  const c = chargeMap.value[id]; if (!c) return ''
+  const h = (x) => (Math.round(x * 10) / 10).toLocaleString('fr-FR') + ' h'
+  return 'Période : ' + periodeOccLib.value + '\nProduction : ' + h(c.prodH) + ' (' + c.prodPct + ' %)\nNettoyage : ' + h(c.nettH) + ' (' + c.nettPct + ' %)\nDisponible : ' + h(c.dispoH) + ' = ' + h(c.ouvH) + ' ouvertes − ' + h(c.arretH) + ' d\'arrêts maintenance\nOccupation = (production + nettoyage) ÷ disponible = ' + c.occ + ' %'
+}
 const goulotId = computed(() => { let best = null, bo = -1; for (const id in chargeMap.value) { const o = chargeMap.value[id].occ; if (o > bo) { bo = o; best = id } } return best })
 function chargeClass(o) { if (o >= 100) return 'ch-over'; if (o >= 85) return 'ch-high'; if (o >= 50) return 'ch-mid'; return 'ch-low' }
 
@@ -1604,6 +1670,24 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pe-pres-synth { margin-top: 10px; }
 .pe-pres-synth .synth-tbl { font-size: 12px; }
 @media (max-width: 900px) { .pe-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Occupation */
+.synth-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.occ-per { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.occ-per-t { font-size: 10.5px; color: #64748b; font-weight: 700; margin-right: 2px; }
+.occ-per .pe-wk-btn { font-size: 10.5px; padding: 3px 8px; background: #f1f5f9; }
+.occ-per .pe-wk-btn.on { background: #0f766e; color: #fff; }
+.occ-per .pe-wk-nav { width: 24px; height: 22px; font-size: 10px; }
+.occ-per-lib { font-size: 10.5px; font-weight: 800; color: #0f172a; margin-left: 4px; }
+.occ-leg { font-size: 10px; color: #64748b; display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; }
+.occ-leg i { display: inline-block; width: 10px; height: 8px; border-radius: 2px; }
+.so-per { font-weight: 600; color: #94a3b8; text-transform: none; }
+.synth-occ-cell .so-bar2 { display: inline-flex; width: 90px; }
+.so-prod { background: #0d9488; height: 100%; display: block; }
+.so-nett { background: #94a3b8; height: 100%; display: block; }
+.occ-leg .so-prod { background: #0d9488; } .occ-leg .so-nett { background: #94a3b8; }
+.so-det { font-size: 9px; color: #64748b; margin-left: 6px; white-space: nowrap; }
+.so-pct.t-ch-over { color: #dc2626; } .so-pct.t-ch-high { color: #c2410c; }
+.synth-occ-cell { min-width: 250px; }
 .pe-clean-notice { background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; padding: 7px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600; margin: 6px 0; display: inline-flex; align-items: center; gap: 8px; }
 .pe-clean-x { background: none; border: none; color: #047857; font-size: 16px; cursor: pointer; line-height: 1; }
 /* Présentation : nettoyages en bande fine (après les règles de taille du mode présentation) */
