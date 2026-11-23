@@ -14,16 +14,25 @@
       <button type="button" :class="{ on: vueMode === 'duree' }" @click="vueMode = 'duree'">Durée réelle par phase</button>
     </div>
 
+    <!-- Sous-pages par phase -->
+    <div v-if="vueMode === 'matrice' || vueMode === 'params'" class="cad-sous">
+      <button v-for="ph in phasesSous" :key="ph.k" type="button" class="cad-sp" :class="['ph-' + ph.k, { on: phaseSel === ph.k }]" @click="choisirPhase(ph.k)">
+        {{ ph.l }}<span class="cad-sp-n">{{ ph.nEq }} équip.<template v-if="vueMode === 'matrice'"> · {{ ph.nProd }} produits</template></span>
+      </button>
+      <button type="button" class="cad-sp" :class="{ on: phaseSel === '' }" @click="choisirPhase('')">Toutes<span class="cad-sp-n">{{ groupes.length }} équip.</span></button>
+    </div>
+
 <template v-if="vueMode === 'matrice'">
       <section class="card mat-card">
         <div class="mat-head">
           <input type="search" v-model="filtre" class="prod-search-big" placeholder="Filtrer les produits (code ou désignation)…" />
           <select v-model="filtreEq" class="eq-select">
             <option value="">Tous les équipements</option>
-            <option v-for="g in groupes" :key="g.key" :value="g.nom">{{ g.nom }}</option>
+            <option v-for="g in groupesPhase" :key="g.key" :value="g.nom">{{ g.nom }}</option>
           </select>
+          <label v-if="phaseSel && !filtreEq" class="cad-tous"><input type="checkbox" v-model="tousProduits" /> Afficher aussi les produits sans cadence dans cette phase (pour en ajouter)</label>
           <span v-if="filtreEq" class="eq-count">{{ produitsMatrice.length }} produit(s) avec cadence</span>
-          <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupes.length }} équipement(s) — saisissez la cadence directement dans les cases</span>
+          <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupesAffiches.length }} équipement(s){{ phaseSel ? ' — ' + (PHASE_LBL[phaseSel] || phaseSel) : '' }} — saisissez la cadence directement dans les cases</span>
           <span v-if="msgMat" class="mat-msg">{{ msgMat }}</span>
         </div>
         <div class="mat-scroll">
@@ -50,7 +59,7 @@
     <template v-if="vueMode === 'params'">
       <section class="card mat-card">
         <div class="mat-head">
-          <span class="mat-count">{{ groupes.length }} équipement(s) — saisissez les paramètres de temps directement (heures)</span>
+          <span class="mat-count">{{ groupesPhase.length }} équipement(s){{ phaseSel ? ' — ' + (PHASE_LBL[phaseSel] || phaseSel) : '' }} — saisissez les paramètres de temps directement (heures)</span>
           <span v-if="msgMat" class="mat-msg">{{ msgMat }}</span>
         </div>
         <div class="mat-scroll">
@@ -62,7 +71,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="g in groupes" :key="g.key">
+              <tr v-for="g in groupesPhase" :key="g.key">
                 <td class="mat-prod" :class="'ph-' + (g.phase || 'x')"><span class="mat-code">{{ g.nom }}</span><span class="mat-des">{{ PHASE_LBL[g.phase] || '' }}</span></td>
                 <td v-for="c in COLS_PARAM" :key="c.k" class="mat-cell"><input type="number" step="any" min="0" class="mat-in" :value="paramCell(g, c.k)" @change="sauverParam(g, c.k, $event.target.value)" @keyup.enter="$event.target.blur()" placeholder="·" /></td>
               </tr>
@@ -104,11 +113,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 
 const routeCad = useRoute()
+const routerCad = useRouter()
 
 const produits = ref([]), equipements = ref([]), ateliers = ref([]), cadences = ref([])
 const chargement = ref(true), sauvegarde = ref(false), sauvegardeP = ref(false)
@@ -215,6 +225,8 @@ const produitsMatrice = computed(() => {
   if (q) list = list.filter(p => String(p.code_pf || '').toLowerCase().includes(q) || String(p.designation || '').toLowerCase().includes(q))
   const gs = groupeFiltreEq.value
   if (gs) list = list.filter(p => cadenceCell(p.id, gs) > 0)
+  // sous-page d'une phase : seulement les produits qui y ont une cadence (sauf option)
+  else if (phaseSel.value && !tousProduits.value && !q) list = list.filter(p => groupesPhase.value.some(g => cadenceCell(p.id, g) > 0))
   return list
 })
 const msgMat = ref('')
@@ -256,11 +268,27 @@ async function sauverParam(grp, k, valeur) {
 
 // Regroupement des équipements identiques : même phase (type) + même nom de base
 const produitUnique = computed(() => produitsMatrice.value.length === 1 ? produitsMatrice.value[0] : null)
+// ===== Sous-pages par phase =====
+const ORDRE_PH = ['pesee', 'granulation', 'melange', 'compression', 'remplissage', 'pelliculage', 'conditionnement']
+const phaseSel = ref(String(routeCad.query.phase || ''))
+const tousProduits = ref(false)
+if (routeCad.query.vue && ['matrice', 'params', 'duree'].includes(String(routeCad.query.vue))) vueMode.value = String(routeCad.query.vue)
+function majUrl() { try { routerCad.replace({ query: { ...routeCad.query, vue: vueMode.value, phase: phaseSel.value || undefined } }) } catch (e) {} }
+function choisirPhase(k) { phaseSel.value = k; filtreEq.value = ''; tousProduits.value = false; majUrl() }
+watch(vueMode, majUrl)
+const phasesSous = computed(() => {
+  const m = {}
+  for (const g of groupes.value) { const k = g.phase || 'autre'; (m[k] = m[k] || { k, l: PHASE_LBL[k] || 'Autres', groupes: [] }).groupes.push(g) }
+  return Object.values(m).sort((a, b) => (ORDRE_PH.indexOf(a.k) + 1 || 99) - (ORDRE_PH.indexOf(b.k) + 1 || 99)).map(x => ({ k: x.k, l: x.l, nEq: x.groupes.length, nProd: produits.value.filter(p => x.groupes.some(g => cadenceCell(p.id, g) > 0)).length }))
+})
+// 1re sous-page par défaut
+onMounted(() => watch(phasesSous, (v) => { if (!phaseSel.value && !routeCad.query.phase && v.length) { phaseSel.value = v[0].k } }, { immediate: true }))   // après la définition de « groupes »
+const groupesPhase = computed(() => phaseSel.value ? groupes.value.filter(g => (g.phase || 'autre') === phaseSel.value) : groupes.value)
 const groupesAffiches = computed(() => {
-  if (filtreEq.value) return groupes.value.filter(g => g.nom === filtreEq.value)
+  if (filtreEq.value) return groupesPhase.value.filter(g => g.nom === filtreEq.value)
   const pu = produitUnique.value
-  if (pu) return groupes.value.filter(g => cadenceCell(pu.id, g) > 0)
-  return groupes.value
+  if (pu) return groupesPhase.value.filter(g => cadenceCell(pu.id, g) > 0)
+  return groupesPhase.value
 })
 const groupes = computed(() => {
   const eqs = equipements.value.slice()
@@ -510,4 +538,12 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 .recap-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 9px; }
 .ri-nom { font-size: 13px; font-weight: 600; color: #334155; }
 .ri-cnt { font-size: 13px; font-weight: 800; color: #0f766e; background: #f0fdfa; border-radius: 6px; padding: 2px 9px; }
+/* Sous-pages par phase */
+.cad-sous { display: flex; gap: 6px; flex-wrap: wrap; margin: -6px 0 14px; padding: 6px; background: #f1f5f9; border-radius: 10px; }
+.cad-sp { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; background: #fff; border: 1px solid #e2e8f0; border-left: 4px solid #94a3b8; border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 700; color: #334155; cursor: pointer; }
+.cad-sp.on { background: #0f766e; color: #fff; border-color: #0f766e; }
+.cad-sp-n { font-size: 10.5px; font-weight: 600; opacity: .75; }
+.cad-sp.ph-pesee { border-left-color: #64748b; } .cad-sp.ph-granulation { border-left-color: #0d9488; } .cad-sp.ph-melange { border-left-color: #2563eb; }
+.cad-sp.ph-compression { border-left-color: #7c3aed; } .cad-sp.ph-remplissage { border-left-color: #4f46e5; } .cad-sp.ph-pelliculage { border-left-color: #d97706; } .cad-sp.ph-conditionnement { border-left-color: #16a34a; }
+.cad-tous { font-size: 12px; color: #475569; display: inline-flex; align-items: center; gap: 5px; }
 </style>
