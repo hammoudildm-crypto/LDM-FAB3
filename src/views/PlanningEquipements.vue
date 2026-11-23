@@ -436,7 +436,7 @@
               <div class="pan-camp-h"><i :style="{ background: couleurProd(g.code).bg }"></i><b>{{ g.desig || g.code }}</b> <span class="pan-camp-n">{{ g.lots.length }} lot(s)</span>
                 <button v-if="g.lots.length > 1" class="pan-btn pan-camp-all" @click="ajouterCampagne(g.pid)" title="Ajouter tous les lots de ce produit à la suite (campagne)">+ toute la campagne</button></div>
               <div class="pan-prods">
-                <button v-for="l in g.lots" :key="l.id" class="pan-chip" :class="{ 'pan-chip-plan': l.plan, 'pan-chip-cours': l.cours, 'pan-chip-ail': l.ailleurs }" @click="ajouterLot(l)" :title="(l.plan ? 'OF non lancé — ' : (l.cours ? 'En cours — ' : 'En attente — ')) + l.code + ' — ' + l.desig + (l.ailleurs ? '  •  déjà dans le panier de ' + l.ailleurs : '')">{{ l.lot }}<small v-if="l.ailleurs"> · {{ l.ailleurs }}</small></button>
+                <button v-for="l in g.lots" :key="l.id" class="pan-chip" :class="{ 'pan-chip-plan': l.plan, 'pan-chip-cours': l.cours, 'pan-chip-ail': l.ailleurs, 'pan-chip-amont': l.amont }" @click="ajouterLot(l)" :title="(l.plan ? 'OF non lancé — ' : (l.cours ? 'En cours — ' : (l.amont ? 'À venir : actuellement en ' + l.amont + ' — ' : 'En attente — '))) + l.code + ' — ' + l.desig + (l.ailleurs ? '  •  déjà dans le panier de ' + l.ailleurs : '')">{{ l.lot }}<small v-if="l.amont"> · en {{ l.amont.toLowerCase() }}</small><small v-if="l.ailleurs"> · {{ l.ailleurs }}</small></button>
               </div>
             </div>
             <span v-if="!lotsAjoutables.length" class="pan-none">Aucun lot en attente pour cette phase.</span>
@@ -817,6 +817,7 @@ const phasesLot = computed(() => {
   }
   return m
 })
+const GAMME_LIB = { 1: 'Pesée', 2: 'Granulation', 3: 'Séchage', 4: 'Mélange', 5: 'Compression', 6: 'Remplissage', 7: 'Pelliculage' }
 const GAMME_DEF = ['Pesée', 'Granulation', 'Séchage', 'Mélange', 'Compression', 'Remplissage', 'Pelliculage']
 // Lots réels en attente par phase (à leur 1re phase de gamme non terminée, non démarrée)
 const lotsAttentePhase = computed(() => {
@@ -840,6 +841,9 @@ const lotsAttentePhase = computed(() => {
       if (cur == null) continue
       if (!q[cur]) q[cur] = []
       q[cur].push({ ...base, cours: pl[cur] === 'En cours' })
+      // … et proposé aussi sur les phases SUIVANTES de sa gamme, pour pouvoir le planifier à l'avance
+      const libCur = GAMME_LIB[cur] || ''
+      for (const po of phases) if (po > cur) { if (!q[po]) q[po] = []; q[po].push({ ...base, amont: libCur }) }
     }
   }
   return q
@@ -2443,4 +2447,6 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .ctrl-tbl td { white-space: normal; vertical-align: top; }
 .ctrl-err td { background: #fef2f2; } .ctrl-warn td { background: #fffbeb; }
 .ctrl-lien { text-decoration: none; color: #0f766e; font-weight: 700; }
+.pan-chip-amont { background: #f5f3ff; border-color: #c4b5fd; color: #5b21b6; }
+.pan-chip-amont:hover { background: #ede9fe; }
 </style>
