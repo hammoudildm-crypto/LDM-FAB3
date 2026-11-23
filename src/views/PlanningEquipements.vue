@@ -45,9 +45,9 @@
       <button v-for="p in produitsPlanning" :key="p.code" type="button" class="lg-prod"
               :class="{ on: prodFocus === p.code, off: prodFocus && prodFocus !== p.code }"
               :style="{ '--c': p.c.bg, '--cd': p.c.bd }"
-              :title="p.designation + ' — ' + p.n + ' lot(s) · cliquer pour mettre en évidence'"
+              :title="p.code + ' — ' + p.designation + ' — ' + p.n + ' lot(s) · cliquer pour mettre en évidence'"
               @click="prodFocus = prodFocus === p.code ? '' : p.code">
-        <i></i>{{ p.code }} <span class="lg-prod-n">{{ p.n }}</span>
+        <i></i>{{ p.designation || p.code }} <span class="lg-prod-n">{{ p.n }}</span>
       </button>
       <button v-if="prodFocus" type="button" class="lg-prod-reset" @click="prodFocus = ''">Tout afficher</button>
     </div>
