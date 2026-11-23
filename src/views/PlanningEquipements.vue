@@ -581,7 +581,7 @@ const dpPhasesLot = computed(() => {
 // RESTANTE de la gamme (1re non terminée et suivantes), le lot est affecté à un équipement de la phase
 // qui a une CADENCE pour ce produit :
 //   1) équipement saisi dans le suivi (en cours / terminé) ; 2) équipement réservé sur l'OF ;
-//   3) équipement où le lot est déjà (stabilité, 📌 épinglé) ; 4) sinon le moins chargé.
+//   3) 📌 épinglé ; 4) sinon CAMPAGNE ENTIÈRE (même produit = même équipement) sur l'équipement le moins chargé.
 // Ordre dans le panier : en cours, puis campagnes par produit (produit le plus urgent d'abord,
 // urgence = échéance holding time), puis échéance, puis n° de lot. Lots ajoutés à la main et 📌 conservés.
 const holdTimes = ref({})
@@ -605,6 +605,7 @@ function synchroniserPaniers() {
   for (const eqId in panierEquip) for (const it of (panierEquip[eqId] || [])) { const eq = equipsFab.find(e => String(e.id) === String(eqId)); if (eq) ou[it.ordreId + '#' + phaseOrdre(eq.type)] = { eqId: Number(eqId), item: it } }
   const voulu = {}  // eqId -> [{ item, cle }]
   let nonAff = 0, nbLots = 0
+  const demandes = []
   for (const o of ofs.value) {
     if (o.statut === 'Libéré' || o.statut === 'Rejeté' || o.date_fin_fabrication) continue
     if (!o.date_lancement && !syncNonLances.value) continue
@@ -627,18 +628,36 @@ function synchroniserPaniers() {
       if (!cands.length) { if (ph !== 3) nonAff++; return }
       const rec = pl[PH_CLE[ph]]
       const deja = ou[o.id + '#' + ph]
-      let cible = null
-      if (rec && rec.equip != null && (rec.statut === 'En cours' || rec.statut === 'Terminé') && cands.some(e => e.id === rec.equip)) cible = rec.equip
-      else if (deja && deja.item.epingle) cible = deja.eqId
-      else if (idx === 0 && o.equipement_id && cands.some(e => e.id === o.equipement_id)) cible = o.equipement_id
-      else if (deja && cands.some(e => e.id === deja.eqId)) cible = deja.eqId
-      else { let best = null, bc = Infinity; for (const e of cands) { const c = charge[e.id] || 0; if (c < bc) { bc = c; best = e.id } } cible = best }
-      charge[cible] = (charge[cible] || 0) + dureeSur(cible, p.id)
-      const ancien = deja && deja.eqId === cible ? deja.item : null
-      const item = ancien ? { ...ancien, auto: ancien.auto === false ? false : true } : { ordreId: o.id, lot: o.numero_lot || '—', pid: p.id, decalage: 0, dateDebut: '', auto: true }
-      item._cle = { cours: (rec && rec.statut === 'En cours') ? 0 : 1, ech: echeance, pid: p.id, lot: String(o.numero_lot || '') }
-      ;(voulu[cible] = voulu[cible] || []).push(item)
+      let force = null
+      if (rec && rec.equip != null && (rec.statut === 'En cours' || rec.statut === 'Terminé') && cands.some(e => e.id === rec.equip)) force = rec.equip
+      else if (deja && deja.item.epingle) force = deja.eqId
+      else if (idx === 0 && o.equipement_id && cands.some(e => e.id === o.equipement_id)) force = o.equipement_id
+      demandes.push({ o, p, ph, rec, deja, echeance, cands, force })
     })
+  }
+  // --- Répartition par CAMPAGNE ENTIÈRE : tous les lots d'un même produit sur une phase vont sur
+  // le même équipement. Lots imposés (suivi / 📌 / réservé) d'abord ; une campagne suit l'équipement
+  // où un de ses lots est imposé ; sinon les campagnes (plus grosses d'abord) vont sur l'équipement
+  // identique le moins chargé.
+  const affect = new Map()
+  for (const d of demandes) if (d.force != null) { affect.set(d, d.force); charge[d.force] = (charge[d.force] || 0) + dureeSur(d.force, d.p.id) }
+  const groupes = {}
+  for (const d of demandes) if (d.force == null) (groupes[d.ph + '#' + d.p.id] = groupes[d.ph + '#' + d.p.id] || []).push(d)
+  const listeG = Object.values(groupes).map(g => ({ g, h: g.reduce((t, d) => t + dureeSur(d.cands[0].id, d.p.id), 0) })).sort((x, y) => y.h - x.h)
+  for (const { g } of listeG) {
+    const d0 = g[0]
+    // équipement où la campagne a déjà un lot imposé (en cours / épinglé / réservé)
+    const ancre = demandes.find(d => d.force != null && d.ph === d0.ph && d.p.id === d0.p.id && d0.cands.some(e => e.id === d.force))
+    let cible = ancre ? ancre.force : null
+    if (cible == null) { let bc = Infinity; for (const e of d0.cands) { const c = charge[e.id] || 0; if (c < bc) { bc = c; cible = e.id } } }
+    for (const d of g) { affect.set(d, cible); charge[cible] = (charge[cible] || 0) + dureeSur(cible, d.p.id) }
+  }
+  for (const d of demandes) {
+    const cible = affect.get(d); if (cible == null) continue
+    const ancien = d.deja && d.deja.eqId === cible ? d.deja.item : null
+    const item = ancien ? { ...ancien, auto: ancien.auto === false ? false : true } : { ordreId: d.o.id, lot: d.o.numero_lot || '—', pid: d.p.id, decalage: 0, dateDebut: '', auto: true }
+    item._cle = { cours: (d.rec && d.rec.statut === 'En cours') ? 0 : 1, ech: d.echeance, pid: d.p.id, lot: String(d.o.numero_lot || '') }
+    ;(voulu[cible] = voulu[cible] || []).push(item)
   }
   let ajout = 0, retrait = 0, modifies = 0
   for (const eq of equipsFab) {
