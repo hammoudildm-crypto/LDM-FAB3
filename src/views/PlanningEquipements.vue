@@ -93,7 +93,7 @@
         </select>
       </label></div>
       <div class="p-grp"><label class="chk-inline"><input type="checkbox" v-model="filtreAvecPlan" /> Avec planning</label></div>
-      <div class="p-grp"><label class="chk-inline" title="Un lot qui ne tient pas avant une plage OFF (nuit/week-end) est reporté au prochain créneau où il tient d'un seul tenant, au lieu d'être coupé."><input type="checkbox" v-model="lotsInsecables" @change="majInsecables" /> Ne pas couper les lots sur l'OFF</label></div>
+      <div class="p-grp regle-off" title="Règle appliquée à tous les lots : nettoyage + lot doivent être terminés avant le début de l'OFF (nuit / week-end / arrêt). Sinon le lot démarre au prochain poste ouvré.">⛔ Un lot ne démarre que s'il est clôturé (nettoyage inclus) avant l'OFF</div>
     </section>
       <div class="pe-gantt-wrap">
     <div v-if="chargement" class="empty">Chargement…</div>
@@ -142,7 +142,7 @@
             <!-- barres (par segment) -->
             <template v-for="(t, i) in row.tasks">
               <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar"
-                   :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragTemps && t.type === 'lot' && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid, 'g-dim': prodFocus && (t.type !== 'lot' || t.prod.code_pf !== prodFocus), 'g-focus': prodFocus && t.type === 'lot' && t.prod.code_pf === prodFocus, 'g-cours': t.type === 'lot' && lotEnCours(row.eq.id, t), 'g-suite': j > 0, 'g-coupe': j < t.segments.length - 1 }]"
+                   :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragTemps && t.type === 'lot' && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid, 'g-dim': prodFocus && (t.type !== 'lot' || t.prod.code_pf !== prodFocus), 'g-focus': prodFocus && t.type === 'lot' && t.prod.code_pf === prodFocus, 'g-cours': t.type === 'lot' && lotEnCours(row.eq.id, t), 'g-suite': j > 0, 'g-coupe': j < t.segments.length - 1, 'g-force': t.coupe }]"
                    :style="[barStyleSeg(seg, t), (t.type === 'lot' && dragTemps && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid) ? { transform: 'translateX(' + (dragTemps.deltaH * pxH) + 'px)', opacity: 0.75, zIndex: 6 } : null]"
                    :title="t.type === 'lot' ? (titre(t) + '  •  glisser horizontalement pour décaler ce lot  •  double-clic pour réinitialiser') : titre(t)"
                    @mousedown="t.type === 'lot' ? debutDragTemps($event, row.eq.id, t.uid) : null"
@@ -563,6 +563,35 @@ function placerLot(start, dureeH, regime, weAll, requis, noSplit) {
   }
   return placer(sdeb, dureeH, regime, weAll, requis)
 }
+// Place NETTOYAGE + LOT en un seul bloc, dans UNE même plage ouvrée.
+// Règle : un lot ne démarre que s'il sera clôturé avant l'OFF (nuit, week-end chômé, arrêt maintenance).
+// Sinon, nettoyage + lot sont reportés au début du poste ouvré suivant.
+//  - cursor     : équipement libre à partir de cet instant
+//  - lotAuPlusTot : le lot ne peut pas démarrer avant (phase précédente, décalage, date imposée)
+// Si nettoyage + lot dépassent la plus longue plage ouvrée (impossible sans coupure),
+// le bloc démarre en début de plage et est coupé → signalé (coupe: true).
+function placerBloc(cursor, lotAuPlusTot, C, D, regime, weAll, requis) {
+  let s = prochainOuvre(new Date(cursor), regime, weAll, requis), g = 0
+  while (g++ < 120) {
+    const W = finOuvre(s, regime, weAll, requis)
+    let cs = Math.max(s.getTime(), lotAuPlusTot.getTime() - C * 3600000)
+    const finBloc = cs + (C + D) * 3600000
+    if (finBloc <= W.getTime() + 1000) {
+      const cDeb = new Date(cs), lDeb = new Date(cs + C * 3600000), lFin = new Date(finBloc)
+      return {
+        clean: { segments: [{ start: cDeb, end: lDeb }], end: lDeb },
+        lot: { segments: [{ start: lDeb, end: lFin }], end: lFin },
+        coupe: false
+      }
+    }
+    s = prochainOuvre(new Date(W), regime, weAll, requis)
+  }
+  // Repli : bloc plus long que toute plage ouvrée -> début de plage, coupure inévitable
+  let s0 = prochainOuvre(new Date(Math.max(cursor.getTime(), lotAuPlusTot.getTime() - C * 3600000)), regime, weAll, requis)
+  const clean = placer(s0, C, regime, weAll, requis)
+  const lot = placer(clean.end, D, regime, weAll, requis)
+  return { clean, lot, coupe: true }
+}
 // Instant ouvré ? (régime variable par jour)
 function estOuvre(d, regimeEq, weAll, requis) {
   if (maintA(d)) return false
@@ -753,8 +782,6 @@ const planning = computed(() => {
           const kg = poidsLotKg(prod)
           dRun = (cN > 0 && kg > 0) ? Math.max(0.25, (kg / nbTurb) / cN) : Math.max(0.25, dLotFull / nbTurb)
         }
-        // Insécable : granulation/mélange/pelliculage toujours, ou option globale pour tous les lots
-        const noWeekend = lotsInsecables.value || (ph === 2 || ph === 4 || ph === 7)
         let finLot = null
         for (let k = 1; k <= nbTurb; k++) {
           let cursor = eqCursor[eq.id]
@@ -762,21 +789,18 @@ const planning = computed(() => {
           const holdingDep = lastGen && (cursor - lastGen) / 3600000 > P.holdingH
           const cln = (lastPid == null || item.pid !== lastPid) ? 'gen' : (holdingDep ? 'genH' : 'part')
           const C = (cln === 'gen' || cln === 'genH') ? P.vdlt : P.vdlp
-          const clFinSiMaintenant = placer(cursor, C, P.regime, P.weAll, P.requis).end
           // 1re turbine : attend la fin de la phase précédente ; les suivantes enchaînent sur l'équipement
           const decalMs = (Number(item.decalage) || 0) * 3600000
-          const ready = (k === 1) ? readyPhase : new Date(t0v)
-          let debut = clFinSiMaintenant > ready ? clFinSiMaintenant : ready
-          if (k === 1 && decalMs > 0) debut = new Date(debut.getTime() + decalMs)
-          if (k === 1 && item.dateDebut) { const dd = new Date(item.dateDebut); if (!isNaN(dd) && dd.getTime() > debut.getTime()) debut = dd }
-          debut = prochainOuvre(new Date(debut), P.regime, P.weAll, P.requis)
-          const plLot = placerLot(debut, dRun, P.regime, P.weAll, P.requis, noWeekend)
+          let auPlusTot = (k === 1) ? new Date(readyPhase) : new Date(t0v)
+          if (k === 1 && decalMs > 0) auPlusTot = new Date(Math.max(auPlusTot.getTime(), cursor.getTime() + C * 3600000) + decalMs)
+          if (k === 1 && item.dateDebut) { const dd = new Date(item.dateDebut); if (!isNaN(dd) && dd.getTime() > auPlusTot.getTime()) auPlusTot = dd }
+          // Nettoyage + lot en un seul bloc, clôturé avant l'OFF
+          const bloc = placerBloc(cursor, auPlusTot, C, dRun, P.regime, P.weAll, P.requis)
+          const plClean = bloc.clean, plLot = bloc.lot
           const lotStart = plLot.segments[0].start
-          const clStart = reculerOuvre(lotStart, C, P.regime, P.weAll, P.requis)
-          const plClean = placer(clStart, C, P.regime, P.weAll, P.requis)
           eqTasks[eq.id].push({ type: cln, segments: plClean.segments, start: plClean.segments[0].start, end: plClean.end })
           if (cln === 'gen' || cln === 'genH') eqLastGen[eq.id] = new Date(plClean.end)
-          eqTasks[eq.id].push({ type: 'lot', prod, lot: item.lot, uid: item.ordreId, turbines: nbTurb, turbNo: (nbTurb > 1 ? k : null), segments: plLot.segments, start: lotStart, end: plLot.end })
+          eqTasks[eq.id].push({ type: 'lot', prod, lot: item.lot, uid: item.ordreId, turbines: nbTurb, turbNo: (nbTurb > 1 ? k : null), segments: plLot.segments, start: lotStart, end: plLot.end, coupe: bloc.coupe })
           eqCursor[eq.id] = plLot.end; eqLastPid[eq.id] = item.pid
           finLot = plLot.end
         }
@@ -936,6 +960,7 @@ function couleurProd(code) {
 const fmtJH = (d) => d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''
 function titre(t) {
   const p = fmtJH(t.start) + ' → ' + fmtJH(t.end)
+  if (t.type === 'lot' && t.coupe) return '⚠ LOT TROP LONG pour un poste : nettoyage + lot dépassent la plage ouvrée, coupure inévitable sur l\'OFF  •  ' + t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + '  •  ' + p
   if (t.type === 'lot') return t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + (t.turbNo ? '  •  turbine ' + t.turbNo + '/' + t.turbines : '') + '  •  ' + p
   if (t.type === 'gen') return 'Nettoyage général (début campagne)  •  ' + p
   if (t.type === 'genH') return 'Nettoyage général (holding dépassé)  •  ' + p
@@ -1059,6 +1084,8 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .g-lbl2 .g-lbl-nom { font-size: 9.5px; font-weight: 600; opacity: .92; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .g-turb { font-style: normal; font-size: 9px; font-weight: 800; background: rgba(255,255,255,.25); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
 .g-live { color: #bbf7d0; margin-right: 3px; }
+.g-bar.g-lot.g-force { outline: 2px dashed #dc2626; outline-offset: 1px; }
+.regle-off { font-size: 10px; font-weight: 700; color: #7f1d1d; background: #fef2f2; border: 1px solid #fecaca; border-radius: 7px; padding: 5px 7px; line-height: 1.3; }
 .g-gen, .g-genH { background: #7f1d1d; border-color: #7f1d1d; }
 .g-gen .g-lbl, .g-genH .g-lbl { color: #fff; }
 .g-genH { background: repeating-linear-gradient(45deg, #7f1d1d, #7f1d1d 4px, #991b1b 4px, #991b1b 8px); }
