@@ -285,7 +285,7 @@
           <div class="pe-kpi"><span class="pe-kpi-l">Lots planifiés cette semaine</span><span class="pe-kpi-v">{{ bKpi.lots }}</span></div>
           <div class="pe-kpi"><span class="pe-kpi-l">Équipements planifiés</span><span class="pe-kpi-v">{{ bKpi.actifs }} / {{ bKpi.total }}</span></div>
           <div class="pe-kpi pe-kpi-ok"><span class="pe-kpi-l">Lots en cours</span><span class="pe-kpi-v">{{ bKpi.cours }}</span></div>
-          <div class="pe-kpi pe-kpi-warn"><span class="pe-kpi-l">Goulot de la semaine</span><span class="pe-kpi-v">{{ goulotLibB }}</span></div>
+          <div class="pe-kpi pe-kpi-warn"><span class="pe-kpi-l">Goulot de la semaine</span><span class="pe-kpi-v">{{ goulotLibB }}</span><span v-if="goulotNomB" class="pe-kpi-s">{{ goulotNomB }}</span></div>
         </div>
         <div class="pb-occ">
           <div v-for="x in bSynthese" :key="x.r.eq.id" class="pb-occ-l" :class="{ gl: String(x.r.eq.id) === String(goulotId) }">
@@ -1511,6 +1511,7 @@ const goulotLib = computed(() => {
   const o = (chargeMap.value[goulotId.value] || {}).occ
   return r ? (r.eq.code + ' · ' + (o || 0) + ' %') : '—'
 })
+const goulotNomB = computed(() => { const r = planningTous.value.find(x => String(x.eq.id) === String(goulotId.value)); return r ? (r.eq.nom || '') : '' })
 const goulotLibB = computed(() => { const r = planningTous.value.find(x => String(x.eq.id) === String(goulotId.value)); return r ? r.eq.code + ' · ' + ((chargeMap.value[goulotId.value] || {}).occ || 0) + ' %' : '—' })
 const nbEnCours = computed(() => { let n = 0; for (const r of planning.value) n += (enCoursListe.value[r.eq.id] || []).length; return n })
 const libelleSemaine = computed(() => {
@@ -2184,4 +2185,5 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pan-btn.on { background: #0f766e; color: #fff; border-color: #0f766e; }
 .pan-exclu { opacity: .5; } .pan-exclu .pan-pnom b { text-decoration: line-through; }
 .pan-ex-l { font-style: normal; color: #b91c1c; font-size: 10.5px; }
+.pe-kpi-s { font-size: 13px; font-weight: 600; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>
