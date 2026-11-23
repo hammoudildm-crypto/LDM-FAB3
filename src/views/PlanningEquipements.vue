@@ -395,6 +395,8 @@
         <p class="pan-hint2">▲▼ ordre de passage · → déplacer vers un équipement identique · ⊘ exclure du planning sans le retirer. Lots en attente de cette phase. Réordonne/décale en les <b>glissant sur le Gantt</b>, ou fixe une <b>date de début</b> par lot ci-dessus.</p>
         <div class="pan-add">
           <input v-model="rechProd" placeholder="Rechercher un lot (n°, produit)…" class="pan-search" />
+          <p v-if="panSansCadence" class="pan-warn">⚠ Aucune cadence renseignée pour cet équipement : tous les lots de la phase sont proposés.</p>
+          <p v-else class="pan-hint2">Seuls les produits qui passent sur {{ panierOuvert.code }} (cadence renseignée) sont proposés.</p>
           <div class="pan-camps">
             <div v-for="g in lotsAjoutablesParProduit" :key="g.pid" class="pan-camp">
               <div class="pan-camp-h"><i :style="{ background: couleurProd(g.code).bg }"></i><b>{{ g.desig || g.code }}</b> <span class="pan-camp-n">{{ g.lots.length }} lot(s)</span>
@@ -1226,9 +1228,14 @@ const lotsAjoutables = computed(() => {
   // lots déjà placés sur un autre équipement de la même phase : signalés
   const ailleurs = {}
   for (const eqId in panierEquip) { if (String(eqId) === String(panierOuvert.value.id)) continue; const e = equipements.value.find(x => String(x.id) === String(eqId)); if (!e || phaseOrdre(e.type) !== ph) continue; for (const it of panierEquip[eqId] || []) ailleurs[it.ordreId] = e.code }
-  return (lotsAttentePhase.value[ph] || []).filter(l => !dans.has(l.id) && (!q || (l.lot + ' ' + l.code + ' ' + (l.desig || '')).toLowerCase().includes(q))).map(l => ({ ...l, ailleurs: ailleurs[l.id] || '' })).slice(0, 300)
+  // seulement les produits qui passent sur cet équipement (cadence renseignée) ;
+  // si l'équipement n'a encore aucune cadence, on affiche tout (avec un avertissement)
+  const eqId = panierOuvert.value.id
+  const prodsEq = new Set(cadences.value.filter(c => String(c.equipement_id) === String(eqId) && Number(c.cadence_nominale) > 0).map(c => String(c.produit_id)))
+  return (lotsAttentePhase.value[ph] || []).filter(l => !dans.has(l.id) && (!prodsEq.size || prodsEq.has(String(l.pid))) && (!q || (l.lot + ' ' + l.code + ' ' + (l.desig || '')).toLowerCase().includes(q))).map(l => ({ ...l, ailleurs: ailleurs[l.id] || '' })).slice(0, 300)
 })
 // Regroupés par produit (en cours / lancés d'abord), lots non encore placés ailleurs en premier
+const panSansCadence = computed(() => { if (!panierOuvert.value) return false; const id = panierOuvert.value.id; return !cadences.value.some(c => String(c.equipement_id) === String(id) && Number(c.cadence_nominale) > 0) })
 const lotsAjoutablesParProduit = computed(() => {
   const m = {}
   for (const l of lotsAjoutables.value) { (m[l.pid] = m[l.pid] || { pid: l.pid, code: l.code, desig: l.desig, lots: [], rang: 2 }).lots.push(l); if (l.cours) m[l.pid].rang = 0; else if (!l.plan) m[l.pid].rang = Math.min(m[l.pid].rang, 1) }
@@ -2348,4 +2355,5 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pan-camp-all { margin-left: auto; background: #0f766e !important; color: #fff !important; border-color: #0f766e !important; }
 .pan-chip-ail { opacity: .55; border-style: dashed; }
 .pan-chip small { font-size: 9px; font-weight: 600; }
+.pan-warn { font-size: 11px; font-weight: 700; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 4px 8px; margin: 0 0 6px; }
 </style>
