@@ -19,6 +19,14 @@
       </div>
     </div>
 
+    <!-- Sélection de la phase (présentation) : toutes les phases de fabrication -->
+    <div v-if="presentation" class="pe-phases">
+      <button type="button" class="pe-ph" :class="{ on: !filtrePhase }" @click="choisirPhasePres('')">Toutes<span>{{ phasesPres.reduce((t, x) => t + x.n, 0) }} équip.</span></button>
+      <button v-for="ph in phasesPres" :key="ph.k" type="button" class="pe-ph" :class="['ph' + ph.k, { on: String(filtrePhase) === String(ph.k), vide: !ph.n }]" :disabled="!ph.n" @click="choisirPhasePres(ph.k)" :title="ph.n ? ph.n + ' équipement(s) — ' + ph.nPlan + ' planifié(s)' : 'Aucun équipement de cette phase'">
+        <b>{{ ph.k }}</b> {{ ph.l }}<span>{{ ph.n }} équip.<template v-if="ph.n"> · {{ ph.nPlan }} planifié{{ ph.nPlan > 1 ? 's' : '' }}</template></span>
+      </button>
+    </div>
+
     <!-- Bandeau KPI (présentation) -->
     <div v-if="presentation && planning.length" class="pe-kpis">
       <div class="pe-kpi"><span class="pe-kpi-l">Lots planifiés</span><span class="pe-kpi-v">{{ totalLots }}</span></div>
@@ -467,6 +475,20 @@ const annee = ref(today.getFullYear())
 const pxH = ref(4)         // pixels par heure (zoom)
 const filtreTexte = ref('')
 const filtrePhase = ref('')
+// Phases de fabrication (présentation) : sélection de la phase -> affichage de ses équipements
+const PHASES_FAB = [[1, 'Pesée'], [2, 'Granulation'], [3, 'Séchage'], [4, 'Mélange'], [5, 'Compression'], [6, 'Remplissage gélules'], [7, 'Pelliculage']]
+const phasesPres = computed(() => PHASES_FAB.map(([k, l]) => {
+  const eqs = equipements.value.filter(e => estFab(e.type) && phaseOrdre(e.type) === k)
+  return { k, l, n: eqs.length, nPlan: eqs.filter(e => (panierEquip[e.id] || []).length).length }
+}))
+let avecPlanAvant = null
+function choisirPhasePres(k) {
+  filtrePhase.value = k ? String(k) : ''
+  // une phase choisie : tous ses équipements affichés (même sans lot), filtre texte retiré
+  if (k) { if (avecPlanAvant === null) avecPlanAvant = filtreAvecPlan.value; filtreAvecPlan.value = false; filtreTexte.value = '' }
+  else if (avecPlanAvant !== null) { filtreAvecPlan.value = avecPlanAvant; avecPlanAvant = null }
+  try { ajusterVueBientot() } catch (e) {}
+}
 // Option : ne pas couper un lot sur les heures OFF — le reporter à la fenêtre
 // de travail suivante où il tient d'un seul tenant (insécable). Mémorisé localement.
 const lotsInsecables = ref((() => { try { return localStorage.getItem('pe_insecables') !== '0' } catch (e) { return true } })())
@@ -2523,4 +2545,13 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pe-pres .g-row, .pe-pres .g-eqcol { min-height: 66px; }
 .pe-pres .g-bar { top: 8px; height: 50px; }
 .pe-pres .g-bar.g-gen, .pe-pres .g-bar.g-genH, .pe-pres .g-bar.g-part { top: 27px; height: 12px; }
+/* Sélection de phase (présentation) */
+.pe-phases { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 10px; }
+.pe-ph { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; background: #fff; border: 1px solid #e2e8f0; border-left: 5px solid #94a3b8; border-radius: 9px; padding: 6px 14px; font: inherit; font-size: 14px; font-weight: 700; color: #0f172a; cursor: pointer; }
+.pe-ph b { display: none; }
+.pe-ph span { font-size: 11px; font-weight: 600; color: #64748b; }
+.pe-ph.on { background: #0f766e; border-color: #0f766e; color: #fff; } .pe-ph.on span { color: #ccfbf1; }
+.pe-ph.vide { opacity: .45; cursor: default; }
+.pe-ph.ph1 { border-left-color: #64748b; } .pe-ph.ph2 { border-left-color: #0d9488; } .pe-ph.ph3 { border-left-color: #0891b2; } .pe-ph.ph4 { border-left-color: #2563eb; }
+.pe-ph.ph5 { border-left-color: #7c3aed; } .pe-ph.ph6 { border-left-color: #4f46e5; } .pe-ph.ph7 { border-left-color: #d97706; }
 </style>
