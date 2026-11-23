@@ -15,6 +15,18 @@
       <span class="lg"><i class="sw sw-gen"></i>Nettoyage général (NG)</span>
       <span class="lg"><i class="sw sw-part"></i>Nettoyage partiel (NP)</span>
       <span class="lg"><i class="sw sw-nuit"></i>OFF (nuit 22h–06h / week-end chômé)</span>
+      <span class="lg"><i class="sw sw-cours"></i>Lot en cours</span>
+    </div>
+    <div v-if="produitsPlanning.length" class="lg-prods">
+      <span class="lg-prods-t">Produits :</span>
+      <button v-for="p in produitsPlanning" :key="p.code" type="button" class="lg-prod"
+              :class="{ on: prodFocus === p.code, off: prodFocus && prodFocus !== p.code }"
+              :style="{ '--c': p.c.bg, '--cd': p.c.bd }"
+              :title="p.designation + ' — ' + p.n + ' lot(s) · cliquer pour mettre en évidence'"
+              @click="prodFocus = prodFocus === p.code ? '' : p.code">
+        <i></i>{{ p.code }} <span class="lg-prod-n">{{ p.n }}</span>
+      </button>
+      <button v-if="prodFocus" type="button" class="lg-prod-reset" @click="prodFocus = ''">Tout afficher</button>
     </div>
 
     <section v-if="!chargement && planning.length" class="card recap">
@@ -129,18 +141,16 @@
             <!-- barres (par segment) -->
             <template v-for="(t, i) in row.tasks">
               <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar"
-                   :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragTemps && t.type === 'lot' && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid }]"
+                   :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragTemps && t.type === 'lot' && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid, 'g-dim': prodFocus && (t.type !== 'lot' || t.prod.code_pf !== prodFocus), 'g-focus': prodFocus && t.type === 'lot' && t.prod.code_pf === prodFocus, 'g-cours': t.type === 'lot' && lotEnCours(row.eq.id, t), 'g-suite': j > 0, 'g-coupe': j < t.segments.length - 1 }]"
                    :style="[barStyleSeg(seg, t), (t.type === 'lot' && dragTemps && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid) ? { transform: 'translateX(' + (dragTemps.deltaH * pxH) + 'px)', opacity: 0.75, zIndex: 6 } : null]"
                    :title="t.type === 'lot' ? (titre(t) + '  •  glisser horizontalement pour décaler ce lot  •  double-clic pour réinitialiser') : titre(t)"
                    @mousedown="t.type === 'lot' ? debutDragTemps($event, row.eq.id, t.uid) : null"
                    @dblclick="t.type === 'lot' ? resetDecal(row.eq.id, t.uid) : null">
-                <span v-if="j === 0" class="g-lbl" :class="{ 'g-lbl2': t.type === 'lot' }">
-                  <template v-if="t.type === 'lot'">
-                    <span class="g-lbl-nom">{{ t.prod.designation }}</span>
-                    <span class="g-lbl-code">{{ t.prod.code_pf }}{{ t.lot ? ' · ' + t.lot : '' }}{{ t.turbNo ? ' T' + t.turbNo : '' }}</span>
-                  </template>
-                  <template v-else>{{ t.type.startsWith('gen') ? 'NG' : 'NP' }}</template>
+                <span v-if="t.type === 'lot' && segW(seg) >= 18" class="g-lbl g-lbl2">
+                  <span class="g-lbl-lot"><b v-if="lotEnCours(row.eq.id, t) && j === 0" class="g-live">▶</b><template v-if="j > 0">↳ </template>{{ t.lot || '—' }}<em v-if="t.turbNo" class="g-turb">T{{ t.turbNo }}/{{ t.turbines }}</em></span>
+                  <span v-if="segW(seg) >= 60" class="g-lbl-nom">{{ t.prod.designation }}</span>
                 </span>
+                <span v-else-if="t.type !== 'lot' && j === 0 && segW(seg) >= 14" class="g-lbl">{{ t.type.startsWith('gen') ? 'NG' : 'NP' }}</span>
               </div>
             </template>
           </div>
@@ -870,25 +880,54 @@ const posMaintenant = computed(() => {
   return (px >= 0 && px <= totalW.value) ? px : null
 })
 
+// Mise en évidence d'un produit (légende cliquable)
+const prodFocus = ref('')
+// Largeur (px) d'un segment
+const segW = (seg) => ((seg.end - seg.start) / 3600000) * pxH.value
+// Lot en cours sur cet équipement (suivi_phases)
+function lotEnCours(eqId, t) { const c = enCoursEquip.value[eqId]; return !!(c && t.lot && String(c.lot) === String(t.lot)) }
+// Produits présents dans le planning (une couleur distincte par produit)
+const produitsPlanning = computed(() => {
+  const m = {}
+  for (const r of planning.value) for (const t of r.tasks) {
+    if (t.type !== 'lot') continue
+    const k = t.prod.code_pf || '—'
+    if (!m[k]) m[k] = { code: k, designation: t.prod.designation || '', lots: new Set() }
+    m[k].lots.add(t.lot || t.uid)
+  }
+  return Object.values(m).sort((a, b) => String(a.code).localeCompare(String(b.code)))
+    .map(p => ({ code: p.code, designation: p.designation, n: p.lots.size, c: couleurProd(p.code) }))
+})
+const couleurIndex = computed(() => {
+  const codes = new Set()
+  for (const r of planning.value) for (const t of r.tasks) if (t.type === 'lot') codes.add(t.prod.code_pf || '—')
+  const idx = {}; [...codes].sort((a, b) => String(a).localeCompare(String(b))).forEach((c, i) => { idx[c] = i })
+  return idx
+})
+
 // Position des barres (par segment)
 function barStyleSeg(seg, t) {
   const left = ((seg.start - t0.value) / 3600000) * pxH.value
   const w = Math.max(2, ((seg.end - seg.start) / 3600000) * pxH.value)
   const s = { left: left + 'px', width: w + 'px' }
-  if (t.type === 'lot') { const c = couleurProd(t.prod.code_pf); s.background = c.bg; s.borderColor = c.bd }
+  if (t.type === 'lot') { const c = couleurProd(t.prod.code_pf); s.background = c.bg; s.borderColor = c.bd; s['--cd'] = c.bd }
   return s
 }
 
 // Couleur par produit (stable)
+// Couleurs franches (texte blanc lisible), attribuées dans l'ordre des produits
+// du planning → deux produits affichés n'ont pas la même couleur (jusqu'à 14).
 const palette = [
-  ['#dbeafe', '#3b82f6'], ['#dcfce7', '#22c55e'], ['#fef9c3', '#eab308'], ['#fae8ff', '#d946ef'],
-  ['#ffedd5', '#f97316'], ['#cffafe', '#06b6d4'], ['#e0e7ff', '#6366f1'], ['#fee2e2', '#ef4444'],
-  ['#d1fae5', '#10b981'], ['#ede9fe', '#8b5cf6']
+  ['#2563eb', '#1e3a8a'], ['#16a34a', '#14532d'], ['#ea580c', '#7c2d12'], ['#9333ea', '#4c1d95'],
+  ['#0891b2', '#164e63'], ['#db2777', '#831843'], ['#ca8a04', '#713f12'], ['#4f46e5', '#312e81'],
+  ['#059669', '#064e3b'], ['#c2410c', '#431407'], ['#0284c7', '#0c4a6e'], ['#65a30d', '#365314'],
+  ['#be185d', '#500724'], ['#7c3aed', '#2e1065']
 ]
 function couleurProd(code) {
-  let h = 0; const s = String(code || '')
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
-  const [bg, bd] = palette[h % palette.length]
+  const k = String(code || '')
+  let i = couleurIndex.value[k]
+  if (i == null) { let h = 0; for (let n = 0; n < k.length; n++) h = (h * 31 + k.charCodeAt(n)) >>> 0; i = h }
+  const [bg, bd] = palette[i % palette.length]
   return { bg, bd }
 }
 
@@ -949,7 +988,16 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .legende { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; font-size: 11px; color: #475569; }
 .lg { display: inline-flex; align-items: center; gap: 5px; }
 .sw { width: 14px; height: 12px; border-radius: 3px; display: inline-block; }
-.sw-lot { background: #dbeafe; border: 1px solid #3b82f6; }
+.sw-lot { background: linear-gradient(90deg, #2563eb 0 33%, #16a34a 33% 66%, #ea580c 66%); border-left: 3px solid #1e3a8a; }
+.sw-cours { background: #fff; border: 2px solid #22c55e; box-shadow: 0 0 0 2px rgba(34,197,94,.3); }
+.lg-prods { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 0 0 8px; }
+.lg-prods-t { font-size: 10px; font-weight: 700; color: #64748b; margin-right: 2px; }
+.lg-prod { display: inline-flex; align-items: center; gap: 5px; background: #fff; border: 1px solid #e2e8f0; border-radius: 999px; padding: 2px 9px 2px 4px; font-size: 10.5px; font-weight: 700; color: #1e293b; cursor: pointer; transition: opacity .15s, box-shadow .15s; }
+.lg-prod i { width: 14px; height: 14px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 2px var(--cd); }
+.lg-prod-n { font-size: 9px; font-weight: 800; color: #fff; background: var(--c); border-radius: 999px; padding: 0 5px; }
+.lg-prod.on { border-color: var(--c); box-shadow: 0 0 0 2px var(--c); }
+.lg-prod.off { opacity: .4; }
+.lg-prod-reset { background: none; border: none; color: #0f766e; font-size: 10.5px; font-weight: 700; cursor: pointer; text-decoration: underline; }
 .sw-gen { background: #7f1d1d; }
 .sw-part { background: #cbd5e1; }
 .sw-nuit { background: repeating-linear-gradient(45deg, rgba(30,41,59,.12), rgba(30,41,59,.12) 3px, rgba(30,41,59,.28) 3px, rgba(30,41,59,.28) 6px); border: 1px solid #cbd5e1; }
@@ -971,7 +1019,7 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .g-eqfin { font-size: 8.5px; color: #94a3b8; }
 .g-eqcours { font-size: 8px; color: #166534; font-weight: 700; background: #dcfce7; border-radius: 4px; padding: 1px 4px; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-eqwe { display: flex; align-items: center; gap: 3px; font-size: 8px; color: #64748b; margin-top: 1px; cursor: pointer; }
-.g-track { position: relative; height: 44px; }
+.g-track { position: relative; height: 54px; }
 .g-dband { position: absolute; top: 0; bottom: 0; border-left: 1px solid #f1f5f9; box-sizing: border-box; z-index: 0; }
 .g-weekend { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #e9edf3 6px, #e9edf3 12px); z-index: 0; }
 .g-nuit { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, rgba(30,41,59,.07), rgba(30,41,59,.07) 5px, rgba(30,41,59,.14) 5px, rgba(30,41,59,.14) 10px); z-index: 0; pointer-events: none; }
@@ -992,12 +1040,22 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .g-now { position: absolute; top: 0; bottom: 0; width: 2px; background: #ef4444; z-index: 3; }
 .g-now-head { position: absolute; top: 0; bottom: 0; width: 2px; background: #ef4444; z-index: 4; }
 .g-now-head span { position: absolute; top: 0; left: 2px; background: #ef4444; color: #fff; font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: 0 3px 3px 0; white-space: nowrap; }
-.g-bar { position: absolute; top: 4px; height: 26px; border-radius: 4px; border: 1px solid; box-sizing: border-box; overflow: hidden; display: flex; align-items: center; cursor: default; z-index: 1; }
-.g-bar.g-lot, .g-bar.g-gen, .g-bar.g-genH, .g-bar.g-part { }
-.g-lbl { font-size: 8.5px; font-weight: 700; padding: 0 3px; white-space: nowrap; color: #1e293b; }
-.g-lbl2 { display: flex; flex-direction: column; justify-content: center; line-height: 1.15; overflow: hidden; }
-.g-lbl2 .g-lbl-nom { font-size: 8px; font-weight: 600; opacity: .82; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.g-lbl2 .g-lbl-code { font-size: 8.5px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-bar { position: absolute; top: 7px; height: 40px; border-radius: 6px; border: 1px solid; box-sizing: border-box; overflow: hidden; display: flex; align-items: center; cursor: default; z-index: 1; transition: opacity .15s, filter .15s, box-shadow .15s; }
+.g-bar.g-lot { border-width: 0 0 0 4px; border-left-color: var(--cd); box-shadow: 0 1px 3px rgba(15,23,42,.25), inset 0 1px 0 rgba(255,255,255,.25); }
+.g-bar.g-lot:hover { filter: brightness(1.08); box-shadow: 0 4px 10px rgba(15,23,42,.35); z-index: 4; }
+.g-bar.g-lot.g-suite { border-left-style: dashed; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.g-bar.g-lot.g-coupe { border-top-right-radius: 0; border-bottom-right-radius: 0; box-shadow: 0 1px 3px rgba(15,23,42,.25), inset -3px 0 0 rgba(255,255,255,.35); }
+.g-bar.g-gen, .g-bar.g-genH, .g-bar.g-part { top: 12px; height: 30px; }
+.g-bar.g-dim { opacity: .18; filter: grayscale(.7); }
+.g-bar.g-focus { box-shadow: 0 0 0 2px #0f172a, 0 4px 10px rgba(15,23,42,.35); z-index: 4; }
+.g-bar.g-cours { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #22c55e; animation: gCours 1.6s ease-in-out infinite; z-index: 3; }
+@keyframes gCours { 50% { box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(34,197,94,.35); } }
+.g-lbl { font-size: 10px; font-weight: 800; padding: 0 5px; white-space: nowrap; color: #1e293b; }
+.g-lbl2 { display: flex; flex-direction: column; justify-content: center; line-height: 1.2; overflow: hidden; min-width: 0; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
+.g-lbl2 .g-lbl-lot { font-size: 11.5px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .01em; }
+.g-lbl2 .g-lbl-nom { font-size: 9.5px; font-weight: 600; opacity: .92; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-turb { font-style: normal; font-size: 9px; font-weight: 800; background: rgba(255,255,255,.25); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+.g-live { color: #bbf7d0; margin-right: 3px; }
 .g-gen, .g-genH { background: #7f1d1d; border-color: #7f1d1d; }
 .g-gen .g-lbl, .g-genH .g-lbl { color: #fff; }
 .g-genH { background: repeating-linear-gradient(45deg, #7f1d1d, #7f1d1d 4px, #991b1b 4px, #991b1b 8px); }
@@ -1101,7 +1159,6 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .g-eqwe { font-size: 7.5px; }
 .g-dlbl { font-size: 9px; }
 .g-sh { font-size: 7.5px; }
-.g-lbl { font-size: 8px; }
 .g-reg, .g-pan { font-size: 7.5px; }
 /* Paramètres en colonne à gauche du Gantt */
 .pe-body { display: flex; gap: 10px; align-items: flex-start; }
