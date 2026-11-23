@@ -115,7 +115,7 @@
         </select>
       </label></div>
       <div class="p-grp"><label class="chk-inline"><input type="checkbox" v-model="filtreAvecPlan" /> Avec planning</label></div>
-      <div class="p-grp regle-off" title="Règle appliquée à tous les lots : nettoyage + lot doivent être terminés avant le début de l'OFF (nuit / week-end / arrêt). Sinon le lot démarre au prochain poste ouvré.">⛔ Un lot ne démarre que s'il est clôturé (nettoyage inclus) avant l'OFF</div>
+      <div class="p-grp regle-off" title="Règle appliquée à tous les lots : le lot doit être terminé avant le début de l'OFF (nuit / week-end / arrêt), sinon il démarre au poste ouvré suivant. Le nettoyage n'est pas concerné : il peut être fait avant l'OFF.">⛔ Un lot ne démarre que s'il est clôturé avant l'OFF (nettoyage possible avant l'OFF)</div>
     </section>
       <div class="pe-gantt-wrap">
     <div v-if="chargement" class="empty">Chargement…</div>
@@ -668,34 +668,56 @@ function placerLot(start, dureeH, regime, weAll, requis, noSplit) {
   }
   return placer(sdeb, dureeH, regime, weAll, requis)
 }
-// Place NETTOYAGE + LOT en un seul bloc, dans UNE même plage ouvrée.
-// Règle : un lot ne démarre que s'il sera clôturé avant l'OFF (nuit, week-end chômé, arrêt maintenance).
-// Sinon, nettoyage + lot sont reportés au début du poste ouvré suivant.
-//  - cursor     : équipement libre à partir de cet instant
+// Place le NETTOYAGE puis le LOT.
+// Règle : le LOT ne démarre que s'il sera clôturé avant l'OFF (nuit, week-end chômé, arrêt maintenance) ;
+// sinon il démarre au poste ouvré suivant. Le NETTOYAGE n'est pas soumis à cette règle : il est fait
+// juste avant le lot, et peut donc se dérouler avant l'OFF (fin de poste) pour un lot lancé à la reprise.
+//  - cursor       : équipement libre à partir de cet instant
 //  - lotAuPlusTot : le lot ne peut pas démarrer avant (phase précédente, décalage, date imposée)
-// Si nettoyage + lot dépassent la plus longue plage ouvrée (impossible sans coupure),
-// le bloc démarre en début de plage et est coupé → signalé (coupe: true).
+// Si le lot est plus long que la plus longue plage ouvrée, il démarre en début de plage et est coupé (coupe: true).
 function placerBloc(cursor, lotAuPlusTot, C, D, regime, weAll, requis) {
-  let s = prochainOuvre(new Date(cursor), regime, weAll, requis), g = 0
+  const finNettMin = placer(cursor, C, regime, weAll, requis).end           // nettoyage au plus tôt
+  const t1 = new Date(Math.max(finNettMin.getTime(), lotAuPlusTot.getTime()))
+  let s = prochainOuvre(t1, regime, weAll, requis), g = 0, lot = null, coupe = false
   while (g++ < 120) {
     const W = finOuvre(s, regime, weAll, requis)
-    let cs = Math.max(s.getTime(), lotAuPlusTot.getTime() - C * 3600000)
-    const finBloc = cs + (C + D) * 3600000
-    if (finBloc <= W.getTime() + 1000) {
-      const cDeb = new Date(cs), lDeb = new Date(cs + C * 3600000), lFin = new Date(finBloc)
-      return {
-        clean: { segments: [{ start: cDeb, end: lDeb }], end: lDeb },
-        lot: { segments: [{ start: lDeb, end: lFin }], end: lFin },
-        coupe: false
-      }
-    }
+    if (s.getTime() + D * 3600000 <= W.getTime() + 1000) { lot = { segments: [{ start: new Date(s), end: new Date(s.getTime() + D * 3600000) }], end: new Date(s.getTime() + D * 3600000) }; break }
     s = prochainOuvre(new Date(W), regime, weAll, requis)
   }
-  // Repli : bloc plus long que toute plage ouvrée -> début de plage, coupure inévitable
-  let s0 = prochainOuvre(new Date(Math.max(cursor.getTime(), lotAuPlusTot.getTime() - C * 3600000)), regime, weAll, requis)
-  const clean = placer(s0, C, regime, weAll, requis)
-  const lot = placer(clean.end, D, regime, weAll, requis)
-  return { clean, lot, coupe: true }
+  if (!lot) { lot = placer(prochainOuvre(t1, regime, weAll, requis), D, regime, weAll, requis); coupe = true }
+  // Nettoyage calé juste avant le lot (heures ouvrées), sans démarrer avant que l'équipement soit libre
+  const lotStart = lot.segments[0].start
+  let cs = reculerNettoyage(lotStart, C, regime, weAll, requis)
+  if (cs < cursor) cs = new Date(cursor)
+  const clean = placer(cs, C, regime, weAll, requis)
+  return { clean, lot, coupe }
+}
+// Bascule précédente (00h, 06h, 22h ou bornes d'arrêt maintenance) strictement avant d
+function basculePrecedente(d) {
+  const t = d.getTime(); let best = -Infinity
+  for (const hh of [0, 6, 22]) { const c = new Date(d); c.setHours(hh, 0, 0, 0); if (c.getTime() >= t) c.setDate(c.getDate() - 1); if (c.getTime() > best) best = c.getTime() }
+  for (const m of maintCourant) { if (m.debut < t && m.debut > best) best = m.debut; if (m.fin < t && m.fin > best) best = m.fin }
+  return new Date(best)
+}
+// Début exact de la plage ouvrée qui contient l'instant juste avant 'fin'
+function debutPlageExact(fin, regime, weAll, requis) {
+  let x = new Date(fin), g = 0
+  while (g++ < 500) { const p = basculePrecedente(x); if (!estOuvre(p, regime, weAll, requis)) return x; x = p }
+  return x
+}
+// Recule de dureeH heures OUVRÉES à partir de 'end' (en sautant les plages OFF) -> instant de début
+function reculerNettoyage(end, dureeH, regime, weAll, requis) {
+  let reste = dureeH, curEnd = new Date(end), g = 0
+  while (reste > 0.001 && g++ < 300) {
+    let c = new Date(curEnd.getTime() - 1), k = 0
+    while (!estOuvre(c, regime, weAll, requis) && k++ < 20000) c = new Date(c.getTime() - 60000)
+    const pf = new Date(Math.min(curEnd.getTime(), finOuvre(c, regime, weAll, requis).getTime()))
+    const deb = debutPlageExact(pf, regime, weAll, requis)
+    const dispo = (pf - deb) / 3600000
+    if (dispo >= reste) return new Date(pf.getTime() - reste * 3600000)
+    reste -= dispo; curEnd = new Date(deb)
+  }
+  return curEnd
 }
 // Instant ouvré ? (régime variable par jour)
 function estOuvre(d, regimeEq, weAll, requis) {
@@ -1199,7 +1221,7 @@ function couleurProd(code) {
 const fmtJH = (d) => d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''
 function titre(t) {
   const p = fmtJH(t.start) + ' → ' + fmtJH(t.end)
-  if (t.type === 'lot' && t.coupe) return '⚠ LOT TROP LONG pour un poste : nettoyage + lot dépassent la plage ouvrée, coupure inévitable sur l\'OFF  •  ' + t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + '  •  ' + p
+  if (t.type === 'lot' && t.coupe) return '⚠ LOT TROP LONG pour un poste : le lot dépasse la plage ouvrée, coupure inévitable sur l\'OFF  •  ' + t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + '  •  ' + p
   if (t.type === 'lot') return t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + (t.turbNo ? '  •  turbine ' + t.turbNo + '/' + t.turbines : '') + '  •  ' + p
   if (t.type === 'gen') return 'Nettoyage général (début campagne)  •  ' + p
   if (t.type === 'genH') return 'Nettoyage général (holding dépassé)  •  ' + p
