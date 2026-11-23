@@ -43,14 +43,15 @@
       <span class="lg"><i class="sw sw-plan"></i>Planifié</span>
     </div>
     <div v-if="produitsPlanning.length" class="lg-prods">
-      <span class="lg-prods-t">Produits :</span>
-      <button v-for="p in produitsPlanning" :key="p.code" type="button" class="lg-prod"
+      <span class="lg-prods-t">Produits ({{ produitsPlanning.length }}) :</span>
+      <button v-for="p in produitsLegende" :key="p.code" type="button" class="lg-prod"
               :class="{ on: prodFocus === p.code, off: prodFocus && prodFocus !== p.code }"
               :style="{ '--c': p.c.bg, '--cd': p.c.bd }"
               :title="p.code + ' — ' + p.designation + ' — ' + p.n + ' lot(s) · cliquer pour mettre en évidence'"
               @click="prodFocus = prodFocus === p.code ? '' : p.code">
         <i></i>{{ p.designation || p.code }} <span class="lg-prod-n">{{ p.n }}</span>
       </button>
+      <button v-if="produitsPlanning.length > NB_PROD_LEG" type="button" class="lg-prod-plus" @click="legOuverte = !legOuverte">{{ legOuverte ? '▲ réduire' : '+ ' + (produitsPlanning.length - NB_PROD_LEG) + ' autres ▾' }}</button>
       <button v-if="prodFocus" type="button" class="lg-prod-reset" @click="prodFocus = ''">Tout afficher</button>
     </div>
 
@@ -81,7 +82,8 @@
         <div class="rc"><span class="rc-v">{{ totalAU }}</span><span class="rc-l">Arrêt autre (h)</span></div>
         <div class="rc"><span class="rc-v">{{ fmtJH(finGlobale) }}</span><span class="rc-l">Fin la plus tardive</span></div>
       </div>
-      <div class="synth-eq" v-if="synthEquip.length">
+      <button v-if="synthEquip.length" type="button" class="synth-tgl" @click="synthOuverte = !synthOuverte">{{ synthOuverte ? '▲ Masquer le détail par équipement' : '▾ Détail par équipement (' + synthEquip.length + ')' }}<span v-if="!synthOuverte && goulotId" class="synth-tgl-gl"> · goulot : <b>{{ goulotLib }}</b></span></button>
+      <div class="synth-eq" v-if="synthEquip.length && synthOuverte">
         <table class="synth-tbl">
           <thead><tr><th>Équipement</th><th class="right">Lots</th><th class="right">NG</th><th class="right">NP</th><th class="right">MP</th><th class="right">MC</th><th class="right">AT</th><th class="right">Autre</th><th>Occupation <span class="so-per">({{ periodeOccLib }})</span></th><th>Régime</th><th class="right">Fin</th></tr></thead>
           <tbody>
@@ -1695,6 +1697,19 @@ function titreCamp(c) { return 'Campagne ' + c.prod.code_pf + ' — ' + c.prod.d
 // Libellé de lot selon la place : complet, 3 derniers chiffres, ou rien
 function lotCourt(lot, w) { const l = String(lot || '—'); if (w >= 52 || l.length <= 3) return l; return w >= 22 ? '…' + l.slice(-3) : '' }
 
+// Légende produits repliée : les plus fréquents d'abord ; détail de synthèse replié
+const NB_PROD_LEG = 8
+const legOuverte = ref(false)
+const synthOuverte = ref((() => { try { return localStorage.getItem('pe_synth_ouv') === '1' } catch (e) { return false } })())
+watch(synthOuverte, (v) => { try { localStorage.setItem('pe_synth_ouv', v ? '1' : '0') } catch (e) {} })
+const produitsLegende = computed(() => {
+  const tri = [...produitsPlanning.value].sort((a, b) => b.n - a.n)
+  if (legOuverte.value || tri.length <= NB_PROD_LEG) return tri
+  const vis = tri.slice(0, NB_PROD_LEG)
+  if (prodFocus.value && !vis.some(x => x.code === prodFocus.value)) { const f = tri.find(x => x.code === prodFocus.value); if (f) vis.push(f) }
+  return vis
+})
+
 // Mise en évidence d'un produit (légende cliquable)
 const prodFocus = ref('')
 // Largeur (px) d'un segment
@@ -2186,4 +2201,7 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pan-exclu { opacity: .5; } .pan-exclu .pan-pnom b { text-decoration: line-through; }
 .pan-ex-l { font-style: normal; color: #b91c1c; font-size: 10.5px; }
 .pe-kpi-s { font-size: 13px; font-weight: 600; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-prod-plus { background: #f1f5f9; border: 1px dashed #94a3b8; border-radius: 999px; padding: 2px 10px; font-size: 10.5px; font-weight: 700; color: #334155; cursor: pointer; }
+.synth-tgl { margin-top: 8px; background: none; border: none; padding: 2px 0; font-size: 11px; font-weight: 700; color: #0f766e; cursor: pointer; }
+.synth-tgl-gl { color: #64748b; font-weight: 600; } .synth-tgl-gl b { color: #c2410c; }
 </style>
