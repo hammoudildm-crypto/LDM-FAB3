@@ -38,7 +38,9 @@
       <span class="lg"><i class="sw sw-gen"></i>Nettoyage général (NG)</span>
       <span class="lg"><i class="sw sw-part"></i>Nettoyage partiel (NP)</span>
       <span class="lg"><i class="sw sw-nuit"></i>OFF (nuit 22h–06h / week-end chômé)</span>
-      <span class="lg"><i class="sw sw-cours"></i>Lot en cours</span>
+      <span class="lg"><i class="sw sw-termine"></i>✓ Terminé (dates réelles)</span>
+      <span class="lg"><i class="sw sw-cours"></i>▶ En cours (avancement %)</span>
+      <span class="lg"><i class="sw sw-plan"></i>Planifié</span>
     </div>
     <div v-if="produitsPlanning.length" class="lg-prods">
       <span class="lg-prods-t">Produits :</span>
@@ -131,6 +133,7 @@
         </select>
       </label></div>
       <div class="p-grp"><label class="chk-inline"><input type="checkbox" v-model="filtreAvecPlan" /> Avec planning</label></div>
+      <div class="p-grp"><label class="chk-inline"><input type="checkbox" v-model="afficherTermines" /> Afficher les lots terminés</label></div>
       <div class="p-grp regle-off" title="Règle appliquée à tous les lots : le lot doit être terminé avant le début de l'OFF (nuit / week-end / arrêt), sinon il démarre au poste ouvré suivant. Le nettoyage n'est pas concerné : il peut être fait avant l'OFF.">⛔ Un lot ne démarre que s'il est clôturé avant l'OFF (nettoyage possible avant l'OFF)</div>
     </section>
       <div class="pe-gantt-wrap">
@@ -189,11 +192,11 @@
             <!-- barres (par segment) -->
             <!-- campagnes (présentation) -->
             <div v-for="c in (presData[row.eq.id] || {}).camps || []" :key="c.key" class="g-bar g-lot g-camp"
-                 :class="{ 'g-dim': prodFocus && c.prod.code_pf !== prodFocus, 'g-focus': prodFocus && c.prod.code_pf === prodFocus, 'g-cours': c.enCours, 'g-suivi': lotSuivi && c.uids.includes(lotSuivi), 'g-dim2': lotSuivi && !c.uids.includes(lotSuivi) }"
-                 :style="campStyle(c)" :title="titreCamp(c)" @click="basculerCamp(c.key)">
+                 :class="{ 'g-termine': c.termine, 'g-dim': prodFocus && c.prod.code_pf !== prodFocus, 'g-focus': prodFocus && c.prod.code_pf === prodFocus, 'g-cours': c.enCours, 'g-suivi': lotSuivi && c.uids.includes(lotSuivi), 'g-dim2': lotSuivi && !c.uids.includes(lotSuivi) }"
+                 :style="campStyle(c)" :title="titreCamp(c)" @click="c.termine ? null : basculerCamp(c.key)">
               <span v-for="(tk, ti) in c.ticks" :key="ti" class="g-camp-tick" :style="{ left: tk + '%' }"></span>
               <span v-if="campW(c) >= 24" class="g-lbl g-lbl2">
-                <span class="g-lbl-lot"><b v-if="c.enCours" class="g-live">▶</b>{{ campW(c) >= 120 ? c.prod.code_pf + ' · ' + c.n + ' lots' : (campW(c) >= 60 ? c.n + ' lots' : '×' + c.n) }}</span>
+                <span class="g-lbl-lot"><b v-if="c.termine" class="g-ok">✓</b><b v-if="c.enCours" class="g-live">▶</b>{{ campW(c) >= 120 ? c.prod.code_pf + ' · ' + c.n + ' lots' : (campW(c) >= 60 ? c.n + ' lots' : '×' + c.n) }}</span>
                 <span v-if="campW(c) >= 60" class="g-lbl-desig">{{ c.prod.designation }}</span>
                 <span v-if="campW(c) >= 120" class="g-lbl-nom">{{ c.premier }} → {{ c.dernier }}</span>
               </span>
@@ -203,14 +206,15 @@
                  title="Campagne dépliée — cliquer pour regrouper" @click="basculerCamp(c.key)"><span>▲ regrouper</span></div>
             <template v-for="(t, i) in ((presData[row.eq.id] || {}).tasks || row.tasks)">
               <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar"
-                   :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragTemps && t.type === 'lot' && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid, 'g-dim': prodFocus && (t.type !== 'lot' || t.prod.code_pf !== prodFocus), 'g-focus': prodFocus && t.type === 'lot' && t.prod.code_pf === prodFocus, 'g-cours': t.type === 'lot' && lotEnCours(row.eq.id, t), 'g-suite': j > 0, 'g-coupe': j < t.segments.length - 1, 'g-force': t.coupe, 'g-suivi': lotSuivi && t.type === 'lot' && t.uid === lotSuivi, 'g-dim2': lotSuivi && (t.type !== 'lot' || t.uid !== lotSuivi) }]"
+                   :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragTemps && t.type === 'lot' && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid, 'g-dim': prodFocus && (t.type !== 'lot' || t.prod.code_pf !== prodFocus), 'g-focus': prodFocus && t.type === 'lot' && t.prod.code_pf === prodFocus, 'g-cours': t.type === 'lot' && lotEnCours(row.eq.id, t), 'g-suite': j > 0, 'g-coupe': j < t.segments.length - 1, 'g-force': t.coupe, 'g-termine': t.etat === 'termine', 'g-encours': t.etat === 'cours', 'g-suivi': lotSuivi && t.type === 'lot' && t.uid === lotSuivi, 'g-dim2': lotSuivi && (t.type !== 'lot' || t.uid !== lotSuivi) }]"
                    :style="[barStyleSeg(seg, t), (t.type === 'lot' && dragTemps && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid) ? { transform: 'translateX(' + (dragTemps.deltaH * pxH) + 'px)', opacity: 0.75, zIndex: 6 } : null]"
                    :title="t.type === 'lot' ? (titre(t) + '  •  clic : suivre ce lot sur toutes ses phases  •  glisser pour décaler  •  double-clic pour réinitialiser') : titre(t)"
-                   @mousedown="t.type === 'lot' ? debutDragTemps($event, row.eq.id, t.uid) : null"
+                   @mousedown="t.type === 'lot' && t.etat !== 'termine' && t.etat !== 'cours' ? debutDragTemps($event, row.eq.id, t.uid) : (t.type === 'lot' ? (lotSuivi = lotSuivi === t.uid ? null : t.uid) : null)"
                    @dblclick="t.type === 'lot' ? resetDecal(row.eq.id, t.uid) : null">
                 <span v-if="t.type === 'lot' && segW(seg) >= 20" class="g-lbl g-lbl2">
-                  <span class="g-lbl-lot"><b v-if="lotEnCours(row.eq.id, t) && j === 0" class="g-live">▶</b><template v-if="j > 0">↳ </template>{{ lotCourt(t.lot, segW(seg)) }}<em v-if="t.turbNo && segW(seg) >= 70" class="g-turb">T{{ t.turbNo }}/{{ t.turbines }}</em></span>
-                  <span v-if="segW(seg) >= 60" class="g-lbl-nom">{{ t.prod.designation }}</span>
+                  <span v-if="t.etat === 'cours'" class="g-prog" :style="{ width: (t.prog || 0) + '%' }"></span>
+                  <span class="g-lbl-lot"><b v-if="t.etat === 'termine'" class="g-ok">✓</b><b v-else-if="(t.etat === 'cours' || lotEnCours(row.eq.id, t)) && j === 0" class="g-live">▶</b><template v-if="j > 0">↳ </template>{{ lotCourt(t.lot, segW(seg)) }}<em v-if="t.turbNo && segW(seg) >= 70" class="g-turb">T{{ t.turbNo }}/{{ t.turbines }}</em></span>
+                  <span v-if="segW(seg) >= 60" class="g-lbl-nom">{{ t.etat === 'cours' ? (t.depasse ? 'en retard · ' : t.prog + ' % · ') : (t.etat === 'termine' ? 'terminé · ' : '') }}{{ t.prod.designation }}</span>
                 </span>
                 <span v-else-if="t.type !== 'lot' && j === 0 && segW(seg) >= (presentation ? 30 : 14)" class="g-lbl">{{ t.type.startsWith('gen') ? 'NG' : 'NP' }}</span>
               </div>
@@ -301,17 +305,18 @@
               <span v-else-if="(bCartes[r.eq.id] || {}).nbSem" class="pb-att">Aucun lot en cours</span>
               <span v-else class="pb-libre">Libre — aucun lot planifié cette semaine</span>
               <span v-if="(bCartes[r.eq.id] || {}).prochain" class="pb-next">Prochain : <b>{{ bCartes[r.eq.id].prochain.lot }}</b> · {{ bCartes[r.eq.id].prochain.prod.designation }} · {{ fmtJH(bCartes[r.eq.id].prochain.segments[0].start) }}</span>
-              <span v-if="(bCartes[r.eq.id] || {}).nbSem" class="pb-nb">{{ bCartes[r.eq.id].nbSem }} lot(s) cette semaine</span>
+              <span class="pb-nb"><b class="pb-n-t">✓ {{ (bCartes[r.eq.id] || {}).nT || 0 }}</b> terminés · <b class="pb-n-c">▶ {{ (bCartes[r.eq.id] || {}).nC || 0 }}</b> en cours · <b>{{ (bCartes[r.eq.id] || {}).nP || 0 }}</b> planifiés</span>
             </div>
             <div class="pb-frise">
               <div v-for="(o, oi) in (bCartes[r.eq.id] || {}).off || []" :key="'o' + oi" class="pb-off" :style="bStyle(o.a, o.b)"></div>
               <div v-for="(o, oi) in bJours" :key="'j' + oi" class="pb-jl" :style="{ left: o.left + '%' }"><span>{{ o.lbl }}</span></div>
-              <div v-for="t in ((bCartes[r.eq.id] || {}).taches || [])" :key="'t' + t.uid + (t.turbNo || '') + t.type + t.start" class="pb-b" :class="'pb-' + t.type" :style="t.type === 'lot' ? bStyle(t.segments[0].start, t.end, t.prod) : bStyle(t.segments[0].start, t.end)">
-                <span v-if="t.type === 'lot'">{{ t.lot }}</span>
+              <div v-for="t in ((bCartes[r.eq.id] || {}).taches || [])" :key="'t' + t.uid + (t.turbNo || '') + t.type + t.start" class="pb-b" :class="['pb-' + t.type, { 'pb-termine': t.etat === 'termine', 'pb-encours': t.etat === 'cours' }]" :style="t.type === 'lot' ? bStyle(t.segments[0].start, t.end, t.prod) : bStyle(t.segments[0].start, t.end)">
+                <span v-if="t.etat === 'cours'" class="g-prog" :style="{ width: (t.prog || 0) + '%' }"></span>
+                <span v-if="t.type === 'lot'">{{ t.etat === 'termine' ? '✓ ' : (t.etat === 'cours' ? '▶ ' : '') }}{{ t.lot }}{{ t.etat === 'cours' ? ' · ' + (t.depasse ? 'retard' : t.prog + ' %') : '' }}</span>
               </div>
-              <div v-for="c in ((bCartes[r.eq.id] || {}).camps || [])" :key="c.key" class="pb-b pb-camp" :class="{ cours: c.enCours }" :style="bStyle(c.start, c.end, c.prod)">
+              <div v-for="c in ((bCartes[r.eq.id] || {}).camps || [])" :key="c.key" class="pb-b pb-camp" :class="{ cours: c.enCours, 'pb-termine': c.termine }" :style="bStyle(c.start, c.end, c.prod)">
                 <span v-for="(tk, ti) in c.ticks" :key="ti" class="g-camp-tick" :style="{ left: tk + '%' }"></span>
-                <span class="pb-camp-l"><b>{{ c.prod.code_pf }} · {{ c.n }} lots</b><em>{{ c.prod.designation }}</em></span>
+                <span class="pb-camp-l"><b>{{ c.termine ? '✓ ' : '' }}{{ c.prod.code_pf }} · {{ c.n }} lots{{ c.termine ? ' terminés' : '' }}</b><em>{{ c.prod.designation }}</em></span>
               </div>
               <div class="pb-now" :style="{ left: bPct(maintenant) + '%' }"></div>
             </div>
@@ -534,13 +539,14 @@ const dpPhasesLot = computed(() => {
     const id = sp.ordre_id, k = dpPhaseKey(sp.phase)
     if (!k) continue
     if (!m[id]) m[id] = {}
-    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut || null, equip: sp.equipement_id ?? null }
-    if (!m[id][k] || sp.statut === 'Terminé') m[id][k] = rec
+    const rec = { statut: sp.statut, date: sp.date_phase || sp.date_debut || null, equip: sp.equipement_id ?? null, debut: sp.date_debut || null, fin: sp.statut === 'Terminé' ? (sp.date_phase || null) : null }
     const nl = String(sp.phase || '').toLowerCase()
-    if (/s[ée]ch/.test(nl) && !/granul/.test(nl)) {
-      if (!sechEtat[id]) sechEtat[id] = { present: false, termine: false }
+    const estSech = /s[ée]ch/.test(nl) && !/granul/.test(nl)
+    if (!estSech || !m[id][k]) { if (!m[id][k] || sp.statut === 'Terminé') m[id][k] = rec }
+    if (estSech) {
+      if (!sechEtat[id]) sechEtat[id] = { present: false, termine: false, fin: null }
       sechEtat[id].present = true
-      if (sp.statut === 'Terminé') sechEtat[id].termine = true
+      if (sp.statut === 'Terminé') { sechEtat[id].termine = true; sechEtat[id].fin = sp.date_phase || null }
     }
   }
   for (const id in m) {
@@ -548,11 +554,25 @@ const dpPhasesLot = computed(() => {
     if (g && g.statut === 'Terminé') {
       const se = sechEtat[id]
       const apres = m[id].compression || m[id].remplissage || m[id].pelliculage || m[id].conditionnement
-      if (se && se.present && !se.termine && !apres) m[id].granulation = { statut: 'En cours', date: g.date, equip: g.equip }
+      if (se && se.present && !se.termine && !apres) m[id].granulation = { statut: 'En cours', date: g.date, equip: g.equip, debut: g.debut, fin: null }
+      else if (se && se.termine && se.fin && (!g.fin || new Date(se.fin) > new Date(g.fin))) m[id].granulation = { ...g, fin: se.fin }
     }
   }
   return m
 })
+// Statut d'un lot sur la PHASE d'un équipement : 'termine' | 'cours' | 'plan' (+ dates réelles)
+const PH_CLE = { 1: 'pesee', 2: 'granulation', 3: 'granulation', 4: 'melange', 5: 'compression', 6: 'remplissage', 7: 'pelliculage' }
+function etatLot(eq, ordreId) {
+  if (enCoursIds.value.has(String(eq.id) + '#' + ordreId)) {
+    const r = (dpPhasesLot.value[ordreId] || {})[PH_CLE[phaseOrdre(eq.type)]] || {}
+    return { etat: 'cours', debut: r.debut ? new Date(r.debut) : null }
+  }
+  const r = (dpPhasesLot.value[ordreId] || {})[PH_CLE[phaseOrdre(eq.type)]]
+  if (r && r.statut === 'Terminé') return { etat: 'termine', debut: r.debut ? new Date(r.debut) : null, fin: r.fin ? new Date(r.fin) : null }
+  return { etat: 'plan' }
+}
+const afficherTermines = ref((() => { try { return localStorage.getItem('pe_termines') !== '0' } catch (e) { return true } })())
+watch(afficherTermines, (v) => { try { localStorage.setItem('pe_termines', v ? '1' : '0') } catch (e) {} })
 // eqId -> [{ ordreId, lot, code, desig, phase, depuis }]
 const enCoursListe = computed(() => {
   const m = {}
@@ -1012,8 +1032,14 @@ const planCalc = computed(() => {
       maintCourant = buildMaintList(maintEquip[eq.id])
       if (eqCursor[eq.id] === undefined) eqCursor[eq.id] = prochainOuvre(new Date(t0v), P.regime, P.weAll, P.requis)
       if (!eqTasks[eq.id]) eqTasks[eq.id] = []
-      for (const item of pan) {
+      // Ordre de traitement : terminés (dates réelles), puis en cours (calé sur le démarrage réel), puis planifiés
+      const etats = {}
+      for (const it of pan) etats[it.ordreId] = etatLot(eq, it.ordreId)
+      const rang = { termine: 0, cours: 1, plan: 2 }
+      const panTri = pan.map((it, i) => ({ it, i })).sort((a, b) => (rang[etats[a.it.ordreId].etat] - rang[etats[b.it.ordreId].etat]) || (etats[a.it.ordreId].etat === 'termine' ? ((etats[a.it.ordreId].debut || 0) - (etats[b.it.ordreId].debut || 0)) : 0) || (a.i - b.i)).map(x => x.it)
+      for (const item of panTri) {
         const prod = produitsById.value[item.pid]; if (!prod) continue
+        const E = etats[item.ordreId]
         const key = item.ordreId
         const readyPhase = lotReady[key] || new Date(t0v)  // fin de la phase précédente
         const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === item.pid)
@@ -1025,6 +1051,31 @@ const planCalc = computed(() => {
           const cN = cad ? (Number(cad.cadence_nominale) || 0) : 0
           const kg = poidsLotKg(prod)
           dRun = (cN > 0 && kg > 0) ? Math.max(0.25, (kg / nbTurb) / cN) : Math.max(0.25, dLotFull / nbTurb)
+        }
+        // --- Lot TERMINÉ sur cette phase : affiché à ses dates réelles, ne consomme pas de capacité future
+        if (E.etat === 'termine') {
+          const dTot = dRun * nbTurb
+          let deb = E.debut, fin = E.fin
+          if (!deb && fin) deb = new Date(fin.getTime() - dTot * 3600000)
+          if (deb && !fin) fin = placer(deb, dTot, P.regime, P.weAll, P.requis).end
+          if (deb && fin && afficherTermines.value) eqTasks[eq.id].push({ type: 'lot', etat: 'termine', prod, lot: item.lot, uid: item.ordreId, turbines: nbTurb, turbNo: null, segments: [{ start: deb, end: fin }], start: deb, end: fin })
+          if (fin) lotReady[key] = new Date(fin)
+          eqLastPid[eq.id] = item.pid
+          continue
+        }
+        // --- Lot EN COURS : calé sur son démarrage réel ; fin = démarrage + durée (heures ouvrées), au moins maintenant
+        if (E.etat === 'cours' && E.debut && !isNaN(E.debut)) {
+          const dTot = dRun * nbTurb
+          const pl = placer(E.debut, dTot, P.regime, P.weAll, P.requis)
+          const maint = maintenant.value
+          let fin = pl.end, segs = pl.segments, depasse = false
+          if (fin < maint) { fin = new Date(maint.getTime() + 15 * 60000); segs = [{ start: new Date(E.debut), end: fin }]; depasse = true }
+          const prog = Math.max(0, Math.min(100, Math.round(((maint - E.debut) / Math.max(1, (pl.end - E.debut))) * 100)))
+          eqTasks[eq.id].push({ type: 'lot', etat: 'cours', prod, lot: item.lot, uid: item.ordreId, turbines: nbTurb, turbNo: null, segments: segs, start: segs[0].start, end: fin, prog, depasse })
+          if (fin > eqCursor[eq.id]) eqCursor[eq.id] = new Date(fin)
+          eqLastPid[eq.id] = item.pid
+          lotReady[key] = new Date(fin)
+          continue
         }
         let finLot = null
         for (let k = 1; k <= nbTurb; k++) {
@@ -1044,7 +1095,7 @@ const planCalc = computed(() => {
           const lotStart = plLot.segments[0].start
           eqTasks[eq.id].push({ type: cln, segments: plClean.segments, start: plClean.segments[0].start, end: plClean.end })
           if (cln === 'gen' || cln === 'genH') eqLastGen[eq.id] = new Date(plClean.end)
-          eqTasks[eq.id].push({ type: 'lot', prod, lot: item.lot, uid: item.ordreId, turbines: nbTurb, turbNo: (nbTurb > 1 ? k : null), segments: plLot.segments, start: lotStart, end: plLot.end, coupe: bloc.coupe })
+          eqTasks[eq.id].push({ type: 'lot', etat: E.etat === 'cours' ? 'cours' : 'plan', prog: 0, prod, lot: item.lot, uid: item.ordreId, turbines: nbTurb, turbNo: (nbTurb > 1 ? k : null), segments: plLot.segments, start: lotStart, end: plLot.end, coupe: bloc.coupe })
           eqCursor[eq.id] = plLot.end; eqLastPid[eq.id] = item.pid
           finLot = plLot.end
         }
@@ -1094,7 +1145,14 @@ const finGlobale = computed(() => {
 })
 // Origine d'AFFICHAGE : en présentation Semaine, on remonte au samedi 22h de la 1re semaine
 // (le calcul du planning, lui, part toujours de la date de départ t0).
-const tAff = computed(() => (presentation.value && vuePres.value === 'semaine' && debutSemaine0.value < t0.value) ? debutSemaine0.value : t0.value)
+// Lots en cours / terminés : l'affichage remonte jusqu'à leur début réel (au plus 3 jours avant le départ)
+const debutHist = computed(() => {
+  let m = t0.value.getTime(); const lim = m - 72 * 3600000
+  const et = planCalc.value.eqTasks
+  for (const id in et) for (const t of et[id]) if (t.type === 'lot' && (t.etat === 'cours' || t.etat === 'termine')) { const d = t.segments[0].start.getTime(); if (d < m) m = Math.max(lim, d) }
+  const d = new Date(m); d.setMinutes(0, 0, 0); return d
+})
+const tAff = computed(() => { const base = (presentation.value && vuePres.value === 'semaine' && debutSemaine0.value < t0.value) ? debutSemaine0.value : t0.value; return debutHist.value < base ? debutHist.value : base })
 const finAff = computed(() => (presentation.value && vuePres.value === 'semaine') ? new Date(Math.max(finGlobale.value.getTime(), debutSemaine0.value.getTime() + nbSemaines.value * H7)) : finGlobale.value)
 const totalHeures = computed(() => Math.max(24, Math.ceil((finAff.value - tAff.value) / 3600000) + ((presentation.value && vuePres.value === 'semaine') ? 0 : 8)))
 const totalW = computed(() => totalHeures.value * pxH.value)
@@ -1425,12 +1483,13 @@ const bCartes = computed(() => {
       if (!ouvertRegime(c, regime, weAll, requis)) { const l = off[off.length - 1]; if (l && l.b.getTime() === c.getTime()) l.b = fin; else off.push({ a: new Date(c), b: fin }) }
       c = fin
     }
-    const prochain = r.tasks.find(t => t.type === 'lot' && t.segments[0].start > now && !lotEnCours(r.eq.id, t))
+    const prochain = r.tasks.find(t => t.type === 'lot' && t.etat === 'plan' && t.segments[0].start > now && !lotEnCours(r.eq.id, t))
+    const uidsEtat = (e) => new Set(r.tasks.filter(t => t.type === 'lot' && t.etat === e).map(t => t.uid)).size
     const nbSem = new Set(r.tasks.filter(t => t.type === 'lot' && bVisible(t.segments[0].start, t.end)).map(t => t.uid)).size
     m[r.eq.id] = {
       camps: cd.camps.filter(x => bVisible(x.start, x.end)),
       taches: cd.tasks.filter(t => bVisible(t.segments[0].start, t.end)),
-      off, prochain, nbSem, regime
+      off, prochain, nbSem, regime, nT: uidsEtat('termine'), nC: uidsEtat('cours'), nP: uidsEtat('plan')
     }
   }
   return m
@@ -1468,9 +1527,18 @@ function campagnesDe(r, ouv) {
     while (i < T.length) {
       const t = T[i]
       if (t.type !== 'lot') { if (t.type !== 'part') tasks.push(t); i++; continue }
+      if (t.etat === 'termine') {
+        const g2 = [t]; let j2 = i + 1
+        while (j2 < T.length && T[j2].type === 'lot' && T[j2].etat === 'termine' && T[j2].prod.code_pf === t.prod.code_pf && (T[j2].segments[0].start - g2[g2.length - 1].end) <= 4 * 3600000) { g2.push(T[j2]); j2++ }
+        if (g2.length < 2) { tasks.push(t); i++; continue }
+        const st = g2[0].segments[0].start, en = g2[g2.length - 1].end, tot = Math.max(1, en - st)
+        camps.push({ key: r.eq.id + ':T:' + g2[0].uid, termine: true, prod: t.prod, start: st, end: en, n: g2.length, premier: g2[0].lot || '—', dernier: g2[g2.length - 1].lot || '—', uids: g2.map(x => x.uid), enCours: false, ticks: g2.slice(1).map(x => Math.round(((x.segments[0].start - st) / tot) * 10000) / 100), lotsTxt: g2.map(x => x.lot || '—').join(', ') })
+        i = j2; continue
+      }
+      if (t.etat === 'cours') { tasks.push(t); i++; continue }
       // construire la campagne
       const grp = [t]; let j = i + 1
-      while (j + 1 < T.length && T[j].type === 'part' && T[j + 1].type === 'lot' && T[j + 1].prod.code_pf === t.prod.code_pf) {
+      while (j + 1 < T.length && T[j].type === 'part' && T[j + 1].type === 'lot' && T[j + 1].etat !== 'termine' && T[j + 1].etat !== 'cours' && T[j + 1].prod.code_pf === t.prod.code_pf) {
         const np = T[j], nx = T[j + 1], prev = grp[grp.length - 1]
         const ecart = (nx.segments[0].start - prev.end) / 3600000
         const dureeNp = (np.end - np.segments[0].start) / 3600000
@@ -1501,6 +1569,7 @@ function campagnesDe(r, ouv) {
 const campW = (c) => ((c.end - c.start) / 3600000) * pxH.value
 function campStyle(c) {
   const col = couleurProd(c.prod.code_pf)
+  if (c.termine) return { left: (((c.start - tAff.value) / 3600000) * pxH.value) + 'px', width: Math.max(2, campW(c)) + 'px', background: 'repeating-linear-gradient(45deg, ' + col.bg + '30, ' + col.bg + '30 5px, ' + col.bg + '18 5px, ' + col.bg + '18 10px)', borderColor: col.bd, '--cd': col.bd }
   return { left: (((c.start - tAff.value) / 3600000) * pxH.value) + 'px', width: Math.max(2, campW(c)) + 'px', background: col.bg, borderColor: col.bd, '--cd': col.bd }
 }
 function titreCamp(c) { return 'Campagne ' + c.prod.code_pf + ' — ' + c.prod.designation + '  •  ' + c.n + ' lot(s) : ' + c.lotsTxt + '  •  ' + fmtJH(c.start) + ' → ' + fmtJH(c.end) + '  •  clic : détail lot par lot' }
@@ -1537,7 +1606,10 @@ function barStyleSeg(seg, t) {
   const left = ((seg.start - tAff.value) / 3600000) * pxH.value
   const w = Math.max(2, ((seg.end - seg.start) / 3600000) * pxH.value)
   const s = { left: left + 'px', width: w + 'px' }
-  if (t.type === 'lot') { const c = couleurProd(t.prod.code_pf); s.background = c.bg; s.borderColor = c.bd; s['--cd'] = c.bd }
+  if (t.type === 'lot') {
+    const c = couleurProd(t.prod.code_pf); s.background = c.bg; s.borderColor = c.bd; s['--cd'] = c.bd
+    if (t.etat === 'termine') s.background = 'repeating-linear-gradient(45deg, ' + c.bg + '30, ' + c.bg + '30 5px, ' + c.bg + '18 5px, ' + c.bg + '18 10px)'
+  }
   return s
 }
 
@@ -1563,6 +1635,8 @@ const fmtJH = (d) => d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: 
 function titre(t) {
   const p = fmtJH(t.start) + ' → ' + fmtJH(t.end)
   if (t.type === 'lot' && t.coupe) return '⚠ LOT TROP LONG pour un poste : le lot dépasse la plage ouvrée, coupure inévitable sur l\'OFF  •  ' + t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + '  •  ' + p
+  if (t.type === 'lot' && t.etat === 'termine') return '✓ TERMINÉ sur cette phase  •  ' + t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + '  •  réel : ' + p
+  if (t.type === 'lot' && t.etat === 'cours') return '▶ EN COURS (' + (t.depasse ? 'durée prévue dépassée' : t.prog + ' %') + ')  •  ' + t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + '  •  démarré ' + fmtJH(t.start) + ' → fin prévue ' + fmtJH(t.end)
   if (t.type === 'lot') return t.prod.code_pf + ' — ' + t.prod.designation + '  •  Lot ' + (t.lot || '—') + (t.turbNo ? '  •  turbine ' + t.turbNo + '/' + t.turbines : '') + '  •  ' + p
   if (t.type === 'gen') return 'Nettoyage général (début campagne)  •  ' + p
   if (t.type === 'genH') return 'Nettoyage général (holding dépassé)  •  ' + p
@@ -1964,4 +2038,21 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pb-camp.cours { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #22c55e; }
 .pb-now { position: absolute; top: -4px; bottom: -4px; width: 2px; background: #ef4444; z-index: 3; }
 .pb-pied { font-size: 11px; color: #94a3b8; text-align: center; padding-top: 6px; }
+/* États de lot */
+.sw-termine { background: repeating-linear-gradient(45deg, #d4537e44, #d4537e44 3px, #d4537e22 3px, #d4537e22 6px); border: 1px solid #d4537e; }
+.sw-plan { background: #d4537e; }
+.g-bar.g-termine { box-shadow: none !important; border-width: 1px 1px 1px 4px; border-style: solid; }
+.g-bar.g-termine .g-lbl2 { color: var(--cd); text-shadow: none; }
+.g-ok { margin-right: 3px; }
+.g-bar.g-encours { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #22c55e; animation: gCours 1.6s ease-in-out infinite; z-index: 3; }
+.g-prog { position: absolute; left: 0; bottom: 0; height: 5px; background: rgba(255,255,255,.9); border-radius: 0 3px 0 0; z-index: 1; }
+.pb-b.pb-termine { color: var(--cd); text-shadow: none; border: 1px solid var(--cd); border-left-width: 4px; }
+
+.pb-b.pb-encours { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #22c55e; }
+.pb-n-t { color: #64748b; } .pb-n-c { color: #15803d; }
+.pb-b.pb-termine { background: repeating-linear-gradient(45deg, rgba(100,116,139,.16), rgba(100,116,139,.16) 5px, rgba(255,255,255,.9) 5px, rgba(255,255,255,.9) 10px) !important; }
+/* Colonne équipement toujours au-dessus des barres (lots démarrés avant la frise) */
+.g-eqcol, .g-grp-lbl { z-index: 8; }
+.g-header { z-index: 9; }
+.pb-b.pb-termine .pb-camp-l { text-shadow: none; }
 </style>
