@@ -2462,4 +2462,24 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pan-chip-amont { background: #f5f3ff; border-color: #c4b5fd; color: #5b21b6; }
 .pan-chip-amont:hover { background: #ede9fe; }
 .ctrl-calc { font-size: 10px; color: #475569; font-variant-numeric: tabular-nums; }
+/* Hauteur : zone du Gantt plus haute, lignes plus hautes (colonne équipement lisible) */
+.gantt { max-height: calc(100vh - 170px); min-height: 60vh; }
+.pe-body .gantt-card { min-height: 62vh; }
+.g-track { height: 78px; }
+.g-row { min-height: 78px; }
+.g-eqcol { min-height: 78px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
+.g-eqcode { font-size: 11.5px; }
+.g-eqnom { font-size: 9.5px; }
+.g-eqcours { font-size: 9px; }
+.g-eqfin, .g-eqwe { font-size: 8.5px; }
+.g-bar { top: 12px; height: 54px; }
+.g-bar.g-gen, .g-bar.g-genH, .g-bar.g-part { top: 24px; height: 30px; }
+.g-lbl2 .g-lbl-lot { font-size: 12.5px; }
+.g-lbl2 .g-lbl-nom { font-size: 10.5px; }
+.g-maint { top: 4px; bottom: 4px; }
+/* le mode présentation garde ses propres hauteurs */
+.pe-pres .g-track, .pe-pres .g-row, .pe-pres .g-eqcol { height: auto; min-height: 66px; }
+.pe-pres .g-track { height: 66px; }
+.pe-pres .g-bar { top: 8px; height: 50px; }
+.pe-pres .g-bar.g-gen, .pe-pres .g-bar.g-genH, .pe-pres .g-bar.g-part { top: 27px; height: 12px; }
 </style>
