@@ -31,7 +31,7 @@
       </div>
       <div v-if="!enrFiltres.length" class="empty-card">Aucun enregistrement. Ajoute une formation suivie ci-dessus.</div>
       <table v-else class="form-tbl">
-        <thead><tr><th>Personne</th><th>Formation</th><th>Date</th><th>Formateur</th><th>Résultat</th><th>Expiration</th><th>État</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
+        <thead><tr><th>Personne</th><th>Formation</th><th>Date</th><th>Formateur</th><th>Résultat</th><th>Expiration</th><th>État</th><th class="c">Évidence</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
         <tbody>
           <tr v-for="e in enrFiltres" :key="e.id" :class="{ 'row-ko': e.statut === 'expire' || e.resultat === 'non acquis' }">
             <td class="nom">{{ e.personneNom }}</td>
@@ -41,10 +41,27 @@
             <td><span :class="e.resultat === 'acquis' ? 'c-ok' : 'c-ko'">{{ e.resultat === 'acquis' ? '✓ Acquis' : '✗ Non acquis' }}</span></td>
             <td style="white-space:nowrap">{{ e.expiration || 'Permanent' }}</td>
             <td><span class="etat" :class="'e-' + e.statut">{{ statutTxt(e) }}</span></td>
+            <td class="c preuve">
+              <template v-if="preuves[e.id]">
+                <button type="button" class="pj view" @click.prevent="voirPreuve(e.id)" :title="preuves[e.id].nom || 'Voir la preuve'">📎 Voir</button>
+                <button v-if="peutEditer" type="button" class="pj" @click.prevent="choisirPreuve(e.id, 'fichier')" title="Remplacer la preuve">↻</button>
+                <button v-if="peutSupprimer" type="button" class="pj" @click.prevent="supprimerPreuve(e.id)" title="Supprimer la preuve">🗑</button>
+              </template>
+              <template v-else-if="peutEditer">
+                <span v-if="preuveBusy === e.id" class="pj-busy">⏳…</span>
+                <template v-else>
+                  <button type="button" class="pj" @click.prevent="choisirPreuve(e.id, 'photo')" title="Prendre une photo de la preuve">📷</button>
+                  <button type="button" class="pj" @click.prevent="choisirPreuve(e.id, 'fichier')" title="Joindre un fichier (image ou PDF)">📎</button>
+                </template>
+              </template>
+              <span v-else class="pj-none">—</span>
+            </td>
             <td v-if="peutEditer" class="act"><button type="button" @click.prevent="modifier(e)" title="Modifier">✎</button><button v-if="peutSupprimer" type="button" @click.prevent="supprimer(e)" title="Supprimer">🗑</button></td>
           </tr>
         </tbody>
       </table>
+      <input ref="fileJoindre" type="file" accept="image/*,application/pdf" style="display:none" @change="onFichierPreuve" />
+      <input ref="filePhoto" type="file" accept="image/*" capture="environment" style="display:none" @change="onFichierPreuve" />
     </section>
   </div>
 </template>
@@ -53,6 +70,7 @@
 import { ref, reactive, computed, onMounted, inject } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
+import { usePreuvesFormation } from '../preuvesFormation'
 
 const peutEditer = inject('peutEditer', ref(true))
 const peutSupprimer = inject('peutSupprimer', ref(true))
@@ -67,6 +85,10 @@ const erreur = ref('')
 const message = ref('')
 const form = reactive({ id: null, personne_id: '', formation_id: '', date_formation: new Date().toISOString().slice(0, 10), formateur: '', resultat: 'acquis' })
 function reset() { Object.assign(form, { id: null, personne_id: '', formation_id: '', date_formation: new Date().toISOString().slice(0, 10), formateur: '', resultat: 'acquis' }) }
+
+// Preuve de formation (photo / PJ) — logique partagée avec la Matrice.
+const { preuves, busy: preuveBusy, fileJoindre, filePhoto, chargerPreuves,
+  choisir: choisirPreuve, onFichier: onFichierPreuve, voir: voirPreuve, supprimer: supprimerPreuve } = usePreuvesFormation({ erreur, message })
 
 // Récupère TOUTES les lignes par pages de 1000 (Supabase plafonne une requête à 1000).
 async function fetchAllPaged(make) {
@@ -89,6 +111,7 @@ async function charger() {
   const re = await fetchAllPaged(() => supabase.from('formation_enregistrements').select('*').order('date_formation', { ascending: false }))
   if (re.error) { erreur.value = re.error.message; return }
   enregistrements.value = re.data || []
+  await chargerPreuves()
 }
 onMounted(charger)
 
@@ -243,6 +266,13 @@ async function supprimer(e) {
 .form-tbl td.act { text-align: right; white-space: nowrap; }
 .form-tbl td.act button { border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; padding: 3px 7px; cursor: pointer; font-size: 12px; margin-left: 4px; }
 .form-tbl td.act button:hover { background: #f8fafc; border-color: #cbd5e1; }
+.form-tbl td.c { text-align: center; }
+.form-tbl td.preuve { white-space: nowrap; }
+.pj { border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; padding: 3px 7px; cursor: pointer; font-size: 12px; margin: 0 2px; line-height: 1.4; }
+.pj:hover { background: #f0fdfa; border-color: #0d9488; }
+.pj.view { color: #0d9488; font-weight: 700; border-color: #99f6e4; background: #f0fdfa; }
+.pj-busy { color: #0d9488; font-size: 12px; font-weight: 700; }
+.pj-none { color: #cbd5e1; }
 .form-tbl tbody tr:hover { background: #f0fdfa; }
 .form-tbl tr.row-ko { background: #fef2f2; }
 .form-tbl tr.row-ko:hover { background: #fee2e2; }

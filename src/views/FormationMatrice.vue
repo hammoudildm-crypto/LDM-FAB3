@@ -4,6 +4,9 @@
       subtitle="État de qualification du personnel : qui est formé, ce qui expire, les écarts." />
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
+    <p v-if="okMsg" class="ok-msg">{{ okMsg }}</p>
+    <input ref="fileJoindre" type="file" accept="image/*,application/pdf" style="display:none" @change="onFichierPreuve" />
+    <input ref="filePhoto" type="file" accept="image/*" capture="environment" style="display:none" @change="onFichierPreuve" />
 
     <section class="card">
       <div class="perim-cards">
@@ -149,7 +152,7 @@
               <td colspan="9">
                 <div v-if="!detailPersonne(personneById[t.id]).length" class="empty-sm">Aucune formation requise ni enregistrée pour cette personne.</div>
                 <table v-else class="pp-dtbl">
-                  <thead><tr><th>Formation</th><th>Statut</th><th>Dernière formation</th><th>Expiration</th><th>Exigence</th></tr></thead>
+                  <thead><tr><th>Formation</th><th>Statut</th><th>Dernière formation</th><th>Expiration</th><th>Exigence</th><th class="c">Évidence</th></tr></thead>
                   <tbody>
                     <tr v-for="d in detailPersonne(personneById[t.id])" :key="d.formationNom + d.requis">
                       <td class="pp-dn">{{ d.formationNom }}</td>
@@ -157,6 +160,20 @@
                       <td>{{ d.date || '—' }}</td>
                       <td>{{ d.expiration || (d.date ? 'permanent' : '—') }}</td>
                       <td><span class="pp-req" :class="d.requis ? 'req' : 'sup'">{{ d.requis ? 'Requise' : 'Supplémentaire' }}</span></td>
+                      <td class="c preuve" @click.stop>
+                        <template v-if="d.enrId && preuves[d.enrId]">
+                          <button type="button" class="pj view" @click.prevent="voirPreuve(d.enrId)" :title="preuves[d.enrId].nom || 'Voir la preuve'">📎 Voir</button>
+                          <button v-if="peutEditer" type="button" class="pj" @click.prevent="choisirPreuve(d.enrId, 'fichier')" title="Remplacer la preuve">↻</button>
+                        </template>
+                        <template v-else-if="d.enrId && peutEditer">
+                          <span v-if="preuveBusy === d.enrId" class="pj-busy">⏳…</span>
+                          <template v-else>
+                            <button type="button" class="pj" @click.prevent="choisirPreuve(d.enrId, 'photo')" title="Prendre une photo de la preuve">📷</button>
+                            <button type="button" class="pj" @click.prevent="choisirPreuve(d.enrId, 'fichier')" title="Joindre un fichier (image ou PDF)">📎</button>
+                          </template>
+                        </template>
+                        <span v-else class="pp-z" :title="d.enrId ? '' : 'Aucun enregistrement — rien à prouver'">—</span>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -280,11 +297,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
+import { usePreuvesFormation } from '../preuvesFormation'
 
+const peutEditer = inject('peutEditer', ref(true))
+const peutSupprimer = inject('peutSupprimer', ref(true))
+const okMsg = ref('')
 const personnes = ref([])
 const formations = ref([])
 const formationsAll = ref([])   // toutes les fiches (actives + inactives) pour la correspondance par nom
@@ -300,6 +321,10 @@ const recherchePers = ref('')
 const normP = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 const erreur = ref('')
 const router = useRouter()
+
+// Preuve de formation (photo / PJ) — logique partagée avec l'écran Enregistrements.
+const { preuves, busy: preuveBusy, fileJoindre, filePhoto, chargerPreuves,
+  choisir: choisirPreuve, onFichier: onFichierPreuve, voir: voirPreuve } = usePreuvesFormation({ erreur, message: okMsg })
 
 // Récupère TOUTES les lignes par pages de 1000 (Supabase plafonne une requête à 1000).
 async function fetchAllPaged(make) {
@@ -322,6 +347,7 @@ async function charger() {
   const re = await fetchAllPaged(() => supabase.from('formation_enregistrements').select('*'))
   if (re.error) { erreur.value = re.error.message; return }
   enregistrements.value = re.data || []
+  await chargerPreuves()
   const rq = await fetchAllPaged(() => supabase.from('formation_requise').select('*'))
   if (!rq.error) requises.value = rq.data || []
   const rfa = await fetchAllPaged(() => supabase.from('formations').select('id, nom'))   // toutes (actives + inactives) pour la correspondance par nom
@@ -459,13 +485,13 @@ function detailPersonne(p) {
   for (const fid of req) {
     const f = formationById.value[fid]; if (!f) continue
     const e = latestByKey.value[p.id + '|' + fid]
-    rows.push({ formationNom: f.nom, statut: cellStatut(p.id, fid), requis: true, date: e ? e.date_formation : null, expiration: e ? e.expiration : null })
+    rows.push({ formationNom: f.nom, statut: cellStatut(p.id, fid), requis: true, date: e ? e.date_formation : null, expiration: e ? e.expiration : null, enrId: e ? e.id : null })
   }
   for (const e of enrEnrichis.value) {
     if (e.personne_id !== p.id || req.has(e.formation_id)) continue
     if (latestByKey.value[p.id + '|' + e.formation_id] !== e) continue
     const f = formationById.value[e.formation_id]; if (!f) continue
-    rows.push({ formationNom: f.nom, statut: e.cell, requis: false, date: e.date_formation, expiration: e.expiration })
+    rows.push({ formationNom: f.nom, statut: e.cell, requis: false, date: e.date_formation, expiration: e.expiration, enrId: e.id })
   }
   const ord = { manquant: 0, expire: 1, bientot: 2, valide: 3, absent: 4 }
   return rows.sort((a, b) => (ord[a.statut] - ord[b.statut]) || a.formationNom.localeCompare(b.formationNom))
@@ -701,6 +727,12 @@ td.c{text-align:center;font-weight:800} .c-valide{background:#dcfce7;color:#1665
 .pp-dtbl th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; font-weight: 800; padding: 6px 9px; background: #f8fafc; border-bottom: 1px solid #eef2f6; }
 .pp-dtbl td { padding: 6px 9px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
 .pp-dtbl td.pp-dn { font-weight: 600; color: #0f172a; white-space: normal; }
+.pp-dtbl th.c, .pp-dtbl td.c { text-align: center; }
+.ok-msg { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 10px 14px; border-radius: 8px; margin: 0 0 14px; }
+.pj { border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; padding: 2px 7px; cursor: pointer; font-size: 12px; margin: 0 2px; line-height: 1.5; }
+.pj:hover { background: #f0fdfa; border-color: #0d9488; }
+.pj.view { color: #0d9488; font-weight: 700; border-color: #99f6e4; background: #f0fdfa; }
+.pj-busy { color: #0d9488; font-size: 12px; font-weight: 700; }
 .et { font-size: 11px; font-weight: 800; padding: 1px 8px; border-radius: 999px; }
 .et-valide { background: #dcfce7; color: #166534; }
 .et-bientot { background: #fef3c7; color: #92400e; }
