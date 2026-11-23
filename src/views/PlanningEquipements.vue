@@ -895,7 +895,11 @@ function nbTurbines(prod) {
 }
 // Durée d'un lot (h) : cadence en Kg/h
 // Unité de cadence : 'unites' (unités/h, cp/h, gél/h…) ou 'kg' (kg/h, par défaut en fabrication)
-function uniteCad(cad) { const u = String((cad && cad.unite_cadence) || '').toLowerCase(); return /unit|cp|comp|g[ée]l|caps|pi[eè]ce|u\/h/.test(u) ? 'unites' : 'kg' }
+// Unité « unités/h » prise en compte seulement si la valeur est plausible (≥ 500 unités/h) :
+// une cadence de 16 marquée « unités/h » est en réalité des kg/h (la matrice affiche kg/h).
+const SEUIL_UNITES = 500
+const uniteDeclaree = (cad) => { const u = String((cad && cad.unite_cadence) || '').toLowerCase(); return /unit|cp|comp|g[ée]l|caps|pi[eè]ce|u\/h/.test(u) ? 'unites' : 'kg' }
+function uniteCad(cad) { return (uniteDeclaree(cad) === 'unites' && (Number(cad.cadence_nominale) || 0) >= SEUIL_UNITES) ? 'unites' : 'kg' }
 const nbUnitesLot = (prod) => (Number(prod.taille_lot) || 0) * (Number(prod.unites_par_boite) || 0)
 // Durée d'un lot + origine du calcul (pour le contrôle des données)
 function dureeInfo(prod, cad) {
@@ -1904,6 +1908,7 @@ const controleDonnees = computed(() => {
     const nbT = phaseOrdre(eq.type) === 7 ? nbTurbines(prod) : 1
     let niveau = null, pb = ''
     if (d.src === 'defaut') { niveau = 'err'; pb = d.raison + ' → durée par défaut 8 h' }
+    else if (cad && uniteDeclaree(cad) === 'unites' && uniteCad(cad) === 'kg') { niveau = 'warn'; pb = 'Unité enregistrée « ' + cad.unite_cadence + ' » improbable pour ' + cad.cadence_nominale + ' → lue en kg/h. Ressaisis la valeur dans Cadences pour corriger l\'unité' }
     else if (d.src === 'unites') { niveau = 'info'; pb = 'Cadence en ' + (cad.unite_cadence || 'unités/h') + ' : convertie (unités du lot ÷ cadence)' }
     if (!niveau && d.h < 0.25) { niveau = 'warn'; pb = 'Durée très courte (' + (Math.round(d.h * 60)) + ' min) : cadence trop élevée ou en mauvaise unité ?' }
     if (!niveau && d.h > 48) { niveau = 'warn'; pb = 'Durée très longue (' + Math.round(d.h) + ' h) : cadence trop faible ou en mauvaise unité ?' }

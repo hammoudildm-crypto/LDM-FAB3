@@ -137,7 +137,7 @@ async function fetchAllPaged(make) {
   for (;;) { const r = await make().range(from, from + size - 1); if (r.error) return all; all = all.concat(r.data || []); if (!r.data || r.data.length < size) break; from += size }
   return all
 }
-async function chargerCadences() { cadences.value = await fetchAllPaged(() => supabase.from('cadences_produit').select('id, equipement_id, produit_id, cadence_nominale, mode')) }
+async function chargerCadences() { cadences.value = await fetchAllPaged(() => supabase.from('cadences_produit').select('id, equipement_id, produit_id, cadence_nominale, mode, unite_cadence')) }
 async function chargerEquip() { equipements.value = await fetchAllPaged(() => supabase.from('equipements').select('*').eq('actif', true)) }
 
 onMounted(() => { if (routeCad.query.produit) filtre.value = String(routeCad.query.produit) })
@@ -241,8 +241,10 @@ async function sauverCellule(pid, grp, valeur) {
   try {
     for (const e of grp.equips) {
       const existing = cadences.value.find(c => c.equipement_id === e.id && c.produit_id === pid)
-      if (nv > 0 && existing) { const r = await supabase.from('cadences_produit').update({ cadence_nominale: nv }).eq('id', existing.id); if (r.error) throw r.error; existing.cadence_nominale = nv }
-      else if (nv > 0) { const r = await supabase.from('cadences_produit').insert({ equipement_id: e.id, produit_id: pid, cadence_nominale: nv }).select('id').single(); if (r.error) throw r.error; if (r.data) cadences.value.push({ id: r.data.id, equipement_id: e.id, produit_id: pid, cadence_nominale: nv }) }
+      // la matrice enregistre l'unité qu'elle affiche (kg/h en fabrication, bts/h en conditionnement)
+      const unite = uniteGroupe(grp)
+      if (nv > 0 && existing) { const r = await supabase.from('cadences_produit').update({ cadence_nominale: nv, unite_cadence: unite }).eq('id', existing.id); if (r.error) throw r.error; existing.cadence_nominale = nv; existing.unite_cadence = unite }
+      else if (nv > 0) { const r = await supabase.from('cadences_produit').insert({ equipement_id: e.id, produit_id: pid, cadence_nominale: nv, unite_cadence: unite }).select('id').single(); if (r.error) throw r.error; if (r.data) cadences.value.push({ id: r.data.id, equipement_id: e.id, produit_id: pid, cadence_nominale: nv, unite_cadence: unite }) }
       else if (nv === 0 && existing) { const r = await supabase.from('cadences_produit').delete().eq('id', existing.id); if (r.error) throw r.error; const i = cadences.value.indexOf(existing); if (i >= 0) cadences.value.splice(i, 1) }
     }
     msgMat.value = 'Enregistré ✓'; setTimeout(() => { msgMat.value = '' }, 1800)
