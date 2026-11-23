@@ -29,6 +29,7 @@
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="panierErreur" class="alert">{{ panierErreur }}</p>
+    <p v-if="msgDeplacement" class="pe-move-msg" :class="{ ko: msgDeplacement.startsWith('⚠') }">{{ msgDeplacement }}</p>
     <p v-if="retiresAuto" class="pe-clean-notice">✓ {{ retiresAuto }} lot(s) terminé(s) retiré(s) automatiquement du planning. <button class="pe-clean-x" @click="retiresAuto = 0">×</button></p>
 
 
@@ -178,7 +179,7 @@
           <div class="g-grp-lbl"><span class="g-grp-n">{{ row.grpNum }}</span>{{ row.grpHead }} <span class="g-grp-c">{{ row.grpCount }} équip.</span></div>
           <div class="g-grp-line" :style="{ width: totalW + 'px' }"></div>
         </div>
-        <div class="g-row">
+        <div class="g-row" :data-eq="row.eq.id" :class="{ 'g-row-cible': dragTemps && dragTemps.mode === 'deplacer' && Math.abs(dragTemps.deltaY) > 6 && String(dragTemps.cible) === String(row.eq.id), 'g-row-ko': dragTemps && dragTemps.mode === 'deplacer' && String(dragTemps.cible) === String(row.eq.id) && !dragTemps.ok }">
           <div class="g-eqcol" :title="'Cliquer pour gérer le panier — ' + row.eq.nom" @click="ouvrirPanier(row.eq)">
             <div class="g-eqcode">{{ row.eq.code }} <span class="g-reg" :class="{ r2: (regimeEquip[row.eq.id] || '3x8') === '2x8' }">{{ (regimeEquip[row.eq.id] || '3x8') === '2x8' ? '2×8' : '3×8' }}</span> <span v-if="(panierEquip[row.eq.id] || []).length" class="g-pan">🧺 {{ (panierEquip[row.eq.id] || []).length }}</span></div>
             <div class="g-eqnom">{{ row.eq.nom }}</div>
@@ -216,8 +217,8 @@
             <template v-for="(t, i) in ((presData[row.eq.id] || {}).tasks || row.tasks)">
               <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar"
                    :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragTemps && t.type === 'lot' && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid, 'g-dim': prodFocus && (t.type !== 'lot' || t.prod.code_pf !== prodFocus), 'g-focus': prodFocus && t.type === 'lot' && t.prod.code_pf === prodFocus, 'g-cours': t.type === 'lot' && lotEnCours(row.eq.id, t), 'g-suite': j > 0, 'g-coupe': j < t.segments.length - 1, 'g-force': t.coupe, 'g-termine': t.etat === 'termine', 'g-encours': t.etat === 'cours', 'g-suivi': lotSuivi && t.type === 'lot' && t.uid === lotSuivi, 'g-dim2': lotSuivi && (t.type !== 'lot' || t.uid !== lotSuivi) }]"
-                   :style="[barStyleSeg(seg, t), (t.type === 'lot' && dragTemps && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid) ? { transform: 'translateX(' + (dragTemps.deltaH * pxH) + 'px)', opacity: 0.75, zIndex: 6 } : null]"
-                   :title="t.type === 'lot' ? (titre(t) + '  •  clic : suivre ce lot sur toutes ses phases  •  glisser pour décaler  •  double-clic pour réinitialiser') : titre(t)"
+                   :style="[barStyleSeg(seg, t), (t.type === 'lot' && dragTemps && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid) ? { transform: 'translate(' + (dragTemps.deltaH * pxH) + 'px,' + (dragTemps.deltaY || 0) + 'px)', opacity: 0.8, zIndex: 20, pointerEvents: 'none' } : null]"
+                   :title="t.type === 'lot' ? (titre(t) + '  •  clic : suivre ce lot  •  glisser : déplacer (dans la ligne ou vers un équipement identique)  •  Maj + glisser : décaler dans le temps  •  double-clic : annuler le décalage') : titre(t)"
                    @mousedown="t.type === 'lot' && t.etat !== 'termine' && t.etat !== 'cours' ? debutDragTemps($event, row.eq.id, t.uid) : (t.type === 'lot' ? (lotSuivi = lotSuivi === t.uid ? null : t.uid) : null)"
                    @dblclick="t.type === 'lot' ? resetDecal(row.eq.id, t.uid) : null">
                 <span v-if="t.type === 'lot' && segW(seg) >= 20" class="g-lbl g-lbl2">
@@ -347,6 +348,7 @@
           </div>
         </div>
         <div class="pan-cfg">
+          <span v-if="ordreManuel[panierOuvert.id]" class="pan-om">✋ Ordre manuel <button class="pan-btn" @click="ordreAuto" title="Revenir à l'ordre automatique (campagnes, holding, prêt d'abord)">↺ ordre auto</button></span>
           <label class="pan-reg">Régime :
             <select :value="regimeEquip[panierOuvert.id] || '3x8'" @change="setRegime($event.target.value)">
               <option value="3x8">3×8 — 24 h/24</option>
@@ -383,8 +385,10 @@
         <div class="pan-list">
           <div v-for="(item, idx) in (panierEquip[panierOuvert.id] || [])" :key="item.ordreId" class="pan-item" :class="{ 'pan-exclu': item.exclu }">
             <span class="pan-idx">{{ idx + 1 }}</span>
+            <span class="pan-ord"><button class="pan-btn" @click="monterLot(idx, -1)" :disabled="idx === 0" title="Monter (passe avant)">▲</button><button class="pan-btn" @click="monterLot(idx, 1)" :disabled="idx === (panierEquip[panierOuvert.id] || []).length - 1" title="Descendre (passe après)">▼</button></span>
             <span class="pan-src" :class="item.auto ? 'src-auto' : 'src-man'" :title="item.auto ? 'Ajouté par la synchronisation avec Disponibilité' : 'Ajouté à la main (conservé par la synchronisation)'">{{ item.auto ? 'auto' : 'manuel' }}</span>
             <span class="pan-pnom"><b>{{ item.lot }}</b> — {{ produitNom(item.pid) }}<em v-if="item.exclu" class="pan-ex-l"> · exclu du planning</em></span>
+            <select v-if="ciblesPossibles(item).length" class="pan-move" @change="deplacerDepuisPanier(item, $event)" title="Déplacer ce lot sur un autre équipement de la même phase"><option value="">→ déplacer…</option><option v-for="e in ciblesPossibles(item)" :key="e.id" :value="e.id">{{ e.code }}</option></select>
             <button class="pan-btn" :class="{ on: item.epingle }" @click="basculerEpingle(item)" :title="item.epingle ? 'Épinglé sur cet équipement — cliquer pour libérer' : 'Épingler sur cet équipement (la synchro ne le déplacera pas)'">📌</button>
             <button class="pan-btn" :class="{ on: item.exclu }" @click="basculerExclu(item)" :title="item.exclu ? 'Rétablir dans le planning' : 'Exclure du planning (la synchro ne le remettra pas)'">⊘</button>
             <input type="datetime-local" v-model="item.dateDebut" class="pan-date" title="Date de début souhaitée (laisser vide = automatique)" @change="sauverPanier(panierOuvert.id)" />
@@ -435,6 +439,7 @@ const weOn = (id) => weekendEquip[id] !== false
 const regimeEquip = reactive({})  // par équipement : '2x8' ou '3x8'
 const requisEquip = reactive({})  // par équipement : dates week-end travaillées
 const maintEquip = reactive({})   // par équipement : arrêts [{type,debut,dureeH}]
+const ordreManuel = reactive({})  // par équipement : true = ordre du panier respecté strictement (réajusté à la main)
 
 const holdingH = computed(() => Number(holdingJ.value) * 24)
 
@@ -478,7 +483,7 @@ async function chargerDonnees() {
       let lotsArr = [], reg = null, req = null
       const pr = row.produits
       if (Array.isArray(pr)) lotsArr = pr
-      else if (pr && typeof pr === 'object') { lotsArr = Array.isArray(pr.lots) ? pr.lots : []; reg = pr.regime; req = pr.requis; if (typeof pr.we === 'boolean') weekendEquip[row.equipement_id] = pr.we; if (Array.isArray(pr.maint)) maintEquip[row.equipement_id] = pr.maint }
+      else if (pr && typeof pr === 'object') { lotsArr = Array.isArray(pr.lots) ? pr.lots : []; reg = pr.regime; req = pr.requis; if (typeof pr.we === 'boolean') weekendEquip[row.equipement_id] = pr.we; if (Array.isArray(pr.maint)) maintEquip[row.equipement_id] = pr.maint; if (typeof pr.om === 'boolean') ordreManuel[row.equipement_id] = pr.om }
       const flat = []
       for (const x of lotsArr) {
         if (x && typeof x === 'object' && x.ordreId) flat.push({ ordreId: x.ordreId, lot: x.lot, pid: x.pid, decalage: Number(x.decalage) || 0, dateDebut: x.dateDebut || '', auto: (x.auto === undefined || x.auto === null) ? null : !!x.auto, epingle: !!x.epingle, exclu: !!x.exclu })
@@ -628,11 +633,11 @@ function synchroniserPaniers() {
       if (!cands.length) { if (ph !== 3) nonAff++; return }
       const rec = pl[PH_CLE[ph]]
       const deja = ou[o.id + '#' + ph]
-      let force = null
-      if (rec && rec.equip != null && (rec.statut === 'En cours' || rec.statut === 'Terminé') && cands.some(e => e.id === rec.equip)) force = rec.equip
+      let force = null, ancre = false
+      if (rec && rec.equip != null && (rec.statut === 'En cours' || rec.statut === 'Terminé') && cands.some(e => e.id === rec.equip)) { force = rec.equip; ancre = true }
       else if (deja && deja.item.epingle) force = deja.eqId
       else if (idx === 0 && o.equipement_id && cands.some(e => e.id === o.equipement_id)) force = o.equipement_id
-      demandes.push({ o, p, ph, rec, deja, echeance, cands, force })
+      demandes.push({ o, p, ph, rec, deja, echeance, cands, force, ancre })
     })
   }
   // --- Répartition par CAMPAGNE ENTIÈRE : tous les lots d'un même produit sur une phase vont sur
@@ -647,7 +652,7 @@ function synchroniserPaniers() {
   for (const { g } of listeG) {
     const d0 = g[0]
     // équipement où la campagne a déjà un lot imposé (en cours / épinglé / réservé)
-    const ancre = demandes.find(d => d.force != null && d.ph === d0.ph && d.p.id === d0.p.id && d0.cands.some(e => e.id === d.force))
+    const ancre = demandes.find(d => d.ancre && d.ph === d0.ph && d.p.id === d0.p.id && d0.cands.some(e => e.id === d.force))
     let cible = ancre ? ancre.force : null
     if (cible == null) { let bc = Infinity; for (const e of d0.cands) { const c = charge[e.id] || 0; if (c < bc) { bc = c; cible = e.id } } }
     for (const d of g) { affect.set(d, cible); charge[cible] = (charge[cible] || 0) + dureeSur(cible, d.p.id) }
@@ -670,7 +675,13 @@ function synchroniserPaniers() {
     const echProd = {}
     for (const x of v) echProd[x._cle.pid] = Math.min(echProd[x._cle.pid] ?? Infinity, x._cle.ech)
     v.sort((a, b) => (a._cle.cours - b._cle.cours) || ((echProd[a._cle.pid] - echProd[b._cle.pid]) || 0) || String(a._cle.pid).localeCompare(String(b._cle.pid)) || ((a._cle.ech - b._cle.ech) || 0) || a._cle.lot.localeCompare(b._cle.lot, undefined, { numeric: true }))
-    const nouveau = [...v.map(({ _cle, ...r }) => r), ...garder]
+    let nouveau = [...v.map(({ _cle, ...r }) => r), ...garder]
+    if (ordreManuel[eq.id]) {
+      // ordre réajusté à la main : on garde l'ordre existant, les nouveaux lots sont ajoutés à la fin
+      const vMap = new Map(v.map(({ _cle, ...r }) => [r.ordreId, r])), gIds = new Set(garder.map(x => x.ordreId)), avIds0 = new Set(ancien.map(x => x.ordreId))
+      const gardes = ancien.filter(x => vMap.has(x.ordreId) || gIds.has(x.ordreId)).map(x => vMap.get(x.ordreId) || x)
+      nouveau = [...gardes, ...v.filter(x => !avIds0.has(x.ordreId)).map(({ _cle, ...r }) => r)]
+    }
     const avIds = new Set(ancien.map(x => x.ordreId)), apIds = new Set(nouveau.map(x => x.ordreId))
     for (const id of apIds) if (!avIds.has(id)) ajout++
     for (const id of avIds) if (!apIds.has(id)) retrait++
@@ -679,6 +690,18 @@ function synchroniserPaniers() {
   }
   syncInfo.value = { quand: new Date(), lots: nbLots, ajout, retrait, nonAff, modifies }
 }
+function monterLot(idx, dir) {
+  const id = panierOuvert.value.id, pan = panierEquip[id]; const j = idx + dir
+  if (!pan || j < 0 || j >= pan.length) return
+  const [it] = pan.splice(idx, 1); pan.splice(j, 0, it); ordreManuel[id] = true; sauverPanier(id)
+}
+function ordreAuto() { const id = panierOuvert.value.id; ordreManuel[id] = false; sauverPanier(id); synchroniserPaniers() }
+// équipements de la même phase pouvant recevoir ce lot (cadence)
+function ciblesPossibles(item) {
+  const src = panierOuvert.value; if (!src) return []
+  return equipements.value.filter(e => estFab(e.type) && e.id !== src.id && phaseOrdre(e.type) === phaseOrdre(src.type) && cadences.value.some(c => c.equipement_id === e.id && c.produit_id === item.pid && Number(c.cadence_nominale) > 0)).sort((a, b) => String(a.code).localeCompare(String(b.code)))
+}
+function deplacerDepuisPanier(item, ev) { const cib = Number(ev.target.value); ev.target.value = ''; if (cib) deplacerLot(panierOuvert.value.id, cib, item.ordreId, null) }
 function basculerEpingle(it) { it.epingle = !it.epingle; sauverPanier(panierOuvert.value.id) }
 function basculerExclu(it) { it.exclu = !it.exclu; sauverPanier(panierOuvert.value.id) }
 
@@ -1039,18 +1062,71 @@ function itemDecal(eqId, uid) { const pan = panierEquip[eqId]; const it = pan &&
 function debutDragTemps(e, eqId, uid) {
   if (e.button !== 0) return
   e.preventDefault()
-  dragTemps.value = { eqId, uid, startX: e.clientX, startDecal: itemDecal(eqId, uid), deltaH: 0 }
+  dragTemps.value = { eqId, uid, startX: e.clientX, startY: e.clientY, startDecal: itemDecal(eqId, uid), deltaH: 0, deltaY: 0, mode: e.shiftKey ? 'decal' : 'deplacer', cible: eqId, ok: true, tDrop: null }
   window.addEventListener('mousemove', moveDragTemps)
   window.addEventListener('mouseup', finDragTemps)
 }
-function moveDragTemps(e) { if (dragTemps.value) dragTemps.value = { ...dragTemps.value, deltaH: (e.clientX - dragTemps.value.startX) / pxH.value } }
+function moveDragTemps(e) {
+  const d = dragTemps.value; if (!d) return
+  const n = { ...d, deltaH: (e.clientX - d.startX) / pxH.value, deltaY: d.mode === 'deplacer' ? (e.clientY - d.startY) : 0 }
+  if (d.mode === 'deplacer') {
+    const el = document.elementFromPoint(e.clientX, e.clientY)
+    const row = el && el.closest ? el.closest('.g-row[data-eq]') : null
+    if (row) {
+      n.cible = Number(row.dataset.eq)
+      const tr = row.querySelector('.g-track:not(.g-timeline)')
+      if (tr) { const r = tr.getBoundingClientRect(); n.tDrop = new Date(tAff.value.getTime() + ((e.clientX - r.left) / pxH.value) * 3600000) }
+      n.ok = verifCible(d.eqId, n.cible, d.uid) === ''
+    }
+  }
+  dragTemps.value = n
+}
+// '' si le lot peut aller sur l'équipement cible, sinon la raison
+function verifCible(src, cib, uid) {
+  if (String(src) === String(cib)) return ''
+  const eS = equipements.value.find(x => String(x.id) === String(src)), eC = equipements.value.find(x => String(x.id) === String(cib))
+  if (!eS || !eC) return 'Équipement introuvable'
+  if (phaseOrdre(eS.type) !== phaseOrdre(eC.type)) return eC.code + ' n\'est pas de la même phase'
+  const it = (panierEquip[src] || []).find(x => x.ordreId === uid); if (!it) return 'Lot introuvable'
+  if (!cadences.value.some(c => String(c.equipement_id) === String(cib) && c.produit_id === it.pid && Number(c.cadence_nominale) > 0)) return eC.code + ' n\'a pas de cadence pour ce produit'
+  return ''
+}
+// Insère le lot dans le panier de 'cib' juste avant le 1er lot planifié qui démarre après tDrop
+function placerDansPanier(cib, item, tDrop) {
+  const pan = (panierEquip[cib] = panierEquip[cib] || [])
+  const row = planningTous.value.find(r => String(r.eq.id) === String(cib))
+  let idx = pan.length
+  if (tDrop && row) {
+    const debut = {}; for (const t of row.tasks) if (t.type === 'lot' && debut[t.uid] == null) debut[t.uid] = t.segments[0].start.getTime()
+    const i = pan.findIndex(x => x.ordreId !== item.ordreId && debut[x.ordreId] != null && debut[x.ordreId] > tDrop.getTime())
+    if (i >= 0) idx = i
+  }
+  pan.splice(idx, 0, item)
+}
+const msgDeplacement = ref('')
+function deplacerLot(src, cib, uid, tDrop) {
+  const raison = verifCible(src, cib, uid)
+  if (raison) { msgDeplacement.value = '⚠ Déplacement refusé : ' + raison; setTimeout(() => { msgDeplacement.value = '' }, 5000); return false }
+  const pS = panierEquip[src] || [], i = pS.findIndex(x => x.ordreId === uid); if (i < 0) return false
+  const [item] = pS.splice(i, 1)
+  item.decalage = 0; item.dateDebut = ''
+  if (String(src) !== String(cib)) item.epingle = true      // changé de ligne : épinglé pour que la synchro ne le ramène pas
+  placerDansPanier(cib, item, tDrop)
+  ordreManuel[cib] = true
+  sauverPanier(cib); if (String(src) !== String(cib)) sauverPanier(src)
+  const eC = equipements.value.find(x => String(x.id) === String(cib))
+  msgDeplacement.value = '✓ Lot ' + item.lot + (String(src) !== String(cib) ? ' déplacé sur ' + (eC ? eC.code : '') + ' (📌 épinglé)' : ' repositionné') + ' — ordre manuel sur ' + (eC ? eC.code : '')
+  setTimeout(() => { msgDeplacement.value = '' }, 5000)
+  return true
+}
 function finDragTemps() {
   window.removeEventListener('mousemove', moveDragTemps)
   window.removeEventListener('mouseup', finDragTemps)
   const d = dragTemps.value; dragTemps.value = null
   if (!d) return
   // Simple clic (pas de glissement) : suivre / ne plus suivre ce lot sur toutes ses phases
-  if (Math.abs(d.deltaH * pxH.value) < 4) { lotSuivi.value = (lotSuivi.value === d.uid) ? null : d.uid; return }
+  if (Math.abs(d.deltaH * pxH.value) < 4 && Math.abs(d.deltaY) < 6) { lotSuivi.value = (lotSuivi.value === d.uid) ? null : d.uid; return }
+  if (d.mode === 'deplacer') { deplacerLot(d.eqId, d.cible, d.uid, d.tDrop); return }
   const nouveau = Math.max(0, Math.round((d.startDecal + d.deltaH) * 4) / 4)
   const pan = panierEquip[d.eqId]
   if (pan) { const it = pan.find(x => x.ordreId === d.uid); if (it) { it.decalage = nouveau; sauverPanier(d.eqId) } }
@@ -1069,7 +1145,7 @@ function dropSur(eqId, uid) {
 const panierErreur = ref('')
 async function sauverPanier(id) {
   try {
-    const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: { lots: panierEquip[id] || [], regime: regimeEquip[id] || '3x8', requis: requisEquip[id] || [], we: weOn(id), maint: maintEquip[id] || [] }, updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
+    const r = await supabase.from('planning_panier').upsert({ equipement_id: id, produits: { lots: panierEquip[id] || [], regime: regimeEquip[id] || '3x8', requis: requisEquip[id] || [], we: weOn(id), maint: maintEquip[id] || [], om: !!ordreManuel[id] }, updated_at: new Date().toISOString() }, { onConflict: 'equipement_id' })
     panierErreur.value = r.error ? ('Panier non sauvegardé : ' + r.error.message + ' — crée la table planning_panier (voir SQL).') : ''
   } catch (e) { panierErreur.value = 'Panier non sauvegardé : ' + String(e) }
   sauverLocal()
@@ -1166,6 +1242,7 @@ const planCalc = computed(() => {
       const pretA = (it) => { let r = lotReady[it.ordreId] || new Date(t0v); if (it.dateDebut) { const dd = new Date(it.dateDebut); if (!isNaN(dd) && dd > r) r = dd } return r.getTime() }
       const suivant = () => {
         if (etats[restants[0].ordreId].etat !== 'plan') return restants.shift()
+        if (ordreManuel[eq.id]) return restants.shift()   // ordre réajusté à la main : respecté tel quel
         const libre = eqCursor[eq.id].getTime() + 1800000
         let iBest = -1
         // continuer la campagne : un lot prêt du même produit que le dernier passé sur l'équipement
@@ -2224,4 +2301,13 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .lg-prod-plus { background: #f1f5f9; border: 1px dashed #94a3b8; border-radius: 999px; padding: 2px 10px; font-size: 10.5px; font-weight: 700; color: #334155; cursor: pointer; }
 .synth-tgl { margin-top: 8px; background: none; border: none; padding: 2px 0; font-size: 11px; font-weight: 700; color: #0f766e; cursor: pointer; }
 .synth-tgl-gl { color: #64748b; font-weight: 600; } .synth-tgl-gl b { color: #c2410c; }
+/* Réajustements manuels */
+.g-row-cible .g-track:not(.g-timeline) { background: rgba(13,148,136,.08); box-shadow: inset 0 0 0 2px #0d9488; }
+.g-row-ko .g-track:not(.g-timeline) { background: rgba(220,38,38,.06); box-shadow: inset 0 0 0 2px #dc2626; }
+.pe-move-msg { position: sticky; top: 4px; z-index: 30; display: inline-block; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 8px; margin: 4px 0; }
+.pe-move-msg.ko { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+.pan-ord { display: inline-flex; gap: 2px; }
+.pan-ord .pan-btn { padding: 0 5px; font-size: 9px; line-height: 16px; }
+.pan-move { font-size: 10.5px; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 6px; max-width: 120px; }
+.pan-om { font-size: 11px; font-weight: 800; color: #92400e; background: #fef3c7; border-radius: 6px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 6px; }
 </style>
