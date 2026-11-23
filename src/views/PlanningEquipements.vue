@@ -178,6 +178,7 @@
               <span v-for="(tk, ti) in c.ticks" :key="ti" class="g-camp-tick" :style="{ left: tk + '%' }"></span>
               <span v-if="campW(c) >= 24" class="g-lbl g-lbl2">
                 <span class="g-lbl-lot"><b v-if="c.enCours" class="g-live">▶</b>{{ campW(c) >= 120 ? c.prod.code_pf + ' · ' + c.n + ' lots' : (campW(c) >= 60 ? c.n + ' lots' : '×' + c.n) }}</span>
+                <span v-if="campW(c) >= 60" class="g-lbl-desig">{{ c.prod.designation }}</span>
                 <span v-if="campW(c) >= 120" class="g-lbl-nom">{{ c.premier }} → {{ c.dernier }}</span>
               </span>
             </div>
@@ -1613,4 +1614,11 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .g-camp-open span { display: none; position: absolute; top: 7px; left: 0; font-size: 10px; font-weight: 800; color: #fff; background: #0f172a; border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
 .g-camp-open:hover { height: 9px; opacity: 1; }
 .g-camp-open:hover span { display: block; }
+.g-lbl2 .g-lbl-desig { font-size: 10px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pe-pres .g-camp .g-lbl2 { line-height: 1.12; }
+.pe-pres .g-camp .g-lbl2 .g-lbl-lot { font-size: 13px; }
+.pe-pres .g-camp .g-lbl2 .g-lbl-desig { font-size: 11px; }
+.pe-pres .g-camp .g-lbl2 .g-lbl-nom { font-size: 10px; opacity: .85; }
+/* Lignes aussi larges que la frise : la colonne équipement reste collée à gauche quel que soit le défilement */
+.g-header, .g-row, .g-grp { width: max-content; min-width: 100%; }
 </style>
