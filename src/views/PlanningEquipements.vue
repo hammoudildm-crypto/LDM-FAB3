@@ -1,7 +1,19 @@
 <template>
-  <div class="pe-page">
+  <div class="pe-page" :class="{ 'pe-pres': presentation }">
     <div class="pe-head">
-      <h1>Planning des équipements — Fabrication</h1>
+      <h1>Planning des équipements — Fabrication<span v-if="presentation" class="pe-pres-sem"> · {{ libelleSemaine }}</span></h1>
+      <div class="pe-head-btns">
+        <span v-if="lotSuivi" class="pe-suivi-chip">🔎 Lot {{ lotSuiviLib }} suivi sur toutes ses phases <button @click="lotSuivi = null" title="Arrêter le suivi">✕</button></span>
+        <button type="button" class="pe-pres-btn" :class="{ on: presentation }" @click="basculerPresentation">{{ presentation ? '✕ Quitter la présentation' : '▶ Présentation' }}</button>
+      </div>
+    </div>
+
+    <!-- Bandeau KPI (présentation) -->
+    <div v-if="presentation && planning.length" class="pe-kpis">
+      <div class="pe-kpi"><span class="pe-kpi-l">Lots planifiés</span><span class="pe-kpi-v">{{ totalLots }}</span></div>
+      <div class="pe-kpi pe-kpi-warn"><span class="pe-kpi-l">Goulot</span><span class="pe-kpi-v">{{ goulotLib }}</span></div>
+      <div class="pe-kpi pe-kpi-ok"><span class="pe-kpi-l">Lots en cours</span><span class="pe-kpi-v">{{ nbEnCours }}</span></div>
+      <div class="pe-kpi"><span class="pe-kpi-l">Fin du plan</span><span class="pe-kpi-v">{{ fmtJH(finGlobale) }}</span></div>
     </div>
 
     <p v-if="erreur" class="alert">{{ erreur }}</p>
@@ -29,7 +41,7 @@
       <button v-if="prodFocus" type="button" class="lg-prod-reset" @click="prodFocus = ''">Tout afficher</button>
     </div>
 
-    <section v-if="!chargement && planning.length" class="card recap">
+    <section v-if="!chargement && planning.length && !presentation" class="card recap">
       <h3>Synthèse</h3>
       <div class="recap-grid">
         <div class="rc"><span class="rc-v">{{ planning.length }}</span><span class="rc-l">Équipements planifiés</span></div>
@@ -119,7 +131,12 @@
           </div>
         </div>
         <!-- lignes -->
-        <div v-for="row in planning" :key="row.eq.id" class="g-row">
+        <template v-for="row in planning" :key="row.eq.id">
+        <div v-if="row.grpHead" class="g-grp">
+          <div class="g-grp-lbl"><span class="g-grp-n">{{ row.grpNum }}</span>{{ row.grpHead }} <span class="g-grp-c">{{ row.grpCount }} équip.</span></div>
+          <div class="g-grp-line" :style="{ width: totalW + 'px' }"></div>
+        </div>
+        <div class="g-row">
           <div class="g-eqcol" :title="'Cliquer pour gérer le panier — ' + row.eq.nom" @click="ouvrirPanier(row.eq)">
             <div class="g-eqcode">{{ row.eq.code }} <span class="g-reg" :class="{ r2: (regimeEquip[row.eq.id] || '3x8') === '2x8' }">{{ (regimeEquip[row.eq.id] || '3x8') === '2x8' ? '2×8' : '3×8' }}</span> <span v-if="(panierEquip[row.eq.id] || []).length" class="g-pan">🧺 {{ (panierEquip[row.eq.id] || []).length }}</span></div>
             <div class="g-eqnom">{{ row.eq.nom }}</div>
@@ -142,9 +159,9 @@
             <!-- barres (par segment) -->
             <template v-for="(t, i) in row.tasks">
               <div v-for="(seg, j) in t.segments" :key="i + '-' + j" class="g-bar"
-                   :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragTemps && t.type === 'lot' && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid, 'g-dim': prodFocus && (t.type !== 'lot' || t.prod.code_pf !== prodFocus), 'g-focus': prodFocus && t.type === 'lot' && t.prod.code_pf === prodFocus, 'g-cours': t.type === 'lot' && lotEnCours(row.eq.id, t), 'g-suite': j > 0, 'g-coupe': j < t.segments.length - 1, 'g-force': t.coupe }]"
+                   :class="[('g-' + t.type), { 'g-drag': t.type === 'lot', 'g-dragging': dragTemps && t.type === 'lot' && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid, 'g-dim': prodFocus && (t.type !== 'lot' || t.prod.code_pf !== prodFocus), 'g-focus': prodFocus && t.type === 'lot' && t.prod.code_pf === prodFocus, 'g-cours': t.type === 'lot' && lotEnCours(row.eq.id, t), 'g-suite': j > 0, 'g-coupe': j < t.segments.length - 1, 'g-force': t.coupe, 'g-suivi': lotSuivi && t.type === 'lot' && t.uid === lotSuivi, 'g-dim2': lotSuivi && (t.type !== 'lot' || t.uid !== lotSuivi) }]"
                    :style="[barStyleSeg(seg, t), (t.type === 'lot' && dragTemps && dragTemps.eqId === row.eq.id && dragTemps.uid === t.uid) ? { transform: 'translateX(' + (dragTemps.deltaH * pxH) + 'px)', opacity: 0.75, zIndex: 6 } : null]"
-                   :title="t.type === 'lot' ? (titre(t) + '  •  glisser horizontalement pour décaler ce lot  •  double-clic pour réinitialiser') : titre(t)"
+                   :title="t.type === 'lot' ? (titre(t) + '  •  clic : suivre ce lot sur toutes ses phases  •  glisser pour décaler  •  double-clic pour réinitialiser') : titre(t)"
                    @mousedown="t.type === 'lot' ? debutDragTemps($event, row.eq.id, t.uid) : null"
                    @dblclick="t.type === 'lot' ? resetDecal(row.eq.id, t.uid) : null">
                 <span v-if="t.type === 'lot' && segW(seg) >= 18" class="g-lbl g-lbl2">
@@ -156,10 +173,27 @@
             </template>
           </div>
         </div>
+        </template>
       </div>
     </section>
       </div>
     </div>
+
+    <!-- Synthèse détaillée sous le Gantt (présentation) -->
+    <section v-if="presentation && synthEquip.length" class="card recap pe-pres-synth">
+      <table class="synth-tbl">
+        <thead><tr><th>Équipement</th><th class="right">Lots</th><th class="right">NG</th><th class="right">NP</th><th>Occupation</th><th>Régime</th><th class="right">Fin</th></tr></thead>
+        <tbody>
+          <tr v-for="e in synthEquip" :key="'p' + e.id" :class="{ 'synth-goulot': String(e.id) === String(goulotId) }">
+            <td>{{ e.code }} <span class="synth-nom">{{ e.nom }}</span></td>
+            <td class="right">{{ e.lots }}</td><td class="right">{{ e.ng }}</td><td class="right">{{ e.np }}</td>
+            <td class="synth-occ-cell"><span class="so-bar"><span class="so-fill" :class="chargeClass((chargeMap[e.id] || {}).occ || 0)" :style="{ width: Math.min(100, (chargeMap[e.id] || {}).occ || 0) + '%' }"></span></span><b class="so-pct">{{ (chargeMap[e.id] || {}).occ || 0 }}%</b></td>
+            <td>{{ e.regime === '2x8' ? '2×8' : '3×8' }}</td>
+            <td class="right nowrap">{{ fmtJH(e.fin) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
 
     <!-- Récap -->
 
@@ -726,6 +760,8 @@ function finDragTemps() {
   window.removeEventListener('mouseup', finDragTemps)
   const d = dragTemps.value; dragTemps.value = null
   if (!d) return
+  // Simple clic (pas de glissement) : suivre / ne plus suivre ce lot sur toutes ses phases
+  if (Math.abs(d.deltaH * pxH.value) < 4) { lotSuivi.value = (lotSuivi.value === d.uid) ? null : d.uid; return }
   const nouveau = Math.max(0, Math.round((d.startDecal + d.deltaH) * 4) / 4)
   const pan = panierEquip[d.eqId]
   if (pan) { const it = pan.find(x => x.ordreId === d.uid); if (it) { it.decalage = nouveau; sauverPanier(d.eqId) } }
@@ -877,7 +913,17 @@ const planning = computed(() => {
     if (q && !((e.code + ' ' + (e.nom || '')).toLowerCase().includes(q))) return false
     return true
   }).sort((a, b) => (phaseOrdre(a.type) - phaseOrdre(b.type)) || String(a.code).localeCompare(String(b.code)))
-  for (const eq of eqsSorted) rows.push({ eq, tasks: eqTasks[eq.id] || [], fin: eqCursor[eq.id] || new Date(t0v) })
+  const PH_LIB = { 1: 'Pesée', 2: 'Granulation', 3: 'Séchage', 4: 'Mélange', 5: 'Compression', 6: 'Remplissage gélules', 7: 'Pelliculage' }
+  const nbParPh = {}
+  for (const eq of eqsSorted) { const ph = phaseOrdre(eq.type); nbParPh[ph] = (nbParPh[ph] || 0) + 1 }
+  let phPrec = null, num = 0
+  for (const eq of eqsSorted) {
+    const ph = phaseOrdre(eq.type)
+    const row = { eq, tasks: eqTasks[eq.id] || [], fin: eqCursor[eq.id] || new Date(t0v) }
+    if (ph !== phPrec) { num++; row.grpHead = PH_LIB[ph] || 'Autres'; row.grpNum = num; row.grpCount = nbParPh[ph] }
+    phPrec = ph
+    rows.push(row)
+  }
   return rows
 })
 
@@ -964,6 +1010,43 @@ const heureMaintenant = computed(() => maintenant.value.toLocaleTimeString('fr-F
 const posMaintenant = computed(() => {
   const px = ((maintenant.value - t0.value) / 3600000) * pxH.value
   return (px >= 0 && px <= totalW.value) ? px : null
+})
+
+// ===== Mode présentation =====
+const presentation = ref(false)
+function basculerPresentation() {
+  presentation.value = !presentation.value
+  try {
+    if (presentation.value && document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {})
+    if (!presentation.value && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {})
+  } catch (e) {}
+}
+function toucheClavier(e) {
+  if (e.key !== 'Escape') return
+  if (lotSuivi.value) { lotSuivi.value = null; return }
+  if (presentation.value) presentation.value = false
+}
+function finPleinEcran() { if (!document.fullscreenElement && presentation.value) presentation.value = false }
+onMounted(() => { window.addEventListener('keydown', toucheClavier); document.addEventListener('fullscreenchange', finPleinEcran) })
+onUnmounted(() => { window.removeEventListener('keydown', toucheClavier); document.removeEventListener('fullscreenchange', finPleinEcran) })
+// Suivi d'un lot (OF) sur toutes ses phases
+const lotSuivi = ref(null)
+const lotSuiviLib = computed(() => {
+  if (!lotSuivi.value) return ''
+  for (const r of planning.value) for (const t of r.tasks) if (t.type === 'lot' && t.uid === lotSuivi.value) return (t.lot || '—') + ' (' + t.prod.code_pf + ')'
+  return ''
+})
+const goulotLib = computed(() => {
+  const r = planning.value.find(x => String(x.eq.id) === String(goulotId.value))
+  const o = (chargeMap.value[goulotId.value] || {}).occ
+  return r ? (r.eq.code + ' · ' + (o || 0) + ' %') : '—'
+})
+const nbEnCours = computed(() => { let n = 0; for (const r of planning.value) n += (enCoursListe.value[r.eq.id] || []).length; return n })
+const libelleSemaine = computed(() => {
+  const d = new Date(t0.value); const j = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const dn = j.getUTCDay() || 7; j.setUTCDate(j.getUTCDate() + 4 - dn)
+  const an = new Date(Date.UTC(j.getUTCFullYear(), 0, 1))
+  return 'semaine ' + Math.ceil(((j - an) / 86400000 + 1) / 7) + ' — départ ' + d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 })
 
 // Mise en évidence d'un produit (légende cliquable)
@@ -1263,6 +1346,54 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .params-side input, .params-side select { width: 100%; box-sizing: border-box; }
 .pe-gantt-wrap { flex: 1; min-width: 0; }
 @media (max-width: 900px) { .pe-body { flex-direction: column; } .params-side { flex: none; width: 100%; flex-direction: row; flex-wrap: wrap; } }
+/* En-tête + bouton présentation */
+.pe-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.pe-head-btns { display: flex; align-items: center; gap: 8px; }
+.pe-pres-btn { background: #0f766e; color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; padding: 6px 14px; cursor: pointer; }
+.pe-pres-btn.on { background: #334155; }
+.pe-suivi-chip { background: #0f172a; color: #fff; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 4px 6px 4px 12px; display: inline-flex; align-items: center; gap: 6px; }
+.pe-suivi-chip button { background: rgba(255,255,255,.18); border: none; color: #fff; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; }
+.pe-pres-sem { font-weight: 600; color: #64748b; }
+/* Groupes par phase */
+.g-grp { display: flex; background: #f1f5f9; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
+.g-grp-lbl { flex: 0 0 168px; width: 168px; position: sticky; left: 0; z-index: 3; background: #f1f5f9; padding: 4px 8px; font-size: 10.5px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.g-grp-n { background: #0f766e; color: #fff; border-radius: 50%; width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; font-size: 9.5px; }
+.g-grp-c { font-weight: 600; color: #64748b; text-transform: none; letter-spacing: 0; font-size: 9.5px; }
+.g-grp-line { height: 1px; }
+/* Suivi d'un lot */
+.g-bar.g-suivi { box-shadow: 0 0 0 3px #0f172a, 0 6px 14px rgba(15,23,42,.4); z-index: 5; filter: none; opacity: 1; }
+.g-bar.g-dim2 { opacity: .15; filter: grayscale(.8); }
+.g-bar.g-lot { cursor: pointer; }
+/* ===== Mode présentation ===== */
+.pe-pres { position: fixed; inset: 0; z-index: 2000; background: #fff; overflow: auto; padding: 14px 20px; }
+.pe-pres .params-side, .pe-pres .pe-clean-notice, .pe-pres .alert { display: none; }
+.pe-pres .pe-head h1 { font-size: 22px; }
+.pe-pres .legende { font-size: 12px; }
+.pe-pres .lg-prod { font-size: 12.5px; padding: 3px 11px 3px 5px; }
+.pe-pres .gantt { max-height: none; }
+.pe-pres .g-eqcol, .pe-pres .g-grp-lbl { flex-basis: 210px; width: 210px; }
+.pe-pres .g-eqcode { font-size: 13px; }
+.pe-pres .g-eqnom { font-size: 10.5px; }
+.pe-pres .g-eqcours { font-size: 10px; }
+.pe-pres .g-eqwe, .pe-pres .g-pan { display: none; }
+.pe-pres .g-grp-lbl { font-size: 12.5px; padding: 6px 10px; }
+.pe-pres .g-dlbl { font-size: 12px; }
+.pe-pres .g-sh { font-size: 9.5px; }
+.pe-pres .g-track { height: 66px; }
+.pe-pres .g-bar { top: 8px; height: 50px; }
+.pe-pres .g-bar.g-gen, .pe-pres .g-bar.g-genH, .pe-pres .g-bar.g-part { top: 16px; height: 34px; }
+.pe-pres .g-lbl2 .g-lbl-lot { font-size: 14px; }
+.pe-pres .g-lbl2 .g-lbl-nom { font-size: 11.5px; }
+.pe-pres .g-lbl { font-size: 12px; }
+.pe-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 6px 0 10px; }
+.pe-kpi { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 14px; display: flex; flex-direction: column; }
+.pe-kpi-l { font-size: 11.5px; color: #64748b; font-weight: 600; }
+.pe-kpi-v { font-size: 24px; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
+.pe-kpi-warn .pe-kpi-v { color: #c2410c; }
+.pe-kpi-ok .pe-kpi-v { color: #15803d; }
+.pe-pres-synth { margin-top: 10px; }
+.pe-pres-synth .synth-tbl { font-size: 12px; }
+@media (max-width: 900px) { .pe-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .pe-clean-notice { background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; padding: 7px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600; margin: 6px 0; display: inline-flex; align-items: center; gap: 8px; }
 .pe-clean-x { background: none; border: none; color: #047857; font-size: 16px; cursor: pointer; line-height: 1; }
 </style>
