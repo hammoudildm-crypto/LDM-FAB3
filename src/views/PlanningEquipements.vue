@@ -22,7 +22,7 @@
     <!-- Bandeau KPI (présentation) -->
     <div v-if="presentation && planning.length" class="pe-kpis">
       <div class="pe-kpi"><span class="pe-kpi-l">Lots planifiés</span><span class="pe-kpi-v">{{ totalLots }}</span></div>
-      <div class="pe-kpi pe-kpi-warn"><span class="pe-kpi-l">Goulot</span><span class="pe-kpi-v">{{ goulotLib }}</span></div>
+      <div class="pe-kpi pe-kpi-warn"><span class="pe-kpi-l">Goulot</span><span class="pe-kpi-v">{{ goulotLib }}</span><span v-if="goulotNom" class="pe-kpi-s">{{ goulotNom }}</span></div>
       <div class="pe-kpi pe-kpi-ok"><span class="pe-kpi-l">Lots en cours</span><span class="pe-kpi-v">{{ nbEnCours }}</span></div>
       <div class="pe-kpi"><span class="pe-kpi-l">Fin du plan</span><span class="pe-kpi-v">{{ fmtJH(finGlobale) }}</span></div>
     </div>
@@ -1508,6 +1508,7 @@ const lotSuiviLib = computed(() => {
   for (const r of planning.value) for (const t of r.tasks) if (t.type === 'lot' && t.uid === lotSuivi.value) return (t.lot || '—') + ' (' + t.prod.code_pf + ')'
   return ''
 })
+const goulotNom = computed(() => { const r = planningTous.value.find(x => String(x.eq.id) === String(goulotId.value)); return r ? (r.eq.nom || '') : '' })
 const goulotLib = computed(() => {
   const r = planning.value.find(x => String(x.eq.id) === String(goulotId.value))
   const o = (chargeMap.value[goulotId.value] || {}).occ
