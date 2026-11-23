@@ -137,11 +137,8 @@
       </label></div>
       <div class="p-grp"><label class="chk-inline"><input type="checkbox" v-model="filtreAvecPlan" /> Avec planning</label></div>
       <div class="p-grp p-sync">
-        <div class="p-sync-t">Alimentation automatique</div>
-        <button type="button" class="vue-btn p-sync-btn" @click="synchroniserPaniers" title="Remplir les paniers depuis la file « Disponibilité des produits par atelier »">⟳ Synchroniser avec Disponibilité</button>
-        <label class="chk-inline"><input type="checkbox" v-model="syncAuto" /> À l'ouverture de la page</label>
-        <label class="chk-inline"><input type="checkbox" v-model="syncNonLances" /> Inclure les OF non lancés</label>
-        <div v-if="syncInfo" class="p-sync-r">✓ {{ syncInfo.lots }} lots · +{{ syncInfo.ajout }} / −{{ syncInfo.retrait }}<span v-if="syncInfo.nonAff" class="p-sync-w" title="Phases sans équipement ayant une cadence pour le produit"> · ⚠ {{ syncInfo.nonAff }} sans cadence</span><br><small>{{ syncInfo.quand.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }}</small></div>
+        <div class="p-sync-t">Planification manuelle</div>
+        <div class="p-sync-r" style="font-weight:600">Clique sur un équipement pour ouvrir son panier et y ajouter les lots en attente (à l'unité ou par campagne). L'ordre du panier est l'ordre de passage.</div>
       </div>
       <div class="p-grp"><label class="chk-inline"><input type="checkbox" v-model="afficherTermines" /> Afficher les lots terminés</label></div>
       <div class="p-grp regle-off" title="Règle appliquée à tous les lots : le lot doit être terminé avant le début de l'OFF (nuit / week-end / arrêt), sinon il démarre au poste ouvré suivant. Le nettoyage n'est pas concerné : il peut être fait avant l'OFF.">⛔ Un lot ne démarre que s'il est clôturé avant l'OFF (nettoyage possible avant l'OFF)</div>
@@ -348,7 +345,6 @@
           </div>
         </div>
         <div class="pan-cfg">
-          <span v-if="ordreManuel[panierOuvert.id]" class="pan-om">✋ Ordre manuel <button class="pan-btn" @click="ordreAuto" title="Revenir à l'ordre automatique (campagnes, holding, prêt d'abord)">↺ ordre auto</button></span>
           <label class="pan-reg">Régime :
             <select :value="regimeEquip[panierOuvert.id] || '3x8'" @change="setRegime($event.target.value)">
               <option value="3x8">3×8 — 24 h/24</option>
@@ -386,22 +382,27 @@
           <div v-for="(item, idx) in (panierEquip[panierOuvert.id] || [])" :key="item.ordreId" class="pan-item" :class="{ 'pan-exclu': item.exclu }">
             <span class="pan-idx">{{ idx + 1 }}</span>
             <span class="pan-ord"><button class="pan-btn" @click="monterLot(idx, -1)" :disabled="idx === 0" title="Monter (passe avant)">▲</button><button class="pan-btn" @click="monterLot(idx, 1)" :disabled="idx === (panierEquip[panierOuvert.id] || []).length - 1" title="Descendre (passe après)">▼</button></span>
-            <span class="pan-src" :class="item.auto ? 'src-auto' : 'src-man'" :title="item.auto ? 'Ajouté par la synchronisation avec Disponibilité' : 'Ajouté à la main (conservé par la synchronisation)'">{{ item.auto ? 'auto' : 'manuel' }}</span>
             <span class="pan-pnom"><b>{{ item.lot }}</b> — {{ produitNom(item.pid) }}<em v-if="item.exclu" class="pan-ex-l"> · exclu du planning</em></span>
             <select v-if="ciblesPossibles(item).length" class="pan-move" @change="deplacerDepuisPanier(item, $event)" title="Déplacer ce lot sur un autre équipement de la même phase"><option value="">→ déplacer…</option><option v-for="e in ciblesPossibles(item)" :key="e.id" :value="e.id">{{ e.code }}</option></select>
             <button class="pan-btn" :class="{ on: item.epingle }" @click="basculerEpingle(item)" :title="item.epingle ? 'Épinglé sur cet équipement — cliquer pour libérer' : 'Épingler sur cet équipement (la synchro ne le déplacera pas)'">📌</button>
             <button class="pan-btn" :class="{ on: item.exclu }" @click="basculerExclu(item)" :title="item.exclu ? 'Rétablir dans le planning' : 'Exclure du planning (la synchro ne le remettra pas)'">⊘</button>
             <input type="datetime-local" v-model="item.dateDebut" class="pan-date" title="Date de début souhaitée (laisser vide = automatique)" @change="sauverPanier(panierOuvert.id)" />
             <button v-if="item.dateDebut" class="pan-btn" @click="item.dateDebut = ''; sauverPanier(panierOuvert.id)" title="Repasser en automatique">auto</button>
-            <button v-if="!item.auto" class="pan-btn del" @click="retirerLot(idx)" title="Retirer du panier">✕</button>
+            <button class="pan-btn del" @click="retirerLot(idx)" title="Retirer du panier">✕</button>
           </div>
           <div v-if="!(panierEquip[panierOuvert.id] || []).length" class="pan-vide">Aucun lot affecté à cet équipement.</div>
         </div>
-        <p class="pan-hint2"><b>auto</b> = ajouté par la synchronisation avec Disponibilité · 📌 épingler sur cet équipement · ⊘ exclure du planning. Lots en attente de cette phase. Réordonne/décale en les <b>glissant sur le Gantt</b>, ou fixe une <b>date de début</b> par lot ci-dessus.</p>
+        <p class="pan-hint2">▲▼ ordre de passage · → déplacer vers un équipement identique · ⊘ exclure du planning sans le retirer. Lots en attente de cette phase. Réordonne/décale en les <b>glissant sur le Gantt</b>, ou fixe une <b>date de début</b> par lot ci-dessus.</p>
         <div class="pan-add">
           <input v-model="rechProd" placeholder="Rechercher un lot (n°, produit)…" class="pan-search" />
-          <div class="pan-prods">
-            <button v-for="l in lotsAjoutables" :key="l.id" class="pan-chip" :class="{ 'pan-chip-plan': l.plan, 'pan-chip-cours': l.cours }" @click="ajouterLot(l)" :title="(l.plan ? 'Planifié — ' : (l.cours ? 'En cours — ' : 'En attente — ')) + l.code + ' — ' + l.desig">{{ l.lot }}</button>
+          <div class="pan-camps">
+            <div v-for="g in lotsAjoutablesParProduit" :key="g.pid" class="pan-camp">
+              <div class="pan-camp-h"><i :style="{ background: couleurProd(g.code).bg }"></i><b>{{ g.desig || g.code }}</b> <span class="pan-camp-n">{{ g.lots.length }} lot(s)</span>
+                <button v-if="g.lots.length > 1" class="pan-btn pan-camp-all" @click="ajouterCampagne(g.pid)" title="Ajouter tous les lots de ce produit à la suite (campagne)">+ toute la campagne</button></div>
+              <div class="pan-prods">
+                <button v-for="l in g.lots" :key="l.id" class="pan-chip" :class="{ 'pan-chip-plan': l.plan, 'pan-chip-cours': l.cours, 'pan-chip-ail': l.ailleurs }" @click="ajouterLot(l)" :title="(l.plan ? 'OF non lancé — ' : (l.cours ? 'En cours — ' : 'En attente — ')) + l.code + ' — ' + l.desig + (l.ailleurs ? '  •  déjà dans le panier de ' + l.ailleurs : '')">{{ l.lot }}<small v-if="l.ailleurs"> · {{ l.ailleurs }}</small></button>
+              </div>
+            </div>
             <span v-if="!lotsAjoutables.length" class="pan-none">Aucun lot en attente pour cette phase.</span>
           </div>
         </div>
@@ -497,7 +498,7 @@ async function chargerDonnees() {
     try { const r2 = await supabase.from('produits').select('id, holding_times'); const hs = {}; if (!r2.error && r2.data) for (const x of r2.data) if (x.holding_times && typeof x.holding_times === 'object') hs[x.id] = x.holding_times; holdSteps.value = hs } catch (e) {}
     nettoyerPanierTermines()
     nettoyerHistoriqueEquip()
-    if (syncAuto.value) synchroniserPaniers()
+    purgerLotsAuto()   // planification MANUELLE : les lots ajoutés par l'ancienne synchro sont retirés
   } catch (e) { erreur.value = String(e) } finally { chargement.value = false }
 }
 
@@ -702,6 +703,25 @@ function ciblesPossibles(item) {
   return equipements.value.filter(e => estFab(e.type) && e.id !== src.id && phaseOrdre(e.type) === phaseOrdre(src.type) && cadences.value.some(c => c.equipement_id === e.id && c.produit_id === item.pid && Number(c.cadence_nominale) > 0)).sort((a, b) => String(a.code).localeCompare(String(b.code)))
 }
 function deplacerDepuisPanier(item, ev) { const cib = Number(ev.target.value); ev.target.value = ''; if (cib) deplacerLot(panierOuvert.value.id, cib, item.ordreId, null) }
+// Mode MANUEL : retire des paniers les lots ajoutés automatiquement, sauf épinglés / en cours / terminés ;
+// les lots conservés deviennent manuels.
+function purgerLotsAuto() {
+  const eqs = equipements.value
+  for (const eqId in panierEquip) {
+    const pan = panierEquip[eqId]; if (!Array.isArray(pan) || !pan.length) continue
+    const eq = eqs.find(e => String(e.id) === String(eqId))
+    let modif = false
+    const garde = pan.filter(x => {
+      if (x.auto !== true) return true
+      const et = eq ? etatLot(eq, x.ordreId).etat : 'plan'
+      if (x.epingle || et === 'cours' || et === 'termine') { x.auto = false; modif = true; return true }
+      modif = true; return false
+    })
+    if (modif) { panierEquip[eqId] = garde; sauverPanier(Number(eqId)) }
+  }
+}
+// Ajout manuel : tous les lots en attente d'un produit (campagne) d'un coup
+function ajouterCampagne(pid) { for (const l of lotsAjoutables.value.filter(x => x.pid === pid)) ajouterLot(l) }
 function basculerEpingle(it) { it.epingle = !it.epingle; sauverPanier(panierOuvert.value.id) }
 function basculerExclu(it) { it.exclu = !it.exclu; sauverPanier(panierOuvert.value.id) }
 
@@ -1115,7 +1135,7 @@ function deplacerLot(src, cib, uid, tDrop) {
   ordreManuel[cib] = true
   sauverPanier(cib); if (String(src) !== String(cib)) sauverPanier(src)
   const eC = equipements.value.find(x => String(x.id) === String(cib))
-  msgDeplacement.value = '✓ Lot ' + item.lot + (String(src) !== String(cib) ? ' déplacé sur ' + (eC ? eC.code : '') + ' (📌 épinglé)' : ' repositionné') + ' — ordre manuel sur ' + (eC ? eC.code : '')
+  msgDeplacement.value = '✓ Lot ' + item.lot + (String(src) !== String(cib) ? ' déplacé sur ' + (eC ? eC.code : '') + ' (📌 épinglé)' :  ' repositionné')
   setTimeout(() => { msgDeplacement.value = '' }, 5000)
   return true
 }
@@ -1203,7 +1223,18 @@ const lotsAjoutables = computed(() => {
   const ph = phaseOuvert.value
   const dans = new Set((panierEquip[panierOuvert.value.id] || []).map(i => i.ordreId))
   const q = rechProd.value.trim().toLowerCase()
-  return (lotsAttentePhase.value[ph] || []).filter(l => !dans.has(l.id) && (!q || (l.lot + ' ' + l.code + ' ' + (l.desig || '')).toLowerCase().includes(q))).slice(0, 150)
+  // lots déjà placés sur un autre équipement de la même phase : signalés
+  const ailleurs = {}
+  for (const eqId in panierEquip) { if (String(eqId) === String(panierOuvert.value.id)) continue; const e = equipements.value.find(x => String(x.id) === String(eqId)); if (!e || phaseOrdre(e.type) !== ph) continue; for (const it of panierEquip[eqId] || []) ailleurs[it.ordreId] = e.code }
+  return (lotsAttentePhase.value[ph] || []).filter(l => !dans.has(l.id) && (!q || (l.lot + ' ' + l.code + ' ' + (l.desig || '')).toLowerCase().includes(q))).map(l => ({ ...l, ailleurs: ailleurs[l.id] || '' })).slice(0, 300)
+})
+// Regroupés par produit (en cours / lancés d'abord), lots non encore placés ailleurs en premier
+const lotsAjoutablesParProduit = computed(() => {
+  const m = {}
+  for (const l of lotsAjoutables.value) { (m[l.pid] = m[l.pid] || { pid: l.pid, code: l.code, desig: l.desig, lots: [], rang: 2 }).lots.push(l); if (l.cours) m[l.pid].rang = 0; else if (!l.plan) m[l.pid].rang = Math.min(m[l.pid].rang, 1) }
+  const out = Object.values(m)
+  for (const g of out) g.lots.sort((a, b) => (!!a.ailleurs - !!b.ailleurs) || String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }))
+  return out.sort((a, b) => (a.rang - b.rang) || String(a.desig || a.code).localeCompare(String(b.desig || b.code)))
 })
 
 const planCalc = computed(() => {
@@ -1241,8 +1272,7 @@ const planCalc = computed(() => {
       const restants = panTri.filter(it => !it.exclu)
       const pretA = (it) => { let r = lotReady[it.ordreId] || new Date(t0v); if (it.dateDebut) { const dd = new Date(it.dateDebut); if (!isNaN(dd) && dd > r) r = dd } return r.getTime() }
       const suivant = () => {
-        if (etats[restants[0].ordreId].etat !== 'plan') return restants.shift()
-        if (ordreManuel[eq.id]) return restants.shift()   // ordre réajusté à la main : respecté tel quel
+        return restants.shift()   // planification manuelle : ordre du panier respecté tel quel
         const libre = eqCursor[eq.id].getTime() + 1800000
         let iBest = -1
         // continuer la campagne : un lot prêt du même produit que le dernier passé sur l'équipement
@@ -2310,4 +2340,12 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pan-ord .pan-btn { padding: 0 5px; font-size: 9px; line-height: 16px; }
 .pan-move { font-size: 10.5px; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 6px; max-width: 120px; }
 .pan-om { font-size: 11px; font-weight: 800; color: #92400e; background: #fef3c7; border-radius: 6px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 6px; }
+.pan-camps { display: flex; flex-direction: column; gap: 8px; max-height: 34vh; overflow-y: auto; }
+.pan-camp { border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 8px; }
+.pan-camp-h { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 5px; }
+.pan-camp-h i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.pan-camp-n { color: #64748b; font-size: 11px; }
+.pan-camp-all { margin-left: auto; background: #0f766e !important; color: #fff !important; border-color: #0f766e !important; }
+.pan-chip-ail { opacity: .55; border-style: dashed; }
+.pan-chip small { font-size: 9px; font-weight: 600; }
 </style>
