@@ -1,7 +1,7 @@
 <template>
   <div class="pe-page" :class="{ 'pe-pres': presentation }">
     <div class="pe-head">
-      <h1>Planning des équipements — Fabrication<span v-if="presentation" class="pe-pres-sem"> · {{ vuePres === 'semaine' ? libelleSemaineVue : 'plan complet' }}</span></h1>
+      <h1>Planning des équipements — Fabrication<span v-if="presentation" class="pe-pres-sem"> · {{ vuePres === 'semaine' ? libelleSemaineVue : 'plan complet' }}</span><span v-if="presentation && vuePres === 'semaine'" class="pe-semtag" :class="{ cour: semaineIdx === idxSemCour }">{{ semaineIdx === idxSemCour ? '● semaine en cours' : (semaineIdx > idxSemCour ? 'S+' + (semaineIdx - idxSemCour) : 'S' + (semaineIdx - idxSemCour)) + ' / semaine en cours' }}</span></h1>
       <div class="pe-head-btns">
         <span v-if="lotSuivi" class="pe-suivi-chip">🔎 Lot {{ lotSuiviLib }} suivi sur toutes ses phases <button @click="lotSuivi = null" title="Arrêter le suivi">✕</button></span>
         <div v-if="presentation" class="pe-wk">
@@ -11,6 +11,7 @@
             <button type="button" class="pe-wk-nav" :disabled="semaineIdx <= 0" @click="changerSemaine(-1)" title="Semaine précédente">◀</button>
             <span class="pe-wk-lbl">{{ semaineIdx + 1 }} / {{ nbSemaines }}</span>
             <button type="button" class="pe-wk-nav" :disabled="semaineIdx >= nbSemaines - 1" @click="changerSemaine(1)" title="Semaine suivante">▶</button>
+            <button type="button" class="pe-wk-btn pe-wk-cour" :class="{ on: semaineIdx === idxSemCour }" @click="allerSemaineCour" title="Revenir à la semaine en cours">⌖ En cours</button>
           </template>
         </div>
         <button v-if="!presentation" type="button" class="pe-pdf-btn" @click="demarrerBoucle" title="Écran atelier : tous les équipements de fabrication en défilement automatique">⟳ Boucle</button>
@@ -123,6 +124,7 @@
     <div class="pe-body">
     <section class="card params params-side">
       <div class="p-grp"><label>Départ</label><div class="dep-row"><input type="date" v-model="dateDepart" /><button type="button" class="vue-btn" @click="dateDepart = iso(new Date())">Auj.</button></div></div>
+      <div class="p-grp"><button type="button" class="vue-btn p-semcour" @click="allerSemaineCour" title="Faire défiler le Gantt jusqu'à la semaine en cours">⌖ Semaine en cours</button></div>
       <div class="p-grp"><label>Affichage</label>
         <div class="vue-btns">
           <button type="button" class="vue-btn" :class="{ on: pxH >= 15 }" @click="pxH = 20">Jour</button>
@@ -181,6 +183,7 @@
                 <span class="g-sh" :style="{ width: (2 * pxH) + 'px' }">22</span>
               </div>
             </div>
+            <div v-if="semCourPos" class="g-semcour-h" :style="semCourPos"><span>Semaine en cours · {{ semCourLib }}</span></div>
             <div v-if="posMaintenant != null" class="g-now-head" :style="{ left: posMaintenant + 'px' }"><span>{{ heureMaintenant }}</span></div>
           </div>
         </div>
@@ -209,6 +212,7 @@
             <div v-for="(n, ni) in (offBands[row.eq.id] || [])" :key="'off'+ni" class="g-nuit" :style="{ left: n.left + 'px', width: n.w + 'px' }" title="OFF — hors plage de travail"></div>
             <div v-for="d in jourDepart" :key="'dep'+d.i" class="g-depart" :style="{ left: d.left + 'px', width: d.w + 'px' }"></div>
             <div v-for="(m, mi) in (maintEquip[row.eq.id] || [])" :key="'mnt'+mi" class="g-maint" :class="{ 'g-maint-curr': m.type === 'curr', 'g-maint-tech': m.type === 'tech', 'g-maint-autre': m.type === 'autre' }" :style="maintStyle(m)" :title="maintLibelle(m) + ' — ' + m.dureeH + ' h'"><span class="g-maint-lbl">{{ maintAbrev(m) }}</span></div>
+            <div v-if="semCourPos" class="g-semcour" :style="semCourPos"></div>
             <div v-if="posMaintenant != null" class="g-now" :style="{ left: posMaintenant + 'px' }"></div>
             <!-- barres (par segment) -->
             <!-- campagnes (présentation) -->
@@ -1684,6 +1688,19 @@ const libelleSemaineVue = computed(() => {
   const f = (d) => d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })
   return 'semaine ' + sem + ' — ' + f(a) + ' 22h → ' + f(b) + ' 22h'
 })
+// ===== Repère « semaine en cours » (sam. 22h → sam. 22h contenant maintenant) =====
+const idxSemCour = computed(() => semaineDe(maintenant.value))
+const semCour = computed(() => { const k = Math.floor((maintenant.value - debutSemaine0.value) / H7); const a = new Date(debutSemaine0.value.getTime() + k * H7); return { a, b: new Date(a.getTime() + H7) } })
+const semCourLib = computed(() => { const f = (d) => d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }); return f(semCour.value.a) + ' 22h → ' + f(semCour.value.b) + ' 22h' })
+const semCourPos = computed(() => {
+  const l = ((semCour.value.a - tAff.value) / 3600000) * pxH.value, w = 168 * pxH.value
+  if (l + w < 0 || l > totalW.value) return null
+  const g = Math.max(0, l); return { left: g + 'px', width: (Math.min(totalW.value, l + w) - g) + 'px' }
+})
+function allerSemaineCour() {
+  if (presentation.value) { vuePres.value = 'semaine'; semaineIdx.value = idxSemCour.value; ajusterVue(); return }
+  nextTick(() => { const el = ganttEl.value; if (el) el.scrollLeft = Math.max(0, ((semCour.value.a - tAff.value) / 3600000) * pxH.value - 20) })
+}
 function largeurUtile() {
   const el = ganttEl.value; if (!el) return 0
   const col = el.querySelector('.g-eqcol'); return el.clientWidth - (col ? col.offsetWidth : 210) - 4
@@ -2577,4 +2594,12 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .sw-shn { background: linear-gradient(to right, #e7ecff, #cfd8ff); border: 1px solid #b4c0f5; }
 .pe-pres .g-dband { border-left: 1px solid #cbd5e1; }
 .pe-pres .g-timeline, .pe-pres .g-dcol { height: 40px; }
+/* Repère semaine en cours */
+.g-semcour-h { position: absolute; top: 0; height: 100%; border-top: 3px solid #0f766e; background: rgba(15,118,110,.06); z-index: 1; pointer-events: none; box-sizing: border-box; }
+.g-semcour-h span { position: absolute; top: 3px; right: 4px; font-size: 9.5px; font-weight: 800; color: #0f766e; background: #ccfbf1; border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+.g-semcour { position: absolute; top: 0; bottom: 0; border-left: 2px dashed #0f766e; border-right: 2px dashed #0f766e; background: rgba(15,118,110,.035); z-index: 0; pointer-events: none; box-sizing: border-box; }
+.pe-semtag { margin-left: 10px; font-size: 13px; font-weight: 800; color: #475569; background: #f1f5f9; border-radius: 999px; padding: 3px 10px; vertical-align: middle; }
+.pe-semtag.cour { color: #0f766e; background: #ccfbf1; }
+.pe-wk-cour.on { background: #ccfbf1 !important; color: #0f766e !important; }
+.p-semcour { width: 100%; background: #ccfbf1 !important; color: #0f766e !important; border-color: #5eead4 !important; font-weight: 800 !important; }
 </style>
