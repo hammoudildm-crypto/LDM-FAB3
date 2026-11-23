@@ -346,9 +346,9 @@
         <div class="ctrl-res">
           <span class="ctrl-n err">{{ nbCtrl.err }}</span> durée par défaut 8 h ·
           <span class="ctrl-n warn">{{ nbCtrl.warn }}</span> durée anormale ·
-          <span class="ctrl-n info">{{ nbCtrl.info }}</span> converties depuis unités/h
+          cadences lues dans le référentiel « Cadences & paramètres par équipement » (kg/h)
         </div>
-        <p class="pan-hint2">Durée d'un lot = poids du lot (taille × unités/boîte × poids unitaire) ÷ cadence en kg/h, ou nombre d'unités du lot ÷ cadence en unités/h. Pelliculage : ÷ nombre de turbines.</p>
+        <p class="pan-hint2">Durée d'un lot = poids du lot (taille × unités/boîte × poids unitaire) ÷ cadence du référentiel Cadences (kg/h ; machines identiques regroupées comme dans la matrice). Pelliculage : ÷ nombre de turbines.</p>
         <div v-if="!controleDonnees.length" class="pan-vide">✓ Aucune anomalie : toutes les cadences et fiches produit utilisées sont complètes.</div>
         <table v-else class="synth-tbl ctrl-tbl">
           <thead><tr><th></th><th>Équipement</th><th>Produit</th><th class="right">Lots planifiés</th><th class="right">Cadence</th><th class="right">Durée / lot</th><th>Calcul</th><th>Problème</th></tr></thead>
@@ -358,7 +358,7 @@
               <td><b>{{ x.eq.code }}</b> <span class="synth-nom">{{ x.eq.nom }}</span></td>
               <td>{{ x.prod.designation }} <span class="synth-nom">{{ x.prod.code_pf }}</span></td>
               <td class="right">{{ x.nbLots || '—' }}</td>
-              <td class="right nowrap">{{ x.cad ? (x.cad.cadence_nominale + ' ' + (x.cad.unite_cadence || 'kg/h')) : '—' }}</td>
+              <td class="right nowrap">{{ x.cad ? (x.cad.cadence_nominale + ' kg/h') : '—' }}</td>
               <td class="right nowrap">{{ fmtH(x.h) }}<span v-if="x.nbT > 1" class="synth-nom"> ({{ fmtH(x.hTurb) }}/turbine)</span></td>
               <td class="ctrl-calc">{{ calculTxt(x.prod, x.cad) }}</td>
               <td>{{ x.pb }}</td>
@@ -638,11 +638,11 @@ const KEY_PH = { pesee: 1, granulation: 2, melange: 4, compression: 5, remplissa
 function holdJours(pid, k) { const st = holdSteps.value[pid]; if (st && k && st[k] != null) return Number(st[k]); return holdTimes.value[pid] != null ? holdTimes.value[pid] : null }
 function synchroniserPaniers() {
   const equipsFab = equipements.value.filter(e => estFab(e.type))
-  const cadOk = new Set(cadences.value.filter(c => Number(c.cadence_nominale) > 0).map(c => c.equipement_id + '#' + c.produit_id))
+  const cadOk = { has: (k) => { const i = k.indexOf('#'); return !!cadRef(k.slice(0, i), k.slice(i + 1)) } }
   const now = Date.now()
   // charge courante (h) par équipement pour répartir
   const charge = {}
-  const dureeSur = (eqId, pid) => { const prod = produitsById.value[pid]; const cad = cadences.value.find(c => c.equipement_id === eqId && c.produit_id === pid); return (prod && cad ? dureeLotH(prod, cad) : 8) + 2 }
+  const dureeSur = (eqId, pid) => { const prod = produitsById.value[pid]; const cad = cadRef(eqId, pid); return (prod && cad ? dureeLotH(prod, cad) : 8) + 2 }
   // où est déjà chaque lot (par phase)
   const ou = {}   // ordreId#ph -> { eqId, item }
   for (const eqId in panierEquip) for (const it of (panierEquip[eqId] || [])) { const eq = equipsFab.find(e => String(e.id) === String(eqId)); if (eq) ou[it.ordreId + '#' + phaseOrdre(eq.type)] = { eqId: Number(eqId), item: it } }
@@ -737,7 +737,7 @@ function ordreAuto() { const id = panierOuvert.value.id; ordreManuel[id] = false
 // équipements de la même phase pouvant recevoir ce lot (cadence)
 function ciblesPossibles(item) {
   const src = panierOuvert.value; if (!src) return []
-  return equipements.value.filter(e => estFab(e.type) && e.id !== src.id && phaseOrdre(e.type) === phaseOrdre(src.type) && cadences.value.some(c => c.equipement_id === e.id && c.produit_id === item.pid && Number(c.cadence_nominale) > 0)).sort((a, b) => String(a.code).localeCompare(String(b.code)))
+  return equipements.value.filter(e => estFab(e.type) && e.id !== src.id && phaseOrdre(e.type) === phaseOrdre(src.type) && !!cadRef(e.id, item.pid)).sort((a, b) => String(a.code).localeCompare(String(b.code)))
 }
 function deplacerDepuisPanier(item, ev) { const cib = Number(ev.target.value); ev.target.value = ''; if (cib) deplacerLot(panierOuvert.value.id, cib, item.ordreId, null) }
 // Mode MANUEL : retire des paniers les lots ajoutés automatiquement, sauf épinglés / en cours / terminés ;
@@ -895,11 +895,33 @@ function nbTurbines(prod) {
 }
 // Durée d'un lot (h) : cadence en Kg/h
 // Unité de cadence : 'unites' (unités/h, cp/h, gél/h…) ou 'kg' (kg/h, par défaut en fabrication)
+// ===== Cadences : SEULE source = référentiel « Cadences & paramètres par équipement » =====
+// Même lecture que la matrice : machines identiques (même phase + même nom sans le n° final)
+// regroupées, valeur du groupe = la plus haute saisie ; unité = kg/h (fabrication), sans tenir
+// compte de l'unité éventuellement enregistrée ailleurs (Saisie TRS).
+const baseNomEq = (nom) => String(nom || '').trim().replace(/\s+(\d{1,2})\s*$/, (m, n) => (Number(n) <= 20 ? '' : m)).trim().toLowerCase()
+const cadRefIndex = computed(() => {
+  const grp = {}
+  for (const e of equipements.value) grp[String(e.id)] = phaseOrdre(e.type) + '|' + baseNomEq(e.nom || e.code)
+  const m = new Map()
+  for (const c of cadences.value) {
+    const g = grp[String(c.equipement_id)]; const v = Number(c.cadence_nominale) || 0
+    if (g == null || v <= 0) continue
+    const k = g + '#' + String(c.produit_id)
+    if (!m.has(k) || v > m.get(k)) m.set(k, v)
+  }
+  return { grp, m }
+})
+function cadRef(eqId, pid) {
+  const r = cadRefIndex.value, g = r.grp[String(eqId)]; if (g == null) return null
+  const v = r.m.get(g + '#' + String(pid))
+  return v ? { equipement_id: eqId, produit_id: pid, cadence_nominale: v, unite_cadence: 'kg/h' } : null
+}
 // Unité « unités/h » prise en compte seulement si la valeur est plausible (≥ 500 unités/h) :
 // une cadence de 16 marquée « unités/h » est en réalité des kg/h (la matrice affiche kg/h).
 const SEUIL_UNITES = 500
 const uniteDeclaree = (cad) => { const u = String((cad && cad.unite_cadence) || '').toLowerCase(); return /unit|cp|comp|g[ée]l|caps|pi[eè]ce|u\/h/.test(u) ? 'unites' : 'kg' }
-function uniteCad(cad) { return (uniteDeclaree(cad) === 'unites' && (Number(cad.cadence_nominale) || 0) >= SEUIL_UNITES) ? 'unites' : 'kg' }
+function uniteCad() { return 'kg' }   // référentiel = kg/h
 const nbUnitesLot = (prod) => (Number(prod.taille_lot) || 0) * (Number(prod.unites_par_boite) || 0)
 // Durée d'un lot + origine du calcul (pour le contrôle des données)
 function dureeInfo(prod, cad) {
@@ -1177,7 +1199,7 @@ function verifCible(src, cib, uid) {
   if (!eS || !eC) return 'Équipement introuvable'
   if (phaseOrdre(eS.type) !== phaseOrdre(eC.type)) return eC.code + ' n\'est pas de la même phase'
   const it = (panierEquip[src] || []).find(x => x.ordreId === uid); if (!it) return 'Lot introuvable'
-  if (!cadences.value.some(c => String(c.equipement_id) === String(cib) && c.produit_id === it.pid && Number(c.cadence_nominale) > 0)) return eC.code + ' n\'a pas de cadence pour ce produit'
+  if (!cadRef(cib, it.pid)) return eC.code + ' n\'a pas de cadence pour ce produit'
   return ''
 }
 // Insère le lot dans le panier de 'cib' juste avant le 1er lot planifié qui démarre après tDrop
@@ -1298,11 +1320,11 @@ const lotsAjoutables = computed(() => {
   // seulement les produits qui passent sur cet équipement (cadence renseignée) ;
   // si l'équipement n'a encore aucune cadence, on affiche tout (avec un avertissement)
   const eqId = panierOuvert.value.id
-  const prodsEq = new Set(cadences.value.filter(c => String(c.equipement_id) === String(eqId) && Number(c.cadence_nominale) > 0).map(c => String(c.produit_id)))
+  const prodsEq = new Set(produits.value.filter(p => cadRef(eqId, p.id)).map(p => String(p.id)))
   return (lotsAttentePhase.value[ph] || []).filter(l => !dans.has(l.id) && (!prodsEq.size || prodsEq.has(String(l.pid))) && (!q || (l.lot + ' ' + l.code + ' ' + (l.desig || '')).toLowerCase().includes(q))).map(l => ({ ...l, ailleurs: ailleurs[l.id] || '' })).slice(0, 300)
 })
 // Regroupés par produit (en cours / lancés d'abord), lots non encore placés ailleurs en premier
-const panSansCadence = computed(() => { if (!panierOuvert.value) return false; const id = panierOuvert.value.id; return !cadences.value.some(c => String(c.equipement_id) === String(id) && Number(c.cadence_nominale) > 0) })
+const panSansCadence = computed(() => { if (!panierOuvert.value) return false; const id = panierOuvert.value.id; return !produits.value.some(p => cadRef(id, p.id)) })
 const lotsAjoutablesParProduit = computed(() => {
   const m = {}
   for (const l of lotsAjoutables.value) { (m[l.pid] = m[l.pid] || { pid: l.pid, code: l.code, desig: l.desig, lots: [], rang: 2 }).lots.push(l); if (l.cours) m[l.pid].rang = 0; else if (!l.plan) m[l.pid].rang = Math.min(m[l.pid].rang, 1) }
@@ -1362,7 +1384,7 @@ const planCalc = computed(() => {
         const E = etats[item.ordreId]
         const key = item.ordreId
         const readyPhase = lotReady[key] || new Date(t0v)  // fin de la phase précédente
-        const cad = cadences.value.find(c => c.equipement_id === eq.id && c.produit_id === item.pid)
+        const cad = cadRef(eq.id, item.pid)
         const dLotFull = cad ? Math.max(0.25, dureeLotH(prod, cad)) : 8
         const calc = calculTxt(prod, cad)
         // Pelliculage : chaque turbine = un lot séparé
@@ -1908,7 +1930,6 @@ const controleDonnees = computed(() => {
     const nbT = phaseOrdre(eq.type) === 7 ? nbTurbines(prod) : 1
     let niveau = null, pb = ''
     if (d.src === 'defaut') { niveau = 'err'; pb = d.raison + ' → durée par défaut 8 h' }
-    else if (cad && uniteDeclaree(cad) === 'unites' && uniteCad(cad) === 'kg') { niveau = 'warn'; pb = 'Unité enregistrée « ' + cad.unite_cadence + ' » improbable pour ' + cad.cadence_nominale + ' → lue en kg/h. Ressaisis la valeur dans Cadences pour corriger l\'unité' }
     else if (d.src === 'unites') { niveau = 'info'; pb = 'Cadence en ' + (cad.unite_cadence || 'unités/h') + ' : convertie (unités du lot ÷ cadence)' }
     if (!niveau && d.h < 0.25) { niveau = 'warn'; pb = 'Durée très courte (' + (Math.round(d.h * 60)) + ' min) : cadence trop élevée ou en mauvaise unité ?' }
     if (!niveau && d.h > 48) { niveau = 'warn'; pb = 'Durée très longue (' + Math.round(d.h) + ' h) : cadence trop faible ou en mauvaise unité ?' }
@@ -1918,9 +1939,9 @@ const controleDonnees = computed(() => {
   // 1) lots présents dans les paniers
   const cpt = {}
   for (const eqId in panierEquip) for (const it of (panierEquip[eqId] || [])) { if (it.exclu) continue; const k = eqId + '#' + it.pid; cpt[k] = (cpt[k] || 0) + 1 }
-  for (const k in cpt) { const [eqId, pid] = k.split('#'); const eq = eqById[eqId]; const prod = produitsById.value[pid]; if (!eq || !prod) continue; const cad = cadences.value.find(c => String(c.equipement_id) === String(eqId) && String(c.produit_id) === String(pid)); ajouter(eq, prod, cad, cpt[k]) }
+  for (const k in cpt) { const [eqId, pid] = k.split('#'); const eq = eqById[eqId]; const prod = produitsById.value[pid]; if (!eq || !prod) continue; const cad = cadRef(eqId, pid); ajouter(eq, prod, cad, cpt[k]) }
   // 2) toutes les cadences de fabrication saisies (même sans lot planifié)
-  for (const c of cadences.value) { const eq = eqById[c.equipement_id]; const prod = produitsById.value[c.produit_id]; if (eq && prod) ajouter(eq, prod, c, cpt[c.equipement_id + '#' + c.produit_id] || 0) }
+  for (const c of cadences.value) { const eq = eqById[c.equipement_id]; const prod = produitsById.value[c.produit_id]; if (eq && prod) ajouter(eq, prod, cadRef(c.equipement_id, c.produit_id), cpt[c.equipement_id + '#' + c.produit_id] || 0) }
   const rang = { err: 0, warn: 1, info: 2 }
   return out.sort((a, b) => (rang[a.niveau] - rang[b.niveau]) || (b.nbLots - a.nbLots) || String(a.eq.code).localeCompare(String(b.eq.code)))
 })
