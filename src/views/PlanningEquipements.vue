@@ -1,9 +1,19 @@
 <template>
   <div class="pe-page" :class="{ 'pe-pres': presentation }">
     <div class="pe-head">
-      <h1>Planning des équipements — Fabrication<span v-if="presentation" class="pe-pres-sem"> · {{ libelleSemaine }}</span></h1>
+      <h1>Planning des équipements — Fabrication<span v-if="presentation" class="pe-pres-sem"> · {{ vuePres === 'semaine' ? libelleSemaineVue : 'plan complet' }}</span></h1>
       <div class="pe-head-btns">
         <span v-if="lotSuivi" class="pe-suivi-chip">🔎 Lot {{ lotSuiviLib }} suivi sur toutes ses phases <button @click="lotSuivi = null" title="Arrêter le suivi">✕</button></span>
+        <div v-if="presentation" class="pe-wk">
+          <button type="button" class="pe-wk-btn" :class="{ on: vuePres === 'semaine' }" @click="choisirVue('semaine')">Semaine</button>
+          <button type="button" class="pe-wk-btn" :class="{ on: vuePres === 'tout' }" @click="choisirVue('tout')">Plan complet</button>
+          <template v-if="vuePres === 'semaine'">
+            <button type="button" class="pe-wk-nav" :disabled="semaineIdx <= 0" @click="changerSemaine(-1)" title="Semaine précédente">◀</button>
+            <span class="pe-wk-lbl">{{ semaineIdx + 1 }} / {{ nbSemaines }}</span>
+            <button type="button" class="pe-wk-nav" :disabled="semaineIdx >= nbSemaines - 1" @click="changerSemaine(1)" title="Semaine suivante">▶</button>
+          </template>
+        </div>
+        <button type="button" class="pe-pdf-btn" @click="exporterPDF" title="Exporter la vue affichée en PDF A3 paysage">🖨 PDF A3</button>
         <button type="button" class="pe-pres-btn" :class="{ on: presentation }" @click="basculerPresentation">{{ presentation ? '✕ Quitter la présentation' : '▶ Présentation' }}</button>
       </div>
     </div>
@@ -113,7 +123,7 @@
 
     <!-- Gantt -->
     <section v-else class="card gantt-card">
-      <div class="gantt">
+      <div class="gantt" ref="ganttEl">
         <!-- entête temps -->
         <div class="g-header">
           <div class="g-eqcol g-eqhead">Équipement</div>
@@ -265,7 +275,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { supabase } from '../supabase'
 
 const chargement = ref(true)
@@ -1014,19 +1024,104 @@ const posMaintenant = computed(() => {
 
 // ===== Mode présentation =====
 const presentation = ref(false)
+const ganttEl = ref(null)
+const vuePres = ref('semaine')   // 'semaine' | 'tout'
+const semaineIdx = ref(0)
+let pxAvant = null, exportEnCours = false
 function basculerPresentation() {
   presentation.value = !presentation.value
+  if (presentation.value) {
+    pxAvant = pxH.value
+    semaineIdx.value = semaineDe(maintenant.value)
+    vuePres.value = 'semaine'
+  } else if (pxAvant != null) { pxH.value = pxAvant; pxAvant = null }
   try {
     if (presentation.value && document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {})
     if (!presentation.value && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {})
   } catch (e) {}
+  ajusterVueBientot()
+}
+// Semaine de travail : du samedi 22h00 au samedi suivant 22h00 (3×8 sam.→jeu. + week-end)
+const H7 = 7 * 24 * 3600000
+const debutSemaine0 = computed(() => { const d = new Date(t0.value); let g = 0; while (d.getDay() !== 6 && g++ < 7) d.setDate(d.getDate() - 1); d.setHours(22, 0, 0, 0); if (d > t0.value) d.setDate(d.getDate() - 7); return d })
+const nbSemaines = computed(() => Math.max(1, Math.ceil((finGlobale.value - debutSemaine0.value) / H7)))
+function semaineDe(d) { const k = Math.floor((new Date(d) - debutSemaine0.value) / H7); return Math.min(Math.max(0, k), nbSemaines.value - 1) }
+const debutSemaineVue = computed(() => new Date(debutSemaine0.value.getTime() + semaineIdx.value * H7))
+const libelleSemaineVue = computed(() => {
+  const a = debutSemaineVue.value, b = new Date(a.getTime() + H7)
+  const lun = new Date(a.getTime() + 2 * 86400000); const j = new Date(Date.UTC(lun.getFullYear(), lun.getMonth(), lun.getDate()))
+  const dn = j.getUTCDay() || 7; j.setUTCDate(j.getUTCDate() + 4 - dn)
+  const sem = Math.ceil(((j - new Date(Date.UTC(j.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7)
+  const f = (d) => d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })
+  return 'semaine ' + sem + ' — ' + f(a) + ' 22h → ' + f(b) + ' 22h'
+})
+function largeurUtile() {
+  const el = ganttEl.value; if (!el) return 0
+  const col = el.querySelector('.g-eqcol'); return el.clientWidth - (col ? col.offsetWidth : 210) - 4
+}
+function ajusterVue() {
+  if (!presentation.value) return
+  const w = largeurUtile(); if (w <= 100) return
+  if (vuePres.value === 'semaine') {
+    pxH.value = Math.round((w / 168) * 1000) / 1000
+    nextTick(() => { const el = ganttEl.value; if (el) el.scrollLeft = Math.max(0, ((debutSemaineVue.value - t0.value) / 3600000) * pxH.value) })
+  } else {
+    pxH.value = Math.max(0.3, Math.round((w / totalHeures.value) * 1000) / 1000)
+    nextTick(() => { if (ganttEl.value) ganttEl.value.scrollLeft = 0 })
+  }
+}
+let tAjust = null
+function ajusterVueBientot() { clearTimeout(tAjust); tAjust = setTimeout(() => nextTick(ajusterVue), 300) }
+function choisirVue(v) { vuePres.value = v; ajusterVue() }
+function changerSemaine(n) { semaineIdx.value = Math.min(Math.max(0, semaineIdx.value + n), nbSemaines.value - 1); ajusterVue() }
+onMounted(() => window.addEventListener('resize', ajusterVueBientot))
+onUnmounted(() => window.removeEventListener('resize', ajusterVueBientot))
+
+// ===== Export PDF A3 paysage de la vue affichée =====
+function echapHtml(x) { return String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) }
+async function exporterPDF() {
+  const etaitPres = presentation.value
+  if (!etaitPres) { basculerPresentation(); await new Promise(r => setTimeout(r, 700)) }
+  const page = document.querySelector('.pe-page'); const gEl = ganttEl.value
+  if (!page || !gEl) return
+  const scroll = gEl.scrollLeft, largeur = page.scrollWidth
+  const clone = page.cloneNode(true)
+  clone.querySelectorAll('.pe-head-btns, .pe-pres-btn, .pe-pdf-btn, .g-now, .g-now-head, .pan-overlay').forEach(n => n.remove())
+  clone.classList.remove('pe-pres'); clone.classList.add('pe-pres', 'pe-print')
+  const styles = [...document.querySelectorAll('link[rel="stylesheet"], style')].map(n => n.outerHTML).join('\n')
+  const edite = new Date().toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const titre = 'Planning fabrication — ' + (vuePres.value === 'semaine' ? libelleSemaineVue.value : 'plan complet')
+  exportEnCours = true
+  const w = window.open('', '_blank')
+  if (!w) { erreur.value = 'Autorise les pop-ups pour générer le PDF.'; exportEnCours = false; return }
+  w.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>' + echapHtml(titre) + '</title>' + styles +
+    '<style>@page{size:A3 landscape;margin:7mm}html,body{margin:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '.pe-print{position:static!important;inset:auto!important;overflow:visible!important;padding:0!important;width:' + largeur + 'px}' +
+    '.pe-print .gantt{max-height:none!important;overflow-x:hidden!important;overflow-y:visible!important}' +
+    '.pe-print .g-bar{animation:none!important}.pe-print .g-row,.pe-print .g-grp{break-inside:avoid}' +
+    '.pe-print-pied{display:flex;justify-content:space-between;font:600 11px system-ui;color:#64748b;border-top:1px solid #e2e8f0;margin-top:8px;padding-top:4px}' +
+    '#zoomer{transform-origin:0 0}</style></head><body><div id="zoomer">' + clone.outerHTML +
+    '<div class="pe-print-pied" style="width:' + largeur + 'px"><span>LDM Groupe — Site El Khroub · ProdTrack</span><span>Édité le ' + echapHtml(edite) + '</span></div></div></body></html>')
+  w.document.close()
+  const lancer = () => {
+    try {
+      const g = w.document.querySelector('.gantt'); if (g) g.scrollLeft = scroll
+      const z = w.document.getElementById('zoomer'); const cible = 1540   // largeur utile A3 paysage (px @96 dpi)
+      if (z && largeur > cible) z.style.zoom = String(cible / largeur)
+    } catch (e) {}
+    setTimeout(() => { try { w.focus(); w.print() } catch (e) {} ; exportEnCours = false; if (!etaitPres && presentation.value) basculerPresentation() }, 400)
+  }
+  if (w.document.readyState === 'complete') setTimeout(lancer, 500); else w.addEventListener('load', () => setTimeout(lancer, 300))
 }
 function toucheClavier(e) {
   if (e.key !== 'Escape') return
   if (lotSuivi.value) { lotSuivi.value = null; return }
-  if (presentation.value) presentation.value = false
+  if (presentation.value) basculerPresentation()
 }
-function finPleinEcran() { if (!document.fullscreenElement && presentation.value) presentation.value = false }
+function finPleinEcran() {
+  if (!document.fullscreenElement && presentation.value && !exportEnCours) { presentation.value = false; if (pxAvant != null) { pxH.value = pxAvant; pxAvant = null } return }
+  ajusterVueBientot()
+}
 onMounted(() => { window.addEventListener('keydown', toucheClavier); document.addEventListener('fullscreenchange', finPleinEcran) })
 onUnmounted(() => { window.removeEventListener('keydown', toucheClavier); document.removeEventListener('fullscreenchange', finPleinEcran) })
 // Suivi d'un lot (OF) sur toutes ses phases
@@ -1364,6 +1459,15 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .g-bar.g-suivi { box-shadow: 0 0 0 3px #0f172a, 0 6px 14px rgba(15,23,42,.4); z-index: 5; filter: none; opacity: 1; }
 .g-bar.g-dim2 { opacity: .15; filter: grayscale(.8); }
 .g-bar.g-lot { cursor: pointer; }
+/* Semaine / export */
+.pe-wk { display: flex; align-items: center; gap: 4px; background: #f1f5f9; border-radius: 9px; padding: 3px; }
+.pe-wk-btn { background: none; border: none; font-size: 12px; font-weight: 700; color: #475569; padding: 5px 10px; border-radius: 7px; cursor: pointer; }
+.pe-wk-btn.on { background: #fff; color: #0f766e; box-shadow: 0 1px 2px rgba(15,23,42,.15); }
+.pe-wk-nav { background: #fff; border: 1px solid #cbd5e1; border-radius: 7px; width: 30px; height: 28px; cursor: pointer; font-size: 12px; color: #0f172a; }
+.pe-wk-nav:disabled { opacity: .35; cursor: default; }
+.pe-wk-lbl { font-size: 12px; font-weight: 800; color: #0f172a; min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
+.pe-pdf-btn { background: #fff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12px; font-weight: 700; padding: 6px 12px; cursor: pointer; }
+.pe-pdf-btn:hover { background: #f8fafc; }
 /* ===== Mode présentation ===== */
 .pe-pres { position: fixed; inset: 0; z-index: 2000; background: #fff; overflow: auto; padding: 14px 20px; }
 .pe-pres .params-side, .pe-pres .pe-clean-notice, .pe-pres .alert { display: none; }
