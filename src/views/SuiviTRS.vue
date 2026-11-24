@@ -162,6 +162,30 @@ const labelsMotifs = computed(() => MOTIFS.map(mo => mo[2]))
 const pct = (x) => (x * 100).toFixed(1) + ' %'
 const fmt = (n) => n == null ? '0' : Math.round(Number(n)).toLocaleString('fr-FR')
 const heures = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' h'
+// Niveau OEE : vert ≥ 85 %, orange 65–85 %, rouge < 65 %
+const niv = (x) => x >= 0.85 ? 'ok' : (x >= 0.65 ? 'mid' : 'ko')
+const NIV_COL = { ok: '#16a34a', mid: '#d97706', ko: '#dc2626' }
+const pctNum = (x) => Math.round((x || 0) * 100)
+// Facteur limitant = la plus basse des trois composantes
+const facteurLimitant = computed(() => {
+  const g = global.value
+  const arr = [['Disponibilité', g.dispo], ['Performance', g.perf], ['Qualité', g.qualite]].sort((a, b) => a[1] - b[1])
+  return { nom: arr[0][0], val: arr[0][1] }
+})
+const topPerte = computed(() => {
+  let best = null
+  for (const mo of MOTIFS) { const v = pertes.value[mo[0]]; if (v > 0 && (!best || v > best.min)) best = { label: mo[2], min: v } }
+  return best
+})
+// Pertes en Pareto : triées décroissant + % cumulé
+const pertesPareto = computed(() => {
+  const ta = totalArrets.value
+  const rows = MOTIFS.map(mo => ({ cle: mo[0], label: mo[2], color: mo[3], min: pertes.value[mo[0]], pct: ta ? pertes.value[mo[0]] / ta * 100 : 0 }))
+    .filter(r => r.min > 0).sort((a, b) => b.min - a.min)
+  let cum = 0
+  for (const r of rows) { cum += r.pct; r.cum = cum }
+  return rows
+})
 
 // Export PDF (fenêtre d'impression, logo ProdTrack) — reflète les filtres actifs.
 function exporterPDF() {
@@ -253,27 +277,65 @@ function exporterPDF() {
 
       <template v-else>
         <div class="toolbar">
+          <span v-if="equipFiltre || produitFiltre" class="flt-chip">Filtre :<b v-if="equipFiltre">{{ equipFiltreCode }}</b><b v-if="produitFiltre">{{ produitFiltreLabel }}</b></span>
           <button type="button" class="btn-pdf" @click="exporterPDF">⬇ Télécharger en PDF</button>
         </div>
-        <div class="kpi-grid">
-          <div class="kpi"><div class="kpi-top"><span class="kpi-ic" :style="TINTS.indigo"><svg viewBox="0 0 24 24" v-html="ICONS.gauge || ICONS.activity"></svg></span><div class="kpi-val big">{{ pct(global.trs) }}</div></div><div class="kpi-lbl">TRS global (pondéré)</div></div>
-          <div class="kpi"><div class="kpi-top"><div class="kpi-val">{{ pct(global.dispo) }}</div></div><div class="kpi-lbl">Disponibilité</div></div>
-          <div class="kpi"><div class="kpi-top"><div class="kpi-val">{{ pct(global.perf) }}</div></div><div class="kpi-lbl">Performance</div></div>
-          <div class="kpi"><div class="kpi-top"><div class="kpi-val">{{ pct(global.qualite) }}</div></div><div class="kpi-lbl">Qualité</div></div>
+
+        <!-- Interprétation automatique -->
+        <div class="interpret" :class="'in-' + niv(global.trs)">
+          <span class="int-ic">💡</span>
+          <span class="int-tx">TRS global <b :style="{ color: NIV_COL[niv(global.trs)] }">{{ pctNum(global.trs) }} %</b> — facteur limitant : <b>{{ facteurLimitant.nom }}</b> ({{ pctNum(facteurLimitant.val) }} %)<template v-if="topPerte">. Principal poste d'arrêt : <b>{{ topPerte.label }}</b> ({{ heures(topPerte.min) }}).</template></span>
         </div>
 
-        <div v-if="produitFiltre" class="flt-banner">Analyse TRS filtrée sur le produit <strong>{{ produitFiltreLabel }}</strong> — {{ parEquip.length }} équipement(s) concerné(s) sur la période.</div>
+        <div class="strs-top">
+          <!-- Héro : anneau TRS + chaîne Disponibilité × Performance × Qualité -->
+          <section class="card hero">
+            <div class="hero-gauge">
+              <svg viewBox="0 0 42 42" class="donut" role="img" :aria-label="'TRS ' + pctNum(global.trs) + ' %'">
+                <circle class="donut-bg" cx="21" cy="21" r="15.915" />
+                <circle class="donut-seg" cx="21" cy="21" r="15.915" :stroke="NIV_COL[niv(global.trs)]" :stroke-dasharray="pctNum(global.trs) + ' ' + (100 - pctNum(global.trs))" stroke-dashoffset="25" />
+                <text x="21" y="20.5" class="donut-val" :style="{ fill: NIV_COL[niv(global.trs)] }">{{ pctNum(global.trs) }}%</text>
+                <text x="21" y="27" class="donut-sub">TRS</text>
+              </svg>
+            </div>
+            <div class="hero-chain">
+              <div class="hc-row" v-for="f in [['Disponibilité', global.dispo], ['Performance', global.perf], ['Qualité', global.qualite]]" :key="f[0]">
+                <span class="hc-lbl">{{ f[0] }}</span>
+                <span class="hc-bar"><span class="hc-bar-f" :style="{ width: pctNum(f[1]) + '%', background: NIV_COL[niv(f[1])] }"></span></span>
+                <span class="hc-val" :style="{ color: NIV_COL[niv(f[1])] }">{{ pctNum(f[1]) }} %</span>
+              </div>
+              <div class="hc-formula">Disponibilité <span>×</span> Performance <span>×</span> Qualité <span>=</span> <b>TRS</b></div>
+            </div>
+          </section>
 
+          <!-- Pertes de temps en Pareto -->
+          <section class="card">
+            <h3 class="card-title">Pertes de temps — Pareto</h3>
+            <div v-if="!pertesPareto.length" class="muted">Aucun arrêt enregistré sur la période.</div>
+            <div v-else class="pareto">
+              <div v-for="r in pertesPareto" :key="r.cle" class="par-row">
+                <span class="par-nom"><span class="par-dot" :style="{ background: r.color }"></span>{{ r.label }}</span>
+                <span class="par-track"><span class="par-f" :style="{ width: r.pct + '%', background: r.color }"></span></span>
+                <span class="par-min">{{ heures(r.min) }}</span>
+                <span class="par-cum">cumul {{ r.cum.toFixed(0) }} %</span>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- TRS par équipement : classement coloré par niveau -->
         <section class="card">
           <h3 class="card-title">TRS par équipement<span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span></h3>
-          <MiniChart :labels="labelsEquip" :format="v => v + ' %'" :value-format="v => v || ''" show-values :series="trsParEquipChart" />
+          <div class="eqrank">
+            <div v-for="e in parEquip" :key="e.id" class="eqbar">
+              <span class="eqbar-code">{{ e.code }} <span class="eqbar-nom">{{ e.nom }}</span></span>
+              <span class="eqbar-track"><span class="eqbar-f" :style="{ width: pctNum(e.trs) + '%', background: NIV_COL[niv(e.trs)] }"></span></span>
+              <span class="eqbar-val" :style="{ color: NIV_COL[niv(e.trs)] }">{{ pctNum(e.trs) }} %</span>
+            </div>
+          </div>
         </section>
 
-        <section class="card">
-          <h3 class="card-title clickable-title" @click="moisVisible = !moisVisible">TRS par mois<span v-if="equipFiltre" class="flt"> — {{ equipFiltreCode }}</span><span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span> <span class="toggle-caret">{{ moisVisible ? '▾ masquer' : '▸ afficher' }}</span></h3>
-          <MiniChart v-if="moisVisible" :labels="MOIS" :format="v => v + ' %'" :value-format="v => v || ''" show-values :series="[{ label: 'TRS %', color: '#0f766e', data: trsParMois }]" />
-        </section>
-
+        <!-- Détail par équipement -->
         <section class="card">
           <h3 class="card-title">Détail par équipement</h3>
           <div class="table-scroll">
@@ -284,10 +346,10 @@ function exporterPDF() {
                   <td class="strong">{{ e.code }} <span class="nom">{{ e.nom }}</span></td>
                   <td class="right nowrap">{{ heures(e.ouverture) }}</td>
                   <td class="right nowrap">{{ heures(e.fonct) }}</td>
-                  <td class="right">{{ pct(e.dispo) }}</td>
-                  <td class="right">{{ pct(e.perf) }}</td>
-                  <td class="right">{{ pct(e.qualite) }}</td>
-                  <td class="right trs-cell">{{ pct(e.trs) }}</td>
+                  <td class="right niv-cell" :style="{ color: NIV_COL[niv(e.dispo)] }">{{ pctNum(e.dispo) }} %</td>
+                  <td class="right niv-cell" :style="{ color: NIV_COL[niv(e.perf)] }">{{ pctNum(e.perf) }} %</td>
+                  <td class="right niv-cell" :style="{ color: NIV_COL[niv(e.qualite)] }">{{ pctNum(e.qualite) }} %</td>
+                  <td class="right trs-cell" :style="{ color: NIV_COL[niv(e.trs)] }">{{ pctNum(e.trs) }} %</td>
                   <td class="right nettoyage-cell">{{ heures(e.arrets.nettoyage) }} <span class="pcm">({{ pct(e.pctNettoyage) }})</span></td>
                 </tr>
               </tbody>
@@ -295,18 +357,10 @@ function exporterPDF() {
           </div>
         </section>
 
+        <!-- TRS par mois -->
         <section class="card">
-          <h3 class="card-title">Détail des pertes de temps (tous équipements)</h3>
-          <MiniChart :labels="labelsMotifs" :format="v => fmt(v) + ' min'" :value-format="v => v || ''" show-values :series="pertesChart" />
-          <div class="pertes-list">
-            <div v-for="mo in MOTIFS" :key="mo[0]" class="perte-row" :class="{ hl: mo[0] === 'nettoyage' }">
-              <span class="perte-dot" :style="{ background: mo[3] }"></span>
-              <span class="perte-nom">{{ mo[2] }}</span>
-              <span class="perte-min">{{ heures(pertes[mo[0]]) }}</span>
-              <span class="perte-pct">{{ totalArrets ? ((pertes[mo[0]] / totalArrets) * 100).toFixed(1) : 0 }} % des arrêts</span>
-              <span class="perte-pct2">{{ pertes.ouverture ? ((pertes[mo[0]] / pertes.ouverture) * 100).toFixed(1) : 0 }} % du temps d'ouverture</span>
-            </div>
-          </div>
+          <h3 class="card-title clickable-title" @click="moisVisible = !moisVisible">TRS par mois<span v-if="equipFiltre" class="flt"> — {{ equipFiltreCode }}</span><span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span> <span class="toggle-caret">{{ moisVisible ? '▾ masquer' : '▸ afficher' }}</span></h3>
+          <MiniChart v-if="moisVisible" :labels="MOIS" :format="v => v + ' %'" :value-format="v => v || ''" show-values :series="[{ label: 'TRS %', color: '#0f766e', data: trsParMois }]" />
         </section>
       </template>
     </template>
@@ -367,5 +421,44 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .perte-nom { font-weight: 600; }
 .perte-min { font-weight: 700; text-align: right; }
 .perte-pct, .perte-pct2 { color: #64748b; font-size: 12.5px; }
-@media (max-width: 800px) { .kpi-grid { grid-template-columns: 1fr 1fr; } .perte-row { grid-template-columns: 16px 1fr auto; } .perte-pct, .perte-pct2 { display: none; } }
+/* ---- Refonte Suivi TRS ---- */
+.flt-chip { font-size: 12px; color: #64748b; font-weight: 600; margin-right: auto; }
+.flt-chip b { color: #4338ca; background: #eef2ff; border-radius: 999px; padding: 2px 9px; margin-left: 6px; }
+.interpret { display: flex; align-items: flex-start; gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #4338ca; border-radius: 10px; padding: 11px 14px; margin-bottom: 16px; font-size: 14px; color: #334155; }
+.interpret.in-ok { border-left-color: #16a34a; } .interpret.in-mid { border-left-color: #d97706; } .interpret.in-ko { border-left-color: #dc2626; }
+.int-ic { font-size: 16px; line-height: 1.3; }
+.strs-top { display: grid; grid-template-columns: 1fr 1.2fr; gap: 14px; margin-bottom: 16px; align-items: stretch; }
+.hero { display: flex; align-items: center; gap: 22px; }
+.hero-gauge { flex: 0 0 auto; }
+.donut { width: 150px; height: 150px; }
+.donut-bg { fill: none; stroke: #eef2f6; stroke-width: 3.6; }
+.donut-seg { fill: none; stroke-width: 3.6; stroke-linecap: round; transition: stroke-dasharray .5s ease; }
+.donut-val { font-size: 9px; font-weight: 800; text-anchor: middle; }
+.donut-sub { font-size: 3.4px; font-weight: 700; fill: #94a3b8; text-anchor: middle; letter-spacing: .15em; }
+.hero-chain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+.hc-row { display: grid; grid-template-columns: 96px 1fr 46px; align-items: center; gap: 10px; }
+.hc-lbl { font-size: 12.5px; font-weight: 600; color: #475569; }
+.hc-bar { height: 10px; background: #eef2f6; border-radius: 5px; overflow: hidden; }
+.hc-bar-f { display: block; height: 100%; border-radius: 5px; transition: width .4s; }
+.hc-val { font-size: 14px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.hc-formula { margin-top: 4px; font-size: 11.5px; color: #94a3b8; font-weight: 600; }
+.hc-formula span { color: #cbd5e1; margin: 0 2px; } .hc-formula b { color: #4338ca; }
+.pareto { display: flex; flex-direction: column; gap: 7px; }
+.par-row { display: grid; grid-template-columns: 120px 1fr auto auto; align-items: center; gap: 10px; }
+.par-nom { font-size: 12.5px; font-weight: 600; color: #1b2733; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.par-dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.par-track { height: 11px; background: #f1f5f9; border-radius: 5px; overflow: hidden; }
+.par-f { display: block; height: 100%; border-radius: 5px; }
+.par-min { font-size: 12.5px; font-weight: 700; color: #334155; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.par-cum { font-size: 11px; color: #94a3b8; font-weight: 600; white-space: nowrap; }
+.eqrank { display: flex; flex-direction: column; gap: 8px; }
+.eqbar { display: grid; grid-template-columns: 220px 1fr 54px; align-items: center; gap: 12px; }
+.eqbar-code { font-size: 13px; font-weight: 700; color: #1b2733; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eqbar-nom { font-weight: 400; color: #94a3b8; }
+.eqbar-track { height: 14px; background: #f1f5f9; border-radius: 7px; overflow: hidden; }
+.eqbar-f { display: block; height: 100%; border-radius: 7px; transition: width .4s; }
+.eqbar-val { font-size: 14px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.niv-cell { font-weight: 700; font-variant-numeric: tabular-nums; }
+.trs-cell { font-weight: 800; font-variant-numeric: tabular-nums; }
+@media (max-width: 860px) { .strs-top { grid-template-columns: 1fr; } .hero { flex-direction: column; text-align: center; } .eqbar { grid-template-columns: 120px 1fr 48px; } .par-row { grid-template-columns: 90px 1fr auto; } .par-cum { display: none; } }
 </style>
