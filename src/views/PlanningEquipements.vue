@@ -14,10 +14,56 @@
             <button type="button" class="pe-wk-btn pe-wk-cour" :class="{ on: semaineIdx === idxSemCour }" @click="allerSemaineCour" title="Revenir à la semaine en cours">⌖ En cours</button>
           </template>
         </div>
+        <button v-if="!presentation" type="button" class="pe-pdf-btn" :class="{ on: bilanOuvert }" @click="bilanOuvert = !bilanOuvert" title="Bilan Plan vs Réalisé — annuel & mensuel, global & par atelier">📊 Bilan</button>
         <button v-if="!presentation" type="button" class="pe-pdf-btn" @click="demarrerBoucle" title="Écran atelier : tous les équipements de fabrication en défilement automatique">⟳ Boucle</button>
         <button type="button" class="pe-pdf-btn" @click="exporterPDF" title="Exporter la vue affichée en PDF A3 paysage">🖨 PDF A3</button>
         <button type="button" class="pe-pres-btn" :class="{ on: presentation }" @click="basculerPresentation">{{ presentation ? '✕ Quitter la présentation' : '▶ Présentation' }}</button>
       </div>
+    </div>
+
+    <!-- Bilan Plan vs Réalisé (annuel & mensuel, global & par atelier) -->
+    <div v-if="bilanOuvert && !presentation" class="pe-bilan">
+      <div class="bil-head">
+        <h2>Plan vs Réalisé — {{ bilan.an }}</h2>
+        <div class="bil-unite">
+          <button type="button" :class="{ on: bilanUnite === 'boites' }" @click="bilanUnite = 'boites'">Boîtes</button>
+          <button type="button" :class="{ on: bilanUnite === 'lots' }" @click="bilanUnite = 'lots'">Lots</button>
+        </div>
+        <button type="button" class="bil-x" @click="bilanOuvert = false" title="Masquer le bilan">✕</button>
+      </div>
+      <div class="bil-glob">
+        <div class="bil-card">
+          <div class="bil-card-t">État d'avancement <b>annuel</b></div>
+          <div class="bil-nums"><b>{{ fmtQ(bilan.global.realAn) }}</b> / {{ fmtQ(bilan.global.planAn) }} <span class="bil-u">{{ bilanUnite }}</span></div>
+          <div class="bil-bar"><span class="bil-fill" :class="{ over: bilan.global.pctAn >= 100 }" :style="{ width: Math.min(100, bilan.global.pctAn) + '%' }"></span></div>
+          <div class="bil-pct">{{ bilan.global.pctAn }} % du plan annuel</div>
+        </div>
+        <div class="bil-card">
+          <div class="bil-card-t">État d'avancement <b>mensuel</b> — {{ bilan.moisNom }}</div>
+          <div class="bil-nums"><b>{{ fmtQ(bilan.global.realMo) }}</b> / {{ fmtQ(bilan.global.planMo) }} <span class="bil-u">{{ bilanUnite }}</span></div>
+          <div class="bil-bar"><span class="bil-fill" :class="{ over: bilan.global.pctMo >= 100 }" :style="{ width: Math.min(100, bilan.global.pctMo) + '%' }"></span></div>
+          <div class="bil-pct">{{ bilan.global.pctMo }} % du plan du mois</div>
+        </div>
+      </div>
+      <table class="bil-tbl" v-if="bilan.ateliers.length">
+        <thead>
+          <tr><th rowspan="2">Atelier</th><th colspan="3">Annuel {{ bilan.an }}</th><th colspan="3">Mois — {{ bilan.moisNom }}</th></tr>
+          <tr class="bil-sub"><th class="r">Plan</th><th class="r">Réalisé</th><th>Avancement</th><th class="r">Plan</th><th class="r">Réalisé</th><th>Avancement</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="a in bilan.ateliers" :key="a.nom">
+            <td class="bil-at">{{ a.nom }}</td>
+            <td class="r">{{ fmtQ(a.planAn) }}</td>
+            <td class="r">{{ fmtQ(a.realAn) }}</td>
+            <td class="bil-pc"><span class="bil-mini"><span class="bil-mini-f" :class="{ over: a.pctAn >= 100 }" :style="{ width: Math.min(100, a.pctAn) + '%' }"></span></span><span class="bil-pc-n">{{ a.pctAn }} %</span></td>
+            <td class="r">{{ fmtQ(a.planMo) }}</td>
+            <td class="r">{{ fmtQ(a.realMo) }}</td>
+            <td class="bil-pc"><span class="bil-mini"><span class="bil-mini-f" :class="{ over: a.pctMo >= 100 }" :style="{ width: Math.min(100, a.pctMo) + '%' }"></span></span><span class="bil-pc-n">{{ a.pctMo }} %</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="bil-note">Aucune donnée de plan/réalisé pour {{ bilan.an }}.</p>
+      <p class="bil-note">Réalisé = OF terminés ({{ bilanUnite === 'lots' ? 'lots' : 'boîtes' }} fabriqués, date de fin dans l'année/mois) · Plan = PDP {{ bilan.an }}. Par atelier, chaque produit compte dans les ateliers de sa gamme (Vrac &amp; Conditionnement = tous les produits), donc la somme des ateliers dépasse le global (une boîte traverse plusieurs ateliers).</p>
     </div>
 
     <!-- Sélection de la phase (présentation) : toutes les phases de fabrication -->
@@ -506,6 +552,10 @@ const produits = ref([])
 const ofs = ref([])
 const suivi = ref([])
 const trsPostes = ref([])   // postes TRS (fenêtre ~6 semaines) pour l'analyse TRS/arrêts du mode Boucle
+const planPdp = ref([])     // plan_production (annee, mois, qté) + gamme/taille produit, pour le bilan plan vs réalisé
+const bilanOuvert = ref(false)
+const bilanUnite = ref((() => { try { return localStorage.getItem('pe_bilan_unite') || 'boites' } catch (e) { return 'boites' } })())
+watch(bilanUnite, (v) => { try { localStorage.setItem('pe_bilan_unite', v) } catch (e) {} })
 
 async function fetchAllPaged(qb) {
   const size = 1000; let from = 0; const out = []
@@ -522,21 +572,23 @@ async function fetchAllPaged(qb) {
 onMounted(async () => { chargerLocal(); await chargerDonnees(); demarrerBoucleSiUrl() })
 async function chargerDonnees() {
   try {
-    const [rp, rc, re, rpr, rpan, rof, rsu, rtrs] = await Promise.all([
+    const [rp, rc, re, rpr, rpan, rof, rsu, rtrs, rpdp] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produit_id')),
       fetchAllPaged(() => supabase.from('cadences_produit').select('cadence_nominale, unite_cadence, mode, equipement_id, produit_id')),
       fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif, vdlt, vdlp, dht, reglage, postes').eq('actif', true)),
       fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, gamme').eq('actif', true)),
       fetchAllPaged(() => supabase.from('planning_panier').select('equipement_id, produits')),
-      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, date_lancement, date_fin_fabrication, equipement_id, produits(id, code_pf, designation, gamme, taille_lot, unites_par_boite, poids_unitaire_mg)')),
+      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, equipement_id, produits(id, code_pf, designation, gamme, taille_lot, unites_par_boite, poids_unitaire_mg)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut, equipement_id').eq('actif', true)),
-      fetchAllPaged(() => supabase.from('trs_postes').select('equipement_id, produit_id, date, temps_ouverture_min, production_realisee, rebuts, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min').eq('actif', true).gte('date', new Date(Date.now() - 42 * 86400000).toISOString().slice(0, 10)))
+      fetchAllPaged(() => supabase.from('trs_postes').select('equipement_id, produit_id, date, temps_ouverture_min, production_realisee, rebuts, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min').eq('actif', true).gte('date', new Date(Date.now() - 42 * 86400000).toISOString().slice(0, 10))),
+      fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot)'))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
     if (rof && !rof.error) ofs.value = rof.data
     if (rsu && !rsu.error) suivi.value = rsu.data
     if (rtrs && !rtrs.error) trsPostes.value = rtrs.data || []
+    if (rpdp && !rpdp.error) planPdp.value = rpdp.data || []
     if (rpan && !rpan.error && rpan.data) for (const row of rpan.data) {
       let lotsArr = [], reg = null, req = null
       const pr = row.produits
@@ -1784,6 +1836,47 @@ const libelleSemaine = computed(() => {
   return 'semaine ' + Math.ceil(((j - an) / 86400000 + 1) / 7) + ' — départ ' + d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 })
 
+// ===== Bilan Plan vs Réalisé (global + par atelier, annuel + mensuel) =====
+// « Atelier » = phase de fabrication ; un produit compte dans les ateliers de sa gamme
+// (Vrac & Conditionnement = tous les produits). Plan = PDP (boîtes planifiées).
+// Réalisé = OF terminés (boîtes fabriquées, date de fin dans l'année/mois).
+const PHASES_BILAN = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Livraison Vrac', 'Conditionnement']
+const MOIS_NOMS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
+const fmtQ = (n) => Math.round(n || 0).toLocaleString('fr-FR')
+const bilan = computed(() => {
+  const an = maintenant.value.getFullYear(), mo = maintenant.value.getMonth(), lots = bilanUnite.value === 'lots'
+  const conv = (boites, taille) => lots ? (taille > 0 ? boites / taille : 0) : boites
+  const phases = PHASES_BILAN
+  const mk = () => ({ planAn: 0, realAn: 0, planMo: 0, realMo: 0 })
+  const glob = mk(); const at = {}; for (const ph of phases) at[ph] = mk()
+  const match = (gamme, ph) => (ph === 'Livraison Vrac' || ph === 'Conditionnement') ? true : new Set((Array.isArray(gamme) ? gamme : []).map(g => String(g).toLowerCase().trim())).has(ph.toLowerCase())
+  for (const r of planPdp.value) {
+    if (Number(r.annee) !== an) continue
+    const pr = r.produits; if (!pr) continue
+    const val = conv(Number(r.quantite_planifiee) || 0, Number(pr.taille_lot) || 0)
+    if (!val) continue
+    const mi = Number(r.mois) - 1
+    glob.planAn += val; if (mi === mo) glob.planMo += val
+    for (const ph of phases) if (match(pr.gamme, ph)) { at[ph].planAn += val; if (mi === mo) at[ph].planMo += val }
+  }
+  for (const o of ofs.value) {
+    const d = o.date_fin_fabrication ? new Date(o.date_fin_fabrication) : null
+    if (!d || isNaN(d.getTime()) || d.getFullYear() !== an) continue
+    const pr = o.produits; const val = conv(Number(o.boites_fabriquees) || 0, Number(pr ? pr.taille_lot : 0) || 0)
+    if (!val) continue
+    const mi = d.getMonth()
+    glob.realAn += val; if (mi === mo) glob.realMo += val
+    for (const ph of phases) if (match(pr ? pr.gamme : [], ph)) { at[ph].realAn += val; if (mi === mo) at[ph].realMo += val }
+  }
+  const pct = (r, p) => p > 0 ? Math.round(r / p * 100) : 0
+  const ateliers = phases.map(ph => ({ nom: ph, planAn: at[ph].planAn, realAn: at[ph].realAn, pctAn: pct(at[ph].realAn, at[ph].planAn), planMo: at[ph].planMo, realMo: at[ph].realMo, pctMo: pct(at[ph].realMo, at[ph].planMo) })).filter(a => a.planAn > 0 || a.realAn > 0)
+  return {
+    an, moisNom: MOIS_NOMS[mo],
+    global: { planAn: glob.planAn, realAn: glob.realAn, pctAn: pct(glob.realAn, glob.planAn), planMo: glob.planMo, realMo: glob.realMo, pctMo: pct(glob.realMo, glob.planMo) },
+    ateliers
+  }
+})
+
 // ===== Mode BOUCLE (écran atelier) =====
 // Une page « vue d'ensemble » puis une page par phase (découpée si trop d'équipements),
 // défilement automatique, données rechargées à chaque tour.
@@ -2357,6 +2450,41 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pe-wk-nav:disabled { opacity: .35; cursor: default; }
 .pe-wk-lbl { font-size: 12px; font-weight: 800; color: #0f172a; min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
 .pe-pdf-btn { background: #fff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12px; font-weight: 700; padding: 6px 12px; cursor: pointer; }
+.pe-pdf-btn.on { background: #4338ca; color: #fff; border-color: #4338ca; }
+/* Panneau Bilan Plan vs Réalisé */
+.pe-bilan { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(16,24,40,.05); }
+.bil-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.bil-head h2 { margin: 0; font-size: 16px; font-weight: 800; color: #0f172a; }
+.bil-unite { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+.bil-unite button { border: none; background: #fff; color: #475569; font: inherit; font-size: 12px; font-weight: 700; padding: 5px 12px; cursor: pointer; }
+.bil-unite button.on { background: #4338ca; color: #fff; }
+.bil-x { margin-left: auto; border: 1px solid #e2e8f0; background: #fff; color: #64748b; border-radius: 8px; width: 30px; height: 30px; cursor: pointer; font-size: 14px; }
+.bil-x:hover { background: #f1f5f9; }
+.bil-glob { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.bil-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; background: #f8fafc; }
+.bil-card-t { font-size: 12px; color: #64748b; font-weight: 600; }
+.bil-card-t b { color: #0f172a; }
+.bil-nums { font-size: 15px; color: #475569; margin: 6px 0 8px; }
+.bil-nums b { font-size: 22px; font-weight: 800; color: #0f172a; }
+.bil-u { font-size: 12px; color: #94a3b8; }
+.bil-bar { height: 12px; background: #e2e8f0; border-radius: 6px; overflow: hidden; }
+.bil-fill { display: block; height: 100%; background: #4338ca; border-radius: 6px; transition: width .3s; }
+.bil-fill.over { background: #16a34a; }
+.bil-pct { font-size: 12px; font-weight: 700; color: #4338ca; margin-top: 5px; }
+.bil-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.bil-tbl th, .bil-tbl td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; text-align: left; }
+.bil-tbl thead th { background: #eef2ff; color: #3730a3; font-size: 11px; text-transform: uppercase; text-align: center; }
+.bil-tbl thead tr:first-child th { border-bottom: 1px solid #c7d2fe; }
+.bil-tbl .bil-sub th { font-size: 10px; }
+.bil-tbl td.r, .bil-tbl th.r { text-align: right; font-variant-numeric: tabular-nums; }
+.bil-at { font-weight: 700; color: #0f172a; white-space: nowrap; }
+.bil-pc { white-space: nowrap; }
+.bil-mini { display: inline-block; width: 70px; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; vertical-align: middle; margin-right: 6px; }
+.bil-mini-f { display: block; height: 100%; background: #6366f1; }
+.bil-mini-f.over { background: #16a34a; }
+.bil-pc-n { font-weight: 700; color: #475569; font-variant-numeric: tabular-nums; }
+.bil-note { font-size: 11px; color: #94a3b8; margin: 10px 0 0; }
+@media (max-width: 760px) { .bil-glob { grid-template-columns: 1fr; } .bil-tbl { font-size: 12px; } .bil-mini { width: 44px; } }
 .pe-pdf-btn:hover { background: #f8fafc; }
 /* Campagnes + en-tête nuit */
 .g-camp { cursor: pointer; }
