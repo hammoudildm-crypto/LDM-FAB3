@@ -44,7 +44,7 @@ function cadenceDe(eq, pr) {
 }
 
 const equipFiltre = ref('')
-const moisVisible = ref(false)
+const moisVisible = ref(true)
 const equipList = computed(() => {
   const m = {}
   for (const s of postes.value) if (s.equipements && !m[s.equipement_id]) m[s.equipement_id] = { id: s.equipement_id, code: s.equipements.code, nom: s.equipements.nom }
@@ -333,17 +333,24 @@ function exporterPDF() {
           </section>
         </div>
 
-        <!-- TRS par équipement : classement coloré par niveau -->
-        <section class="card">
-          <h3 class="card-title">TRS par équipement<span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span></h3>
-          <div class="eqrank">
-            <div v-for="e in parEquip" :key="e.id" class="eqbar">
-              <span class="eqbar-code">{{ e.code }} <span class="eqbar-nom">{{ e.nom }}</span></span>
-              <span class="eqbar-track"><span class="eqbar-f" :style="{ width: pctNum(e.trs) + '%', background: NIV_COL[niv(e.trs)] }"></span></span>
-              <span class="eqbar-val" :style="{ color: NIV_COL[niv(e.trs)] }">{{ pctNum(e.trs) }} %</span>
+        <!-- TRS par équipement + TRS par mois, côte à côte -->
+        <div class="strs-mid">
+          <section class="card">
+            <h3 class="card-title">TRS par équipement<span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span></h3>
+            <div class="eqrank">
+              <div v-for="e in parEquip" :key="e.id" class="eqbar">
+                <span class="eqbar-code">{{ e.code }} <span class="eqbar-nom">{{ e.nom }}</span></span>
+                <span class="eqbar-track"><span class="eqbar-f" :style="{ width: pctNum(e.trs) + '%', background: NIV_COL[niv(e.trs)] }"></span></span>
+                <span class="eqbar-val" :style="{ color: NIV_COL[niv(e.trs)] }">{{ pctNum(e.trs) }} %</span>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+
+          <section class="card">
+            <h3 class="card-title clickable-title" @click="moisVisible = !moisVisible">TRS par mois<span v-if="equipFiltre" class="flt"> — {{ equipFiltreCode }}</span><span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span> <span class="toggle-caret">{{ moisVisible ? '▾ masquer' : '▸ afficher' }}</span></h3>
+            <MiniChart v-if="moisVisible" :labels="MOIS" :format="v => v + ' %'" :value-format="v => v || ''" show-values :series="[{ label: 'TRS %', color: '#0f766e', data: trsParMois }]" />
+          </section>
+        </div>
 
         <!-- Détail par équipement -->
         <section class="card">
@@ -365,12 +372,6 @@ function exporterPDF() {
               </tbody>
             </table>
           </div>
-        </section>
-
-        <!-- TRS par mois -->
-        <section class="card">
-          <h3 class="card-title clickable-title" @click="moisVisible = !moisVisible">TRS par mois<span v-if="equipFiltre" class="flt"> — {{ equipFiltreCode }}</span><span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span> <span class="toggle-caret">{{ moisVisible ? '▾ masquer' : '▸ afficher' }}</span></h3>
-          <MiniChart v-if="moisVisible" :labels="MOIS" :format="v => v + ' %'" :value-format="v => v || ''" show-values :series="[{ label: 'TRS %', color: '#0f766e', data: trsParMois }]" />
         </section>
       </template>
     </template>
@@ -438,6 +439,10 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .interpret.in-ok { border-left-color: #16a34a; } .interpret.in-mid { border-left-color: #d97706; } .interpret.in-ko { border-left-color: #dc2626; }
 .int-ic { font-size: 16px; line-height: 1.3; }
 .strs-top { display: grid; grid-template-columns: 1fr 1.2fr; gap: 14px; margin-bottom: 16px; align-items: stretch; }
+.strs-mid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; align-items: start; }
+.strs-mid .card { margin-bottom: 0; }
+.strs-mid .eqbar { grid-template-columns: 140px 1fr 48px; gap: 8px; }
+.strs-mid .eqbar-code { font-size: 12px; }
 .hero { display: flex; align-items: center; gap: 22px; }
 .hero-gauge { flex: 0 0 auto; }
 .donut { width: 150px; height: 150px; }
@@ -470,5 +475,5 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .eqbar-val { font-size: 14px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
 .niv-cell { font-weight: 700; font-variant-numeric: tabular-nums; }
 .trs-cell { font-weight: 800; font-variant-numeric: tabular-nums; }
-@media (max-width: 860px) { .strs-top { grid-template-columns: 1fr; } .hero { flex-direction: column; text-align: center; } .eqbar { grid-template-columns: 120px 1fr 48px; } .par-row { grid-template-columns: 90px 1fr auto; } .par-cum { display: none; } }
+@media (max-width: 860px) { .strs-top, .strs-mid { grid-template-columns: 1fr; } .hero { flex-direction: column; text-align: center; } .eqbar { grid-template-columns: 120px 1fr 48px; } .par-row { grid-template-columns: 90px 1fr auto; } .par-cum { display: none; } }
 </style>
