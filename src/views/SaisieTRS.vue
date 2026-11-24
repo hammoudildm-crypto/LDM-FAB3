@@ -176,6 +176,18 @@ const qualiteDe = (p) => {
 }
 const trsDe = (p) => dispoDe(p) * perfDe(p) * qualiteDe(p)
 
+// Sélecteur produit par poste : barre de recherche + liste déroulante (combobox)
+const prodUI = reactive({ 1: { q: '', open: false }, 2: { q: '', open: false }, 3: { q: '', open: false } })
+const prodLabel = (id) => { const p = produits.value.find(x => x.id === id); return p ? p.code_pf + (p.designation ? ' — ' + p.designation : '') : '' }
+function filtreProd(pk) {
+  const q = (prodUI[pk].q || '').trim().toLowerCase()
+  const sel = jour[pk].produitId
+  if (!q || (sel && prodLabel(sel).toLowerCase() === q)) return produits.value.slice(0, 60)
+  return produits.value.filter(p => (p.code_pf + ' ' + (p.designation || '')).toLowerCase().includes(q)).slice(0, 60)
+}
+function pickProd(pk, p) { jour[pk].produitId = p.id; prodUI[pk].q = p.code_pf + (p.designation ? ' — ' + p.designation : ''); prodUI[pk].open = false }
+function clearProd(pk) { jour[pk].produitId = ''; prodUI[pk].q = ''; prodUI[pk].open = true }
+
 async function chargerCadenceJour(pk) {
   const p = jour[pk]; p.cadenceObj = null
   if (!equipId.value || !p.produitId) return
@@ -199,6 +211,8 @@ function chargerJour() {
       base.verifie_par = ex.verifie_par || ''
     }
     Object.assign(jour[pk], base)
+    prodUI[pk].q = prodLabel(jour[pk].produitId)
+    prodUI[pk].open = false
   }
   for (const pk of [1, 2, 3]) chargerCadenceJour(pk)
 }
@@ -408,10 +422,14 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <tr class="jprod">
               <td>Produit</td>
               <td v-for="pk in [1, 2, 3]" :key="pk">
-                <select v-model="jour[pk].produitId">
-                  <option value="">— choisir —</option>
-                  <option v-for="p in produits" :key="p.id" :value="p.id">{{ p.code_pf }}{{ p.designation ? ' — ' + p.designation : '' }}</option>
-                </select>
+                <div class="jcombo">
+                  <input type="text" class="jcombo-in" v-model="prodUI[pk].q" placeholder="Rechercher un produit…"
+                    @focus="prodUI[pk].open = true" @input="prodUI[pk].open = true" @blur="prodUI[pk].open = false" />
+                  <button v-if="jour[pk].produitId || prodUI[pk].q" type="button" class="jcombo-x" @mousedown.prevent="clearProd(pk)" title="Effacer">×</button>
+                  <ul v-if="prodUI[pk].open && filtreProd(pk).length" class="jcombo-list">
+                    <li v-for="p in filtreProd(pk)" :key="p.id" :class="{ sel: p.id === jour[pk].produitId }" @mousedown.prevent="pickProd(pk, p)"><strong>{{ p.code_pf }}</strong><span v-if="p.designation"> — {{ p.designation }}</span></li>
+                  </ul>
+                </div>
               </td>
             </tr>
             <tr class="jcad">
@@ -577,6 +595,16 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .jtable .jtrs td:first-child { font-size: 13px; }
 .jtable .jcom input, .jtable .jsig input { text-align: left; }
 .sig-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 12px; }
+/* Combobox produit (recherche + liste) dans la grille 3×8 */
+.jcombo { position: relative; }
+.jcombo-in { width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 22px 5px 7px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; }
+.jcombo-x { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); border: 0; background: #e2e8f0; color: #475569; width: 16px; height: 16px; border-radius: 50%; cursor: pointer; font-size: 12px; line-height: 1; padding: 0; display: flex; align-items: center; justify-content: center; }
+.jcombo-x:hover { background: #cbd5e1; }
+.jcombo-list { position: absolute; z-index: 60; top: calc(100% + 3px); left: 0; right: 0; margin: 0; padding: 4px; list-style: none; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 10px 24px rgba(16,24,40,.16); max-height: 230px; overflow-y: auto; text-align: left; }
+.jcombo-list li { padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: normal; line-height: 1.3; color: #475569; }
+.jcombo-list li:hover { background: #eef2ff; }
+.jcombo-list li.sel { background: #e0e7ff; }
+.jcombo-list strong { color: #1b2733; font-weight: 700; }
 .jfoot { display: flex; align-items: center; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
 .jhint { font-size: 12px; color: #64748b; }
 @media (max-width: 700px) { .jfoot { flex-direction: column; align-items: flex-start; } }
