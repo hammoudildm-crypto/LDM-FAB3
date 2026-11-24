@@ -123,7 +123,7 @@
 
     <div class="pe-body">
     <section class="card params params-side">
-      <div class="p-grp"><label>Départ</label><div class="dep-row"><input type="date" v-model="dateDepart" /><button type="button" class="vue-btn" @click="dateDepart = iso(new Date())">Auj.</button></div></div>
+      <div class="p-grp"><label>Départ</label><div class="dep-row"><input type="date" v-model="dateDepart" /><input type="time" v-model="heureDepart" class="dep-h" title="Heure de démarrage du planning — toute la chaîne se recale sur cet instant" /><button type="button" class="vue-btn" @click="maintenantDepart" title="Caler le départ sur l'instant présent">⦿ Maintenant</button></div></div>
       <div class="p-grp"><button type="button" class="vue-btn p-semcour" @click="allerSemaineCour" title="Faire défiler le Gantt jusqu'à la semaine en cours">⌖ Semaine en cours</button></div>
       <div class="p-grp"><label>Affichage</label>
         <div class="vue-btns">
@@ -402,13 +402,13 @@
             <select v-if="ciblesPossibles(item).length" class="pan-move" @change="deplacerDepuisPanier(item, $event)" title="Déplacer ce lot sur un autre équipement de la même phase"><option value="">→ déplacer…</option><option v-for="e in ciblesPossibles(item)" :key="e.id" :value="e.id">{{ e.code }}</option></select>
             <button class="pan-btn" :class="{ on: item.epingle }" @click="basculerEpingle(item)" :title="item.epingle ? 'Épinglé sur cet équipement — cliquer pour libérer' : 'Épingler sur cet équipement (la synchro ne le déplacera pas)'">📌</button>
             <button class="pan-btn" :class="{ on: item.exclu }" @click="basculerExclu(item)" :title="item.exclu ? 'Rétablir dans le planning' : 'Exclure du planning (la synchro ne le remettra pas)'">⊘</button>
-            <input type="datetime-local" v-model="item.dateDebut" class="pan-date" title="Date de début souhaitée (laisser vide = automatique)" @change="sauverPanier(panierOuvert.id)" />
+            <label class="pan-start" :class="{ on: item.dateDebut }" title="Démarre à — ce lot démarre à cette date/heure (au prochain poste ouvré) ; les lots suivants et les phases aval se recalent derrière. Vide = automatique."><span class="pan-start-l">⏱ démarre à</span><input type="datetime-local" v-model="item.dateDebut" class="pan-date" @change="sauverPanier(panierOuvert.id)" /></label>
             <button v-if="item.dateDebut" class="pan-btn" @click="item.dateDebut = ''; sauverPanier(panierOuvert.id)" title="Repasser en automatique">auto</button>
             <button class="pan-btn del" @click="retirerLot(idx)" title="Retirer du panier">✕</button>
           </div>
           <div v-if="!(panierEquip[panierOuvert.id] || []).length" class="pan-vide">Aucun lot affecté à cet équipement.</div>
         </div>
-        <p class="pan-hint2">▲▼ ordre de passage · → déplacer vers un équipement identique · ⊘ exclure du planning sans le retirer. Lots en attente de cette phase. Réordonne/décale en les <b>glissant sur le Gantt</b>, ou fixe une <b>date de début</b> par lot ci-dessus.</p>
+        <p class="pan-hint2">▲▼ ordre de passage · → déplacer vers un équipement identique · ⊘ exclure du planning sans le retirer. Lots en attente de cette phase. Réordonne/décale en les <b>glissant sur le Gantt</b>, ou fixe un <b>« démarre à »</b> par lot ci-dessus (les lots suivants et les phases aval suivent).</p>
         <div class="pan-add">
           <input v-model="rechProd" placeholder="Rechercher un lot (n°, produit)…" class="pan-search" />
           <p v-if="panSansCadence" class="pan-warn">⚠ Aucune cadence renseignée pour cet équipement : tous les lots de la phase sont proposés.</p>
@@ -441,6 +441,10 @@ const today = new Date()
 const iso = (d) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const j = String(d.getDate()).padStart(2, '0'); return y + '-' + m + '-' + j }
 const dateDepart = ref((() => { try { return localStorage.getItem('pe_depart') || '2026-08-11' } catch (e) { return '2026-08-11' } })())
 watch(dateDepart, (v) => { try { if (v) localStorage.setItem('pe_depart', v) } catch (e) {} })
+// Heure de démarrage du planning (ancre globale) : toute la chaîne se recale sur cet instant.
+const heureDepart = ref((() => { try { return localStorage.getItem('pe_depart_h') || '22:00' } catch (e) { return '22:00' } })())
+watch(heureDepart, (v) => { try { if (v) localStorage.setItem('pe_depart_h', v) } catch (e) {} })
+function maintenantDepart() { const n = new Date(); dateDepart.value = iso(n); heureDepart.value = String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0') }
 const vdlt = ref(8)        // nettoyage général (h)
 const vdlp = ref(2)        // nettoyage partiel (h)
 const holdingJ = ref(7)    // validité campagne (jours)
@@ -1329,7 +1333,7 @@ const lotsAjoutablesParProduit = computed(() => {
 })
 
 const planCalc = computed(() => {
-  const t0v = new Date(dateDepart.value + 'T22:00:00')
+  const t0v = new Date(dateDepart.value + 'T' + (heureDepart.value || '22:00') + ':00')
   const q = filtreTexte.value.trim().toLowerCase()
   const equipsFab = equipements.value.filter(e => estFab(e.type))
   const paramsEq = (eq) => ({
@@ -1471,7 +1475,7 @@ const planning = computed(() => {
 })
 
 // Bornes temps
-const t0 = computed(() => new Date(dateDepart.value + 'T22:00:00'))
+const t0 = computed(() => new Date(dateDepart.value + 'T' + (heureDepart.value || '22:00') + ':00'))
 const finGlobale = computed(() => {
   let m = t0.value
   for (const r of planning.value) if (r.fin > m) m = r.fin
@@ -2055,7 +2059,8 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .vue-btns { display: flex; gap: 4px; }
 .vue-btn { background: #eef2f7; border: 1px solid #cbd5e1; border-radius: 7px; font-size: 12px; padding: 5px 11px; cursor: pointer; color: #475569; font-weight: 600; }
 .vue-btn.on { background: #0f766e; border-color: #0f766e; color: #fff; }
-.dep-row { display: flex; gap: 6px; align-items: center; }
+.dep-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.dep-h { font: inherit; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 6px; max-width: 92px; }
 .p-grp .chk { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; }
 .p-grp .chk-inline { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; }
 .p-grp input[type=text], .p-grp select { font-size: 12px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 7px; }
@@ -2176,6 +2181,10 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pan-hint { font-size: 11px; color: #94a3b8; margin: 0 0 10px; }
 .pan-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; max-height: 42vh; overflow-y: auto; border: 1px solid #f1f5f9; border-radius: 8px; padding: 6px; }
 .pan-date { font: inherit; font-size: 10.5px; padding: 2px 5px; border: 1px solid #cbd5e1; border-radius: 5px; max-width: 155px; }
+.pan-start { display: inline-flex; align-items: center; gap: 4px; }
+.pan-start-l { font-size: 9.5px; font-weight: 700; color: #64748b; white-space: nowrap; }
+.pan-start.on .pan-start-l { color: #4338ca; }
+.pan-start.on .pan-date { border-color: #6366f1; background: #eef2ff; }
 .pan-item { display: flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 5px 8px; }
 .pan-idx { font-size: 11px; font-weight: 800; color: #5B9BD5; width: 18px; }
 .pan-pnom { flex: 1; font-size: 12px; color: #1b2733; }
