@@ -234,6 +234,11 @@ function exporterPDF() {
   const fl = facteurLimitant.value, tp = topPerte.value
   const interpret = '<div class="interp">💡 TRS global <b style="color:' + nivC(g.trs) + '">' + p0(g.trs) + ' %</b> — facteur limitant : <b>' + esc(fl.nom) + '</b> (' + p0(fl.val) + ' %)' + (tp ? '. Principal poste d\'arrêt : <b>' + esc(tp.label) + '</b> (' + heures(tp.min) + ').' : '') + '</div>'
 
+  // TRS par poste (3×8) — mini-anneaux Matin / Après-midi / Nuit
+  const posteDonut = (trs, vide) => '<svg viewBox="0 0 42 42" width="62" height="62"><circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f6" stroke-width="4"/>' + (vide ? '' : '<circle cx="21" cy="21" r="15.915" fill="none" stroke="' + nivC(trs) + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + p0(trs) + ' ' + (100 - p0(trs)) + '" stroke-dashoffset="25" style="' + ce + '"/>') + '<text x="21" y="24" text-anchor="middle" font-size="10" font-weight="800" fill="' + (vide ? '#cbd5e1' : nivC(trs)) + '">' + (vide ? '—' : p0(trs) + '%') + '</text></svg>'
+  const posteCells = trsParPoste.value.map(p => '<div class="pcell"><div>' + posteDonut(p.trs, p.vide) + '</div><div class="pm"><div class="plib">' + esc(p.lib) + ' <span class="pn">Poste ' + p.poste + '</span></div>' + (p.vide ? '<div class="pv">Aucune saisie</div>' : '<div class="pdpq"><b style="color:' + nivC(p.dispo) + '">D ' + p0(p.dispo) + '%</b> · <b style="color:' + nivC(p.perf) + '">P ' + p0(p.perf) + '%</b> · <b style="color:' + nivC(p.qualite) + '">Q ' + p0(p.qualite) + '%</b></div><div class="pnp">' + p.nb + ' poste' + (p.nb > 1 ? 's' : '') + ' saisi' + (p.nb > 1 ? 's' : '') + '</div>') + '</div></div>').join('')
+  const posteBlock = '<h2>TRS par poste (3×8)</h2><div class="pgrid">' + posteCells + '</div>'
+
   const maxTrs = Math.max(1, ...parEquip.value.map(e => e.trs * 100))
   const bars = parEquip.value.map(e => {
     const v = e.trs * 100
@@ -260,6 +265,7 @@ function exporterPDF() {
     '.chain{flex:1}.hcr{display:grid;grid-template-columns:90px 1fr 46px;align-items:center;gap:8px;margin:4px 0}.hcl{font-size:11px;font-weight:600;color:#475569}' +
     '.hct{height:9px;background:#eef2f6;border-radius:5px;overflow:hidden}.hcf{display:block;height:100%;border-radius:5px}.hcv{font-size:12px;font-weight:800;text-align:right}' +
     '.formula{margin-top:5px;font-size:10px;color:#94a3b8;font-weight:600}.formula b{color:#4338ca}' +
+    '.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:6px}.pcell{display:flex;align-items:center;gap:10px;border:1px solid #e2e8f0;border-radius:9px;padding:9px 11px}.plib{font-size:12px;font-weight:800}.pn{font-size:9.5px;font-weight:600;color:#94a3b8}.pdpq{font-size:10.5px;color:#475569;margin-top:2px}.pdpq b{font-weight:800}.pnp{font-size:9px;color:#94a3b8;margin-top:1px}.pv{font-size:10.5px;color:#94a3b8;margin-top:2px}' +
     'table{width:100%;border-collapse:collapse;margin-bottom:6px}th,td{text-align:left;padding:4px 8px;border-bottom:1px solid #eef2f6}' +
     'th{background:#eef2ff;color:#3730a3;font-size:10px;text-transform:uppercase}td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}' +
     '.bar{display:grid;grid-template-columns:150px 1fr 60px;align-items:center;gap:8px;margin:3px 0}.bl{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bl i{font-weight:400;color:#94a3b8}' +
@@ -269,7 +275,7 @@ function exporterPDF() {
     '<h1>Suivi TRS</h1>' +
     '<p class="sub">Rendement global des équipements · Disponibilité × Performance × Qualité</p>' +
     '<div class="meta"><div><b>Période :</b> ' + esc(dFr(du.value)) + ' → ' + esc(dFr(au.value)) + '</div><div><b>Équipement :</b> ' + esc(equipTxt) + '</div><div><b>Produit :</b> ' + esc(prodTxt) + '</div><div><b>Postes analysés :</b> ' + postesFiltres.value.length + '</div></div>' +
-    interpret + hero +
+    interpret + hero + posteBlock +
     '<h2>TRS par équipement</h2>' + bars +
     '<h2>Détail par équipement</h2>' +
     '<table><thead><tr><th>Équipement</th><th class="r">Ouverture</th><th class="r">Fonct.</th><th class="r">Dispo.</th><th class="r">Perf.</th><th class="r">Qualité</th><th class="r">TRS</th><th class="r">Nettoyage</th></tr></thead><tbody>' + eqRows + '</tbody></table>' +
@@ -360,35 +366,23 @@ function exporterPDF() {
           </section>
         </div>
 
-        <!-- TRS par poste (3×8) : Matin / Après-midi / Nuit -->
-        <section class="card">
-          <h3 class="card-title">TRS par poste <span class="ct-sub">(3×8)</span></h3>
-          <div class="poste-grid">
-            <div v-for="p in trsParPoste" :key="p.poste" class="poste-cell" :class="{ vide: p.vide }">
-              <svg class="poste-ring" viewBox="0 0 42 42" :aria-label="p.lib + ' ' + pctNum(p.trs) + ' %'">
-                <circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f6" stroke-width="4" />
-                <circle v-if="!p.vide" cx="21" cy="21" r="15.915" fill="none" :stroke="NIV_COL[niv(p.trs)]" stroke-width="4" stroke-linecap="round" :stroke-dasharray="pctNum(p.trs) + ' ' + (100 - pctNum(p.trs))" stroke-dashoffset="25" />
-                <text x="21" y="23.5" text-anchor="middle" font-size="10" font-weight="800" :fill="p.vide ? '#cbd5e1' : NIV_COL[niv(p.trs)]">{{ p.vide ? '—' : pctNum(p.trs) + '%' }}</text>
-              </svg>
-              <div class="poste-info">
-                <div class="poste-lib">{{ p.lib }} <span class="poste-n">Poste {{ p.poste }}</span></div>
-                <div v-if="!p.vide" class="poste-dpq"><b :style="{ color: NIV_COL[niv(p.dispo)] }">D {{ pctNum(p.dispo) }}%</b> · <b :style="{ color: NIV_COL[niv(p.perf)] }">P {{ pctNum(p.perf) }}%</b> · <b :style="{ color: NIV_COL[niv(p.qualite)] }">Q {{ pctNum(p.qualite) }}%</b></div>
-                <div v-else class="poste-vide-tx">Aucune saisie sur la période</div>
-                <div v-if="!p.vide" class="poste-np">{{ p.nb }} poste{{ p.nb > 1 ? 's' : '' }} saisi{{ p.nb > 1 ? 's' : '' }}</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- TRS par équipement + TRS par mois, côte à côte -->
+        <!-- TRS par poste (3×8) côte à côte avec TRS par mois -->
         <div class="strs-mid">
           <section class="card">
-            <h3 class="card-title">TRS par équipement<span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span></h3>
-            <div class="eqrank">
-              <div v-for="e in parEquip" :key="e.id" class="eqbar">
-                <span class="eqbar-code">{{ e.code }} <span class="eqbar-nom">{{ e.nom }}</span></span>
-                <span class="eqbar-track"><span class="eqbar-f" :style="{ width: pctNum(e.trs) + '%', background: NIV_COL[niv(e.trs)] }"></span></span>
-                <span class="eqbar-val" :style="{ color: NIV_COL[niv(e.trs)] }">{{ pctNum(e.trs) }} %</span>
+            <h3 class="card-title">TRS par poste <span class="ct-sub">(3×8)</span></h3>
+            <div class="poste-grid">
+              <div v-for="p in trsParPoste" :key="p.poste" class="poste-cell" :class="{ vide: p.vide }">
+                <svg class="poste-ring" viewBox="0 0 42 42" :aria-label="p.lib + ' ' + pctNum(p.trs) + ' %'">
+                  <circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f6" stroke-width="4" />
+                  <circle v-if="!p.vide" cx="21" cy="21" r="15.915" fill="none" :stroke="NIV_COL[niv(p.trs)]" stroke-width="4" stroke-linecap="round" :stroke-dasharray="pctNum(p.trs) + ' ' + (100 - pctNum(p.trs))" stroke-dashoffset="25" />
+                  <text x="21" y="23.5" text-anchor="middle" font-size="10" font-weight="800" :fill="p.vide ? '#cbd5e1' : NIV_COL[niv(p.trs)]">{{ p.vide ? '—' : pctNum(p.trs) + '%' }}</text>
+                </svg>
+                <div class="poste-info">
+                  <div class="poste-lib">{{ p.lib }} <span class="poste-n">Poste {{ p.poste }}</span></div>
+                  <div v-if="!p.vide" class="poste-dpq"><b :style="{ color: NIV_COL[niv(p.dispo)] }">D {{ pctNum(p.dispo) }}%</b> · <b :style="{ color: NIV_COL[niv(p.perf)] }">P {{ pctNum(p.perf) }}%</b> · <b :style="{ color: NIV_COL[niv(p.qualite)] }">Q {{ pctNum(p.qualite) }}%</b></div>
+                  <div v-else class="poste-vide-tx">Aucune saisie sur la période</div>
+                  <div v-if="!p.vide" class="poste-np">{{ p.nb }} poste{{ p.nb > 1 ? 's' : '' }} saisi{{ p.nb > 1 ? 's' : '' }}</div>
+                </div>
               </div>
             </div>
           </section>
@@ -398,6 +392,18 @@ function exporterPDF() {
             <MiniChart v-if="moisVisible" :labels="MOIS" :format="v => v + ' %'" :value-format="v => v || ''" show-values :series="[{ label: 'TRS %', color: '#0f766e', data: trsParMois }]" />
           </section>
         </div>
+
+        <!-- TRS par équipement en pleine largeur (classement) -->
+        <section class="card">
+          <h3 class="card-title">TRS par équipement<span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span></h3>
+          <div class="eqrank eqrank-full">
+            <div v-for="e in parEquip" :key="e.id" class="eqbar">
+              <span class="eqbar-code">{{ e.code }} <span class="eqbar-nom">{{ e.nom }}</span></span>
+              <span class="eqbar-track"><span class="eqbar-f" :style="{ width: pctNum(e.trs) + '%', background: NIV_COL[niv(e.trs)] }"></span></span>
+              <span class="eqbar-val" :style="{ color: NIV_COL[niv(e.trs)] }">{{ pctNum(e.trs) }} %</span>
+            </div>
+          </div>
+        </section>
 
         <!-- Détail par équipement -->
         <section class="card">
@@ -488,12 +494,10 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .strs-top { display: grid; grid-template-columns: 1fr 1.2fr; gap: 14px; margin-bottom: 16px; align-items: stretch; }
 .strs-mid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; align-items: stretch; }
 .strs-mid > .card { display: flex; flex-direction: column; }
-.strs-mid .eqrank { flex: 1; justify-content: center; }
+.strs-mid .poste-grid { flex: 1; align-content: center; }
 .strs-mid .card { margin-bottom: 0; }
-.strs-mid .eqbar { grid-template-columns: 140px 1fr 48px; gap: 8px; }
-.strs-mid .eqbar-code { font-size: 12px; }
 .ct-sub { font-size: 12px; font-weight: 600; color: #94a3b8; }
-.poste-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.poste-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .poste-cell { display: flex; align-items: center; gap: 13px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; }
 .poste-cell.vide { background: #fafbfc; }
 .poste-ring { width: 60px; height: 60px; flex: none; }
