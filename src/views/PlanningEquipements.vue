@@ -24,7 +24,9 @@
     <!-- Bilan Plan vs Réalisé (annuel & mensuel, global & par atelier) -->
     <div v-if="bilanOuvert && !presentation" class="pe-bilan">
       <div class="bil-head">
-        <h2>Plan vs Réalisé — {{ bilan.an }}</h2>
+        <h2>Plan vs Réalisé</h2>
+        <select class="bil-annee" v-model.number="bilanAnnee" title="Année du bilan"><option v-for="y in bilanAnnees" :key="y" :value="y">{{ y }}</option></select>
+        <span v-if="!bilan.estCourante" class="bil-clos" title="Année terminée : réalisé issu de l'historique importé">historique</span>
         <div class="bil-unite">
           <button type="button" :class="{ on: bilanUnite === 'boites' }" @click="bilanUnite = 'boites'">Boîtes</button>
           <button type="button" :class="{ on: bilanUnite === 'lots' }" @click="bilanUnite = 'lots'">Lots</button>
@@ -76,7 +78,7 @@
       <!-- Graphique : Plan vs Réalisé par mois -->
       <div class="bil-chart">
         <div class="bil-chart-t">Plan vs Réalisé par mois — {{ bilan.an }} ({{ uniteLabel }})</div>
-        <MiniChart :labels="chartMois.labels" :series="chartMois.series" :format="v => fmtQ(v)" :current-index="bilan.mo" prefKey="bilan-mois" show-values />
+        <MiniChart :labels="chartMois.labels" :series="chartMois.series" :format="v => fmtQ(v)" :current-index="bilan.estCourante ? bilan.mo : -1" prefKey="bilan-mois" show-values />
       </div>
 
       <!-- Tableau par atelier -->
@@ -405,7 +407,9 @@
       <!-- Page bilan : Plan vs Réalisé -->
       <div v-else-if="bPageCour.type === 'bilan'" class="pb-bilan">
         <div class="pbb-unite">
-          <span class="pbb-u-l">Plan vs Réalisé {{ bilan.an }}</span>
+          <span class="pbb-u-l">Plan vs Réalisé</span>
+          <select class="bil-annee" v-model.number="bilanAnnee" title="Année du bilan"><option v-for="y in bilanAnnees" :key="y" :value="y">{{ y }}</option></select>
+          <span v-if="!bilan.estCourante" class="bil-clos">historique</span>
           <button type="button" :class="{ on: bilanUnite === 'boites' }" @click="bilanUnite = 'boites'">Boîtes</button>
           <button type="button" :class="{ on: bilanUnite === 'lots' }" @click="bilanUnite = 'lots'">Lots</button>
           <button type="button" :class="{ on: bilanUnite === 'ca' }" @click="bilanUnite = 'ca'">CA</button>
@@ -433,7 +437,7 @@
           </table>
           <div class="pbb-chart">
             <div class="pbb-chart-t">Plan vs Réalisé par mois ({{ uniteLabel }})</div>
-            <MiniChart :labels="chartMois.labels" :series="chartMois.series" :format="v => fmtQ(v)" :current-index="bilan.mo" prefKey="bilan-mois-b" :show-switch="false" show-values />
+            <MiniChart :labels="chartMois.labels" :series="chartMois.series" :format="v => fmtQ(v)" :current-index="bilan.estCourante ? bilan.mo : -1" prefKey="bilan-mois-b" :show-switch="false" show-values />
           </div>
         </div>
       </div>
@@ -634,6 +638,9 @@ const suivi = ref([])
 const trsPostes = ref([])   // postes TRS (fenêtre ~6 semaines) pour l'analyse TRS/arrêts du mode Boucle
 const planPdp = ref([])     // plan_production (annee, mois, qté) + gamme/taille produit, pour le bilan plan vs réalisé
 const conds = ref([])       // conditionnement (réalisé de la phase Conditionnement) — même source que « Production par atelier »
+const histProd = ref([])    // production_historique (compteurs lots par étape/mois, années passées)
+const histLotsP = ref([])   // historique_lots_phases (+ journal embarqué) : détail lot/phase pour boîtes/CA
+const bilanAnnee = ref(new Date().getFullYear())   // année affichée dans le Bilan (sélecteur)
 const bilanOuvert = ref(false)
 const bilanUnite = ref((() => { try { return localStorage.getItem('pe_bilan_unite') || 'boites' } catch (e) { return 'boites' } })())
 watch(bilanUnite, (v) => { try { localStorage.setItem('pe_bilan_unite', v) } catch (e) {} })
@@ -653,17 +660,19 @@ async function fetchAllPaged(qb) {
 onMounted(async () => { chargerLocal(); await chargerDonnees(); demarrerBoucleSiUrl() })
 async function chargerDonnees() {
   try {
-    const [rp, rc, re, rpr, rpan, rof, rsu, rtrs, rpdp, rcond] = await Promise.all([
+    const [rp, rc, re, rpr, rpan, rof, rsu, rtrs, rpdp, rcond, rhist, rhlots] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produit_id')),
       fetchAllPaged(() => supabase.from('cadences_produit').select('cadence_nominale, unite_cadence, mode, equipement_id, produit_id')),
       fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif, vdlt, vdlp, dht, reglage, postes').eq('actif', true)),
-      fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, gamme').eq('actif', true)),
+      fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, pcsu, gamme').eq('actif', true)),
       fetchAllPaged(() => supabase.from('planning_panier').select('equipement_id, produits')),
       fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, equipement_id, produits(id, code_pf, designation, gamme, taille_lot, unites_par_boite, poids_unitaire_mg, pcsu)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut, equipement_id').eq('actif', true)),
       fetchAllPaged(() => supabase.from('trs_postes').select('equipement_id, produit_id, date, temps_ouverture_min, production_realisee, rebuts, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min').eq('actif', true).gte('date', new Date(Date.now() - 42 * 86400000).toISOString().slice(0, 10))),
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot, pcsu)')),
-      fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, date_conditionnement, date_fin').eq('actif', true))
+      fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, date_conditionnement, date_fin').eq('actif', true)),
+      fetchAllPaged(() => supabase.from('production_historique').select('annee, mois, etape, nb_lots')),
+      fetchAllPaged(() => supabase.from('historique_lots_phases').select('numero_lot, code_pf, designation, phase, date_fin'))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
@@ -672,6 +681,23 @@ async function chargerDonnees() {
     if (rtrs && !rtrs.error) trsPostes.value = rtrs.data || []
     if (rpdp && !rpdp.error) planPdp.value = rpdp.data || []
     if (rcond && !rcond.error) conds.value = rcond.data || []
+    if (rhist && !rhist.error) histProd.value = rhist.data || []
+    let hl = (rhlots && !rhlots.error) ? (rhlots.data || []) : []
+    // Journal réalisé embarqué (SUIVI PAR ATELIER 2022→2025), fusionné comme sur « Production par atelier »
+    try {
+      const rj = await fetch(`${import.meta.env.BASE_URL}historique_realise.json`, { cache: 'force-cache' })
+      if (rj.ok) {
+        const j = await rj.json(), ph = j.p || [], dm = j.d || {}
+        const vus = new Set(hl.map(h => (h.numero_lot || '') + '|' + (h.phase || '')))
+        for (const a of (j.r || [])) {
+          const phase = ph[a[2]] || '', k = String(a[0]) + '|' + phase
+          if (!phase || vus.has(k)) continue
+          vus.add(k)
+          hl.push({ numero_lot: String(a[0]), code_pf: a[1], designation: dm[a[1]] || '', phase, date_fin: a[3] })
+        }
+      }
+    } catch (e) { /* asset indisponible : on garde l'historique en base */ }
+    histLotsP.value = hl
     if (rpan && !rpan.error && rpan.data) for (const row of rpan.data) {
       let lotsArr = [], reg = null, req = null
       const pr = row.produits
@@ -1929,34 +1955,69 @@ const fmtQ = (n) => Math.round(n || 0).toLocaleString('fr-FR')
 const MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
 const ABREGE_AT = { 'Pesée': 'Pesée', 'Granulation et Séchage': 'Granul.', 'Mélange': 'Mélange', 'Compression': 'Compr.', 'Remplissage Gélules': 'Gélules', 'Pelliculage': 'Pellic.', 'Livraison Vrac': 'Vrac', 'Conditionnement': 'Condi.' }
 const uniteLabel = computed(() => bilanUnite.value === 'ca' ? 'DA' : (bilanUnite.value === 'lots' ? 'lots' : 'boîtes'))
-const bilan = computed(() => {
-  const now = maintenant.value, an = now.getFullYear(), mo = now.getMonth(), u = bilanUnite.value
-  const phases = PHASES_BILAN
-  // ---- RÉALISÉ : même méthode que « Production par atelier » (année en cours) ----
-  // Un lot distinct ayant TERMINÉ une phase ce mois compte pour : 1 (lots),
-  // sa taille de lot en boîtes (boîtes) ou taille × prix de cession (CA) — valeur NOMINALE.
-  // Sources live : Suivi des phases (fab), Conditionnement, et OF (Livraison Vrac = délivrable).
-  const ofVal = {}
-  for (const o of ofs.value) { const p = o.produits || {}; ofVal[o.id] = { taille: Number(p.taille_lot) || 0, pcsu: Number(p.pcsu) || 0 } }
-  const norm = (ph) => /^(granulation|s[ée]chage)$/i.test(String(ph).trim()) ? 'Granulation et Séchage' : ph
-  const real = {}; for (const ph of phases) real[ph] = Array(12).fill(0)
-  const vus = {}
-  const addReal = (ph0, ordreId, d) => {
-    const ph = norm(ph0)
-    if (!d || ordreId == null || !real[ph]) return
-    const dt = new Date(d); if (isNaN(dt.getTime()) || dt.getFullYear() !== an) return
-    const mi = dt.getMonth(), cle = ph + '|' + mi
-    if (!vus[cle]) vus[cle] = new Set()
-    if (vus[cle].has(ordreId)) return
-    vus[cle].add(ordreId)
-    const v = ofVal[ordreId] || { taille: 0, pcsu: 0 }
-    real[ph][mi] += u === 'ca' ? v.taille * v.pcsu : (u === 'lots' ? 1 : v.taille)
+// Réalisé : moteur identique à « Production par atelier » (live + historique importé + journal),
+// en lots / boîtes (nominales) / CA, par phase / année / mois. Aucun filtre (zone/partenaire).
+const prodByCode = computed(() => { const m = {}; for (const p of produits.value) m[p.code_pf] = { taille: Number(p.taille_lot) || 0, pcsu: Number(p.pcsu) || 0 }; return m })
+const normPh = (ph) => /^(granulation|s[ée]chage)$/i.test(String(ph).trim()) ? 'Granulation et Séchage' : ph
+const bilanMatrices = computed(() => {
+  const liveL = {}, liveB = {}, liveC = {}, vusL = {}
+  const ofVal = {}; for (const o of ofs.value) { const p = o.produits || {}; ofVal[o.id] = { taille: Number(p.taille_lot) || 0, pcsu: Number(p.pcsu) || 0 } }
+  const addLive = (ph0, id, d) => {
+    const ph = normPh(ph0); if (!d || id == null || !PHASES_BILAN.includes(ph)) return
+    const dt = new Date(d); if (isNaN(dt.getTime())) return
+    const y = dt.getFullYear(), mo = dt.getMonth(), cle = ph + '|' + y + '|' + mo
+    if (!vusL[cle]) vusL[cle] = new Set(); if (vusL[cle].has(id)) return; vusL[cle].add(id)
+    const v = ofVal[id] || { taille: 0, pcsu: 0 }
+    liveL[ph] = liveL[ph] || {}; liveL[ph][y] = liveL[ph][y] || Array(12).fill(0); liveL[ph][y][mo]++
+    liveB[ph] = liveB[ph] || {}; liveB[ph][y] = liveB[ph][y] || Array(12).fill(0); liveB[ph][y][mo] += v.taille
+    liveC[ph] = liveC[ph] || {}; liveC[ph][y] = liveC[ph][y] || Array(12).fill(0); liveC[ph][y][mo] += v.taille * v.pcsu
   }
-  for (const sp of suivi.value) if (sp.date_phase) addReal(sp.phase, sp.ordre_id, sp.date_phase)
-  for (const c of conds.value) addReal('Conditionnement', c.ordre_id, c.date_fin || c.date_conditionnement)
-  for (const o of ofs.value) addReal('Livraison Vrac', o.id, o.date_fin_fabrication)
-  const gmReal = real['Livraison Vrac'] || Array(12).fill(0)   // global réalisé = délivrable (Vrac)
-  // ---- PLAN : PDP brut (global) + réparti par gamme (par atelier) ----
+  for (const sp of suivi.value) if (sp.date_phase) addLive(sp.phase, sp.ordre_id, sp.date_phase)
+  for (const c of conds.value) addLive('Conditionnement', c.ordre_id, c.date_fin || c.date_conditionnement)
+  for (const o of ofs.value) addLive('Livraison Vrac', o.id, o.date_fin_fabrication)
+  const histAgg = {}
+  for (const r of histProd.value) { const ph = normPh(r.etape); histAgg[ph] = histAgg[ph] || {}; histAgg[ph][r.annee] = histAgg[ph][r.annee] || Array(12).fill(0); if (r.mois >= 1 && r.mois <= 12) histAgg[ph][r.annee][r.mois - 1] = Math.max(histAgg[ph][r.annee][r.mois - 1] || 0, r.nb_lots) }
+  const histLotsL = {}, histB = {}, histC = {}, vusH = {}
+  for (const h of histLotsP.value) {
+    const ph = normPh(h.phase); if (!h.date_fin || !PHASES_BILAN.includes(ph)) continue
+    const dt = new Date(h.date_fin); if (isNaN(dt.getTime())) continue
+    const y = dt.getFullYear(), mo = dt.getMonth(), cle = ph + '|' + y + '|' + mo, key = h.numero_lot || h.code_pf
+    if (!vusH[cle]) vusH[cle] = new Set(); if (vusH[cle].has(key)) continue; vusH[cle].add(key)
+    const prod = prodByCode.value[h.code_pf] || { taille: 0, pcsu: 0 }
+    histLotsL[ph] = histLotsL[ph] || {}; histLotsL[ph][y] = histLotsL[ph][y] || Array(12).fill(0); histLotsL[ph][y][mo]++
+    histB[ph] = histB[ph] || {}; histB[ph][y] = histB[ph][y] || Array(12).fill(0); histB[ph][y][mo] += prod.taille
+    histC[ph] = histC[ph] || {}; histC[ph][y] = histC[ph][y] || Array(12).fill(0); histC[ph][y][mo] += prod.taille * prod.pcsu
+  }
+  return { liveL, liveB, liveC, histAgg, histLotsL, histB, histC }
+})
+function bilanValeurs(stage, year, metric) {
+  const M = bilanMatrices.value
+  let hSrc, lSrc
+  if (metric === 'boites') { hSrc = M.histB; lSrc = M.liveB }
+  else if (metric === 'ca') { hSrc = M.histC; lSrc = M.liveC }
+  else { const lot = M.histLotsL; const dispo = !!(lot[stage] && lot[stage][year] && lot[stage][year].some(v => v > 0)); hSrc = dispo ? lot : M.histAgg; lSrc = M.liveL }
+  const h = (hSrc[stage] && hSrc[stage][year]) ? hSrc[stage][year] : null
+  const l = (lSrc[stage] && lSrc[stage][year]) ? lSrc[stage][year] : null
+  const cur = new Date().getFullYear()
+  if (year < cur) return h || Array(12).fill(0)
+  const hh = h || Array(12).fill(0), ll = l || Array(12).fill(0)
+  return hh.map((v, i) => v > 0 ? v : ll[i])
+}
+const bilanAnnees = computed(() => {
+  const s = new Set([new Date().getFullYear()])
+  for (const r of planPdp.value) if (r.annee) s.add(Number(r.annee))
+  for (const r of histProd.value) if (r.annee) s.add(Number(r.annee))
+  for (const h of histLotsP.value) { const d = h.date_fin ? new Date(h.date_fin) : null; if (d && !isNaN(d.getTime())) s.add(d.getFullYear()) }
+  return [...s].filter(y => y >= 2020 && y <= new Date().getFullYear() + 1).sort((a, b) => b - a)
+})
+const bilan = computed(() => {
+  const now = maintenant.value, cur = now.getFullYear()
+  const an = bilanAnnee.value, mo = now.getMonth(), u = bilanUnite.value
+  const phases = PHASES_BILAN
+  // Réalisé par phase (12 mois) via valeurs() — historique pour les années passées, temps réel sinon.
+  const real = {}; for (const ph of phases) real[ph] = bilanValeurs(ph, an, u)
+  const gmReal = bilanValeurs('Livraison Vrac', an, u)   // global = délivrable fabrication (Vrac)
+  // Plan PDP : global brut + réparti par gamme (par atelier)
   const conv = (b, taille, pcsu) => u === 'ca' ? b * (Number(pcsu) || 0) : (u === 'lots' ? (taille > 0 ? b / taille : 0) : b)
   const gmPlan = Array(12).fill(0)
   const planAt = {}; for (const ph of phases) planAt[ph] = Array(12).fill(0)
@@ -1970,11 +2031,9 @@ const bilan = computed(() => {
     gmPlan[mi] += val
     for (const ph of phases) if (match(pr.gamme, ph)) planAt[ph][mi] += val
   }
-  // ---- Projection fin d'année : rythme réalisé rapporté à l'année (jours écoulés) ----
-  const startY = new Date(an, 0, 1)
-  const dayOfYear = Math.floor((now - startY) / 86400000) + 1
-  const daysInYear = ((an % 4 === 0 && an % 100 !== 0) || an % 400 === 0) ? 366 : 365
-  const frac = Math.min(1, Math.max(dayOfYear / daysInYear, 1 / daysInYear))
+  // Projection : partielle pour l'année en cours ; année passée = réalisé final (frac = 1).
+  let frac = 1
+  if (an === cur) { const startY = new Date(an, 0, 1); const doy = Math.floor((now - startY) / 86400000) + 1; const diy = ((an % 4 === 0 && an % 100 !== 0) || an % 400 === 0) ? 366 : 365; frac = Math.min(1, Math.max(doy / diy, 1 / diy)) }
   const proj = (r) => Math.max(r, frac > 0 ? r / frac : r)
   const som = (arr) => arr.reduce((s, x) => s + x, 0)
   const pct = (r, p) => p > 0 ? Math.round(r / p * 100) : 0
@@ -1982,9 +2041,9 @@ const bilan = computed(() => {
     const planAn = som(planAt[ph]), realAn = som(real[ph]), pj = proj(realAn)
     return { nom: ph, court: ABREGE_AT[ph] || ph, planAn, realAn, pctAn: pct(realAn, planAn), projAn: pj, pctProj: pct(pj, planAn), planMo: planAt[ph][mo], realMo: real[ph][mo], pctMo: pct(real[ph][mo], planAt[ph][mo]) }
   }).filter(a => a.planAn > 0 || a.realAn > 0)
-  const gPlanAn = som(gmPlan), gRealAn = som(gmReal), gProj = proj(gRealAn), moisEcoules = frac * 12
+  const gPlanAn = som(gmPlan), gRealAn = som(gmReal), gProj = proj(gRealAn), moisEcoules = an === cur ? frac * 12 : 12
   return {
-    an, mo, moisNom: MOIS_NOMS[mo],
+    an, mo, moisNom: MOIS_NOMS[mo], estCourante: an === cur,
     global: {
       planAn: gPlanAn, realAn: gRealAn, pctAn: pct(gRealAn, gPlanAn),
       planMo: gmPlan[mo], realMo: gmReal[mo], pctMo: pct(gmReal[mo], gmPlan[mo]),
@@ -2588,6 +2647,9 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pe-bilan { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(16,24,40,.05); }
 .bil-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .bil-head h2 { margin: 0; font-size: 16px; font-weight: 800; color: #0f172a; }
+.bil-annee { font: inherit; font-size: 14px; font-weight: 700; padding: 5px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #0f172a; cursor: pointer; }
+.pbb-unite .bil-annee { font-size: 15px; }
+.bil-clos { font-size: 11px; font-weight: 700; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; border-radius: 999px; padding: 2px 9px; }
 .bil-unite { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
 .bil-unite button { border: none; background: #fff; color: #475569; font: inherit; font-size: 12px; font-weight: 700; padding: 5px 12px; cursor: pointer; }
 .bil-unite button.on { background: #4338ca; color: #fff; }
