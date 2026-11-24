@@ -371,6 +371,11 @@
           <span class="pb-sem">Semaine {{ bSemLib }}</span>
         </div>
         <div class="pb-ctl">
+          <div class="pb-profil" title="Profil d'affichage : Opérateurs (atelier) / Direction (pilotage) / Tout">
+            <button :class="{ on: boucleProfil === 'operateurs' }" @click="boucleProfil = 'operateurs'">👷 Opérateurs</button>
+            <button :class="{ on: boucleProfil === 'direction' }" @click="boucleProfil = 'direction'">📊 Direction</button>
+            <button :class="{ on: boucleProfil === 'tout' }" @click="boucleProfil = 'tout'">Tout</button>
+          </div>
           <span class="pb-h">{{ bHeure }}</span>
           <span class="pb-pg">page {{ bPage + 1 }} / {{ bPages.length }}</span>
           <button @click="bSuivante(-1)" title="Page précédente (←)">◀</button>
@@ -2000,12 +2005,13 @@ const libelleSemaine = computed(() => {
 const PHASES_BILAN = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Livraison Vrac', 'Conditionnement']
 const MOIS_NOMS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
 const fmtQ = (n) => Math.round(n || 0).toLocaleString('fr-FR')
-// CA compact : « 1,5 Md » au-delà du milliard, « 12,3 M » au-delà du million, sinon le nombre entier.
+// CA compact : « 1,45 Md » (2 déc.), « 12,3 M » (1 déc.), « 450 k » (milliers), sinon le nombre entier.
 function fmtCA(n) {
   const v = Number(n) || 0, a = Math.abs(v), sg = v < 0 ? '-' : ''
-  const d1 = (x) => (Math.round(x * 10) / 10).toLocaleString('fr-FR')
-  if (a >= 1e9) return sg + d1(a / 1e9) + ' Md'
-  if (a >= 1e6) return sg + d1(a / 1e6) + ' M'
+  const dec = (x, d) => (Math.round(x * Math.pow(10, d)) / Math.pow(10, d)).toLocaleString('fr-FR')
+  if (a >= 1e9) return sg + dec(a / 1e9, 2) + ' Md'
+  if (a >= 1e6) return sg + dec(a / 1e6, 1) + ' M'
+  if (a >= 1e3) return sg + dec(a / 1e3, 0) + ' k'
   return Math.round(v).toLocaleString('fr-FR')
 }
 // Format selon l'unité : CA compact (M/Md), sinon entier. Lié au contexte (panneau / Boucle).
@@ -2140,6 +2146,9 @@ const bPause = ref(false)
 const bEcoule = ref(0)
 const bDuree = ref((() => { try { return Number(localStorage.getItem('pe_boucle_s')) || 20 } catch (e) { return 20 } })())
 watch(bDuree, (v) => { try { localStorage.setItem('pe_boucle_s', String(v)) } catch (e) {} })
+// Profil d'affichage de la Boucle : operateurs (atelier, action) / direction (pilotage) / tout
+const boucleProfil = ref((() => { try { return localStorage.getItem('pe_boucle_profil') || 'operateurs' } catch (e) { return 'operateurs' } })())
+watch(boucleProfil, (v) => { try { localStorage.setItem('pe_boucle_profil', v) } catch (e) {} bPage.value = 0; bEcoule.value = 0 })
 const bParPage = ref(4)
 const bMaj = ref(null)
 let bTimer = null
@@ -2150,18 +2159,26 @@ const semaineBoucle = computed(() => {
   return { a, b: new Date(a.getTime() + H7) }
 })
 const bPages = computed(() => {
+  const prof = boucleProfil.value
+  const showPhases = prof !== 'direction'      // opérateurs + tout : détail par équipement
+  const showBilan = prof !== 'operateurs'      // direction + tout : Plan vs Réalisé (CA, projections)
+  const showFonction = prof !== 'operateurs'   // direction + tout : formation par fonction
   const pages = [{ type: 'synthese', titre: "Vue d'ensemble", ph: 0, k: 0 }]
-  const parPh = {}
-  for (const r of planningTous.value) { const ph = phaseOrdre(r.eq.type); (parPh[ph] = parPh[ph] || []).push(r) }
-  for (const ph of Object.keys(parPh).map(Number).sort((a, b) => a - b)) {
-    const rows = parPh[ph], n = Math.max(1, bParPage.value), nbp = Math.ceil(rows.length / n)
-    for (let i = 0; i < nbp; i++) pages.push({ type: 'phase', ph, k: ph, titre: (PH_LIB_B[ph] || 'Autres') + (nbp > 1 ? ' (' + (i + 1) + '/' + nbp + ')' : ''), rows: rows.slice(i * n, i * n + n), num: ph })
+  if (showPhases) {
+    const parPh = {}
+    for (const r of planningTous.value) { const ph = phaseOrdre(r.eq.type); (parPh[ph] = parPh[ph] || []).push(r) }
+    for (const ph of Object.keys(parPh).map(Number).sort((a, b) => a - b)) {
+      const rows = parPh[ph], n = Math.max(1, bParPage.value), nbp = Math.ceil(rows.length / n)
+      for (let i = 0; i < nbp; i++) pages.push({ type: 'phase', ph, k: ph, titre: (PH_LIB_B[ph] || 'Autres') + (nbp > 1 ? ' (' + (i + 1) + '/' + nbp + ')' : ''), rows: rows.slice(i * n, i * n + n), num: ph })
+    }
   }
-  // Une page Bilan par unité : chaque « point » (Boîtes, Lots, CA) défile séparément.
-  const UNITES_B = [['boites', 'Boîtes'], ['lots', 'Lots'], ['ca', 'CA']]
-  for (const [uk, ul] of UNITES_B) pages.push({ type: 'bilan', unite: uk, ph: -1, k: 'bilan-' + uk, titre: 'Bilan Plan vs Réalisé — ' + ul })
-  // Suivi KPI formation : une page par ventilation (atelier, fonction)
-  for (const [dk, dl] of [['atelier', 'atelier'], ['fonction', 'fonction']]) pages.push({ type: 'formation', dim: dk, ph: -1, k: 'form-' + dk, titre: 'Suivi formation — par ' + dl })
+  if (showBilan) {
+    const UNITES_B = [['boites', 'Boîtes'], ['lots', 'Lots'], ['ca', 'CA']]
+    for (const [uk, ul] of UNITES_B) pages.push({ type: 'bilan', unite: uk, ph: -1, k: 'bilan-' + uk, titre: 'Bilan Plan vs Réalisé — ' + ul })
+  }
+  // Formation : par atelier pour tous les profils ; par fonction pour direction/tout
+  pages.push({ type: 'formation', dim: 'atelier', ph: -1, k: 'form-atelier', titre: 'Suivi formation — par atelier' })
+  if (showFonction) pages.push({ type: 'formation', dim: 'fonction', ph: -1, k: 'form-fonction', titre: 'Suivi formation — par fonction' })
   return pages
 })
 const bPhases = computed(() => { const seen = new Set(), out = []; bPages.value.forEach((p, i) => { const k = p.k; if (!seen.has(k)) { seen.add(k); out.push({ k, idx: i, lib: p.type === 'synthese' ? "Vue d'ensemble" : (p.type === 'bilan' ? ('📊 ' + (p.unite === 'ca' ? 'CA' : (p.unite === 'lots' ? 'Lots' : 'Boîtes'))) : (p.type === 'formation' ? ('👷 ' + (p.dim === 'fonction' ? 'Fonctions' : 'Ateliers')) : (PH_LIB_B[p.ph] || 'Autres'))) }) } }); return out })
@@ -2844,6 +2861,10 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pb-ctl { display: flex; align-items: center; gap: 6px; }
 .pb-ctl button, .pb-ctl select { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; height: 32px; min-width: 34px; font-size: 13px; cursor: pointer; color: #0f172a; }
 .pb-ctl .pb-x { background: #334155; color: #fff; border-color: #334155; }
+.pb-profil { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; margin-right: 6px; }
+.pb-profil button { border: none; border-radius: 0; height: 32px; min-width: 0; padding: 0 12px; background: #fff; color: #475569; font-size: 13px; font-weight: 700; cursor: pointer; }
+.pb-profil button + button { border-left: 1px solid #e2e8f0; }
+.pb-profil button.on { background: #4338ca; color: #fff; }
 .pb-h { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; margin-right: 6px; }
 .pb-pg { font-size: 12px; color: #64748b; font-weight: 700; margin-right: 4px; }
 .pb-prog { height: 5px; background: #e2e8f0; border-radius: 3px; margin: 10px 0 8px; overflow: hidden; }
