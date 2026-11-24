@@ -111,6 +111,33 @@ const trsParMois = computed(() => {
   }
   return out
 })
+// TRS technique par mois (arrêts planifiés exclus du temps requis)
+const trsTechParMois = computed(() => {
+  const parM = {}
+  for (const s of postesFiltres.value) {
+    const mo = new Date(s.date).getMonth()
+    if (!parM[mo]) parM[mo] = { ouverture: 0, fonct: 0, arrPlan: 0, theo: 0, prodPerf: 0, ecoule: 0, fonctPerf: 0, prodQual: 0, rebutsQual: 0 }
+    const a = parM[mo]
+    const to = s.temps_ouverture_min || 0
+    let arr = 0, arrP = 0
+    for (const m of MOTIFS) { const v = s[m[1]] || 0; arr += v; if (m[4] === 'plan') arrP += v }
+    const tf = Math.max(0, to - arr)
+    a.ouverture += to; a.fonct += tf; a.arrPlan += arrP
+    const cd = cadenceDe(s.equipement_id, s.produit_id)
+    if (cd.mode === 'cycle') { a.ecoule += Number(s.production_realisee) || 0; a.fonctPerf += tf }
+    else if (cd.value > 0) { a.theo += (tf / 60) * cd.value; a.prodPerf += Number(s.production_realisee) || 0; a.prodQual += Number(s.production_realisee) || 0; a.rebutsQual += Number(s.rebuts) || 0 }
+  }
+  const out = Array(12).fill(0)
+  for (let mo = 0; mo < 12; mo++) {
+    const a = parM[mo]; if (!a) continue
+    const requis = Math.max(0, a.ouverture - a.arrPlan)
+    const dispoTech = requis ? a.fonct / requis : 0
+    const perf = a.theo ? Math.min(1, a.prodPerf / a.theo) : (a.fonctPerf ? Math.min(1, a.ecoule / a.fonctPerf) : 0)
+    const qualite = a.prodQual ? Math.max(0, (a.prodQual - a.rebutsQual) / a.prodQual) : 1
+    out[mo] = +((dispoTech * perf * qualite) * 100).toFixed(1)
+  }
+  return out
+})
 
 // TRS par poste 3×8 (Matin / Après-midi / Nuit = postes 1 / 2 / 3)
 const POSTE_LIB = { 1: 'Matin', 2: 'Après-midi', 3: 'Nuit' }
@@ -228,6 +255,11 @@ const paretoDe = (groupe) => {
 const paretoPlan = computed(() => paretoDe('plan'))
 const paretoSubi = computed(() => paretoDe('subi'))
 const aucunArret = computed(() => totalArrets.value === 0)
+// Répartition planifié / subi des arrêts (part organisationnelle vs fiabilité)
+const ratioPlanifie = computed(() => {
+  const p = paretoPlan.value.total, s = paretoSubi.value.total, tot = p + s
+  return { plan: p, subi: s, total: tot, pctPlan: tot ? Math.round(p / tot * 100) : 0, pctSubi: tot ? Math.round(s / tot * 100) : 0 }
+})
 
 // Export PDF (fenêtre d'impression, logo ProdTrack) — reflète les filtres actifs.
 function exporterPDF() {
@@ -270,7 +302,8 @@ function exporterPDF() {
 
   const moisData = {}
   for (const s of postesFiltres.value) moisData[new Date(s.date).getMonth()] = true
-  const moisRows = MOIS.map((lbl, mo) => moisData[mo] ? '<tr><td>' + lbl + '</td><td class="r"><b>' + trsParMois.value[mo].toFixed(1) + ' %</b></td></tr>' : '').join('')
+  const moisRows = MOIS.map((lbl, mo) => moisData[mo] ? '<tr><td>' + lbl + '</td><td class="r"><b>' + trsParMois.value[mo].toFixed(1) + ' %</b></td><td class="r">' + trsTechParMois.value[mo].toFixed(1) + ' %</td></tr>' : '').join('')
+  const rp = ratioPlanifie.value
 
   const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Suivi TRS ' + esc(dFr(du.value)) + '</title>' +
     '<style>*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:24px;font-size:12px}' +
@@ -290,6 +323,7 @@ function exporterPDF() {
     '.herotech{font-size:9px;font-weight:600;color:#94a3b8;margin-top:3px;line-height:1.3}.herotech b{font-size:12px}.herotech small{font-size:7.5px}' +
     '.grptag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;margin:12px 0 5px;padding:3px 9px;border-radius:5px;border-left:3px solid;-webkit-print-color-adjust:exact;print-color-adjust:exact}.grptag.plan{color:#4338ca;background:#eef2ff;border-color:#6366f1}.grptag.subi{color:#b45309;background:#fff7ed;border-color:#f59e0b}' +
     '.grprow td{background:#f1f5f9;font-weight:800;font-size:9px;text-transform:uppercase;color:#475569}' +
+    '.ratio{font-size:11px;font-weight:600;color:#475569;margin:0 0 8px}' +
     '.foot{margin-top:22px;color:#94a3b8;font-size:10px;border-top:1px solid #eee;padding-top:6px}@media print{body{margin:12mm}}</style></head><body>' + LOGO_HTML +
     '<h1>Suivi TRS</h1>' +
     '<p class="sub">Rendement global des équipements · Disponibilité × Performance × Qualité</p>' +
@@ -299,10 +333,11 @@ function exporterPDF() {
     '<h2>Détail par équipement</h2>' +
     '<table><thead><tr><th>Équipement</th><th class="r">Ouverture</th><th class="r">Fonct.</th><th class="r">Dispo.</th><th class="r">Perf.</th><th class="r">Qualité</th><th class="r">TRS</th><th class="r">TRS tech.</th><th class="r">Nettoyage</th></tr></thead><tbody>' + eqRows + '</tbody></table>' +
     '<h2>Pertes de temps — planifiés vs subis</h2>' +
+    '<div class="ratio">Répartition des arrêts : <b style="color:#4338ca">Planifiés ' + rp.pctPlan + ' %</b> · <b style="color:#b45309">Subis ' + rp.pctSubi + ' %</b> — ' + heures(rp.total) + ' au total</div>' +
     '<div class="grptag plan">Planifiés (organisationnels) — ' + heures(paretoP.total) + '</div>' + (barsGrp(paretoP) || '<div class="muted">Aucun</div>') +
     '<div class="grptag subi">Subis (non planifiés) — ' + heures(paretoS.total) + '</div>' + (barsGrp(paretoS) || '<div class="muted">Aucun</div>') +
     '<table style="margin-top:10px"><thead><tr><th>Motif d\'arrêt</th><th class="r">Durée</th><th class="r">% des arrêts</th><th class="r">% ouverture</th></tr></thead><tbody><tr class="grprow"><td colspan="4">Planifiés</td></tr>' + rowsGrp(paretoP) + '<tr class="grprow"><td colspan="4">Subis</td></tr>' + rowsGrp(paretoS) + '</tbody></table>' +
-    (moisRows ? '<h2>TRS par mois</h2><table><thead><tr><th>Mois</th><th class="r">TRS</th></tr></thead><tbody>' + moisRows + '</tbody></table>' : '') +
+    (moisRows ? '<h2>TRS par mois — global vs technique</h2><table><thead><tr><th>Mois</th><th class="r">TRS global</th><th class="r">TRS technique</th></tr></thead><tbody>' + moisRows + '</tbody></table>' : '') +
     '<p class="foot">ProdTrack — LDM Groupe · Document généré le ' + esc(new Date().toLocaleDateString('fr-FR')) + '</p>' +
     '</body></html>'
   const w = window.open('', '_blank')
@@ -382,6 +417,14 @@ function exporterPDF() {
             <h3 class="card-title">Pertes de temps — Pareto <span class="ct-sub">planifiés / subis</span></h3>
             <div v-if="aucunArret" class="muted">Aucun arrêt enregistré sur la période.</div>
             <template v-else>
+              <div class="ratio-bar">
+                <div class="ratio-head"><span>Répartition des arrêts</span><span class="ratio-tot">{{ heures(ratioPlanifie.total) }}</span></div>
+                <div class="ratio-track">
+                  <span class="ratio-plan" :style="{ width: ratioPlanifie.pctPlan + '%' }"></span>
+                  <span class="ratio-subi" :style="{ width: ratioPlanifie.pctSubi + '%' }"></span>
+                </div>
+                <div class="ratio-lbl"><span class="rl plan">Planifiés {{ ratioPlanifie.pctPlan }} %</span><span class="rl subi">Subis {{ ratioPlanifie.pctSubi }} %</span></div>
+              </div>
               <div class="par-grp"><span class="par-grp-tag plan">Planifiés (organisationnels)</span><span class="par-grp-tot">{{ heures(paretoPlan.total) }}</span></div>
               <div class="pareto">
                 <div v-for="r in paretoPlan.rows" :key="r.cle" class="par-row">
@@ -428,8 +471,8 @@ function exporterPDF() {
           </section>
 
           <section class="card">
-            <h3 class="card-title clickable-title" @click="moisVisible = !moisVisible">TRS par mois<span v-if="equipFiltre" class="flt"> — {{ equipFiltreCode }}</span><span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span> <span class="toggle-caret">{{ moisVisible ? '▾ masquer' : '▸ afficher' }}</span></h3>
-            <MiniChart v-if="moisVisible" :labels="MOIS" :format="v => v + ' %'" :value-format="v => v || ''" show-values :series="[{ label: 'TRS %', color: '#0f766e', data: trsParMois }]" />
+            <h3 class="card-title clickable-title" @click="moisVisible = !moisVisible">TRS global vs technique — par mois<span v-if="equipFiltre" class="flt"> — {{ equipFiltreCode }}</span><span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span> <span class="toggle-caret">{{ moisVisible ? '▾ masquer' : '▸ afficher' }}</span></h3>
+            <MiniChart v-if="moisVisible" :labels="MOIS" :format="v => v + ' %'" :series="[{ label: 'TRS global', color: '#0f766e', data: trsParMois }, { label: 'TRS technique', color: '#6366f1', data: trsTechParMois }]" />
           </section>
         </div>
 
@@ -566,6 +609,14 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .par-grp-tag.subi { color: #b45309; background: #fff7ed; border-color: #f59e0b; }
 .par-grp-tot { font-size: 12.5px; font-weight: 800; color: #475569; font-variant-numeric: tabular-nums; }
 .muted.sm { font-size: 12px; padding: 2px 0; }
+.ratio-bar { margin: 0 0 12px; padding: 0 0 12px; border-bottom: 1px solid #eef2f6; }
+.ratio-head { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 6px; }
+.ratio-tot { color: #94a3b8; font-variant-numeric: tabular-nums; }
+.ratio-track { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: #f1f5f9; }
+.ratio-plan { background: #6366f1; transition: width .4s; }
+.ratio-subi { background: #f59e0b; transition: width .4s; }
+.ratio-lbl { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11.5px; font-weight: 800; }
+.rl.plan { color: #4338ca; } .rl.subi { color: #b45309; }
 .donut { width: 150px; height: 150px; }
 .donut-bg { fill: none; stroke: #eef2f6; stroke-width: 3.6; }
 .donut-seg { fill: none; stroke-width: 3.6; stroke-linecap: round; transition: stroke-dasharray .5s ease; }
