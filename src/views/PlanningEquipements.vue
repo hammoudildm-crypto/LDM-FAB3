@@ -454,18 +454,22 @@
           <div class="pbf-col">
             <div class="pbf-col-t">Taux par {{ bPageCour.dim === 'fonction' ? 'fonction' : 'atelier' }}</div>
             <div v-if="!foBoard.length" class="pbf-vide">Aucune exigence de formation définie.</div>
-            <div v-for="g in foBoard" :key="g.nom" class="pbf-grp">
-              <div class="pbf-grp-h"><span class="pbf-grp-n">{{ g.nom }}</span><span class="pbf-grp-p" :class="'t-' + foTauxCls(g.taux)">{{ g.taux != null ? Math.round(g.taux) + ' %' : '—' }}</span></div>
-              <div class="pbf-bar"><span class="pbf-bar-f" :class="'t-' + foTauxCls(g.taux)" :style="{ width: (g.taux || 0) + '%' }"></span></div>
-              <div class="pbf-tags"><span v-if="g.expire" class="pbf-tag ko">✗ {{ g.expire }} expirées</span><span v-if="g.manquant" class="pbf-tag miss">! {{ g.manquant }} manquantes</span><span v-if="g.bientot" class="pbf-tag mid">⚠ {{ g.bientot }} à renouveler</span><span v-if="!g.expire && !g.manquant && !g.bientot" class="pbf-tag ok">✓ à jour</span></div>
+            <div v-else class="pbf-grid">
+              <div v-for="g in foBoard" :key="g.nom" class="pbf-grp">
+                <div class="pbf-grp-h"><span class="pbf-grp-n">{{ g.nom }}</span><span class="pbf-grp-p" :class="'t-' + foTauxCls(g.taux)">{{ g.taux != null ? Math.round(g.taux) + ' %' : '—' }}</span></div>
+                <div class="pbf-bar"><span class="pbf-bar-f" :class="'t-' + foTauxCls(g.taux)" :style="{ width: (g.taux || 0) + '%' }"></span></div>
+                <div class="pbf-tags"><span v-if="g.expire" class="pbf-tag ko">✗ {{ g.expire }}</span><span v-if="g.manquant" class="pbf-tag miss">! {{ g.manquant }}</span><span v-if="g.bientot" class="pbf-tag mid">⚠ {{ g.bientot }}</span><span v-if="!g.expire && !g.manquant && !g.bientot" class="pbf-tag ok">✓ à jour</span></div>
+              </div>
             </div>
           </div>
           <div class="pbf-col">
             <div class="pbf-col-t">À traiter en priorité</div>
             <div v-if="!formationKpi.priorite.length" class="pbf-vide">✓ Aucun écart : tout le monde est à jour.</div>
-            <div v-for="t in formationKpi.priorite" :key="t.nom + t.fonction" class="pbf-prio">
-              <div class="pbf-prio-i"><span class="pbf-prio-n">{{ t.nom }}</span><span class="pbf-prio-f">{{ t.fonction || '—' }}</span></div>
-              <div class="pbf-prio-t"><span v-if="t.expire" class="pbf-tag ko">✗ {{ t.expire }}</span><span v-if="t.manquant" class="pbf-tag miss">! {{ t.manquant }}</span><span v-if="t.bientot" class="pbf-tag mid">⚠ {{ t.bientot }}</span><span class="pbf-prio-x" :class="'t-' + foTauxCls(t.taux)">{{ Math.round(t.taux) }} %</span></div>
+            <div v-else class="pbf-prio-grid">
+              <div v-for="t in formationKpi.priorite" :key="t.nom + t.fonction" class="pbf-prio">
+                <div class="pbf-prio-i"><span class="pbf-prio-n">{{ t.nom }}</span><span class="pbf-prio-f">{{ t.fonction || '—' }}</span></div>
+                <div class="pbf-prio-t"><span v-if="t.expire" class="pbf-tag ko">✗ {{ t.expire }}</span><span v-if="t.manquant" class="pbf-tag miss">! {{ t.manquant }}</span><span v-if="t.bientot" class="pbf-tag mid">⚠ {{ t.bientot }}</span><span class="pbf-prio-x" :class="'t-' + foTauxCls(t.taux)">{{ Math.round(t.taux) }} %</span></div>
+              </div>
             </div>
           </div>
         </div>
@@ -2862,10 +2866,13 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pbf-kpi.k-ko .pbf-v, .pbf-kpi.k-miss .pbf-v { color: #b91c1c; }
 .pbf-kpi.k-ok .pbf-v { color: #15803d; }
 .pbf-l { font-size: 11.5px; color: #64748b; font-weight: 600; margin-top: 2px; }
-.pbf-body { flex: 1; display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; min-height: 0; overflow: hidden; }
-.pbf-col { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; background: #fff; overflow-y: auto; }
-.pbf-col-t { font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 10px; }
-.pbf-grp { margin-bottom: 11px; }
+.pbf-body { flex: 1; display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; min-height: 0; overflow: hidden; }
+.pbf-col { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
+.pbf-col-t { font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 10px; flex: 0 0 auto; }
+/* Grilles multi-colonnes : tout tient sur une page, sans défilement (mode présentation) */
+.pbf-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); grid-auto-rows: min-content; gap: 7px 18px; align-content: start; }
+.pbf-prio-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); grid-auto-rows: min-content; gap: 0 18px; align-content: start; }
+.pbf-grp { margin-bottom: 0; }
 .pbf-grp-h { display: flex; justify-content: space-between; align-items: baseline; }
 .pbf-grp-n { font-size: 13px; font-weight: 700; color: #1b2733; }
 .pbf-grp-p { font-size: 14px; font-weight: 800; }
