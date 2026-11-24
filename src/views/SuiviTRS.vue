@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, inject } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 import MiniChart from '../components/MiniChart.vue'
@@ -43,9 +43,32 @@ async function charger() {
   postes.value = r.data || []
   const rc = await supabase.from('cadences_produit').select('*')
   if (!rc.error) cadences.value = rc.data || []
+  const ro = await supabase.from('equipements').select('id, objectif_trs').eq('actif', true)
+  if (!ro.error) { colObjectif.value = true; const m = {}; for (const e of ro.data || []) m[e.id] = e.objectif_trs; objectifs.value = m }
+  else colObjectif.value = false
   chargement.value = false
 }
 onMounted(charger)
+
+// Objectifs / cibles de TRS
+const peutEditer = inject('peutEditer', ref(false))
+const objectifs = ref({})           // equipId -> objectif_trs (fraction) depuis la base
+const colObjectif = ref(false)      // vrai une fois la migration 012 exécutée
+const OBJ_DEF_KEY = 'ldmfab-trs-objectif-defaut'
+const objectifDefaut = ref(0.75)    // cible par défaut du site (modifiable, mémorisée)
+try { const v = localStorage.getItem(OBJ_DEF_KEY); if (v != null && v !== '') objectifDefaut.value = Number(v) } catch (e) { /* ignore */ }
+function setObjectifDefaut(pct) {
+  const v = Math.max(0, Math.min(100, Number(pct) || 0)) / 100
+  objectifDefaut.value = v
+  try { localStorage.setItem(OBJ_DEF_KEY, String(v)) } catch (e) { /* ignore */ }
+}
+const objectifDe = (id) => { const o = objectifs.value[id]; return (o != null && o > 0) ? Number(o) : objectifDefaut.value }
+async function majObjectif(id, pct) {
+  if (!colObjectif.value) return
+  const val = (pct === '' || pct == null) ? null : Math.max(0, Math.min(100, Number(pct))) / 100
+  const r = await supabase.from('equipements').update({ objectif_trs: val }).eq('id', id)
+  if (!r.error) objectifs.value = { ...objectifs.value, [id]: val }
+}
 
 function cadenceDe(eq, pr) {
   const c = cadences.value.find(c => c.equipement_id === eq && c.produit_id === pr)
@@ -199,7 +222,9 @@ const parEquip = computed(() => {
     const arrPlan = CLES_PLAN.reduce((s, c) => s + (e.arrets[c] || 0), 0)
     const requis = Math.max(0, e.ouverture - arrPlan)
     const dispoTech = requis ? e.fonct / requis : 0
-    return { ...e, dispo, perf, qualite, trs: dispo * perf * qualite, arrPlan, requis, dispoTech, trsTech: dispoTech * perf * qualite, pctNettoyage: e.ouverture ? e.arrets.nettoyage / e.ouverture : 0 }
+    const trs = dispo * perf * qualite
+    const objectif = objectifDe(e.id)
+    return { ...e, dispo, perf, qualite, trs, objectif, sousObjectif: trs < objectif, ecartObj: trs - objectif, arrPlan, requis, dispoTech, trsTech: dispoTech * perf * qualite, pctNettoyage: e.ouverture ? e.arrets.nettoyage / e.ouverture : 0 }
   }).sort((a, b) => b.trs - a.trs)
 })
 
@@ -260,6 +285,8 @@ const ratioPlanifie = computed(() => {
   const p = paretoPlan.value.total, s = paretoSubi.value.total, tot = p + s
   return { plan: p, subi: s, total: tot, pctPlan: tot ? Math.round(p / tot * 100) : 0, pctSubi: tot ? Math.round(s / tot * 100) : 0 }
 })
+const sousObjectifCount = computed(() => parEquip.value.filter(e => e.sousObjectif).length)
+const globalSousObjectif = computed(() => global.value.trs < objectifDefaut.value)
 
 // Export PDF (fenêtre d'impression, logo ProdTrack) — reflète les filtres actifs.
 function exporterPDF() {
@@ -293,7 +320,7 @@ function exporterPDF() {
     return '<div class="bar"><span class="bl">' + esc(e.code) + (e.nom ? ' <i>' + esc(e.nom) + '</i>' : '') + '</span><span class="bt"><span class="bf" style="width:' + (v / maxTrs * 100).toFixed(1) + '%;background:' + nivC(e.trs) + ce + '"></span></span><span class="bv" style="color:' + nivC(e.trs) + '">' + v.toFixed(1) + ' %</span></div>'
   }).join('')
 
-  const eqRows = parEquip.value.map(e => '<tr><td><b>' + esc(e.code) + '</b> ' + esc(e.nom || '') + '</td><td class="r">' + heures(e.ouverture) + '</td><td class="r">' + heures(e.fonct) + '</td><td class="r" style="color:' + nivC(e.dispo) + '">' + pct(e.dispo) + '</td><td class="r" style="color:' + nivC(e.perf) + '">' + pct(e.perf) + '</td><td class="r" style="color:' + nivC(e.qualite) + '">' + pct(e.qualite) + '</td><td class="r"><b style="color:' + nivC(e.trs) + '">' + pct(e.trs) + '</b></td><td class="r" style="color:' + nivC(e.trsTech) + '">' + pct(e.trsTech) + '</td><td class="r">' + heures(e.arrets.nettoyage) + '</td></tr>').join('')
+  const eqRows = parEquip.value.map(e => '<tr><td><b>' + esc(e.code) + '</b> ' + esc(e.nom || '') + '</td><td class="r">' + heures(e.ouverture) + '</td><td class="r">' + heures(e.fonct) + '</td><td class="r" style="color:' + nivC(e.dispo) + '">' + pct(e.dispo) + '</td><td class="r" style="color:' + nivC(e.perf) + '">' + pct(e.perf) + '</td><td class="r" style="color:' + nivC(e.qualite) + '">' + pct(e.qualite) + '</td><td class="r"><b style="color:' + nivC(e.trs) + '">' + pct(e.trs) + '</b></td><td class="r" style="color:' + nivC(e.trsTech) + '">' + pct(e.trsTech) + '</td><td class="r"' + (e.sousObjectif ? ' style="color:#b91c1c;font-weight:800"' : '') + '>' + p0(e.objectif) + ' %' + (e.sousObjectif ? ' ▼' : '') + '</td><td class="r">' + heures(e.arrets.nettoyage) + '</td></tr>').join('')
 
   const ta = totalArrets.value, ouv = pertes.value.ouverture
   const paretoP = paretoPlan.value, paretoS = paretoSubi.value
@@ -324,14 +351,16 @@ function exporterPDF() {
     '.grptag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;margin:12px 0 5px;padding:3px 9px;border-radius:5px;border-left:3px solid;-webkit-print-color-adjust:exact;print-color-adjust:exact}.grptag.plan{color:#4338ca;background:#eef2ff;border-color:#6366f1}.grptag.subi{color:#b45309;background:#fff7ed;border-color:#f59e0b}' +
     '.grprow td{background:#f1f5f9;font-weight:800;font-size:9px;text-transform:uppercase;color:#475569}' +
     '.ratio{font-size:11px;font-weight:600;color:#475569;margin:0 0 8px}' +
+    '.objnote{font-size:11px;font-weight:600;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:6px 10px;margin:0 0 8px}' +
     '.foot{margin-top:22px;color:#94a3b8;font-size:10px;border-top:1px solid #eee;padding-top:6px}@media print{body{margin:12mm}}</style></head><body>' + LOGO_HTML +
     '<h1>Suivi TRS</h1>' +
     '<p class="sub">Rendement global des équipements · Disponibilité × Performance × Qualité</p>' +
     '<div class="meta"><div><b>Période :</b> ' + esc(dFr(du.value)) + ' → ' + esc(dFr(au.value)) + '</div><div><b>Équipement :</b> ' + esc(equipTxt) + '</div><div><b>Produit :</b> ' + esc(prodTxt) + '</div><div><b>Postes analysés :</b> ' + postesFiltres.value.length + '</div></div>' +
     interpret + hero + posteBlock +
     '<h2>TRS par équipement</h2>' + bars +
+    '<div class="objnote">🎯 Objectif par défaut : <b>' + p0(objectifDefaut.value) + ' %</b> · ' + (sousObjectifCount.value ? '<b style="color:#b91c1c">' + sousObjectifCount.value + ' équipement(s) sous objectif ▼</b>' : '<b style="color:#047857">tous au-dessus de l\'objectif ✓</b>') + '</div>' +
     '<h2>Détail par équipement</h2>' +
-    '<table><thead><tr><th>Équipement</th><th class="r">Ouverture</th><th class="r">Fonct.</th><th class="r">Dispo.</th><th class="r">Perf.</th><th class="r">Qualité</th><th class="r">TRS</th><th class="r">TRS tech.</th><th class="r">Nettoyage</th></tr></thead><tbody>' + eqRows + '</tbody></table>' +
+    '<table><thead><tr><th>Équipement</th><th class="r">Ouverture</th><th class="r">Fonct.</th><th class="r">Dispo.</th><th class="r">Perf.</th><th class="r">Qualité</th><th class="r">TRS</th><th class="r">TRS tech.</th><th class="r">Objectif</th><th class="r">Nettoyage</th></tr></thead><tbody>' + eqRows + '</tbody></table>' +
     '<h2>Pertes de temps — planifiés vs subis</h2>' +
     '<div class="ratio">Répartition des arrêts : <b style="color:#4338ca">Planifiés ' + rp.pctPlan + ' %</b> · <b style="color:#b45309">Subis ' + rp.pctSubi + ' %</b> — ' + heures(rp.total) + ' au total</div>' +
     '<div class="grptag plan">Planifiés (organisationnels) — ' + heures(paretoP.total) + '</div>' + (barsGrp(paretoP) || '<div class="muted">Aucun</div>') +
@@ -381,6 +410,9 @@ function exporterPDF() {
       <template v-else>
         <div class="toolbar">
           <span v-if="equipFiltre || produitFiltre" class="flt-chip">Filtre :<b v-if="equipFiltre">{{ equipFiltreCode }}</b><b v-if="produitFiltre">{{ produitFiltreLabel }}</b></span>
+          <label class="obj-ctl" title="Cible de TRS par défaut (mémorisée sur ce poste de travail)">🎯 Objectif TRS <input type="number" min="0" max="100" step="1" :value="Math.round(objectifDefaut * 100)" @change="setObjectifDefaut($event.target.value)" /> %</label>
+          <span v-if="sousObjectifCount" class="obj-chip">⚠ {{ sousObjectifCount }} équip. sous objectif</span>
+          <span v-else class="obj-chip ok">✓ Tous au-dessus de l'objectif</span>
           <button type="button" class="btn-pdf" @click="exporterPDF">⬇ Télécharger en PDF</button>
         </div>
 
@@ -480,10 +512,10 @@ function exporterPDF() {
         <section class="card">
           <h3 class="card-title">TRS par équipement<span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span></h3>
           <div class="eqrank eqrank-full">
-            <div v-for="e in parEquip" :key="e.id" class="eqbar">
+            <div v-for="e in parEquip" :key="e.id" class="eqbar" :class="{ 'sous-obj': e.sousObjectif }">
               <span class="eqbar-code">{{ e.code }} <span class="eqbar-nom">{{ e.nom }}</span></span>
-              <span class="eqbar-track"><span class="eqbar-f" :style="{ width: pctNum(e.trs) + '%', background: NIV_COL[niv(e.trs)] }"></span></span>
-              <span class="eqbar-val" :style="{ color: NIV_COL[niv(e.trs)] }">{{ pctNum(e.trs) }} %</span>
+              <span class="eqbar-track"><span class="eqbar-f" :style="{ width: pctNum(e.trs) + '%', background: NIV_COL[niv(e.trs)] }"></span><span class="eqbar-obj" :style="{ left: pctNum(e.objectif) + '%' }" :title="'Objectif ' + pctNum(e.objectif) + ' %'"></span></span>
+              <span class="eqbar-val" :style="{ color: NIV_COL[niv(e.trs)] }">{{ pctNum(e.trs) }} %<span v-if="e.sousObjectif" class="obj-flag" :title="'Sous objectif (' + pctNum(e.objectif) + ' %)'">▼</span></span>
             </div>
           </div>
         </section>
@@ -493,7 +525,7 @@ function exporterPDF() {
           <h3 class="card-title">Détail par équipement</h3>
           <div class="table-scroll">
             <table class="mini">
-              <thead><tr><th>Équipement</th><th class="right">Ouverture</th><th class="right">Fonct.</th><th class="right">Dispo.</th><th class="right">Perf.</th><th class="right">Qualité</th><th class="right">TRS</th><th class="right">TRS tech.</th><th class="right">Nettoyage</th></tr></thead>
+              <thead><tr><th>Équipement</th><th class="right">Ouverture</th><th class="right">Fonct.</th><th class="right">Dispo.</th><th class="right">Perf.</th><th class="right">Qualité</th><th class="right">TRS</th><th class="right">TRS tech.</th><th class="right">Objectif</th><th class="right">Nettoyage</th></tr></thead>
               <tbody>
                 <tr v-for="e in parEquip" :key="e.id">
                   <td class="strong">{{ e.code }} <span class="nom">{{ e.nom }}</span></td>
@@ -504,6 +536,9 @@ function exporterPDF() {
                   <td class="right niv-cell" :style="{ color: NIV_COL[niv(e.qualite)] }">{{ pctNum(e.qualite) }} %</td>
                   <td class="right trs-cell" :style="{ color: NIV_COL[niv(e.trs)] }">{{ pctNum(e.trs) }} %</td>
                   <td class="right niv-cell" :style="{ color: NIV_COL[niv(e.trsTech)] }">{{ pctNum(e.trsTech) }} %</td>
+                  <td class="right obj-cell" :class="{ 'sous-obj-cell': e.sousObjectif }">
+                    <input v-if="peutEditer && colObjectif" class="obj-in" type="number" min="0" max="100" :value="objectifs[e.id] != null ? Math.round(objectifs[e.id] * 100) : ''" :placeholder="Math.round(objectifDefaut * 100)" @change="majObjectif(e.id, $event.target.value)" /><template v-else>{{ pctNum(e.objectif) }}</template> %<span v-if="e.sousObjectif" class="obj-flag" title="Sous objectif">▼</span>
+                  </td>
                   <td class="right nettoyage-cell">{{ heures(e.arrets.nettoyage) }} <span class="pcm">({{ pct(e.pctNettoyage) }})</span></td>
                 </tr>
               </tbody>
@@ -536,7 +571,11 @@ function exporterPDF() {
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .muted { color: #94a3b8; }
 .empty { color: #94a3b8; text-align: center; padding: 30px; font-style: italic; }
-.toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
+.toolbar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.obj-ctl { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #475569; }
+.obj-ctl input { width: 56px; font-size: 13px; font-weight: 700; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; text-align: right; color: #1b2733; background: #fff; }
+.obj-chip { font-size: 12.5px; font-weight: 700; padding: 6px 11px; border-radius: 8px; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.obj-chip.ok { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
 .btn-pdf { display: inline-flex; align-items: center; gap: 6px; background: #4338ca; color: #fff; border: none; border-radius: 9px; padding: 9px 16px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
 .btn-pdf:hover { background: #3730a3; }
 .dl-group { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
@@ -642,7 +681,13 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .eqbar { display: grid; grid-template-columns: 220px 1fr 54px; align-items: center; gap: 12px; }
 .eqbar-code { font-size: 13px; font-weight: 700; color: #1b2733; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .eqbar-nom { font-weight: 400; color: #94a3b8; }
-.eqbar-track { height: 14px; background: #f1f5f9; border-radius: 7px; overflow: hidden; }
+.eqbar-track { position: relative; height: 14px; background: #f1f5f9; border-radius: 7px; overflow: hidden; }
+.eqbar-obj { position: absolute; top: 0; bottom: 0; width: 2px; background: #0f172a; z-index: 2; }
+.eqbar.sous-obj .eqbar-code { color: #b91c1c; }
+.obj-flag { color: #dc2626; font-size: 11px; margin-left: 3px; }
+.obj-cell { white-space: nowrap; }
+.obj-in { width: 46px; font-size: 13px; font-weight: 700; padding: 3px 5px; border: 1px solid #cbd5e1; border-radius: 6px; text-align: right; color: #1b2733; }
+.sous-obj-cell { background: #fef2f2; }
 .eqbar-f { display: block; height: 100%; border-radius: 7px; transition: width .4s; }
 .eqbar-val { font-size: 14px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
 .niv-cell { font-weight: 700; font-variant-numeric: tabular-nums; }
