@@ -6,6 +6,11 @@ import MiniChart from '../components/MiniChart.vue'
 import { ICONS, TINTS } from '../icons.js'
 import { LOGO_HTML } from '../logo'
 
+// Modèles téléchargeables (hébergés dans public/modeles/)
+const MODELES_BASE = import.meta.env.BASE_URL + 'modeles/'
+const urlModeleXlsx = MODELES_BASE + 'Template_TRS_par_poste_LDM.xlsx'
+const urlFicheA4 = MODELES_BASE + 'Fiche_releve_TRS_poste_A4.pdf'
+
 const postes = ref([])
 const cadences = ref([])
 const chargement = ref(true)
@@ -310,6 +315,10 @@ function exporterPDF() {
         <label>Du <input type="date" v-model="du" @change="charger" /></label>
         <label>Au <input type="date" v-model="au" @change="charger" /></label>
       </div>
+      <div class="dl-group">
+        <a class="dl-btn" :href="urlFicheA4" download target="_blank" rel="noopener" title="Fiche de relevé vierge, format A4 (PDF)">⬇ Fiche A4 (PDF)</a>
+        <a class="dl-btn" :href="urlModeleXlsx" download title="Classeur Excel : fiche, registre, référentiel, guide">⬇ Modèle Excel</a>
+      </div>
     </PageHeader>
 
     <p v-if="msg" class="alert">{{ msg }}</p>
@@ -455,6 +464,11 @@ function exporterPDF() {
 .toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
 .btn-pdf { display: inline-flex; align-items: center; gap: 6px; background: #4338ca; color: #fff; border: none; border-radius: 9px; padding: 9px 16px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
 .btn-pdf:hover { background: #3730a3; }
+.dl-group { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.dl-btn { height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; border-radius: 9px; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
+.dl-btn:hover { background: #4338ca; border-color: #4338ca; color: #fff; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .dl-btn { background: #1e293b; color: #a5b4fc; border-color: #334155; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .dl-btn:hover { background: #4338ca; color: #fff; border-color: #4338ca; }
 .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .kpi-top { display: flex; align-items: center; gap: 10px; }
