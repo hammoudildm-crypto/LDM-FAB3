@@ -27,7 +27,15 @@
         <h2 class="card-title">Enregistrements</h2>
         <span class="count">{{ enrFiltres.length }}</span>
         <button v-if="peutSupprimer && doublons.length" class="btn ghost" type="button" @click.prevent="nettoyerDoublons" title="Conserver la fiche la plus récente par personne et formation, supprimer les autres">🧹 Nettoyer {{ doublons.length }} doublon(s)</button>
-        <select v-model="filtrePersonne" class="filtre" style="margin-left:auto"><option value="">Toutes les personnes</option><option v-for="p in personnes" :key="p.id" :value="String(p.id)">{{ p.nom }}</option></select>
+        <select v-model="filtrePreuve" class="filtre" style="margin-left:auto" title="Filtrer selon la pièce jointe de preuve de formation"><option value="">Preuve : toutes</option><option value="avec">✅ Avec preuve</option><option value="sans">⚠ Sans preuve</option></select>
+        <select v-model="filtrePersonne" class="filtre"><option value="">Toutes les personnes</option><option v-for="p in personnes" :key="p.id" :value="String(p.id)">{{ p.nom }}</option></select>
+      </div>
+      <div class="prv-suivi">
+        <span class="prv-k"><b>{{ couverturePreuve.avec }}</b> / {{ couverturePreuve.total }} preuves attachées</span>
+        <span class="prv-bar"><span class="prv-fill" :class="{ full: couverturePreuve.pct === 100 }" :style="{ width: couverturePreuve.pct + '%' }"></span></span>
+        <span class="prv-pct">{{ couverturePreuve.pct }} %</span>
+        <span v-if="couverturePreuve.sans" class="prv-manq" @click="filtrePreuve = filtrePreuve === 'sans' ? '' : 'sans'" :title="filtrePreuve === 'sans' ? 'Afficher toutes les lignes' : 'Afficher uniquement les formations sans preuve'">⚠ {{ couverturePreuve.sans }} sans preuve</span>
+        <span v-else-if="couverturePreuve.total" class="prv-tout">✓ toutes les formations ont une preuve</span>
       </div>
       <div v-if="!enrFiltres.length" class="empty-card">Aucun enregistrement. Ajoute une formation suivie ci-dessus.</div>
       <table v-else class="form-tbl">
@@ -78,6 +86,7 @@ const personnes = ref([])
 const formations = ref([])
 const enregistrements = ref([])
 const filtrePersonne = ref('')
+const filtrePreuve = ref('')   // '' | 'avec' | 'sans' — suivi des pièces jointes de preuve
 const rechercheP = ref('')
 const rechercheF = ref('')
 const rechercheSop = ref('')
@@ -152,7 +161,20 @@ const enrEnrichis = computed(() => enregistrements.value.map(e => {
     return { ...e, personneNom: '(donnée illisible)', formationNom: '—', codeSop: '', expiration: null, statut: 'permanent' }
   }
 }))
-const enrFiltres = computed(() => filtrePersonne.value ? enrEnrichis.value.filter(e => String(e.personne_id) === filtrePersonne.value) : enrEnrichis.value)
+const enrBase = computed(() => filtrePersonne.value ? enrEnrichis.value.filter(e => String(e.personne_id) === filtrePersonne.value) : enrEnrichis.value)
+// Suivi des preuves : couverture (attachées / total) sur l'ensemble filtré par personne.
+const couverturePreuve = computed(() => {
+  const list = enrBase.value, total = list.length
+  let avec = 0
+  for (const e of list) if (preuves.value[e.id]) avec++
+  return { total, avec, sans: total - avec, pct: total ? Math.round(avec / total * 100) : 0 }
+})
+const enrFiltres = computed(() => {
+  const list = enrBase.value
+  if (filtrePreuve.value === 'avec') return list.filter(e => preuves.value[e.id])
+  if (filtrePreuve.value === 'sans') return list.filter(e => !preuves.value[e.id])
+  return list
+})
 // Formateurs proposés = personnel de la page Effectifs (table organigramme),
 // complété des formateurs déjà saisis (pour ne pas perdre d'historique).
 const formateursDispo = computed(() => {
@@ -257,6 +279,15 @@ async function supprimer(e) {
 .form-row select:focus, .form-row input:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
 .form-row .acts { display: flex; gap: 8px; }
 .filtre { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: 13px; background: #fff; color: #1b2733; font-weight: 600; }
+.prv-suivi { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 2px 0 14px; padding: 9px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 13px; color: #475569; }
+.prv-k b { color: #0f172a; font-size: 15px; }
+.prv-bar { flex: 1; min-width: 120px; max-width: 320px; height: 9px; background: #e2e8f0; border-radius: 5px; overflow: hidden; }
+.prv-fill { display: block; height: 100%; background: #6366f1; transition: width .25s; }
+.prv-fill.full { background: #16a34a; }
+.prv-pct { font-weight: 800; color: #0f172a; min-width: 42px; }
+.prv-manq { margin-left: auto; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 999px; padding: 3px 11px; font-weight: 700; cursor: pointer; }
+.prv-manq:hover { background: #fde68a; }
+.prv-tout { margin-left: auto; color: #166534; font-weight: 700; }
 
 .form-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .form-tbl th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; font-weight: 700; padding: 6px 10px; border-bottom: 2px solid #eef2f6; }
