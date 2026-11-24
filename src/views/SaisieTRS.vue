@@ -194,6 +194,20 @@ const sommeSubis = computed(() => ARRETS_SUBIS.reduce((s, m) => s + (Number(form
 const tempsRequis = computed(() => Math.max(0, (Number(form.temps_ouverture_min) || 0) - sommePlanifies.value))
 const dispoTech = computed(() => tempsRequis.value ? tempsFonct.value / tempsRequis.value : 0)
 const trsTech = computed(() => dispoTech.value * perf.value * qualite.value)
+// Cascade du temps : Ouverture = Σ arrêts + Temps utile (production) + Écart non justifié
+const tempsUtile = computed(() => {
+  const prod = Number(form.production_realisee) || 0
+  if (cadenceMode.value === 'cycle') return Math.min(tempsFonct.value, prod)
+  const c = cadence.value
+  return c > 0 ? Math.min(tempsFonct.value, prod / c * 60) : 0
+})
+const ecartTemps = computed(() => Math.max(0, tempsFonct.value - tempsUtile.value))
+const surDeclare = computed(() => {
+  const prod = Number(form.production_realisee) || 0
+  if (cadenceMode.value === 'cycle') return prod > tempsFonct.value + 0.5
+  const c = cadence.value
+  return c > 0 && (prod / c * 60) > tempsFonct.value + 0.5
+})
 const pct = (x) => (x * 100).toFixed(1) + ' %'
 
 // ------- Mode « Journée 3×8 » : les 3 postes saisis en grille, un seul enregistrement -------
@@ -229,6 +243,13 @@ const qualiteDe = (p) => {
   return prod ? Math.max(0, (prod - (Number(p.rebuts) || 0)) / prod) : 0
 }
 const trsDe = (p) => dispoDe(p) * perfDe(p) * qualiteDe(p)
+const tempsUtileDe = (p) => {
+  const prod = Number(p.production_realisee) || 0
+  if (modeDe(p) === 'cycle') return Math.min(fonctDe(p), prod)
+  const c = cadenceDe(p)
+  return c > 0 ? Math.min(fonctDe(p), prod / c * 60) : 0
+}
+const ecartTempsDe = (p) => Math.max(0, fonctDe(p) - tempsUtileDe(p))
 const sommePlanifiesDe = (p) => ARRETS_PLANIFIES.reduce((s, m) => s + (Number(p[m[0]]) || 0), 0)
 const tempsRequisDe = (p) => Math.max(0, (Number(p.temps_ouverture_min) || 0) - sommePlanifiesDe(p))
 const dispoTechDe = (p) => { const tr = tempsRequisDe(p); return tr ? fonctDe(p) / tr : 0 }
@@ -483,6 +504,23 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
           <button v-if="peutEditer" class="btn" @click="enregistrer">Enregistrer le poste</button>
         </div>
       </div>
+      <div class="cascade">
+        <div class="casc-ttl">Cascade du temps (min) — où passe le temps d'ouverture</div>
+        <div class="casc-flow">
+          <span class="cf-step"><i>Ouverture</i><b>{{ form.temps_ouverture_min || 0 }}</b></span>
+          <span class="cf-op">−</span>
+          <span class="cf-step"><i>Arrêts déclarés</i><b>{{ sommeArrets }}</b></span>
+          <span class="cf-op">=</span>
+          <span class="cf-step accent"><i>Fonctionnement</i><b>{{ tempsFonct }}</b></span>
+          <span class="cf-op">−</span>
+          <span class="cf-step"><i>Temps utile (production)</i><b>{{ Math.round(tempsUtile) }}</b></span>
+          <span class="cf-op">=</span>
+          <span class="cf-step ecart" :class="{ warn: ecartTemps > 0 }"><i>Écart non justifié</i><b>{{ Math.round(ecartTemps) }}</b></span>
+        </div>
+        <div v-if="surDeclare" class="casc-note err">⚠ Incohérence : la production dépasse la capacité du temps de fonctionnement — vérifie les arrêts déclarés ou la cadence du couple.</div>
+        <div v-else-if="ecartTemps > 0" class="casc-note">⚠ {{ Math.round(ecartTemps) }} min non justifiés (micro-arrêts / ralentissements non déclarés) — ils pèsent sur la Performance. À déclarer en arrêt si c'en était un, sinon c'est une perte de vitesse.</div>
+        <div v-else class="casc-note ok">✓ Temps entièrement justifié : arrêts + production utile = temps d'ouverture.</div>
+      </div>
     </section>
 
     <!-- Mode Journée 3×8 : les 3 postes en colonnes, un seul enregistrement -->
@@ -544,6 +582,10 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <tr v-if="colRetouche">
               <td>Retouches</td>
               <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk].retouches" /></td>
+            </tr>
+            <tr class="jcalc">
+              <td>Temps utile · Écart non justifié (min)</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk">{{ Math.round(tempsUtileDe(jour[pk])) }} · <b :style="{ color: ecartTempsDe(jour[pk]) > 0 ? '#b45309' : '#047857' }">{{ Math.round(ecartTempsDe(jour[pk])) }}</b></td>
             </tr>
             <tr class="jdpq"><td>Disponibilité</td><td v-for="pk in [1, 2, 3]" :key="pk">{{ pct(dispoDe(jour[pk])) }}</td></tr>
             <tr class="jdpq"><td>Performance</td><td v-for="pk in [1, 2, 3]" :key="pk">{{ pct(perfDe(jour[pk])) }}</td></tr>
@@ -652,6 +694,21 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .dl-btn:hover { background
 .info { color: #94a3b8; font-size: 11px; cursor: help; text-decoration: none; border: 0; }
 .trs-tech { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0 2px; margin-top: 4px; border-top: 1px dashed #cbd5e1; font-size: 14px; font-weight: 700; color: #0f766e; }
 .trs-tech small { font-weight: 500; color: #94a3b8; font-size: 11px; }
+/* Cascade du temps (écart non justifié) */
+.cascade { margin-top: 16px; border-top: 1px solid #e2e8f0; padding-top: 14px; }
+.casc-ttl { font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 8px; }
+.casc-flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; }
+.cf-step { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 12px; min-width: 92px; }
+.cf-step i { font-style: normal; font-size: 10.5px; font-weight: 600; color: #64748b; text-align: center; }
+.cf-step b { font-size: 16px; color: #1b2733; font-variant-numeric: tabular-nums; }
+.cf-step.accent { background: #eef2ff; border-color: #c7d2fe; } .cf-step.accent b { color: #4338ca; }
+.cf-step.ecart { background: #f0fdfa; border-color: #99f6e4; } .cf-step.ecart b { color: #0f766e; }
+.cf-step.ecart.warn { background: #fff7ed; border-color: #fed7aa; } .cf-step.ecart.warn b { color: #b45309; }
+.cf-op { display: flex; align-items: center; font-size: 16px; font-weight: 700; color: #cbd5e1; }
+.casc-note { margin-top: 9px; font-size: 12px; color: #b45309; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 7px 11px; }
+.casc-note.ok { color: #047857; background: #ecfdf5; border-color: #a7f3d0; }
+.casc-note.err { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+@media (max-width: 700px) { .cf-op { display: none; } .cf-step { flex: 1 1 120px; } }
 .trs-box { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin: 14px 0; background: #f8fafc; }
 .trs-line { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; color: #475569; }
 .trs-line b { color: #1b2733; }
