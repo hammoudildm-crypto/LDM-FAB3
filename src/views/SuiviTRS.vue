@@ -103,6 +103,33 @@ const trsParMois = computed(() => {
   return out
 })
 
+// TRS par poste 3×8 (Matin / Après-midi / Nuit = postes 1 / 2 / 3)
+const POSTE_LIB = { 1: 'Matin', 2: 'Après-midi', 3: 'Nuit' }
+const trsParPoste = computed(() => {
+  const by = {}
+  for (const s of postesFiltres.value) {
+    const p = Number(s.poste) || 0
+    if (!by[p]) by[p] = { ouverture: 0, fonct: 0, theo: 0, prodPerf: 0, ecoule: 0, fonctPerf: 0, prodQual: 0, rebutsQual: 0, nb: 0 }
+    const a = by[p]
+    const to = s.temps_ouverture_min || 0
+    let arr = 0
+    for (const m of MOTIFS) arr += s[m[1]] || 0
+    const tf = Math.max(0, to - arr)
+    a.ouverture += to; a.fonct += tf; a.nb++
+    const cd = cadenceDe(s.equipement_id, s.produit_id)
+    if (cd.mode === 'cycle') { a.ecoule += Number(s.production_realisee) || 0; a.fonctPerf += tf }
+    else if (cd.value > 0) { a.theo += (tf / 60) * cd.value; a.prodPerf += Number(s.production_realisee) || 0; a.prodQual += Number(s.production_realisee) || 0; a.rebutsQual += Number(s.rebuts) || 0 }
+  }
+  return [1, 2, 3].map(p => {
+    const a = by[p]
+    if (!a) return { poste: p, lib: POSTE_LIB[p], nb: 0, dispo: 0, perf: 0, qualite: 0, trs: 0, vide: true }
+    const dispo = a.ouverture ? a.fonct / a.ouverture : 0
+    const perf = a.theo ? Math.min(1, a.prodPerf / a.theo) : (a.fonctPerf ? Math.min(1, a.ecoule / a.fonctPerf) : 0)
+    const qualite = a.prodQual ? Math.max(0, (a.prodQual - a.rebutsQual) / a.prodQual) : 1
+    return { poste: p, lib: POSTE_LIB[p], nb: a.nb, dispo, perf, qualite, trs: dispo * perf * qualite, vide: false }
+  })
+})
+
 const parEquip = computed(() => {
   const m = {}
   for (const s of postesFiltres.value) {
@@ -333,6 +360,26 @@ function exporterPDF() {
           </section>
         </div>
 
+        <!-- TRS par poste (3×8) : Matin / Après-midi / Nuit -->
+        <section class="card">
+          <h3 class="card-title">TRS par poste <span class="ct-sub">(3×8)</span></h3>
+          <div class="poste-grid">
+            <div v-for="p in trsParPoste" :key="p.poste" class="poste-cell" :class="{ vide: p.vide }">
+              <svg class="poste-ring" viewBox="0 0 42 42" :aria-label="p.lib + ' ' + pctNum(p.trs) + ' %'">
+                <circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f6" stroke-width="4" />
+                <circle v-if="!p.vide" cx="21" cy="21" r="15.915" fill="none" :stroke="NIV_COL[niv(p.trs)]" stroke-width="4" stroke-linecap="round" :stroke-dasharray="pctNum(p.trs) + ' ' + (100 - pctNum(p.trs))" stroke-dashoffset="25" />
+                <text x="21" y="23.5" text-anchor="middle" font-size="10" font-weight="800" :fill="p.vide ? '#cbd5e1' : NIV_COL[niv(p.trs)]">{{ p.vide ? '—' : pctNum(p.trs) + '%' }}</text>
+              </svg>
+              <div class="poste-info">
+                <div class="poste-lib">{{ p.lib }} <span class="poste-n">Poste {{ p.poste }}</span></div>
+                <div v-if="!p.vide" class="poste-dpq"><b :style="{ color: NIV_COL[niv(p.dispo)] }">D {{ pctNum(p.dispo) }}%</b> · <b :style="{ color: NIV_COL[niv(p.perf)] }">P {{ pctNum(p.perf) }}%</b> · <b :style="{ color: NIV_COL[niv(p.qualite)] }">Q {{ pctNum(p.qualite) }}%</b></div>
+                <div v-else class="poste-vide-tx">Aucune saisie sur la période</div>
+                <div v-if="!p.vide" class="poste-np">{{ p.nb }} poste{{ p.nb > 1 ? 's' : '' }} saisi{{ p.nb > 1 ? 's' : '' }}</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- TRS par équipement + TRS par mois, côte à côte -->
         <div class="strs-mid">
           <section class="card">
@@ -443,6 +490,18 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .strs-mid .card { margin-bottom: 0; }
 .strs-mid .eqbar { grid-template-columns: 140px 1fr 48px; gap: 8px; }
 .strs-mid .eqbar-code { font-size: 12px; }
+.ct-sub { font-size: 12px; font-weight: 600; color: #94a3b8; }
+.poste-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.poste-cell { display: flex; align-items: center; gap: 13px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; }
+.poste-cell.vide { background: #fafbfc; }
+.poste-ring { width: 60px; height: 60px; flex: none; }
+.poste-info { min-width: 0; }
+.poste-lib { font-size: 15px; font-weight: 800; color: #0f172a; }
+.poste-n { font-size: 11px; font-weight: 600; color: #94a3b8; }
+.poste-dpq { font-size: 12px; color: #475569; margin-top: 3px; } .poste-dpq b { font-weight: 800; }
+.poste-np { font-size: 10.5px; color: #94a3b8; margin-top: 2px; }
+.poste-vide-tx { font-size: 12px; color: #94a3b8; margin-top: 3px; }
+@media (max-width: 860px) { .poste-grid { grid-template-columns: 1fr; } }
 .hero { display: flex; align-items: center; gap: 22px; }
 .hero-gauge { flex: 0 0 auto; }
 .donut { width: 150px; height: 150px; }
