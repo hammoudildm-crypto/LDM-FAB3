@@ -54,7 +54,7 @@ const MOTIFS = [
 const motifsGrille = MOTIFS.filter(m => !['arret_nettoyage_min', 'arret_reglage_min', 'arret_maintenance_min', 'arret_attente_min', 'arret_vdlg_min', 'arret_vdlp_min'].includes(m[0]))
 
 async function charger() {
-  const re = await supabase.from('equipements').select('id, code, nom, type').eq('actif', true).order('code')
+  const re = await supabase.from('equipements').select('id, code, nom, type, atelier_id').eq('actif', true).order('code')
   if (!re.error) equipements.value = re.data || []
   const rp = await supabase.from('produits').select('id, code_pf, designation').eq('actif', true).order('code_pf')
   if (!rp.error) produits.value = rp.data || []
@@ -82,21 +82,29 @@ const listeContient = (champ, val) => {
 }
 // Une personne « couvre » l'équipement si sa machine = nom de l'équipement, ou sa phase = type de l'équipement
 const couvreEquip = (p, eq) => !!eq && (listeContient(p.machine, eq.nom) || listeContient(p.equipement, eq.type))
-const estVerificateur = (fonction) => { const f = normTxt(fonction); return f.includes('chef de ligne') || f.includes('chef ligne') || f.includes('superviseur') }
+const estChefLigne = (fonction) => { const f = normTxt(fonction); return f.includes('chef de ligne') || f.includes('chef ligne') }
+const estSuperviseur = (fonction) => normTxt(fonction).includes('superviseur')
 const uniqNoms = (arr) => [...new Set(arr.map(p => p.nom).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'))
+// Périmètre d'un agent vis-à-vis de l'équipement : machine, phase, ou même atelier
+const couvrePerim = (p, eq) => couvreEquip(p, eq) || (!!eq && !!eq.atelier_id && String(p.atelier_id || '') === String(eq.atelier_id))
 // Fait par : personnel affecté au poste (machine/phase) ; repli = tout le personnel actif
 const operateursPoste = computed(() => {
   const eq = equip.value; if (!eq) return []
   const scoped = personnel.value.filter(p => couvreEquip(p, eq))
   return uniqNoms(scoped.length ? scoped : personnel.value)
 })
-// Vérifié par : chefs de ligne / superviseurs du périmètre ; repli = tous les chefs / superviseurs
+// Vérifié par : chefs de ligne du poste + superviseurs de l'atelier (toujours inclus).
 const verificateursPoste = computed(() => {
   const eq = equip.value
-  const chefs = personnel.value.filter(p => estVerificateur(p.fonction))
-  if (!eq) return uniqNoms(chefs)
-  const scoped = chefs.filter(p => couvreEquip(p, eq))
-  return uniqNoms(scoped.length ? scoped : chefs)
+  const chefs = personnel.value.filter(p => estChefLigne(p.fonction))
+  const supers = personnel.value.filter(p => estSuperviseur(p.fonction))
+  if (!eq) return uniqNoms([...chefs, ...supers])
+  const chefsScoped = chefs.filter(p => couvrePerim(p, eq))
+  const supersScoped = supers.filter(p => couvrePerim(p, eq))
+  return uniqNoms([
+    ...(chefsScoped.length ? chefsScoped : chefs),
+    ...(supersScoped.length ? supersScoped : supers)
+  ])
 })
 const phases = computed(() => { const s = new Set(); for (const e of equipements.value) if (e.type) s.add(e.type); return [...s].sort() })
 const equipementsFiltres = computed(() => phaseFiltre.value ? equipements.value.filter(e => e.type === phaseFiltre.value) : equipements.value)
@@ -330,6 +338,10 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 
 <template>
   <div class="trs-page">
+    <div class="trs-brand">
+      <span class="trs-brand-mark"><svg viewBox="0 0 24 24" width="20" height="20" fill="none"><path d="M4 16 L10 11 L15 14 L20 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="16" r="1.7" fill="#fff"/><circle cx="10" cy="11" r="1.7" fill="#fff"/><circle cx="15" cy="14" r="1.7" fill="#fff"/><circle cx="20" cy="6" r="1.7" fill="#fff"/></svg></span>
+      <span class="trs-brand-wm">Prod<span class="trs-brand-sub">Track</span></span>
+    </div>
     <PageHeader title="Saisie TRS" tone="indigo"
       subtitle="Temps, arrêts, production et rebuts par équipement, produit et poste (3×8).">
     </PageHeader>
@@ -571,6 +583,11 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 
 <style scoped>
 .trs-page { color: #1b2733; }
+.trs-brand { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+.trs-brand-mark { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(140deg, #2dd4bf, #14b8a6); box-shadow: 0 2px 6px rgba(20,184,166,.3); flex-shrink: 0; }
+.trs-brand-wm { font-size: 20px; font-weight: 800; letter-spacing: .02em; color: #0f172a; }
+.trs-brand-sub { color: #14b8a6; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .trs-brand-wm { color: #e2e8f0; }
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .okmsg { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
