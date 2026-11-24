@@ -6,6 +6,11 @@ import PageHeader from '../components/PageHeader.vue'
 const peutEditer = inject('peutEditer', ref(false))
 const lotPartage = inject('lotPartage', null)
 
+// Modèles téléchargeables (hébergés dans public/modeles/)
+const MODELES_BASE = import.meta.env.BASE_URL + 'modeles/'
+const urlModeleXlsx = MODELES_BASE + 'Template_TRS_par_poste_LDM.xlsx'
+const urlFicheA4 = MODELES_BASE + 'Fiche_releve_TRS_poste_A4.pdf'
+
 const equipements = ref([])
 const produits = ref([])
 const personnel = ref([])        // organigramme (volet formation) pour « Fait par » / « Vérifié par »
@@ -344,6 +349,8 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
     </div>
     <PageHeader title="Saisie TRS" tone="indigo"
       subtitle="Temps, arrêts, production et rebuts par équipement, produit et poste (3×8).">
+      <a class="dl-btn" :href="urlFicheA4" download target="_blank" rel="noopener" title="Fiche de relevé vierge, format A4 (PDF)">⬇ Fiche A4 (PDF)</a>
+      <a class="dl-btn" :href="urlModeleXlsx" download title="Classeur Excel : fiche, registre, référentiel, guide">⬇ Modèle Excel</a>
     </PageHeader>
 
     <p v-if="msg" class="alert">{{ msg }}</p>
@@ -588,6 +595,10 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 .trs-brand-wm { font-size: 20px; font-weight: 800; letter-spacing: .02em; color: #0f172a; }
 .trs-brand-sub { color: #14b8a6; }
 html:is([data-theme="sombre"], [data-theme="minuit"]) .trs-brand-wm { color: #e2e8f0; }
+.dl-btn { height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; border-radius: 8px; font-size: 12.5px; font-weight: 700; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
+.dl-btn:hover { background: #4338ca; border-color: #4338ca; color: #fff; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .dl-btn { background: #1e293b; color: #a5b4fc; border-color: #334155; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .dl-btn:hover { background: #4338ca; color: #fff; border-color: #4338ca; }
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .okmsg { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
