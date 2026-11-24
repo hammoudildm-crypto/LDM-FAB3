@@ -76,7 +76,7 @@
       <!-- Graphique : Plan vs Réalisé par mois -->
       <div class="bil-chart">
         <div class="bil-chart-t">Plan vs Réalisé par mois — {{ bilan.an }} ({{ uniteLabel }})</div>
-        <MiniChart :labels="chartMois.labels" :series="chartMois.series" :format="v => fmtQ(v)" :current-index="bilan.mo" prefKey="bilan-mois" />
+        <MiniChart :labels="chartMois.labels" :series="chartMois.series" :format="v => fmtQ(v)" :current-index="bilan.mo" prefKey="bilan-mois" show-values />
       </div>
 
       <!-- Tableau par atelier -->
@@ -103,7 +103,7 @@
       <!-- Graphique : Plan vs Réalisé par atelier (annuel) -->
       <div class="bil-chart" v-if="bilan.ateliers.length">
         <div class="bil-chart-t">Plan vs Réalisé par atelier — annuel {{ bilan.an }} ({{ uniteLabel }})</div>
-        <MiniChart :labels="chartAteliers.labels" :series="chartAteliers.series" :format="v => fmtQ(v)" prefKey="bilan-atelier" />
+        <MiniChart :labels="chartAteliers.labels" :series="chartAteliers.series" :format="v => fmtQ(v)" prefKey="bilan-atelier" show-values />
       </div>
 
       <p class="bil-note">Réalisé = OF terminés ({{ uniteLabel }}, date de fin dans l'année/mois) · Plan = PDP {{ bilan.an }} · Projection = rythme réalisé rapporté à l'année entière. Par atelier, chaque produit compte dans les ateliers de sa gamme (Vrac &amp; Conditionnement = tous les produits), donc la somme des ateliers dépasse le global (une boîte traverse plusieurs ateliers).</p>
@@ -433,7 +433,7 @@
           </table>
           <div class="pbb-chart">
             <div class="pbb-chart-t">Plan vs Réalisé par mois ({{ uniteLabel }})</div>
-            <MiniChart :labels="chartMois.labels" :series="chartMois.series" :format="v => fmtQ(v)" :current-index="bilan.mo" prefKey="bilan-mois-b" :show-switch="false" />
+            <MiniChart :labels="chartMois.labels" :series="chartMois.series" :format="v => fmtQ(v)" :current-index="bilan.mo" prefKey="bilan-mois-b" :show-switch="false" show-values />
           </div>
         </div>
       </div>
