@@ -47,16 +47,22 @@ const colRetouche = ref(false)   // vrai une fois la migration 003 exécutée (c
 const colVdl = ref(false)        // vrai une fois la migration 009 exécutée (colonnes arret_vdlg_min / arret_vdlp_min)
 const colSignat = ref(false)     // vrai une fois la migration 011 exécutée (colonnes fait_par / verifie_par)
 
-const MOTIFS = [
-  ['arret_panne_min', 'Panne'], ['arret_format_min', 'Changement de format'],
-  ['arret_nettoyage_min', 'Nettoyage'], ['arret_reglage_min', 'Réglage'],
-  ['arret_vdlg_min', 'Vide de ligne général (VDLG)'], ['arret_vdlp_min', 'Vide de ligne partiel (VDLP)'],
-  ['arret_maintenance_min', 'Maintenance'], ['arret_attente_min', 'Attente (matière/perso.)'],
-  ['arret_autre_min', 'Autre']
+// Motifs d'arrêt regroupés MECE (un arrêt = un seul motif) :
+// Planifié (organisationnel) vs Subi (non planifié). [colonne, libellé, définition]
+const ARRETS_PLANIFIES = [
+  ['arret_format_min', 'Changement de format', "Montage / démontage + réglage initial du passage d'un produit ou format à un autre."],
+  ['arret_vdlg_min', 'Vide de ligne général (VDLG)', "Vidage + nettoyage complet lors d'un changement de produit / campagne (le nettoyage du changement est compté ICI)."],
+  ['arret_vdlp_min', 'Vide de ligne partiel (VDLP)', "Vide de ligne entre lots d'un même produit (même campagne)."],
+  ['arret_nettoyage_min', 'Nettoyage (hors VDL)', 'Nettoyage planifié NON lié à un changement : fin de poste, nettoyage intermédiaire.'],
+  ['arret_maintenance_min', 'Maintenance préventive', 'Intervention de maintenance PLANIFIÉE (préventive).']
 ]
-// Motifs sortis de la grille 2-colonnes pour être regroupés sur des lignes dédiées
-// (Nettoyage/Réglage, Vide de ligne général/partiel, Maintenance/Attente).
-const motifsGrille = MOTIFS.filter(m => !['arret_nettoyage_min', 'arret_reglage_min', 'arret_maintenance_min', 'arret_attente_min', 'arret_vdlg_min', 'arret_vdlp_min'].includes(m[0]))
+const ARRETS_SUBIS = [
+  ['arret_panne_min', 'Panne', 'Défaillance machine imprévue (= maintenance corrective).'],
+  ['arret_attente_min', 'Attente (matière / perso.)', "Arrêt subi faute de matière, de personnel ou d'utilités."],
+  ['arret_reglage_min', 'Réglage (en cours)', 'Micro-réglages ou aléas process EN COURS de production, hors changement de format.'],
+  ['arret_autre_min', 'Autre', 'Tout autre arrêt non classé (à minimiser).']
+]
+const MOTIFS = [...ARRETS_PLANIFIES, ...ARRETS_SUBIS]
 
 async function charger() {
   const re = await supabase.from('equipements').select('id, code, nom, type, atelier_id').eq('actif', true).order('code')
@@ -182,6 +188,12 @@ const qualite = computed(() => {
   return p ? Math.max(0, (p - (Number(form.rebuts) || 0)) / p) : 0
 })
 const trs = computed(() => dispo.value * perf.value * qualite.value)
+// TRS technique : on sort les arrêts planifiés du temps requis (isole la fiabilité machine)
+const sommePlanifies = computed(() => ARRETS_PLANIFIES.reduce((s, m) => s + (Number(form[m[0]]) || 0), 0))
+const sommeSubis = computed(() => ARRETS_SUBIS.reduce((s, m) => s + (Number(form[m[0]]) || 0), 0))
+const tempsRequis = computed(() => Math.max(0, (Number(form.temps_ouverture_min) || 0) - sommePlanifies.value))
+const dispoTech = computed(() => tempsRequis.value ? tempsFonct.value / tempsRequis.value : 0)
+const trsTech = computed(() => dispoTech.value * perf.value * qualite.value)
 const pct = (x) => (x * 100).toFixed(1) + ' %'
 
 // ------- Mode « Journée 3×8 » : les 3 postes saisis en grille, un seul enregistrement -------
@@ -217,6 +229,10 @@ const qualiteDe = (p) => {
   return prod ? Math.max(0, (prod - (Number(p.rebuts) || 0)) / prod) : 0
 }
 const trsDe = (p) => dispoDe(p) * perfDe(p) * qualiteDe(p)
+const sommePlanifiesDe = (p) => ARRETS_PLANIFIES.reduce((s, m) => s + (Number(p[m[0]]) || 0), 0)
+const tempsRequisDe = (p) => Math.max(0, (Number(p.temps_ouverture_min) || 0) - sommePlanifiesDe(p))
+const dispoTechDe = (p) => { const tr = tempsRequisDe(p); return tr ? fonctDe(p) / tr : 0 }
+const trsTechDe = (p) => dispoTechDe(p) * perfDe(p) * qualiteDe(p)
 
 // Sélecteur produit par poste : barre de recherche + liste déroulante (combobox)
 const prodUI = reactive({ 1: { q: '', open: false }, 2: { q: '', open: false }, 3: { q: '', open: false } })
@@ -415,35 +431,38 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         <div>
           <h3 class="card-title">Temps du poste (minutes)</h3>
           <label class="fl">Temps d'ouverture (pause 30 min déduite)<input type="number" v-model.number="form.temps_ouverture_min" /></label>
+
+          <div class="grp-head grp-plan">Arrêts planifiés (organisationnels)</div>
           <div class="motifs">
-            <label v-for="m in motifsGrille" :key="m[0]" class="fl">{{ m[1] }}<input type="number" min="0" v-model.number="form[m[0]]" /></label>
+            <label v-for="m in ARRETS_PLANIFIES" :key="m[0]" class="fl" :class="{ vdl: m[0] === 'arret_vdlg_min' || m[0] === 'arret_vdlp_min' }">
+              <span class="lbl">{{ m[1] }}<abbr class="info" :title="m[2]">ⓘ</abbr></span>
+              <input type="number" min="0" v-model.number="form[m[0]]" :title="m[2]" />
+            </label>
           </div>
-          <div class="duo">
-            <label class="fl vdl">Vide de ligne général (VDLG)<input type="number" min="0" v-model.number="form.arret_vdlg_min" title="Vide de ligne complet lors d'un changement de produit ou de campagne." /></label>
-            <label class="fl vdl">Vide de ligne partiel (VDLP)<input type="number" min="0" v-model.number="form.arret_vdlp_min" title="Vide de ligne entre lots d'un même produit." /></label>
+
+          <div class="grp-head grp-subi">Arrêts subis (non planifiés)</div>
+          <div class="motifs">
+            <label v-for="m in ARRETS_SUBIS" :key="m[0]" class="fl">
+              <span class="lbl">{{ m[1] }}<abbr class="info" :title="m[2]">ⓘ</abbr></span>
+              <input type="number" min="0" v-model.number="form[m[0]]" :title="m[2]" />
+            </label>
           </div>
-          <div class="trio">
-            <label class="fl hl">Nettoyage<input type="number" min="0" v-model.number="form.arret_nettoyage_min" /></label>
-            <label class="fl">Réglage<input type="number" min="0" v-model.number="form.arret_reglage_min" /></label>
-            <label v-if="colRetouche" class="fl">Retouches<input type="number" min="0" v-model.number="form.retouches" title="Unités reprises/retouchées — alimente le KPI « Taux de retouche »." /></label>
-          </div>
-          <div class="trio">
-            <label class="fl">Maintenance<input type="number" min="0" v-model.number="form.arret_maintenance_min" /></label>
-            <label class="fl">Attente (matière/perso.)<input type="number" min="0" v-model.number="form.arret_attente_min" /></label>
-            <label class="fl">Commentaire<input type="text" v-model="form.commentaire" placeholder="Optionnel" /></label>
-          </div>
-          <div class="sub">Σ arrêts : <b>{{ sommeArrets }}</b> min · Fonctionnement : <b>{{ tempsFonct }}</b> min</div>
+
+          <label class="fl">Commentaire<input type="text" v-model="form.commentaire" placeholder="Optionnel" /></label>
+          <div class="sub">Σ planifiés : <b>{{ sommePlanifies }}</b> · Σ subis : <b>{{ sommeSubis }}</b> · Fonct. : <b>{{ tempsFonct }}</b> · Requis : <b>{{ tempsRequis }}</b> min</div>
         </div>
         <div>
           <h3 class="card-title">Production</h3>
           <label class="fl">{{ cadenceMode === 'cycle' ? 'Temps écoulé (min)' : 'Production réalisée (' + uniteCad.replace('/h','') + ')' }}<input type="number" min="0" v-model.number="form.production_realisee" /></label>
           <label v-if="cadenceMode !== 'cycle'" class="fl">Rebuts<input type="number" min="0" v-model.number="form.rebuts" /></label>
+          <label v-if="colRetouche && cadenceMode !== 'cycle'" class="fl">Retouches<input type="number" min="0" v-model.number="form.retouches" title="Unités reprises / retouchées — alimente le taux de retouche (Qualité), sans impact sur le TRS." /></label>
 
           <div class="trs-box">
             <div class="trs-line"><span>Disponibilité</span><b>{{ pct(dispo) }}</b></div>
             <div class="trs-line"><span>Performance</span><b>{{ pct(perf) }}</b></div>
             <div class="trs-line"><span>Qualité</span><b>{{ pct(qualite) }}</b></div>
-            <div class="trs-total"><span>TRS</span><b>{{ pct(trs) }}</b></div>
+            <div class="trs-total"><span>TRS global</span><b>{{ pct(trs) }}</b></div>
+            <div class="trs-tech"><span>TRS technique <small>arrêts planifiés exclus</small></span><b>{{ pct(trsTech) }}</b></div>
           </div>
           <div class="sig-duo">
             <label class="fl">Fait par
@@ -500,13 +519,19 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
               <td>Temps d'ouverture (min)</td>
               <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk].temps_ouverture_min" /></td>
             </tr>
-            <tr v-for="m in MOTIFS" :key="m[0]" :class="{ 'jvdl': m[0] === 'arret_vdlg_min' || m[0] === 'arret_vdlp_min' }">
-              <td>{{ m[1] }}</td>
+            <tr class="jgrp jgrp-plan"><td colspan="4">Arrêts planifiés (organisationnels)</td></tr>
+            <tr v-for="m in ARRETS_PLANIFIES" :key="m[0]" :class="{ 'jvdl': m[0] === 'arret_vdlg_min' || m[0] === 'arret_vdlp_min' }">
+              <td :title="m[2]">{{ m[1] }}</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk][m[0]]" /></td>
+            </tr>
+            <tr class="jgrp jgrp-subi"><td colspan="4">Arrêts subis (non planifiés)</td></tr>
+            <tr v-for="m in ARRETS_SUBIS" :key="m[0]">
+              <td :title="m[2]">{{ m[1] }}</td>
               <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk][m[0]]" /></td>
             </tr>
             <tr class="jcalc">
-              <td>Σ Arrêts · Fonctionnement (min)</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk">{{ sommeArretsDe(jour[pk]) }} · <b>{{ fonctDe(jour[pk]) }}</b></td>
+              <td>Σ Arrêts · Fonct. · Requis (min)</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk">{{ sommeArretsDe(jour[pk]) }} · <b>{{ fonctDe(jour[pk]) }}</b> · {{ tempsRequisDe(jour[pk]) }}</td>
             </tr>
             <tr>
               <td>Production réalisée</td>
@@ -523,7 +548,8 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <tr class="jdpq"><td>Disponibilité</td><td v-for="pk in [1, 2, 3]" :key="pk">{{ pct(dispoDe(jour[pk])) }}</td></tr>
             <tr class="jdpq"><td>Performance</td><td v-for="pk in [1, 2, 3]" :key="pk">{{ pct(perfDe(jour[pk])) }}</td></tr>
             <tr class="jdpq"><td>Qualité</td><td v-for="pk in [1, 2, 3]" :key="pk">{{ pct(qualiteDe(jour[pk])) }}</td></tr>
-            <tr class="jtrs"><td>TRS</td><td v-for="pk in [1, 2, 3]" :key="pk" :style="{ color: trsCol(trsDe(jour[pk])) }"><b>{{ pct(trsDe(jour[pk])) }}</b></td></tr>
+            <tr class="jtrs"><td>TRS global</td><td v-for="pk in [1, 2, 3]" :key="pk" :style="{ color: trsCol(trsDe(jour[pk])) }"><b>{{ pct(trsDe(jour[pk])) }}</b></td></tr>
+            <tr class="jtrs jtrs-tech"><td>TRS technique <small>(planifiés exclus)</small></td><td v-for="pk in [1, 2, 3]" :key="pk" :style="{ color: trsCol(trsTechDe(jour[pk])) }">{{ pct(trsTechDe(jour[pk])) }}</td></tr>
             <tr class="jsig">
               <td>Fait par</td>
               <td v-for="pk in [1, 2, 3]" :key="pk">
@@ -618,6 +644,14 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .dl-btn:hover { background
 .fl.hl input { border-color: #0f766e; background: #f0fdfa; }
 .fl.vdl input { border-color: #6366f1; background: #eef2ff; }
 .sub { font-size: 13px; color: #64748b; margin-top: 8px; }
+/* Groupes d'arrêts (Planifié / Subi) */
+.grp-head { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; margin: 14px 0 8px; padding: 4px 10px; border-radius: 6px; border-left: 4px solid; }
+.grp-plan { color: #4338ca; background: #eef2ff; border-color: #6366f1; }
+.grp-subi { color: #b45309; background: #fff7ed; border-color: #f59e0b; }
+.fl .lbl { display: inline-flex; align-items: center; gap: 4px; }
+.info { color: #94a3b8; font-size: 11px; cursor: help; text-decoration: none; border: 0; }
+.trs-tech { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0 2px; margin-top: 4px; border-top: 1px dashed #cbd5e1; font-size: 14px; font-weight: 700; color: #0f766e; }
+.trs-tech small { font-weight: 500; color: #94a3b8; font-size: 11px; }
 .trs-box { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin: 14px 0; background: #f8fafc; }
 .trs-line { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; color: #475569; }
 .trs-line b { color: #1b2733; }
@@ -663,7 +697,13 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .jtable .jvdl input { border-color: #6366f1; background: #eef2ff; }
 .jtable .jcalc { background: #f1f5f9; color: #475569; font-weight: 600; }
 .jtable .jdpq td:not(:first-child) { font-weight: 600; color: #334155; }
+.jtable .jgrp td { background: #f1f5f9; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; text-align: left; padding: 5px 8px; }
+.jtable .jgrp-plan td { color: #4338ca; border-left: 3px solid #6366f1; }
+.jtable .jgrp-subi td { color: #b45309; border-left: 3px solid #f59e0b; }
 .jtable .jtrs td { background: #f8fafc; font-size: 15px; }
+.jtable .jtrs-tech td { font-size: 13px; background: #fbfbfe; }
+.jtable .jtrs-tech td:first-child { font-size: 12px; color: #0f766e; }
+.jtable .jtrs-tech td small { color: #94a3b8; font-weight: 400; }
 .jtable .jtrs td:first-child { font-size: 13px; }
 .jtable .jcom input, .jtable .jsig input { text-align: left; }
 .sig-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 12px; }
