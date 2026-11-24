@@ -39,13 +39,13 @@
       <div class="bil-glob">
         <div class="bil-card">
           <div class="bil-card-t">État d'avancement <b>annuel</b></div>
-          <div class="bil-nums"><b>{{ fmtQ(bilan.global.realAn) }}</b> / {{ fmtQ(bilan.global.planAn) }} <span class="bil-u">{{ uniteLabel }}</span></div>
+          <div class="bil-nums"><b>{{ fmtPanel(bilan.global.realAn) }}</b> / {{ fmtPanel(bilan.global.planAn) }} <span class="bil-u">{{ uniteLabel }}</span></div>
           <div class="bil-bar"><span class="bil-fill" :class="{ over: bilan.global.pctAn >= 100 }" :style="{ width: Math.min(100, bilan.global.pctAn) + '%' }"></span></div>
           <div class="bil-pct">{{ bilan.global.pctAn }} % du plan annuel</div>
         </div>
         <div class="bil-card">
           <div class="bil-card-t">État d'avancement <b>mensuel</b> — {{ bilan.moisNom }}</div>
-          <div class="bil-nums"><b>{{ fmtQ(bilan.global.realMo) }}</b> / {{ fmtQ(bilan.global.planMo) }} <span class="bil-u">{{ uniteLabel }}</span></div>
+          <div class="bil-nums"><b>{{ fmtPanel(bilan.global.realMo) }}</b> / {{ fmtPanel(bilan.global.planMo) }} <span class="bil-u">{{ uniteLabel }}</span></div>
           <div class="bil-bar"><span class="bil-fill" :class="{ over: bilan.global.pctMo >= 100 }" :style="{ width: Math.min(100, bilan.global.pctMo) + '%' }"></span></div>
           <div class="bil-pct">{{ bilan.global.pctMo }} % du plan du mois</div>
         </div>
@@ -55,22 +55,22 @@
       <div class="bil-kpis">
         <div class="bil-kpi">
           <div class="bil-kpi-l">Projection fin d'année</div>
-          <div class="bil-kpi-v">{{ fmtQ(bilan.global.projAn) }} <span class="bil-u">{{ uniteLabel }}</span></div>
+          <div class="bil-kpi-v">{{ fmtPanel(bilan.global.projAn) }} <span class="bil-u">{{ uniteLabel }}</span></div>
           <div class="bil-kpi-s" :class="bilan.global.pctProj >= 100 ? 'pos' : (bilan.global.pctProj >= 85 ? 'warn' : 'neg')">atterrissage {{ bilan.global.pctProj }} % du plan</div>
         </div>
         <div class="bil-kpi">
           <div class="bil-kpi-l">Reste à produire (annuel)</div>
-          <div class="bil-kpi-v">{{ fmtQ(bilan.global.reste) }} <span class="bil-u">{{ uniteLabel }}</span></div>
-          <div class="bil-kpi-s">sur {{ fmtQ(bilan.global.planAn) }} planifiés</div>
+          <div class="bil-kpi-v">{{ fmtPanel(bilan.global.reste) }} <span class="bil-u">{{ uniteLabel }}</span></div>
+          <div class="bil-kpi-s">sur {{ fmtPanel(bilan.global.planAn) }} planifiés</div>
         </div>
         <div class="bil-kpi">
           <div class="bil-kpi-l">Rythme mensuel moyen</div>
-          <div class="bil-kpi-v">{{ fmtQ(bilan.global.rythme) }} <span class="bil-u">{{ uniteLabel }}</span></div>
+          <div class="bil-kpi-v">{{ fmtPanel(bilan.global.rythme) }} <span class="bil-u">{{ uniteLabel }}</span></div>
           <div class="bil-kpi-s">réalisé / mois écoulé</div>
         </div>
         <div class="bil-kpi">
           <div class="bil-kpi-l">Réalisé {{ bilan.an }} à ce jour</div>
-          <div class="bil-kpi-v">{{ fmtQ(bilan.global.realAn) }} <span class="bil-u">{{ uniteLabel }}</span></div>
+          <div class="bil-kpi-v">{{ fmtPanel(bilan.global.realAn) }} <span class="bil-u">{{ uniteLabel }}</span></div>
           <div class="bil-kpi-s">{{ bilan.global.pctAn }} % du plan annuel</div>
         </div>
       </div>
@@ -78,7 +78,7 @@
       <!-- Graphique : Plan vs Réalisé par mois -->
       <div class="bil-chart">
         <div class="bil-chart-t">Plan vs Réalisé par mois — {{ bilan.an }} ({{ uniteLabel }})</div>
-        <MiniChart :labels="chartMois.labels" :series="chartMois.series" :format="v => fmtQ(v)" :current-index="bilan.estCourante ? bilan.mo : -1" prefKey="bilan-mois" show-values />
+        <MiniChart :labels="chartMois.labels" :series="chartMois.series" :format="v => fmtPanel(v)" :current-index="bilan.estCourante ? bilan.mo : -1" prefKey="bilan-mois" show-values />
       </div>
 
       <!-- Tableau par atelier -->
@@ -90,12 +90,12 @@
         <tbody>
           <tr v-for="a in bilan.ateliers" :key="a.nom">
             <td class="bil-at">{{ a.nom }}</td>
-            <td class="r">{{ fmtQ(a.planAn) }}</td>
-            <td class="r">{{ fmtQ(a.realAn) }}</td>
+            <td class="r">{{ fmtPanel(a.planAn) }}</td>
+            <td class="r">{{ fmtPanel(a.realAn) }}</td>
             <td class="bil-pc"><span class="bil-mini"><span class="bil-mini-f" :class="{ over: a.pctAn >= 100 }" :style="{ width: Math.min(100, a.pctAn) + '%' }"></span></span><span class="bil-pc-n">{{ a.pctAn }} %</span></td>
-            <td class="r bil-proj">{{ fmtQ(a.projAn) }}<span class="bil-proj-p">{{ a.pctProj }} %</span></td>
-            <td class="r">{{ fmtQ(a.planMo) }}</td>
-            <td class="r">{{ fmtQ(a.realMo) }}</td>
+            <td class="r bil-proj">{{ fmtPanel(a.projAn) }}<span class="bil-proj-p">{{ a.pctProj }} %</span></td>
+            <td class="r">{{ fmtPanel(a.planMo) }}</td>
+            <td class="r">{{ fmtPanel(a.realMo) }}</td>
             <td class="bil-pc"><span class="bil-mini"><span class="bil-mini-f" :class="{ over: a.pctMo >= 100 }" :style="{ width: Math.min(100, a.pctMo) + '%' }"></span></span><span class="bil-pc-n">{{ a.pctMo }} %</span></td>
           </tr>
         </tbody>
@@ -105,7 +105,7 @@
       <!-- Graphique : Plan vs Réalisé par atelier (annuel) -->
       <div class="bil-chart" v-if="bilan.ateliers.length">
         <div class="bil-chart-t">Plan vs Réalisé par atelier — annuel {{ bilan.an }} ({{ uniteLabel }})</div>
-        <MiniChart :labels="chartAteliers.labels" :series="chartAteliers.series" :format="v => fmtQ(v)" prefKey="bilan-atelier" show-values />
+        <MiniChart :labels="chartAteliers.labels" :series="chartAteliers.series" :format="v => fmtPanel(v)" prefKey="bilan-atelier" show-values />
       </div>
 
       <p class="bil-note">Réalisé = OF terminés ({{ uniteLabel }}, date de fin dans l'année/mois) · Plan = PDP {{ bilan.an }} · Projection = rythme réalisé rapporté à l'année entière. Par atelier, chaque produit compte dans les ateliers de sa gamme (Vrac &amp; Conditionnement = tous les produits), donc la somme des ateliers dépasse le global (une boîte traverse plusieurs ateliers).</p>
@@ -413,10 +413,10 @@
           <span v-if="!bilanBoucle.estCourante" class="bil-clos">historique</span>
         </div>
         <div class="pbb-kpis">
-          <div class="pbb-kpi"><div class="pbb-l">Avancement annuel</div><div class="pbb-v">{{ bilanBoucle.global.pctAn }} %</div><div class="pbb-s">{{ fmtQ(bilanBoucle.global.realAn) }} / {{ fmtQ(bilanBoucle.global.planAn) }} {{ bilanBoucle.uniteLabel }}</div></div>
-          <div class="pbb-kpi"><div class="pbb-l">Avancement {{ bilanBoucle.moisNom }}</div><div class="pbb-v">{{ bilanBoucle.global.pctMo }} %</div><div class="pbb-s">{{ fmtQ(bilanBoucle.global.realMo) }} / {{ fmtQ(bilanBoucle.global.planMo) }} {{ bilanBoucle.uniteLabel }}</div></div>
-          <div class="pbb-kpi"><div class="pbb-l">Projection fin d'année</div><div class="pbb-v">{{ fmtQ(bilanBoucle.global.projAn) }}</div><div class="pbb-s" :class="bilanBoucle.global.pctProj >= 100 ? 'pos' : (bilanBoucle.global.pctProj >= 85 ? 'warn' : 'neg')">atterrissage {{ bilanBoucle.global.pctProj }} %</div></div>
-          <div class="pbb-kpi"><div class="pbb-l">Reste à produire</div><div class="pbb-v">{{ fmtQ(bilanBoucle.global.reste) }}</div><div class="pbb-s">rythme {{ fmtQ(bilanBoucle.global.rythme) }} / mois</div></div>
+          <div class="pbb-kpi"><div class="pbb-l">Avancement annuel</div><div class="pbb-v">{{ bilanBoucle.global.pctAn }} %</div><div class="pbb-s">{{ fmtLoop(bilanBoucle.global.realAn) }} / {{ fmtLoop(bilanBoucle.global.planAn) }} {{ bilanBoucle.uniteLabel }}</div></div>
+          <div class="pbb-kpi"><div class="pbb-l">Avancement {{ bilanBoucle.moisNom }}</div><div class="pbb-v">{{ bilanBoucle.global.pctMo }} %</div><div class="pbb-s">{{ fmtLoop(bilanBoucle.global.realMo) }} / {{ fmtLoop(bilanBoucle.global.planMo) }} {{ bilanBoucle.uniteLabel }}</div></div>
+          <div class="pbb-kpi"><div class="pbb-l">Projection fin d'année</div><div class="pbb-v">{{ fmtLoop(bilanBoucle.global.projAn) }}</div><div class="pbb-s" :class="bilanBoucle.global.pctProj >= 100 ? 'pos' : (bilanBoucle.global.pctProj >= 85 ? 'warn' : 'neg')">atterrissage {{ bilanBoucle.global.pctProj }} %</div></div>
+          <div class="pbb-kpi"><div class="pbb-l">Reste à produire</div><div class="pbb-v">{{ fmtLoop(bilanBoucle.global.reste) }}</div><div class="pbb-s">rythme {{ fmtLoop(bilanBoucle.global.rythme) }} / mois</div></div>
         </div>
         <div class="pbb-body">
           <table class="bil-tbl pbb-tbl" v-if="bilanBoucle.ateliers.length">
@@ -424,18 +424,18 @@
             <tbody>
               <tr v-for="a in bilanBoucle.ateliers" :key="a.nom">
                 <td class="bil-at">{{ a.nom }}</td>
-                <td class="r">{{ fmtQ(a.planAn) }}</td>
-                <td class="r">{{ fmtQ(a.realAn) }}</td>
+                <td class="r">{{ fmtLoop(a.planAn) }}</td>
+                <td class="r">{{ fmtLoop(a.realAn) }}</td>
                 <td class="bil-pc"><span class="bil-mini"><span class="bil-mini-f" :class="{ over: a.pctAn >= 100 }" :style="{ width: Math.min(100, a.pctAn) + '%' }"></span></span><span class="bil-pc-n">{{ a.pctAn }} %</span></td>
-                <td class="r bil-proj">{{ fmtQ(a.projAn) }}</td>
-                <td class="r">{{ fmtQ(a.planMo) }}</td>
-                <td class="r">{{ fmtQ(a.realMo) }}</td>
+                <td class="r bil-proj">{{ fmtLoop(a.projAn) }}</td>
+                <td class="r">{{ fmtLoop(a.planMo) }}</td>
+                <td class="r">{{ fmtLoop(a.realMo) }}</td>
               </tr>
             </tbody>
           </table>
           <div class="pbb-chart">
             <div class="pbb-chart-t">Plan vs Réalisé par mois ({{ bilanBoucle.uniteLabel }})</div>
-            <MiniChart :labels="chartMoisBoucle.labels" :series="chartMoisBoucle.series" :format="v => fmtQ(v)" :current-index="bilanBoucle.estCourante ? bilanBoucle.mo : -1" prefKey="bilan-mois-b" :show-switch="false" show-values />
+            <MiniChart :labels="chartMoisBoucle.labels" :series="chartMoisBoucle.series" :format="v => fmtLoop(v)" :current-index="bilanBoucle.estCourante ? bilanBoucle.mo : -1" prefKey="bilan-mois-b" :show-switch="false" show-values />
           </div>
         </div>
       </div>
@@ -2000,6 +2000,17 @@ const libelleSemaine = computed(() => {
 const PHASES_BILAN = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Livraison Vrac', 'Conditionnement']
 const MOIS_NOMS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
 const fmtQ = (n) => Math.round(n || 0).toLocaleString('fr-FR')
+// CA compact : « 1,5 Md » au-delà du milliard, « 12,3 M » au-delà du million, sinon le nombre entier.
+function fmtCA(n) {
+  const v = Number(n) || 0, a = Math.abs(v), sg = v < 0 ? '-' : ''
+  const d1 = (x) => (Math.round(x * 10) / 10).toLocaleString('fr-FR')
+  if (a >= 1e9) return sg + d1(a / 1e9) + ' Md'
+  if (a >= 1e6) return sg + d1(a / 1e6) + ' M'
+  return Math.round(v).toLocaleString('fr-FR')
+}
+// Format selon l'unité : CA compact (M/Md), sinon entier. Lié au contexte (panneau / Boucle).
+const fmtPanel = (n) => bilan.value.unite === 'ca' ? fmtCA(n) : fmtQ(n)
+const fmtLoop = (n) => bilanBoucle.value.unite === 'ca' ? fmtCA(n) : fmtQ(n)
 const MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
 const ABREGE_AT = { 'Pesée': 'Pesée', 'Granulation et Séchage': 'Granul.', 'Mélange': 'Mélange', 'Compression': 'Compr.', 'Remplissage Gélules': 'Gélules', 'Pelliculage': 'Pellic.', 'Livraison Vrac': 'Vrac', 'Conditionnement': 'Condi.' }
 const uniteLabelDe = (u) => u === 'ca' ? 'DA' : (u === 'lots' ? 'lots' : 'boîtes')
