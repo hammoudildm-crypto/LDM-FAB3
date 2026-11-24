@@ -27,6 +27,7 @@ const produitId = ref('')
 const rechercheProduit = ref('')
 const dateSel = ref(new Date().toISOString().slice(0, 10))
 const poste = ref(1)
+const modeSaisie = ref('poste')   // 'poste' = un poste à la fois · 'jour' = grille 3×8
 
 const form = reactive({
   temps_ouverture_min: 450,
@@ -135,6 +136,100 @@ const qualite = computed(() => {
 const trs = computed(() => dispo.value * perf.value * qualite.value)
 const pct = (x) => (x * 100).toFixed(1) + ' %'
 
+// ------- Mode « Journée 3×8 » : les 3 postes saisis en grille, un seul enregistrement -------
+const TRS_COL = { ok: '#16a34a', mid: '#d97706', ko: '#dc2626' }
+const trsCol = (x) => (x >= 0.85 ? TRS_COL.ok : (x >= 0.65 ? TRS_COL.mid : TRS_COL.ko))
+function blankPoste() {
+  return {
+    produitId: '', cadenceObj: null,
+    temps_ouverture_min: 450,
+    arret_panne_min: 0, arret_format_min: 0, arret_nettoyage_min: 0,
+    arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
+    arret_vdlg_min: 0, arret_vdlp_min: 0,
+    production_realisee: 0, rebuts: 0, retouches: 0, commentaire: ''
+  }
+}
+const jour = reactive({ 1: blankPoste(), 2: blankPoste(), 3: blankPoste() })
+const cadenceDe = (p) => (p.cadenceObj && p.cadenceObj.cadence_nominale != null ? Number(p.cadenceObj.cadence_nominale) : 0)
+const modeDe = (p) => (p.cadenceObj ? (p.cadenceObj.mode || 'debit') : 'debit')
+const uniteDe = (p) => (p.cadenceObj && p.cadenceObj.unite_cadence ? p.cadenceObj.unite_cadence : 'unités/h')
+const sommeArretsDe = (p) => MOTIFS.reduce((s, m) => s + (Number(p[m[0]]) || 0), 0)
+const fonctDe = (p) => Math.max(0, (Number(p.temps_ouverture_min) || 0) - sommeArretsDe(p))
+const dispoDe = (p) => { const to = Number(p.temps_ouverture_min) || 0; return to ? fonctDe(p) / to : 0 }
+const perfDe = (p) => {
+  const prod = Number(p.production_realisee) || 0
+  if (modeDe(p) === 'cycle') return fonctDe(p) ? Math.min(1, prod / fonctDe(p)) : 0
+  const theo = (fonctDe(p) / 60) * cadenceDe(p)
+  return theo ? Math.min(1, prod / theo) : 0
+}
+const qualiteDe = (p) => {
+  if (modeDe(p) === 'cycle') return 1
+  const prod = Number(p.production_realisee) || 0
+  return prod ? Math.max(0, (prod - (Number(p.rebuts) || 0)) / prod) : 0
+}
+const trsDe = (p) => dispoDe(p) * perfDe(p) * qualiteDe(p)
+
+async function chargerCadenceJour(pk) {
+  const p = jour[pk]; p.cadenceObj = null
+  if (!equipId.value || !p.produitId) return
+  const r = await supabase.from('cadences_produit').select('*')
+    .eq('equipement_id', equipId.value).eq('produit_id', p.produitId).limit(1)
+  if (!r.error && r.data && r.data.length) p.cadenceObj = r.data[0]
+}
+function chargerJour() {
+  for (const pk of [1, 2, 3]) {
+    const base = blankPoste()
+    const ex = saisies.value.find(s => String(s.equipement_id) === String(equipId.value) && s.date === dateSel.value && s.poste === pk)
+    if (ex) {
+      base.produitId = ex.produit_id || ''
+      base.temps_ouverture_min = ex.temps_ouverture_min
+      for (const m of MOTIFS) base[m[0]] = ex[m[0]] || 0
+      base.production_realisee = ex.production_realisee || 0
+      base.rebuts = ex.rebuts || 0
+      base.retouches = ex.retouches || 0
+      base.commentaire = ex.commentaire || ''
+    }
+    Object.assign(jour[pk], base)
+  }
+  for (const pk of [1, 2, 3]) chargerCadenceJour(pk)
+}
+for (const pk of [1, 2, 3]) watch(() => jour[pk].produitId, () => chargerCadenceJour(pk))
+watch([equipId, dateSel], () => { if (modeSaisie.value === 'jour') chargerJour() })
+watch(modeSaisie, (m) => { if (m === 'jour') chargerJour() })
+
+async function enregistrerJour() {
+  msg.value = ''
+  if (!equipId.value) { msg.value = 'Choisir un équipement.'; return }
+  const aEnreg = [1, 2, 3].filter(pk => jour[pk].produitId)
+  if (!aEnreg.length) { msg.value = 'Renseigne au moins un poste (le produit est requis).'; return }
+  for (const pk of aEnreg) {
+    const p = jour[pk]
+    if (!p.cadenceObj) { msg.value = 'Poste ' + pk + ' : ce produit n\'a pas de cadence définie (Référentiels › Cadences).'; return }
+    if (modeDe(p) === 'debit' && !cadenceDe(p)) { msg.value = 'Poste ' + pk + ' : cadence (débit) manquante.'; return }
+  }
+  let n = 0
+  for (const pk of aEnreg) {
+    const p = jour[pk]
+    const payload = {
+      equipement_id: equipId.value, produit_id: p.produitId, date: dateSel.value, poste: pk,
+      temps_ouverture_min: Number(p.temps_ouverture_min) || 0,
+      production_realisee: Number(p.production_realisee) || 0,
+      rebuts: Number(p.rebuts) || 0, commentaire: p.commentaire || null
+    }
+    if (colRetouche.value) payload.retouches = Number(p.retouches) || 0
+    for (const m of MOTIFS) {
+      if (!colVdl.value && (m[0] === 'arret_vdlg_min' || m[0] === 'arret_vdlp_min')) continue
+      payload[m[0]] = Number(p[m[0]]) || 0
+    }
+    const r = await supabase.from('trs_postes').upsert(payload, { onConflict: 'equipement_id,date,poste' })
+    if (r.error) { msg.value = 'Poste ' + pk + ' : ' + r.error.message; return }
+    n++
+  }
+  await charger()
+  chargerJour()
+  ok.value = n + ' poste(s) enregistré(s) pour le ' + dateSel.value + '.'; setTimeout(() => ok.value = '', 3500)
+}
+
 async function enregistrer() {
   msg.value = ''
   if (!equipId.value) { msg.value = 'Choisir un équipement.'; return }
@@ -186,6 +281,11 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
     <p v-if="msg" class="alert">{{ msg }}</p>
     <p v-if="ok" class="okmsg">{{ ok }}</p>
 
+    <div class="mode-switch">
+      <button :class="{ on: modeSaisie === 'poste' }" @click="modeSaisie = 'poste'">Poste par poste</button>
+      <button :class="{ on: modeSaisie === 'jour' }" @click="modeSaisie = 'jour'">Journée 3×8 (grille)</button>
+    </div>
+
     <section class="card">
       <div class="sel-row">
         <label>Phase / Atelier
@@ -200,7 +300,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <option v-for="e in equipementsFiltres" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option>
           </select>
         </label>
-        <label class="prod-col">Produit
+        <label class="prod-col" v-if="modeSaisie === 'poste'">Produit
           <div class="prod-row">
             <input class="prod-search" v-model="rechercheProduit" placeholder="Rechercher (code / nom)…" />
             <select v-model="produitId">
@@ -212,7 +312,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         <label>Date
           <input type="date" v-model="dateSel" @change="chargerContexte" />
         </label>
-        <label>Poste
+        <label v-if="modeSaisie === 'poste'">Poste
           <select v-model.number="poste" @change="chargerContexte">
             <option :value="1">Poste 1</option>
             <option :value="2">Poste 2</option>
@@ -221,6 +321,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         </label>
       </div>
 
+      <template v-if="modeSaisie === 'poste'">
       <div v-if="equipId && produitId" class="cad-row">
         <span class="cad-lbl">Cadence de ce produit sur cet équipement :</span>
         <span class="cad-val" v-if="cadenceMode === 'cycle'">Mesuré au temps écoulé</span>
@@ -234,9 +335,11 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         </span>
       </div>
       <p v-else class="hint">Choisis un équipement <b>et</b> un produit : la cadence est propre à chaque couple.</p>
+      </template>
+      <p v-if="modeSaisie === 'jour' && !equipId" class="hint">Choisis un équipement <b>et</b> une date : tu saisiras les 3 postes de la journée d'un seul coup.</p>
     </section>
 
-    <section v-if="equipId && produitId" class="card">
+    <section v-if="modeSaisie === 'poste' && equipId && produitId" class="card">
       <div class="grid2">
         <div>
           <h3 class="card-title">Temps du poste (minutes)</h3>
@@ -273,6 +376,73 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
           </div>
           <button v-if="peutEditer" class="btn" @click="enregistrer">Enregistrer le poste</button>
         </div>
+      </div>
+    </section>
+
+    <!-- Mode Journée 3×8 : les 3 postes en colonnes, un seul enregistrement -->
+    <section v-if="modeSaisie === 'jour' && equipId" class="card">
+      <h3 class="card-title">Journée 3×8 — {{ equip ? equip.code + (equip.nom ? ' · ' + equip.nom : '') : '' }} · {{ dateSel }}</h3>
+      <div class="jtable-wrap">
+        <table class="jtable">
+          <thead>
+            <tr><th>Rubrique</th><th>Matin · P1</th><th>Après-midi · P2</th><th>Nuit · P3</th></tr>
+          </thead>
+          <tbody>
+            <tr class="jprod">
+              <td>Produit</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk">
+                <select v-model="jour[pk].produitId">
+                  <option value="">— choisir —</option>
+                  <option v-for="p in produits" :key="p.id" :value="p.id">{{ p.code_pf }}{{ p.designation ? ' — ' + p.designation : '' }}</option>
+                </select>
+              </td>
+            </tr>
+            <tr class="jcad">
+              <td>Cadence</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk">
+                <span v-if="jour[pk].cadenceObj">{{ modeDe(jour[pk]) === 'cycle' ? 'temps écoulé' : (cadenceDe(jour[pk]) ? cadenceDe(jour[pk]).toLocaleString('fr-FR') + ' ' + uniteDe(jour[pk]) : '⚠ non définie') }}</span>
+                <span v-else-if="jour[pk].produitId" class="cad-warn">⚠ cadence non définie</span>
+                <span v-else class="jmuted">—</span>
+              </td>
+            </tr>
+            <tr>
+              <td>Temps d'ouverture (min)</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk].temps_ouverture_min" /></td>
+            </tr>
+            <tr v-for="m in MOTIFS" :key="m[0]" :class="{ 'jvdl': m[0] === 'arret_vdlg_min' || m[0] === 'arret_vdlp_min' }">
+              <td>{{ m[1] }}</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk][m[0]]" /></td>
+            </tr>
+            <tr class="jcalc">
+              <td>Σ Arrêts · Fonctionnement (min)</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk">{{ sommeArretsDe(jour[pk]) }} · <b>{{ fonctDe(jour[pk]) }}</b></td>
+            </tr>
+            <tr>
+              <td>Production réalisée</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk].production_realisee" /></td>
+            </tr>
+            <tr>
+              <td>Rebuts</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk].rebuts" /></td>
+            </tr>
+            <tr v-if="colRetouche">
+              <td>Retouches</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk].retouches" /></td>
+            </tr>
+            <tr class="jdpq"><td>Disponibilité</td><td v-for="pk in [1, 2, 3]" :key="pk">{{ pct(dispoDe(jour[pk])) }}</td></tr>
+            <tr class="jdpq"><td>Performance</td><td v-for="pk in [1, 2, 3]" :key="pk">{{ pct(perfDe(jour[pk])) }}</td></tr>
+            <tr class="jdpq"><td>Qualité</td><td v-for="pk in [1, 2, 3]" :key="pk">{{ pct(qualiteDe(jour[pk])) }}</td></tr>
+            <tr class="jtrs"><td>TRS</td><td v-for="pk in [1, 2, 3]" :key="pk" :style="{ color: trsCol(trsDe(jour[pk])) }"><b>{{ pct(trsDe(jour[pk])) }}</b></td></tr>
+            <tr class="jcom">
+              <td>Commentaire</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="text" v-model="jour[pk].commentaire" placeholder="Optionnel" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="jfoot">
+        <button v-if="peutEditer" class="btn" @click="enregistrerJour">Enregistrer la journée</button>
+        <span class="jhint">Une colonne sans produit n'est pas enregistrée. Les postes déjà saisis pour cette date se chargent automatiquement.</span>
       </div>
     </section>
 
@@ -358,4 +528,30 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .ds-filtre { font-size: 13px; color: #475569; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
 .ds-filtre input { cursor: pointer; }
 .dt-nom { color: #94a3b8; font-weight: 400; }
+/* Interrupteur de mode */
+.mode-switch { display: inline-flex; gap: 3px; background: #eef2ff; border-radius: 10px; padding: 4px; margin: 0 0 14px; }
+.mode-switch button { border: 0; background: none; font-family: inherit; font-size: 13px; font-weight: 700; color: #64748b; padding: 7px 16px; border-radius: 7px; cursor: pointer; transition: background .15s, color .15s; }
+.mode-switch button.on { background: #fff; color: #4338ca; box-shadow: 0 1px 2px rgba(16,24,40,.1); }
+/* Grille Journée 3×8 */
+.jtable-wrap { overflow-x: auto; }
+.jtable { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 580px; }
+.jtable th, .jtable td { border: 1px solid #e8edf3; padding: 6px 8px; text-align: center; }
+.jtable thead th { background: #4338ca; color: #fff; font-size: 12px; font-weight: 700; position: sticky; top: 0; }
+.jtable thead th:first-child { background: #3730a3; }
+.jtable td:first-child, .jtable th:first-child { text-align: left; font-weight: 600; color: #475569; white-space: nowrap; background: #f8fafc; }
+.jtable input { width: 100%; box-sizing: border-box; font-size: 13px; padding: 5px 7px; border: 1px solid #cbd5e1; border-radius: 6px; text-align: right; background: #fff; color: #1b2733; }
+.jtable select { width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 7px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; }
+.jtable .jprod td:not(:first-child), .jtable .jcad td:not(:first-child) { background: #fcfdff; }
+.jtable .jcad { color: #4338ca; font-weight: 700; font-size: 12px; }
+.jtable .jcad .cad-warn { color: #d97706; }
+.jtable .jmuted { color: #cbd5e1; }
+.jtable .jvdl input { border-color: #6366f1; background: #eef2ff; }
+.jtable .jcalc { background: #f1f5f9; color: #475569; font-weight: 600; }
+.jtable .jdpq td:not(:first-child) { font-weight: 600; color: #334155; }
+.jtable .jtrs td { background: #f8fafc; font-size: 15px; }
+.jtable .jtrs td:first-child { font-size: 13px; }
+.jtable .jcom input { text-align: left; }
+.jfoot { display: flex; align-items: center; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
+.jhint { font-size: 12px; color: #64748b; }
+@media (max-width: 700px) { .jfoot { flex-direction: column; align-items: flex-start; } }
 </style>
