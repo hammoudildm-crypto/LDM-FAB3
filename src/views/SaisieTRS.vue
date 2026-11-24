@@ -34,10 +34,12 @@ const form = reactive({
   arret_panne_min: 0, arret_format_min: 0, arret_nettoyage_min: 0,
   arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
   arret_vdlg_min: 0, arret_vdlp_min: 0,
-  production_realisee: 0, rebuts: 0, retouches: 0, commentaire: ''
+  production_realisee: 0, rebuts: 0, retouches: 0, commentaire: '',
+  fait_par: '', verifie_par: ''
 })
 const colRetouche = ref(false)   // vrai une fois la migration 003 exécutée (colonne trs_postes.retouches)
 const colVdl = ref(false)        // vrai une fois la migration 009 exécutée (colonnes arret_vdlg_min / arret_vdlp_min)
+const colSignat = ref(false)     // vrai une fois la migration 011 exécutée (colonnes fait_par / verifie_par)
 
 const MOTIFS = [
   ['arret_panne_min', 'Panne'], ['arret_format_min', 'Changement de format'],
@@ -61,6 +63,8 @@ async function charger() {
   colRetouche.value = !pr.error
   const pv = await supabase.from('trs_postes').select('arret_vdlg_min').limit(1)
   colVdl.value = !pv.error
+  const psg = await supabase.from('trs_postes').select('fait_par').limit(1)
+  colSignat.value = !psg.error
 }
 onMounted(charger)
 
@@ -116,6 +120,8 @@ function chargerContexte() {
     form.rebuts = ex.rebuts || 0
     form.retouches = ex.retouches || 0
     form.commentaire = ex.commentaire || ''
+    form.fait_par = ex.fait_par || ''
+    form.verifie_par = ex.verifie_par || ''
   }
 }
 
@@ -146,7 +152,8 @@ function blankPoste() {
     arret_panne_min: 0, arret_format_min: 0, arret_nettoyage_min: 0,
     arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
     arret_vdlg_min: 0, arret_vdlp_min: 0,
-    production_realisee: 0, rebuts: 0, retouches: 0, commentaire: ''
+    production_realisee: 0, rebuts: 0, retouches: 0, commentaire: '',
+    fait_par: '', verifie_par: ''
   }
 }
 const jour = reactive({ 1: blankPoste(), 2: blankPoste(), 3: blankPoste() })
@@ -188,6 +195,8 @@ function chargerJour() {
       base.rebuts = ex.rebuts || 0
       base.retouches = ex.retouches || 0
       base.commentaire = ex.commentaire || ''
+      base.fait_par = ex.fait_par || ''
+      base.verifie_par = ex.verifie_par || ''
     }
     Object.assign(jour[pk], base)
   }
@@ -217,6 +226,7 @@ async function enregistrerJour() {
       rebuts: Number(p.rebuts) || 0, commentaire: p.commentaire || null
     }
     if (colRetouche.value) payload.retouches = Number(p.retouches) || 0
+    if (colSignat.value) { payload.fait_par = p.fait_par || null; payload.verifie_par = p.verifie_par || null }
     for (const m of MOTIFS) {
       if (!colVdl.value && (m[0] === 'arret_vdlg_min' || m[0] === 'arret_vdlp_min')) continue
       payload[m[0]] = Number(p[m[0]]) || 0
@@ -243,6 +253,7 @@ async function enregistrer() {
     rebuts: Number(form.rebuts) || 0, commentaire: form.commentaire || null
   }
   if (colRetouche.value) payload.retouches = Number(form.retouches) || 0
+  if (colSignat.value) { payload.fait_par = form.fait_par || null; payload.verifie_par = form.verifie_par || null }
   for (const m of MOTIFS) {
     // Tant que la migration 009 n'est pas exécutée, on n'envoie pas VDLG/VDLP
     // (colonnes absentes) pour ne pas casser l'enregistrement.
@@ -261,6 +272,8 @@ async function enregistrer() {
   form.rebuts = 0
   form.retouches = 0
   form.commentaire = ''
+  form.fait_par = ''
+  form.verifie_par = ''
 }
 
 function trsSaisie(s) {
@@ -374,6 +387,10 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <div class="trs-line"><span>Qualité</span><b>{{ pct(qualite) }}</b></div>
             <div class="trs-total"><span>TRS</span><b>{{ pct(trs) }}</b></div>
           </div>
+          <div class="sig-duo">
+            <label class="fl">Fait par<input type="text" v-model="form.fait_par" placeholder="Nom opérateur" /></label>
+            <label class="fl">Vérifié par<input type="text" v-model="form.verifie_par" placeholder="Nom vérificateur" /></label>
+          </div>
           <button v-if="peutEditer" class="btn" @click="enregistrer">Enregistrer le poste</button>
         </div>
       </div>
@@ -433,6 +450,14 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <tr class="jdpq"><td>Performance</td><td v-for="pk in [1, 2, 3]" :key="pk">{{ pct(perfDe(jour[pk])) }}</td></tr>
             <tr class="jdpq"><td>Qualité</td><td v-for="pk in [1, 2, 3]" :key="pk">{{ pct(qualiteDe(jour[pk])) }}</td></tr>
             <tr class="jtrs"><td>TRS</td><td v-for="pk in [1, 2, 3]" :key="pk" :style="{ color: trsCol(trsDe(jour[pk])) }"><b>{{ pct(trsDe(jour[pk])) }}</b></td></tr>
+            <tr class="jsig">
+              <td>Fait par</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="text" v-model="jour[pk].fait_par" placeholder="Opérateur" /></td>
+            </tr>
+            <tr class="jsig">
+              <td>Vérifié par</td>
+              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="text" v-model="jour[pk].verifie_par" placeholder="Vérificateur" /></td>
+            </tr>
             <tr class="jcom">
               <td>Commentaire</td>
               <td v-for="pk in [1, 2, 3]" :key="pk"><input type="text" v-model="jour[pk].commentaire" placeholder="Optionnel" /></td>
@@ -550,7 +575,8 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .jtable .jdpq td:not(:first-child) { font-weight: 600; color: #334155; }
 .jtable .jtrs td { background: #f8fafc; font-size: 15px; }
 .jtable .jtrs td:first-child { font-size: 13px; }
-.jtable .jcom input { text-align: left; }
+.jtable .jcom input, .jtable .jsig input { text-align: left; }
+.sig-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 12px; }
 .jfoot { display: flex; align-items: center; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
 .jhint { font-size: 12px; color: #64748b; }
 @media (max-width: 700px) { .jfoot { flex-direction: column; align-items: flex-start; } }
