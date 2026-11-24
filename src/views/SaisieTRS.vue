@@ -8,6 +8,7 @@ const lotPartage = inject('lotPartage', null)
 
 const equipements = ref([])
 const produits = ref([])
+const personnel = ref([])        // organigramme (volet formation) pour « Fait par » / « Vérifié par »
 const cadenceObj = ref(null)
 const cadIn = ref('')
 const cadUniteIn = ref('kg/h')
@@ -57,6 +58,8 @@ async function charger() {
   if (!re.error) equipements.value = re.data || []
   const rp = await supabase.from('produits').select('id, code_pf, designation').eq('actif', true).order('code_pf')
   if (!rp.error) produits.value = rp.data || []
+  const rpe = await supabase.from('organigramme').select('id, nom, fonction, atelier_id, equipement, machine').eq('actif', true).order('nom')
+  if (!rpe.error) personnel.value = rpe.data || []
   const rs = await supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf)').eq('actif', true).order('date', { ascending: false }).order('poste').limit(80)
   if (!rs.error) saisies.value = rs.data || []
   const pr = await supabase.from('trs_postes').select('retouches').limit(1)
@@ -69,6 +72,32 @@ async function charger() {
 onMounted(charger)
 
 const equip = computed(() => equipements.value.find(e => e.id === equipId.value))
+
+// --- Personnel pour « Fait par » / « Vérifié par » (depuis l'organigramme / volet formation) ---
+const normTxt = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+const listeContient = (champ, val) => {
+  if (!val) return false
+  const cible = normTxt(val)
+  return String(champ || '').split(',').map(x => normTxt(x)).some(x => x && (x === cible || x.includes(cible) || cible.includes(x)))
+}
+// Une personne « couvre » l'équipement si sa machine = nom de l'équipement, ou sa phase = type de l'équipement
+const couvreEquip = (p, eq) => !!eq && (listeContient(p.machine, eq.nom) || listeContient(p.equipement, eq.type))
+const estVerificateur = (fonction) => { const f = normTxt(fonction); return f.includes('chef de ligne') || f.includes('chef ligne') || f.includes('superviseur') }
+const uniqNoms = (arr) => [...new Set(arr.map(p => p.nom).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'))
+// Fait par : personnel affecté au poste (machine/phase) ; repli = tout le personnel actif
+const operateursPoste = computed(() => {
+  const eq = equip.value; if (!eq) return []
+  const scoped = personnel.value.filter(p => couvreEquip(p, eq))
+  return uniqNoms(scoped.length ? scoped : personnel.value)
+})
+// Vérifié par : chefs de ligne / superviseurs du périmètre ; repli = tous les chefs / superviseurs
+const verificateursPoste = computed(() => {
+  const eq = equip.value
+  const chefs = personnel.value.filter(p => estVerificateur(p.fonction))
+  if (!eq) return uniqNoms(chefs)
+  const scoped = chefs.filter(p => couvreEquip(p, eq))
+  return uniqNoms(scoped.length ? scoped : chefs)
+})
 const phases = computed(() => { const s = new Set(); for (const e of equipements.value) if (e.type) s.add(e.type); return [...s].sort() })
 const equipementsFiltres = computed(() => phaseFiltre.value ? equipements.value.filter(e => e.type === phaseFiltre.value) : equipements.value)
 function onPhaseChange() { equipId.value = '' }
@@ -402,8 +431,20 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <div class="trs-total"><span>TRS</span><b>{{ pct(trs) }}</b></div>
           </div>
           <div class="sig-duo">
-            <label class="fl">Fait par<input type="text" v-model="form.fait_par" placeholder="Nom opérateur" /></label>
-            <label class="fl">Vérifié par<input type="text" v-model="form.verifie_par" placeholder="Nom vérificateur" /></label>
+            <label class="fl">Fait par
+              <select v-model="form.fait_par">
+                <option value="">— choisir —</option>
+                <option v-for="nom in operateursPoste" :key="nom" :value="nom">{{ nom }}</option>
+                <option v-if="form.fait_par && !operateursPoste.includes(form.fait_par)" :value="form.fait_par">{{ form.fait_par }}</option>
+              </select>
+            </label>
+            <label class="fl">Vérifié par
+              <select v-model="form.verifie_par">
+                <option value="">— choisir —</option>
+                <option v-for="nom in verificateursPoste" :key="nom" :value="nom">{{ nom }}</option>
+                <option v-if="form.verifie_par && !verificateursPoste.includes(form.verifie_par)" :value="form.verifie_par">{{ form.verifie_par }}</option>
+              </select>
+            </label>
           </div>
           <button v-if="peutEditer" class="btn" @click="enregistrer">Enregistrer le poste</button>
         </div>
@@ -470,11 +511,23 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <tr class="jtrs"><td>TRS</td><td v-for="pk in [1, 2, 3]" :key="pk" :style="{ color: trsCol(trsDe(jour[pk])) }"><b>{{ pct(trsDe(jour[pk])) }}</b></td></tr>
             <tr class="jsig">
               <td>Fait par</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="text" v-model="jour[pk].fait_par" placeholder="Opérateur" /></td>
+              <td v-for="pk in [1, 2, 3]" :key="pk">
+                <select v-model="jour[pk].fait_par">
+                  <option value="">— choisir —</option>
+                  <option v-for="nom in operateursPoste" :key="nom" :value="nom">{{ nom }}</option>
+                  <option v-if="jour[pk].fait_par && !operateursPoste.includes(jour[pk].fait_par)" :value="jour[pk].fait_par">{{ jour[pk].fait_par }}</option>
+                </select>
+              </td>
             </tr>
             <tr class="jsig">
               <td>Vérifié par</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="text" v-model="jour[pk].verifie_par" placeholder="Vérificateur" /></td>
+              <td v-for="pk in [1, 2, 3]" :key="pk">
+                <select v-model="jour[pk].verifie_par">
+                  <option value="">— choisir —</option>
+                  <option v-for="nom in verificateursPoste" :key="nom" :value="nom">{{ nom }}</option>
+                  <option v-if="jour[pk].verifie_par && !verificateursPoste.includes(jour[pk].verifie_par)" :value="jour[pk].verifie_par">{{ jour[pk].verifie_par }}</option>
+                </select>
+              </td>
             </tr>
             <tr class="jcom">
               <td>Commentaire</td>
@@ -528,7 +581,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 .prod-row { display: flex; gap: 8px; align-items: center; }
 .prod-row > * { flex: 1 1 0; min-width: 0; margin: 0; }
 .sel-row label, .fl { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; color: #475569; gap: 5px; }
-.sel-row select, .sel-row input, .fl input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 500; width: 100%; box-sizing: border-box; }
+.sel-row select, .sel-row input, .fl input, .fl select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; font-weight: 500; width: 100%; box-sizing: border-box; }
 .prod-search { font-size: 13px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 5px; width: 100%; box-sizing: border-box; }
 @media (max-width: 900px) { .sel-row { flex-wrap: wrap; } .sel-row > label { flex: 1 1 180px; } }
 .cad-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; font-size: 14px; }
