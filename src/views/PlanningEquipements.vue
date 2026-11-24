@@ -28,27 +28,62 @@
         <div class="bil-unite">
           <button type="button" :class="{ on: bilanUnite === 'boites' }" @click="bilanUnite = 'boites'">Boîtes</button>
           <button type="button" :class="{ on: bilanUnite === 'lots' }" @click="bilanUnite = 'lots'">Lots</button>
+          <button type="button" :class="{ on: bilanUnite === 'ca' }" @click="bilanUnite = 'ca'">CA</button>
         </div>
         <button type="button" class="bil-x" @click="bilanOuvert = false" title="Masquer le bilan">✕</button>
       </div>
+
+      <!-- Avancement global : annuel + mensuel -->
       <div class="bil-glob">
         <div class="bil-card">
           <div class="bil-card-t">État d'avancement <b>annuel</b></div>
-          <div class="bil-nums"><b>{{ fmtQ(bilan.global.realAn) }}</b> / {{ fmtQ(bilan.global.planAn) }} <span class="bil-u">{{ bilanUnite }}</span></div>
+          <div class="bil-nums"><b>{{ fmtQ(bilan.global.realAn) }}</b> / {{ fmtQ(bilan.global.planAn) }} <span class="bil-u">{{ uniteLabel }}</span></div>
           <div class="bil-bar"><span class="bil-fill" :class="{ over: bilan.global.pctAn >= 100 }" :style="{ width: Math.min(100, bilan.global.pctAn) + '%' }"></span></div>
           <div class="bil-pct">{{ bilan.global.pctAn }} % du plan annuel</div>
         </div>
         <div class="bil-card">
           <div class="bil-card-t">État d'avancement <b>mensuel</b> — {{ bilan.moisNom }}</div>
-          <div class="bil-nums"><b>{{ fmtQ(bilan.global.realMo) }}</b> / {{ fmtQ(bilan.global.planMo) }} <span class="bil-u">{{ bilanUnite }}</span></div>
+          <div class="bil-nums"><b>{{ fmtQ(bilan.global.realMo) }}</b> / {{ fmtQ(bilan.global.planMo) }} <span class="bil-u">{{ uniteLabel }}</span></div>
           <div class="bil-bar"><span class="bil-fill" :class="{ over: bilan.global.pctMo >= 100 }" :style="{ width: Math.min(100, bilan.global.pctMo) + '%' }"></span></div>
           <div class="bil-pct">{{ bilan.global.pctMo }} % du plan du mois</div>
         </div>
       </div>
+
+      <!-- KPIs : projection / reste / rythme -->
+      <div class="bil-kpis">
+        <div class="bil-kpi">
+          <div class="bil-kpi-l">Projection fin d'année</div>
+          <div class="bil-kpi-v">{{ fmtQ(bilan.global.projAn) }} <span class="bil-u">{{ uniteLabel }}</span></div>
+          <div class="bil-kpi-s" :class="bilan.global.pctProj >= 100 ? 'pos' : (bilan.global.pctProj >= 85 ? 'warn' : 'neg')">atterrissage {{ bilan.global.pctProj }} % du plan</div>
+        </div>
+        <div class="bil-kpi">
+          <div class="bil-kpi-l">Reste à produire (annuel)</div>
+          <div class="bil-kpi-v">{{ fmtQ(bilan.global.reste) }} <span class="bil-u">{{ uniteLabel }}</span></div>
+          <div class="bil-kpi-s">sur {{ fmtQ(bilan.global.planAn) }} planifiés</div>
+        </div>
+        <div class="bil-kpi">
+          <div class="bil-kpi-l">Rythme mensuel moyen</div>
+          <div class="bil-kpi-v">{{ fmtQ(bilan.global.rythme) }} <span class="bil-u">{{ uniteLabel }}</span></div>
+          <div class="bil-kpi-s">réalisé / mois écoulé</div>
+        </div>
+        <div class="bil-kpi">
+          <div class="bil-kpi-l">Réalisé {{ bilan.an }} à ce jour</div>
+          <div class="bil-kpi-v">{{ fmtQ(bilan.global.realAn) }} <span class="bil-u">{{ uniteLabel }}</span></div>
+          <div class="bil-kpi-s">{{ bilan.global.pctAn }} % du plan annuel</div>
+        </div>
+      </div>
+
+      <!-- Graphique : Plan vs Réalisé par mois -->
+      <div class="bil-chart">
+        <div class="bil-chart-t">Plan vs Réalisé par mois — {{ bilan.an }} ({{ uniteLabel }})</div>
+        <MiniChart :labels="chartMois.labels" :series="chartMois.series" :format="v => fmtQ(v)" :current-index="bilan.mo" prefKey="bilan-mois" />
+      </div>
+
+      <!-- Tableau par atelier -->
       <table class="bil-tbl" v-if="bilan.ateliers.length">
         <thead>
-          <tr><th rowspan="2">Atelier</th><th colspan="3">Annuel {{ bilan.an }}</th><th colspan="3">Mois — {{ bilan.moisNom }}</th></tr>
-          <tr class="bil-sub"><th class="r">Plan</th><th class="r">Réalisé</th><th>Avancement</th><th class="r">Plan</th><th class="r">Réalisé</th><th>Avancement</th></tr>
+          <tr><th rowspan="2">Atelier</th><th colspan="4">Annuel {{ bilan.an }}</th><th colspan="3">Mois — {{ bilan.moisNom }}</th></tr>
+          <tr class="bil-sub"><th class="r">Plan</th><th class="r">Réalisé</th><th>Avancement</th><th class="r">Projection</th><th class="r">Plan</th><th class="r">Réalisé</th><th>Avancement</th></tr>
         </thead>
         <tbody>
           <tr v-for="a in bilan.ateliers" :key="a.nom">
@@ -56,6 +91,7 @@
             <td class="r">{{ fmtQ(a.planAn) }}</td>
             <td class="r">{{ fmtQ(a.realAn) }}</td>
             <td class="bil-pc"><span class="bil-mini"><span class="bil-mini-f" :class="{ over: a.pctAn >= 100 }" :style="{ width: Math.min(100, a.pctAn) + '%' }"></span></span><span class="bil-pc-n">{{ a.pctAn }} %</span></td>
+            <td class="r bil-proj">{{ fmtQ(a.projAn) }}<span class="bil-proj-p">{{ a.pctProj }} %</span></td>
             <td class="r">{{ fmtQ(a.planMo) }}</td>
             <td class="r">{{ fmtQ(a.realMo) }}</td>
             <td class="bil-pc"><span class="bil-mini"><span class="bil-mini-f" :class="{ over: a.pctMo >= 100 }" :style="{ width: Math.min(100, a.pctMo) + '%' }"></span></span><span class="bil-pc-n">{{ a.pctMo }} %</span></td>
@@ -63,7 +99,14 @@
         </tbody>
       </table>
       <p v-else class="bil-note">Aucune donnée de plan/réalisé pour {{ bilan.an }}.</p>
-      <p class="bil-note">Réalisé = OF terminés ({{ bilanUnite === 'lots' ? 'lots' : 'boîtes' }} fabriqués, date de fin dans l'année/mois) · Plan = PDP {{ bilan.an }}. Par atelier, chaque produit compte dans les ateliers de sa gamme (Vrac &amp; Conditionnement = tous les produits), donc la somme des ateliers dépasse le global (une boîte traverse plusieurs ateliers).</p>
+
+      <!-- Graphique : Plan vs Réalisé par atelier (annuel) -->
+      <div class="bil-chart" v-if="bilan.ateliers.length">
+        <div class="bil-chart-t">Plan vs Réalisé par atelier — annuel {{ bilan.an }} ({{ uniteLabel }})</div>
+        <MiniChart :labels="chartAteliers.labels" :series="chartAteliers.series" :format="v => fmtQ(v)" prefKey="bilan-atelier" />
+      </div>
+
+      <p class="bil-note">Réalisé = OF terminés ({{ uniteLabel }}, date de fin dans l'année/mois) · Plan = PDP {{ bilan.an }} · Projection = rythme réalisé rapporté à l'année entière. Par atelier, chaque produit compte dans les ateliers de sa gamme (Vrac &amp; Conditionnement = tous les produits), donc la somme des ateliers dépasse le global (une boîte traverse plusieurs ateliers).</p>
     </div>
 
     <!-- Sélection de la phase (présentation) : toutes les phases de fabrication -->
@@ -496,6 +539,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { supabase } from '../supabase'
+import MiniChart from '../components/MiniChart.vue'
 
 const chargement = ref(true)
 const erreur = ref('')
@@ -578,10 +622,10 @@ async function chargerDonnees() {
       fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif, vdlt, vdlp, dht, reglage, postes').eq('actif', true)),
       fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, gamme').eq('actif', true)),
       fetchAllPaged(() => supabase.from('planning_panier').select('equipement_id, produits')),
-      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, equipement_id, produits(id, code_pf, designation, gamme, taille_lot, unites_par_boite, poids_unitaire_mg)')),
+      fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, equipement_id, produits(id, code_pf, designation, gamme, taille_lot, unites_par_boite, poids_unitaire_mg, pcsu)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut, equipement_id').eq('actif', true)),
       fetchAllPaged(() => supabase.from('trs_postes').select('equipement_id, produit_id, date, temps_ouverture_min, production_realisee, rebuts, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min').eq('actif', true).gte('date', new Date(Date.now() - 42 * 86400000).toISOString().slice(0, 10))),
-      fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot)'))
+      fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot, pcsu)'))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
@@ -1843,39 +1887,73 @@ const libelleSemaine = computed(() => {
 const PHASES_BILAN = ['Pesée', 'Granulation et Séchage', 'Mélange', 'Compression', 'Remplissage Gélules', 'Pelliculage', 'Livraison Vrac', 'Conditionnement']
 const MOIS_NOMS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
 const fmtQ = (n) => Math.round(n || 0).toLocaleString('fr-FR')
+const MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
+const ABREGE_AT = { 'Pesée': 'Pesée', 'Granulation et Séchage': 'Granul.', 'Mélange': 'Mélange', 'Compression': 'Compr.', 'Remplissage Gélules': 'Gélules', 'Pelliculage': 'Pellic.', 'Livraison Vrac': 'Vrac', 'Conditionnement': 'Condi.' }
+const uniteLabel = computed(() => bilanUnite.value === 'ca' ? 'DA' : (bilanUnite.value === 'lots' ? 'lots' : 'boîtes'))
 const bilan = computed(() => {
-  const an = maintenant.value.getFullYear(), mo = maintenant.value.getMonth(), lots = bilanUnite.value === 'lots'
-  const conv = (boites, taille) => lots ? (taille > 0 ? boites / taille : 0) : boites
+  const now = maintenant.value, an = now.getFullYear(), mo = now.getMonth(), u = bilanUnite.value
+  const conv = (boites, taille, pcsu) => u === 'ca' ? boites * (Number(pcsu) || 0) : (u === 'lots' ? (taille > 0 ? boites / taille : 0) : boites)
   const phases = PHASES_BILAN
   const mk = () => ({ planAn: 0, realAn: 0, planMo: 0, realMo: 0 })
-  const glob = mk(); const at = {}; for (const ph of phases) at[ph] = mk()
+  const glob = mk(); const gmPlan = Array(12).fill(0); const gmReal = Array(12).fill(0)
+  const at = {}; for (const ph of phases) at[ph] = mk()
   const match = (gamme, ph) => (ph === 'Livraison Vrac' || ph === 'Conditionnement') ? true : new Set((Array.isArray(gamme) ? gamme : []).map(g => String(g).toLowerCase().trim())).has(ph.toLowerCase())
   for (const r of planPdp.value) {
     if (Number(r.annee) !== an) continue
     const pr = r.produits; if (!pr) continue
-    const val = conv(Number(r.quantite_planifiee) || 0, Number(pr.taille_lot) || 0)
+    const val = conv(Number(r.quantite_planifiee) || 0, Number(pr.taille_lot) || 0, pr.pcsu)
     if (!val) continue
     const mi = Number(r.mois) - 1
-    glob.planAn += val; if (mi === mo) glob.planMo += val
+    glob.planAn += val; if (mi >= 0 && mi < 12) gmPlan[mi] += val
+    if (mi === mo) glob.planMo += val
     for (const ph of phases) if (match(pr.gamme, ph)) { at[ph].planAn += val; if (mi === mo) at[ph].planMo += val }
   }
   for (const o of ofs.value) {
     const d = o.date_fin_fabrication ? new Date(o.date_fin_fabrication) : null
     if (!d || isNaN(d.getTime()) || d.getFullYear() !== an) continue
-    const pr = o.produits; const val = conv(Number(o.boites_fabriquees) || 0, Number(pr ? pr.taille_lot : 0) || 0)
+    const pr = o.produits; const val = conv(Number(o.boites_fabriquees) || 0, Number(pr ? pr.taille_lot : 0) || 0, pr ? pr.pcsu : 0)
     if (!val) continue
     const mi = d.getMonth()
-    glob.realAn += val; if (mi === mo) glob.realMo += val
+    glob.realAn += val; gmReal[mi] += val; if (mi === mo) glob.realMo += val
     for (const ph of phases) if (match(pr ? pr.gamme : [], ph)) { at[ph].realAn += val; if (mi === mo) at[ph].realMo += val }
   }
+  // Projection fin d'année : rythme réalisé rapporté à l'année entière (jours calendaires écoulés).
+  const startY = new Date(an, 0, 1)
+  const dayOfYear = Math.floor((now - startY) / 86400000) + 1
+  const daysInYear = ((an % 4 === 0 && an % 100 !== 0) || an % 400 === 0) ? 366 : 365
+  const frac = Math.min(1, Math.max(dayOfYear / daysInYear, 1 / daysInYear))
+  const proj = (real) => Math.max(real, frac > 0 ? real / frac : real)
   const pct = (r, p) => p > 0 ? Math.round(r / p * 100) : 0
-  const ateliers = phases.map(ph => ({ nom: ph, planAn: at[ph].planAn, realAn: at[ph].realAn, pctAn: pct(at[ph].realAn, at[ph].planAn), planMo: at[ph].planMo, realMo: at[ph].realMo, pctMo: pct(at[ph].realMo, at[ph].planMo) })).filter(a => a.planAn > 0 || a.realAn > 0)
+  const ateliers = phases.map(ph => {
+    const e = at[ph], pj = proj(e.realAn)
+    return { nom: ph, court: ABREGE_AT[ph] || ph, planAn: e.planAn, realAn: e.realAn, pctAn: pct(e.realAn, e.planAn), projAn: pj, pctProj: pct(pj, e.planAn), planMo: e.planMo, realMo: e.realMo, pctMo: pct(e.realMo, e.planMo) }
+  }).filter(a => a.planAn > 0 || a.realAn > 0)
+  const projAn = proj(glob.realAn), moisEcoules = frac * 12
   return {
-    an, moisNom: MOIS_NOMS[mo],
-    global: { planAn: glob.planAn, realAn: glob.realAn, pctAn: pct(glob.realAn, glob.planAn), planMo: glob.planMo, realMo: glob.realMo, pctMo: pct(glob.realMo, glob.planMo) },
-    ateliers
+    an, mo, moisNom: MOIS_NOMS[mo],
+    global: {
+      planAn: glob.planAn, realAn: glob.realAn, pctAn: pct(glob.realAn, glob.planAn),
+      planMo: glob.planMo, realMo: glob.realMo, pctMo: pct(glob.realMo, glob.planMo),
+      projAn, pctProj: pct(projAn, glob.planAn), reste: Math.max(0, glob.planAn - glob.realAn),
+      rythme: moisEcoules > 0 ? glob.realAn / moisEcoules : 0
+    },
+    gmPlan, gmReal, ateliers
   }
 })
+const chartMois = computed(() => ({
+  labels: MOIS_COURT,
+  series: [
+    { label: 'Plan', color: '#c7d2fe', data: bilan.value.gmPlan.map(x => Math.round(x)) },
+    { label: 'Réalisé', color: '#4338ca', data: bilan.value.gmReal.map(x => Math.round(x)) }
+  ]
+}))
+const chartAteliers = computed(() => ({
+  labels: bilan.value.ateliers.map(a => a.court),
+  series: [
+    { label: 'Plan', color: '#c7d2fe', data: bilan.value.ateliers.map(a => Math.round(a.planAn)) },
+    { label: 'Réalisé', color: '#4338ca', data: bilan.value.ateliers.map(a => Math.round(a.realAn)) }
+  ]
+}))
 
 // ===== Mode BOUCLE (écran atelier) =====
 // Une page « vue d'ensemble » puis une page par phase (découpée si trop d'équipements),
@@ -2484,7 +2562,20 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .bil-mini-f.over { background: #16a34a; }
 .bil-pc-n { font-weight: 700; color: #475569; font-variant-numeric: tabular-nums; }
 .bil-note { font-size: 11px; color: #94a3b8; margin: 10px 0 0; }
-@media (max-width: 760px) { .bil-glob { grid-template-columns: 1fr; } .bil-tbl { font-size: 12px; } .bil-mini { width: 44px; } }
+.bil-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.bil-kpi { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; background: #fff; }
+.bil-kpi-l { font-size: 11px; color: #64748b; font-weight: 600; }
+.bil-kpi-v { font-size: 19px; font-weight: 800; color: #0f172a; margin: 4px 0 2px; }
+.bil-kpi-v .bil-u { font-size: 11px; font-weight: 600; color: #94a3b8; }
+.bil-kpi-s { font-size: 11px; color: #64748b; }
+.bil-kpi-s.pos { color: #166534; font-weight: 700; }
+.bil-kpi-s.warn { color: #92400e; font-weight: 700; }
+.bil-kpi-s.neg { color: #991b1b; font-weight: 700; }
+.bil-chart { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; background: #fff; }
+.bil-chart-t { font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 8px; }
+.bil-proj { color: #4338ca; font-weight: 700; }
+.bil-proj-p { display: block; font-size: 10px; color: #94a3b8; font-weight: 600; }
+@media (max-width: 760px) { .bil-glob { grid-template-columns: 1fr; } .bil-kpis { grid-template-columns: 1fr 1fr; } .bil-tbl { font-size: 12px; } .bil-mini { width: 44px; } }
 .pe-pdf-btn:hover { background: #f8fafc; }
 /* Campagnes + en-tête nuit */
 .g-camp { cursor: pointer; }
