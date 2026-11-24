@@ -404,27 +404,25 @@
         </div>
       </div>
 
-      <!-- Page bilan : Plan vs Réalisé -->
+      <!-- Page bilan : Plan vs Réalisé (une page par unité : Boîtes / Lots / CA) -->
       <div v-else-if="bPageCour.type === 'bilan'" class="pb-bilan">
         <div class="pbb-unite">
           <span class="pbb-u-l">Plan vs Réalisé</span>
           <select class="bil-annee" v-model.number="bilanAnnee" title="Année du bilan"><option v-for="y in bilanAnnees" :key="y" :value="y">{{ y }}</option></select>
-          <span v-if="!bilan.estCourante" class="bil-clos">historique</span>
-          <button type="button" :class="{ on: bilanUnite === 'boites' }" @click="bilanUnite = 'boites'">Boîtes</button>
-          <button type="button" :class="{ on: bilanUnite === 'lots' }" @click="bilanUnite = 'lots'">Lots</button>
-          <button type="button" :class="{ on: bilanUnite === 'ca' }" @click="bilanUnite = 'ca'">CA</button>
+          <span class="pbb-tag" :class="'u-' + bilanBoucle.unite">{{ bilanBoucle.unite === 'ca' ? "Chiffre d'affaires (DA)" : (bilanBoucle.unite === 'lots' ? 'Lots' : 'Boîtes') }}</span>
+          <span v-if="!bilanBoucle.estCourante" class="bil-clos">historique</span>
         </div>
         <div class="pbb-kpis">
-          <div class="pbb-kpi"><div class="pbb-l">Avancement annuel</div><div class="pbb-v">{{ bilan.global.pctAn }} %</div><div class="pbb-s">{{ fmtQ(bilan.global.realAn) }} / {{ fmtQ(bilan.global.planAn) }} {{ uniteLabel }}</div></div>
-          <div class="pbb-kpi"><div class="pbb-l">Avancement {{ bilan.moisNom }}</div><div class="pbb-v">{{ bilan.global.pctMo }} %</div><div class="pbb-s">{{ fmtQ(bilan.global.realMo) }} / {{ fmtQ(bilan.global.planMo) }} {{ uniteLabel }}</div></div>
-          <div class="pbb-kpi"><div class="pbb-l">Projection fin d'année</div><div class="pbb-v">{{ fmtQ(bilan.global.projAn) }}</div><div class="pbb-s" :class="bilan.global.pctProj >= 100 ? 'pos' : (bilan.global.pctProj >= 85 ? 'warn' : 'neg')">atterrissage {{ bilan.global.pctProj }} %</div></div>
-          <div class="pbb-kpi"><div class="pbb-l">Reste à produire</div><div class="pbb-v">{{ fmtQ(bilan.global.reste) }}</div><div class="pbb-s">rythme {{ fmtQ(bilan.global.rythme) }} / mois</div></div>
+          <div class="pbb-kpi"><div class="pbb-l">Avancement annuel</div><div class="pbb-v">{{ bilanBoucle.global.pctAn }} %</div><div class="pbb-s">{{ fmtQ(bilanBoucle.global.realAn) }} / {{ fmtQ(bilanBoucle.global.planAn) }} {{ bilanBoucle.uniteLabel }}</div></div>
+          <div class="pbb-kpi"><div class="pbb-l">Avancement {{ bilanBoucle.moisNom }}</div><div class="pbb-v">{{ bilanBoucle.global.pctMo }} %</div><div class="pbb-s">{{ fmtQ(bilanBoucle.global.realMo) }} / {{ fmtQ(bilanBoucle.global.planMo) }} {{ bilanBoucle.uniteLabel }}</div></div>
+          <div class="pbb-kpi"><div class="pbb-l">Projection fin d'année</div><div class="pbb-v">{{ fmtQ(bilanBoucle.global.projAn) }}</div><div class="pbb-s" :class="bilanBoucle.global.pctProj >= 100 ? 'pos' : (bilanBoucle.global.pctProj >= 85 ? 'warn' : 'neg')">atterrissage {{ bilanBoucle.global.pctProj }} %</div></div>
+          <div class="pbb-kpi"><div class="pbb-l">Reste à produire</div><div class="pbb-v">{{ fmtQ(bilanBoucle.global.reste) }}</div><div class="pbb-s">rythme {{ fmtQ(bilanBoucle.global.rythme) }} / mois</div></div>
         </div>
         <div class="pbb-body">
-          <table class="bil-tbl pbb-tbl" v-if="bilan.ateliers.length">
-            <thead><tr><th>Atelier</th><th class="r">Plan an.</th><th class="r">Réalisé</th><th>Avanc.</th><th class="r">Proj.</th><th class="r">Plan {{ bilan.moisNom }}</th><th class="r">Réal.</th></tr></thead>
+          <table class="bil-tbl pbb-tbl" v-if="bilanBoucle.ateliers.length">
+            <thead><tr><th>Atelier</th><th class="r">Plan an.</th><th class="r">Réalisé</th><th>Avanc.</th><th class="r">Proj.</th><th class="r">Plan {{ bilanBoucle.moisNom }}</th><th class="r">Réal.</th></tr></thead>
             <tbody>
-              <tr v-for="a in bilan.ateliers" :key="a.nom">
+              <tr v-for="a in bilanBoucle.ateliers" :key="a.nom">
                 <td class="bil-at">{{ a.nom }}</td>
                 <td class="r">{{ fmtQ(a.planAn) }}</td>
                 <td class="r">{{ fmtQ(a.realAn) }}</td>
@@ -436,8 +434,8 @@
             </tbody>
           </table>
           <div class="pbb-chart">
-            <div class="pbb-chart-t">Plan vs Réalisé par mois ({{ uniteLabel }})</div>
-            <MiniChart :labels="chartMois.labels" :series="chartMois.series" :format="v => fmtQ(v)" :current-index="bilan.estCourante ? bilan.mo : -1" prefKey="bilan-mois-b" :show-switch="false" show-values />
+            <div class="pbb-chart-t">Plan vs Réalisé par mois ({{ bilanBoucle.uniteLabel }})</div>
+            <MiniChart :labels="chartMoisBoucle.labels" :series="chartMoisBoucle.series" :format="v => fmtQ(v)" :current-index="bilanBoucle.estCourante ? bilanBoucle.mo : -1" prefKey="bilan-mois-b" :show-switch="false" show-values />
           </div>
         </div>
       </div>
@@ -1954,7 +1952,8 @@ const MOIS_NOMS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juill
 const fmtQ = (n) => Math.round(n || 0).toLocaleString('fr-FR')
 const MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
 const ABREGE_AT = { 'Pesée': 'Pesée', 'Granulation et Séchage': 'Granul.', 'Mélange': 'Mélange', 'Compression': 'Compr.', 'Remplissage Gélules': 'Gélules', 'Pelliculage': 'Pellic.', 'Livraison Vrac': 'Vrac', 'Conditionnement': 'Condi.' }
-const uniteLabel = computed(() => bilanUnite.value === 'ca' ? 'DA' : (bilanUnite.value === 'lots' ? 'lots' : 'boîtes'))
+const uniteLabelDe = (u) => u === 'ca' ? 'DA' : (u === 'lots' ? 'lots' : 'boîtes')
+const uniteLabel = computed(() => uniteLabelDe(bilanUnite.value))
 // Réalisé : moteur identique à « Production par atelier » (live + historique importé + journal),
 // en lots / boîtes (nominales) / CA, par phase / année / mois. Aucun filtre (zone/partenaire).
 const prodByCode = computed(() => { const m = {}; for (const p of produits.value) m[p.code_pf] = { taille: Number(p.taille_lot) || 0, pcsu: Number(p.pcsu) || 0 }; return m })
@@ -2010,9 +2009,9 @@ const bilanAnnees = computed(() => {
   for (const h of histLotsP.value) { const d = h.date_fin ? new Date(h.date_fin) : null; if (d && !isNaN(d.getTime())) s.add(d.getFullYear()) }
   return [...s].filter(y => y >= 2020 && y <= new Date().getFullYear() + 1).sort((a, b) => b - a)
 })
-const bilan = computed(() => {
+function computeBilan(u) {
   const now = maintenant.value, cur = now.getFullYear()
-  const an = bilanAnnee.value, mo = now.getMonth(), u = bilanUnite.value
+  const an = bilanAnnee.value, mo = now.getMonth()
   const phases = PHASES_BILAN
   // Réalisé par phase (12 mois) via valeurs() — historique pour les années passées, temps réel sinon.
   const real = {}; for (const ph of phases) real[ph] = bilanValeurs(ph, an, u)
@@ -2043,7 +2042,7 @@ const bilan = computed(() => {
   }).filter(a => a.planAn > 0 || a.realAn > 0)
   const gPlanAn = som(gmPlan), gRealAn = som(gmReal), gProj = proj(gRealAn), moisEcoules = an === cur ? frac * 12 : 12
   return {
-    an, mo, moisNom: MOIS_NOMS[mo], estCourante: an === cur,
+    an, mo, moisNom: MOIS_NOMS[mo], estCourante: an === cur, unite: u, uniteLabel: uniteLabelDe(u),
     global: {
       planAn: gPlanAn, realAn: gRealAn, pctAn: pct(gRealAn, gPlanAn),
       planMo: gmPlan[mo], realMo: gmReal[mo], pctMo: pct(gmReal[mo], gmPlan[mo]),
@@ -2052,21 +2051,15 @@ const bilan = computed(() => {
     },
     gmPlan, gmReal, ateliers
   }
-})
-const chartMois = computed(() => ({
-  labels: MOIS_COURT,
-  series: [
-    { label: 'Plan', color: '#c7d2fe', data: bilan.value.gmPlan.map(x => Math.round(x)) },
-    { label: 'Réalisé', color: '#4338ca', data: bilan.value.gmReal.map(x => Math.round(x)) }
-  ]
-}))
-const chartAteliers = computed(() => ({
-  labels: bilan.value.ateliers.map(a => a.court),
-  series: [
-    { label: 'Plan', color: '#c7d2fe', data: bilan.value.ateliers.map(a => Math.round(a.planAn)) },
-    { label: 'Réalisé', color: '#4338ca', data: bilan.value.ateliers.map(a => Math.round(a.realAn)) }
-  ]
-}))
+}
+const bilan = computed(() => computeBilan(bilanUnite.value))
+// En Boucle, chaque page Bilan fixe son unité (Boîtes / Lots / CA) ; sinon on suit le toggle.
+const bilanBoucle = computed(() => { const p = bPageCour.value; return computeBilan(p && p.type === 'bilan' && p.unite ? p.unite : bilanUnite.value) })
+function chartMoisDe(b) { return { labels: MOIS_COURT, series: [{ label: 'Plan', color: '#c7d2fe', data: b.gmPlan.map(x => Math.round(x)) }, { label: 'Réalisé', color: '#4338ca', data: b.gmReal.map(x => Math.round(x)) }] } }
+function chartAteliersDe(b) { return { labels: b.ateliers.map(a => a.court), series: [{ label: 'Plan', color: '#c7d2fe', data: b.ateliers.map(a => Math.round(a.planAn)) }, { label: 'Réalisé', color: '#4338ca', data: b.ateliers.map(a => Math.round(a.realAn)) }] } }
+const chartMois = computed(() => chartMoisDe(bilan.value))
+const chartAteliers = computed(() => chartAteliersDe(bilan.value))
+const chartMoisBoucle = computed(() => chartMoisDe(bilanBoucle.value))
 
 // ===== Mode BOUCLE (écran atelier) =====
 // Une page « vue d'ensemble » puis une page par phase (découpée si trop d'équipements),
@@ -2094,10 +2087,12 @@ const bPages = computed(() => {
     const rows = parPh[ph], n = Math.max(1, bParPage.value), nbp = Math.ceil(rows.length / n)
     for (let i = 0; i < nbp; i++) pages.push({ type: 'phase', ph, k: ph, titre: (PH_LIB_B[ph] || 'Autres') + (nbp > 1 ? ' (' + (i + 1) + '/' + nbp + ')' : ''), rows: rows.slice(i * n, i * n + n), num: ph })
   }
-  pages.push({ type: 'bilan', titre: 'Bilan Plan vs Réalisé', ph: -1, k: 'bilan' })
+  // Une page Bilan par unité : chaque « point » (Boîtes, Lots, CA) défile séparément.
+  const UNITES_B = [['boites', 'Boîtes'], ['lots', 'Lots'], ['ca', 'CA']]
+  for (const [uk, ul] of UNITES_B) pages.push({ type: 'bilan', unite: uk, ph: -1, k: 'bilan-' + uk, titre: 'Bilan Plan vs Réalisé — ' + ul })
   return pages
 })
-const bPhases = computed(() => { const seen = new Set(), out = []; bPages.value.forEach((p, i) => { const k = p.k; if (!seen.has(k)) { seen.add(k); out.push({ k, idx: i, lib: p.type === 'synthese' ? "Vue d'ensemble" : (p.type === 'bilan' ? '📊 Bilan' : (PH_LIB_B[p.ph] || 'Autres')) }) } }); return out })
+const bPhases = computed(() => { const seen = new Set(), out = []; bPages.value.forEach((p, i) => { const k = p.k; if (!seen.has(k)) { seen.add(k); out.push({ k, idx: i, lib: p.type === 'synthese' ? "Vue d'ensemble" : (p.type === 'bilan' ? ('📊 ' + (p.unite === 'ca' ? 'CA' : (p.unite === 'lots' ? 'Lots' : 'Boîtes'))) : (PH_LIB_B[p.ph] || 'Autres')) }) } }); return out })
 const bPageCour = computed(() => bPages.value[Math.min(bPage.value, bPages.value.length - 1)] || bPages.value[0])
 function bCalcParPage() { const h = window.innerHeight || 900; bParPage.value = Math.max(2, Math.floor((h - 170) / 225)) }
 async function bSuivante(dir = 1) {
@@ -2801,6 +2796,10 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pb-bilan { flex: 1; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
 .pbb-unite { display: flex; align-items: center; gap: 8px; }
 .pbb-u-l { font-size: 15px; font-weight: 800; color: #0f172a; margin-right: 6px; }
+.pbb-tag { font-size: 15px; font-weight: 800; padding: 4px 14px; border-radius: 999px; }
+.pbb-tag.u-boites { background: #e0e7ff; color: #3730a3; }
+.pbb-tag.u-lots { background: #dcfce7; color: #166534; }
+.pbb-tag.u-ca { background: #fef3c7; color: #92400e; }
 .pbb-unite button { border: 1px solid #cbd5e1; background: #fff; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 5px 14px; border-radius: 8px; cursor: pointer; }
 .pbb-unite button.on { background: #4338ca; color: #fff; border-color: #4338ca; }
 .pbb-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
