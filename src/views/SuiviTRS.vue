@@ -20,15 +20,19 @@ const now = new Date()
 const du = ref(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10))
 const au = ref(now.toISOString().slice(0, 10))
 
+// [cle, colonne, libellé, couleur, groupe] — planifié (organisationnel) vs subi (non planifié)
 const MOTIFS = [
-  ['panne', 'arret_panne_min', 'Panne', '#ef4444'],
-  ['format', 'arret_format_min', 'Format', '#f59e0b'],
-  ['nettoyage', 'arret_nettoyage_min', 'Nettoyage', '#0f766e'],
-  ['reglage', 'arret_reglage_min', 'Réglage', '#8b5cf6'],
-  ['maintenance', 'arret_maintenance_min', 'Maintenance', '#6366f1'],
-  ['attente', 'arret_attente_min', 'Attente', '#94a3b8'],
-  ['autre', 'arret_autre_min', 'Autre', '#cbd5e1']
+  ['format', 'arret_format_min', 'Changement de format', '#f59e0b', 'plan'],
+  ['vdlg', 'arret_vdlg_min', 'VDLG', '#6366f1', 'plan'],
+  ['vdlp', 'arret_vdlp_min', 'VDLP', '#818cf8', 'plan'],
+  ['nettoyage', 'arret_nettoyage_min', 'Nettoyage (hors VDL)', '#0f766e', 'plan'],
+  ['maintenance', 'arret_maintenance_min', 'Maintenance préventive', '#0891b2', 'plan'],
+  ['panne', 'arret_panne_min', 'Panne', '#ef4444', 'subi'],
+  ['attente', 'arret_attente_min', 'Attente', '#94a3b8', 'subi'],
+  ['reglage', 'arret_reglage_min', 'Réglage (en cours)', '#8b5cf6', 'subi'],
+  ['autre', 'arret_autre_min', 'Autre', '#cbd5e1', 'subi']
 ]
+const CLES_PLAN = MOTIFS.filter(m => m[4] === 'plan').map(m => m[0])
 
 async function charger() {
   chargement.value = true; msg.value = ''
@@ -142,7 +146,7 @@ const parEquip = computed(() => {
     if (!m[k]) m[k] = {
       id: k, code: s.equipements ? s.equipements.code : '?', nom: s.equipements ? s.equipements.nom : '',
       ouverture: 0, fonct: 0, theo: 0, prodPerf: 0, ecoule: 0, fonctPerf: 0, prodQual: 0, rebutsQual: 0, nbPostes: 0,
-      arrets: { panne: 0, format: 0, nettoyage: 0, reglage: 0, maintenance: 0, attente: 0, autre: 0 }
+      arrets: Object.fromEntries(MOTIFS.map(mo => [mo[0], 0]))
     }
     const e = m[k]
     const to = s.temps_ouverture_min || 0
@@ -165,12 +169,15 @@ const parEquip = computed(() => {
     const dispo = e.ouverture ? e.fonct / e.ouverture : 0
     const perf = e.theo ? Math.min(1, e.prodPerf / e.theo) : (e.fonctPerf ? Math.min(1, e.ecoule / e.fonctPerf) : 0)
     const qualite = e.prodQual ? Math.max(0, (e.prodQual - e.rebutsQual) / e.prodQual) : 1
-    return { ...e, dispo, perf, qualite, trs: dispo * perf * qualite, pctNettoyage: e.ouverture ? e.arrets.nettoyage / e.ouverture : 0 }
+    const arrPlan = CLES_PLAN.reduce((s, c) => s + (e.arrets[c] || 0), 0)
+    const requis = Math.max(0, e.ouverture - arrPlan)
+    const dispoTech = requis ? e.fonct / requis : 0
+    return { ...e, dispo, perf, qualite, trs: dispo * perf * qualite, arrPlan, requis, dispoTech, trsTech: dispoTech * perf * qualite, pctNettoyage: e.ouverture ? e.arrets.nettoyage / e.ouverture : 0 }
   }).sort((a, b) => b.trs - a.trs)
 })
 
 const pertes = computed(() => {
-  const t = { ouverture: 0, fonct: 0, panne: 0, format: 0, nettoyage: 0, reglage: 0, maintenance: 0, attente: 0, autre: 0 }
+  const t = Object.assign({ ouverture: 0, fonct: 0 }, Object.fromEntries(MOTIFS.map(mo => [mo[0], 0])))
   for (const e of parEquip.value) {
     t.ouverture += e.ouverture; t.fonct += e.fonct
     for (const mo of MOTIFS) t[mo[0]] += e.arrets[mo[0]]
@@ -181,9 +188,9 @@ const totalArrets = computed(() => MOTIFS.reduce((s, mo) => s + pertes.value[mo[
 
 // TRS global (pondéré)
 const global = computed(() => {
-  let ouv = 0, sTrs = 0, sDispo = 0, sPerf = 0, sQual = 0
-  for (const e of parEquip.value) { ouv += e.ouverture; sTrs += e.trs * e.ouverture; sDispo += e.dispo * e.ouverture; sPerf += e.perf * e.ouverture; sQual += e.qualite * e.ouverture }
-  return ouv ? { dispo: sDispo / ouv, perf: sPerf / ouv, qualite: sQual / ouv, trs: sTrs / ouv } : { dispo: 0, perf: 0, qualite: 0, trs: 0 }
+  let ouv = 0, sTrs = 0, sDispo = 0, sPerf = 0, sQual = 0, sTrsTech = 0, sDispoTech = 0
+  for (const e of parEquip.value) { ouv += e.ouverture; sTrs += e.trs * e.ouverture; sDispo += e.dispo * e.ouverture; sPerf += e.perf * e.ouverture; sQual += e.qualite * e.ouverture; sTrsTech += e.trsTech * e.ouverture; sDispoTech += e.dispoTech * e.ouverture }
+  return ouv ? { dispo: sDispo / ouv, perf: sPerf / ouv, qualite: sQual / ouv, trs: sTrs / ouv, dispoTech: sDispoTech / ouv, trsTech: sTrsTech / ouv } : { dispo: 0, perf: 0, qualite: 0, trs: 0, dispoTech: 0, trsTech: 0 }
 })
 
 const trsParEquipChart = computed(() => [{ label: 'TRS %', color: '#4338ca', data: parEquip.value.map(e => +(e.trs * 100).toFixed(1)) }])
@@ -209,15 +216,18 @@ const topPerte = computed(() => {
   for (const mo of MOTIFS) { const v = pertes.value[mo[0]]; if (v > 0 && (!best || v > best.min)) best = { label: mo[2], min: v } }
   return best
 })
-// Pertes en Pareto : triées décroissant + % cumulé
-const pertesPareto = computed(() => {
-  const ta = totalArrets.value
-  const rows = MOTIFS.map(mo => ({ cle: mo[0], label: mo[2], color: mo[3], min: pertes.value[mo[0]], pct: ta ? pertes.value[mo[0]] / ta * 100 : 0 }))
+// Pareto séparé planifié / subi (chaque groupe trié décroissant + % cumulé intra-groupe)
+const paretoDe = (groupe) => {
+  const list = MOTIFS.filter(m => m[4] === groupe)
+  const tot = list.reduce((s, mo) => s + (pertes.value[mo[0]] || 0), 0)
+  const rows = list.map(mo => ({ cle: mo[0], label: mo[2], color: mo[3], min: pertes.value[mo[0]] || 0, pct: tot ? (pertes.value[mo[0]] || 0) / tot * 100 : 0 }))
     .filter(r => r.min > 0).sort((a, b) => b.min - a.min)
-  let cum = 0
-  for (const r of rows) { cum += r.pct; r.cum = cum }
-  return rows
-})
+  let cum = 0; for (const r of rows) { cum += r.pct; r.cum = cum }
+  return { rows, total: tot }
+}
+const paretoPlan = computed(() => paretoDe('plan'))
+const paretoSubi = computed(() => paretoDe('subi'))
+const aucunArret = computed(() => totalArrets.value === 0)
 
 // Export PDF (fenêtre d'impression, logo ProdTrack) — reflète les filtres actifs.
 function exporterPDF() {
@@ -235,9 +245,10 @@ function exporterPDF() {
   const ce = ';-webkit-print-color-adjust:exact;print-color-adjust:exact'
   const donut = '<svg viewBox="0 0 42 42" width="104" height="104"><circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f6" stroke-width="3.6"/><circle cx="21" cy="21" r="15.915" fill="none" stroke="' + nivC(g.trs) + '" stroke-width="3.6" stroke-linecap="round" stroke-dasharray="' + p0(g.trs) + ' ' + (100 - p0(g.trs)) + '" stroke-dashoffset="25" style="' + ce + '"/><text x="21" y="20.5" text-anchor="middle" font-size="9" font-weight="800" fill="' + nivC(g.trs) + '">' + p0(g.trs) + '%</text><text x="21" y="27" text-anchor="middle" font-size="3.4" font-weight="700" fill="#94a3b8" letter-spacing="0.15em">TRS</text></svg>'
   const chainRow = (lbl, v) => '<div class="hcr"><span class="hcl">' + lbl + '</span><span class="hct"><span class="hcf" style="width:' + p0(v) + '%;background:' + nivC(v) + ce + '"></span></span><span class="hcv" style="color:' + nivC(v) + '">' + p0(v) + ' %</span></div>'
-  const hero = '<div class="hero"><div>' + donut + '</div><div class="chain">' + chainRow('Disponibilité', g.dispo) + chainRow('Performance', g.perf) + chainRow('Qualité', g.qualite) + '<div class="formula">Disponibilité × Performance × Qualité = <b>TRS</b></div></div></div>'
+  const heroTech = '<div class="herotech">TRS technique<br><b style="color:' + nivC(g.trsTech) + '">' + p0(g.trsTech) + ' %</b><br><small>arrêts planifiés exclus</small></div>'
+  const hero = '<div class="hero"><div style="text-align:center">' + donut + heroTech + '</div><div class="chain">' + chainRow('Disponibilité', g.dispo) + chainRow('Performance', g.perf) + chainRow('Qualité', g.qualite) + '<div class="formula">Disponibilité × Performance × Qualité = <b>TRS global</b></div></div></div>'
   const fl = facteurLimitant.value, tp = topPerte.value
-  const interpret = '<div class="interp">💡 TRS global <b style="color:' + nivC(g.trs) + '">' + p0(g.trs) + ' %</b> — facteur limitant : <b>' + esc(fl.nom) + '</b> (' + p0(fl.val) + ' %)' + (tp ? '. Principal poste d\'arrêt : <b>' + esc(tp.label) + '</b> (' + heures(tp.min) + ').' : '') + '</div>'
+  const interpret = '<div class="interp">💡 TRS global <b style="color:' + nivC(g.trs) + '">' + p0(g.trs) + ' %</b> · TRS technique <b style="color:' + nivC(g.trsTech) + '">' + p0(g.trsTech) + ' %</b> (arrêts planifiés exclus) — facteur limitant : <b>' + esc(fl.nom) + '</b> (' + p0(fl.val) + ' %)' + (tp ? '. Principal poste d\'arrêt : <b>' + esc(tp.label) + '</b> (' + heures(tp.min) + ').' : '') + '</div>'
 
   // TRS par poste (3×8) — mini-anneaux Matin / Après-midi / Nuit
   const posteDonut = (trs, vide) => '<svg viewBox="0 0 42 42" width="62" height="62"><circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f6" stroke-width="4"/>' + (vide ? '' : '<circle cx="21" cy="21" r="15.915" fill="none" stroke="' + nivC(trs) + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + p0(trs) + ' ' + (100 - p0(trs)) + '" stroke-dashoffset="25" style="' + ce + '"/>') + '<text x="21" y="24" text-anchor="middle" font-size="10" font-weight="800" fill="' + (vide ? '#cbd5e1' : nivC(trs)) + '">' + (vide ? '—' : p0(trs) + '%') + '</text></svg>'
@@ -250,12 +261,12 @@ function exporterPDF() {
     return '<div class="bar"><span class="bl">' + esc(e.code) + (e.nom ? ' <i>' + esc(e.nom) + '</i>' : '') + '</span><span class="bt"><span class="bf" style="width:' + (v / maxTrs * 100).toFixed(1) + '%;background:' + nivC(e.trs) + ce + '"></span></span><span class="bv" style="color:' + nivC(e.trs) + '">' + v.toFixed(1) + ' %</span></div>'
   }).join('')
 
-  const eqRows = parEquip.value.map(e => '<tr><td><b>' + esc(e.code) + '</b> ' + esc(e.nom || '') + '</td><td class="r">' + heures(e.ouverture) + '</td><td class="r">' + heures(e.fonct) + '</td><td class="r" style="color:' + nivC(e.dispo) + '">' + pct(e.dispo) + '</td><td class="r" style="color:' + nivC(e.perf) + '">' + pct(e.perf) + '</td><td class="r" style="color:' + nivC(e.qualite) + '">' + pct(e.qualite) + '</td><td class="r"><b style="color:' + nivC(e.trs) + '">' + pct(e.trs) + '</b></td><td class="r">' + heures(e.arrets.nettoyage) + '</td></tr>').join('')
+  const eqRows = parEquip.value.map(e => '<tr><td><b>' + esc(e.code) + '</b> ' + esc(e.nom || '') + '</td><td class="r">' + heures(e.ouverture) + '</td><td class="r">' + heures(e.fonct) + '</td><td class="r" style="color:' + nivC(e.dispo) + '">' + pct(e.dispo) + '</td><td class="r" style="color:' + nivC(e.perf) + '">' + pct(e.perf) + '</td><td class="r" style="color:' + nivC(e.qualite) + '">' + pct(e.qualite) + '</td><td class="r"><b style="color:' + nivC(e.trs) + '">' + pct(e.trs) + '</b></td><td class="r" style="color:' + nivC(e.trsTech) + '">' + pct(e.trsTech) + '</td><td class="r">' + heures(e.arrets.nettoyage) + '</td></tr>').join('')
 
   const ta = totalArrets.value, ouv = pertes.value.ouverture
-  const perteRows = MOTIFS.map(mo => '<tr><td><span class="dot" style="background:' + mo[3] + '"></span>' + esc(mo[2]) + '</td><td class="r">' + heures(pertes.value[mo[0]]) + '</td><td class="r">' + (ta ? ((pertes.value[mo[0]] / ta) * 100).toFixed(1) : 0) + ' %</td><td class="r">' + (ouv ? ((pertes.value[mo[0]] / ouv) * 100).toFixed(1) : 0) + ' %</td></tr>').join('')
-  const maxPerte = Math.max(1, ...MOTIFS.map(mo => pertes.value[mo[0]]))
-  const perteBars = MOTIFS.map(mo => '<div class="bar"><span class="bl">' + esc(mo[2]) + '</span><span class="bt"><span class="bf" style="width:' + (pertes.value[mo[0]] / maxPerte * 100).toFixed(1) + '%;background:' + mo[3] + '"></span></span><span class="bv">' + heures(pertes.value[mo[0]]) + '</span></div>').join('')
+  const paretoP = paretoPlan.value, paretoS = paretoSubi.value
+  const barsGrp = (par) => { const mx = Math.max(1, ...par.rows.map(r => r.min)); return par.rows.map(r => '<div class="bar"><span class="bl">' + esc(r.label) + '</span><span class="bt"><span class="bf" style="width:' + (r.min / mx * 100).toFixed(1) + '%;background:' + r.color + ce + '"></span></span><span class="bv">' + heures(r.min) + ' · ' + r.cum.toFixed(0) + ' %</span></div>').join('') }
+  const rowsGrp = (par) => par.rows.map(r => '<tr><td><span class="dot" style="background:' + r.color + '"></span>' + esc(r.label) + '</td><td class="r">' + heures(r.min) + '</td><td class="r">' + (ta ? (r.min / ta * 100).toFixed(1) : 0) + ' %</td><td class="r">' + (ouv ? (r.min / ouv * 100).toFixed(1) : 0) + ' %</td></tr>').join('')
 
   const moisData = {}
   for (const s of postesFiltres.value) moisData[new Date(s.date).getMonth()] = true
@@ -276,6 +287,9 @@ function exporterPDF() {
     '.bar{display:grid;grid-template-columns:150px 1fr 60px;align-items:center;gap:8px;margin:3px 0}.bl{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bl i{font-weight:400;color:#94a3b8}' +
     '.bt{background:#eef2f6;border-radius:5px;height:14px;overflow:hidden}.bf{display:block;height:100%;background:#4338ca;-webkit-print-color-adjust:exact;print-color-adjust:exact}.bv{font-size:11px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}' +
     '.dot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '.herotech{font-size:9px;font-weight:600;color:#94a3b8;margin-top:3px;line-height:1.3}.herotech b{font-size:12px}.herotech small{font-size:7.5px}' +
+    '.grptag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;margin:12px 0 5px;padding:3px 9px;border-radius:5px;border-left:3px solid;-webkit-print-color-adjust:exact;print-color-adjust:exact}.grptag.plan{color:#4338ca;background:#eef2ff;border-color:#6366f1}.grptag.subi{color:#b45309;background:#fff7ed;border-color:#f59e0b}' +
+    '.grprow td{background:#f1f5f9;font-weight:800;font-size:9px;text-transform:uppercase;color:#475569}' +
     '.foot{margin-top:22px;color:#94a3b8;font-size:10px;border-top:1px solid #eee;padding-top:6px}@media print{body{margin:12mm}}</style></head><body>' + LOGO_HTML +
     '<h1>Suivi TRS</h1>' +
     '<p class="sub">Rendement global des équipements · Disponibilité × Performance × Qualité</p>' +
@@ -283,9 +297,11 @@ function exporterPDF() {
     interpret + hero + posteBlock +
     '<h2>TRS par équipement</h2>' + bars +
     '<h2>Détail par équipement</h2>' +
-    '<table><thead><tr><th>Équipement</th><th class="r">Ouverture</th><th class="r">Fonct.</th><th class="r">Dispo.</th><th class="r">Perf.</th><th class="r">Qualité</th><th class="r">TRS</th><th class="r">Nettoyage</th></tr></thead><tbody>' + eqRows + '</tbody></table>' +
-    '<h2>Détail des pertes de temps (tous équipements)</h2>' + perteBars +
-    '<table style="margin-top:10px"><thead><tr><th>Motif d\'arrêt</th><th class="r">Durée</th><th class="r">% des arrêts</th><th class="r">% ouverture</th></tr></thead><tbody>' + perteRows + '</tbody></table>' +
+    '<table><thead><tr><th>Équipement</th><th class="r">Ouverture</th><th class="r">Fonct.</th><th class="r">Dispo.</th><th class="r">Perf.</th><th class="r">Qualité</th><th class="r">TRS</th><th class="r">TRS tech.</th><th class="r">Nettoyage</th></tr></thead><tbody>' + eqRows + '</tbody></table>' +
+    '<h2>Pertes de temps — planifiés vs subis</h2>' +
+    '<div class="grptag plan">Planifiés (organisationnels) — ' + heures(paretoP.total) + '</div>' + (barsGrp(paretoP) || '<div class="muted">Aucun</div>') +
+    '<div class="grptag subi">Subis (non planifiés) — ' + heures(paretoS.total) + '</div>' + (barsGrp(paretoS) || '<div class="muted">Aucun</div>') +
+    '<table style="margin-top:10px"><thead><tr><th>Motif d\'arrêt</th><th class="r">Durée</th><th class="r">% des arrêts</th><th class="r">% ouverture</th></tr></thead><tbody><tr class="grprow"><td colspan="4">Planifiés</td></tr>' + rowsGrp(paretoP) + '<tr class="grprow"><td colspan="4">Subis</td></tr>' + rowsGrp(paretoS) + '</tbody></table>' +
     (moisRows ? '<h2>TRS par mois</h2><table><thead><tr><th>Mois</th><th class="r">TRS</th></tr></thead><tbody>' + moisRows + '</tbody></table>' : '') +
     '<p class="foot">ProdTrack — LDM Groupe · Document généré le ' + esc(new Date().toLocaleDateString('fr-FR')) + '</p>' +
     '</body></html>'
@@ -336,7 +352,7 @@ function exporterPDF() {
         <!-- Interprétation automatique -->
         <div class="interpret" :class="'in-' + niv(global.trs)">
           <span class="int-ic">💡</span>
-          <span class="int-tx">TRS global <b :style="{ color: NIV_COL[niv(global.trs)] }">{{ pctNum(global.trs) }} %</b> — facteur limitant : <b>{{ facteurLimitant.nom }}</b> ({{ pctNum(facteurLimitant.val) }} %)<template v-if="topPerte">. Principal poste d'arrêt : <b>{{ topPerte.label }}</b> ({{ heures(topPerte.min) }}).</template></span>
+          <span class="int-tx">TRS global <b :style="{ color: NIV_COL[niv(global.trs)] }">{{ pctNum(global.trs) }} %</b> · TRS technique <b :style="{ color: NIV_COL[niv(global.trsTech)] }">{{ pctNum(global.trsTech) }} %</b> <span class="int-note">(arrêts planifiés exclus)</span> — facteur limitant : <b>{{ facteurLimitant.nom }}</b> ({{ pctNum(facteurLimitant.val) }} %)<template v-if="topPerte">. Principal poste d'arrêt : <b>{{ topPerte.label }}</b> ({{ heures(topPerte.min) }}).</template></span>
         </div>
 
         <div class="strs-top">
@@ -349,6 +365,7 @@ function exporterPDF() {
                 <text x="21" y="20.5" class="donut-val" :style="{ fill: NIV_COL[niv(global.trs)] }">{{ pctNum(global.trs) }}%</text>
                 <text x="21" y="27" class="donut-sub">TRS</text>
               </svg>
+              <div class="hero-tech">TRS technique<br><b :style="{ color: NIV_COL[niv(global.trsTech)] }">{{ pctNum(global.trsTech) }} %</b></div>
             </div>
             <div class="hero-chain">
               <div class="hc-row" v-for="f in [['Disponibilité', global.dispo], ['Performance', global.perf], ['Qualité', global.qualite]]" :key="f[0]">
@@ -362,16 +379,30 @@ function exporterPDF() {
 
           <!-- Pertes de temps en Pareto -->
           <section class="card">
-            <h3 class="card-title">Pertes de temps — Pareto</h3>
-            <div v-if="!pertesPareto.length" class="muted">Aucun arrêt enregistré sur la période.</div>
-            <div v-else class="pareto">
-              <div v-for="r in pertesPareto" :key="r.cle" class="par-row">
-                <span class="par-nom"><span class="par-dot" :style="{ background: r.color }"></span>{{ r.label }}</span>
-                <span class="par-track"><span class="par-f" :style="{ width: r.pct + '%', background: r.color }"></span></span>
-                <span class="par-min">{{ heures(r.min) }}</span>
-                <span class="par-cum">cumul {{ r.cum.toFixed(0) }} %</span>
+            <h3 class="card-title">Pertes de temps — Pareto <span class="ct-sub">planifiés / subis</span></h3>
+            <div v-if="aucunArret" class="muted">Aucun arrêt enregistré sur la période.</div>
+            <template v-else>
+              <div class="par-grp"><span class="par-grp-tag plan">Planifiés (organisationnels)</span><span class="par-grp-tot">{{ heures(paretoPlan.total) }}</span></div>
+              <div class="pareto">
+                <div v-for="r in paretoPlan.rows" :key="r.cle" class="par-row">
+                  <span class="par-nom"><span class="par-dot" :style="{ background: r.color }"></span>{{ r.label }}</span>
+                  <span class="par-track"><span class="par-f" :style="{ width: r.pct + '%', background: r.color }"></span></span>
+                  <span class="par-min">{{ heures(r.min) }}</span>
+                  <span class="par-cum">cumul {{ r.cum.toFixed(0) }} %</span>
+                </div>
+                <div v-if="!paretoPlan.rows.length" class="muted sm">Aucun arrêt planifié.</div>
               </div>
-            </div>
+              <div class="par-grp"><span class="par-grp-tag subi">Subis (non planifiés)</span><span class="par-grp-tot">{{ heures(paretoSubi.total) }}</span></div>
+              <div class="pareto">
+                <div v-for="r in paretoSubi.rows" :key="r.cle" class="par-row">
+                  <span class="par-nom"><span class="par-dot" :style="{ background: r.color }"></span>{{ r.label }}</span>
+                  <span class="par-track"><span class="par-f" :style="{ width: r.pct + '%', background: r.color }"></span></span>
+                  <span class="par-min">{{ heures(r.min) }}</span>
+                  <span class="par-cum">cumul {{ r.cum.toFixed(0) }} %</span>
+                </div>
+                <div v-if="!paretoSubi.rows.length" class="muted sm">Aucun arrêt subi.</div>
+              </div>
+            </template>
           </section>
         </div>
 
@@ -419,7 +450,7 @@ function exporterPDF() {
           <h3 class="card-title">Détail par équipement</h3>
           <div class="table-scroll">
             <table class="mini">
-              <thead><tr><th>Équipement</th><th class="right">Ouverture</th><th class="right">Fonct.</th><th class="right">Dispo.</th><th class="right">Perf.</th><th class="right">Qualité</th><th class="right">TRS</th><th class="right">Nettoyage</th></tr></thead>
+              <thead><tr><th>Équipement</th><th class="right">Ouverture</th><th class="right">Fonct.</th><th class="right">Dispo.</th><th class="right">Perf.</th><th class="right">Qualité</th><th class="right">TRS</th><th class="right">TRS tech.</th><th class="right">Nettoyage</th></tr></thead>
               <tbody>
                 <tr v-for="e in parEquip" :key="e.id">
                   <td class="strong">{{ e.code }} <span class="nom">{{ e.nom }}</span></td>
@@ -429,6 +460,7 @@ function exporterPDF() {
                   <td class="right niv-cell" :style="{ color: NIV_COL[niv(e.perf)] }">{{ pctNum(e.perf) }} %</td>
                   <td class="right niv-cell" :style="{ color: NIV_COL[niv(e.qualite)] }">{{ pctNum(e.qualite) }} %</td>
                   <td class="right trs-cell" :style="{ color: NIV_COL[niv(e.trs)] }">{{ pctNum(e.trs) }} %</td>
+                  <td class="right niv-cell" :style="{ color: NIV_COL[niv(e.trsTech)] }">{{ pctNum(e.trsTech) }} %</td>
                   <td class="right nettoyage-cell">{{ heures(e.arrets.nettoyage) }} <span class="pcm">({{ pct(e.pctNettoyage) }})</span></td>
                 </tr>
               </tbody>
@@ -523,7 +555,17 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .poste-vide-tx { font-size: 12px; color: #94a3b8; margin-top: 3px; }
 @media (max-width: 860px) { .poste-grid { grid-template-columns: 1fr; } }
 .hero { display: flex; align-items: center; gap: 22px; }
-.hero-gauge { flex: 0 0 auto; }
+.hero-gauge { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; }
+.hero-tech { margin-top: 2px; font-size: 11px; font-weight: 600; color: #94a3b8; text-align: center; line-height: 1.3; }
+.hero-tech b { font-size: 15px; }
+.int-note { color: #94a3b8; font-weight: 400; font-size: 12px; }
+.par-grp { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 7px; }
+.par-grp:first-child { margin-top: 2px; }
+.par-grp-tag { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; padding: 3px 9px; border-radius: 6px; border-left: 3px solid; }
+.par-grp-tag.plan { color: #4338ca; background: #eef2ff; border-color: #6366f1; }
+.par-grp-tag.subi { color: #b45309; background: #fff7ed; border-color: #f59e0b; }
+.par-grp-tot { font-size: 12.5px; font-weight: 800; color: #475569; font-variant-numeric: tabular-nums; }
+.muted.sm { font-size: 12px; padding: 2px 0; }
 .donut { width: 150px; height: 150px; }
 .donut-bg { fill: none; stroke: #eef2f6; stroke-width: 3.6; }
 .donut-seg { fill: none; stroke-width: 3.6; stroke-linecap: round; transition: stroke-dasharray .5s ease; }
