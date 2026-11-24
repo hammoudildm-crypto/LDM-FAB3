@@ -486,7 +486,9 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .interpret.in-ok { border-left-color: #16a34a; } .interpret.in-mid { border-left-color: #d97706; } .interpret.in-ko { border-left-color: #dc2626; }
 .int-ic { font-size: 16px; line-height: 1.3; }
 .strs-top { display: grid; grid-template-columns: 1fr 1.2fr; gap: 14px; margin-bottom: 16px; align-items: stretch; }
-.strs-mid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; align-items: start; }
+.strs-mid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; align-items: stretch; }
+.strs-mid > .card { display: flex; flex-direction: column; }
+.strs-mid .eqrank { flex: 1; justify-content: center; }
 .strs-mid .card { margin-bottom: 0; }
 .strs-mid .eqbar { grid-template-columns: 140px 1fr 48px; gap: 8px; }
 .strs-mid .eqbar-code { font-size: 12px; }
