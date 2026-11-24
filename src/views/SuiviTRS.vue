@@ -494,7 +494,7 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .strs-top { display: grid; grid-template-columns: 1fr 1.2fr; gap: 14px; margin-bottom: 16px; align-items: stretch; }
 .strs-mid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; align-items: stretch; }
 .strs-mid > .card { display: flex; flex-direction: column; }
-.strs-mid .poste-grid { flex: 1; align-content: center; }
+.strs-mid .poste-grid { flex: 1; grid-template-rows: repeat(3, 1fr); }
 .strs-mid .card { margin-bottom: 0; }
 .ct-sub { font-size: 12px; font-weight: 600; color: #94a3b8; }
 .poste-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
