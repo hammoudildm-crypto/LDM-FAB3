@@ -536,9 +536,16 @@
             <!-- Analyse TRS + répartition des arrêts (semaine affichée) -->
             <div v-if="trsCarte[r.eq.id]" class="pb-trs">
               <div class="pb-trs-kpis">
-                <span class="pb-trs-main" :class="'tt-' + trsClass(trsCarte[r.eq.id].trs)">TRS {{ pctB(trsCarte[r.eq.id].trs) }}</span>
-                <span class="pb-trs-dpq">D {{ pctB(trsCarte[r.eq.id].dispo) }} · P {{ pctB(trsCarte[r.eq.id].perf) }} · Q {{ pctB(trsCarte[r.eq.id].qualite) }}</span>
-                <span class="pb-trs-np">{{ trsCarte[r.eq.id].nbPostes }} poste{{ trsCarte[r.eq.id].nbPostes > 1 ? 's' : '' }}</span>
+                <svg class="pb-ring" viewBox="0 0 42 42">
+                  <circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f6" stroke-width="4.2" />
+                  <circle cx="21" cy="21" r="15.915" fill="none" :stroke="TRS_COL[trsClass(trsCarte[r.eq.id].trs)]" stroke-width="4.2" stroke-linecap="round" :stroke-dasharray="Math.round(trsCarte[r.eq.id].trs * 100) + ' ' + (100 - Math.round(trsCarte[r.eq.id].trs * 100))" stroke-dashoffset="25" />
+                  <text x="21" y="24.5" text-anchor="middle" font-size="12" font-weight="800" :fill="TRS_COL[trsClass(trsCarte[r.eq.id].trs)]">{{ Math.round(trsCarte[r.eq.id].trs * 100) }}</text>
+                </svg>
+                <div class="pb-trs-meta">
+                  <span class="pb-trs-ttl">TRS</span>
+                  <span class="pb-trs-dpq"><b :style="{ color: TRS_COL[trsClass(trsCarte[r.eq.id].dispo)] }">D {{ pctB(trsCarte[r.eq.id].dispo) }}</b> · <b :style="{ color: TRS_COL[trsClass(trsCarte[r.eq.id].perf)] }">P {{ pctB(trsCarte[r.eq.id].perf) }}</b> · <b :style="{ color: TRS_COL[trsClass(trsCarte[r.eq.id].qualite)] }">Q {{ pctB(trsCarte[r.eq.id].qualite) }}</b></span>
+                  <span class="pb-trs-np">{{ trsCarte[r.eq.id].nbPostes }} poste{{ trsCarte[r.eq.id].nbPostes > 1 ? 's' : '' }}</span>
+                </div>
               </div>
               <template v-if="trsCarte[r.eq.id].totalArret">
                 <div class="pb-arr-bar">
@@ -2315,7 +2322,8 @@ function cadenceTRS(eq, pr) {
   return { value: c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0, mode: c ? (c.mode || 'debit') : 'debit' }
 }
 const pctB = (x) => Math.round((x || 0) * 100) + ' %'
-function trsClass(x) { return x >= 0.75 ? 'ok' : (x >= 0.6 ? 'mid' : 'ko') }
+const TRS_COL = { ok: '#16a34a', mid: '#d97706', ko: '#dc2626' }
+function trsClass(x) { return x >= 0.85 ? 'ok' : (x >= 0.65 ? 'mid' : 'ko') }   // seuils OEE 85/65
 function fmtMin(min) { return min >= 60 ? (min / 60).toFixed(1).replace('.0', '') + ' h' : Math.round(min) + ' min' }
 const trsCarte = computed(() => {
   const d0 = new Date(semaineBoucle.value.a); d0.setHours(0, 0, 0, 0)
@@ -3022,13 +3030,13 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pb-frise { position: relative; flex: 1; min-height: 72px; margin-left: 12px; background: #fbfcfd; border-radius: 6px; }
 /* Analyse TRS + répartition des arrêts dans la carte équipement (mode Boucle) */
 .pb-trs { margin-left: 12px; padding-top: 7px; border-top: 1px dashed #e2e8f0; }
-.pb-trs-kpis { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.pb-trs-main { font-size: 15px; font-weight: 800; padding: 1px 8px; border-radius: 6px; }
-.pb-trs-main.tt-ok { background: #dcfce7; color: #166534; }
-.pb-trs-main.tt-mid { background: #fef9c3; color: #854d0e; }
-.pb-trs-main.tt-ko { background: #fee2e2; color: #991b1b; }
-.pb-trs-dpq { font-size: 11.5px; color: #475569; font-weight: 600; }
-.pb-trs-np { font-size: 10.5px; color: #94a3b8; margin-left: auto; }
+.pb-trs-kpis { display: flex; align-items: center; gap: 12px; }
+.pb-ring { width: 48px; height: 48px; flex: none; }
+.pb-trs-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.pb-trs-ttl { font-size: 10px; font-weight: 700; color: #94a3b8; letter-spacing: .12em; }
+.pb-trs-dpq { font-size: 12px; color: #475569; font-weight: 600; }
+.pb-trs-dpq b { font-weight: 800; }
+.pb-trs-np { font-size: 10.5px; color: #94a3b8; }
 .pb-arr-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 6px; background: #f1f5f9; }
 .pb-arr-seg { height: 100%; }
 .pb-arr-leg { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 5px; }

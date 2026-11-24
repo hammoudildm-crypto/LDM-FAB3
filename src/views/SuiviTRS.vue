@@ -197,16 +197,23 @@ function exporterPDF() {
   const equipTxt = equipFiltre.value ? (equipFiltreCode.value + (eqSel && eqSel.nom ? ' — ' + eqSel.nom : '')) : 'Tous'
   const prodTxt = produitFiltre.value ? produitFiltreLabel.value : 'Tous'
 
-  const kpis = [['TRS global', pct(g.trs), true], ['Disponibilité', pct(g.dispo), false], ['Performance', pct(g.perf), false], ['Qualité', pct(g.qualite), false]]
-    .map(k => '<div class="kpi' + (k[2] ? ' big' : '') + '"><div class="kv2">' + k[1] + '</div><div class="kl">' + k[0] + '</div></div>').join('')
+  // Anneau TRS + chaîne D×P×Q (couleurs par niveau OEE), comme l'écran
+  const nivC = (x) => NIV_COL[niv(x)]
+  const p0 = (x) => Math.round((x || 0) * 100)
+  const ce = ';-webkit-print-color-adjust:exact;print-color-adjust:exact'
+  const donut = '<svg viewBox="0 0 42 42" width="104" height="104"><circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f6" stroke-width="3.6"/><circle cx="21" cy="21" r="15.915" fill="none" stroke="' + nivC(g.trs) + '" stroke-width="3.6" stroke-linecap="round" stroke-dasharray="' + p0(g.trs) + ' ' + (100 - p0(g.trs)) + '" stroke-dashoffset="25" style="' + ce + '"/><text x="21" y="20.5" text-anchor="middle" font-size="9" font-weight="800" fill="' + nivC(g.trs) + '">' + p0(g.trs) + '%</text><text x="21" y="27" text-anchor="middle" font-size="3.4" font-weight="700" fill="#94a3b8" letter-spacing="0.15em">TRS</text></svg>'
+  const chainRow = (lbl, v) => '<div class="hcr"><span class="hcl">' + lbl + '</span><span class="hct"><span class="hcf" style="width:' + p0(v) + '%;background:' + nivC(v) + ce + '"></span></span><span class="hcv" style="color:' + nivC(v) + '">' + p0(v) + ' %</span></div>'
+  const hero = '<div class="hero"><div>' + donut + '</div><div class="chain">' + chainRow('Disponibilité', g.dispo) + chainRow('Performance', g.perf) + chainRow('Qualité', g.qualite) + '<div class="formula">Disponibilité × Performance × Qualité = <b>TRS</b></div></div></div>'
+  const fl = facteurLimitant.value, tp = topPerte.value
+  const interpret = '<div class="interp">💡 TRS global <b style="color:' + nivC(g.trs) + '">' + p0(g.trs) + ' %</b> — facteur limitant : <b>' + esc(fl.nom) + '</b> (' + p0(fl.val) + ' %)' + (tp ? '. Principal poste d\'arrêt : <b>' + esc(tp.label) + '</b> (' + heures(tp.min) + ').' : '') + '</div>'
 
   const maxTrs = Math.max(1, ...parEquip.value.map(e => e.trs * 100))
   const bars = parEquip.value.map(e => {
     const v = e.trs * 100
-    return '<div class="bar"><span class="bl">' + esc(e.code) + (e.nom ? ' <i>' + esc(e.nom) + '</i>' : '') + '</span><span class="bt"><span class="bf" style="width:' + (v / maxTrs * 100).toFixed(1) + '%"></span></span><span class="bv">' + v.toFixed(1) + ' %</span></div>'
+    return '<div class="bar"><span class="bl">' + esc(e.code) + (e.nom ? ' <i>' + esc(e.nom) + '</i>' : '') + '</span><span class="bt"><span class="bf" style="width:' + (v / maxTrs * 100).toFixed(1) + '%;background:' + nivC(e.trs) + ce + '"></span></span><span class="bv" style="color:' + nivC(e.trs) + '">' + v.toFixed(1) + ' %</span></div>'
   }).join('')
 
-  const eqRows = parEquip.value.map(e => '<tr><td><b>' + esc(e.code) + '</b> ' + esc(e.nom || '') + '</td><td class="r">' + heures(e.ouverture) + '</td><td class="r">' + heures(e.fonct) + '</td><td class="r">' + pct(e.dispo) + '</td><td class="r">' + pct(e.perf) + '</td><td class="r">' + pct(e.qualite) + '</td><td class="r"><b>' + pct(e.trs) + '</b></td><td class="r">' + heures(e.arrets.nettoyage) + '</td></tr>').join('')
+  const eqRows = parEquip.value.map(e => '<tr><td><b>' + esc(e.code) + '</b> ' + esc(e.nom || '') + '</td><td class="r">' + heures(e.ouverture) + '</td><td class="r">' + heures(e.fonct) + '</td><td class="r" style="color:' + nivC(e.dispo) + '">' + pct(e.dispo) + '</td><td class="r" style="color:' + nivC(e.perf) + '">' + pct(e.perf) + '</td><td class="r" style="color:' + nivC(e.qualite) + '">' + pct(e.qualite) + '</td><td class="r"><b style="color:' + nivC(e.trs) + '">' + pct(e.trs) + '</b></td><td class="r">' + heures(e.arrets.nettoyage) + '</td></tr>').join('')
 
   const ta = totalArrets.value, ouv = pertes.value.ouverture
   const perteRows = MOTIFS.map(mo => '<tr><td><span class="dot" style="background:' + mo[3] + '"></span>' + esc(mo[2]) + '</td><td class="r">' + heures(pertes.value[mo[0]]) + '</td><td class="r">' + (ta ? ((pertes.value[mo[0]] / ta) * 100).toFixed(1) : 0) + ' %</td><td class="r">' + (ouv ? ((pertes.value[mo[0]] / ouv) * 100).toFixed(1) : 0) + ' %</td></tr>').join('')
@@ -221,8 +228,11 @@ function exporterPDF() {
     '<style>*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:24px;font-size:12px}' +
     'h1{font-size:18px;margin:0 0 2px}h2{font-size:13px;color:#4338ca;border-bottom:2px solid #eee;padding-bottom:4px;margin:18px 0 10px}' +
     '.sub{color:#64748b;margin:0 0 10px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;margin:0 0 12px;font-size:12px}.meta b{color:#475569}' +
-    '.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 0 6px}' +
-    '.kpi{border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px}.kv2{font-size:20px;font-weight:800}.kpi.big .kv2{color:#4338ca}.kl{font-size:11px;color:#64748b;margin-top:3px}' +
+    '.interp{background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #4338ca;border-radius:8px;padding:9px 12px;margin:0 0 12px;font-size:12px}' +
+    '.hero{display:flex;align-items:center;gap:20px;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin:0 0 6px}' +
+    '.chain{flex:1}.hcr{display:grid;grid-template-columns:90px 1fr 46px;align-items:center;gap:8px;margin:4px 0}.hcl{font-size:11px;font-weight:600;color:#475569}' +
+    '.hct{height:9px;background:#eef2f6;border-radius:5px;overflow:hidden}.hcf{display:block;height:100%;border-radius:5px}.hcv{font-size:12px;font-weight:800;text-align:right}' +
+    '.formula{margin-top:5px;font-size:10px;color:#94a3b8;font-weight:600}.formula b{color:#4338ca}' +
     'table{width:100%;border-collapse:collapse;margin-bottom:6px}th,td{text-align:left;padding:4px 8px;border-bottom:1px solid #eef2f6}' +
     'th{background:#eef2ff;color:#3730a3;font-size:10px;text-transform:uppercase}td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}' +
     '.bar{display:grid;grid-template-columns:150px 1fr 60px;align-items:center;gap:8px;margin:3px 0}.bl{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bl i{font-weight:400;color:#94a3b8}' +
@@ -232,7 +242,7 @@ function exporterPDF() {
     '<h1>Suivi TRS</h1>' +
     '<p class="sub">Rendement global des équipements · Disponibilité × Performance × Qualité</p>' +
     '<div class="meta"><div><b>Période :</b> ' + esc(dFr(du.value)) + ' → ' + esc(dFr(au.value)) + '</div><div><b>Équipement :</b> ' + esc(equipTxt) + '</div><div><b>Produit :</b> ' + esc(prodTxt) + '</div><div><b>Postes analysés :</b> ' + postesFiltres.value.length + '</div></div>' +
-    '<div class="kpis">' + kpis + '</div>' +
+    interpret + hero +
     '<h2>TRS par équipement</h2>' + bars +
     '<h2>Détail par équipement</h2>' +
     '<table><thead><tr><th>Équipement</th><th class="r">Ouverture</th><th class="r">Fonct.</th><th class="r">Dispo.</th><th class="r">Perf.</th><th class="r">Qualité</th><th class="r">TRS</th><th class="r">Nettoyage</th></tr></thead><tbody>' + eqRows + '</tbody></table>' +
