@@ -6,12 +6,19 @@
         <h1 class="sm-title">SMED — Changement de série</h1>
         <p class="sm-sub">Temps de changement (format + réglage) par équipement et par produit, pour les réduire. Issu des arrêts TRS.</p>
       </div>
-      <select v-model.number="annee" class="sm-year">
+      <select v-if="smedMode === 'analyse'" v-model.number="annee" class="sm-year">
         <option v-for="y in anneesDispo" :key="y" :value="y">{{ y }}</option>
       </select>
     </div>
 
+    <div class="sm-tabs">
+      <button :class="{ on: smedMode === 'analyse' }" @click="smedMode = 'analyse'">Analyse (depuis TRS)</button>
+      <button :class="{ on: smedMode === 'chrono' }" @click="smedMode = 'chrono'">Chronométrage SMED</button>
+    </div>
+
     <p v-if="erreur" class="sm-alert">{{ erreur }}</p>
+
+    <template v-if="smedMode === 'analyse'">
     <p v-if="!parEquip.length && !chargement" class="sm-empty">Aucun temps de format/réglage saisi en {{ annee }}.</p>
 
     <div class="sm-kpis">
@@ -102,18 +109,148 @@
     </section>
 
     <p class="sm-foot">Un « changement » = une saisie poste/jour avec un temps de format ou de réglage &gt; 0. Objectif SMED : convertir les opérations internes (machine arrêtée) en externes (machine en marche) pour réduire ces temps.</p>
+    </template>
+
+    <template v-else>
+      <div v-if="!colSmed" class="sm-alert">Le chronométrage SMED nécessite la table <code>smed_sessions</code> (migration 013). En attendant, la saisie est désactivée.</div>
+
+      <section v-if="colSmed" class="sm-card">
+        <div class="sm-ch">{{ form.id ? 'Modifier le changement chronométré' : 'Nouveau changement chronométré' }}</div>
+        <div class="sc-grid">
+          <label>Équipement<select v-model="form.equipement_id"><option value="">— Choisir —</option><option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option></select></label>
+          <label>Date<input type="date" v-model="form.date" /></label>
+          <label>Produit avant<input type="text" v-model="form.produit_avant" placeholder="Code / nom" /></label>
+          <label>Produit après<input type="text" v-model="form.produit_apres" placeholder="Code / nom" /></label>
+          <label>Temps cible (min)<input type="number" min="0" v-model.number="form.temps_cible_min" /></label>
+        </div>
+
+        <div class="sc-ops">
+          <div class="sc-ops-head"><span>Opérations du changement</span><button v-if="peutEditer" class="sc-add" @click="addOp">+ Ajouter une opération</button></div>
+          <div v-if="!form.operations.length" class="sm-none">Liste les étapes du changement, en précisant si chacune est <b>interne</b> (machine arrêtée) ou <b>externe</b> (préparée machine en marche).</div>
+          <div v-for="(op, i) in form.operations" :key="i" class="sc-op" :class="op.type">
+            <span class="sc-op-badge">{{ i + 1 }}</span>
+            <input class="sc-op-nom" type="text" v-model="op.nom" placeholder="Opération (démontage, nettoyage, réglage, approvisionnement…)" />
+            <select v-model="op.type"><option value="interne">Interne (arrêt)</option><option value="externe">Externe (masqué)</option></select>
+            <input class="sc-op-min" type="number" min="0" v-model.number="op.duree" /><span class="sc-u">min</span>
+            <button v-if="peutEditer" class="sc-del" @click="rmOp(i)" title="Supprimer">×</button>
+          </div>
+        </div>
+
+        <div class="sc-tot">
+          <span class="sc-t interne">Interne (arrêt machine)<b>{{ sumInterne }} min</b></span>
+          <span class="sc-t externe">Externe (masqué)<b>{{ sumExterne }} min</b></span>
+          <span class="sc-t">Total opérations<b>{{ sumTotal }} min</b></span>
+          <span class="sc-t pct">Part interne<b>{{ pctInterne }} %</b></span>
+          <span class="sc-t cible" :class="{ warn: form.temps_cible_min && sumInterne > form.temps_cible_min, ok: form.temps_cible_min && sumInterne <= form.temps_cible_min }">vs cible {{ form.temps_cible_min || '—' }} min<b v-if="form.temps_cible_min">{{ sumInterne > form.temps_cible_min ? '▲ +' + (sumInterne - form.temps_cible_min) : '✓' }}</b></span>
+        </div>
+
+        <label class="sc-com">Commentaire<input type="text" v-model="form.commentaire" placeholder="Optionnel" /></label>
+
+        <div v-if="internesTriees.length" class="sc-plan">
+          <div class="sc-plan-ttl">💡 Plan d'action SMED — opérations internes à externaliser / réduire (du plus long au plus court)</div>
+          <ol class="sc-plan-list"><li v-for="(op, i) in internesTriees" :key="i"><b>{{ op.duree }} min</b> — {{ op.nom || 'opération ' + (i + 1) }}</li></ol>
+          <p class="sc-plan-note">Le temps d'arrêt réel de la machine = la somme des internes ({{ sumInterne }} min). Convertis en externe ce qui peut être préparé machine en marche, puis réduis le reste.</p>
+        </div>
+
+        <div v-if="peutEditer" class="sc-actions">
+          <button class="sc-save" @click="saveSession">{{ form.id ? 'Enregistrer les modifications' : 'Enregistrer le changement' }}</button>
+          <button v-if="form.id" class="sc-cancel" @click="resetForm">Annuler</button>
+        </div>
+      </section>
+
+      <section v-if="colSmed" class="sm-card">
+        <div class="sm-ch">Changements chronométrés</div>
+        <div v-if="!sessionsCalc.length" class="sm-none">Aucun changement chronométré pour l'instant.</div>
+        <div v-else class="sm-scroll">
+          <table class="sm-tbl">
+            <thead><tr><th>Date</th><th>Équipement</th><th>Produit</th><th class="r">Interne</th><th class="r">Externe</th><th class="r">% interne</th><th class="r">Cible</th><th class="r"></th></tr></thead>
+            <tbody>
+              <tr v-for="s in sessionsCalc" :key="s.id">
+                <td class="nowrap">{{ s.date }}</td>
+                <td>{{ s.eqLabel }}</td>
+                <td class="sc-prod">{{ s.produit_avant || '?' }} → {{ s.produit_apres || '?' }}</td>
+                <td class="r"><b :class="clsMoy(s.interne)">{{ s.interne }} min</b></td>
+                <td class="r">{{ s.externe }} min</td>
+                <td class="r">{{ s.pctInterne }} %</td>
+                <td class="r nowrap" :class="{ 'sc-over': s.temps_cible_min && s.interne > s.temps_cible_min }">{{ s.temps_cible_min ? s.temps_cible_min + ' min' : '—' }}<span v-if="s.temps_cible_min && s.interne > s.temps_cible_min"> ▲</span></td>
+                <td class="r nowrap"><button class="sc-mini" @click="editSession(s)" title="Modifier">✎</button><button v-if="peutEditer" class="sc-mini del" @click="delSession(s)" title="Supprimer">🗑</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, inject } from 'vue'
 import { supabase } from '../supabase'
 
+const peutEditer = inject('peutEditer', ref(false))
 const postes = ref([])
 const chargement = ref(true)
 const erreur = ref('')
 const annee = ref(new Date().getFullYear())
 const num = (v) => Number(v) || 0
+
+// ===== Module chronométrage SMED (opérations interne / externe) =====
+const smedMode = ref('analyse')          // 'analyse' (depuis TRS) | 'chrono' (détaillé)
+const equipements = ref([])
+const sessions = ref([])
+const colSmed = ref(false)               // vrai une fois la migration 013 exécutée
+const AUJ = new Date().toISOString().slice(0, 10)
+const form = reactive({ id: null, equipement_id: '', date: AUJ, produit_avant: '', produit_apres: '', temps_cible_min: 20, operations: [], commentaire: '' })
+function addOp() { form.operations.push({ nom: '', type: 'interne', duree: 0 }) }
+function rmOp(i) { form.operations.splice(i, 1) }
+function resetForm() { Object.assign(form, { id: null, date: AUJ, produit_avant: '', produit_apres: '', temps_cible_min: 20, operations: [], commentaire: '' }) }
+const sumInterne = computed(() => form.operations.filter(o => o.type === 'interne').reduce((s, o) => s + (Number(o.duree) || 0), 0))
+const sumExterne = computed(() => form.operations.filter(o => o.type === 'externe').reduce((s, o) => s + (Number(o.duree) || 0), 0))
+const sumTotal = computed(() => sumInterne.value + sumExterne.value)
+const pctInterne = computed(() => sumTotal.value ? Math.round(sumInterne.value / sumTotal.value * 100) : 0)
+// opérations internes triées (candidates à externaliser / réduire — les plus longues d'abord)
+const internesTriees = computed(() => form.operations.filter(o => o.type === 'interne' && (Number(o.duree) || 0) > 0).slice().sort((a, b) => (Number(b.duree) || 0) - (Number(a.duree) || 0)))
+
+async function chargerEquip() {
+  const re = await supabase.from('equipements').select('id, code, nom').eq('actif', true).order('code')
+  if (!re.error) equipements.value = re.data || []
+}
+async function chargerSessions() {
+  const r = await supabase.from('smed_sessions').select('*').eq('actif', true).order('date', { ascending: false }).limit(200)
+  if (!r.error) { colSmed.value = true; sessions.value = r.data || [] } else colSmed.value = false
+}
+onMounted(() => { chargerEquip(); chargerSessions() })
+
+const eqLabelDe = (id) => { const e = equipements.value.find(x => String(x.id) === String(id)); return e ? (e.code + (e.nom ? ' — ' + e.nom : '')) : ('#' + id) }
+const sessionsCalc = computed(() => sessions.value.map(s => {
+  const ops = Array.isArray(s.operations) ? s.operations : []
+  const interne = ops.filter(o => o.type === 'interne').reduce((a, o) => a + (Number(o.duree) || 0), 0)
+  const externe = ops.filter(o => o.type === 'externe').reduce((a, o) => a + (Number(o.duree) || 0), 0)
+  const tot = interne + externe
+  return { ...s, interne, externe, pctInterne: tot ? Math.round(interne / tot * 100) : 0, eqLabel: eqLabelDe(s.equipement_id) }
+}))
+function editSession(s) {
+  Object.assign(form, { id: s.id, equipement_id: s.equipement_id, date: s.date, produit_avant: s.produit_avant || '', produit_apres: s.produit_apres || '', temps_cible_min: s.temps_cible_min || 20, operations: (Array.isArray(s.operations) ? s.operations : []).map(o => ({ nom: o.nom || '', type: o.type === 'externe' ? 'externe' : 'interne', duree: Number(o.duree) || 0 })), commentaire: s.commentaire || '' })
+  try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch (e) { /* ignore */ }
+}
+async function delSession(s) { if (!confirm('Supprimer ce changement chronométré ?')) return; const r = await supabase.from('smed_sessions').update({ actif: false }).eq('id', s.id); if (!r.error) await chargerSessions(); else erreur.value = r.error.message }
+async function saveSession() {
+  erreur.value = ''
+  if (!form.equipement_id) { erreur.value = 'Choisir un équipement.'; return }
+  if (!form.operations.length) { erreur.value = 'Ajoute au moins une opération.'; return }
+  const payload = {
+    equipement_id: String(form.equipement_id), date: form.date,
+    produit_avant: form.produit_avant || null, produit_apres: form.produit_apres || null,
+    temps_cible_min: Number(form.temps_cible_min) || null,
+    operations: form.operations.map(o => ({ nom: o.nom || '', type: o.type === 'externe' ? 'externe' : 'interne', duree: Number(o.duree) || 0 })),
+    commentaire: form.commentaire || null
+  }
+  const r = form.id
+    ? await supabase.from('smed_sessions').update(payload).eq('id', form.id)
+    : await supabase.from('smed_sessions').insert(payload)
+  if (r.error) { erreur.value = r.error.message; return }
+  resetForm(); await chargerSessions()
+}
 
 async function fetchAllPaged(make) {
   const size = 1000; let from = 0, all = []
@@ -221,6 +358,47 @@ function clsMoy(m) { return m >= 120 ? 'm-ko' : m >= 45 ? 'm-mid' : 'm-ok' }
 .sm-code { font-weight: 700; color: #0f172a; }
 .sm-des { color: #64748b; margin-left: 8px; font-size: 12px; }
 .m-ok { color: #047857; } .m-mid { color: #b45309; } .m-ko { color: #b91c1c; }
+/* Onglets + module chronométrage SMED */
+.sm-tabs { display: inline-flex; gap: 3px; background: #eef2ff; border-radius: 10px; padding: 4px; margin: 0 0 16px; }
+.sm-tabs button { border: 0; background: none; font-family: inherit; font-size: 13px; font-weight: 700; color: #64748b; padding: 7px 16px; border-radius: 7px; cursor: pointer; }
+.sm-tabs button.on { background: #fff; color: #4338ca; box-shadow: 0 1px 2px rgba(16,24,40,.1); }
+.sc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding: 14px 16px; }
+.sc-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 600; color: #475569; }
+.sc-grid input, .sc-grid select { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1b2733; }
+.sc-ops { padding: 0 16px 6px; }
+.sc-ops-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 8px; }
+.sc-add { border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca; font-weight: 700; font-size: 12.5px; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.sc-op { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid #e2e8f0; border-radius: 9px; margin-bottom: 7px; border-left: 4px solid #cbd5e1; }
+.sc-op.interne { border-left-color: #dc2626; background: #fff8f8; }
+.sc-op.externe { border-left-color: #16a34a; background: #f6fef9; }
+.sc-op-badge { flex: none; width: 20px; height: 20px; border-radius: 50%; background: #e2e8f0; color: #475569; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.sc-op-nom { flex: 1; min-width: 0; font-size: 13px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 7px; }
+.sc-op select { font-size: 12.5px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; }
+.sc-op-min { width: 64px; font-size: 13px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 7px; text-align: right; }
+.sc-u { font-size: 11px; color: #94a3b8; }
+.sc-del { border: 0; background: #fee2e2; color: #b91c1c; width: 24px; height: 24px; border-radius: 6px; cursor: pointer; font-size: 14px; line-height: 1; flex: none; }
+.sc-tot { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px; border-top: 1px solid #eef2f6; }
+.sc-t { display: flex; flex-direction: column; gap: 1px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 12px; font-size: 11px; font-weight: 600; color: #64748b; }
+.sc-t b { font-size: 15px; color: #1b2733; }
+.sc-t.interne { background: #fff1f2; border-color: #fecaca; } .sc-t.interne b { color: #dc2626; }
+.sc-t.externe { background: #ecfdf5; border-color: #a7f3d0; } .sc-t.externe b { color: #047857; }
+.sc-t.pct b { color: #4338ca; }
+.sc-t.cible.warn { background: #fff7ed; border-color: #fed7aa; } .sc-t.cible.warn b { color: #b45309; }
+.sc-t.cible.ok { background: #ecfdf5; border-color: #a7f3d0; } .sc-t.cible.ok b { color: #047857; }
+.sc-com { display: flex; flex-direction: column; gap: 5px; padding: 6px 16px 12px; font-size: 12px; font-weight: 600; color: #475569; }
+.sc-com input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
+.sc-plan { margin: 0 16px 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 10px 13px; }
+.sc-plan-ttl { font-size: 12.5px; font-weight: 800; color: #92400e; margin-bottom: 6px; }
+.sc-plan-list { margin: 0 0 6px; padding-left: 20px; font-size: 13px; color: #1b2733; }
+.sc-plan-list li { margin: 2px 0; } .sc-plan-list b { color: #b45309; }
+.sc-plan-note { margin: 0; font-size: 11.5px; color: #92400e; }
+.sc-actions { display: flex; gap: 10px; padding: 0 16px 16px; }
+.sc-save { background: #4338ca; color: #fff; border: 0; border-radius: 9px; padding: 10px 18px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.sc-cancel { background: #fff; color: #475569; border: 1px solid #cbd5e1; border-radius: 9px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.sc-prod { font-size: 12px; color: #475569; }
+.sc-over { color: #b91c1c; font-weight: 700; }
+.sc-mini { border: 0; background: #f1f5f9; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 13px; margin-left: 4px; }
+.sc-mini.del:hover { background: #fee2e2; }
 .sm-none { text-align: center; color: #94a3b8; padding: 16px; }
 .sm-foot { margin-top: 6px; color: #94a3b8; font-size: 12px; }
 .sm-two { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; margin-bottom: 16px; }
