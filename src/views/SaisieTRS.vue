@@ -343,10 +343,6 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 
 <template>
   <div class="trs-page">
-    <div class="trs-brand">
-      <span class="trs-brand-mark"><svg viewBox="0 0 24 24" width="20" height="20" fill="none"><path d="M4 16 L10 11 L15 14 L20 6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="16" r="1.7" fill="#fff"/><circle cx="10" cy="11" r="1.7" fill="#fff"/><circle cx="15" cy="14" r="1.7" fill="#fff"/><circle cx="20" cy="6" r="1.7" fill="#fff"/></svg></span>
-      <span class="trs-brand-wm">Prod<span class="trs-brand-sub">Track</span></span>
-    </div>
     <PageHeader title="Saisie TRS" tone="indigo"
       subtitle="Temps, arrêts, production et rebuts par équipement, produit et poste (3×8).">
       <a class="dl-btn" :href="urlFicheA4" download target="_blank" rel="noopener" title="Fiche de relevé vierge, format A4 (PDF)">⬇ Fiche A4 (PDF)</a>
@@ -590,11 +586,6 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 
 <style scoped>
 .trs-page { color: #1b2733; }
-.trs-brand { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
-.trs-brand-mark { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(140deg, #2dd4bf, #14b8a6); box-shadow: 0 2px 6px rgba(20,184,166,.3); flex-shrink: 0; }
-.trs-brand-wm { font-size: 20px; font-weight: 800; letter-spacing: .02em; color: #0f172a; }
-.trs-brand-sub { color: #14b8a6; }
-html:is([data-theme="sombre"], [data-theme="minuit"]) .trs-brand-wm { color: #e2e8f0; }
 .dl-btn { height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; border-radius: 8px; font-size: 12.5px; font-weight: 700; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
 .dl-btn:hover { background: #4338ca; border-color: #4338ca; color: #fff; }
 html:is([data-theme="sombre"], [data-theme="minuit"]) .dl-btn { background: #1e293b; color: #a5b4fc; border-color: #334155; }
