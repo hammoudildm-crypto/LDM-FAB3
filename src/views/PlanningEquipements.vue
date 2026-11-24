@@ -381,7 +381,7 @@
           <button @click="bSuivante(-1)" title="Page précédente (←)">◀</button>
           <button @click="bPause = !bPause" :title="bPause ? 'Reprendre (espace)' : 'Pause (espace)'">{{ bPause ? '▶' : '❚❚' }}</button>
           <button @click="bSuivante(1)" title="Page suivante (→)">▶</button>
-          <select v-model.number="bDuree" title="Durée d'affichage par page"><option :value="10">10 s</option><option :value="20">20 s</option><option :value="30">30 s</option><option :value="60">60 s</option></select>
+          <select v-model.number="bDuree" title="Durée d'affichage par page (mémorisée par profil)"><option :value="10">10 s</option><option :value="15">15 s</option><option :value="20">20 s</option><option :value="30">30 s</option><option :value="40">40 s</option><option :value="60">60 s</option></select>
           <button class="pb-x" @click="arreterBoucle" title="Quitter (Échap)">✕</button>
         </div>
       </div>
@@ -476,6 +476,30 @@
                 <div class="pbf-prio-t"><span v-if="t.expire" class="pbf-tag ko">✗ {{ t.expire }}</span><span v-if="t.manquant" class="pbf-tag miss">! {{ t.manquant }}</span><span v-if="t.bientot" class="pbf-tag mid">⚠ {{ t.bientot }}</span><span class="pbf-prio-x" :class="'t-' + foTauxCls(t.taux)">{{ Math.round(t.taux) }} %</span></div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page Top risques (profil Direction) -->
+      <div v-else-if="bPageCour.type === 'risques'" class="pb-risq">
+        <div class="pbr-col">
+          <div class="pbr-col-t">🏭 Ateliers en retard de plan <span class="pbr-sub">(atterrissage &lt; 100 % — {{ bilanRisque.an }}, boîtes)</span></div>
+          <div v-if="!risquePlan.length" class="pbf-vide">✓ Tous les ateliers sont sur la trajectoire du plan.</div>
+          <div v-for="a in risquePlan" :key="a.nom" class="pbr-row">
+            <span class="pbr-n">{{ a.nom }}</span>
+            <span class="pbr-d">{{ fmtQ(a.realAn) }} / {{ fmtQ(a.planAn) }}</span>
+            <span class="pbr-bar"><span class="pbr-bar-f" :class="'t-' + (a.pctProj >= 85 ? 'mid' : 'ko')" :style="{ width: Math.min(100, a.pctProj) + '%' }"></span></span>
+            <span class="pbr-x" :class="'t-' + (a.pctProj >= 85 ? 'mid' : 'ko')">{{ a.pctProj }} %</span>
+          </div>
+        </div>
+        <div class="pbr-col">
+          <div class="pbr-col-t">🎓 Ateliers en retard de formation <span class="pbr-sub">(taux le plus bas / écarts)</span></div>
+          <div v-if="!risqueForm.length" class="pbf-vide">✓ Formation à jour sur tous les ateliers.</div>
+          <div v-for="g in risqueForm" :key="g.nom" class="pbr-row">
+            <span class="pbr-n">{{ g.nom }}</span>
+            <span class="pbr-tags"><span v-if="g.expire" class="pbf-tag ko">✗ {{ g.expire }}</span><span v-if="g.manquant" class="pbf-tag miss">! {{ g.manquant }}</span><span v-if="g.bientot" class="pbf-tag mid">⚠ {{ g.bientot }}</span></span>
+            <span class="pbr-bar"><span class="pbr-bar-f" :class="'t-' + foTauxCls(g.taux)" :style="{ width: (g.taux || 0) + '%' }"></span></span>
+            <span class="pbr-x" :class="'t-' + foTauxCls(g.taux)">{{ g.taux != null ? Math.round(g.taux) + ' %' : '—' }}</span>
           </div>
         </div>
       </div>
@@ -2137,6 +2161,17 @@ const formationKpi = computed(() => computeFormationKpis({
 const foBoard = computed(() => (bPageCour.value && bPageCour.value.dim === 'fonction') ? formationKpi.value.parFonction : formationKpi.value.parAtelier)
 const foTauxCls = (t) => t == null ? '' : (t >= 90 ? 'ok' : (t >= 60 ? 'mid' : 'ko'))
 
+// ===== Top risques (profil Direction) =====
+const bilanRisque = computed(() => computeBilan('boites'))   // base boîtes pour le risque « plan »
+// Ateliers en retard de plan : atterrissage projeté sous 100 % du plan (les plus bas d'abord)
+const risquePlan = computed(() => bilanRisque.value.ateliers
+  .filter(a => a.planAn > 0 && a.pctProj < 100)
+  .sort((x, y) => x.pctProj - y.pctProj).slice(0, 8))
+// Ateliers en retard de formation : taux le plus bas / présence d'écarts
+const risqueForm = computed(() => formationKpi.value.parAtelier
+  .filter(g => (g.taux != null && g.taux < 100) || g.expire || g.manquant)
+  .sort((x, y) => (x.taux == null ? 0 : x.taux) - (y.taux == null ? 0 : y.taux)).slice(0, 8))
+
 // ===== Mode BOUCLE (écran atelier) =====
 // Une page « vue d'ensemble » puis une page par phase (découpée si trop d'équipements),
 // défilement automatique, données rechargées à chaque tour.
@@ -2144,11 +2179,14 @@ const boucle = ref(false)
 const bPage = ref(0)
 const bPause = ref(false)
 const bEcoule = ref(0)
-const bDuree = ref((() => { try { return Number(localStorage.getItem('pe_boucle_s')) || 20 } catch (e) { return 20 } })())
-watch(bDuree, (v) => { try { localStorage.setItem('pe_boucle_s', String(v)) } catch (e) {} })
-// Profil d'affichage de la Boucle : operateurs (atelier, action) / direction (pilotage) / tout
+// Profil d'affichage de la Boucle : operateurs (atelier, action) / direction (pilotage) / tout.
+// Vitesse de défilement mémorisée PAR profil (défauts : 15 s / 40 s / 20 s).
+const BDUREE_DEF = { operateurs: 15, direction: 40, tout: 20 }
+const dureeFor = (prof) => { try { const v = Number(localStorage.getItem('pe_boucle_s_' + prof)); return v > 0 ? v : (BDUREE_DEF[prof] || 20) } catch (e) { return BDUREE_DEF[prof] || 20 } }
 const boucleProfil = ref((() => { try { return localStorage.getItem('pe_boucle_profil') || 'operateurs' } catch (e) { return 'operateurs' } })())
-watch(boucleProfil, (v) => { try { localStorage.setItem('pe_boucle_profil', v) } catch (e) {} bPage.value = 0; bEcoule.value = 0 })
+const bDuree = ref(dureeFor(boucleProfil.value))
+watch(bDuree, (v) => { try { localStorage.setItem('pe_boucle_s_' + boucleProfil.value, String(v)) } catch (e) {} })
+watch(boucleProfil, (v) => { try { localStorage.setItem('pe_boucle_profil', v) } catch (e) {} bPage.value = 0; bEcoule.value = 0; bDuree.value = dureeFor(v) })
 const bParPage = ref(4)
 const bMaj = ref(null)
 let bTimer = null
@@ -2179,9 +2217,10 @@ const bPages = computed(() => {
   // Formation : par atelier pour tous les profils ; par fonction pour direction/tout
   pages.push({ type: 'formation', dim: 'atelier', ph: -1, k: 'form-atelier', titre: 'Suivi formation — par atelier' })
   if (showFonction) pages.push({ type: 'formation', dim: 'fonction', ph: -1, k: 'form-fonction', titre: 'Suivi formation — par fonction' })
+  if (showBilan) pages.push({ type: 'risques', ph: -1, k: 'risques', titre: 'Top risques' })   // direction + tout
   return pages
 })
-const bPhases = computed(() => { const seen = new Set(), out = []; bPages.value.forEach((p, i) => { const k = p.k; if (!seen.has(k)) { seen.add(k); out.push({ k, idx: i, lib: p.type === 'synthese' ? "Vue d'ensemble" : (p.type === 'bilan' ? ('📊 ' + (p.unite === 'ca' ? 'CA' : (p.unite === 'lots' ? 'Lots' : 'Boîtes'))) : (p.type === 'formation' ? ('👷 ' + (p.dim === 'fonction' ? 'Fonctions' : 'Ateliers')) : (PH_LIB_B[p.ph] || 'Autres'))) }) } }); return out })
+const bPhases = computed(() => { const seen = new Set(), out = []; bPages.value.forEach((p, i) => { const k = p.k; if (!seen.has(k)) { seen.add(k); out.push({ k, idx: i, lib: p.type === 'synthese' ? "Vue d'ensemble" : (p.type === 'bilan' ? ('📊 ' + (p.unite === 'ca' ? 'CA' : (p.unite === 'lots' ? 'Lots' : 'Boîtes'))) : (p.type === 'formation' ? ('👷 ' + (p.dim === 'fonction' ? 'Fonctions' : 'Ateliers')) : (p.type === 'risques' ? '⚠ Risques' : (PH_LIB_B[p.ph] || 'Autres')))) }) } }); return out })
 const bPageCour = computed(() => bPages.value[Math.min(bPage.value, bPages.value.length - 1)] || bPages.value[0])
 function bCalcParPage() { const h = window.innerHeight || 900; bParPage.value = Math.max(2, Math.floor((h - 170) / 225)) }
 async function bSuivante(dir = 1) {
@@ -2885,6 +2924,21 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pb-occ-c { font-size: 12px; color: #15803d; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .t-ch-over { color: #dc2626; } .t-ch-high { color: #c2410c; }
 .pb-cartes { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+/* Page Top risques en mode Boucle */
+.pb-risq { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; min-height: 0; overflow: hidden; }
+.pbr-col { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
+.pbr-col-t { font-size: 15px; font-weight: 800; color: #0f172a; margin-bottom: 12px; }
+.pbr-sub { font-size: 11px; font-weight: 600; color: #94a3b8; }
+.pbr-row { display: grid; grid-template-columns: 1.4fr auto 90px 54px; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+.pbr-n { font-size: 14px; font-weight: 700; color: #1b2733; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pbr-d { font-size: 12px; color: #64748b; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pbr-tags { display: flex; gap: 4px; }
+.pbr-bar { height: 9px; background: #eef2f6; border-radius: 5px; overflow: hidden; }
+.pbr-bar-f { display: block; height: 100%; }
+.pbr-bar-f.t-ok { background: #16a34a; } .pbr-bar-f.t-mid { background: #d97706; } .pbr-bar-f.t-ko { background: #dc2626; }
+.pbr-x { font-size: 14px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.pbr-x.t-ok { color: #16a34a; } .pbr-x.t-mid { color: #d97706; } .pbr-x.t-ko { color: #dc2626; }
+@media (max-width: 1000px) { .pb-risq { grid-template-columns: 1fr; } }
 /* Page Formation (suivi KPI) en mode Boucle */
 .pb-form { flex: 1; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
 .pbf-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
