@@ -380,7 +380,7 @@
       </div>
       <div class="pb-prog"><div :style="{ width: Math.min(100, bEcoule / bDuree * 100) + '%' }" :class="{ pause: bPause }"></div></div>
       <div class="pb-tabs">
-        <button v-for="ph in bPhases" :key="ph.k" :class="{ on: (bPageCour.type === 'synthese' ? 0 : bPageCour.ph) === ph.k }" @click="bAller(ph.idx)">{{ ph.lib }}</button>
+        <button v-for="ph in bPhases" :key="ph.k" :class="{ on: bPageCour.k === ph.k }" @click="bAller(ph.idx)">{{ ph.lib }}</button>
       </div>
 
       <!-- Vue d'ensemble -->
@@ -398,6 +398,42 @@
             <span class="pb-occ-bar"><span class="so-prod" :style="{ width: Math.min(100, x.c.prodPct || 0) + '%' }"></span><span class="so-nett" :style="{ width: Math.max(0, Math.min(100 - (x.c.prodPct || 0), x.c.nettPct || 0)) + '%' }"></span></span>
             <b class="pb-occ-pct" :class="'t-' + chargeClass(x.c.occ || 0)">{{ x.c.occ || 0 }} %</b>
             <span class="pb-occ-c"><template v-if="x.cours.length">▶ {{ x.cours[0].lot }} · {{ x.cours[0].code }}</template><template v-else-if="!(x.c.busyH > 0)">libre</template></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page bilan : Plan vs Réalisé -->
+      <div v-else-if="bPageCour.type === 'bilan'" class="pb-bilan">
+        <div class="pbb-unite">
+          <span class="pbb-u-l">Plan vs Réalisé {{ bilan.an }}</span>
+          <button type="button" :class="{ on: bilanUnite === 'boites' }" @click="bilanUnite = 'boites'">Boîtes</button>
+          <button type="button" :class="{ on: bilanUnite === 'lots' }" @click="bilanUnite = 'lots'">Lots</button>
+          <button type="button" :class="{ on: bilanUnite === 'ca' }" @click="bilanUnite = 'ca'">CA</button>
+        </div>
+        <div class="pbb-kpis">
+          <div class="pbb-kpi"><div class="pbb-l">Avancement annuel</div><div class="pbb-v">{{ bilan.global.pctAn }} %</div><div class="pbb-s">{{ fmtQ(bilan.global.realAn) }} / {{ fmtQ(bilan.global.planAn) }} {{ uniteLabel }}</div></div>
+          <div class="pbb-kpi"><div class="pbb-l">Avancement {{ bilan.moisNom }}</div><div class="pbb-v">{{ bilan.global.pctMo }} %</div><div class="pbb-s">{{ fmtQ(bilan.global.realMo) }} / {{ fmtQ(bilan.global.planMo) }} {{ uniteLabel }}</div></div>
+          <div class="pbb-kpi"><div class="pbb-l">Projection fin d'année</div><div class="pbb-v">{{ fmtQ(bilan.global.projAn) }}</div><div class="pbb-s" :class="bilan.global.pctProj >= 100 ? 'pos' : (bilan.global.pctProj >= 85 ? 'warn' : 'neg')">atterrissage {{ bilan.global.pctProj }} %</div></div>
+          <div class="pbb-kpi"><div class="pbb-l">Reste à produire</div><div class="pbb-v">{{ fmtQ(bilan.global.reste) }}</div><div class="pbb-s">rythme {{ fmtQ(bilan.global.rythme) }} / mois</div></div>
+        </div>
+        <div class="pbb-body">
+          <table class="bil-tbl pbb-tbl" v-if="bilan.ateliers.length">
+            <thead><tr><th>Atelier</th><th class="r">Plan an.</th><th class="r">Réalisé</th><th>Avanc.</th><th class="r">Proj.</th><th class="r">Plan {{ bilan.moisNom }}</th><th class="r">Réal.</th></tr></thead>
+            <tbody>
+              <tr v-for="a in bilan.ateliers" :key="a.nom">
+                <td class="bil-at">{{ a.nom }}</td>
+                <td class="r">{{ fmtQ(a.planAn) }}</td>
+                <td class="r">{{ fmtQ(a.realAn) }}</td>
+                <td class="bil-pc"><span class="bil-mini"><span class="bil-mini-f" :class="{ over: a.pctAn >= 100 }" :style="{ width: Math.min(100, a.pctAn) + '%' }"></span></span><span class="bil-pc-n">{{ a.pctAn }} %</span></td>
+                <td class="r bil-proj">{{ fmtQ(a.projAn) }}</td>
+                <td class="r">{{ fmtQ(a.planMo) }}</td>
+                <td class="r">{{ fmtQ(a.realMo) }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="pbb-chart">
+            <div class="pbb-chart-t">Plan vs Réalisé par mois ({{ uniteLabel }})</div>
+            <MiniChart :labels="chartMois.labels" :series="chartMois.series" :format="v => fmtQ(v)" :current-index="bilan.mo" prefKey="bilan-mois-b" :show-switch="false" />
           </div>
         </div>
       </div>
@@ -597,6 +633,7 @@ const ofs = ref([])
 const suivi = ref([])
 const trsPostes = ref([])   // postes TRS (fenêtre ~6 semaines) pour l'analyse TRS/arrêts du mode Boucle
 const planPdp = ref([])     // plan_production (annee, mois, qté) + gamme/taille produit, pour le bilan plan vs réalisé
+const conds = ref([])       // conditionnement (réalisé de la phase Conditionnement) — même source que « Production par atelier »
 const bilanOuvert = ref(false)
 const bilanUnite = ref((() => { try { return localStorage.getItem('pe_bilan_unite') || 'boites' } catch (e) { return 'boites' } })())
 watch(bilanUnite, (v) => { try { localStorage.setItem('pe_bilan_unite', v) } catch (e) {} })
@@ -616,7 +653,7 @@ async function fetchAllPaged(qb) {
 onMounted(async () => { chargerLocal(); await chargerDonnees(); demarrerBoucleSiUrl() })
 async function chargerDonnees() {
   try {
-    const [rp, rc, re, rpr, rpan, rof, rsu, rtrs, rpdp] = await Promise.all([
+    const [rp, rc, re, rpr, rpan, rof, rsu, rtrs, rpdp, rcond] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produit_id')),
       fetchAllPaged(() => supabase.from('cadences_produit').select('cadence_nominale, unite_cadence, mode, equipement_id, produit_id')),
       fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif, vdlt, vdlp, dht, reglage, postes').eq('actif', true)),
@@ -625,7 +662,8 @@ async function chargerDonnees() {
       fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, boites_fabriquees, date_lancement, date_fin_fabrication, equipement_id, produits(id, code_pf, designation, gamme, taille_lot, unites_par_boite, poids_unitaire_mg, pcsu)')),
       fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut, equipement_id').eq('actif', true)),
       fetchAllPaged(() => supabase.from('trs_postes').select('equipement_id, produit_id, date, temps_ouverture_min, production_realisee, rebuts, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min').eq('actif', true).gte('date', new Date(Date.now() - 42 * 86400000).toISOString().slice(0, 10))),
-      fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot, pcsu)'))
+      fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot, pcsu)')),
+      fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, date_conditionnement, date_fin').eq('actif', true))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
@@ -633,6 +671,7 @@ async function chargerDonnees() {
     if (rsu && !rsu.error) suivi.value = rsu.data
     if (rtrs && !rtrs.error) trsPostes.value = rtrs.data || []
     if (rpdp && !rpdp.error) planPdp.value = rpdp.data || []
+    if (rcond && !rcond.error) conds.value = rcond.data || []
     if (rpan && !rpan.error && rpan.data) for (const row of rpan.data) {
       let lotsArr = [], reg = null, req = null
       const pr = row.produits
@@ -1892,50 +1931,65 @@ const ABREGE_AT = { 'Pesée': 'Pesée', 'Granulation et Séchage': 'Granul.', 'M
 const uniteLabel = computed(() => bilanUnite.value === 'ca' ? 'DA' : (bilanUnite.value === 'lots' ? 'lots' : 'boîtes'))
 const bilan = computed(() => {
   const now = maintenant.value, an = now.getFullYear(), mo = now.getMonth(), u = bilanUnite.value
-  const conv = (boites, taille, pcsu) => u === 'ca' ? boites * (Number(pcsu) || 0) : (u === 'lots' ? (taille > 0 ? boites / taille : 0) : boites)
   const phases = PHASES_BILAN
-  const mk = () => ({ planAn: 0, realAn: 0, planMo: 0, realMo: 0 })
-  const glob = mk(); const gmPlan = Array(12).fill(0); const gmReal = Array(12).fill(0)
-  const at = {}; for (const ph of phases) at[ph] = mk()
+  // ---- RÉALISÉ : même méthode que « Production par atelier » (année en cours) ----
+  // Un lot distinct ayant TERMINÉ une phase ce mois compte pour : 1 (lots),
+  // sa taille de lot en boîtes (boîtes) ou taille × prix de cession (CA) — valeur NOMINALE.
+  // Sources live : Suivi des phases (fab), Conditionnement, et OF (Livraison Vrac = délivrable).
+  const ofVal = {}
+  for (const o of ofs.value) { const p = o.produits || {}; ofVal[o.id] = { taille: Number(p.taille_lot) || 0, pcsu: Number(p.pcsu) || 0 } }
+  const norm = (ph) => /^(granulation|s[ée]chage)$/i.test(String(ph).trim()) ? 'Granulation et Séchage' : ph
+  const real = {}; for (const ph of phases) real[ph] = Array(12).fill(0)
+  const vus = {}
+  const addReal = (ph0, ordreId, d) => {
+    const ph = norm(ph0)
+    if (!d || ordreId == null || !real[ph]) return
+    const dt = new Date(d); if (isNaN(dt.getTime()) || dt.getFullYear() !== an) return
+    const mi = dt.getMonth(), cle = ph + '|' + mi
+    if (!vus[cle]) vus[cle] = new Set()
+    if (vus[cle].has(ordreId)) return
+    vus[cle].add(ordreId)
+    const v = ofVal[ordreId] || { taille: 0, pcsu: 0 }
+    real[ph][mi] += u === 'ca' ? v.taille * v.pcsu : (u === 'lots' ? 1 : v.taille)
+  }
+  for (const sp of suivi.value) if (sp.date_phase) addReal(sp.phase, sp.ordre_id, sp.date_phase)
+  for (const c of conds.value) addReal('Conditionnement', c.ordre_id, c.date_fin || c.date_conditionnement)
+  for (const o of ofs.value) addReal('Livraison Vrac', o.id, o.date_fin_fabrication)
+  const gmReal = real['Livraison Vrac'] || Array(12).fill(0)   // global réalisé = délivrable (Vrac)
+  // ---- PLAN : PDP brut (global) + réparti par gamme (par atelier) ----
+  const conv = (b, taille, pcsu) => u === 'ca' ? b * (Number(pcsu) || 0) : (u === 'lots' ? (taille > 0 ? b / taille : 0) : b)
+  const gmPlan = Array(12).fill(0)
+  const planAt = {}; for (const ph of phases) planAt[ph] = Array(12).fill(0)
   const match = (gamme, ph) => (ph === 'Livraison Vrac' || ph === 'Conditionnement') ? true : new Set((Array.isArray(gamme) ? gamme : []).map(g => String(g).toLowerCase().trim())).has(ph.toLowerCase())
   for (const r of planPdp.value) {
     if (Number(r.annee) !== an) continue
     const pr = r.produits; if (!pr) continue
     const val = conv(Number(r.quantite_planifiee) || 0, Number(pr.taille_lot) || 0, pr.pcsu)
     if (!val) continue
-    const mi = Number(r.mois) - 1
-    glob.planAn += val; if (mi >= 0 && mi < 12) gmPlan[mi] += val
-    if (mi === mo) glob.planMo += val
-    for (const ph of phases) if (match(pr.gamme, ph)) { at[ph].planAn += val; if (mi === mo) at[ph].planMo += val }
+    const mi = Number(r.mois) - 1; if (mi < 0 || mi > 11) continue
+    gmPlan[mi] += val
+    for (const ph of phases) if (match(pr.gamme, ph)) planAt[ph][mi] += val
   }
-  for (const o of ofs.value) {
-    const d = o.date_fin_fabrication ? new Date(o.date_fin_fabrication) : null
-    if (!d || isNaN(d.getTime()) || d.getFullYear() !== an) continue
-    const pr = o.produits; const val = conv(Number(o.boites_fabriquees) || 0, Number(pr ? pr.taille_lot : 0) || 0, pr ? pr.pcsu : 0)
-    if (!val) continue
-    const mi = d.getMonth()
-    glob.realAn += val; gmReal[mi] += val; if (mi === mo) glob.realMo += val
-    for (const ph of phases) if (match(pr ? pr.gamme : [], ph)) { at[ph].realAn += val; if (mi === mo) at[ph].realMo += val }
-  }
-  // Projection fin d'année : rythme réalisé rapporté à l'année entière (jours calendaires écoulés).
+  // ---- Projection fin d'année : rythme réalisé rapporté à l'année (jours écoulés) ----
   const startY = new Date(an, 0, 1)
   const dayOfYear = Math.floor((now - startY) / 86400000) + 1
   const daysInYear = ((an % 4 === 0 && an % 100 !== 0) || an % 400 === 0) ? 366 : 365
   const frac = Math.min(1, Math.max(dayOfYear / daysInYear, 1 / daysInYear))
-  const proj = (real) => Math.max(real, frac > 0 ? real / frac : real)
+  const proj = (r) => Math.max(r, frac > 0 ? r / frac : r)
+  const som = (arr) => arr.reduce((s, x) => s + x, 0)
   const pct = (r, p) => p > 0 ? Math.round(r / p * 100) : 0
   const ateliers = phases.map(ph => {
-    const e = at[ph], pj = proj(e.realAn)
-    return { nom: ph, court: ABREGE_AT[ph] || ph, planAn: e.planAn, realAn: e.realAn, pctAn: pct(e.realAn, e.planAn), projAn: pj, pctProj: pct(pj, e.planAn), planMo: e.planMo, realMo: e.realMo, pctMo: pct(e.realMo, e.planMo) }
+    const planAn = som(planAt[ph]), realAn = som(real[ph]), pj = proj(realAn)
+    return { nom: ph, court: ABREGE_AT[ph] || ph, planAn, realAn, pctAn: pct(realAn, planAn), projAn: pj, pctProj: pct(pj, planAn), planMo: planAt[ph][mo], realMo: real[ph][mo], pctMo: pct(real[ph][mo], planAt[ph][mo]) }
   }).filter(a => a.planAn > 0 || a.realAn > 0)
-  const projAn = proj(glob.realAn), moisEcoules = frac * 12
+  const gPlanAn = som(gmPlan), gRealAn = som(gmReal), gProj = proj(gRealAn), moisEcoules = frac * 12
   return {
     an, mo, moisNom: MOIS_NOMS[mo],
     global: {
-      planAn: glob.planAn, realAn: glob.realAn, pctAn: pct(glob.realAn, glob.planAn),
-      planMo: glob.planMo, realMo: glob.realMo, pctMo: pct(glob.realMo, glob.planMo),
-      projAn, pctProj: pct(projAn, glob.planAn), reste: Math.max(0, glob.planAn - glob.realAn),
-      rythme: moisEcoules > 0 ? glob.realAn / moisEcoules : 0
+      planAn: gPlanAn, realAn: gRealAn, pctAn: pct(gRealAn, gPlanAn),
+      planMo: gmPlan[mo], realMo: gmReal[mo], pctMo: pct(gmReal[mo], gmPlan[mo]),
+      projAn: gProj, pctProj: pct(gProj, gPlanAn), reste: Math.max(0, gPlanAn - gRealAn),
+      rythme: moisEcoules > 0 ? gRealAn / moisEcoules : 0
     },
     gmPlan, gmReal, ateliers
   }
@@ -1974,16 +2028,17 @@ const semaineBoucle = computed(() => {
   return { a, b: new Date(a.getTime() + H7) }
 })
 const bPages = computed(() => {
-  const pages = [{ type: 'synthese', titre: "Vue d'ensemble", ph: 0 }]
+  const pages = [{ type: 'synthese', titre: "Vue d'ensemble", ph: 0, k: 0 }]
   const parPh = {}
   for (const r of planningTous.value) { const ph = phaseOrdre(r.eq.type); (parPh[ph] = parPh[ph] || []).push(r) }
   for (const ph of Object.keys(parPh).map(Number).sort((a, b) => a - b)) {
     const rows = parPh[ph], n = Math.max(1, bParPage.value), nbp = Math.ceil(rows.length / n)
-    for (let i = 0; i < nbp; i++) pages.push({ type: 'phase', ph, titre: (PH_LIB_B[ph] || 'Autres') + (nbp > 1 ? ' (' + (i + 1) + '/' + nbp + ')' : ''), rows: rows.slice(i * n, i * n + n), num: ph })
+    for (let i = 0; i < nbp; i++) pages.push({ type: 'phase', ph, k: ph, titre: (PH_LIB_B[ph] || 'Autres') + (nbp > 1 ? ' (' + (i + 1) + '/' + nbp + ')' : ''), rows: rows.slice(i * n, i * n + n), num: ph })
   }
+  pages.push({ type: 'bilan', titre: 'Bilan Plan vs Réalisé', ph: -1, k: 'bilan' })
   return pages
 })
-const bPhases = computed(() => { const seen = new Set(), out = []; bPages.value.forEach((p, i) => { const k = p.type === 'synthese' ? 0 : p.ph; if (!seen.has(k)) { seen.add(k); out.push({ k, idx: i, lib: p.type === 'synthese' ? "Vue d'ensemble" : (PH_LIB_B[p.ph] || 'Autres') }) } }); return out })
+const bPhases = computed(() => { const seen = new Set(), out = []; bPages.value.forEach((p, i) => { const k = p.k; if (!seen.has(k)) { seen.add(k); out.push({ k, idx: i, lib: p.type === 'synthese' ? "Vue d'ensemble" : (p.type === 'bilan' ? '📊 Bilan' : (PH_LIB_B[p.ph] || 'Autres')) }) } }); return out })
 const bPageCour = computed(() => bPages.value[Math.min(bPage.value, bPages.value.length - 1)] || bPages.value[0])
 function bCalcParPage() { const h = window.innerHeight || 900; bParPage.value = Math.max(2, Math.floor((h - 170) / 225)) }
 async function bSuivante(dir = 1) {
@@ -2680,6 +2735,26 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pb-occ-c { font-size: 12px; color: #15803d; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .t-ch-over { color: #dc2626; } .t-ch-high { color: #c2410c; }
 .pb-cartes { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+/* Page Bilan en mode Boucle */
+.pb-bilan { flex: 1; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.pbb-unite { display: flex; align-items: center; gap: 8px; }
+.pbb-u-l { font-size: 15px; font-weight: 800; color: #0f172a; margin-right: 6px; }
+.pbb-unite button { border: 1px solid #cbd5e1; background: #fff; color: #475569; font: inherit; font-size: 13px; font-weight: 700; padding: 5px 14px; border-radius: 8px; cursor: pointer; }
+.pbb-unite button.on { background: #4338ca; color: #fff; border-color: #4338ca; }
+.pbb-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.pbb-kpi { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 16px; background: #fff; }
+.pbb-l { font-size: 13px; color: #64748b; font-weight: 600; }
+.pbb-v { font-size: 30px; font-weight: 800; color: #0f172a; margin: 4px 0 2px; }
+.pbb-s { font-size: 12px; color: #64748b; }
+.pbb-s.pos { color: #166534; font-weight: 700; }
+.pbb-s.warn { color: #92400e; font-weight: 700; }
+.pbb-s.neg { color: #991b1b; font-weight: 700; }
+.pbb-body { flex: 1; display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; min-height: 0; }
+.pbb-tbl { font-size: 15px; align-self: start; }
+.pbb-tbl th, .pbb-tbl td { padding: 7px 10px; }
+.pbb-chart { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; background: #fff; display: flex; flex-direction: column; }
+.pbb-chart-t { font-size: 14px; font-weight: 700; color: #334155; margin-bottom: 8px; }
+@media (max-width: 1100px) { .pbb-body { grid-template-columns: 1fr; } .pbb-kpis { grid-template-columns: 1fr 1fr; } }
 .pb-jours { position: absolute; top: 0; left: 252px; right: 14px; height: 16px; }
 .pb-jours span { position: absolute; font-size: 12px; font-weight: 700; color: #475569; padding-left: 4px; white-space: nowrap; }
 .pb-carte { display: flex; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; min-height: 150px; overflow: hidden; }
