@@ -440,6 +440,37 @@
         </div>
       </div>
 
+      <!-- Page formation : suivi KPI (par atelier / par fonction) -->
+      <div v-else-if="bPageCour.type === 'formation'" class="pb-form">
+        <div class="pbf-kpis">
+          <div class="pbf-kpi" :class="'k-' + foTauxCls(formationKpi.global.taux)"><div class="pbf-v">{{ formationKpi.global.taux != null ? Math.round(formationKpi.global.taux) + ' %' : '—' }}</div><div class="pbf-l">Taux de formation</div></div>
+          <div class="pbf-kpi"><div class="pbf-v">{{ formationKpi.global.qualifies }} / {{ formationKpi.global.avecReq }}</div><div class="pbf-l">Personnes à jour</div></div>
+          <div class="pbf-kpi k-mid"><div class="pbf-v">{{ formationKpi.global.bientot }}</div><div class="pbf-l">À renouveler</div></div>
+          <div class="pbf-kpi k-ko"><div class="pbf-v">{{ formationKpi.global.expire }}</div><div class="pbf-l">Expirées</div></div>
+          <div class="pbf-kpi k-miss"><div class="pbf-v">{{ formationKpi.global.manquant }}</div><div class="pbf-l">Manquantes</div></div>
+          <div class="pbf-kpi"><div class="pbf-v">{{ formationKpi.global.preuveCov }} %</div><div class="pbf-l">Preuves jointes</div></div>
+        </div>
+        <div class="pbf-body">
+          <div class="pbf-col">
+            <div class="pbf-col-t">Taux par {{ bPageCour.dim === 'fonction' ? 'fonction' : 'atelier' }}</div>
+            <div v-if="!foBoard.length" class="pbf-vide">Aucune exigence de formation définie.</div>
+            <div v-for="g in foBoard" :key="g.nom" class="pbf-grp">
+              <div class="pbf-grp-h"><span class="pbf-grp-n">{{ g.nom }}</span><span class="pbf-grp-p" :class="'t-' + foTauxCls(g.taux)">{{ g.taux != null ? Math.round(g.taux) + ' %' : '—' }}</span></div>
+              <div class="pbf-bar"><span class="pbf-bar-f" :class="'t-' + foTauxCls(g.taux)" :style="{ width: (g.taux || 0) + '%' }"></span></div>
+              <div class="pbf-tags"><span v-if="g.expire" class="pbf-tag ko">✗ {{ g.expire }} expirées</span><span v-if="g.manquant" class="pbf-tag miss">! {{ g.manquant }} manquantes</span><span v-if="g.bientot" class="pbf-tag mid">⚠ {{ g.bientot }} à renouveler</span><span v-if="!g.expire && !g.manquant && !g.bientot" class="pbf-tag ok">✓ à jour</span></div>
+            </div>
+          </div>
+          <div class="pbf-col">
+            <div class="pbf-col-t">À traiter en priorité</div>
+            <div v-if="!formationKpi.priorite.length" class="pbf-vide">✓ Aucun écart : tout le monde est à jour.</div>
+            <div v-for="t in formationKpi.priorite" :key="t.nom + t.fonction" class="pbf-prio">
+              <div class="pbf-prio-i"><span class="pbf-prio-n">{{ t.nom }}</span><span class="pbf-prio-f">{{ t.fonction || '—' }}</span></div>
+              <div class="pbf-prio-t"><span v-if="t.expire" class="pbf-tag ko">✗ {{ t.expire }}</span><span v-if="t.manquant" class="pbf-tag miss">! {{ t.manquant }}</span><span v-if="t.bientot" class="pbf-tag mid">⚠ {{ t.bientot }}</span><span class="pbf-prio-x" :class="'t-' + foTauxCls(t.taux)">{{ Math.round(t.taux) }} %</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Page phase : cartes équipements -->
       <div v-else class="pb-cartes">
         <div v-for="r in bPageCour.rows" :key="r.eq.id" class="pb-carte" :class="{ libre: !(bCartes[r.eq.id] || {}).nbSem && !(enCoursListe[r.eq.id] || []).length }">
@@ -578,6 +609,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { supabase } from '../supabase'
 import MiniChart from '../components/MiniChart.vue'
+import { computeFormationKpis } from '../formationKpis'
 
 const chargement = ref(true)
 const erreur = ref('')
@@ -639,6 +671,8 @@ const conds = ref([])       // conditionnement (réalisé de la phase Conditionn
 const histProd = ref([])    // production_historique (compteurs lots par étape/mois, années passées)
 const histLotsP = ref([])   // historique_lots_phases (+ journal embarqué) : détail lot/phase pour boîtes/CA
 const bilanAnnee = ref(new Date().getFullYear())   // année affichée dans le Bilan (sélecteur)
+// Données formation (pour le suivi KPI formation en mode Boucle)
+const foPers = ref([]), foFormAct = ref([]), foFormAll = ref([]), foEnr = ref([]), foReq = ref([]), foPreuveIds = ref(new Set())
 const bilanOuvert = ref(false)
 const bilanUnite = ref((() => { try { return localStorage.getItem('pe_bilan_unite') || 'boites' } catch (e) { return 'boites' } })())
 watch(bilanUnite, (v) => { try { localStorage.setItem('pe_bilan_unite', v) } catch (e) {} })
@@ -658,7 +692,7 @@ async function fetchAllPaged(qb) {
 onMounted(async () => { chargerLocal(); await chargerDonnees(); demarrerBoucleSiUrl() })
 async function chargerDonnees() {
   try {
-    const [rp, rc, re, rpr, rpan, rof, rsu, rtrs, rpdp, rcond, rhist, rhlots] = await Promise.all([
+    const [rp, rc, re, rpr, rpan, rof, rsu, rtrs, rpdp, rcond, rhist, rhlots, rorg, rfoAct, rfoAll, rfoEnr, rfoReq, rfoPr] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produit_id')),
       fetchAllPaged(() => supabase.from('cadences_produit').select('cadence_nominale, unite_cadence, mode, equipement_id, produit_id')),
       fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif, vdlt, vdlp, dht, reglage, postes').eq('actif', true)),
@@ -670,7 +704,13 @@ async function chargerDonnees() {
       fetchAllPaged(() => supabase.from('plan_production').select('annee, mois, quantite_planifiee, produits(id, gamme, taille_lot, pcsu)')),
       fetchAllPaged(() => supabase.from('conditionnement').select('ordre_id, date_conditionnement, date_fin').eq('actif', true)),
       fetchAllPaged(() => supabase.from('production_historique').select('annee, mois, etape, nb_lots')),
-      fetchAllPaged(() => supabase.from('historique_lots_phases').select('numero_lot, code_pf, designation, phase, date_fin'))
+      fetchAllPaged(() => supabase.from('historique_lots_phases').select('numero_lot, code_pf, designation, phase, date_fin')),
+      fetchAllPaged(() => supabase.from('organigramme').select('id, nom, fonction, atelier_id, date_recrutement').eq('actif', true)),
+      fetchAllPaged(() => supabase.from('formations').select('id, nom, code_sop, validite_mois').eq('actif', true)),
+      fetchAllPaged(() => supabase.from('formations').select('id, nom')),
+      fetchAllPaged(() => supabase.from('formation_enregistrements').select('id, personne_id, formation_id, date_formation, resultat')),
+      fetchAllPaged(() => supabase.from('formation_requise').select('fonction, formation_id')),
+      fetchAllPaged(() => supabase.from('formation_preuves').select('enregistrement_id'))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
@@ -696,6 +736,12 @@ async function chargerDonnees() {
       }
     } catch (e) { /* asset indisponible : on garde l'historique en base */ }
     histLotsP.value = hl
+    if (rorg && !rorg.error) foPers.value = rorg.data || []
+    if (rfoAct && !rfoAct.error) foFormAct.value = rfoAct.data || []
+    if (rfoAll && !rfoAll.error) foFormAll.value = rfoAll.data || []
+    if (rfoEnr && !rfoEnr.error) foEnr.value = rfoEnr.data || []
+    if (rfoReq && !rfoReq.error) foReq.value = rfoReq.data || []
+    if (rfoPr && !rfoPr.error) foPreuveIds.value = new Set((rfoPr.data || []).map(x => x.enregistrement_id))
     if (rpan && !rpan.error && rpan.data) for (const row of rpan.data) {
       let lotsArr = [], reg = null, req = null
       const pr = row.produits
@@ -2061,6 +2107,15 @@ const chartMois = computed(() => chartMoisDe(bilan.value))
 const chartAteliers = computed(() => chartAteliersDe(bilan.value))
 const chartMoisBoucle = computed(() => chartMoisDe(bilanBoucle.value))
 
+// ===== Suivi KPI formation (mode Boucle) =====
+const formationKpi = computed(() => computeFormationKpis({
+  personnes: foPers.value, formations: foFormAct.value, formationsAll: foFormAll.value,
+  enregistrements: foEnr.value, requises: foReq.value, preuveIds: foPreuveIds.value
+}))
+// Ventilation affichée selon la page Boucle (atelier ou fonction)
+const foBoard = computed(() => (bPageCour.value && bPageCour.value.dim === 'fonction') ? formationKpi.value.parFonction : formationKpi.value.parAtelier)
+const foTauxCls = (t) => t == null ? '' : (t >= 90 ? 'ok' : (t >= 60 ? 'mid' : 'ko'))
+
 // ===== Mode BOUCLE (écran atelier) =====
 // Une page « vue d'ensemble » puis une page par phase (découpée si trop d'équipements),
 // défilement automatique, données rechargées à chaque tour.
@@ -2090,9 +2145,11 @@ const bPages = computed(() => {
   // Une page Bilan par unité : chaque « point » (Boîtes, Lots, CA) défile séparément.
   const UNITES_B = [['boites', 'Boîtes'], ['lots', 'Lots'], ['ca', 'CA']]
   for (const [uk, ul] of UNITES_B) pages.push({ type: 'bilan', unite: uk, ph: -1, k: 'bilan-' + uk, titre: 'Bilan Plan vs Réalisé — ' + ul })
+  // Suivi KPI formation : une page par ventilation (atelier, fonction)
+  for (const [dk, dl] of [['atelier', 'atelier'], ['fonction', 'fonction']]) pages.push({ type: 'formation', dim: dk, ph: -1, k: 'form-' + dk, titre: 'Suivi formation — par ' + dl })
   return pages
 })
-const bPhases = computed(() => { const seen = new Set(), out = []; bPages.value.forEach((p, i) => { const k = p.k; if (!seen.has(k)) { seen.add(k); out.push({ k, idx: i, lib: p.type === 'synthese' ? "Vue d'ensemble" : (p.type === 'bilan' ? ('📊 ' + (p.unite === 'ca' ? 'CA' : (p.unite === 'lots' ? 'Lots' : 'Boîtes'))) : (PH_LIB_B[p.ph] || 'Autres')) }) } }); return out })
+const bPhases = computed(() => { const seen = new Set(), out = []; bPages.value.forEach((p, i) => { const k = p.k; if (!seen.has(k)) { seen.add(k); out.push({ k, idx: i, lib: p.type === 'synthese' ? "Vue d'ensemble" : (p.type === 'bilan' ? ('📊 ' + (p.unite === 'ca' ? 'CA' : (p.unite === 'lots' ? 'Lots' : 'Boîtes'))) : (p.type === 'formation' ? ('👷 ' + (p.dim === 'fonction' ? 'Fonctions' : 'Ateliers')) : (PH_LIB_B[p.ph] || 'Autres'))) }) } }); return out })
 const bPageCour = computed(() => bPages.value[Math.min(bPage.value, bPages.value.length - 1)] || bPages.value[0])
 function bCalcParPage() { const h = window.innerHeight || 900; bParPage.value = Math.max(2, Math.floor((h - 170) / 225)) }
 async function bSuivante(dir = 1) {
@@ -2792,6 +2849,44 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pb-occ-c { font-size: 12px; color: #15803d; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .t-ch-over { color: #dc2626; } .t-ch-high { color: #c2410c; }
 .pb-cartes { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+/* Page Formation (suivi KPI) en mode Boucle */
+.pb-form { flex: 1; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.pbf-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.pbf-kpi { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; background: #fff; text-align: center; }
+.pbf-kpi.k-ok { background: #f0fdf4; border-color: #bbf7d0; }
+.pbf-kpi.k-mid { background: #fffbeb; border-color: #fde68a; }
+.pbf-kpi.k-ko { background: #fef2f2; border-color: #fecaca; }
+.pbf-kpi.k-miss { background: #fef2f2; border-color: #fecaca; }
+.pbf-v { font-size: 26px; font-weight: 800; color: #0f172a; }
+.pbf-kpi.k-mid .pbf-v { color: #b45309; }
+.pbf-kpi.k-ko .pbf-v, .pbf-kpi.k-miss .pbf-v { color: #b91c1c; }
+.pbf-kpi.k-ok .pbf-v { color: #15803d; }
+.pbf-l { font-size: 11.5px; color: #64748b; font-weight: 600; margin-top: 2px; }
+.pbf-body { flex: 1; display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; min-height: 0; overflow: hidden; }
+.pbf-col { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; background: #fff; overflow-y: auto; }
+.pbf-col-t { font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 10px; }
+.pbf-grp { margin-bottom: 11px; }
+.pbf-grp-h { display: flex; justify-content: space-between; align-items: baseline; }
+.pbf-grp-n { font-size: 13px; font-weight: 700; color: #1b2733; }
+.pbf-grp-p { font-size: 14px; font-weight: 800; }
+.pbf-grp-p.t-ok { color: #16a34a; } .pbf-grp-p.t-mid { color: #d97706; } .pbf-grp-p.t-ko { color: #dc2626; }
+.pbf-bar { height: 10px; background: #eef2f6; border-radius: 5px; overflow: hidden; margin: 4px 0 5px; }
+.pbf-bar-f { display: block; height: 100%; }
+.pbf-bar-f.t-ok { background: #16a34a; } .pbf-bar-f.t-mid { background: #d97706; } .pbf-bar-f.t-ko { background: #dc2626; }
+.pbf-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.pbf-tag { font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 2px 8px; }
+.pbf-tag.ok { background: #dcfce7; color: #166534; }
+.pbf-tag.mid { background: #fef3c7; color: #92400e; }
+.pbf-tag.ko { background: #fee2e2; color: #991b1b; }
+.pbf-tag.miss { background: #fde68a; color: #854d0e; }
+.pbf-vide { font-size: 12px; color: #94a3b8; }
+.pbf-prio { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f1f5f9; }
+.pbf-prio-n { font-size: 13px; font-weight: 700; color: #1b2733; }
+.pbf-prio-f { font-size: 11px; color: #64748b; margin-left: 8px; }
+.pbf-prio-t { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.pbf-prio-x { font-size: 13px; font-weight: 800; margin-left: 4px; }
+.pbf-prio-x.t-ok { color: #16a34a; } .pbf-prio-x.t-mid { color: #d97706; } .pbf-prio-x.t-ko { color: #dc2626; }
+@media (max-width: 1100px) { .pbf-kpis { grid-template-columns: repeat(3, 1fr); } .pbf-body { grid-template-columns: 1fr; } }
 /* Page Bilan en mode Boucle */
 .pb-bilan { flex: 1; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
 .pbb-unite { display: flex; align-items: center; gap: 8px; }
