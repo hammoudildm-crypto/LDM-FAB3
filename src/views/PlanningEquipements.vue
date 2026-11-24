@@ -342,6 +342,24 @@
               </div>
               <div class="pb-now" :style="{ left: bPct(maintenant) + '%' }"></div>
             </div>
+            <!-- Analyse TRS + répartition des arrêts (semaine affichée) -->
+            <div v-if="trsCarte[r.eq.id]" class="pb-trs">
+              <div class="pb-trs-kpis">
+                <span class="pb-trs-main" :class="'tt-' + trsClass(trsCarte[r.eq.id].trs)">TRS {{ pctB(trsCarte[r.eq.id].trs) }}</span>
+                <span class="pb-trs-dpq">D {{ pctB(trsCarte[r.eq.id].dispo) }} · P {{ pctB(trsCarte[r.eq.id].perf) }} · Q {{ pctB(trsCarte[r.eq.id].qualite) }}</span>
+                <span class="pb-trs-np">{{ trsCarte[r.eq.id].nbPostes }} poste{{ trsCarte[r.eq.id].nbPostes > 1 ? 's' : '' }}</span>
+              </div>
+              <template v-if="trsCarte[r.eq.id].totalArret">
+                <div class="pb-arr-bar">
+                  <span v-for="sg in trsCarte[r.eq.id].segs" :key="sg.cle" class="pb-arr-seg" :style="{ width: sg.pct + '%', background: sg.color }" :title="sg.label + ' · ' + fmtMin(sg.min) + ' (' + Math.round(sg.pct) + ' %)'"></span>
+                </div>
+                <div class="pb-arr-leg">
+                  <span v-for="sg in trsCarte[r.eq.id].segs" :key="sg.cle" class="pb-arr-lg"><i :style="{ background: sg.color }"></i>{{ sg.label }} {{ fmtMin(sg.min) }}</span>
+                </div>
+              </template>
+              <div v-else class="pb-arr-none">Aucun arrêt saisi cette semaine</div>
+            </div>
+            <div v-else class="pb-trs pb-trs-vide">TRS — pas de saisie cette semaine</div>
           </div>
         </div>
       </div>
@@ -487,6 +505,7 @@ const equipements = ref([])
 const produits = ref([])
 const ofs = ref([])
 const suivi = ref([])
+const trsPostes = ref([])   // postes TRS (fenêtre ~6 semaines) pour l'analyse TRS/arrêts du mode Boucle
 
 async function fetchAllPaged(qb) {
   const size = 1000; let from = 0; const out = []
@@ -503,19 +522,21 @@ async function fetchAllPaged(qb) {
 onMounted(async () => { chargerLocal(); await chargerDonnees(); demarrerBoucleSiUrl() })
 async function chargerDonnees() {
   try {
-    const [rp, rc, re, rpr, rpan, rof, rsu] = await Promise.all([
+    const [rp, rc, re, rpr, rpan, rof, rsu, rtrs] = await Promise.all([
       fetchAllPaged(() => supabase.from('plan_production').select('annee, quantite_planifiee, produit_id')),
       fetchAllPaged(() => supabase.from('cadences_produit').select('cadence_nominale, unite_cadence, mode, equipement_id, produit_id')),
       fetchAllPaged(() => supabase.from('equipements').select('id, code, nom, type, atelier_id, actif, vdlt, vdlp, dht, reglage, postes').eq('actif', true)),
       fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot, unites_par_boite, poids_unitaire_mg, gamme').eq('actif', true)),
       fetchAllPaged(() => supabase.from('planning_panier').select('equipement_id, produits')),
       fetchAllPaged(() => supabase.from('ordres_fabrication').select('id, numero_lot, statut, quantite_theorique, date_lancement, date_fin_fabrication, equipement_id, produits(id, code_pf, designation, gamme, taille_lot, unites_par_boite, poids_unitaire_mg)')),
-      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut, equipement_id').eq('actif', true))
+      fetchAllPaged(() => supabase.from('suivi_phases').select('ordre_id, phase, statut, date_phase, date_debut, equipement_id').eq('actif', true)),
+      fetchAllPaged(() => supabase.from('trs_postes').select('equipement_id, produit_id, date, temps_ouverture_min, production_realisee, rebuts, arret_panne_min, arret_format_min, arret_nettoyage_min, arret_reglage_min, arret_maintenance_min, arret_attente_min, arret_autre_min').eq('actif', true).gte('date', new Date(Date.now() - 42 * 86400000).toISOString().slice(0, 10)))
     ])
     if (rp.error || rc.error || re.error || rpr.error) { erreur.value = (rp.error || rc.error || re.error || rpr.error).message; return }
     planRaw.value = rp.data; cadences.value = rc.data; equipements.value = re.data; produits.value = rpr.data
     if (rof && !rof.error) ofs.value = rof.data
     if (rsu && !rsu.error) suivi.value = rsu.data
+    if (rtrs && !rtrs.error) trsPostes.value = rtrs.data || []
     if (rpan && !rpan.error && rpan.data) for (const row of rpan.data) {
       let lotsArr = [], reg = null, req = null
       const pr = row.produits
@@ -1793,7 +1814,7 @@ const bPages = computed(() => {
 })
 const bPhases = computed(() => { const seen = new Set(), out = []; bPages.value.forEach((p, i) => { const k = p.type === 'synthese' ? 0 : p.ph; if (!seen.has(k)) { seen.add(k); out.push({ k, idx: i, lib: p.type === 'synthese' ? "Vue d'ensemble" : (PH_LIB_B[p.ph] || 'Autres') }) } }); return out })
 const bPageCour = computed(() => bPages.value[Math.min(bPage.value, bPages.value.length - 1)] || bPages.value[0])
-function bCalcParPage() { const h = window.innerHeight || 900; bParPage.value = Math.max(2, Math.floor((h - 170) / 175)) }
+function bCalcParPage() { const h = window.innerHeight || 900; bParPage.value = Math.max(2, Math.floor((h - 170) / 225)) }
 async function bSuivante(dir = 1) {
   const n = bPages.value.length
   let p = bPage.value + dir
@@ -1869,6 +1890,56 @@ const bKpi = computed(() => {
 const bHeure = computed(() => maintenant.value.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))
 const bSemLib = computed(() => { const f = (d) => d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }); return f(semaineBoucle.value.a) + ' 22h → ' + f(semaineBoucle.value.b) + ' 22h' })
 const bJours = computed(() => { const out = []; const { a } = semaineBoucle.value; for (let i = 0; i < 7; i++) { const d = new Date(a.getTime() + (i * 24 + 2) * 3600000); d.setHours(0, 0, 0, 0); out.push({ lbl: d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit' }), left: bPct(d) }) } return out })
+
+// ===== Analyse TRS + répartition des arrêts par équipement (semaine affichée) =====
+// Formule identique à l'écran « Suivi TRS » : TRS = Disponibilité × Performance × Qualité.
+const TRS_MOTIFS = [
+  ['panne', 'arret_panne_min', 'Panne', '#ef4444'],
+  ['format', 'arret_format_min', 'Format', '#f59e0b'],
+  ['nettoyage', 'arret_nettoyage_min', 'Nettoyage', '#0f766e'],
+  ['reglage', 'arret_reglage_min', 'Réglage', '#8b5cf6'],
+  ['maintenance', 'arret_maintenance_min', 'Maintenance', '#6366f1'],
+  ['attente', 'arret_attente_min', 'Attente', '#94a3b8'],
+  ['autre', 'arret_autre_min', 'Autre', '#cbd5e1']
+]
+function cadenceTRS(eq, pr) {
+  const c = cadences.value.find(c => c.equipement_id === eq && c.produit_id === pr)
+  return { value: c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0, mode: c ? (c.mode || 'debit') : 'debit' }
+}
+const pctB = (x) => Math.round((x || 0) * 100) + ' %'
+function trsClass(x) { return x >= 0.75 ? 'ok' : (x >= 0.6 ? 'mid' : 'ko') }
+function fmtMin(min) { return min >= 60 ? (min / 60).toFixed(1).replace('.0', '') + ' h' : Math.round(min) + ' min' }
+const trsCarte = computed(() => {
+  const d0 = new Date(semaineBoucle.value.a); d0.setHours(0, 0, 0, 0)
+  const t0 = d0.getTime(), t1 = t0 + 7 * 86400000   // 7 jours calendaires de la semaine affichée
+  const m = {}
+  for (const s of trsPostes.value) {
+    const d = s.date ? new Date(s.date + 'T12:00:00').getTime() : NaN
+    if (isNaN(d) || d < t0 || d >= t1) continue
+    const k = s.equipement_id
+    if (!m[k]) m[k] = { ouverture: 0, fonct: 0, theo: 0, prodPerf: 0, ecoule: 0, fonctPerf: 0, prodQual: 0, rebutsQual: 0, nbPostes: 0, arrets: { panne: 0, format: 0, nettoyage: 0, reglage: 0, maintenance: 0, attente: 0, autre: 0 } }
+    const e = m[k]
+    const to = s.temps_ouverture_min || 0
+    let arr = 0
+    for (const mo of TRS_MOTIFS) { const v = s[mo[1]] || 0; e.arrets[mo[0]] += v; arr += v }
+    const tf = Math.max(0, to - arr)
+    e.ouverture += to; e.fonct += tf; e.nbPostes++
+    const cd = cadenceTRS(s.equipement_id, s.produit_id)
+    if (cd.mode === 'cycle') { e.ecoule += Number(s.production_realisee) || 0; e.fonctPerf += tf }
+    else if (cd.value > 0) { e.theo += (tf / 60) * cd.value; e.prodPerf += Number(s.production_realisee) || 0; e.prodQual += Number(s.production_realisee) || 0; e.rebutsQual += Number(s.rebuts) || 0 }
+  }
+  const out = {}
+  for (const k in m) {
+    const e = m[k]
+    const dispo = e.ouverture ? e.fonct / e.ouverture : 0
+    const perf = e.theo ? Math.min(1, e.prodPerf / e.theo) : (e.fonctPerf ? Math.min(1, e.ecoule / e.fonctPerf) : 0)
+    const qualite = e.prodQual ? Math.max(0, (e.prodQual - e.rebutsQual) / e.prodQual) : 1
+    const totalArret = TRS_MOTIFS.reduce((t, mo) => t + e.arrets[mo[0]], 0)
+    const segs = TRS_MOTIFS.map(mo => ({ cle: mo[0], label: mo[2], color: mo[3], min: e.arrets[mo[0]], pct: totalArret ? (e.arrets[mo[0]] / totalArret * 100) : 0 })).filter(x => x.min > 0).sort((x, y) => y.min - x.min)
+    out[k] = { dispo, perf, qualite, trs: dispo * perf * qualite, ouverture: e.ouverture, nbPostes: e.nbPostes, totalArret, segs }
+  }
+  return out
+})
 
 // ===== Campagnes (présentation) =====
 // Lots consécutifs du même produit, séparés seulement par un NP (pas de NG, pas d'OFF entre eux)
@@ -2406,6 +2477,22 @@ const totalAU = computed(() => synthEquip.value.reduce((s, e) => s + e.au, 0))
 .pb-next { color: #0f172a; }
 .pb-nb { color: #64748b; font-size: 12.5px; margin-left: auto; }
 .pb-frise { position: relative; flex: 1; min-height: 72px; margin-left: 12px; background: #fbfcfd; border-radius: 6px; }
+/* Analyse TRS + répartition des arrêts dans la carte équipement (mode Boucle) */
+.pb-trs { margin-left: 12px; padding-top: 7px; border-top: 1px dashed #e2e8f0; }
+.pb-trs-kpis { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.pb-trs-main { font-size: 15px; font-weight: 800; padding: 1px 8px; border-radius: 6px; }
+.pb-trs-main.tt-ok { background: #dcfce7; color: #166534; }
+.pb-trs-main.tt-mid { background: #fef9c3; color: #854d0e; }
+.pb-trs-main.tt-ko { background: #fee2e2; color: #991b1b; }
+.pb-trs-dpq { font-size: 11.5px; color: #475569; font-weight: 600; }
+.pb-trs-np { font-size: 10.5px; color: #94a3b8; margin-left: auto; }
+.pb-arr-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 6px; background: #f1f5f9; }
+.pb-arr-seg { height: 100%; }
+.pb-arr-leg { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 5px; }
+.pb-arr-lg { font-size: 10.5px; color: #475569; display: inline-flex; align-items: center; gap: 4px; }
+.pb-arr-lg i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.pb-arr-none { font-size: 10.5px; color: #94a3b8; margin-top: 5px; }
+.pb-trs-vide { font-size: 11px; color: #94a3b8; }
 .pb-off { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, rgba(30,41,59,.06), rgba(30,41,59,.06) 5px, rgba(30,41,59,.13) 5px, rgba(30,41,59,.13) 10px); }
 .pb-jl { position: absolute; top: 0; bottom: 0; border-left: 1px solid #e2e8f0; }
 .pb-jl span { position: absolute; top: 1px; left: 4px; font-size: 10.5px; font-weight: 700; color: #94a3b8; white-space: nowrap; }
