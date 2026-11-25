@@ -502,7 +502,7 @@ function exporterPDF() {
 
           <section class="card mois-card">
             <h3 class="card-title clickable-title" @click="moisVisible = !moisVisible">TRS global vs technique — par mois<span v-if="equipFiltre" class="flt"> — {{ equipFiltreCode }}</span><span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span> <span class="toggle-caret">{{ moisVisible ? '▾ masquer' : '▸ afficher' }}</span></h3>
-            <MiniChart v-if="moisVisible" :labels="MOIS" :format="v => v + ' %'" :series="[{ label: 'TRS global', color: '#0f766e', data: trsParMois }, { label: 'TRS technique', color: '#6366f1', data: trsTechParMois }]" />
+            <MiniChart v-if="moisVisible" :labels="MOIS" :format="v => v + ' %'" show-values :value-format="v => v ? Math.round(v) + '%' : ''" :series="[{ label: 'TRS global', color: '#0f766e', data: trsParMois }, { label: 'TRS technique', color: '#6366f1', data: trsTechParMois }]" />
           </section>
         </div>
 
