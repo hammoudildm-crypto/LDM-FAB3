@@ -41,11 +41,12 @@ const form = reactive({
   arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
   arret_vdlg_min: 0, arret_vdlp_min: 0,
   production_realisee: 0, rebuts: 0, retouches: 0, commentaire: '',
-  fait_par: '', verifie_par: ''
+  fait_par: '', verifie_par: '', superviseur: ''
 })
 const colRetouche = ref(false)   // vrai une fois la migration 003 exécutée (colonne trs_postes.retouches)
 const colVdl = ref(false)        // vrai une fois la migration 009 exécutée (colonnes arret_vdlg_min / arret_vdlp_min)
 const colSignat = ref(false)     // vrai une fois la migration 011 exécutée (colonnes fait_par / verifie_par)
+const colSuperviseur = ref(false) // vrai une fois la migration 015 exécutée (colonne superviseur)
 
 // Motifs d'arrêt regroupés MECE (un arrêt = un seul motif) :
 // Planifié (organisationnel) vs Subi (non planifié). [colonne, libellé, définition]
@@ -79,6 +80,8 @@ async function charger() {
   colVdl.value = !pv.error
   const psg = await supabase.from('trs_postes').select('fait_par').limit(1)
   colSignat.value = !psg.error
+  const pss = await supabase.from('trs_postes').select('superviseur').limit(1)
+  colSuperviseur.value = !pss.error
 }
 onMounted(charger)
 
@@ -147,6 +150,14 @@ const verificateursPoste = computed(() => {
     ...(supersScoped.length ? supersScoped : supers)
   ])
 })
+// Superviseur de shift : superviseurs de l'organigramme (de préférence ceux de l'atelier, sinon tous).
+const superviseursListe = computed(() => {
+  const eq = equip.value
+  const supers = personnel.value.filter(p => estSuperviseur(p.fonction))
+  if (!eq) return uniqNoms(supers)
+  const scoped = supers.filter(p => couvrePerim(p, eq))
+  return uniqNoms(scoped.length ? scoped : supers)
+})
 const phases = computed(() => { const s = new Set(); for (const e of equipements.value) if (e.type) s.add(e.type); return [...s].sort() })
 const equipementsFiltres = computed(() => phaseFiltre.value ? equipements.value.filter(e => e.type === phaseFiltre.value) : equipements.value)
 function onPhaseChange() { equipId.value = '' }
@@ -200,6 +211,7 @@ function chargerContexte() {
     form.commentaire = ex.commentaire || ''
     form.fait_par = ex.fait_par || ''
     form.verifie_par = ex.verifie_par || ''
+    form.superviseur = ex.superviseur || ''
   }
 }
 
@@ -269,7 +281,7 @@ function blankPoste() {
     arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
     arret_vdlg_min: 0, arret_vdlp_min: 0,
     production_realisee: 0, rebuts: 0, retouches: 0, commentaire: '',
-    fait_par: '', verifie_par: ''
+    fait_par: '', verifie_par: '', superviseur: ''
   }
 }
 const jour = reactive({ 1: blankPoste(), 2: blankPoste(), 3: blankPoste() })
@@ -336,6 +348,7 @@ function chargerJour() {
       base.commentaire = ex.commentaire || ''
       base.fait_par = ex.fait_par || ''
       base.verifie_par = ex.verifie_par || ''
+      base.superviseur = ex.superviseur || ''
     }
     Object.assign(jour[pk], base)
     prodUI[pk].q = prodLabel(jour[pk].produitId)
@@ -368,6 +381,7 @@ async function enregistrerJour() {
     }
     if (colRetouche.value) payload.retouches = Number(p.retouches) || 0
     if (colSignat.value) { payload.fait_par = p.fait_par || null; payload.verifie_par = p.verifie_par || null }
+    if (colSuperviseur.value) payload.superviseur = p.superviseur || null
     for (const m of MOTIFS) {
       if (!colVdl.value && (m[0] === 'arret_vdlg_min' || m[0] === 'arret_vdlp_min')) continue
       payload[m[0]] = Number(p[m[0]]) || 0
@@ -395,6 +409,7 @@ async function enregistrer() {
   }
   if (colRetouche.value) payload.retouches = Number(form.retouches) || 0
   if (colSignat.value) { payload.fait_par = form.fait_par || null; payload.verifie_par = form.verifie_par || null }
+  if (colSuperviseur.value) payload.superviseur = form.superviseur || null
   for (const m of MOTIFS) {
     // Tant que la migration 009 n'est pas exécutée, on n'envoie pas VDLG/VDLP
     // (colonnes absentes) pour ne pas casser l'enregistrement.
@@ -415,6 +430,7 @@ async function enregistrer() {
   form.commentaire = ''
   form.fait_par = ''
   form.verifie_par = ''
+  form.superviseur = ''
 }
 
 function trsSaisie(s) {
@@ -547,6 +563,13 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
                 <option v-if="form.verifie_par && !verificateursPoste.includes(form.verifie_par)" :value="form.verifie_par">{{ form.verifie_par }}</option>
               </select>
             </label>
+            <label class="fl">Superviseur de shift
+              <select v-model="form.superviseur">
+                <option value="">— choisir —</option>
+                <option v-for="nom in superviseursListe" :key="nom" :value="nom">{{ nom }}</option>
+                <option v-if="form.superviseur && !superviseursListe.includes(form.superviseur)" :value="form.superviseur">{{ form.superviseur }}</option>
+              </select>
+            </label>
           </div>
           <button v-if="peutEditer" class="btn" @click="enregistrer">Enregistrer le poste</button>
         </div>
@@ -656,6 +679,16 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
                   <option value="">— choisir —</option>
                   <option v-for="nom in verificateursPoste" :key="nom" :value="nom">{{ nom }}</option>
                   <option v-if="jour[pk].verifie_par && !verificateursPoste.includes(jour[pk].verifie_par)" :value="jour[pk].verifie_par">{{ jour[pk].verifie_par }}</option>
+                </select>
+              </td>
+            </tr>
+            <tr class="jsig">
+              <td>Superviseur de shift</td>
+              <td v-for="pk in postesActifs" :key="pk">
+                <select v-model="jour[pk].superviseur">
+                  <option value="">— choisir —</option>
+                  <option v-for="nom in superviseursListe" :key="nom" :value="nom">{{ nom }}</option>
+                  <option v-if="jour[pk].superviseur && !superviseursListe.includes(jour[pk].superviseur)" :value="jour[pk].superviseur">{{ jour[pk].superviseur }}</option>
                 </select>
               </td>
             </tr>
@@ -817,7 +850,8 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .ds-edit:hover { backgroun
 .jtable .jtrs-tech td small { color: #94a3b8; font-weight: 400; }
 .jtable .jtrs td:first-child { font-size: 13px; }
 .jtable .jcom input, .jtable .jsig input { text-align: left; }
-.sig-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 12px; }
+.sig-duo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 0 12px; }
+@media (max-width: 640px) { .sig-duo { grid-template-columns: 1fr; } }
 /* Combobox produit (recherche + liste) dans la grille 3×8 */
 .jcombo { position: relative; }
 .jcombo-in { width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 22px 5px 7px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; }
