@@ -422,7 +422,7 @@ function exporterPDF() {
           <span class="int-tx">TRS global <b :style="{ color: NIV_COL[niv(global.trs)] }">{{ pctNum(global.trs) }} %</b> · TRS technique <b :style="{ color: NIV_COL[niv(global.trsTech)] }">{{ pctNum(global.trsTech) }} %</b> <span class="int-note">(arrêts planifiés exclus)</span> — facteur limitant : <b>{{ facteurLimitant.nom }}</b> ({{ pctNum(facteurLimitant.val) }} %)<template v-if="topPerte">. Principal poste d'arrêt : <b>{{ topPerte.label }}</b> ({{ heures(topPerte.min) }}).</template></span>
         </div>
 
-        <div class="strs-top">
+        <div class="strs-grid">
           <!-- Héro : anneau TRS + chaîne Disponibilité × Performance × Qualité -->
           <section class="card hero">
             <div class="hero-gauge">
@@ -479,10 +479,8 @@ function exporterPDF() {
               </div>
             </template>
           </section>
-        </div>
 
-        <!-- TRS par poste (3×8) côte à côte avec TRS par mois -->
-        <div class="strs-mid">
+          <!-- TRS par poste (3×8) côte à côte avec TRS par mois -->
           <section class="card">
             <h3 class="card-title">TRS par poste <span class="ct-sub">(3×8)</span></h3>
             <div class="poste-grid">
@@ -502,7 +500,7 @@ function exporterPDF() {
             </div>
           </section>
 
-          <section class="card">
+          <section class="card mois-card">
             <h3 class="card-title clickable-title" @click="moisVisible = !moisVisible">TRS global vs technique — par mois<span v-if="equipFiltre" class="flt"> — {{ equipFiltreCode }}</span><span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span> <span class="toggle-caret">{{ moisVisible ? '▾ masquer' : '▸ afficher' }}</span></h3>
             <MiniChart v-if="moisVisible" :labels="MOIS" :format="v => v + ' %'" :series="[{ label: 'TRS global', color: '#0f766e', data: trsParMois }, { label: 'TRS technique', color: '#6366f1', data: trsTechParMois }]" />
           </section>
@@ -619,11 +617,12 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .interpret { display: flex; align-items: flex-start; gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #4338ca; border-radius: 10px; padding: 11px 14px; margin-bottom: 16px; font-size: 14px; color: #334155; }
 .interpret.in-ok { border-left-color: #16a34a; } .interpret.in-mid { border-left-color: #d97706; } .interpret.in-ko { border-left-color: #dc2626; }
 .int-ic { font-size: 16px; line-height: 1.3; }
-.strs-top { display: grid; grid-template-columns: 1fr 1.2fr; gap: 14px; margin-bottom: 16px; align-items: stretch; }
-.strs-mid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; align-items: stretch; }
-.strs-mid > .card { display: flex; flex-direction: column; }
-.strs-mid .poste-grid { flex: 1; grid-template-rows: repeat(3, 1fr); }
-.strs-mid .card { margin-bottom: 0; }
+/* Grille 2×2 homogène : 4 cartes de même largeur et même hauteur */
+.strs-grid { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 14px; margin-bottom: 16px; align-items: stretch; }
+.strs-grid > .card { margin-bottom: 0; }
+.strs-grid > .card:not(.hero) { display: flex; flex-direction: column; }
+.strs-grid .poste-grid { flex: 1; grid-template-rows: repeat(3, 1fr); }
+.strs-grid > .mois-card > .mc { margin: auto 0; width: 100%; }
 .ct-sub { font-size: 12px; font-weight: 600; color: #94a3b8; }
 .poste-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .poste-cell { display: flex; align-items: center; gap: 13px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; }
@@ -692,5 +691,5 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .eqbar-val { font-size: 14px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
 .niv-cell { font-weight: 700; font-variant-numeric: tabular-nums; }
 .trs-cell { font-weight: 800; font-variant-numeric: tabular-nums; }
-@media (max-width: 860px) { .strs-top, .strs-mid { grid-template-columns: 1fr; } .hero { flex-direction: column; text-align: center; } .eqbar { grid-template-columns: 120px 1fr 48px; } .par-row { grid-template-columns: 132px 1fr auto; } .par-cum { display: none; } }
+@media (max-width: 860px) { .strs-grid { grid-template-columns: 1fr; grid-auto-rows: auto; } .hero { flex-direction: column; text-align: center; } .eqbar { grid-template-columns: 120px 1fr 48px; } .par-row { grid-template-columns: 132px 1fr auto; } .par-cum { display: none; } }
 </style>
