@@ -65,7 +65,7 @@ const ARRETS_SUBIS = [
 const MOTIFS = [...ARRETS_PLANIFIES, ...ARRETS_SUBIS]
 
 async function charger() {
-  const re = await supabase.from('equipements').select('id, code, nom, type, atelier_id').eq('actif', true).order('code')
+  const re = await supabase.from('equipements').select('*').eq('actif', true).order('code')
   if (!re.error) equipements.value = re.data || []
   const rp = await supabase.from('produits').select('id, code_pf, designation').eq('actif', true).order('code_pf')
   if (!rp.error) produits.value = rp.data || []
@@ -83,6 +83,36 @@ async function charger() {
 onMounted(charger)
 
 const equip = computed(() => equipements.value.find(e => e.id === equipId.value))
+
+// ------- Régime de travail : repris de la page Capacité (localStorage 'sc_reg_equip') -------
+// La Capacité enregistre, par unité physique (nom de base), un régime 1/2/3/4 (×8).
+// On applique le même régime ici : seuls les postes réellement travaillés sont saisis.
+const PREFIXE_OP = /^(granulation|s[ée]chage|s[ée]choir|m[ée]lange|pes[ée]e|compression|remplissage|encapsulation|pelliculage|enrobage|conditionnement)\s+(?!et\s)/i
+function baseNom(nom) {
+  const n = String(nom || '').trim().replace(PREFIXE_OP, '')
+  return n.replace(/\s+(\d{1,2})\s*$/, (m, d) => (Number(d) <= 20 ? '' : m)).trim()
+}
+const regimeEquipMap = ref({})
+function relireRegime() { try { regimeEquipMap.value = JSON.parse(localStorage.getItem('sc_reg_equip') || '{}') } catch (e) { regimeEquipMap.value = {} } }
+relireRegime()
+watch(equipId, relireRegime)
+// Nombre de postes/jour selon le régime (4×8 = 24/7 ⇒ 3 postes/jour) ; repli = postes de l'équipement, sinon 3.
+const nbPostes = computed(() => {
+  const e = equip.value
+  if (!e) return 3
+  const key = (baseNom(e.nom || e.code) || String(e.nom || e.code || '')).toLowerCase()
+  const r = regimeEquipMap.value[key]
+  if (r === '4' || r === 4) return 3
+  const n = Number(r)
+  if (n >= 1 && n <= 3) return n
+  const pf = Number(e.postes)
+  return pf >= 1 && pf <= 3 ? pf : 3
+})
+const postesActifs = computed(() => (nbPostes.value >= 3 ? [1, 2, 3] : (nbPostes.value === 2 ? [1, 2] : [1])))
+const regimeLabel = computed(() => nbPostes.value + '×8')
+const POSTE_NOM = { 1: 'Matin', 2: 'Après-midi', 3: 'Nuit' }
+// Si le poste sélectionné dépasse le régime, on le ramène dans la plage.
+watch(nbPostes, (n) => { if (poste.value > n) poste.value = n })
 
 // --- Personnel pour « Fait par » / « Vérifié par » (depuis l'organigramme / volet formation) ---
 const normTxt = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
@@ -302,7 +332,7 @@ watch(modeSaisie, (m) => { if (m === 'jour') chargerJour() })
 async function enregistrerJour() {
   msg.value = ''
   if (!equipId.value) { msg.value = 'Choisir un équipement.'; return }
-  const aEnreg = [1, 2, 3].filter(pk => jour[pk].produitId)
+  const aEnreg = postesActifs.value.filter(pk => jour[pk].produitId)
   if (!aEnreg.length) { msg.value = 'Renseigne au moins un poste (le produit est requis).'; return }
   for (const pk of aEnreg) {
     const p = jour[pk]
@@ -391,8 +421,9 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 
     <div class="mode-switch">
       <button :class="{ on: modeSaisie === 'poste' }" @click="modeSaisie = 'poste'">Poste par poste</button>
-      <button :class="{ on: modeSaisie === 'jour' }" @click="modeSaisie = 'jour'">Journée 3×8 (grille)</button>
+      <button :class="{ on: modeSaisie === 'jour' }" @click="modeSaisie = 'jour'">Journée {{ regimeLabel }} (grille)</button>
     </div>
+    <p v-if="equip" class="rg-hint">Régime <b>{{ regimeLabel }}</b> appliqué (défini sur la page Capacité)<span v-if="nbPostes < 3"> — seuls les {{ nbPostes }} poste(s) travaillés sont saisis</span>.</p>
 
     <section class="card">
       <div class="sel-row">
@@ -422,9 +453,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         </label>
         <label v-if="modeSaisie === 'poste'">Poste
           <select v-model.number="poste" @change="chargerContexte">
-            <option :value="1">Poste 1</option>
-            <option :value="2">Poste 2</option>
-            <option :value="3">Poste 3</option>
+            <option v-for="pk in postesActifs" :key="pk" :value="pk">Poste {{ pk }} · {{ POSTE_NOM[pk] }}</option>
           </select>
         </label>
       </div>
@@ -444,7 +473,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
       </div>
       <p v-else class="hint">Choisis un équipement <b>et</b> un produit : la cadence est propre à chaque couple.</p>
       </template>
-      <p v-if="modeSaisie === 'jour' && !equipId" class="hint">Choisis un équipement <b>et</b> une date : tu saisiras les 3 postes de la journée d'un seul coup.</p>
+      <p v-if="modeSaisie === 'jour' && !equipId" class="hint">Choisis un équipement <b>et</b> une date : tu saisiras les postes de la journée (selon le régime) d'un seul coup.</p>
     </section>
 
     <section v-if="modeSaisie === 'poste' && equipId && produitId" class="card">
@@ -525,16 +554,16 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 
     <!-- Mode Journée 3×8 : les 3 postes en colonnes, un seul enregistrement -->
     <section v-if="modeSaisie === 'jour' && equipId" class="card">
-      <h3 class="card-title">Journée 3×8 — {{ equip ? equip.code + (equip.nom ? ' · ' + equip.nom : '') : '' }} · {{ dateSel }}</h3>
+      <h3 class="card-title">Journée {{ regimeLabel }} — {{ equip ? equip.code + (equip.nom ? ' · ' + equip.nom : '') : '' }} · {{ dateSel }}</h3>
       <div class="jtable-wrap">
         <table class="jtable">
           <thead>
-            <tr><th>Rubrique</th><th>Matin · P1</th><th>Après-midi · P2</th><th>Nuit · P3</th></tr>
+            <tr><th>Rubrique</th><th v-for="pk in postesActifs" :key="pk">{{ POSTE_NOM[pk] }} · P{{ pk }}</th></tr>
           </thead>
           <tbody>
             <tr class="jprod">
               <td>Produit</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk">
+              <td v-for="pk in postesActifs" :key="pk">
                 <div class="jcombo">
                   <input type="text" class="jcombo-in" v-model="prodUI[pk].q" placeholder="Rechercher un produit…"
                     @focus="prodUI[pk].open = true" @input="prodUI[pk].open = true" @blur="prodUI[pk].open = false" />
@@ -547,7 +576,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             </tr>
             <tr class="jcad">
               <td>Cadence</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk">
+              <td v-for="pk in postesActifs" :key="pk">
                 <span v-if="jour[pk].cadenceObj">{{ modeDe(jour[pk]) === 'cycle' ? 'temps écoulé' : (cadenceDe(jour[pk]) ? cadenceDe(jour[pk]).toLocaleString('fr-FR') + ' ' + uniteDe(jour[pk]) : '⚠ non définie') }}</span>
                 <span v-else-if="jour[pk].produitId" class="cad-warn">⚠ cadence non définie</span>
                 <span v-else class="jmuted">—</span>
@@ -555,46 +584,46 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             </tr>
             <tr>
               <td>Temps d'ouverture (min)</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk].temps_ouverture_min" /></td>
+              <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" v-model.number="jour[pk].temps_ouverture_min" /></td>
             </tr>
             <tr class="jgrp jgrp-plan"><td colspan="4">Arrêts planifiés (organisationnels)</td></tr>
             <tr v-for="m in ARRETS_PLANIFIES" :key="m[0]" :class="{ 'jvdl': m[0] === 'arret_vdlg_min' || m[0] === 'arret_vdlp_min' }">
               <td :title="m[2]">{{ m[1] }}</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk][m[0]]" /></td>
+              <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" v-model.number="jour[pk][m[0]]" /></td>
             </tr>
             <tr class="jgrp jgrp-subi"><td colspan="4">Arrêts subis (non planifiés)</td></tr>
             <tr v-for="m in ARRETS_SUBIS" :key="m[0]">
               <td :title="m[2]">{{ m[1] }}</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk][m[0]]" /></td>
+              <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" v-model.number="jour[pk][m[0]]" /></td>
             </tr>
             <tr class="jcalc">
               <td>Σ Arrêts · Fonct. · Requis (min)</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk">{{ sommeArretsDe(jour[pk]) }} · <b>{{ fonctDe(jour[pk]) }}</b> · {{ tempsRequisDe(jour[pk]) }}</td>
+              <td v-for="pk in postesActifs" :key="pk">{{ sommeArretsDe(jour[pk]) }} · <b>{{ fonctDe(jour[pk]) }}</b> · {{ tempsRequisDe(jour[pk]) }}</td>
             </tr>
             <tr>
               <td>Production réalisée</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk].production_realisee" /></td>
+              <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" v-model.number="jour[pk].production_realisee" /></td>
             </tr>
             <tr>
               <td>Rebuts</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk].rebuts" /></td>
+              <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" v-model.number="jour[pk].rebuts" /></td>
             </tr>
             <tr v-if="colRetouche">
               <td>Retouches</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="number" min="0" v-model.number="jour[pk].retouches" /></td>
+              <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" v-model.number="jour[pk].retouches" /></td>
             </tr>
             <tr class="jcalc">
               <td>Temps utile · Écart non justifié (min)</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk">{{ Math.round(tempsUtileDe(jour[pk])) }} · <b :style="{ color: ecartTempsDe(jour[pk]) > 0 ? '#b45309' : '#047857' }">{{ Math.round(ecartTempsDe(jour[pk])) }}</b></td>
+              <td v-for="pk in postesActifs" :key="pk">{{ Math.round(tempsUtileDe(jour[pk])) }} · <b :style="{ color: ecartTempsDe(jour[pk]) > 0 ? '#b45309' : '#047857' }">{{ Math.round(ecartTempsDe(jour[pk])) }}</b></td>
             </tr>
-            <tr class="jdpq"><td>Disponibilité</td><td v-for="pk in [1, 2, 3]" :key="pk">{{ pct(dispoDe(jour[pk])) }}</td></tr>
-            <tr class="jdpq"><td>Performance</td><td v-for="pk in [1, 2, 3]" :key="pk">{{ pct(perfDe(jour[pk])) }}</td></tr>
-            <tr class="jdpq"><td>Qualité</td><td v-for="pk in [1, 2, 3]" :key="pk">{{ pct(qualiteDe(jour[pk])) }}</td></tr>
-            <tr class="jtrs"><td>TRS global</td><td v-for="pk in [1, 2, 3]" :key="pk" :style="{ color: trsCol(trsDe(jour[pk])) }"><b>{{ pct(trsDe(jour[pk])) }}</b></td></tr>
-            <tr class="jtrs jtrs-tech"><td>TRS technique <small>(planifiés exclus)</small></td><td v-for="pk in [1, 2, 3]" :key="pk" :style="{ color: trsCol(trsTechDe(jour[pk])) }">{{ pct(trsTechDe(jour[pk])) }}</td></tr>
+            <tr class="jdpq"><td>Disponibilité</td><td v-for="pk in postesActifs" :key="pk">{{ pct(dispoDe(jour[pk])) }}</td></tr>
+            <tr class="jdpq"><td>Performance</td><td v-for="pk in postesActifs" :key="pk">{{ pct(perfDe(jour[pk])) }}</td></tr>
+            <tr class="jdpq"><td>Qualité</td><td v-for="pk in postesActifs" :key="pk">{{ pct(qualiteDe(jour[pk])) }}</td></tr>
+            <tr class="jtrs"><td>TRS global</td><td v-for="pk in postesActifs" :key="pk" :style="{ color: trsCol(trsDe(jour[pk])) }"><b>{{ pct(trsDe(jour[pk])) }}</b></td></tr>
+            <tr class="jtrs jtrs-tech"><td>TRS technique <small>(planifiés exclus)</small></td><td v-for="pk in postesActifs" :key="pk" :style="{ color: trsCol(trsTechDe(jour[pk])) }">{{ pct(trsTechDe(jour[pk])) }}</td></tr>
             <tr class="jsig">
               <td>Fait par</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk">
+              <td v-for="pk in postesActifs" :key="pk">
                 <select v-model="jour[pk].fait_par">
                   <option value="">— choisir —</option>
                   <option v-for="nom in operateursPoste" :key="nom" :value="nom">{{ nom }}</option>
@@ -604,7 +633,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             </tr>
             <tr class="jsig">
               <td>Vérifié par</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk">
+              <td v-for="pk in postesActifs" :key="pk">
                 <select v-model="jour[pk].verifie_par">
                   <option value="">— choisir —</option>
                   <option v-for="nom in verificateursPoste" :key="nom" :value="nom">{{ nom }}</option>
@@ -614,7 +643,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             </tr>
             <tr class="jcom">
               <td>Commentaire</td>
-              <td v-for="pk in [1, 2, 3]" :key="pk"><input type="text" v-model="jour[pk].commentaire" placeholder="Optionnel" /></td>
+              <td v-for="pk in postesActifs" :key="pk"><input type="text" v-model="jour[pk].commentaire" placeholder="Optionnel" /></td>
             </tr>
           </tbody>
         </table>
@@ -735,7 +764,9 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .ds-filtre input { cursor: pointer; }
 .dt-nom { color: #94a3b8; font-weight: 400; }
 /* Interrupteur de mode */
-.mode-switch { display: inline-flex; gap: 3px; background: #eef2ff; border-radius: 10px; padding: 4px; margin: 0 0 14px; }
+.mode-switch { display: inline-flex; gap: 3px; background: #eef2ff; border-radius: 10px; padding: 4px; margin: 0 0 8px; }
+.rg-hint { margin: 0 0 14px; font-size: 12.5px; color: #475569; }
+.rg-hint b { color: #4338ca; }
 .mode-switch button { border: 0; background: none; font-family: inherit; font-size: 13px; font-weight: 700; color: #64748b; padding: 7px 16px; border-radius: 7px; cursor: pointer; transition: background .15s, color .15s; }
 .mode-switch button.on { background: #fff; color: #4338ca; box-shadow: 0 1px 2px rgba(16,24,40,.1); }
 /* Grille Journée 3×8 */
