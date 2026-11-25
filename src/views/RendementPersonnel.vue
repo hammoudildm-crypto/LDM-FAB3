@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 import MiniChart from '../components/MiniChart.vue'
+import { LOGO_HTML } from '../logo'
 
 // Rendement du personnel : on relie chaque saisie TRS à la personne (Fait par /
 // Vérifié par / Superviseur de shift) et on calcule son rendement = production
@@ -12,6 +13,8 @@ import MiniChart from '../components/MiniChart.vue'
 const postes = ref([])
 const cadences = ref([])
 const personnel = ref([])
+const ateliers = ref([])
+const equipements = ref([])
 const chargement = ref(true)
 const msg = ref('')
 
@@ -19,6 +22,7 @@ const now = new Date()
 const du = ref(new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().slice(0, 10))
 const au = ref(now.toISOString().slice(0, 10))
 const role = ref('operateur')          // 'operateur' | 'chef' | 'superviseur'
+const atelierFiltre = ref('')
 const recherche = ref('')
 const detail = ref(null)               // nom de la personne dont la fiche est ouverte
 const MIN_POSTES = 5
@@ -44,9 +48,16 @@ async function charger() {
   postes.value = r.data || []
   const rc = await supabase.from('cadences_produit').select('*'); if (!rc.error) cadences.value = rc.data || []
   const ro = await supabase.from('organigramme').select('*'); if (!ro.error) personnel.value = ro.data || []
+  const ra = await supabase.from('ateliers').select('id, code, nom').order('nom'); if (!ra.error) ateliers.value = ra.data || []
+  const re = await supabase.from('equipements').select('id, atelier_id'); if (!re.error) equipements.value = re.data || []
   chargement.value = false
 }
 onMounted(charger)
+
+// Filtre par atelier : on ne garde que les postes dont l'équipement est dans l'atelier choisi.
+const equipAtelier = computed(() => { const m = {}; for (const e of equipements.value) m[e.id] = e.atelier_id; return m })
+const postesFiltres = computed(() => atelierFiltre.value ? postes.value.filter(s => String(equipAtelier.value[s.equipement_id] || '') === String(atelierFiltre.value)) : postes.value)
+const atelierLabel = computed(() => { const a = ateliers.value.find(a => String(a.id) === String(atelierFiltre.value)); return a ? (a.nom || a.code) : '' })
 
 function cadenceDe(eq, pr) {
   const c = cadences.value.find(c => c.equipement_id === eq && c.produit_id === pr)
@@ -71,7 +82,7 @@ function cumuler(a, s, to, tf, arrPlan, cd) {
 const parPersonne = computed(() => {
   const champ = CHAMP[role.value]
   const m = {}
-  for (const s of postes.value) {
+  for (const s of postesFiltres.value) {
     const nom = normNom(s[champ]); if (!nom) continue
     if (!m[nom]) m[nom] = {
       nom, nbPostes: 0, prodTot: 0, rebutsTot: 0, retouchesTot: 0,
@@ -122,7 +133,7 @@ const evalues = computed(() => parPersonne.value.filter(p => p.suffisant))
 const rdtMoyen = computed(() => { const a = evalues.value; const tot = a.reduce((s, p) => s + p.fonct, 0); return tot ? a.reduce((s, p) => s + (p.rendement || 0) * p.fonct, 0) / tot : null })
 const meilleur = computed(() => evalues.value.slice().sort((a, b) => (b.rendement || 0) - (a.rendement || 0))[0] || null)
 const volumeTotal = computed(() => classement.value.reduce((s, p) => s + p.prodTot, 0))
-const roleDispo = computed(() => { const c = CHAMP[role.value]; return postes.value.some(s => normNom(s[c])) })
+const roleDispo = computed(() => { const c = CHAMP[role.value]; return postesFiltres.value.some(s => normNom(s[c])) })
 const ficheDe = computed(() => detail.value ? parPersonne.value.find(p => p.nom === detail.value) : null)
 
 const pctR = (v) => (v == null ? '—' : Math.round(v * 100) + ' %')
@@ -131,6 +142,38 @@ const niv = (v) => (v == null ? 'none' : (v >= 0.85 ? 'vert' : (v >= 0.65 ? 'ora
 const fmtInt = (v) => Math.round(Number(v) || 0).toLocaleString('fr-FR')
 function appliquer() { detail.value = null; charger() }
 function choisirRole(r) { role.value = r; detail.value = null }
+
+function exporterPDF() {
+  const list = classement.value
+  if (!list.length) { msg.value = 'Rien à exporter sur cette sélection.'; return }
+  const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const dFr = (d) => { try { return new Date(d).toLocaleDateString('fr-FR') } catch (e) { return d } }
+  const COL = { vert: '#16a34a', orange: '#d97706', rouge: '#dc2626', none: '#cbd5e1' }
+  const ce = ';-webkit-print-color-adjust:exact;print-color-adjust:exact'
+  const atTxt = atelierFiltre.value ? atelierLabel.value : 'Tous'
+  const rows = list.map((p, i) => {
+    const w = p.rendement == null ? 0 : Math.round(p.rendement * 100)
+    const col = COL[niv(p.rendement)]
+    return '<tr' + (p.suffisant ? '' : ' class="insuff"') + '><td class="r">' + (p.suffisant ? i + 1 : '·') + '</td><td><b>' + esc(p.nom) + '</b>' + (p.fonction ? ' <i>' + esc(p.fonction) + '</i>' : '') + '</td><td class="r">' + p.nbPostes + '</td><td><span class="bt"><span class="bf" style="width:' + w + '%;background:' + col + ce + '"></span></span></td><td class="r" style="color:' + col + ';font-weight:800">' + pctR(p.rendement) + '</td><td class="r">' + fmtInt(p.prodTot) + '</td><td class="r">' + pct1(p.rebutRate) + '</td><td class="r">' + pct1(p.retoucheRate) + '</td><td class="r">' + p.nbEquip + '</td></tr>'
+  }).join('')
+  const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Rendement du personnel</title>' +
+    '<style>*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:24px;font-size:12px}' +
+    'h1{font-size:18px;margin:0 0 2px}.sub{color:#64748b;margin:0 0 10px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;margin:0 0 12px}.meta b{color:#475569}' +
+    'table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:5px 8px;border-bottom:1px solid #eef2f6}th{background:#ecfdf5;color:#0f766e;font-size:10px;text-transform:uppercase}' +
+    'td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}td i{color:#94a3b8;font-weight:400;font-style:normal}' +
+    '.bt{display:block;width:130px;height:12px;background:#eef2f6;border-radius:5px;overflow:hidden}.bf{display:block;height:100%}' +
+    '.insuff td{color:#94a3b8}.note{margin-top:10px;font-size:10px;color:#94a3b8;line-height:1.5}.foot{margin-top:20px;color:#94a3b8;font-size:10px;border-top:1px solid #eee;padding-top:6px}@media print{body{margin:12mm}}</style></head><body>' + LOGO_HTML +
+    '<h1>Rendement du personnel — ' + esc(ROLE_LBL[role.value]) + 's</h1>' +
+    '<p class="sub">Rendement = production réelle ÷ production théorique (cadence × temps de marche)</p>' +
+    '<div class="meta"><div><b>Période :</b> ' + esc(dFr(du.value)) + ' → ' + esc(dFr(au.value)) + '</div><div><b>Atelier :</b> ' + esc(atTxt) + '</div><div><b>Rendement moyen (pondéré) :</b> ' + pctR(rdtMoyen.value) + '</div><div><b>Personnes :</b> ' + list.length + '</div></div>' +
+    '<table><thead><tr><th class="r">#</th><th>Personne</th><th class="r">Postes</th><th>Rendement</th><th class="r">%</th><th class="r">Quantité</th><th class="r">Rebuts</th><th class="r">Retouches</th><th class="r">Polyv.</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<p class="note">Rendement normalisé, comparable d\'une machine à l\'autre. Les quantités dépendent de l\'équipement (non comparables entre lignes). Personnes avec moins de ' + MIN_POSTES + ' postes (ou sans cadence définie) en gris, hors classement.</p>' +
+    '<p class="foot">ProdTrack — LDM Groupe · Document généré le ' + esc(new Date().toLocaleDateString('fr-FR')) + '</p></body></html>'
+  const w = window.open('', '_blank')
+  if (!w) { msg.value = 'Autorise les pop-ups pour générer le PDF.'; return }
+  w.document.write(html); w.document.close(); w.focus()
+  setTimeout(() => { try { w.print() } catch (e) {} }, 350)
+}
 </script>
 
 <template>
@@ -141,6 +184,12 @@ function choisirRole(r) { role.value = r; detail.value = null }
     <div class="pf-bar">
       <label class="pf-f">Du<input type="date" v-model="du" /></label>
       <label class="pf-f">Au<input type="date" v-model="au" /></label>
+      <label class="pf-f">Atelier
+        <select v-model="atelierFiltre">
+          <option value="">Tous les ateliers</option>
+          <option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.nom || a.code }}</option>
+        </select>
+      </label>
       <button class="pf-apply" @click="appliquer">Appliquer</button>
       <div class="pf-tabs">
         <button :class="{ on: role === 'operateur' }" @click="choisirRole('operateur')">Opérateurs</button>
@@ -162,7 +211,7 @@ function choisirRole(r) { role.value = r; detail.value = null }
       </div>
 
       <section class="card">
-        <div class="tb"><h2 class="card-title">Classement — {{ ROLE_LBL[role] }}s <span class="ct-sub">rendement décroissant</span></h2></div>
+        <div class="tb"><h2 class="card-title">Classement — {{ ROLE_LBL[role] }}s <span class="ct-sub">rendement décroissant</span></h2><button class="pf-pdf" @click="exporterPDF">⬇ Exporter PDF</button></div>
         <div class="tbl-scroll">
           <table class="tbl">
             <thead><tr><th>#</th><th>Personne</th><th class="r">Postes</th><th class="rdt-col">Rendement</th><th class="r">Quantité produite</th><th class="r">Rebuts</th><th class="r">Retouches</th><th class="r">Polyv.</th><th></th></tr></thead>
@@ -229,8 +278,10 @@ function choisirRole(r) { role.value = r; detail.value = null }
 .alert { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 10px; padding: 10px 14px; font-size: 13px; }
 .pf-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 16px; }
 .pf-f { display: flex; flex-direction: column; gap: 3px; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .03em; }
-.pf-f input { font-size: 14px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
+.pf-f input, .pf-f select { font-size: 14px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
 .pf-apply { align-self: flex-end; background: #0d9488; color: #fff; border: 0; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.pf-pdf { margin-left: auto; border: 1px solid #99f6e4; background: #f0fdfa; color: #0f766e; border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.pf-pdf:hover { background: #0d9488; border-color: #0d9488; color: #fff; }
 .pf-tabs { display: inline-flex; gap: 2px; background: #f1f5f9; border-radius: 9px; padding: 3px; }
 .pf-tabs button { border: 0; background: none; font-size: 13px; font-weight: 700; color: #64748b; padding: 7px 14px; border-radius: 7px; cursor: pointer; }
 .pf-tabs button.on { background: #fff; color: #0f766e; box-shadow: 0 1px 2px rgba(16,24,40,.1); }
