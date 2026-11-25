@@ -30,6 +30,7 @@ async function charger() {
   const depuis = new Date(new Date().getFullYear() - 1, 0, 1)   // 1er janv. de l'an dernier → couvre l'évolution annuelle
   const rs = await supabase.from('mouvements_consommables').select('consommable_id,quantite,date_mvt').eq('type', 'sortie').gte('date_mvt', ymd(depuis))
   if (!rs.error) sorties.value = rs.data || []
+  await chargerCommandes()
 }
 onMounted(charger)
 
@@ -183,6 +184,107 @@ async function validerMvt() {
   if (ru.error) erreur.value = ru.error.message
   mvtModal.value = null; message.value = 'Mouvement enregistré.'; await charger()
 }
+
+// ================= Commandes & approvisionnement =================
+const vueConso = ref('stock')          // 'stock' | 'cmd'
+const commandes = ref([])
+const cmdDispo = ref(true)             // false tant que la table n'existe pas (migration 014)
+const cmdModal = ref(null)
+const receptionModal = ref(null)
+const filtreCmd = ref('ouvertes')      // 'ouvertes' | 'toutes'
+const STATUT_LBL = { en_cours: 'En cours', partielle: 'Partielle', recue: 'Reçue', annulee: 'Annulée' }
+
+async function chargerCommandes() {
+  const r = await supabase.from('commandes_consommables').select('*').order('date_commande', { ascending: false }).order('id', { ascending: false })
+  if (r.error) { cmdDispo.value = false; commandes.value = []; return }
+  cmdDispo.value = true; commandes.value = r.data || []
+}
+
+const cmdOuverte = (c) => c.statut === 'en_cours' || c.statut === 'partielle'
+const resteDe = (c) => Math.max(0, (Number(c.quantite_commandee) || 0) - (Number(c.quantite_recue) || 0))
+const commandesAff = computed(() => commandes.value.filter(c => filtreCmd.value === 'toutes' || cmdOuverte(c)))
+const nbCmdOuvertes = computed(() => commandes.value.filter(cmdOuverte).length)
+const valeurEngagee = computed(() => commandes.value.filter(cmdOuverte).reduce((s, c) => s + resteDe(c) * (Number(c.prix_unitaire) || 0), 0))
+const nbCmdRetard = computed(() => commandes.value.filter(c => cmdOuverte(c) && c.date_prevue && c.date_prevue < ajKey.value).length)
+const enCommandeParArticle = computed(() => { const m = {}; for (const c of commandes.value) if (cmdOuverte(c)) m[c.consommable_id] = (m[c.consommable_id] || 0) + resteDe(c); return m })
+const enCommandeDe = (id) => enCommandeParArticle.value[id] || 0
+
+// Suggestions d'approvisionnement : articles sous seuil MP (ou couverture < 14 j).
+// Qté à commander = cible − stock MP − déjà commandé ; cible = 2× seuil MP (ou 30 j de conso à défaut de seuil).
+const CIBLE_FACTEUR = 2
+function qteSuggereeDe(c) {
+  const seuil = seMp(c)
+  const cible = seuil > 0 ? seuil * CIBLE_FACTEUR : Math.ceil(moyJourDe(c.id) * 30)
+  return Math.max(0, Math.round(cible - sMp(c) - enCommandeDe(c.id)))
+}
+const suggestions = computed(() => consommables.value
+  .filter(c => etatMp(c) === 'rupture' || etatMp(c) === 'alerte' || (couvMpJ(c) !== null && couvMpJ(c) < 14))
+  .map(c => ({ c, qte: qteSuggereeDe(c), enCommande: enCommandeDe(c.id) }))
+  .filter(x => x.qte > 0)
+  .sort((a, b) => ((etatMp(b.c) === 'rupture') - (etatMp(a.c) === 'rupture')) || b.qte - a.qte))
+const nbSuggestions = computed(() => suggestions.value.length)
+
+function nouvelleCommande(c = null) {
+  cmdModal.value = {
+    id: null,
+    consommable_id: c ? c.id : (consommables.value[0]?.id ?? null),
+    fournisseur: '', reference_commande: '',
+    quantite_commandee: c ? qteSuggereeDe(c) : 0,
+    prix_unitaire: c ? (Number(c.prix_unitaire) || 0) : 0,
+    date_commande: ajKey.value, date_prevue: '', commentaire: ''
+  }
+}
+function editerCommande(cmd) { cmdModal.value = { ...cmd, date_prevue: cmd.date_prevue || '' } }
+function onCmdArticle() { const a = consoById.value[cmdModal.value.consommable_id]; if (a && !cmdModal.value.id) cmdModal.value.prix_unitaire = Number(a.prix_unitaire) || 0 }
+async function validerCommande() {
+  const m = cmdModal.value
+  if (!m.consommable_id) { erreur.value = 'Choisis un article.'; return }
+  if ((Number(m.quantite_commandee) || 0) <= 0) { erreur.value = 'Quantité commandée invalide.'; return }
+  const art = consoById.value[m.consommable_id]
+  const payload = {
+    consommable_id: m.consommable_id, fournisseur: m.fournisseur || null, reference_commande: m.reference_commande || null,
+    quantite_commandee: Number(m.quantite_commandee) || 0, unite: art ? art.unite : null,
+    prix_unitaire: Number(m.prix_unitaire) || 0, date_commande: m.date_commande || ajKey.value,
+    date_prevue: m.date_prevue || null, commentaire: m.commentaire || null
+  }
+  const r = m.id
+    ? await supabase.from('commandes_consommables').update(payload).eq('id', m.id)
+    : await supabase.from('commandes_consommables').insert({ ...payload, quantite_recue: 0, statut: 'en_cours', emplacement: 'mp' })
+  if (r.error) { erreur.value = r.error.message; return }
+  cmdModal.value = null; message.value = m.id ? 'Commande modifiée.' : 'Commande créée.'; await chargerCommandes()
+}
+async function annulerCommande(cmd) {
+  if (!confirm('Annuler la commande de « ' + nomDe(cmd.consommable_id) + ' » ?')) return
+  const r = await supabase.from('commandes_consommables').update({ statut: 'annulee' }).eq('id', cmd.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  message.value = 'Commande annulée.'; await chargerCommandes()
+}
+async function supprimerCommande(cmd) {
+  if (!peutSupprimer.value) { erreur.value = 'Suppression réservée à l’administrateur.'; return }
+  if (!confirm('Supprimer définitivement cette commande ?')) return
+  const r = await supabase.from('commandes_consommables').delete().eq('id', cmd.id)
+  if (r.error) { erreur.value = r.error.message; return }
+  message.value = 'Commande supprimée.'; await chargerCommandes()
+}
+// Réception : entrée en Stock MP + mise à jour de la commande (quantité reçue + statut).
+function ouvrirReception(cmd) {
+  const art = consoById.value[cmd.consommable_id]
+  receptionModal.value = { cmd, nom: nomDe(cmd.consommable_id), unite: cmd.unite || (art ? art.unite : ''), quantite: resteDe(cmd), date_mvt: ajKey.value, mpAvant: art ? sMp(art) : 0 }
+}
+async function validerReception() {
+  const r = receptionModal.value; const q = Number(r.quantite) || 0
+  if (q <= 0) { erreur.value = 'Quantité reçue invalide.'; return }
+  const cmd = r.cmd
+  const ri = await supabase.from('mouvements_consommables').insert({ consommable_id: cmd.consommable_id, type: 'entree', quantite: q, date_mvt: r.date_mvt, motif: 'Réception commande' + (cmd.reference_commande ? ' ' + cmd.reference_commande : ''), emplacement: 'mp' })
+  if (ri.error) { erreur.value = ri.error.message; return }
+  const art = consoById.value[cmd.consommable_id]
+  if (art) { const ru = await supabase.from('consommables').update({ stock_mp: sMp(art) + q }).eq('id', cmd.consommable_id); if (ru.error) { erreur.value = ru.error.message; return } }
+  const recu = (Number(cmd.quantite_recue) || 0) + q
+  const statut = recu >= (Number(cmd.quantite_commandee) || 0) ? 'recue' : 'partielle'
+  const rc = await supabase.from('commandes_consommables').update({ quantite_recue: recu, statut }).eq('id', cmd.id)
+  if (rc.error) { erreur.value = rc.error.message; return }
+  receptionModal.value = null; message.value = 'Réception enregistrée — Stock MP mis à jour.'; await charger()
+}
 </script>
 
 <template>
@@ -193,6 +295,12 @@ async function validerMvt() {
     <p v-if="erreur" class="alert">{{ erreur }}</p>
     <p v-if="message" class="ok" @click="message = ''">{{ message }}</p>
 
+    <div class="conso-tabs">
+      <button :class="{ on: vueConso === 'stock' }" @click="vueConso = 'stock'">Stock &amp; mouvements</button>
+      <button :class="{ on: vueConso === 'cmd' }" @click="vueConso = 'cmd'">Commandes &amp; approvisionnement<span v-if="nbCmdOuvertes" class="tab-badge">{{ nbCmdOuvertes }}</span></button>
+    </div>
+
+    <div v-show="vueConso === 'stock'">
     <div class="kpi-row">
       <div class="kpi"><div class="kpi-v">{{ consommables.length }}</div><div class="kpi-l">Références</div></div>
       <div class="kpi alerte"><div class="kpi-v">{{ nbAlerte }}</div><div class="kpi-l">En alerte (≤ seuil)</div></div>
@@ -283,6 +391,80 @@ async function validerMvt() {
         </table>
       </div>
     </section>
+    </div><!-- /vue stock -->
+
+    <div v-show="vueConso === 'cmd'">
+      <p v-if="!cmdDispo" class="alert">La table des commandes n'est pas encore créée. Exécute la migration <b>014</b> dans Supabase (SQL Editor) pour activer ce module.</p>
+
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-v">{{ nbCmdOuvertes }}</div><div class="kpi-l">Commandes en cours</div></div>
+        <div class="kpi valeur"><div class="kpi-v">{{ fmtDA(valeurEngagee) }}</div><div class="kpi-l">Valeur engagée (reste à livrer)</div></div>
+        <div class="kpi rupture"><div class="kpi-v">{{ nbCmdRetard }}</div><div class="kpi-l">Livraisons en retard</div></div>
+        <div class="kpi alerte"><div class="kpi-v">{{ nbSuggestions }}</div><div class="kpi-l">Articles à commander</div></div>
+      </div>
+
+      <section class="card">
+        <div class="tb">
+          <h2 class="card-title" style="margin:0">Suggestions d'approvisionnement</h2>
+          <span class="sugg-note">Sous seuil MP ou couverture &lt; 14 jours · quantité proposée pour revenir à 2× le seuil</span>
+        </div>
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead><tr><th>Consommable</th><th class="r">Stock MP</th><th class="r">Seuil MP</th><th class="r">Couverture</th><th class="r">Conso/j</th><th class="r">Déjà commandé</th><th class="r">À commander</th><th v-if="peutEditer" class="r">Action</th></tr></thead>
+            <tbody>
+              <tr v-for="s in suggestions" :key="s.c.id">
+                <td class="nom">{{ s.c.nom }}<span v-if="s.c.reference" class="sub2"> · {{ s.c.reference }}</span></td>
+                <td class="r" :class="etatMp(s.c)"><b>{{ fmt(sMp(s.c)) }}</b></td>
+                <td class="r">{{ fmt(seMp(s.c)) }}</td>
+                <td class="r"><span :class="couvClass(couvMpJ(s.c))">{{ couvLabel(couvMpJ(s.c)) }}</span></td>
+                <td class="r">{{ moyJourDe(s.c.id) ? (Math.round(moyJourDe(s.c.id) * 10) / 10) : '—' }}</td>
+                <td class="r">{{ s.enCommande ? fmt(s.enCommande) : '—' }}</td>
+                <td class="r sugg-qte">{{ fmt(s.qte) }} {{ s.c.unite }}</td>
+                <td v-if="peutEditer" class="r"><button class="btn-sm" :disabled="!cmdDispo" @click="nouvelleCommande(s.c)">Commander</button></td>
+              </tr>
+              <tr v-if="!suggestions.length"><td :colspan="peutEditer ? 8 : 7" class="vide">Aucun réapprovisionnement nécessaire pour le moment. 👍</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="tb">
+          <h2 class="card-title" style="margin:0">Commandes {{ filtreCmd === 'ouvertes' ? 'en cours' : '(toutes)' }}</h2>
+          <div class="seg">
+            <button :class="{ on: filtreCmd === 'ouvertes' }" @click="filtreCmd = 'ouvertes'">En cours</button>
+            <button :class="{ on: filtreCmd === 'toutes' }" @click="filtreCmd = 'toutes'">Toutes</button>
+          </div>
+          <button v-if="peutEditer" class="btn" style="margin-left:auto" :disabled="!cmdDispo" @click="nouvelleCommande()">＋ Nouvelle commande</button>
+        </div>
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead><tr><th>Article</th><th>Fournisseur</th><th>N° BC</th><th>Commandé le</th><th>Prévu</th><th class="r">Qté</th><th class="r">Reçu</th><th class="r">Reste</th><th>Statut</th><th class="r">Valeur reste</th><th v-if="peutEditer" class="r">Actions</th></tr></thead>
+            <tbody>
+              <tr v-for="c in commandesAff" :key="c.id" :class="{ 'row-retard': cmdOuverte(c) && c.date_prevue && c.date_prevue < ajKey }">
+                <td class="nom">{{ nomDe(c.consommable_id) }}</td>
+                <td>{{ c.fournisseur || '—' }}</td>
+                <td>{{ c.reference_commande || '—' }}</td>
+                <td class="nowrap-a">{{ fmtDate(c.date_commande) }}</td>
+                <td class="nowrap-a" :class="{ 'txt-retard': cmdOuverte(c) && c.date_prevue && c.date_prevue < ajKey }">{{ fmtDate(c.date_prevue) }}</td>
+                <td class="r">{{ fmt(c.quantite_commandee) }}</td>
+                <td class="r">{{ fmt(c.quantite_recue) }}</td>
+                <td class="r">{{ fmt(resteDe(c)) }}</td>
+                <td><span class="stag" :class="c.statut">{{ STATUT_LBL[c.statut] || c.statut }}</span></td>
+                <td class="r">{{ fmtDA(resteDe(c) * (Number(c.prix_unitaire) || 0)) }}</td>
+                <td v-if="peutEditer" class="r nowrap-a">
+                  <button v-if="cmdOuverte(c)" class="btn-sm ok" @click="ouvrirReception(c)" title="Réceptionner (entrée Stock MP)">⇣ Recevoir</button>
+                  <button class="icon-b" @click="editerCommande(c)" title="Modifier">✎</button>
+                  <button v-if="cmdOuverte(c)" class="icon-b" @click="annulerCommande(c)" title="Annuler">⦸</button>
+                  <button v-if="peutSupprimer" class="icon-b danger" @click="supprimerCommande(c)" title="Supprimer">🗑</button>
+                </td>
+              </tr>
+              <tr v-if="!commandesAff.length"><td :colspan="peutEditer ? 11 : 10" class="vide">Aucune commande{{ filtreCmd === 'ouvertes' ? ' en cours' : '' }}.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div><!-- /vue cmd -->
 
     <div v-if="mvtModal" class="modal-back" @click.self="mvtModal = null">
       <div class="modal">
@@ -321,6 +503,45 @@ async function validerMvt() {
           </div>
         </div>
         <div class="modal-f"><button class="btn ghost" @click="editModal = null">Annuler</button><button class="btn" @click="validerEdit">Enregistrer</button></div>
+      </div>
+    </div>
+
+    <!-- Commande : créer / modifier -->
+    <div v-if="cmdModal" class="modal-back" @click.self="cmdModal = null">
+      <div class="modal modal-lg">
+        <div class="modal-h"><span>{{ cmdModal.id ? 'Modifier la commande' : 'Nouvelle commande' }}</span><button class="x" @click="cmdModal = null">✕</button></div>
+        <div class="modal-b">
+          <label>Article
+            <select v-model.number="cmdModal.consommable_id" @change="onCmdArticle">
+              <option v-for="c in consommables" :key="c.id" :value="c.id">{{ c.nom }}{{ c.reference ? ' · ' + c.reference : '' }}</option>
+            </select>
+          </label>
+          <div class="modal-grid2">
+            <label>Fournisseur<input v-model="cmdModal.fournisseur" placeholder="(optionnel)" /></label>
+            <label>N° bon de commande<input v-model="cmdModal.reference_commande" placeholder="(optionnel)" /></label>
+            <label>Quantité commandée<input v-model.number="cmdModal.quantite_commandee" type="number" min="0" /></label>
+            <label>Prix unitaire (DA)<input v-model.number="cmdModal.prix_unitaire" type="number" step="0.01" /></label>
+            <label>Date de commande<input v-model="cmdModal.date_commande" type="date" /></label>
+            <label>Livraison prévue<input v-model="cmdModal.date_prevue" type="date" /></label>
+          </div>
+          <label>Commentaire<input v-model="cmdModal.commentaire" placeholder="(optionnel)" /></label>
+          <p class="modal-info">Montant estimé : <b>{{ fmtDA((Number(cmdModal.quantite_commandee) || 0) * (Number(cmdModal.prix_unitaire) || 0)) }}</b></p>
+        </div>
+        <div class="modal-f"><button class="btn ghost" @click="cmdModal = null">Annuler</button><button class="btn" @click="validerCommande">{{ cmdModal.id ? 'Enregistrer' : 'Créer la commande' }}</button></div>
+      </div>
+    </div>
+
+    <!-- Réception d'une commande -->
+    <div v-if="receptionModal" class="modal-back" @click.self="receptionModal = null">
+      <div class="modal">
+        <div class="modal-h entree"><span>Réception — {{ receptionModal.nom }}</span><button class="x" @click="receptionModal = null">✕</button></div>
+        <div class="modal-b">
+          <label>Quantité reçue ({{ receptionModal.unite }})<input v-model.number="receptionModal.quantite" type="number" min="0" /></label>
+          <label>Date de réception<input v-model="receptionModal.date_mvt" type="date" /></label>
+          <p class="modal-info">Entrée en <b>Stock MP</b> : {{ fmt(receptionModal.mpAvant) }} → <b>{{ fmt(receptionModal.mpAvant + (Number(receptionModal.quantite) || 0)) }}</b></p>
+          <p class="modal-info">Reste à livrer après : <b>{{ fmt(Math.max(0, resteDe(receptionModal.cmd) - (Number(receptionModal.quantite) || 0))) }}</b></p>
+        </div>
+        <div class="modal-f"><button class="btn ghost" @click="receptionModal = null">Annuler</button><button class="btn" @click="validerReception">Valider la réception</button></div>
       </div>
     </div>
   </div>
@@ -432,6 +653,35 @@ async function validerMvt() {
 .modal-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
 .modal-info { margin: 2px 0 0; font-size: 13px; color: #475569; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 8px; padding: 8px 11px; line-height: 1.6; }
 .modal-info .neg { color: #dc2626; }
+
+/* ---- Commandes & approvisionnement ---- */
+.conso-tabs { display: inline-flex; gap: 3px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 4px; margin: 0 0 16px; }
+.conso-tabs button { border: 0; background: none; font-size: 13px; font-weight: 700; color: #9a6a3a; padding: 8px 16px; border-radius: 7px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.conso-tabs button.on { background: #b45309; color: #fff; }
+.tab-badge { background: #dc2626; color: #fff; font-size: 11px; font-weight: 800; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; }
+.conso-tabs button.on .tab-badge { background: #fff; color: #b45309; }
+.seg { display: inline-flex; gap: 2px; background: #f1f5f9; border-radius: 8px; padding: 3px; }
+.seg button { border: 0; background: none; font-size: 12.5px; font-weight: 700; color: #64748b; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
+.seg button.on { background: #fff; color: #b45309; box-shadow: 0 1px 2px rgba(16,24,40,.1); }
+.sugg-note { font-size: 12px; color: #94a3b8; font-weight: 600; }
+.sub2 { color: #94a3b8; font-weight: 400; font-size: 12px; }
+.sugg-qte { font-weight: 800; color: #b45309; }
+.tbl td.rupture { color: #dc2626; } .tbl td.alerte { color: #b45309; }
+.stag { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.stag.en_cours { background: #eff6ff; color: #1d4ed8; }
+.stag.partielle { background: #fff7ed; color: #b45309; }
+.stag.recue { background: #f0fdf4; color: #15803d; }
+.stag.annulee { background: #f1f5f9; color: #94a3b8; }
+.row-retard { background: #fff7f7; }
+.txt-retard { color: #dc2626; font-weight: 800; }
+.btn-sm { border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca; font-weight: 700; font-size: 12px; padding: 4px 10px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.btn-sm.ok { border-color: #bbf7d0; background: #f0fdf4; color: #15803d; }
+.btn-sm:hover { filter: brightness(.97); }
+.btn-sm:disabled { opacity: .5; cursor: not-allowed; }
+.icon-b { border: 1px solid #e2e8f0; background: #fff; color: #475569; font-size: 13px; padding: 4px 8px; border-radius: 7px; cursor: pointer; margin-left: 4px; }
+.icon-b.danger { color: #dc2626; border-color: #fecaca; }
+.icon-b:hover { background: #f8fafc; }
+.nowrap-a { white-space: nowrap; }
 .modal-warn { display: block; color: #b91c1c; font-weight: 700; font-size: 12px; margin-top: 4px; }
 .modal-f { display: flex; justify-content: flex-end; gap: 8px; padding: 13px 16px; border-top: 1px solid #eef2f6; }
 </style>
