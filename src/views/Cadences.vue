@@ -444,7 +444,7 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 </script>
 
 <style scoped>
-.cad { max-width: 1080px; margin: 0 auto; padding: 6px 4px 24px; }
+.cad { max-width: 1600px; margin: 0 auto; padding: 6px 4px 24px; }
 .cad-head { margin-bottom: 20px; }
 .cadh-eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #0f766e; }
 .cadh-title { font-size: 24px; font-weight: 800; letter-spacing: -.02em; color: #1a2233; margin: 3px 0 2px; }
