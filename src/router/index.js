@@ -54,6 +54,7 @@ import PqrValidation from '../views/PqrValidation.vue'
 import FormationReferentiel from '../views/FormationReferentiel.vue'
 import FormationEnregistrements from '../views/FormationEnregistrements.vue'
 import FormationMatrice from '../views/FormationMatrice.vue'
+import RendementPersonnel from '../views/RendementPersonnel.vue'
 import FormationExigences from '../views/FormationExigences.vue'
 import CalculPesee from '../views/CalculPesee.vue'
 import AnalyseGranulo from '../views/AnalyseGranulo.vue'
@@ -88,6 +89,7 @@ const routes = [
   { path: '/formations', name: 'formations', component: FormationReferentiel },
   { path: '/formations-enreg', name: 'formations-enreg', component: FormationEnregistrements },
   { path: '/formations-matrice', name: 'formations-matrice', component: FormationMatrice },
+  { path: '/rendement-personnel', name: 'rendement-personnel', component: RendementPersonnel },
   { path: '/formations-exigences', name: 'formations-exigences', component: FormationExigences },
   { path: '/calcul-pesee', name: 'calcul-pesee', component: CalculPesee },
   { path: '/granulometrie', name: 'granulometrie', component: AnalyseGranulo },
