@@ -231,7 +231,14 @@ function exporterPDF() {
     </div>
 
     <p v-if="chargement" class="pf-empty">Chargement…</p>
-    <p v-else-if="!roleDispo" class="pf-empty">Aucune saisie avec « {{ ROLE_LBL[role] }} » renseigné sur la période.<span v-if="role === 'superviseur'"> Renseigne le superviseur dans Saisie TRS (migration 015 requise).</span></p>
+    <div v-else-if="!roleDispo" class="pf-empty">
+      <template v-if="!postesFiltres.length">Aucune saisie TRS sur la période sélectionnée{{ atelierFiltre ? ' pour cet atelier' : '' }}. Élargis la période (en haut) puis « Appliquer ».</template>
+      <template v-else><b>{{ postesFiltres.length }}</b> saisie(s) TRS trouvée(s) sur la période, mais aucune n'a le champ « {{ ROLE_LBL[role] }} » renseigné — ce classement reste donc vide.
+        <template v-if="role === 'operateur'"> Renseigne <b>« Fait par »</b> dans Saisie TRS (les anciennes saisies ne l'ont pas rétroactivement).</template>
+        <template v-else-if="role === 'chef'"> Renseigne <b>« Vérifié par »</b> dans Saisie TRS.</template>
+        <template v-else> Renseigne <b>« Superviseur de shift »</b> dans Saisie TRS (migration 015 requise).</template>
+      </template>
+    </div>
 
     <template v-else>
       <div class="kpi-row">
