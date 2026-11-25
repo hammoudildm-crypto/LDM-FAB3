@@ -30,7 +30,7 @@ export const MODULES = [
     links: [['/verification-ddl', 'DDL Fab — Production'], ['/verification-ddl-aq', 'DDL Fab — AQ'], ['/verification-ddl-cond', 'DDL Conditionnement'], ['/qualite', 'Déviations / CAPA / Changements'], ['/audit', "Journal d'audit"]] },
   { key: 'formation', label: 'Formation & Qualification', c: '#0d9488',
     icon: `<g ${S}><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/></g>`,
-    links: [['/effectifs', 'Effectifs'], ['/organigramme', 'Organigramme'], ['/formations', 'Référentiel des formations'], ['/formations-exigences', 'Exigences par fonction'], ['/formations-planning', 'Planification & suivi'], ['/formations-enreg', 'Enregistrements'], ['/formations-matrice', 'Matrice & tableau de bord'], ['/rendement-personnel', 'Rendement du personnel']] },
+    links: [['/effectifs', 'Effectifs'], ['/organigramme', 'Organigramme'], ['/formations', 'Référentiel des formations'], ['/formations-exigences', 'Exigences par fonction'], ['/formations-planning', 'Planification & suivi'], ['/formations-enreg', 'Enregistrements'], ['/formations-matrice', 'Matrice & tableau de bord'], ['/rendement-personnel', 'Performance du personnel']] },
   { key: 'pqr', label: 'Revue qualité (PQR)', c: '#a855f7',
     icon: `<g ${S}><path d="M9 3h6"/><path d="M10 3v5.5L4.5 17a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 8.5V3"/><line x1="8.5" y1="14" x2="15.5" y2="14"/></g>`,
     links: [['/pqr-parametres', 'Paramètres critiques'], ['/pqr-validation', 'Protocole de validation'], ['/pqr-saisie', 'Saisie des mesures'], ['/granulometrie', 'Granulométrie & densité'], ['/pqr-tableau', 'Tableau de bord PQR']] },
