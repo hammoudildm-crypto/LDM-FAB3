@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, inject, onMounted, watch } from 'vue'
+import { ref, reactive, computed, inject, onMounted, watch, nextTick } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 
@@ -111,8 +111,8 @@ const nbPostes = computed(() => {
 const postesActifs = computed(() => (nbPostes.value >= 3 ? [1, 2, 3] : (nbPostes.value === 2 ? [1, 2] : [1])))
 const regimeLabel = computed(() => nbPostes.value + '×8')
 const POSTE_NOM = { 1: 'Matin', 2: 'Après-midi', 3: 'Nuit' }
-// Si le poste sélectionné dépasse le régime, on le ramène dans la plage.
-watch(nbPostes, (n) => { if (poste.value > n) poste.value = n })
+// Options du sélecteur : postes du régime + le poste couramment choisi (pour éditer une saisie hors régime).
+const postesSelectables = computed(() => (postesActifs.value.includes(Number(poste.value)) ? postesActifs.value : [...postesActifs.value, Number(poste.value)].sort((a, b) => a - b)))
 
 // --- Personnel pour « Fait par » / « Vérifié par » (depuis l'organigramme / volet formation) ---
 const normTxt = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
@@ -201,6 +201,24 @@ function chargerContexte() {
     form.fait_par = ex.fait_par || ''
     form.verifie_par = ex.verifie_par || ''
   }
+}
+
+// Revenir sur une saisie de la liste pour la modifier : on la recharge dans le formulaire (mode Poste par poste).
+const hautForm = ref(null)
+function modifierSaisie(s) {
+  modeSaisie.value = 'poste'
+  phaseFiltre.value = ''            // afficher tous les équipements
+  rechercheProduit.value = ''       // afficher tous les produits
+  equipId.value = s.equipement_id
+  dateSel.value = s.date
+  poste.value = Number(s.poste)
+  produitId.value = s.produit_id || ''
+  relireRegime()
+  chargerContexte()                 // remplit le formulaire avec les valeurs existantes
+  msg.value = ''
+  ok.value = 'Saisie chargée — modifie les valeurs puis « Enregistrer » pour mettre à jour.'
+  setTimeout(() => { if (ok.value.startsWith('Saisie chargée')) ok.value = '' }, 5000)
+  nextTick(() => { try { hautForm.value && hautForm.value.scrollIntoView({ behavior: 'smooth', block: 'start' }) } catch (e) {} })
 }
 
 const sommeArrets = computed(() => MOTIFS.reduce((s, m) => s + (Number(form[m[0]]) || 0), 0))
@@ -419,7 +437,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
     <p v-if="msg" class="alert">{{ msg }}</p>
     <p v-if="ok" class="okmsg">{{ ok }}</p>
 
-    <div class="mode-switch">
+    <div class="mode-switch" ref="hautForm">
       <button :class="{ on: modeSaisie === 'poste' }" @click="modeSaisie = 'poste'">Poste par poste</button>
       <button :class="{ on: modeSaisie === 'jour' }" @click="modeSaisie = 'jour'">Journée {{ regimeLabel }} (grille)</button>
     </div>
@@ -453,7 +471,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         </label>
         <label v-if="modeSaisie === 'poste'">Poste
           <select v-model.number="poste" @change="chargerContexte">
-            <option v-for="pk in postesActifs" :key="pk" :value="pk">Poste {{ pk }} · {{ POSTE_NOM[pk] }}</option>
+            <option v-for="pk in postesSelectables" :key="pk" :value="pk">Poste {{ pk }} · {{ POSTE_NOM[pk] }}{{ pk > nbPostes ? ' (hors régime)' : '' }}</option>
           </select>
         </label>
       </div>
@@ -662,7 +680,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
       <div v-if="!saisiesAffichees.length" class="empty">{{ filtreSaisiesEquip && equipId ? 'Aucune saisie pour cet équipement.' : "Aucune saisie pour l\'instant." }}</div>
       <div v-else class="table-scroll">
         <table class="mini">
-          <thead><tr><th>Date</th><th>Poste</th><th>Équip.</th><th>Produit</th><th class="right">Ouv.</th><th class="right">Arrêts</th><th class="right">Fonct.</th><th class="right">Nettoyage</th></tr></thead>
+          <thead><tr><th>Date</th><th>Poste</th><th>Équip.</th><th>Produit</th><th class="right">Ouv.</th><th class="right">Arrêts</th><th class="right">Fonct.</th><th class="right">Nettoyage</th><th class="right">Action</th></tr></thead>
           <tbody>
             <tr v-for="s in saisiesAffichees" :key="s.id">
               <td class="nowrap">{{ s.date }}</td>
@@ -673,6 +691,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
               <td class="right">{{ fmt(trsSaisie(s).arr) }}</td>
               <td class="right">{{ fmt(trsSaisie(s).tf) }}</td>
               <td class="right">{{ fmt(s.arret_nettoyage_min) }}</td>
+              <td class="right"><button type="button" class="ds-edit" @click="modifierSaisie(s)" title="Recharger cette saisie dans le formulaire pour la modifier">✎ Modifier</button></td>
             </tr>
           </tbody>
         </table>
@@ -767,6 +786,10 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .mode-switch { display: inline-flex; gap: 3px; background: #eef2ff; border-radius: 10px; padding: 4px; margin: 0 0 8px; }
 .rg-hint { margin: 0 0 14px; font-size: 12.5px; color: #475569; }
 .rg-hint b { color: #4338ca; }
+.ds-edit { border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca; font-weight: 700; font-size: 12px; padding: 4px 10px; border-radius: 7px; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
+.ds-edit:hover { background: #4338ca; border-color: #4338ca; color: #fff; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .ds-edit { background: #1e293b; color: #a5b4fc; border-color: #334155; }
+html:is([data-theme="sombre"], [data-theme="minuit"]) .ds-edit:hover { background: #4338ca; color: #fff; border-color: #4338ca; }
 .mode-switch button { border: 0; background: none; font-family: inherit; font-size: 13px; font-weight: 700; color: #64748b; padding: 7px 16px; border-radius: 7px; cursor: pointer; transition: background .15s, color .15s; }
 .mode-switch button.on { background: #fff; color: #4338ca; box-shadow: 0 1px 2px rgba(16,24,40,.1); }
 /* Grille Journée 3×8 */
