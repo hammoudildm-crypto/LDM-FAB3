@@ -32,7 +32,7 @@
           </select>
           <label v-if="phaseSel && !filtreEq" class="cad-tous"><input type="checkbox" v-model="tousProduits" /> Afficher aussi les produits sans cadence dans cette phase (pour en ajouter)</label>
           <span v-if="filtreEq" class="eq-count">{{ produitsMatrice.length }} produit(s) avec cadence</span>
-          <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupesAffiches.length }} équipement(s){{ phaseSel ? ' — ' + (PHASE_LBL[phaseSel] || phaseSel) : '' }} — saisissez la cadence directement dans les cases</span>
+          <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupesAffiches.length }} équipement(s){{ phaseSel ? ' — ' + (PHASE_LBL[phaseSel] || phaseSel) : '' }} — saisissez la cadence dans les cases. Bouton d'en-tête : basculer un équipement en <b>temps par lot (h/lot)</b> au lieu du débit (kg/h).</span>
           <span v-if="msgMat" class="mat-msg">{{ msgMat }}</span>
         </div>
         <div class="mat-scroll">
@@ -42,6 +42,7 @@
                 <th class="mat-corner">Produit</th>
                 <th v-for="g in groupesAffiches" :key="g.key" class="mat-col" :class="'ph-' + (g.phase || 'x')">
                   {{ g.nom }}<div class="mat-unit">{{ uniteGroupe(g) }}</div>
+                  <button type="button" class="mode-tg" :class="{ temps: modeGroupe(g) === 'temps' }" @click="toggleModeGroupe(g)" :title="modeGroupe(g) === 'temps' ? 'Cadence en temps par lot (h/lot) — cliquer pour revenir au débit' : 'Cadence en débit — cliquer pour passer en temps par lot (h/lot)'">{{ modeGroupe(g) === 'temps' ? '⏱ h/lot' : '⇄ kg/h' }}</button>
                 </th>
               </tr>
             </thead>
@@ -219,7 +220,28 @@ function cadenceCell(pid, grp) {
   for (const e of grp.equips) { const x = idx.get(e.id + '#' + pid); if (x && x > v) v = x }
   return v
 }
-function uniteGroupe(grp) { return grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h' }
+// Mode de cadence par équipement : 'debit' (kg/h ou bts/h) ou 'temps' (h par lot).
+const modesGroupe = reactive({})   // override UI par groupe ; sinon dérivé des cadences existantes
+function modeGroupe(grp) {
+  if (modesGroupe[grp.key]) return modesGroupe[grp.key]
+  const ids = new Set(grp.equips.map(e => e.id))
+  return cadences.value.some(c => ids.has(c.equipement_id) && c.mode === 'temps') ? 'temps' : 'debit'
+}
+function uniteGroupe(grp) { return modeGroupe(grp) === 'temps' ? 'h/lot' : (grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h') }
+async function toggleModeGroupe(grp) {
+  const nouveau = modeGroupe(grp) === 'temps' ? 'debit' : 'temps'
+  modesGroupe[grp.key] = nouveau
+  const unite = nouveau === 'temps' ? 'h/lot' : (grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h')
+  try {
+    const ids = new Set(grp.equips.map(e => e.id))
+    for (const c of cadences.value) {
+      if (!ids.has(c.equipement_id)) continue
+      const r = await supabase.from('cadences_produit').update({ mode: nouveau, unite_cadence: unite }).eq('id', c.id)
+      if (!r.error) { c.mode = nouveau; c.unite_cadence = unite }
+    }
+    msgMat.value = nouveau === 'temps' ? 'Mode « temps par lot » (h/lot) ✓' : 'Mode « débit » ✓'; setTimeout(() => { msgMat.value = '' }, 2200)
+  } catch (err) { msgMat.value = 'Erreur : ' + (err.message || err) }
+}
 const fmtCad = (v) => Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 })
 function ouvrirGroupe(g) { selGroupe.value = g.key; chargerEditeur(); vueMode.value = 'editeur' }
 const groupeFiltreEq = computed(() => filtreEq.value ? (groupes.value.find(g => g.nom === filtreEq.value) || null) : null)
@@ -241,10 +263,11 @@ async function sauverCellule(pid, grp, valeur) {
   try {
     for (const e of grp.equips) {
       const existing = cadences.value.find(c => c.equipement_id === e.id && c.produit_id === pid)
-      // la matrice enregistre l'unité qu'elle affiche (kg/h en fabrication, bts/h en conditionnement)
+      // la matrice enregistre l'unité qu'elle affiche (kg/h ou bts/h en débit, h/lot en temps) + le mode
       const unite = uniteGroupe(grp)
-      if (nv > 0 && existing) { const r = await supabase.from('cadences_produit').update({ cadence_nominale: nv, unite_cadence: unite }).eq('id', existing.id); if (r.error) throw r.error; existing.cadence_nominale = nv; existing.unite_cadence = unite }
-      else if (nv > 0) { const r = await supabase.from('cadences_produit').insert({ equipement_id: e.id, produit_id: pid, cadence_nominale: nv, unite_cadence: unite }).select('id').single(); if (r.error) throw r.error; if (r.data) cadences.value.push({ id: r.data.id, equipement_id: e.id, produit_id: pid, cadence_nominale: nv, unite_cadence: unite }) }
+      const md = modeGroupe(grp)
+      if (nv > 0 && existing) { const r = await supabase.from('cadences_produit').update({ cadence_nominale: nv, unite_cadence: unite, mode: md }).eq('id', existing.id); if (r.error) throw r.error; existing.cadence_nominale = nv; existing.unite_cadence = unite; existing.mode = md }
+      else if (nv > 0) { const r = await supabase.from('cadences_produit').insert({ equipement_id: e.id, produit_id: pid, cadence_nominale: nv, unite_cadence: unite, mode: md }).select('id').single(); if (r.error) throw r.error; if (r.data) cadences.value.push({ id: r.data.id, equipement_id: e.id, produit_id: pid, cadence_nominale: nv, unite_cadence: unite, mode: md }) }
       else if (nv === 0 && existing) { const r = await supabase.from('cadences_produit').delete().eq('id', existing.id); if (r.error) throw r.error; const i = cadences.value.indexOf(existing); if (i >= 0) cadences.value.splice(i, 1) }
     }
     msgMat.value = 'Enregistré ✓'; setTimeout(() => { msgMat.value = '' }, 1800)
@@ -407,7 +430,11 @@ const trsReel = ref(null)
 const trsChargementReel = ref(false)
 function cadenceDe(eq, pr) {
   const c = cadences.value.find(c => c.equipement_id === eq && c.produit_id === pr)
-  return { value: c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0, mode: c ? (c.mode || 'debit') : 'debit' }
+  if (!c || c.cadence_nominale == null) return { value: 0, mode: 'debit' }
+  const v = Number(c.cadence_nominale)
+  // mode 'temps' = cadence en temps par lot (h/lot) -> débit équivalent (lots/h = 1 / temps)
+  if (c.mode === 'temps') return { value: v > 0 ? 1 / v : 0, mode: 'debit' }
+  return { value: v, mode: c.mode || 'debit' }
 }
 async function chargerTRSReel(equipIds) {
   trsReel.value = null
@@ -497,6 +524,10 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 .mat-col:hover { background: #ccfbf1; }
 .mat-col2 { position: sticky; top: 0; z-index: 2; background: #f1f5f9; text-align: center; font-weight: 700; color: #334155; min-width: 84px; }
 .mat-unit { font-size: 10px; font-weight: 500; color: #94a3b8; margin-top: 1px; }
+.mode-tg { display: inline-block; margin-top: 3px; border: 1px solid #cbd5e1; background: #fff; color: #64748b; font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.mode-tg.temps { background: #0f766e; border-color: #0f766e; color: #fff; }
+.mode-tg:hover { border-color: #0f766e; color: #0f766e; }
+.mode-tg.temps:hover { background: #115e59; color: #fff; }
 .mat-prod { position: sticky; left: 0; z-index: 1; background: #fff; }
 .mat-code { font-family: ui-monospace, monospace; font-weight: 700; color: #0f766e; display: block; }
 .mat-des { font-size: 11px; color: #64748b; display: block; }
