@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { supabase } from '../supabase'
 import PageHeader from '../components/PageHeader.vue'
 import MiniChart from '../components/MiniChart.vue'
@@ -24,6 +24,7 @@ const au = ref(now.toISOString().slice(0, 10))
 const role = ref('operateur')          // 'operateur' | 'chef' | 'superviseur'
 const scoreMetric = ref('trsTech')     // 'trsTech' | 'rendement'
 const atelierFiltre = ref('')
+const equipFiltre = ref('')
 const recherche = ref('')
 const detail = ref(null)
 const MIN_POSTES = 5
@@ -60,8 +61,24 @@ onMounted(charger)
 const atelierNomParId = computed(() => { const m = {}; for (const a of ateliers.value) m[String(a.id)] = a.nom || a.code; return m })
 const equipAtelierNom = computed(() => { const m = {}; for (const e of equipements.value) m[e.id] = atelierNomParId.value[String(e.atelier_id)] || ''; return m })
 const ateliersListe = computed(() => [...new Set(ateliers.value.map(a => a.nom || a.code).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr')))
-const postesFiltres = computed(() => atelierFiltre.value ? postes.value.filter(s => equipAtelierNom.value[s.equipement_id] === atelierFiltre.value) : postes.value)
+// Liste des équipements (restreinte à l'atelier sélectionné), dédoublonnée.
+const equipsListe = computed(() => {
+  const m = {}
+  for (const s of postes.value) {
+    if (!s.equipement_id || m[s.equipement_id]) continue
+    if (atelierFiltre.value && equipAtelierNom.value[s.equipement_id] !== atelierFiltre.value) continue
+    m[s.equipement_id] = { id: s.equipement_id, code: s.equipements ? s.equipements.code : '?', nom: s.equipements ? s.equipements.nom : '' }
+  }
+  return Object.values(m).sort((a, b) => String(a.code).localeCompare(String(b.code), 'fr'))
+})
+const equipLabel = computed(() => { const e = equipsListe.value.find(x => String(x.id) === String(equipFiltre.value)); return e ? (e.nom ? e.code + ' — ' + e.nom : e.code) : '' })
+const postesFiltres = computed(() => postes.value.filter(s =>
+  (!atelierFiltre.value || equipAtelierNom.value[s.equipement_id] === atelierFiltre.value) &&
+  (!equipFiltre.value || String(s.equipement_id) === String(equipFiltre.value))
+))
 const atelierLabel = computed(() => atelierFiltre.value)
+// Changer d'atelier réinitialise l'équipement (il peut ne plus appartenir à l'atelier).
+watch(atelierFiltre, () => { equipFiltre.value = '' })
 // Nombre total de postes saisis par équipement (pour le taux de vérification des chefs de ligne).
 const postesParEquip = computed(() => { const m = {}; for (const s of postesFiltres.value) { const k = s.equipement_id || '—'; m[k] = (m[k] || 0) + 1 } return m })
 
@@ -185,6 +202,7 @@ function exporterPDF() {
   const COL = { vert: '#16a34a', orange: '#d97706', rouge: '#dc2626', none: '#cbd5e1' }
   const ce = ';-webkit-print-color-adjust:exact;print-color-adjust:exact'
   const atTxt = atelierFiltre.value ? atelierLabel.value : 'Tous'
+  const eqTxt = equipFiltre.value ? equipLabel.value : 'Tous'
   const rc = roleCol.value
   const rows = list.map((p, i) => {
     const sc = scoreDe(p)
@@ -201,7 +219,7 @@ function exporterPDF() {
     '.insuff td{color:#94a3b8}.note{margin-top:10px;font-size:10px;color:#94a3b8;line-height:1.5}.foot{margin-top:20px;color:#94a3b8;font-size:10px;border-top:1px solid #eee;padding-top:6px}@media print{body{margin:12mm}}</style></head><body>' + LOGO_HTML +
     '<h1>Performance du personnel — ' + esc(ROLE_LBL[role.value]) + 's</h1>' +
     '<p class="sub">Classement sur le ' + esc(scoreLabel.value) + ' · ' + (scoreMetric.value === 'rendement' ? 'production réelle ÷ théorique' : 'arrêts planifiés et pannes exclus') + '</p>' +
-    '<div class="meta"><div><b>Période :</b> ' + esc(dFr(du.value)) + ' → ' + esc(dFr(au.value)) + '</div><div><b>Atelier :</b> ' + esc(atTxt) + '</div><div><b>' + esc(scoreLabel.value) + ' moyen (pondéré) :</b> ' + pctR(scoreMoyen.value) + '</div><div><b>Personnes :</b> ' + list.length + '</div></div>' +
+    '<div class="meta"><div><b>Période :</b> ' + esc(dFr(du.value)) + ' → ' + esc(dFr(au.value)) + '</div><div><b>Atelier :</b> ' + esc(atTxt) + '</div><div><b>Équipement :</b> ' + esc(eqTxt) + '</div><div><b>' + esc(scoreLabel.value) + ' moyen (pondéré) :</b> ' + pctR(scoreMoyen.value) + '</div><div><b>Personnes :</b> ' + list.length + '</div></div>' +
     '<table><thead><tr><th class="r">#</th><th>Personne</th><th class="r">Postes</th><th>' + esc(scoreLabel.value) + '</th><th class="r">' + (scoreMetric.value === 'rendement' ? 'TRS tech.' : 'Rendement') + '</th><th class="r">Quantité</th><th class="r">Rebuts</th><th class="r">' + esc(rc.lbl) + '</th><th class="r">Polyv.</th></tr></thead><tbody>' + rows + '</tbody></table>' +
     '<p class="note">Comparer à iso-équipement. Le TRS technique exclut arrêts planifiés et pannes (ce qui échappe à l\'opérateur). Outil de coaching / ciblage formation. Personnes avec moins de ' + MIN_POSTES + ' postes (ou sans cadence définie) en gris, hors classement.</p>' +
     '<p class="foot">ProdTrack — LDM Groupe · Document généré le ' + esc(new Date().toLocaleDateString('fr-FR')) + '</p></body></html>'
@@ -226,6 +244,12 @@ function exporterPDF() {
           <option v-for="nom in ateliersListe" :key="nom" :value="nom">{{ nom }}</option>
         </select>
       </label>
+      <label class="pf-f">Équipement
+        <select v-model="equipFiltre">
+          <option value="">Tous les équipements</option>
+          <option v-for="e in equipsListe" :key="e.id" :value="e.id">{{ e.code }}{{ e.nom ? ' — ' + e.nom : '' }}</option>
+        </select>
+      </label>
       <button class="pf-apply" @click="appliquer">Appliquer</button>
       <input class="pf-search" v-model="recherche" placeholder="Rechercher une personne…" />
     </div>
@@ -246,7 +270,7 @@ function exporterPDF() {
 
     <p v-if="chargement" class="pf-empty">Chargement…</p>
     <div v-else-if="!roleDispo" class="pf-empty">
-      <template v-if="!postesFiltres.length">Aucune saisie TRS sur la période sélectionnée{{ atelierFiltre ? ' pour cet atelier' : '' }}. Élargis la période (en haut) puis « Appliquer ».</template>
+      <template v-if="!postesFiltres.length">Aucune saisie TRS sur la période sélectionnée{{ (atelierFiltre || equipFiltre) ? ' pour cette sélection' : '' }}. Élargis la période (en haut) puis « Appliquer ».</template>
       <template v-else><b>{{ postesFiltres.length }}</b> saisie(s) TRS trouvée(s) sur la période, mais aucune n'a le champ « {{ ROLE_LBL[role] }} » renseigné — ce classement reste donc vide.
         <template v-if="role === 'operateur'"> Renseigne <b>« Fait par »</b> dans Saisie TRS (les anciennes saisies ne l'ont pas rétroactivement).</template>
         <template v-else-if="role === 'chef'"> Renseigne <b>« Vérifié par »</b> dans Saisie TRS.</template>
