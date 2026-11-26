@@ -459,16 +459,39 @@ const cadIndex = computed(() => {
   for (const c of cadList.value) m[c.equipement_id + '_' + c.produit_id] = c
   return m
 })
-// Équipements regroupés par atelier (atelier = filtre optionnel). Ordre : atelier puis code.
+// Phase de procédé d'un équipement -> ordre de fabrication des colonnes
+function phaseDeType(type) {
+  const t = (type || '').toLowerCase()
+  if (/pes[ée]|balance|bascule/.test(t)) return 'pesee'
+  if (/granul|séch|sech/.test(t)) return 'granulation'
+  if (/mélang|melang/.test(t)) return 'melange'
+  if (/gélule|gelule|remplis|encapsul|capsul/.test(t)) return 'remplissage'
+  if (/compress|presse|compri/.test(t)) return 'compression'
+  if (/pellicul|enrob|coat|dragé|drage/.test(t)) return 'pelliculage'
+  if (/condition|blister|thermoform|uhlmann|integra|marchesini|emball|étui|etui|fardel|encart|mise en bo/.test(t)) return 'conditionnement'
+  return null
+}
+const ORDRE_GAMME = { pesee: 1, granulation: 2, melange: 3, compression: 4, remplissage: 5, pelliculage: 6, conditionnement: 7 }
+const rangPhase = (e) => ORDRE_GAMME[phaseDeType(e.type)] || 99
+
+// Équipements regroupés par atelier, colonnes dans l'ordre du procédé de fabrication.
 const ateliersMat = computed(() => {
   const actifs = equipements.value.filter(e => e.actif !== false && (!cadMatAtelier.value || e.atelier_id === cadMatAtelier.value))
   const parAtelier = {}
   for (const e of actifs) { const k = e.atelier_id || '__none__'; (parAtelier[k] || (parAtelier[k] = [])).push(e) }
-  const triEq = (a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true })
+  const triEq = (a, b) => (rangPhase(a) - rangPhase(b)) || String(a.code).localeCompare(String(b.code), undefined, { numeric: true })
   const groupes = []
-  const ordreAt = ateliers.value.slice().sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true }))
-  for (const a of ordreAt) if (parAtelier[a.id] && parAtelier[a.id].length) groupes.push({ atelier: a, equips: parAtelier[a.id].slice().sort(triEq) })
-  if (parAtelier['__none__']) groupes.push({ atelier: { id: '__none__', code: '—', nom: 'Sans atelier' }, equips: parAtelier['__none__'].slice().sort(triEq) })
+  for (const [id, eqs] of Object.entries(parAtelier)) {
+    if (!eqs.length) continue
+    const at = id === '__none__' ? { id: '__none__', code: '—', nom: 'Sans atelier' } : (ateliers.value.find(a => a.id == id) || { id, code: '?', nom: '' })
+    groupes.push({ atelier: at, equips: eqs.slice().sort(triEq) })
+  }
+  const rangAt = (g) => Math.min(...g.equips.map(rangPhase))   // atelier placé à sa phase la plus précoce
+  groupes.sort((a, b) => {
+    const na = a.atelier.id === '__none__' ? 1 : 0, nb = b.atelier.id === '__none__' ? 1 : 0
+    if (na !== nb) return na - nb                              // « Sans atelier » en dernier
+    return (rangAt(a) - rangAt(b)) || String(a.atelier.code).localeCompare(String(b.atelier.code), undefined, { numeric: true })
+  })
   return groupes
 })
 const equipsMat = computed(() => ateliersMat.value.flatMap(g => g.equips))
