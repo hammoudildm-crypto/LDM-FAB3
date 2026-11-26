@@ -983,54 +983,21 @@ onMounted(async () => {
         <span class="chevron">{{ ouvert.cadences ? '▾' : '▸' }}</span>
       </div>
       <div v-show="ouvert.cadences">
-        <div class="cad-form" v-if="peutEditer">
-          <select v-model="cadEquip"><option value="">Équipement…</option><option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option></select>
-          <input v-model="rechercheProdCad" placeholder="Rechercher produit…" class="cad-prod-search" />
-          <select v-model="cadProduit"><option value="">— {{ produitsFiltresCad.length }} produit(s) —</option><option v-for="p in produitsFiltresCad" :key="p.id" :value="p.id">{{ p.code_pf }} — {{ p.designation }}</option></select>
-          <select v-model="cadMode"><option value="debit">Débit (unités/h ou kg/h)</option><option value="cycle">Temps écoulé (au poste)</option></select>
-          <input v-if="cadMode === 'debit'" id="cad-valeur" type="number" step="any" v-model="cadValeur" placeholder="cadence (ex. 60000)" />
-          <select v-if="cadMode === 'debit'" v-model="cadUnite" class="cad-unite-in"><option value="unités/h">unités/h (conditionnement)</option><option value="kg/h">kg/h (fabrication)</option></select>
-          <button class="btn" @click="ajouterCad">Enregistrer</button>
-        </div>
-        <div class="bulk-row" v-if="peutEditer">
-          <span class="bulk-lbl">En masse — atelier :</span>
-          <select v-model="bulkAtelier"><option value="">Choisir…</option><option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.code }} — {{ a.nom }}</option></select>
-          <button class="btn-sm" @click="passerAtelierTempsEcoule">Tout passer en temps écoulé</button>
-          <span v-if="bulkMsg" class="bulk-msg">{{ bulkMsg }}</span>
-        </div>
-        <div class="cadfill" v-if="peutEditer">
-          <div class="cadfill-row">
-            <span class="cadfill-lbl">Remplissage manuel — produits sans cadence pour :</span>
-            <select v-model="filtreCadEquip"><option value="">Choisir un équipement…</option><option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option></select>
-          </div>
-          <div v-if="filtreCadEquip" class="cadfill-body">
-            <p v-if="!produitsSansCadence.length" class="cadfill-ok">✓ Tous les produits actifs ont déjà une cadence sur cet équipement.</p>
-            <template v-else>
-              <p class="cadfill-count">{{ produitsSansCadence.length }} produit(s) sans cadence — clique pour pré-remplir le formulaire ci-dessus :</p>
-              <div class="cadfill-chips">
-                <button v-for="pr in produitsSansCadence" :key="pr.id" class="cadfill-chip" @click="prefillCad(pr)" :title="pr.designation">{{ pr.code_pf }}</button>
-              </div>
-            </template>
-          </div>
+        <div class="cad-redirect">
+          <p>🔗 Les cadences se gèrent désormais sur la page dédiée <b>Cadences &amp; paramètres par équipement</b> — c'est la <b>source unique</b>. Cet écran sert uniquement à les <b>consulter</b> (pour éviter les doublons et garder un seul mode par équipement).</p>
+          <RouterLink to="/cadences" class="btn">Ouvrir la page Cadences →</RouterLink>
         </div>
         <div v-if="!cadList.length" class="empty">Aucune cadence définie.</div>
         <div class="cad-scroll" v-else>
           <table class="ref-table">
-            <thead><tr><th>Équipement</th><th>Produit</th><th class="right">Cadence</th><th>Unité</th><th></th></tr></thead>
+            <thead><tr><th>Équipement</th><th>Produit</th><th class="right">Cadence</th><th>Unité</th><th>Mode</th></tr></thead>
             <tbody>
               <tr v-for="c in cadList" :key="c.id">
                 <td>{{ c.equipements ? c.equipements.code : '—' }}</td>
                 <td>{{ c.produits ? (c.produits.code_pf + ' — ' + c.produits.designation) : '—' }}</td>
-                <template v-if="editCadId === c.id">
-                  <td class="right"><input v-if="editCadMode === 'debit'" type="number" step="any" v-model="editCadValeur" class="cad-edit-in" /><span v-else class="muted-sm">—</span></td>
-                  <td><select v-model="editCadMode" class="cad-edit-sel"><option value="debit">Débit</option><option value="cycle">Temps écoulé</option></select><select v-if="editCadMode === 'debit'" v-model="editCadUnite" class="cad-edit-in2"><option value="unités/h">unités/h</option><option value="kg/h">kg/h</option></select></td>
-                  <td class="right nowrap"><button class="link" @click="enregistrerCad(c)">OK</button> <button class="link" @click="editCadId = null">Annuler</button></td>
-                </template>
-                <template v-else>
-                  <td class="right strong">{{ c.cadence_nominale != null ? Number(c.cadence_nominale).toLocaleString('fr-FR') : '—' }}</td>
-                  <td>{{ c.unite_cadence }}</td>
-                  <td class="right nowrap"><button v-if="peutEditer" class="link" @click="ouvrirEditCad(c)">Modifier</button> <button v-if="peutSupprimer" class="link danger" @click="supprimerCad(c)">Supprimer</button></td>
-                </template>
+                <td class="right strong">{{ c.cadence_nominale != null ? Number(c.cadence_nominale).toLocaleString('fr-FR') : '—' }}</td>
+                <td>{{ c.unite_cadence }}</td>
+                <td><span v-if="c.mode === 'cycle'" class="mode-old">temps écoulé (ancien)</span><span v-else>{{ c.mode === 'temps' ? 'temps (min/lot)' : 'débit' }}</span></td>
               </tr>
             </tbody>
           </table>
@@ -1187,6 +1154,10 @@ button.link.danger { color: #b91c1c; }
 .poste-grp:first-of-type { margin-top: 6px; }
 .poste-grp-h { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #6d28d9; background: #f5f3ff; border: 1px solid #e9d5ff; border-radius: 8px; padding: 6px 11px; margin-bottom: 6px; }
 .poste-grp-n { margin-left: auto; font-size: 11px; font-weight: 700; color: #7c3aed; background: #fff; border: 1px solid #e9d5ff; border-radius: 999px; padding: 1px 9px; }
+.cad-redirect { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.cad-redirect p { margin: 0; flex: 1; min-width: 240px; font-size: 13px; color: #334155; line-height: 1.5; }
+.cad-redirect .btn { text-decoration: none; }
+.mode-old { color: #b45309; font-weight: 700; font-size: 12px; }
 .cad-form { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 9px; align-items: center; }
 .cad-form select, .cad-form input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
 .cad-form select { max-width: 250px; }
