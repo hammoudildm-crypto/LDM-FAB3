@@ -459,18 +459,17 @@ const cadIndex = computed(() => {
   for (const c of cadList.value) m[c.equipement_id + '_' + c.produit_id] = c
   return m
 })
-const equipsMatAtelier = computed(() => {
-  if (!cadMatAtelier.value) return []
-  return equipements.value
-    .filter(e => e.atelier_id === cadMatAtelier.value && e.actif !== false)
-    .sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true }))
+const equipsMat = computed(() => {
+  let list = equipements.value.filter(e => e.actif !== false)
+  if (cadMatAtelier.value) list = list.filter(e => e.atelier_id === cadMatAtelier.value)  // atelier = filtre optionnel
+  return list.slice().sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true }))
 })
 const produitsMat = computed(() => {
   const q = cadMatRecherche.value.trim().toLowerCase()
   const list = produits.value
   if (q) return list.filter(p => (String(p.code_pf || '') + ' ' + String(p.designation || '')).toLowerCase().includes(q))
   if (cadMatTous.value) return list
-  const eqIds = new Set(equipsMatAtelier.value.map(e => e.id))
+  const eqIds = new Set(equipsMat.value.map(e => e.id))
   return list.filter(p => cadList.value.some(c => c.produit_id === p.id && eqIds.has(c.equipement_id)))
 })
 function valCadMat(eqId, prodId) {
@@ -1050,33 +1049,33 @@ onMounted(async () => {
         <!-- VUE MATRICE : produits × équipements d'un atelier, cellules éditables -->
         <div v-if="vueCad === 'matrice'" class="cadmat">
           <div class="cadmat-head">
-            <select v-model="cadMatAtelier"><option value="">Choisir un atelier…</option><option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.code }} — {{ a.nom }}</option></select>
+            <select v-model="cadMatAtelier"><option value="">Tous les ateliers</option><option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.code }} — {{ a.nom }}</option></select>
             <input v-model="cadMatRecherche" placeholder="Rechercher un produit…" class="cadmat-search" />
             <label class="cadmat-tous"><input type="checkbox" v-model="cadMatTous" /> Tous les produits</label>
           </div>
-          <p v-if="!cadMatAtelier" class="cadmat-hint">Choisis un atelier pour afficher la grille produits × équipements. Chaque case = la cadence (vide = non définie). Tape une valeur pour créer/modifier, efface pour supprimer.</p>
-          <p v-else-if="!equipsMatAtelier.length" class="cadmat-hint">Aucun équipement actif pour cet atelier.</p>
+          <p class="cadmat-hint-sm">Tous les équipements sont en colonnes (filtre par atelier si besoin). Chaque case = la cadence (vide = non définie) : tape une valeur pour créer/modifier, efface pour supprimer.</p>
+          <p v-if="!equipsMat.length" class="cadmat-hint">Aucun équipement actif.</p>
           <template v-else>
             <div class="cadmat-scroll">
               <table class="cadmat-table">
                 <thead>
                   <tr>
                     <th class="cadmat-corner">Produit</th>
-                    <th v-for="e in equipsMatAtelier" :key="e.id" class="cadmat-col" :title="e.nom">{{ e.code }}<div class="cadmat-unit">{{ uniteEquipMat(e.id) }}</div></th>
+                    <th v-for="e in equipsMat" :key="e.id" class="cadmat-col" :title="e.nom">{{ e.code }}<div class="cadmat-unit">{{ uniteEquipMat(e.id) }}</div></th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="p in produitsMat" :key="p.id">
                     <td class="cadmat-prod"><span class="cadmat-pcode">{{ p.code_pf }}</span><span class="cadmat-pdes">{{ p.designation }}</span></td>
-                    <td v-for="e in equipsMatAtelier" :key="e.id" class="cadmat-cell" :class="{ filled: valCadMat(e.id, p.id) !== '' }">
+                    <td v-for="e in equipsMat" :key="e.id" class="cadmat-cell" :class="{ filled: valCadMat(e.id, p.id) !== '' }">
                       <input type="number" step="any" inputmode="decimal" :value="valCadMat(e.id, p.id)" @change="saveCadMat(e.id, p.id, $event.target.value)" :disabled="!peutEditer" class="cadmat-in" />
                     </td>
                   </tr>
-                  <tr v-if="!produitsMat.length"><td :colspan="equipsMatAtelier.length + 1" class="cadmat-empty">Aucun produit à afficher. {{ cadMatTous ? '' : 'Coche « Tous les produits » pour en ajouter.' }}</td></tr>
+                  <tr v-if="!produitsMat.length"><td :colspan="equipsMat.length + 1" class="cadmat-empty">Aucun produit à afficher. {{ cadMatTous ? '' : 'Coche « Tous les produits » pour en ajouter.' }}</td></tr>
                 </tbody>
               </table>
             </div>
-            <p class="cadmat-count">{{ produitsMat.length }} produit(s) × {{ equipsMatAtelier.length }} équipement(s). L'unité de chaque colonne reprend les cadences existantes de l'équipement (défaut : unités/h).</p>
+            <p class="cadmat-count">{{ produitsMat.length }} produit(s) × {{ equipsMat.length }} équipement(s). L'unité de chaque colonne reprend les cadences existantes de l'équipement (défaut : unités/h).</p>
           </template>
         </div>
 
@@ -1317,6 +1316,7 @@ button.link.danger { color: #b91c1c; }
 .cadmat-search { min-width: 220px; }
 .cadmat-tous { font-size: 13px; color: #475569; display: inline-flex; align-items: center; gap: 6px; }
 .cadmat-hint { color: #64748b; font-size: 13px; line-height: 1.6; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; }
+.cadmat-hint-sm { color: #94a3b8; font-size: 12px; line-height: 1.6; margin: 0 2px 10px; }
 .cadmat-scroll { overflow: auto; max-height: 66vh; border: 1px solid #e2e8f0; border-radius: 10px; }
 .cadmat-table { border-collapse: separate; border-spacing: 0; font-size: 13px; }
 .cadmat-table th, .cadmat-table td { border-bottom: 1px solid #eef2f6; border-right: 1px solid #eef2f6; }
