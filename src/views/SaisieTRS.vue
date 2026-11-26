@@ -271,6 +271,8 @@ const surDeclare = computed(() => {
   return c > 0 && (prod / c * 60) > tempsFonct.value + 0.5
 })
 const pct = (x) => (x * 100).toFixed(1) + ' %'
+// Mode « temps de marche » (cycle) : la prod saisie = minutes de marche ; équivalent quantité = cadence × (min/60)
+const equivMarche = computed(() => cadenceMode.value === 'cycle' && cadence.value > 0 ? cadence.value * ((Number(form.production_realisee) || 0) / 60) : 0)
 
 // ------- Mode « Journée 3×8 » : les 3 postes saisis en grille, un seul enregistrement -------
 const TRS_COL = { ok: '#16a34a', mid: '#d97706', ko: '#dc2626' }
@@ -498,7 +500,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
       <template v-if="modeSaisie === 'poste'">
       <div v-if="equipId && produitId" class="cad-row">
         <span class="cad-lbl">Cadence de ce produit sur cet équipement :</span>
-        <span class="cad-val" v-if="cadenceMode === 'cycle'">Mesuré au temps écoulé</span>
+        <span class="cad-val" v-if="cadenceMode === 'cycle'">Suivi par temps de marche{{ cadence > 0 ? ' · équiv. ' + cadence.toLocaleString('fr-FR') + ' ' + uniteCad : '' }}</span>
         <span class="cad-val" v-else>{{ cadence ? cadence.toLocaleString('fr-FR') + ' ' + uniteCad : '—' }}</span>
         <span v-if="cadenceMode === 'debit' && !cadence" class="cad-warn">⚠ non définie</span>
         <span v-if="peutEditer && cadenceMode === 'debit' && !cadence" class="cad-inline">
@@ -540,7 +542,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         </div>
         <div>
           <h3 class="card-title">Production</h3>
-          <label class="fl">{{ cadenceMode === 'cycle' ? 'Temps écoulé (min)' : (cadenceMode === 'temps' ? 'Nombre de lots' : 'Production réalisée (' + uniteCad.replace('/h','') + ')') }}<input type="number" min="0" step="any" v-model.number="form.production_realisee" /></label>
+          <label class="fl">{{ cadenceMode === 'cycle' ? 'Temps de marche (min)' : (cadenceMode === 'temps' ? 'Nombre de lots' : 'Production réalisée (' + uniteCad.replace('/h','') + ')') }}<input type="number" min="0" step="any" v-model.number="form.production_realisee" /><span v-if="cadenceMode === 'cycle' && equivMarche > 0" class="equiv-marche">≈ {{ Math.round(equivMarche).toLocaleString('fr-FR') }} {{ uniteCad.replace('/h','') }} équivalents</span></label>
           <label v-if="cadenceMode !== 'cycle'" class="fl">Rebuts<input type="number" min="0" v-model.number="form.rebuts" /></label>
           <label v-if="colRetouche && cadenceMode !== 'cycle'" class="fl">Retouches<input type="number" min="0" v-model.number="form.retouches" title="Unités reprises / retouchées — alimente le taux de retouche (Qualité), sans impact sur le TRS." /></label>
 
@@ -621,7 +623,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <tr class="jcad">
               <td>Cadence</td>
               <td v-for="pk in postesActifs" :key="pk">
-                <span v-if="jour[pk].cadenceObj">{{ modeDe(jour[pk]) === 'cycle' ? 'temps écoulé' : (cadenceDe(jour[pk]) ? cadenceDe(jour[pk]).toLocaleString('fr-FR') + ' ' + uniteDe(jour[pk]) : '⚠ non définie') }}</span>
+                <span v-if="jour[pk].cadenceObj">{{ modeDe(jour[pk]) === 'cycle' ? 'temps de marche' : (cadenceDe(jour[pk]) ? cadenceDe(jour[pk]).toLocaleString('fr-FR') + ' ' + uniteDe(jour[pk]) : '⚠ non définie') }}</span>
                 <span v-else-if="jour[pk].produitId" class="cad-warn">⚠ cadence non définie</span>
                 <span v-else class="jmuted">—</span>
               </td>
@@ -645,7 +647,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
               <td v-for="pk in postesActifs" :key="pk">{{ sommeArretsDe(jour[pk]) }} · <b>{{ fonctDe(jour[pk]) }}</b> · {{ tempsRequisDe(jour[pk]) }}</td>
             </tr>
             <tr>
-              <td>{{ postesActifs.some(pk => modeDe(jour[pk]) === 'temps') ? 'Nombre de lots' : 'Production réalisée' }}</td>
+              <td>{{ postesActifs.some(pk => modeDe(jour[pk]) === 'cycle') ? 'Temps de marche (min)' : (postesActifs.some(pk => modeDe(jour[pk]) === 'temps') ? 'Nombre de lots' : 'Production réalisée') }}</td>
               <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" step="any" v-model.number="jour[pk].production_realisee" /></td>
             </tr>
             <tr>
@@ -763,6 +765,7 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .dl-btn:hover { background
 .cad-row input { font-size: 14px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; width: 130px; }
 .cad-unit { color: #64748b; }
 .cad-val { font-weight: 700; color: #4338ca; font-size: 15px; }
+.equiv-marche { display: block; margin-top: 4px; font-size: 12px; font-weight: 600; color: #c2410c; }
 .cad-warn { color: #d97706; font-size: 12px; font-weight: 600; }
 .hint { margin-top: 12px; color: #64748b; font-size: 13px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }

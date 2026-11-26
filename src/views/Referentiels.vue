@@ -513,6 +513,12 @@ const UNITE_TEMPS = 'min/lot'        // unité « temps » : cadence = minutes p
 const UNITES_CAD = ['unités/h', 'kg/h', 'comprimés/h', 'gélules/h', 'flacons/h', 'bouteilles/h', 'blisters/h', 'boîtes/h', 'sachets/h', 'L/h', UNITE_TEMPS]
 const uniteOverride = reactive({})   // choix d'unité par équipement (persiste aussi sur les cadences existantes)
 const modePourUnite = (u) => u === UNITE_TEMPS ? 'temps' : 'debit'
+const marcheOverride = reactive({})  // équipement suivi par « temps de marche » (mode cycle)
+function suiviMarche(eqId) {
+  if (eqId in marcheOverride) return marcheOverride[eqId]
+  const c = cadList.value.find(x => x.equipement_id === eqId)
+  return c ? c.mode === 'cycle' : false
+}
 function uniteEquipMat(eqId) {
   if (uniteOverride[eqId]) return uniteOverride[eqId]
   const c = cadList.value.find(x => x.equipement_id === eqId && x.unite_cadence && x.unite_cadence !== 'temps écoulé')
@@ -524,11 +530,20 @@ function unitesPourEquip(eqId) {
 }
 async function changerUniteEquip(eqId, unite) {
   uniteOverride[eqId] = unite
-  const mode = modePourUnite(unite)
-  // applique l'unité + le mode (débit / temps) aux cadences existantes de cet équipement (hors ancien « cycle »)
-  const r = await supabase.from('cadences_produit').update({ unite_cadence: unite, mode }).eq('equipement_id', eqId).neq('mode', 'cycle')
+  const mode = suiviMarche(eqId) ? 'cycle' : modePourUnite(unite)   // garde le mode « temps de marche » s'il est actif
+  const r = await supabase.from('cadences_produit').update({ unite_cadence: unite, mode }).eq('equipement_id', eqId)
   if (r.error) { erreur.value = r.error.message; return }
-  for (const c of cadList.value) if (c.equipement_id === eqId && c.mode !== 'cycle') { c.unite_cadence = unite; c.mode = mode }
+  for (const c of cadList.value) if (c.equipement_id === eqId) { c.unite_cadence = unite; c.mode = mode }
+  erreur.value = ''
+}
+// Bascule « quantité <-> temps de marche » (mode cycle : la prod se saisit en minutes de marche)
+async function basculerMarche(eqId) {
+  const nv = !suiviMarche(eqId)
+  marcheOverride[eqId] = nv
+  const mode = nv ? 'cycle' : modePourUnite(uniteEquipMat(eqId))
+  const r = await supabase.from('cadences_produit').update({ mode }).eq('equipement_id', eqId)
+  if (r.error) { erreur.value = r.error.message; return }
+  for (const c of cadList.value) if (c.equipement_id === eqId) c.mode = mode
   erreur.value = ''
 }
 const CAD_MAT_SELECT = 'id, cadence_nominale, unite_cadence, mode, equipement_id, produit_id, equipements(code), produits(code_pf, designation)'
@@ -548,7 +563,7 @@ async function saveCadMat(eqId, prodId, raw) {
   if (isNaN(v)) { erreur.value = 'Valeur invalide : ' + txt; return }
   const unite = uniteEquipMat(eqId)
   const r = await supabase.from('cadences_produit')
-    .upsert({ equipement_id: eqId, produit_id: prodId, cadence_nominale: v, unite_cadence: unite, mode: modePourUnite(unite) }, { onConflict: 'equipement_id,produit_id' })
+    .upsert({ equipement_id: eqId, produit_id: prodId, cadence_nominale: v, unite_cadence: unite, mode: suiviMarche(eqId) ? 'cycle' : modePourUnite(unite) }, { onConflict: 'equipement_id,produit_id' })
     .select(CAD_MAT_SELECT).maybeSingle()
   if (r.error) { erreur.value = r.error.message; return }
   if (r.data) {
@@ -1104,7 +1119,7 @@ onMounted(async () => {
             <input v-model="cadMatRecherche" placeholder="Rechercher un produit…" class="cadmat-search" />
             <label class="cadmat-tous"><input type="checkbox" v-model="cadMatTous" /> Tous les produits</label>
           </div>
-          <p class="cadmat-hint-sm">Tous les équipements sont en colonnes (filtre par atelier si besoin). Chaque case = la cadence (vide = non définie) : tape pour créer/modifier, efface pour supprimer. Unité <b>min/lot</b> = suivi en <b>temps</b> (la case = minutes par lot, production saisie en <b>nombre de lots</b>).</p>
+          <p class="cadmat-hint-sm">Tous les équipements sont en colonnes (filtre par atelier si besoin). Chaque case = la cadence (vide = non définie) : tape pour créer/modifier, efface pour supprimer. Unité <b>min/lot</b> = suivi en <b>temps</b> (case = min par lot, production en nb de lots). Bouton <b>⏱ marche</b> = suivi par <b>temps de marche</b> (l'opérateur saisit les <b>minutes de marche</b> ; la cadence sert à afficher l'équivalent quantité).</p>
           <p v-if="!equipsMat.length" class="cadmat-hint">Aucun équipement actif.</p>
           <template v-else>
             <div class="cadmat-scroll">
@@ -1115,7 +1130,7 @@ onMounted(async () => {
                     <th v-for="g in ateliersMat" :key="g.atelier.id" class="cadmat-atelier" :colspan="g.equips.length" :title="g.atelier.nom">{{ g.atelier.code }} — {{ g.atelier.nom }}</th>
                   </tr>
                   <tr>
-                    <th v-for="e in equipsMat" :key="e.id" class="cadmat-col" :class="{ 'cadmat-sep': equipsMatSep.has(e.id), 'cadmat-temps': uniteEquipMat(e.id) === UNITE_TEMPS }" :title="e.nom">{{ e.code }}<select class="cadmat-unit-sel" :value="uniteEquipMat(e.id)" @change="changerUniteEquip(e.id, $event.target.value)" :disabled="!peutEditer" title="Unité de mesure de cet équipement"><option v-for="u in unitesPourEquip(e.id)" :key="u" :value="u">{{ u }}</option></select></th>
+                    <th v-for="e in equipsMat" :key="e.id" class="cadmat-col" :class="{ 'cadmat-sep': equipsMatSep.has(e.id), 'cadmat-temps': uniteEquipMat(e.id) === UNITE_TEMPS, 'cadmat-marche-col': suiviMarche(e.id) }" :title="e.nom">{{ e.code }}<select class="cadmat-unit-sel" :value="uniteEquipMat(e.id)" @change="changerUniteEquip(e.id, $event.target.value)" :disabled="!peutEditer" title="Unité de mesure (sert aussi à convertir le temps de marche en quantité équivalente)"><option v-for="u in unitesPourEquip(e.id)" :key="u" :value="u">{{ u }}</option></select><button type="button" class="cadmat-marche" :class="{ on: suiviMarche(e.id) }" @click.stop="basculerMarche(e.id)" :disabled="!peutEditer" :title="suiviMarche(e.id) ? 'Suivi par temps de marche (minutes) — cliquer pour revenir à la quantité' : 'Suivi par quantité — cliquer pour passer en temps de marche (minutes)'">{{ suiviMarche(e.id) ? '⏱ marche' : 'Qté' }}</button></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1384,6 +1399,10 @@ button.link.danger { color: #b91c1c; }
 .cadmat-col.cadmat-sep, .cadmat-cell.cadmat-sep { border-left: 2px solid #99f6e4; }
 .cadmat-col.cadmat-temps { background: #eef2ff; }
 .cadmat-col.cadmat-temps .cadmat-unit-sel { color: #4338ca; border-color: #c7d2fe; }
+.cadmat-col.cadmat-marche-col { background: #fff7ed; }
+.cadmat-marche { display: block; margin: 3px auto 0; font-size: 10px; font-weight: 700; color: #64748b; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 2px 6px; cursor: pointer; }
+.cadmat-marche:hover:not(:disabled) { border-color: #ea580c; color: #c2410c; }
+.cadmat-marche.on { background: #ea580c; color: #fff; border-color: #ea580c; }
 .cadmat-prod { position: sticky; left: 0; z-index: 1; background: #fff; padding: 6px 12px; min-width: 230px; }
 .cadmat-pcode { font-family: ui-monospace, monospace; font-weight: 700; color: #0f766e; display: block; }
 .cadmat-pdes { font-size: 11px; color: #64748b; display: block; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
