@@ -536,7 +536,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
           </div>
 
           <label class="fl">Commentaire<input type="text" v-model="form.commentaire" placeholder="Optionnel" /></label>
-          <div class="sub">Σ planifiés : <b>{{ sommePlanifies }}</b> · Σ subis : <b>{{ sommeSubis }}</b> · Fonct. : <b>{{ tempsFonct }}</b> · Requis : <b>{{ tempsRequis }}</b> min</div>
+          <div class="sub">Σ planifiés : <b>{{ sommePlanifies }}</b> · Σ subis : <b>{{ sommeSubis }}</b> · Temps de fonctionnement : <b>{{ tempsFonct }}</b> · Temps requis : <b>{{ tempsRequis }}</b> min</div>
         </div>
         <div>
           <h3 class="card-title">Production</h3>
@@ -642,8 +642,16 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
               <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" v-model.number="jour[pk][m[0]]" /></td>
             </tr>
             <tr class="jcalc">
-              <td>Σ Arrêts · Fonct. · Requis (min)</td>
-              <td v-for="pk in postesActifs" :key="pk">{{ sommeArretsDe(jour[pk]) }} · <b>{{ fonctDe(jour[pk]) }}</b> · {{ tempsRequisDe(jour[pk]) }}</td>
+              <td>Σ Arrêts (min)</td>
+              <td v-for="pk in postesActifs" :key="pk">{{ sommeArretsDe(jour[pk]) }}</td>
+            </tr>
+            <tr class="jcalc jfonct">
+              <td>Temps de fonctionnement (min)</td>
+              <td v-for="pk in postesActifs" :key="pk"><b>{{ fonctDe(jour[pk]) }}</b></td>
+            </tr>
+            <tr class="jcalc jmini">
+              <td>Temps requis <small>(hors arrêts planifiés — base du TRS technique)</small></td>
+              <td v-for="pk in postesActifs" :key="pk">{{ tempsRequisDe(jour[pk]) }}</td>
             </tr>
             <tr>
               <td>{{ postesActifs.some(pk => modeDe(jour[pk]) === 'temps') ? 'Nombre de lots' : 'Production réalisée' }}</td>
@@ -849,6 +857,10 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .ds-edit:hover { backgroun
 .jtable .jmuted { color: #cbd5e1; }
 .jtable .jvdl input { border-color: #6366f1; background: #eef2ff; }
 .jtable .jcalc { background: #f1f5f9; color: #475569; font-weight: 600; }
+.jtable .jfonct td { background: #eef2ff; color: #3730a3; }
+.jtable .jfonct td b { color: #312e81; }
+.jtable .jmini td { font-weight: 500; color: #94a3b8; font-size: 12px; }
+.jtable .jmini td small { color: #cbd5e1; font-weight: 400; }
 .jtable .jdpq td:not(:first-child) { font-weight: 600; color: #334155; }
 .jtable .jgrp td { background: #f1f5f9; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; text-align: left; padding: 5px 8px; }
 .jtable .jgrp-plan td { color: #4338ca; border-left: 3px solid #6366f1; }
