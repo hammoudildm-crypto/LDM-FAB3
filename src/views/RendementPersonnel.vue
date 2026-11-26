@@ -88,29 +88,35 @@ function cumuler(a, s, to, tf, arrPlan, cd) {
   else if (cd.value > 0) { a.theo += (tf / 60) * cd.value; a.prodPerf += Number(s.production_realisee) || 0; a.prodQual += Number(s.production_realisee) || 0; a.rebutsQual += Number(s.rebuts) || 0 }
 }
 
+// Un champ « Fait par » peut contenir 2 opérateurs (poste en binôme) : « A, B ». On
+// crédite alors le poste aux deux (même performance, même machine, même temps).
+const splitNoms = (v) => String(v || '').split(/\s*,\s*/).map(x => x.trim()).filter(Boolean)
 const parPersonne = computed(() => {
   const champ = CHAMP[role.value]
   const m = {}
   for (const s of postesFiltres.value) {
-    const nom = normNom(s[champ]); if (!nom) continue
-    if (!m[nom]) m[nom] = { nom, nbPostes: 0, prodTot: 0, rebutsTot: 0, retouchesTot: 0, reglageTot: 0, glob: accVide(), equips: new Map(), parMois: Array.from({ length: 12 }, accVide) }
-    const e = m[nom]
+    const noms = splitNoms(s[champ]); if (!noms.length) continue
     const to = s.temps_ouverture_min || 0
     let arr = 0, arrPlan = 0
     for (const mo of MOTIFS) arr += (s[mo[1]] || 0)
     for (const col of COL_PLAN) arrPlan += (s[col] || 0)
     const tf = Math.max(0, to - arr)
     const cd = cadenceDe(s.equipement_id, s.produit_id)
-    e.nbPostes++
-    e.prodTot += Number(s.production_realisee) || 0
-    e.rebutsTot += Number(s.rebuts) || 0
-    e.retouchesTot += Number(s.retouches) || 0
-    e.reglageTot += Number(s.arret_reglage_min) || 0
-    cumuler(e.glob, s, to, tf, arrPlan, cd)
-    cumuler(e.parMois[new Date(s.date).getMonth()], s, to, tf, arrPlan, cd)
+    const mois = new Date(s.date).getMonth()
     const k = s.equipement_id || '—'
-    if (!e.equips.has(k)) e.equips.set(k, { id: k, code: s.equipements ? s.equipements.code : '?', nom: s.equipements ? s.equipements.nom : '', postes: 0, prod: 0, acc: accVide() })
-    const eq = e.equips.get(k); eq.postes++; eq.prod += Number(s.production_realisee) || 0; cumuler(eq.acc, s, to, tf, arrPlan, cd)
+    for (const nom of noms) {
+      if (!m[nom]) m[nom] = { nom, nbPostes: 0, prodTot: 0, rebutsTot: 0, retouchesTot: 0, reglageTot: 0, glob: accVide(), equips: new Map(), parMois: Array.from({ length: 12 }, accVide) }
+      const e = m[nom]
+      e.nbPostes++
+      e.prodTot += Number(s.production_realisee) || 0
+      e.rebutsTot += Number(s.rebuts) || 0
+      e.retouchesTot += Number(s.retouches) || 0
+      e.reglageTot += Number(s.arret_reglage_min) || 0
+      cumuler(e.glob, s, to, tf, arrPlan, cd)
+      cumuler(e.parMois[mois], s, to, tf, arrPlan, cd)
+      if (!e.equips.has(k)) e.equips.set(k, { id: k, code: s.equipements ? s.equipements.code : '?', nom: s.equipements ? s.equipements.nom : '', postes: 0, prod: 0, acc: accVide() })
+      const eq = e.equips.get(k); eq.postes++; eq.prod += Number(s.production_realisee) || 0; cumuler(eq.acc, s, to, tf, arrPlan, cd)
+    }
   }
   const ppe = postesParEquip.value
   return Object.values(m).map(e => {
@@ -151,7 +157,8 @@ const classement = computed(() => {
 const evalues = computed(() => parPersonne.value.filter(p => p.suffisant))
 const scoreMoyen = computed(() => { const a = evalues.value; const tot = a.reduce((s, p) => s + p.fonct, 0); return tot ? a.reduce((s, p) => s + (p.score || 0) * p.fonct, 0) / tot : null })
 const meilleur = computed(() => evalues.value.slice().sort((a, b) => (b.score || 0) - (a.score || 0))[0] || null)
-const volumeTotal = computed(() => classement.value.reduce((s, p) => s + p.prodTot, 0))
+// Volume total = production de la période comptée une seule fois par poste (un binôme ne double pas le volume).
+const volumeTotal = computed(() => { const champ = CHAMP[role.value]; return postesFiltres.value.reduce((s, p) => s + (splitNoms(p[champ]).length ? (Number(p.production_realisee) || 0) : 0), 0) })
 const roleDispo = computed(() => { const c = CHAMP[role.value]; return postesFiltres.value.some(s => normNom(s[c])) })
 const ficheDe = computed(() => detail.value ? parPersonne.value.find(p => p.nom === detail.value) : null)
 // Indicateur propre au rôle affiché dans la dernière colonne du classement.
@@ -279,7 +286,7 @@ function exporterPDF() {
             </tbody>
           </table>
         </div>
-        <p class="pf-note">Comparer <b>à iso-équipement</b> (le rendement est normalisé, mais les habitudes diffèrent selon la machine). Le <b>TRS technique</b> exclut les arrêts planifiés et les pannes — ce qui échappe à l'opérateur — d'où son usage pour le classement. Pour les chefs, « Taux vérif. » = part des postes de leurs lignes qu'ils ont vérifiés ; pour les superviseurs, « Ratio planifié » = part planifiée des arrêts de leurs shifts. Outil de coaching, pas de sanction. Moins de {{ MIN_POSTES }} postes (ou sans cadence) : en gris, hors classement.</p>
+        <p class="pf-note">Comparer <b>à iso-équipement</b> (le rendement est normalisé, mais les habitudes diffèrent selon la machine). Le <b>TRS technique</b> exclut les arrêts planifiés et les pannes — ce qui échappe à l'opérateur — d'où son usage pour le classement. Pour les chefs, « Taux vérif. » = part des postes de leurs lignes qu'ils ont vérifiés ; pour les superviseurs, « Ratio planifié » = part planifiée des arrêts de leurs shifts. Outil de coaching, pas de sanction. Moins de {{ MIN_POSTES }} postes (ou sans cadence) : en gris, hors classement. Un poste tenu <b>en binôme</b> (2 opérateurs dans « Fait par ») est crédité aux <b>deux</b>.</p>
       </section>
 
       <section v-if="ficheDe" class="card fiche">

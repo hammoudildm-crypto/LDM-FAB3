@@ -41,7 +41,7 @@ const form = reactive({
   arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
   arret_vdlg_min: 0, arret_vdlp_min: 0,
   production_realisee: 0, rebuts: 0, retouches: 0, commentaire: '',
-  fait_par: '', verifie_par: '', superviseur: ''
+  fait_par: '', fait_par2: '', verifie_par: '', superviseur: ''
 })
 const colRetouche = ref(false)   // vrai une fois la migration 003 exécutée (colonne trs_postes.retouches)
 const colVdl = ref(false)        // vrai une fois la migration 009 exécutée (colonnes arret_vdlg_min / arret_vdlp_min)
@@ -211,7 +211,8 @@ function chargerContexte() {
     form.rebuts = ex.rebuts || 0
     form.retouches = ex.retouches || 0
     form.commentaire = ex.commentaire || ''
-    form.fait_par = ex.fait_par || ''
+    form.fait_par = premierOp(ex.fait_par)
+    form.fait_par2 = secondOp(ex.fait_par)
     form.verifie_par = ex.verifie_par || ''
     form.superviseur = ex.superviseur || ''
   }
@@ -285,9 +286,13 @@ function blankPoste() {
     arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
     arret_vdlg_min: 0, arret_vdlp_min: 0,
     production_realisee: 0, rebuts: 0, retouches: 0, commentaire: '',
-    fait_par: '', verifie_par: '', superviseur: ''
+    fait_par: '', fait_par2: '', verifie_par: '', superviseur: ''
   }
 }
+// « Fait par » peut comporter 2 opérateurs (atelier tenu en binôme) : stockés « A, B » dans la même colonne.
+function joindreOp(a, b) { return [...new Set([a, b].map(x => String(x || '').trim()).filter(Boolean))].join(', ') || null }
+function premierOp(v) { return String(v || '').split(/\s*,\s*/)[0] || '' }
+function secondOp(v) { const a = String(v || '').split(/\s*,\s*/).filter(Boolean); return a.length > 1 ? a.slice(1).join(', ') : '' }
 const jour = reactive({ 1: blankPoste(), 2: blankPoste(), 3: blankPoste() })
 const cadenceDe = (p) => (p.cadenceObj && p.cadenceObj.cadence_nominale != null ? Number(p.cadenceObj.cadence_nominale) : 0)
 const modeDe = (p) => (p.cadenceObj ? (p.cadenceObj.mode || 'debit') : 'debit')
@@ -351,7 +356,8 @@ function chargerJour() {
       base.rebuts = ex.rebuts || 0
       base.retouches = ex.retouches || 0
       base.commentaire = ex.commentaire || ''
-      base.fait_par = ex.fait_par || ''
+      base.fait_par = premierOp(ex.fait_par)
+      base.fait_par2 = secondOp(ex.fait_par)
       base.verifie_par = ex.verifie_par || ''
       base.superviseur = ex.superviseur || ''
     }
@@ -385,7 +391,7 @@ async function enregistrerJour() {
       rebuts: Number(p.rebuts) || 0, commentaire: p.commentaire || null
     }
     if (colRetouche.value) payload.retouches = Number(p.retouches) || 0
-    if (colSignat.value) { payload.fait_par = p.fait_par || null; payload.verifie_par = p.verifie_par || null }
+    if (colSignat.value) { payload.fait_par = joindreOp(p.fait_par, p.fait_par2); payload.verifie_par = p.verifie_par || null }
     if (colSuperviseur.value) payload.superviseur = p.superviseur || null
     for (const m of MOTIFS) {
       if (!colVdl.value && (m[0] === 'arret_vdlg_min' || m[0] === 'arret_vdlp_min')) continue
@@ -413,7 +419,7 @@ async function enregistrer() {
     rebuts: Number(form.rebuts) || 0, commentaire: form.commentaire || null
   }
   if (colRetouche.value) payload.retouches = Number(form.retouches) || 0
-  if (colSignat.value) { payload.fait_par = form.fait_par || null; payload.verifie_par = form.verifie_par || null }
+  if (colSignat.value) { payload.fait_par = joindreOp(form.fait_par, form.fait_par2); payload.verifie_par = form.verifie_par || null }
   if (colSuperviseur.value) payload.superviseur = form.superviseur || null
   for (const m of MOTIFS) {
     // Tant que la migration 009 n'est pas exécutée, on n'envoie pas VDLG/VDLP
@@ -434,6 +440,7 @@ async function enregistrer() {
   form.retouches = 0
   form.commentaire = ''
   form.fait_par = ''
+  form.fait_par2 = ''
   form.verifie_par = ''
   form.superviseur = ''
 }
@@ -560,6 +567,11 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
                 <option v-for="nom in operateursPoste" :key="nom" :value="nom">{{ nom }}</option>
                 <option v-if="form.fait_par && !operateursPoste.includes(form.fait_par)" :value="form.fait_par">{{ form.fait_par }}</option>
               </select>
+              <select v-model="form.fait_par2" class="sig-2nd" title="2ᵉ opérateur si le poste est tenu en binôme">
+                <option value="">+ 2ᵉ opérateur (binôme)</option>
+                <option v-for="nom in operateursPoste" :key="'b'+nom" :value="nom">{{ nom }}</option>
+                <option v-if="form.fait_par2 && !operateursPoste.includes(form.fait_par2)" :value="form.fait_par2">{{ form.fait_par2 }}</option>
+              </select>
             </label>
             <label class="fl">Vérifié par
               <select v-model="form.verifie_par">
@@ -674,6 +686,11 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
                   <option value="">— choisir —</option>
                   <option v-for="nom in operateursPoste" :key="nom" :value="nom">{{ nom }}</option>
                   <option v-if="jour[pk].fait_par && !operateursPoste.includes(jour[pk].fait_par)" :value="jour[pk].fait_par">{{ jour[pk].fait_par }}</option>
+                </select>
+                <select v-model="jour[pk].fait_par2" class="sig-2nd" title="2ᵉ opérateur (binôme)">
+                  <option value="">+ 2ᵉ opérateur</option>
+                  <option v-for="nom in operateursPoste" :key="'b'+nom" :value="nom">{{ nom }}</option>
+                  <option v-if="jour[pk].fait_par2 && !operateursPoste.includes(jour[pk].fait_par2)" :value="jour[pk].fait_par2">{{ jour[pk].fait_par2 }}</option>
                 </select>
               </td>
             </tr>
@@ -861,6 +878,7 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .ds-edit:hover { backgroun
 .jtable .jtrs td:first-child { font-size: 13px; }
 .jtable .jcom input, .jtable .jsig input { text-align: left; }
 .sig-duo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 0 12px; }
+.sig-2nd { margin-top: 5px; font-size: 13px !important; color: #64748b; border-style: dashed !important; }
 @media (max-width: 640px) { .sig-duo { grid-template-columns: 1fr; } }
 /* Combobox produit (recherche + liste) dans la grille 3×8 */
 .jcombo { position: relative; }
