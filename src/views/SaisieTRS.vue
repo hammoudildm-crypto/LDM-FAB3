@@ -713,7 +713,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
       <div v-if="!saisiesAffichees.length" class="empty">{{ filtreSaisiesEquip && equipId ? 'Aucune saisie pour cet équipement.' : "Aucune saisie pour l\'instant." }}</div>
       <div v-else class="table-scroll">
         <table class="mini">
-          <thead><tr><th>Date</th><th>Poste</th><th>Équip.</th><th>Produit</th><th class="right">Ouv.</th><th class="right">Arrêts</th><th class="right">Fonct.</th><th class="right">Nettoyage</th><th class="right">Action</th></tr></thead>
+          <thead><tr><th>Date</th><th>Poste</th><th>Équip.</th><th>Produit</th><th class="right">Ouv.</th><th class="right">Arrêts</th><th class="right">Fonct.</th><th class="right">Nettoyage</th><th>Fait par</th><th>Vérifié par</th><th>Superviseur de shift</th><th class="right">Action</th></tr></thead>
           <tbody>
             <tr v-for="s in saisiesAffichees" :key="s.id">
               <td class="nowrap">{{ s.date }}</td>
@@ -724,6 +724,9 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
               <td class="right">{{ fmt(trsSaisie(s).arr) }}</td>
               <td class="right">{{ fmt(trsSaisie(s).tf) }}</td>
               <td class="right">{{ fmt(s.arret_nettoyage_min) }}</td>
+              <td class="sig-col">{{ s.fait_par || '—' }}</td>
+              <td class="sig-col">{{ s.verifie_par || '—' }}</td>
+              <td class="sig-col">{{ s.superviseur || '—' }}</td>
               <td class="right"><button type="button" class="ds-edit" @click="modifierSaisie(s)" title="Recharger cette saisie dans le formulaire pour la modifier">✎ Modifier</button></td>
             </tr>
           </tbody>
@@ -815,6 +818,7 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .ds-filtre { font-size: 13px; color: #475569; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
 .ds-filtre input { cursor: pointer; }
 .dt-nom { color: #94a3b8; font-weight: 400; }
+.sig-col { white-space: nowrap; color: #334155; font-size: 13px; }
 /* Interrupteur de mode */
 .mode-switch { display: inline-flex; gap: 3px; background: #eef2ff; border-radius: 10px; padding: 4px; margin: 0 0 8px; }
 .rg-hint { margin: 0 0 14px; font-size: 12.5px; color: #475569; }
