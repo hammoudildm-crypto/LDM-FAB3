@@ -39,14 +39,15 @@ async function charger() {
   if (re.error) { msg.value = re.error.message; chargement.value = false; return }
   equipements.value = re.data || []
   const rc = await supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, mode'); if (!rc.error) cadences.value = rc.data || []
-  const rp = await supabase.from('produits').select('id, taille_lot'); if (!rp.error) produits.value = rp.data || []
+  const rp = await supabase.from('produits').select('id, poids_lot_kg'); if (!rp.error) produits.value = rp.data || []
   const depuis = new Date(Date.now() - JOURS * 864e5).toISOString().slice(0, 10)
   const rs = await supabase.from('trs_postes').select('equipement_id, produit_id').eq('actif', true).gte('date', depuis); if (!rs.error) postes.value = rs.data || []
   chargement.value = false
 }
 onMounted(charger)
 
-const tailleMap = computed(() => { const m = {}; for (const p of produits.value) m[p.id] = Number(p.taille_lot) || 0; return m })
+// Masse d'un lot en kg (colonne « Poids du lot (kg) ») — nécessaire pour les cadences en mode temps.
+const tailleMap = computed(() => { const m = {}; for (const p of produits.value) m[p.id] = Number(p.poids_lot_kg) || 0; return m })
 
 const audit = computed(() => {
   const cadByEq = {}
@@ -112,7 +113,7 @@ const modeLbl = (m) => m === 'temps' ? 'Temps (min/lot)' : (m === 'cycle' ? 'Tem
               <td><span class="stag" :class="STATUT[e.statut].c">{{ STATUT[e.statut].l }}</span></td>
               <td class="nom">{{ e.code }}<span v-if="e.nom" class="sub2"> · {{ e.nom }}</span></td>
               <td>{{ e.phase ? PHASE_LBL[e.phase] : '—' }}</td>
-              <td :class="{ warn: e.mixed || e.nbCycle }">{{ modeLbl(e.modePrincipal) }}<span v-if="e.nbCycle" class="migr-txt"> · ⚠ {{ e.nbCycle }} en ancien « temps écoulé »</span><span v-if="e.mixed" class="sub2"> · mélangés !</span><span v-if="e.tailleManquante" class="sub2"> · {{ e.tailleManquante }} sans taille de lot</span></td>
+              <td :class="{ warn: e.mixed || e.nbCycle }">{{ modeLbl(e.modePrincipal) }}<span v-if="e.nbCycle" class="migr-txt"> · ⚠ {{ e.nbCycle }} en ancien « temps écoulé »</span><span v-if="e.mixed" class="sub2"> · mélangés !</span><span v-if="e.tailleManquante" class="sub2"> · {{ e.tailleManquante }} sans poids de lot (kg)</span></td>
               <td class="r">{{ e.nbCad }}</td>
               <td class="r" :class="{ warn: e.manquants > 0 }"><b v-if="e.manquants > 0">{{ e.manquants }}</b><span v-else>—</span></td>
               <td class="r">{{ e.nbSaisies }}</td>

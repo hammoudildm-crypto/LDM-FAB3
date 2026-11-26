@@ -32,7 +32,7 @@
           </select>
           <label v-if="phaseSel || filtreEq" class="cad-tous"><input type="checkbox" v-model="tousProduits" /> Afficher aussi les produits sans cadence (pour en ajouter)</label>
           <span v-if="filtreEq" class="eq-count">{{ produitsMatrice.length }} produit(s) avec cadence</span>
-          <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupesAffiches.length }} équipement(s){{ phaseSel ? ' — ' + (PHASE_LBL[phaseSel] || phaseSel) : '' }} — saisissez la cadence dans les cases. Bouton d'en-tête : basculer un équipement en <b>temps par lot (min/lot)</b> — converti automatiquement depuis le kg/h via la taille de lot.</span>
+          <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupesAffiches.length }} équipement(s){{ phaseSel ? ' — ' + (PHASE_LBL[phaseSel] || phaseSel) : '' }} — saisissez la cadence dans les cases. Bouton d'en-tête : basculer un équipement en <b>temps par lot (min/lot)</b> — converti automatiquement depuis le kg/h via le poids du lot (kg).</span>
           <span v-if="msgMat" class="mat-msg">{{ msgMat }}</span>
         </div>
         <div class="mat-scroll">
@@ -145,7 +145,7 @@ async function chargerEquip() { equipements.value = await fetchAllPaged(() => su
 
 onMounted(() => { if (routeCad.query.produit) filtre.value = String(routeCad.query.produit) })
 onMounted(async () => {
-  produits.value = await fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot').eq('actif', true))
+  produits.value = await fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, poids_lot_kg').eq('actif', true))
   ateliers.value = await fetchAllPaged(() => supabase.from('ateliers').select('id, code, nom').eq('actif', true))
   await chargerEquip()
   await chargerCadences()
@@ -246,9 +246,11 @@ function modeGroupe(grp) {
   return cadences.value.some(c => ids.has(c.equipement_id) && c.mode === 'temps') ? 'temps' : 'debit'
 }
 function uniteGroupe(grp) { return modeGroupe(grp) === 'temps' ? 'min/lot' : (grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h') }
-const tailleLotDe = (pid) => { const p = produits.value.find(p => p.id === pid); const t = p ? Number(p.taille_lot) : 0; return t > 0 ? t : 0 }
-// Bascule kg/h <-> min/lot avec conversion automatique via la taille de lot :
-//   min/lot = (taille_lot / cadence_kgh) x 60   |   kg/h = 60 x taille_lot / min_lot
+// Masse d'un lot en kg = colonne « Poids du lot (kg) » du produit (PAS « Taille de lot »,
+// qui est un nombre de comprimés/boîtes). C'est cette masse qui sert à la conversion.
+const poidsLotDe = (pid) => { const p = produits.value.find(p => p.id === pid); const t = p ? Number(p.poids_lot_kg) : 0; return t > 0 ? t : 0 }
+// Bascule kg/h <-> min/lot avec conversion automatique via le poids du lot (kg) :
+//   min/lot = (poids_lot_kg / cadence_kgh) x 60   |   kg/h = 60 x poids_lot_kg / min_lot
 async function toggleModeGroupe(grp) {
   const nouveau = modeGroupe(grp) === 'temps' ? 'debit' : 'temps'
   modesGroupe[grp.key] = nouveau
@@ -258,17 +260,17 @@ async function toggleModeGroupe(grp) {
     const ids = new Set(grp.equips.map(e => e.id))
     for (const c of cadences.value) {
       if (!ids.has(c.equipement_id)) continue
-      const taille = tailleLotDe(c.produit_id)
+      const poids = poidsLotDe(c.produit_id)
       const v = Number(c.cadence_nominale) || 0
       let nv = v
-      if (taille > 0 && v > 0) {
-        nv = nouveau === 'temps' ? Math.round((taille / v) * 60 * 10) / 10 : Math.round((60 * taille / v) * 10) / 10
+      if (poids > 0 && v > 0) {
+        nv = nouveau === 'temps' ? Math.round((poids / v) * 60 * 10) / 10 : Math.round((60 * poids / v) * 10) / 10
         convertis++
       } else if (v > 0) sansTaille++
       const r = await supabase.from('cadences_produit').update({ cadence_nominale: nv, mode: nouveau, unite_cadence: unite }).eq('id', c.id)
       if (!r.error) { c.cadence_nominale = nv; c.mode = nouveau; c.unite_cadence = unite }
     }
-    msgMat.value = (nouveau === 'temps' ? 'Converti en min/lot' : 'Converti en kg/h') + ' — ' + convertis + ' valeur(s)' + (sansTaille ? ' · ' + sansTaille + ' sans taille de lot (à saisir à la main)' : '') + ' ✓'
+    msgMat.value = (nouveau === 'temps' ? 'Converti en min/lot' : 'Converti en kg/h') + ' — ' + convertis + ' valeur(s)' + (sansTaille ? ' · ' + sansTaille + ' sans poids de lot (kg) (à saisir dans Référentiels › Produits)' : '') + ' ✓'
     setTimeout(() => { msgMat.value = '' }, 3500)
   } catch (err) { msgMat.value = 'Erreur : ' + (err.message || err) }
 }
