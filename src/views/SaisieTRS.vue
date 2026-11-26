@@ -179,6 +179,8 @@ if (lotPartage) watch(() => lotPartage.value && lotPartage.value.produitId, (pid
 const cadence = computed(() => cadenceObj.value && cadenceObj.value.cadence_nominale != null ? Number(cadenceObj.value.cadence_nominale) : 0)
 const cadenceMode = computed(() => cadenceObj.value ? (cadenceObj.value.mode || 'debit') : 'debit')
 const uniteCad = computed(() => cadenceObj.value && cadenceObj.value.unite_cadence ? cadenceObj.value.unite_cadence : 'unités/h')
+// Cadence effective = débit équivalent. En mode temps, la cadence est en min/lot -> 60/min = lots/h.
+const cadenceEff = computed(() => cadenceMode.value === 'temps' ? (cadence.value > 0 ? 60 / cadence.value : 0) : cadence.value)
 
 // Enregistrer la cadence directement depuis la Saisie TRS (évite l'aller-retour
 // vers Référentiels et recharge la liste sur place -> plus de discordance).
@@ -239,7 +241,7 @@ const dispo = computed(() => { const to = Number(form.temps_ouverture_min) || 0;
 const perf = computed(() => {
   const prod = Number(form.production_realisee) || 0
   if (cadenceMode.value === 'cycle') return tempsFonct.value ? Math.min(1, prod / tempsFonct.value) : 0
-  const theo = (tempsFonct.value / 60) * cadence.value
+  const theo = (tempsFonct.value / 60) * cadenceEff.value
   return theo ? Math.min(1, prod / theo) : 0
 })
 const qualite = computed(() => {
@@ -258,14 +260,14 @@ const trsTech = computed(() => dispoTech.value * perf.value * qualite.value)
 const tempsUtile = computed(() => {
   const prod = Number(form.production_realisee) || 0
   if (cadenceMode.value === 'cycle') return Math.min(tempsFonct.value, prod)
-  const c = cadence.value
+  const c = cadenceEff.value
   return c > 0 ? Math.min(tempsFonct.value, prod / c * 60) : 0
 })
 const ecartTemps = computed(() => Math.max(0, tempsFonct.value - tempsUtile.value))
 const surDeclare = computed(() => {
   const prod = Number(form.production_realisee) || 0
   if (cadenceMode.value === 'cycle') return prod > tempsFonct.value + 0.5
-  const c = cadence.value
+  const c = cadenceEff.value
   return c > 0 && (prod / c * 60) > tempsFonct.value + 0.5
 })
 const pct = (x) => (x * 100).toFixed(1) + ' %'
@@ -288,13 +290,14 @@ const jour = reactive({ 1: blankPoste(), 2: blankPoste(), 3: blankPoste() })
 const cadenceDe = (p) => (p.cadenceObj && p.cadenceObj.cadence_nominale != null ? Number(p.cadenceObj.cadence_nominale) : 0)
 const modeDe = (p) => (p.cadenceObj ? (p.cadenceObj.mode || 'debit') : 'debit')
 const uniteDe = (p) => (p.cadenceObj && p.cadenceObj.unite_cadence ? p.cadenceObj.unite_cadence : 'unités/h')
+const cadenceEffDe = (p) => modeDe(p) === 'temps' ? (cadenceDe(p) > 0 ? 60 / cadenceDe(p) : 0) : cadenceDe(p)
 const sommeArretsDe = (p) => MOTIFS.reduce((s, m) => s + (Number(p[m[0]]) || 0), 0)
 const fonctDe = (p) => Math.max(0, (Number(p.temps_ouverture_min) || 0) - sommeArretsDe(p))
 const dispoDe = (p) => { const to = Number(p.temps_ouverture_min) || 0; return to ? fonctDe(p) / to : 0 }
 const perfDe = (p) => {
   const prod = Number(p.production_realisee) || 0
   if (modeDe(p) === 'cycle') return fonctDe(p) ? Math.min(1, prod / fonctDe(p)) : 0
-  const theo = (fonctDe(p) / 60) * cadenceDe(p)
+  const theo = (fonctDe(p) / 60) * cadenceEffDe(p)
   return theo ? Math.min(1, prod / theo) : 0
 }
 const qualiteDe = (p) => {
@@ -306,7 +309,7 @@ const trsDe = (p) => dispoDe(p) * perfDe(p) * qualiteDe(p)
 const tempsUtileDe = (p) => {
   const prod = Number(p.production_realisee) || 0
   if (modeDe(p) === 'cycle') return Math.min(fonctDe(p), prod)
-  const c = cadenceDe(p)
+  const c = cadenceEffDe(p)
   return c > 0 ? Math.min(fonctDe(p), prod / c * 60) : 0
 }
 const ecartTempsDe = (p) => Math.max(0, fonctDe(p) - tempsUtileDe(p))
@@ -368,7 +371,7 @@ async function enregistrerJour() {
   for (const pk of aEnreg) {
     const p = jour[pk]
     if (!p.cadenceObj) { msg.value = 'Poste ' + pk + ' : ce produit n\'a pas de cadence définie (Référentiels › Cadences).'; return }
-    if (modeDe(p) === 'debit' && !cadenceDe(p)) { msg.value = 'Poste ' + pk + ' : cadence (débit) manquante.'; return }
+    if ((modeDe(p) === 'debit' || modeDe(p) === 'temps') && !cadenceDe(p)) { msg.value = 'Poste ' + pk + ' : cadence manquante.'; return }
   }
   let n = 0
   for (const pk of aEnreg) {
@@ -400,7 +403,7 @@ async function enregistrer() {
   if (!equipId.value) { msg.value = 'Choisir un équipement.'; return }
   if (!produitId.value) { msg.value = 'Choisir le produit qui tournait sur ce poste.'; return }
   if (!cadenceObj.value) { msg.value = "Ce produit sur cet équipement n'a pas de mode/cadence défini — renseigne-le dans Référentiels › Cadences."; return }
-  if (cadenceMode.value === 'debit' && !cadence.value) { msg.value = "Renseigner la cadence (débit) dans Référentiels › Cadences."; return }
+  if ((cadenceMode.value === 'debit' || cadenceMode.value === 'temps') && !cadence.value) { msg.value = "Renseigner la cadence dans Référentiels › Cadences."; return }
   const payload = {
     equipement_id: equipId.value, produit_id: produitId.value, date: dateSel.value, poste: Number(poste.value),
     temps_ouverture_min: Number(form.temps_ouverture_min) || 0,
@@ -537,7 +540,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         </div>
         <div>
           <h3 class="card-title">Production</h3>
-          <label class="fl">{{ cadenceMode === 'cycle' ? 'Temps écoulé (min)' : 'Production réalisée (' + uniteCad.replace('/h','') + ')' }}<input type="number" min="0" v-model.number="form.production_realisee" /></label>
+          <label class="fl">{{ cadenceMode === 'cycle' ? 'Temps écoulé (min)' : (cadenceMode === 'temps' ? 'Nombre de lots' : 'Production réalisée (' + uniteCad.replace('/h','') + ')') }}<input type="number" min="0" step="any" v-model.number="form.production_realisee" /></label>
           <label v-if="cadenceMode !== 'cycle'" class="fl">Rebuts<input type="number" min="0" v-model.number="form.rebuts" /></label>
           <label v-if="colRetouche && cadenceMode !== 'cycle'" class="fl">Retouches<input type="number" min="0" v-model.number="form.retouches" title="Unités reprises / retouchées — alimente le taux de retouche (Qualité), sans impact sur le TRS." /></label>
 
@@ -642,8 +645,8 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
               <td v-for="pk in postesActifs" :key="pk">{{ sommeArretsDe(jour[pk]) }} · <b>{{ fonctDe(jour[pk]) }}</b> · {{ tempsRequisDe(jour[pk]) }}</td>
             </tr>
             <tr>
-              <td>Production réalisée</td>
-              <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" v-model.number="jour[pk].production_realisee" /></td>
+              <td>{{ postesActifs.some(pk => modeDe(jour[pk]) === 'temps') ? 'Nombre de lots' : 'Production réalisée' }}</td>
+              <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" step="any" v-model.number="jour[pk].production_realisee" /></td>
             </tr>
             <tr>
               <td>Rebuts</td>

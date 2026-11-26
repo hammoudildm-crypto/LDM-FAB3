@@ -486,11 +486,13 @@ function valCadMat(eqId, prodId) {
   return c && c.cadence_nominale != null ? c.cadence_nominale : ''
 }
 // Unités de cadence proposées (modifiables par colonne / équipement)
-const UNITES_CAD = ['unités/h', 'kg/h', 'comprimés/h', 'gélules/h', 'flacons/h', 'bouteilles/h', 'blisters/h', 'boîtes/h', 'sachets/h', 'L/h']
+const UNITE_TEMPS = 'min/lot'        // unité « temps » : cadence = minutes par lot, production = nb de lots
+const UNITES_CAD = ['unités/h', 'kg/h', 'comprimés/h', 'gélules/h', 'flacons/h', 'bouteilles/h', 'blisters/h', 'boîtes/h', 'sachets/h', 'L/h', UNITE_TEMPS]
 const uniteOverride = reactive({})   // choix d'unité par équipement (persiste aussi sur les cadences existantes)
+const modePourUnite = (u) => u === UNITE_TEMPS ? 'temps' : 'debit'
 function uniteEquipMat(eqId) {
   if (uniteOverride[eqId]) return uniteOverride[eqId]
-  const c = cadList.value.find(x => x.equipement_id === eqId && x.unite_cadence && !['temps écoulé', 'min/lot'].includes(x.unite_cadence))
+  const c = cadList.value.find(x => x.equipement_id === eqId && x.unite_cadence && x.unite_cadence !== 'temps écoulé')
   return c ? c.unite_cadence : 'unités/h'
 }
 function unitesPourEquip(eqId) {
@@ -499,10 +501,11 @@ function unitesPourEquip(eqId) {
 }
 async function changerUniteEquip(eqId, unite) {
   uniteOverride[eqId] = unite
-  // applique l'unité à toutes les cadences « débit » existantes de cet équipement
-  const r = await supabase.from('cadences_produit').update({ unite_cadence: unite }).eq('equipement_id', eqId).eq('mode', 'debit')
+  const mode = modePourUnite(unite)
+  // applique l'unité + le mode (débit / temps) aux cadences existantes de cet équipement (hors ancien « cycle »)
+  const r = await supabase.from('cadences_produit').update({ unite_cadence: unite, mode }).eq('equipement_id', eqId).neq('mode', 'cycle')
   if (r.error) { erreur.value = r.error.message; return }
-  for (const c of cadList.value) if (c.equipement_id === eqId && c.mode === 'debit') c.unite_cadence = unite
+  for (const c of cadList.value) if (c.equipement_id === eqId && c.mode !== 'cycle') { c.unite_cadence = unite; c.mode = mode }
   erreur.value = ''
 }
 const CAD_MAT_SELECT = 'id, cadence_nominale, unite_cadence, mode, equipement_id, produit_id, equipements(code), produits(code_pf, designation)'
@@ -522,7 +525,7 @@ async function saveCadMat(eqId, prodId, raw) {
   if (isNaN(v)) { erreur.value = 'Valeur invalide : ' + txt; return }
   const unite = uniteEquipMat(eqId)
   const r = await supabase.from('cadences_produit')
-    .upsert({ equipement_id: eqId, produit_id: prodId, cadence_nominale: v, unite_cadence: unite, mode: 'debit' }, { onConflict: 'equipement_id,produit_id' })
+    .upsert({ equipement_id: eqId, produit_id: prodId, cadence_nominale: v, unite_cadence: unite, mode: modePourUnite(unite) }, { onConflict: 'equipement_id,produit_id' })
     .select(CAD_MAT_SELECT).maybeSingle()
   if (r.error) { erreur.value = r.error.message; return }
   if (r.data) {
@@ -1078,7 +1081,7 @@ onMounted(async () => {
             <input v-model="cadMatRecherche" placeholder="Rechercher un produit…" class="cadmat-search" />
             <label class="cadmat-tous"><input type="checkbox" v-model="cadMatTous" /> Tous les produits</label>
           </div>
-          <p class="cadmat-hint-sm">Tous les équipements sont en colonnes (filtre par atelier si besoin). Chaque case = la cadence (vide = non définie) : tape une valeur pour créer/modifier, efface pour supprimer.</p>
+          <p class="cadmat-hint-sm">Tous les équipements sont en colonnes (filtre par atelier si besoin). Chaque case = la cadence (vide = non définie) : tape pour créer/modifier, efface pour supprimer. Unité <b>min/lot</b> = suivi en <b>temps</b> (la case = minutes par lot, production saisie en <b>nombre de lots</b>).</p>
           <p v-if="!equipsMat.length" class="cadmat-hint">Aucun équipement actif.</p>
           <template v-else>
             <div class="cadmat-scroll">
@@ -1089,7 +1092,7 @@ onMounted(async () => {
                     <th v-for="g in ateliersMat" :key="g.atelier.id" class="cadmat-atelier" :colspan="g.equips.length" :title="g.atelier.nom">{{ g.atelier.code }} — {{ g.atelier.nom }}</th>
                   </tr>
                   <tr>
-                    <th v-for="e in equipsMat" :key="e.id" class="cadmat-col" :class="{ 'cadmat-sep': equipsMatSep.has(e.id) }" :title="e.nom">{{ e.code }}<select class="cadmat-unit-sel" :value="uniteEquipMat(e.id)" @change="changerUniteEquip(e.id, $event.target.value)" :disabled="!peutEditer" title="Unité de mesure de cet équipement"><option v-for="u in unitesPourEquip(e.id)" :key="u" :value="u">{{ u }}</option></select></th>
+                    <th v-for="e in equipsMat" :key="e.id" class="cadmat-col" :class="{ 'cadmat-sep': equipsMatSep.has(e.id), 'cadmat-temps': uniteEquipMat(e.id) === UNITE_TEMPS }" :title="e.nom">{{ e.code }}<select class="cadmat-unit-sel" :value="uniteEquipMat(e.id)" @change="changerUniteEquip(e.id, $event.target.value)" :disabled="!peutEditer" title="Unité de mesure de cet équipement"><option v-for="u in unitesPourEquip(e.id)" :key="u" :value="u">{{ u }}</option></select></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1356,6 +1359,8 @@ button.link.danger { color: #b91c1c; }
 .cadmat-unit-sel:hover:not(:disabled) { border-color: #0f766e; }
 .cadmat-unit-sel:disabled { color: #94a3b8; background: transparent; border-color: transparent; cursor: default; -webkit-appearance: none; appearance: none; text-align: center; }
 .cadmat-col.cadmat-sep, .cadmat-cell.cadmat-sep { border-left: 2px solid #99f6e4; }
+.cadmat-col.cadmat-temps { background: #eef2ff; }
+.cadmat-col.cadmat-temps .cadmat-unit-sel { color: #4338ca; border-color: #c7d2fe; }
 .cadmat-prod { position: sticky; left: 0; z-index: 1; background: #fff; padding: 6px 12px; min-width: 230px; }
 .cadmat-pcode { font-family: ui-monospace, monospace; font-weight: 700; color: #0f766e; display: block; }
 .cadmat-pdes { font-size: 11px; color: #64748b; display: block; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

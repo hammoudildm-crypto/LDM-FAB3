@@ -63,7 +63,10 @@ const postesParEquip = computed(() => { const m = {}; for (const s of postesFilt
 
 function cadenceDe(eq, pr) {
   const c = cadences.value.find(c => c.equipement_id === eq && c.produit_id === pr)
-  return { value: c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0, mode: c ? (c.mode || 'debit') : 'debit' }
+  if (!c || c.cadence_nominale == null) return { value: 0, mode: 'debit' }
+  const v = Number(c.cadence_nominale)
+  if (c.mode === 'temps') return { value: v > 0 ? 60 / v : 0, mode: 'debit' }   // min/lot -> lots/h (production = nb de lots)
+  return { value: v, mode: c.mode || 'debit' }
 }
 const normNom = (s) => String(s || '').trim()
 const fonctionDe = (nom) => { const p = personnel.value.find(p => normNom(p.nom) === normNom(nom)); return p ? (p.fonction || '') : '' }
