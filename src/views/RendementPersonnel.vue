@@ -24,6 +24,7 @@ const du = ref(new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().
 const au = ref(now.toISOString().slice(0, 10))
 const role = ref('operateur')          // 'operateur' | 'chef' | 'superviseur'
 const scoreMetric = ref('trsTech')     // 'trsTech' | 'rendement'
+const sensTri = ref('desc')            // 'desc' (décroissant) | 'asc' (croissant)
 const atelierFiltre = ref('')
 const equipFiltre = ref('')
 const recherche = ref('')
@@ -196,7 +197,8 @@ const classement = computed(() => {
   const q = recherche.value.trim().toLowerCase()
   let arr = parPersonne.value
   if (q) arr = arr.filter(p => p.nom.toLowerCase().includes(q) || (p.fonction || '').toLowerCase().includes(q))
-  return arr.slice().sort((a, b) => (Number(b.suffisant) - Number(a.suffisant)) || ((b.score ?? -1) - (a.score ?? -1)))
+  const dir = sensTri.value === 'asc' ? 1 : -1   // les personnes hors classement restent toujours en bas
+  return arr.slice().sort((a, b) => (Number(b.suffisant) - Number(a.suffisant)) || dir * ((a.score ?? -1) - (b.score ?? -1)))
 })
 // Classement affiché : top 5 par défaut ; les autres sont pliés (bouton) ou révélés par la recherche.
 const TOP_N = 5
@@ -316,7 +318,12 @@ function exporterPDF() {
       </div>
 
       <section class="card">
-        <div class="tb"><h2 class="card-title">Classement — {{ ROLE_LBL[role] }}s <span class="ct-sub">{{ scoreLabelBas }} décroissant</span></h2><button class="pf-pdf" @click="exporterPDF">⬇ Exporter PDF</button></div>
+        <div class="tb"><h2 class="card-title">Classement — {{ ROLE_LBL[role] }}s <span class="ct-sub">{{ scoreLabelBas }} {{ sensTri === 'asc' ? 'croissant' : 'décroissant' }}</span></h2>
+          <div class="pf-tabs sm tri-sel">
+            <button :class="{ on: sensTri === 'desc' }" @click="sensTri = 'desc'">↓ Décroissant</button>
+            <button :class="{ on: sensTri === 'asc' }" @click="sensTri = 'asc'">↑ Croissant</button>
+          </div>
+          <button class="pf-pdf" @click="exporterPDF">⬇ Exporter PDF</button></div>
         <div class="tbl-scroll">
           <table class="tbl">
             <thead><tr><th>#</th><th>Personne</th><th class="r">Postes</th><th class="rdt-col">{{ scoreLabel }}</th><th class="r">{{ scoreMetric === 'rendement' ? 'TRS tech.' : 'Rendement' }}</th><th class="r">Quantité</th><th class="r">Boîtes</th><th class="r">Rebuts</th><th class="r">Retouches</th><th class="r">{{ roleCol.lbl }}</th><th class="r">Polyv.</th><th></th></tr></thead>
@@ -345,7 +352,7 @@ function exporterPDF() {
           </table>
         </div>
         <div v-if="!enRecherche && classement.length > TOP_N" class="voir-plus">
-          <button class="vp-btn" @click="voirTous = !voirTous">{{ voirTous ? '▴ Réduire au top ' + TOP_N : '▾ Voir les ' + nbMasques + ' autre' + (nbMasques > 1 ? 's' : '') }}</button>
+          <button class="vp-btn" @click="voirTous = !voirTous">{{ voirTous ? '▴ Réduire à ' + TOP_N : '▾ Voir les ' + nbMasques + ' autre' + (nbMasques > 1 ? 's' : '') }}</button>
         </div>
         <p v-else-if="enRecherche" class="vp-hint">{{ classement.length }} résultat{{ classement.length > 1 ? 's' : '' }} pour « {{ recherche }} »</p>
         <p class="pf-note">Comparer <b>à iso-équipement</b> (le rendement est normalisé, mais les habitudes diffèrent selon la machine). Le <b>TRS technique</b> exclut les arrêts planifiés et les pannes — ce qui échappe à l'opérateur — d'où son usage pour le classement. Pour les chefs, « Taux vérif. » = part des postes de leurs lignes qu'ils ont vérifiés ; pour les superviseurs, « Ratio planifié » = part planifiée des arrêts de leurs shifts. Outil de coaching, pas de sanction. Moins de {{ MIN_POSTES }} postes (ou sans cadence) : en gris, hors classement. Un poste tenu <b>en binôme</b> (2 opérateurs dans « Fait par ») est crédité aux <b>deux</b>.</p>
@@ -441,6 +448,7 @@ td.vert, b.vert { color: #15803d; } td.orange, b.orange { color: #b45309; } td.r
 .vide { text-align: center; color: #94a3b8; padding: 22px; }
 .icon-b { border: 1px solid #e2e8f0; background: #fff; color: #475569; font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 7px; cursor: pointer; }
 .icon-b:hover { background: #f8fafc; }
+.tri-sel { margin-left: 4px; }
 .voir-plus { display: flex; justify-content: center; margin-top: 12px; }
 .vp-btn { border: 1px solid #99f6e4; background: #f0fdfa; color: #0f766e; border-radius: 9px; padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .vp-btn:hover { background: #0d9488; border-color: #0d9488; color: #fff; }
