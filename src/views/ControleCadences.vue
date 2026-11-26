@@ -29,6 +29,7 @@ function phaseDeType(type) {
 const PHASE_LBL = { pesee: 'Pesée', granulation: 'Granulation / Séchage', melange: 'Mélange', compression: 'Compression', remplissage: 'Remplissage', pelliculage: 'Pelliculage', conditionnement: 'Conditionnement' }
 const STATUT = {
   pret: { l: 'Prêt', c: 'ok' }, partiel: { l: 'À compléter', c: 'warn' },
+  cycle: { l: 'Ancien mode — à migrer', c: 'migr' },
   manquant: { l: 'Non configuré', c: 'bad' }, mixte: { l: 'Modes mélangés', c: 'warn' }, inactif: { l: 'Non utilisé', c: 'muet' }
 }
 
@@ -55,8 +56,9 @@ const audit = computed(() => {
   return equipements.value.map(e => {
     const cads = cadByEq[e.id] || []
     const modes = new Set(cads.map(c => c.mode))
-    const modePrincipal = modes.has('temps') ? 'temps' : (cads.length ? 'debit' : null)
-    const mixed = modes.size > 1
+    const nbCycle = cads.filter(c => c.mode === 'cycle').length   // ancien mode « temps écoulé » (à migrer)
+    const modePrincipal = modes.has('temps') ? 'temps' : (modes.has('cycle') && !modes.has('debit') ? 'cycle' : (cads.length ? 'debit' : null))
+    const mixed = new Set(cads.filter(c => c.mode !== 'cycle').map(c => c.mode)).size > 1
     const cadPids = new Set(cads.map(c => c.pid))
     const produced = prodByEq[e.id] || new Set()
     const nbSaisies = nbSaisiesByEq[e.id] || 0
@@ -65,20 +67,21 @@ const audit = computed(() => {
     let statut
     if (nbSaisies === 0) statut = 'inactif'
     else if (cads.length === 0) statut = 'manquant'
+    else if (nbCycle > 0) statut = 'cycle'
     else if (manquants > 0) statut = 'partiel'
     else if (mixed) statut = 'mixte'
     else statut = 'pret'
-    return { id: e.id, code: e.code, nom: e.nom, phase: phaseDeType(e.type), modePrincipal, mixed, nbCad: cads.length, nbProduced: produced.size, manquants, tailleManquante, nbSaisies, statut }
+    return { id: e.id, code: e.code, nom: e.nom, phase: phaseDeType(e.type), modePrincipal, mixed, nbCycle, nbCad: cads.length, nbProduced: produced.size, manquants, tailleManquante, nbSaisies, statut }
   })
 })
 
-const ORDRE = { manquant: 0, partiel: 1, mixte: 2, pret: 3, inactif: 4 }
+const ORDRE = { manquant: 0, cycle: 1, partiel: 2, mixte: 3, pret: 4, inactif: 5 }
 const liste = computed(() => audit.value.filter(e => !(masquerInactifs.value && e.statut === 'inactif')).slice().sort((a, b) => (ORDRE[a.statut] - ORDRE[b.statut]) || String(a.code).localeCompare(String(b.code))))
 const nb = (s) => audit.value.filter(e => e.statut === s).length
-const aRegler = computed(() => nb('manquant') + nb('partiel') + nb('mixte'))
+const aRegler = computed(() => nb('manquant') + nb('cycle') + nb('partiel') + nb('mixte'))
 
 function lienCadence(e) { return { path: '/cadences', query: { vue: 'matrice', phase: e.phase || undefined } } }
-const modeLbl = (m) => m === 'temps' ? 'Temps (min/lot)' : (m === 'debit' ? 'Débit (kg/h · bts/h)' : '—')
+const modeLbl = (m) => m === 'temps' ? 'Temps (min/lot)' : (m === 'cycle' ? 'Temps écoulé (ancien)' : (m === 'debit' ? 'Débit (kg/h · bts/h)' : '—'))
 </script>
 
 <template>
@@ -88,6 +91,7 @@ const modeLbl = (m) => m === 'temps' ? 'Temps (min/lot)' : (m === 'debit' ? 'Dé
 
     <div class="kpi-row">
       <div class="kpi vert"><div class="kpi-v">{{ nb('pret') }}</div><div class="kpi-l">Prêts pour le TRS</div></div>
+      <div class="kpi migr"><div class="kpi-v">{{ nb('cycle') }}</div><div class="kpi-l">⚠ Ancien mode « temps écoulé » à migrer</div></div>
       <div class="kpi orange"><div class="kpi-v">{{ nb('partiel') + nb('mixte') }}</div><div class="kpi-l">À compléter</div></div>
       <div class="kpi rouge"><div class="kpi-v">{{ nb('manquant') }}</div><div class="kpi-l">Non configurés</div></div>
       <div class="kpi"><div class="kpi-v">{{ nb('inactif') }}</div><div class="kpi-l">Non utilisés (90 j)</div></div>
@@ -108,7 +112,7 @@ const modeLbl = (m) => m === 'temps' ? 'Temps (min/lot)' : (m === 'debit' ? 'Dé
               <td><span class="stag" :class="STATUT[e.statut].c">{{ STATUT[e.statut].l }}</span></td>
               <td class="nom">{{ e.code }}<span v-if="e.nom" class="sub2"> · {{ e.nom }}</span></td>
               <td>{{ e.phase ? PHASE_LBL[e.phase] : '—' }}</td>
-              <td :class="{ warn: e.mixed }">{{ modeLbl(e.modePrincipal) }}<span v-if="e.mixed" class="sub2"> · mélangés !</span><span v-if="e.tailleManquante" class="sub2"> · {{ e.tailleManquante }} sans taille de lot</span></td>
+              <td :class="{ warn: e.mixed || e.nbCycle }">{{ modeLbl(e.modePrincipal) }}<span v-if="e.nbCycle" class="migr-txt"> · ⚠ {{ e.nbCycle }} en ancien « temps écoulé »</span><span v-if="e.mixed" class="sub2"> · mélangés !</span><span v-if="e.tailleManquante" class="sub2"> · {{ e.tailleManquante }} sans taille de lot</span></td>
               <td class="r">{{ e.nbCad }}</td>
               <td class="r" :class="{ warn: e.manquants > 0 }"><b v-if="e.manquants > 0">{{ e.manquants }}</b><span v-else>—</span></td>
               <td class="r">{{ e.nbSaisies }}</td>
@@ -118,7 +122,7 @@ const modeLbl = (m) => m === 'temps' ? 'Temps (min/lot)' : (m === 'debit' ? 'Dé
           </tbody>
         </table>
       </div>
-      <p class="cc-note"><b>Lecture :</b> <span class="stag bad">Non configuré</span> = aucune cadence, la Performance et le TRS resteront « n/d » tant qu'on n'en définit pas une. <span class="stag warn">À compléter</span> = certains produits fabriqués n'ont pas de cadence (leurs postes auront une Performance « n/d »). <span class="stag ok">Prêt</span> = tout est couvert. Les <b>Non utilisés</b> n'ont aucune saisie sur 90 jours — pas urgent.</p>
+      <p class="cc-note"><b>Lecture :</b> <span class="stag bad">Non configuré</span> = aucune cadence, la Performance et le TRS resteront « n/d » tant qu'on n'en définit pas une. <span class="stag migr">Ancien mode — à migrer</span> = cadence encore en « temps écoulé » (ancien calcul par cycle, <b>faux</b>) : à repasser en <b>Débit (kg/h)</b> ou <b>Temps (min/lot)</b> sur la page Cadences. <span class="stag warn">À compléter</span> = certains produits fabriqués n'ont pas de cadence (leurs postes auront une Performance « n/d »). <span class="stag ok">Prêt</span> = tout est couvert. Les <b>Non utilisés</b> n'ont aucune saisie sur 90 jours — pas urgent.</p>
     </section>
   </div>
 </template>
@@ -132,6 +136,7 @@ const modeLbl = (m) => m === 'temps' ? 'Temps (min/lot)' : (m === 'debit' ? 'Dé
 .kpi-l { font-size: 12px; color: #64748b; font-weight: 600; margin-top: 3px; }
 .kpi.vert { border-left-color: #16a34a; } .kpi.vert .kpi-v { color: #15803d; }
 .kpi.orange { border-left-color: #d97706; } .kpi.orange .kpi-v { color: #b45309; }
+.kpi.migr { border-left-color: #ea580c; background: #fff7ed; } .kpi.migr .kpi-v { color: #c2410c; }
 .kpi.rouge { border-left-color: #dc2626; } .kpi.rouge .kpi-v { color: #dc2626; }
 .cc-ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; border-radius: 10px; padding: 12px 16px; font-size: 14px; font-weight: 600; margin-bottom: 16px; }
 .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px 18px; }
@@ -149,6 +154,9 @@ const modeLbl = (m) => m === 'temps' ? 'Temps (min/lot)' : (m === 'debit' ? 'Dé
 .vide { text-align: center; color: #94a3b8; padding: 22px; }
 .stag { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
 .stag.ok { background: #f0fdf4; color: #15803d; } .stag.warn { background: #fff7ed; color: #b45309; } .stag.bad { background: #fef2f2; color: #dc2626; } .stag.muet { background: #f1f5f9; color: #94a3b8; }
+.stag.migr { background: #ffedd5; color: #c2410c; }
+.migr-txt { color: #c2410c; font-weight: 700; font-size: 12px; }
+.row-migr { background: #fff7ed; }
 .cc-btn { display: inline-block; border: 1px solid #99f6e4; background: #f0fdfa; color: #0f766e; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 7px; text-decoration: none; white-space: nowrap; }
 .cc-btn:hover { background: #0d9488; border-color: #0d9488; color: #fff; }
 .cc-note { margin: 12px 2px 0; font-size: 12px; color: #64748b; line-height: 1.8; }
