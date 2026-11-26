@@ -55,9 +55,13 @@ async function charger() {
 }
 onMounted(charger)
 
-const equipAtelier = computed(() => { const m = {}; for (const e of equipements.value) m[e.id] = e.atelier_id; return m })
-const postesFiltres = computed(() => atelierFiltre.value ? postes.value.filter(s => String(equipAtelier.value[s.equipement_id] || '') === String(atelierFiltre.value)) : postes.value)
-const atelierLabel = computed(() => { const a = ateliers.value.find(a => String(a.id) === String(atelierFiltre.value)); return a ? (a.nom || a.code) : '' })
+// Filtre par NOM d'atelier (et non par id) : la table ateliers peut contenir plusieurs
+// lignes homonymes -> on dédoublonne la liste et on regroupe leurs équipements.
+const atelierNomParId = computed(() => { const m = {}; for (const a of ateliers.value) m[String(a.id)] = a.nom || a.code; return m })
+const equipAtelierNom = computed(() => { const m = {}; for (const e of equipements.value) m[e.id] = atelierNomParId.value[String(e.atelier_id)] || ''; return m })
+const ateliersListe = computed(() => [...new Set(ateliers.value.map(a => a.nom || a.code).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr')))
+const postesFiltres = computed(() => atelierFiltre.value ? postes.value.filter(s => equipAtelierNom.value[s.equipement_id] === atelierFiltre.value) : postes.value)
+const atelierLabel = computed(() => atelierFiltre.value)
 // Nombre total de postes saisis par équipement (pour le taux de vérification des chefs de ligne).
 const postesParEquip = computed(() => { const m = {}; for (const s of postesFiltres.value) { const k = s.equipement_id || '—'; m[k] = (m[k] || 0) + 1 } return m })
 
@@ -219,7 +223,7 @@ function exporterPDF() {
       <label class="pf-f">Atelier
         <select v-model="atelierFiltre">
           <option value="">Tous les ateliers</option>
-          <option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.nom || a.code }}</option>
+          <option v-for="nom in ateliersListe" :key="nom" :value="nom">{{ nom }}</option>
         </select>
       </label>
       <button class="pf-apply" @click="appliquer">Appliquer</button>
