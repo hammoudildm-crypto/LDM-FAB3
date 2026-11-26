@@ -14,6 +14,7 @@ const postes = ref([])
 const cadences = ref([])
 const personnel = ref([])
 const ateliers = ref([])
+const produits = ref([])
 const equipements = ref([])
 const chargement = ref(true)
 const msg = ref('')
@@ -51,6 +52,7 @@ async function charger() {
   const rc = await supabase.from('cadences_produit').select('*'); if (!rc.error) cadences.value = rc.data || []
   const ro = await supabase.from('organigramme').select('*'); if (!ro.error) personnel.value = ro.data || []
   const ra = await supabase.from('ateliers').select('id, code, nom').order('nom'); if (!ra.error) ateliers.value = ra.data || []
+  const rp = await supabase.from('produits').select('id, unites_par_boite, poids_unitaire_mg, taille_lot'); if (!rp.error) produits.value = rp.data || []
   const re = await supabase.from('equipements').select('id, atelier_id'); if (!re.error) equipements.value = re.data || []
   chargement.value = false
 }
@@ -89,6 +91,25 @@ function cadenceDe(eq, pr) {
   if (c.mode === 'temps') return { value: v > 0 ? 60 / v : 0, mode: 'debit' }   // min/lot -> lots/h (production = nb de lots)
   return { value: v, mode: c.mode || 'debit' }
 }
+
+// Conversion de la production d'un poste en BOÎTES (selon l'unité de cadence + fiche produit).
+const produitParId = computed(() => { const m = {}; for (const p of produits.value) m[p.id] = { upb: Number(p.unites_par_boite || 0), mm: Number(p.poids_unitaire_mg || 0), taille: Number(p.taille_lot || 0) }; return m })
+const normU = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+function boitesPoste(s) {
+  const prod = Number(s.production_realisee) || 0
+  if (prod <= 0) return 0
+  const c = cadences.value.find(x => x.equipement_id === s.equipement_id && x.produit_id === s.produit_id)
+  const mode = c ? (c.mode || 'debit') : 'debit'
+  const unit = normU(c ? c.unite_cadence : '')
+  const p = produitParId.value[s.produit_id] || {}
+  const upb = Number(p.upb || 0), mm = Number(p.mm || 0), taille = Number(p.taille || 0)
+  if (mode === 'cycle') return 0                                   // production = minutes, non convertible
+  if (mode === 'temps') return taille > 0 ? prod * taille : 0      // production = nb de lots -> × taille_lot (boîtes/lot)
+  if (unit.includes('boite')) return prod                          // déjà en boîtes
+  if (unit.includes('kg')) return (mm > 0 && upb > 0) ? Math.floor(prod * 1e6 / mm / upb) : 0   // kg -> comprimés -> boîtes
+  if (/(comprime|gelule|unite|flacon|bouteille|blister|sachet)/.test(unit)) return upb > 0 ? Math.floor(prod / upb) : 0
+  return 0
+}
 const normNom = (s) => String(s || '').trim()
 const fonctionDe = (nom) => { const p = personnel.value.find(p => normNom(p.nom) === normNom(nom)); return p ? (p.fonction || '') : '' }
 
@@ -125,11 +146,13 @@ const parPersonne = computed(() => {
     const cd = cadenceDe(s.equipement_id, s.produit_id)
     const mois = new Date(s.date).getMonth()
     const k = s.equipement_id || '—'
+    const bts = boitesPoste(s)
     for (const nom of noms) {
-      if (!m[nom]) m[nom] = { nom, nbPostes: 0, prodTot: 0, rebutsTot: 0, retouchesTot: 0, reglageTot: 0, glob: accVide(), equips: new Map(), parMois: Array.from({ length: 12 }, accVide) }
+      if (!m[nom]) m[nom] = { nom, nbPostes: 0, prodTot: 0, boitesTot: 0, rebutsTot: 0, retouchesTot: 0, reglageTot: 0, glob: accVide(), equips: new Map(), parMois: Array.from({ length: 12 }, accVide) }
       const e = m[nom]
       e.nbPostes++
       e.prodTot += Number(s.production_realisee) || 0
+      e.boitesTot += bts
       e.rebutsTot += Number(s.rebuts) || 0
       e.retouchesTot += Number(s.retouches) || 0
       e.reglageTot += Number(s.arret_reglage_min) || 0
@@ -159,7 +182,7 @@ const parPersonne = computed(() => {
     const topEquips = [...e.equips.values()].map(eq => ({ ...eq, rendement: rendementDe(eq.acc), trsTech: trsTechDe(eq.acc) })).sort((a, b) => b.prod - a.prod).slice(0, 8)
     const score = scoreMetric.value === 'rendement' ? rendement : trsTech
     return {
-      nom: e.nom, fonction: fonctionDe(e.nom), nbPostes: e.nbPostes, prodTot: e.prodTot,
+      nom: e.nom, fonction: fonctionDe(e.nom), nbPostes: e.nbPostes, prodTot: e.prodTot, boitesTot: e.boitesTot,
       rendement, trsGlobal, trsTech, dispo, dispoTech, qualite, rebutRate, retoucheRate,
       ratioPlan, reglagePart, tauxVerif, fonct: g.fonct, nbEquip: e.equips.size,
       trend, topEquips, score, suffisant: e.nbPostes >= MIN_POSTES && score != null
@@ -208,7 +231,7 @@ function exporterPDF() {
     const sc = scoreDe(p)
     const w = sc == null ? 0 : Math.round(sc * 100)
     const col = COL[niv(sc)]
-    return '<tr' + (p.suffisant ? '' : ' class="insuff"') + '><td class="r">' + (p.suffisant ? i + 1 : '·') + '</td><td><b>' + esc(p.nom) + '</b>' + (p.fonction ? ' <i>' + esc(p.fonction) + '</i>' : '') + '</td><td class="r">' + p.nbPostes + '</td><td><span class="bt"><span class="bf" style="width:' + w + '%;background:' + col + ce + '"></span></span></td><td class="r" style="color:' + col + ';font-weight:800">' + pctR(sc) + '</td><td class="r">' + pctR(autreMetric(p)) + '</td><td class="r">' + fmtInt(p.prodTot) + '</td><td class="r">' + pct1(p.rebutRate) + '</td><td class="r">' + pct1(p[rc.key]) + '</td><td class="r">' + p.nbEquip + '</td></tr>'
+    return '<tr' + (p.suffisant ? '' : ' class="insuff"') + '><td class="r">' + (p.suffisant ? i + 1 : '·') + '</td><td><b>' + esc(p.nom) + '</b>' + (p.fonction ? ' <i>' + esc(p.fonction) + '</i>' : '') + '</td><td class="r">' + p.nbPostes + '</td><td><span class="bt"><span class="bf" style="width:' + w + '%;background:' + col + ce + '"></span></span></td><td class="r" style="color:' + col + ';font-weight:800">' + pctR(sc) + '</td><td class="r">' + pctR(autreMetric(p)) + '</td><td class="r">' + fmtInt(p.prodTot) + '</td><td class="r">' + fmtInt(p.boitesTot) + '</td><td class="r">' + pct1(p.rebutRate) + '</td><td class="r">' + pct1(p[rc.key]) + '</td><td class="r">' + p.nbEquip + '</td></tr>'
   }).join('')
   const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Performance du personnel</title>' +
     '<style>*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1b2733;margin:24px;font-size:12px}' +
@@ -220,7 +243,7 @@ function exporterPDF() {
     '<h1>Performance du personnel — ' + esc(ROLE_LBL[role.value]) + 's</h1>' +
     '<p class="sub">Classement sur le ' + esc(scoreLabel.value) + ' · ' + (scoreMetric.value === 'rendement' ? 'production réelle ÷ théorique' : 'arrêts planifiés et pannes exclus') + '</p>' +
     '<div class="meta"><div><b>Période :</b> ' + esc(dFr(du.value)) + ' → ' + esc(dFr(au.value)) + '</div><div><b>Atelier :</b> ' + esc(atTxt) + '</div><div><b>Équipement :</b> ' + esc(eqTxt) + '</div><div><b>' + esc(scoreLabel.value) + ' moyen (pondéré) :</b> ' + pctR(scoreMoyen.value) + '</div><div><b>Personnes :</b> ' + list.length + '</div></div>' +
-    '<table><thead><tr><th class="r">#</th><th>Personne</th><th class="r">Postes</th><th>' + esc(scoreLabel.value) + '</th><th class="r">' + (scoreMetric.value === 'rendement' ? 'TRS tech.' : 'Rendement') + '</th><th class="r">Quantité</th><th class="r">Rebuts</th><th class="r">' + esc(rc.lbl) + '</th><th class="r">Polyv.</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<table><thead><tr><th class="r">#</th><th>Personne</th><th class="r">Postes</th><th>' + esc(scoreLabel.value) + '</th><th class="r">' + (scoreMetric.value === 'rendement' ? 'TRS tech.' : 'Rendement') + '</th><th class="r">Quantité</th><th class="r">Boîtes</th><th class="r">Rebuts</th><th class="r">' + esc(rc.lbl) + '</th><th class="r">Polyv.</th></tr></thead><tbody>' + rows + '</tbody></table>' +
     '<p class="note">Comparer à iso-équipement. Le TRS technique exclut arrêts planifiés et pannes (ce qui échappe à l\'opérateur). Outil de coaching / ciblage formation. Personnes avec moins de ' + MIN_POSTES + ' postes (ou sans cadence définie) en gris, hors classement.</p>' +
     '<p class="foot">ProdTrack — LDM Groupe · Document généré le ' + esc(new Date().toLocaleDateString('fr-FR')) + '</p></body></html>'
   const w = window.open('', '_blank')
@@ -290,7 +313,7 @@ function exporterPDF() {
         <div class="tb"><h2 class="card-title">Classement — {{ ROLE_LBL[role] }}s <span class="ct-sub">{{ scoreLabelBas }} décroissant</span></h2><button class="pf-pdf" @click="exporterPDF">⬇ Exporter PDF</button></div>
         <div class="tbl-scroll">
           <table class="tbl">
-            <thead><tr><th>#</th><th>Personne</th><th class="r">Postes</th><th class="rdt-col">{{ scoreLabel }}</th><th class="r">{{ scoreMetric === 'rendement' ? 'TRS tech.' : 'Rendement' }}</th><th class="r">Quantité</th><th class="r">Rebuts</th><th class="r">Retouches</th><th class="r">{{ roleCol.lbl }}</th><th class="r">Polyv.</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Personne</th><th class="r">Postes</th><th class="rdt-col">{{ scoreLabel }}</th><th class="r">{{ scoreMetric === 'rendement' ? 'TRS tech.' : 'Rendement' }}</th><th class="r">Quantité</th><th class="r">Boîtes</th><th class="r">Rebuts</th><th class="r">Retouches</th><th class="r">{{ roleCol.lbl }}</th><th class="r">Polyv.</th><th></th></tr></thead>
             <tbody>
               <tr v-for="(p, i) in classement" :key="p.nom" :class="{ insuff: !p.suffisant }">
                 <td class="rang">{{ p.suffisant ? i + 1 : '·' }}</td>
@@ -304,13 +327,14 @@ function exporterPDF() {
                 </td>
                 <td class="r" :class="niv(autreMetric(p))">{{ pctR(autreMetric(p)) }}</td>
                 <td class="r vol">{{ fmtInt(p.prodTot) }}</td>
+                <td class="r vol">{{ fmtInt(p.boitesTot) }}</td>
                 <td class="r" :class="{ warnq: p.rebutRate > 0.03 }">{{ pct1(p.rebutRate) }}</td>
                 <td class="r">{{ pct1(p.retoucheRate) }}</td>
                 <td class="r">{{ pct1(p[roleCol.key]) }}</td>
                 <td class="r">{{ p.nbEquip }}</td>
                 <td class="r"><button class="icon-b" @click="detail = detail === p.nom ? null : p.nom">{{ detail === p.nom ? '▲' : 'Détail' }}</button></td>
               </tr>
-              <tr v-if="!classement.length"><td colspan="11" class="vide">Aucune donnée sur la période.</td></tr>
+              <tr v-if="!classement.length"><td colspan="12" class="vide">Aucune donnée sur la période.</td></tr>
             </tbody>
           </table>
         </div>
@@ -323,6 +347,7 @@ function exporterPDF() {
           <div class="fk"><span class="fk-l">TRS global</span><b :class="niv(ficheDe.trsGlobal)">{{ pctR(ficheDe.trsGlobal) }}</b></div>
           <div class="fk"><span class="fk-l">TRS technique</span><b :class="niv(ficheDe.trsTech)">{{ pctR(ficheDe.trsTech) }}</b></div>
           <div class="fk"><span class="fk-l">Quantité produite</span><b>{{ fmtInt(ficheDe.prodTot) }}</b></div>
+          <div class="fk"><span class="fk-l">Quantité (boîtes)</span><b>{{ fmtInt(ficheDe.boitesTot) }}</b></div>
           <div class="fk"><span class="fk-l">Disponibilité</span><b>{{ pctR(ficheDe.dispo) }}</b></div>
           <div class="fk"><span class="fk-l">Performance (rendement)</span><b :class="niv(ficheDe.rendement)">{{ pctR(ficheDe.rendement) }}</b></div>
           <div class="fk"><span class="fk-l">Qualité</span><b>{{ pctR(ficheDe.qualite) }}</b></div>
