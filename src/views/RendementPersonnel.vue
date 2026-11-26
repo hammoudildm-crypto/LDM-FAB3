@@ -345,7 +345,7 @@ function exporterPDF() {
                 <td class="r">{{ pct1(p.retoucheRate) }}</td>
                 <td class="r">{{ pct1(p[roleCol.key]) }}</td>
                 <td class="r">{{ p.nbEquip }}</td>
-                <td class="r"><button class="icon-b" @click="detail = detail === p.nom ? null : p.nom">{{ detail === p.nom ? '▲' : 'Détail' }}</button></td>
+                <td class="r"><button class="icon-b detail-b" @click="detail = detail === p.nom ? null : p.nom">{{ detail === p.nom ? '▲' : 'Détail' }}</button></td>
               </tr>
               <tr v-if="!classementAffiche.length"><td colspan="12" class="vide">Aucune donnée sur la période.</td></tr>
             </tbody>
@@ -448,7 +448,11 @@ td.vert, b.vert { color: #15803d; } td.orange, b.orange { color: #b45309; } td.r
 .vide { text-align: center; color: #94a3b8; padding: 22px; }
 .icon-b { border: 1px solid #e2e8f0; background: #fff; color: #475569; font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 7px; cursor: pointer; }
 .icon-b:hover { background: #f8fafc; }
-.tri-sel { margin-left: 4px; }
+.detail-b { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+.detail-b:hover { background: #4338ca; border-color: #4338ca; color: #fff; }
+.tri-sel { margin-left: 4px; background: #ccfbf1; }
+.tri-sel button { color: #0f766e; }
+.tri-sel button.on { background: #0d9488; color: #fff; box-shadow: 0 1px 3px rgba(13,148,136,.45); }
 .voir-plus { display: flex; justify-content: center; margin-top: 12px; }
 .vp-btn { border: 1px solid #99f6e4; background: #f0fdfa; color: #0f766e; border-radius: 9px; padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .vp-btn:hover { background: #0d9488; border-color: #0d9488; color: #fff; }
