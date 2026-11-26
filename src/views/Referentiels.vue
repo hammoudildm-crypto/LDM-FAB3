@@ -459,11 +459,20 @@ const cadIndex = computed(() => {
   for (const c of cadList.value) m[c.equipement_id + '_' + c.produit_id] = c
   return m
 })
-const equipsMat = computed(() => {
-  let list = equipements.value.filter(e => e.actif !== false)
-  if (cadMatAtelier.value) list = list.filter(e => e.atelier_id === cadMatAtelier.value)  // atelier = filtre optionnel
-  return list.slice().sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true }))
+// Équipements regroupés par atelier (atelier = filtre optionnel). Ordre : atelier puis code.
+const ateliersMat = computed(() => {
+  const actifs = equipements.value.filter(e => e.actif !== false && (!cadMatAtelier.value || e.atelier_id === cadMatAtelier.value))
+  const parAtelier = {}
+  for (const e of actifs) { const k = e.atelier_id || '__none__'; (parAtelier[k] || (parAtelier[k] = [])).push(e) }
+  const triEq = (a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true })
+  const groupes = []
+  const ordreAt = ateliers.value.slice().sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true }))
+  for (const a of ordreAt) if (parAtelier[a.id] && parAtelier[a.id].length) groupes.push({ atelier: a, equips: parAtelier[a.id].slice().sort(triEq) })
+  if (parAtelier['__none__']) groupes.push({ atelier: { id: '__none__', code: '—', nom: 'Sans atelier' }, equips: parAtelier['__none__'].slice().sort(triEq) })
+  return groupes
 })
+const equipsMat = computed(() => ateliersMat.value.flatMap(g => g.equips))
+const equipsMatSep = computed(() => { const s = new Set(); for (const g of ateliersMat.value) if (g.equips.length) s.add(g.equips[0].id); return s })
 const produitsMat = computed(() => {
   const q = cadMatRecherche.value.trim().toLowerCase()
   const list = produits.value
@@ -1060,14 +1069,17 @@ onMounted(async () => {
               <table class="cadmat-table">
                 <thead>
                   <tr>
-                    <th class="cadmat-corner">Produit</th>
-                    <th v-for="e in equipsMat" :key="e.id" class="cadmat-col" :title="e.nom">{{ e.code }}<div class="cadmat-unit">{{ uniteEquipMat(e.id) }}</div></th>
+                    <th class="cadmat-corner" rowspan="2">Produit</th>
+                    <th v-for="g in ateliersMat" :key="g.atelier.id" class="cadmat-atelier" :colspan="g.equips.length" :title="g.atelier.nom">{{ g.atelier.code }} — {{ g.atelier.nom }}</th>
+                  </tr>
+                  <tr>
+                    <th v-for="e in equipsMat" :key="e.id" class="cadmat-col" :class="{ 'cadmat-sep': equipsMatSep.has(e.id) }" :title="e.nom">{{ e.code }}<div class="cadmat-unit">{{ uniteEquipMat(e.id) }}</div></th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="p in produitsMat" :key="p.id">
                     <td class="cadmat-prod"><span class="cadmat-pcode">{{ p.code_pf }}</span><span class="cadmat-pdes">{{ p.designation }}</span></td>
-                    <td v-for="e in equipsMat" :key="e.id" class="cadmat-cell" :class="{ filled: valCadMat(e.id, p.id) !== '' }">
+                    <td v-for="e in equipsMat" :key="e.id" class="cadmat-cell" :class="{ filled: valCadMat(e.id, p.id) !== '', 'cadmat-sep': equipsMatSep.has(e.id) }">
                       <input type="number" step="any" inputmode="decimal" :value="valCadMat(e.id, p.id)" @change="saveCadMat(e.id, p.id, $event.target.value)" :disabled="!peutEditer" class="cadmat-in" />
                     </td>
                   </tr>
@@ -1321,8 +1333,10 @@ button.link.danger { color: #b91c1c; }
 .cadmat-table { border-collapse: separate; border-spacing: 0; font-size: 13px; }
 .cadmat-table th, .cadmat-table td { border-bottom: 1px solid #eef2f6; border-right: 1px solid #eef2f6; }
 .cadmat-corner { position: sticky; left: 0; top: 0; z-index: 4; background: #0f766e; color: #fff; text-align: left; font-weight: 700; padding: 9px 12px; min-width: 230px; }
-.cadmat-col { position: sticky; top: 0; z-index: 2; background: #f1f5f9; color: #334155; font-weight: 700; text-align: center; padding: 7px 10px; min-width: 96px; white-space: nowrap; }
+.cadmat-atelier { position: sticky; top: 0; z-index: 3; height: 32px; box-sizing: border-box; background: #0f766e; color: #fff; font-size: 12px; font-weight: 700; text-align: center; padding: 6px 10px; white-space: nowrap; border-right: 2px solid #fff; }
+.cadmat-col { position: sticky; top: 32px; z-index: 2; background: #f1f5f9; color: #334155; font-weight: 700; text-align: center; padding: 7px 10px; min-width: 96px; white-space: nowrap; }
 .cadmat-unit { font-size: 10px; font-weight: 500; color: #94a3b8; margin-top: 2px; }
+.cadmat-col.cadmat-sep, .cadmat-cell.cadmat-sep { border-left: 2px solid #99f6e4; }
 .cadmat-prod { position: sticky; left: 0; z-index: 1; background: #fff; padding: 6px 12px; min-width: 230px; }
 .cadmat-pcode { font-family: ui-monospace, monospace; font-weight: 700; color: #0f766e; display: block; }
 .cadmat-pdes { font-size: 11px; color: #64748b; display: block; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
