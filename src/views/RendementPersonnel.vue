@@ -66,7 +66,7 @@ function cadenceDe(eq, pr) {
   if (!c || c.cadence_nominale == null) return { value: 0, mode: 'debit' }
   const v = Number(c.cadence_nominale)
   // mode 'temps' = cadence en temps par lot (h/lot) -> débit équivalent (lots/h = 1 / temps)
-  if (c.mode === 'temps') return { value: v > 0 ? 1 / v : 0, mode: 'debit' }
+  if (c.mode === 'temps') return { value: v > 0 ? 60 / v : 0, mode: 'debit' }   // v = min/lot -> débit (lots/h = 60 / temps)
   return { value: v, mode: c.mode || 'debit' }
 }
 const normNom = (s) => String(s || '').trim()

@@ -32,7 +32,7 @@
           </select>
           <label v-if="phaseSel && !filtreEq" class="cad-tous"><input type="checkbox" v-model="tousProduits" /> Afficher aussi les produits sans cadence dans cette phase (pour en ajouter)</label>
           <span v-if="filtreEq" class="eq-count">{{ produitsMatrice.length }} produit(s) avec cadence</span>
-          <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupesAffiches.length }} équipement(s){{ phaseSel ? ' — ' + (PHASE_LBL[phaseSel] || phaseSel) : '' }} — saisissez la cadence dans les cases. Bouton d'en-tête : basculer un équipement en <b>temps par lot (h/lot)</b> au lieu du débit (kg/h).</span>
+          <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupesAffiches.length }} équipement(s){{ phaseSel ? ' — ' + (PHASE_LBL[phaseSel] || phaseSel) : '' }} — saisissez la cadence dans les cases. Bouton d'en-tête : basculer un équipement en <b>temps par lot (min/lot)</b> — converti automatiquement depuis le kg/h via la taille de lot.</span>
           <span v-if="msgMat" class="mat-msg">{{ msgMat }}</span>
         </div>
         <div class="mat-scroll">
@@ -42,7 +42,7 @@
                 <th class="mat-corner">Produit</th>
                 <th v-for="g in groupesAffiches" :key="g.key" class="mat-col" :class="'ph-' + (g.phase || 'x')">
                   {{ g.nom }}<div class="mat-unit">{{ uniteGroupe(g) }}</div>
-                  <button type="button" class="mode-tg" :class="{ temps: modeGroupe(g) === 'temps' }" @click="toggleModeGroupe(g)" :title="modeGroupe(g) === 'temps' ? 'Cadence en temps par lot (h/lot) — cliquer pour revenir au débit' : 'Cadence en débit — cliquer pour passer en temps par lot (h/lot)'">{{ modeGroupe(g) === 'temps' ? '⏱ h/lot' : '⇄ kg/h' }}</button>
+                  <button type="button" class="mode-tg" :class="{ temps: modeGroupe(g) === 'temps' }" @click="toggleModeGroupe(g)" :title="modeGroupe(g) === 'temps' ? 'Cadence en temps par lot (h/lot) — cliquer pour revenir au débit' : 'Cadence en débit — cliquer pour passer en temps par lot (h/lot)'">{{ modeGroupe(g) === 'temps' ? '⏱ min/lot' : '⇄ kg/h' }}</button>
                 </th>
               </tr>
             </thead>
@@ -227,19 +227,31 @@ function modeGroupe(grp) {
   const ids = new Set(grp.equips.map(e => e.id))
   return cadences.value.some(c => ids.has(c.equipement_id) && c.mode === 'temps') ? 'temps' : 'debit'
 }
-function uniteGroupe(grp) { return modeGroupe(grp) === 'temps' ? 'h/lot' : (grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h') }
+function uniteGroupe(grp) { return modeGroupe(grp) === 'temps' ? 'min/lot' : (grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h') }
+const tailleLotDe = (pid) => { const p = produits.value.find(p => p.id === pid); const t = p ? Number(p.taille_lot) : 0; return t > 0 ? t : 0 }
+// Bascule kg/h <-> min/lot avec conversion automatique via la taille de lot :
+//   min/lot = (taille_lot / cadence_kgh) x 60   |   kg/h = 60 x taille_lot / min_lot
 async function toggleModeGroupe(grp) {
   const nouveau = modeGroupe(grp) === 'temps' ? 'debit' : 'temps'
   modesGroupe[grp.key] = nouveau
-  const unite = nouveau === 'temps' ? 'h/lot' : (grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h')
+  const unite = nouveau === 'temps' ? 'min/lot' : (grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h')
+  let convertis = 0, sansTaille = 0
   try {
     const ids = new Set(grp.equips.map(e => e.id))
     for (const c of cadences.value) {
       if (!ids.has(c.equipement_id)) continue
-      const r = await supabase.from('cadences_produit').update({ mode: nouveau, unite_cadence: unite }).eq('id', c.id)
-      if (!r.error) { c.mode = nouveau; c.unite_cadence = unite }
+      const taille = tailleLotDe(c.produit_id)
+      const v = Number(c.cadence_nominale) || 0
+      let nv = v
+      if (taille > 0 && v > 0) {
+        nv = nouveau === 'temps' ? Math.round((taille / v) * 60 * 10) / 10 : Math.round((60 * taille / v) * 10) / 10
+        convertis++
+      } else if (v > 0) sansTaille++
+      const r = await supabase.from('cadences_produit').update({ cadence_nominale: nv, mode: nouveau, unite_cadence: unite }).eq('id', c.id)
+      if (!r.error) { c.cadence_nominale = nv; c.mode = nouveau; c.unite_cadence = unite }
     }
-    msgMat.value = nouveau === 'temps' ? 'Mode « temps par lot » (h/lot) ✓' : 'Mode « débit » ✓'; setTimeout(() => { msgMat.value = '' }, 2200)
+    msgMat.value = (nouveau === 'temps' ? 'Converti en min/lot' : 'Converti en kg/h') + ' — ' + convertis + ' valeur(s)' + (sansTaille ? ' · ' + sansTaille + ' sans taille de lot (à saisir à la main)' : '') + ' ✓'
+    setTimeout(() => { msgMat.value = '' }, 3500)
   } catch (err) { msgMat.value = 'Erreur : ' + (err.message || err) }
 }
 const fmtCad = (v) => Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 })
@@ -433,7 +445,7 @@ function cadenceDe(eq, pr) {
   if (!c || c.cadence_nominale == null) return { value: 0, mode: 'debit' }
   const v = Number(c.cadence_nominale)
   // mode 'temps' = cadence en temps par lot (h/lot) -> débit équivalent (lots/h = 1 / temps)
-  if (c.mode === 'temps') return { value: v > 0 ? 1 / v : 0, mode: 'debit' }
+  if (c.mode === 'temps') return { value: v > 0 ? 60 / v : 0, mode: 'debit' }   // v = min/lot -> débit (lots/h = 60 / temps)
   return { value: v, mode: c.mode || 'debit' }
 }
 async function chargerTRSReel(equipIds) {
