@@ -283,6 +283,23 @@ const paretoDe = (groupe) => {
 const paretoPlan = computed(() => paretoDe('plan'))
 const paretoSubi = computed(() => paretoDe('subi'))
 const aucunArret = computed(() => totalArrets.value === 0)
+
+// Drill-down du Pareto : cliquer un motif déplie les postes qui l'ont généré
+const detailMotif = ref('')
+function toggleDetail(cle) { detailMotif.value = detailMotif.value === cle ? '' : cle }
+const dateFr = (d) => { try { return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) } catch (e) { return d } }
+const detailLabel = computed(() => { const mo = MOTIFS.find(m => m[0] === detailMotif.value); return mo ? mo[2] : '' })
+const detailRows = computed(() => {
+  const mo = MOTIFS.find(m => m[0] === detailMotif.value)
+  if (!mo) return []
+  const col = mo[1]
+  return postesFiltres.value.map(s => ({
+    date: s.date, lib: POSTE_LIB[Number(s.poste)] || ('P' + (s.poste || '?')),
+    code: s.equipements ? s.equipements.code : '?', nom: s.equipements ? s.equipements.nom : '',
+    prod: s.produits ? (s.produits.code_pf || '') : '', min: Number(s[col]) || 0
+  })).filter(r => r.min > 0).sort((a, b) => b.min - a.min || (a.date < b.date ? 1 : -1))
+})
+const detailTotal = computed(() => detailRows.value.reduce((s, r) => s + r.min, 0))
 // Répartition planifié / subi des arrêts (part organisationnelle vs fiabilité)
 const ratioPlanifie = computed(() => {
   const p = paretoPlan.value.total, s = paretoSubi.value.total, tot = p + s
@@ -462,22 +479,54 @@ function exporterPDF() {
               </div>
               <div class="par-grp"><span class="par-grp-tag plan">Planifiés (organisationnels)</span><span class="par-grp-tot">{{ heures(paretoPlan.total) }}</span></div>
               <div class="pareto">
-                <div v-for="r in paretoPlan.rows" :key="r.cle" class="par-row">
-                  <span class="par-nom"><span class="par-dot" :style="{ background: r.color }"></span>{{ r.label }}</span>
-                  <span class="par-track"><span class="par-f" :style="{ width: r.pct + '%', background: r.color }"></span></span>
-                  <span class="par-min">{{ heures(r.min) }}</span>
-                  <span class="par-cum">cumul {{ r.cum.toFixed(0) }} %</span>
-                </div>
+                <template v-for="r in paretoPlan.rows" :key="r.cle">
+                  <div class="par-row clk" :class="{ open: detailMotif === r.cle }" @click="toggleDetail(r.cle)" :title="'Voir le détail — ' + r.label">
+                    <span class="par-nom"><span class="par-caret">{{ detailMotif === r.cle ? '▾' : '▸' }}</span><span class="par-dot" :style="{ background: r.color }"></span>{{ r.label }}</span>
+                    <span class="par-track"><span class="par-f" :style="{ width: r.pct + '%', background: r.color }"></span></span>
+                    <span class="par-min">{{ heures(r.min) }}</span>
+                    <span class="par-cum">cumul {{ r.cum.toFixed(0) }} %</span>
+                  </div>
+                  <div v-if="detailMotif === r.cle" class="par-detail">
+                    <div class="pd-head"><b>{{ detailLabel }}</b> · {{ detailRows.length }} poste{{ detailRows.length > 1 ? 's' : '' }} · {{ heures(detailTotal) }}</div>
+                    <div v-if="!detailRows.length" class="muted sm">Aucun poste sur la sélection courante.</div>
+                    <table v-else class="pd-table">
+                      <thead><tr><th>Date</th><th>Poste</th><th>Équipement</th><th>Produit</th><th class="r">Durée</th></tr></thead>
+                      <tbody>
+                        <tr v-for="(d, i) in detailRows" :key="i">
+                          <td>{{ dateFr(d.date) }}</td><td>{{ d.lib }}</td>
+                          <td><b>{{ d.code }}</b><span v-if="d.nom" class="pd-nom"> {{ d.nom }}</span></td>
+                          <td>{{ d.prod || '—' }}</td><td class="r">{{ fmt(d.min) }} min</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </template>
                 <div v-if="!paretoPlan.rows.length" class="muted sm">Aucun arrêt planifié.</div>
               </div>
               <div class="par-grp"><span class="par-grp-tag subi">Subis (non planifiés)</span><span class="par-grp-tot">{{ heures(paretoSubi.total) }}</span></div>
               <div class="pareto">
-                <div v-for="r in paretoSubi.rows" :key="r.cle" class="par-row">
-                  <span class="par-nom"><span class="par-dot" :style="{ background: r.color }"></span>{{ r.label }}</span>
-                  <span class="par-track"><span class="par-f" :style="{ width: r.pct + '%', background: r.color }"></span></span>
-                  <span class="par-min">{{ heures(r.min) }}</span>
-                  <span class="par-cum">cumul {{ r.cum.toFixed(0) }} %</span>
-                </div>
+                <template v-for="r in paretoSubi.rows" :key="r.cle">
+                  <div class="par-row clk" :class="{ open: detailMotif === r.cle }" @click="toggleDetail(r.cle)" :title="'Voir le détail — ' + r.label">
+                    <span class="par-nom"><span class="par-caret">{{ detailMotif === r.cle ? '▾' : '▸' }}</span><span class="par-dot" :style="{ background: r.color }"></span>{{ r.label }}</span>
+                    <span class="par-track"><span class="par-f" :style="{ width: r.pct + '%', background: r.color }"></span></span>
+                    <span class="par-min">{{ heures(r.min) }}</span>
+                    <span class="par-cum">cumul {{ r.cum.toFixed(0) }} %</span>
+                  </div>
+                  <div v-if="detailMotif === r.cle" class="par-detail">
+                    <div class="pd-head"><b>{{ detailLabel }}</b> · {{ detailRows.length }} poste{{ detailRows.length > 1 ? 's' : '' }} · {{ heures(detailTotal) }}</div>
+                    <div v-if="!detailRows.length" class="muted sm">Aucun poste sur la sélection courante.</div>
+                    <table v-else class="pd-table">
+                      <thead><tr><th>Date</th><th>Poste</th><th>Équipement</th><th>Produit</th><th class="r">Durée</th></tr></thead>
+                      <tbody>
+                        <tr v-for="(d, i) in detailRows" :key="i">
+                          <td>{{ dateFr(d.date) }}</td><td>{{ d.lib }}</td>
+                          <td><b>{{ d.code }}</b><span v-if="d.nom" class="pd-nom"> {{ d.nom }}</span></td>
+                          <td>{{ d.prod || '—' }}</td><td class="r">{{ fmt(d.min) }} min</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </template>
                 <div v-if="!paretoSubi.rows.length" class="muted sm">Aucun arrêt subi.</div>
               </div>
             </template>
@@ -679,6 +728,19 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .par-f { display: block; height: 100%; border-radius: 5px; }
 .par-min { font-size: 12.5px; font-weight: 700; color: #334155; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .par-cum { font-size: 11px; color: #94a3b8; font-weight: 600; white-space: nowrap; }
+.par-row.clk { cursor: pointer; border-radius: 7px; padding: 3px 5px; margin: 0 -5px; transition: background .12s; }
+.par-row.clk:hover { background: #f8fafc; }
+.par-row.clk.open { background: #f1f5f9; }
+.par-caret { display: inline-block; width: 11px; color: #94a3b8; font-size: 10px; flex: none; }
+.par-detail { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; padding: 10px 12px; margin: 1px 0 3px; }
+.pd-head { font-size: 12px; color: #475569; margin-bottom: 7px; }
+.pd-head b { color: #1b2733; }
+.pd-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.pd-table th { text-align: left; color: #94a3b8; font-weight: 600; padding: 3px 8px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+.pd-table td { padding: 4px 8px; border-bottom: 1px solid #eef2f6; color: #334155; }
+.pd-table td.r, .pd-table th.r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pd-table tr:last-child td { border-bottom: none; }
+.pd-nom { color: #94a3b8; font-weight: 400; }
 .eqrank { display: flex; flex-direction: column; gap: 8px; }
 .eqbar { display: grid; grid-template-columns: 280px 1fr 54px; align-items: center; gap: 12px; }
 .eqbar-code { font-size: 13px; font-weight: 700; color: #1b2733; line-height: 1.25; overflow-wrap: anywhere; }
