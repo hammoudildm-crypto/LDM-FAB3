@@ -54,25 +54,6 @@ async function supprimerCause(c) {
   await chargerTout()
 }
 
-const cadList = ref([])
-const cadEquip = ref('')
-const cadProduit = ref('')
-const cadValeur = ref('')
-const cadUnite = ref('unités/h')
-const cadMode = ref('debit')
-const bulkAtelier = ref('')
-const bulkMsg = ref('')
-const editCadId = ref(null)
-const editCadValeur = ref('')
-const editCadUnite = ref('')
-const editCadMode = ref('debit')
-const rechercheProdCad = ref('')
-const filtreCadEquip = ref('')
-const produitsFiltresCad = computed(() => {
-  const q = rechercheProdCad.value.trim().toLowerCase()
-  if (!q) return produits.value
-  return produits.value.filter(p => (String(p.code_pf || '') + ' ' + String(p.designation || '')).toLowerCase().includes(q))
-})
 const erreur = ref('')
 
 const FORMES = ['comprimé', 'gélule', 'gel', 'crème', 'pommade', 'sachet', 'blister', 'seringue']
@@ -150,7 +131,7 @@ function resetA() { Object.assign(formA, { id: null, code: '', nom: '' }) }
 
 // --- Équipement ---
 const formE = reactive({ id: null, code: '', nom: '', atelier_id: '', type: '', nb_machines: 1 })
-const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, cadences: false, postes: false, causes: false, peseeConfig: false })
+const ouvert = reactive({ donneurs: false, ateliers: false, equipements: false, produits: false, superviseurs: false, verifCond: false, postes: false, causes: false, peseeConfig: false })
 const sectionActive = ref(null)
 const peseeConfigs = ref([])
 const SECTIONS = [
@@ -160,7 +141,6 @@ const SECTIONS = [
   { k: 'produits', lbl: 'Produits', ic: '💊', n: () => produits.value.length },
   { k: 'superviseurs', lbl: 'Vérificateurs', ic: '👤', n: () => supList.value.length },
   { k: 'verifCond', lbl: 'Vérif. conditionnement', ic: '📦', n: () => condList.value.length },
-  { k: 'cadences', lbl: 'Cadences', ic: '⏱️', n: () => cadList.value.length },
   { k: 'postes', lbl: 'Postes', ic: '💼', n: () => postesList.value.length },
   { k: 'causes', lbl: 'Causes types', ic: '🐟', n: () => causesList.value.length },
   { k: 'peseeConfig', lbl: 'Config pesée', ic: '⚖️', n: () => peseeConfigs.value.length }
@@ -228,8 +208,6 @@ async function chargerTout() {
   if (!rCt.error) causesList.value = rCt.data
   const rVC = await supabase.from('verificateurs_cond').select('id, nom').order('nom')
   if (!rVC.error) condList.value = rVC.data
-  const rCad = await supabase.from('cadences_produit').select('id, cadence_nominale, unite_cadence, mode, equipement_id, produit_id, equipements(code), produits(code_pf, designation)').order('id', { ascending: false })
-  if (!rCad.error) cadList.value = rCad.data
   await chargerPC()
 }
 
@@ -377,77 +355,8 @@ async function supprimerCond(v) {
   await chargerTout()
 }
 
-// --- Cadences (équipement × produit) ---
-async function ajouterCad() {
-  if (!cadEquip.value || !cadProduit.value) { erreur.value = 'Choisir un équipement ET un produit.'; return }
-  const v = cadValeur.value === '' ? null : Number(cadValeur.value)
-  const unite = cadMode.value === 'cycle' ? 'temps écoulé' : (cadUnite.value || 'unités/h')
-  const r = await supabase.from('cadences_produit').upsert(
-    { equipement_id: cadEquip.value, produit_id: cadProduit.value, cadence_nominale: v, unite_cadence: unite, mode: cadMode.value },
-    { onConflict: 'equipement_id,produit_id' })
-  if (r.error) { erreur.value = r.error.message; return }
-  cadValeur.value = ''
-  await chargerTout()
-}
-
-// --- Remplissage manuel : produits SANS cadence pour un équipement ---
-const produitsSansCadence = computed(() => {
-  if (!filtreCadEquip.value) return []
-  const avec = new Set(cadList.value.filter(c => c.equipement_id === filtreCadEquip.value).map(c => c.produit_id))
-  return produits.value
-    .filter(pr => !avec.has(pr.id))
-    .sort((a, b) => String(a.code_pf || '').localeCompare(String(b.code_pf || ''), undefined, { numeric: true }))
-})
-function prefillCad(pr) {
-  cadEquip.value = filtreCadEquip.value
-  rechercheProdCad.value = pr.code_pf || ''
-  cadProduit.value = pr.id
-  cadMode.value = 'debit'
-  setTimeout(() => {
-    const el = document.getElementById('cad-valeur')
-    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus() }
-  }, 50)
-}
-async function passerAtelierTempsEcoule() {
-  bulkMsg.value = ''
-  if (!bulkAtelier.value) { bulkMsg.value = 'Choisir un atelier.'; return }
-  const equips = equipements.value.filter(e => e.atelier_id === bulkAtelier.value)
-  if (!equips.length) { bulkMsg.value = 'Aucun équipement pour cet atelier.'; return }
-  const at = ateliers.value.find(a => a.id === bulkAtelier.value)
-  const atNom = at ? (at.code + ' — ' + at.nom) : 'cet atelier'
-  if (!confirm('Passer TOUS les produits (' + produits.value.length + ') en temps écoulé sur les ' + equips.length + ' équipement(s) de « ' + atNom + ' » ?')) return
-  const rows = []
-  for (const e of equips) for (const p of produits.value) rows.push({ equipement_id: e.id, produit_id: p.id, cadence_nominale: null, unite_cadence: 'temps écoulé', mode: 'cycle' })
-  bulkMsg.value = 'Enregistrement de ' + rows.length + ' cadences…'
-  const CHUNK = 500
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const r = await supabase.from('cadences_produit').upsert(rows.slice(i, i + CHUNK), { onConflict: 'equipement_id,produit_id' })
-    if (r.error) { bulkMsg.value = 'Erreur : ' + r.error.message; return }
-  }
-  await chargerTout()
-  bulkMsg.value = rows.length + ' cadences en temps écoulé configurées pour « ' + atNom + ' ».'
-  setTimeout(() => { bulkMsg.value = '' }, 6000)
-}
-async function supprimerCad(c) {
-  if (!confirm('Supprimer cette cadence ?')) return
-  const r = await supabase.from('cadences_produit').delete().eq('id', c.id)
-  if (r.error) { erreur.value = r.error.message; return }
-  await chargerTout()
-}
-function ouvrirEditCad(c) {
-  editCadId.value = c.id
-  editCadValeur.value = c.cadence_nominale != null ? c.cadence_nominale : ''
-  editCadUnite.value = c.unite_cadence || 'unités/h'
-  editCadMode.value = c.mode || 'debit'
-}
-async function enregistrerCad(c) {
-  const v = editCadValeur.value === '' ? null : Number(editCadValeur.value)
-  const unite = editCadMode.value === 'cycle' ? 'temps écoulé' : (editCadUnite.value || 'unités/h')
-  const r = await supabase.from('cadences_produit').update({ cadence_nominale: v, unite_cadence: unite, mode: editCadMode.value }).eq('id', c.id)
-  if (r.error) { erreur.value = r.error.message; return }
-  editCadId.value = null
-  await chargerTout()
-}
+// Les cadences se gèrent exclusivement sur la page dédiée « Cadences & paramètres
+// par équipement » (/cadences) — source unique. Plus aucun éditeur de cadence ici.
 // --- Actions Donneur d'ordre ---
 async function enregistrerDO() {
   erreur.value = ''
@@ -976,35 +885,6 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section v-if="sectionActive === 'cadences'" class="card">
-      <div class="card-head clickable" @click="ouvert.cadences = !ouvert.cadences">
-        <h2>Cadences (équipement × produit)</h2>
-        <span class="count">{{ cadList.length }}</span>
-        <span class="chevron">{{ ouvert.cadences ? '▾' : '▸' }}</span>
-      </div>
-      <div v-show="ouvert.cadences">
-        <div class="cad-redirect">
-          <p>🔗 Les cadences se gèrent désormais sur la page dédiée <b>Cadences &amp; paramètres par équipement</b> — c'est la <b>source unique</b>. Cet écran sert uniquement à les <b>consulter</b> (pour éviter les doublons et garder un seul mode par équipement).</p>
-          <RouterLink to="/cadences" class="btn">Ouvrir la page Cadences →</RouterLink>
-        </div>
-        <div v-if="!cadList.length" class="empty">Aucune cadence définie.</div>
-        <div class="cad-scroll" v-else>
-          <table class="ref-table">
-            <thead><tr><th>Équipement</th><th>Produit</th><th class="right">Cadence</th><th>Unité</th><th>Mode</th></tr></thead>
-            <tbody>
-              <tr v-for="c in cadList" :key="c.id">
-                <td>{{ c.equipements ? c.equipements.code : '—' }}</td>
-                <td>{{ c.produits ? (c.produits.code_pf + ' — ' + c.produits.designation) : '—' }}</td>
-                <td class="right strong">{{ c.cadence_nominale != null ? Number(c.cadence_nominale).toLocaleString('fr-FR') : '—' }}</td>
-                <td>{{ c.unite_cadence }}</td>
-                <td><span v-if="c.mode === 'cycle'" class="mode-old">temps écoulé (ancien)</span><span v-else>{{ c.mode === 'temps' ? 'temps (min/lot)' : 'débit' }}</span></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
     <!-- CONFIG PESEE -->
     <section v-if="sectionActive === 'peseeConfig'" class="card">
       <div class="card-head clickable" @click="ouvert.peseeConfig = !ouvert.peseeConfig">
@@ -1154,10 +1034,6 @@ button.link.danger { color: #b91c1c; }
 .poste-grp:first-of-type { margin-top: 6px; }
 .poste-grp-h { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #6d28d9; background: #f5f3ff; border: 1px solid #e9d5ff; border-radius: 8px; padding: 6px 11px; margin-bottom: 6px; }
 .poste-grp-n { margin-left: auto; font-size: 11px; font-weight: 700; color: #7c3aed; background: #fff; border: 1px solid #e9d5ff; border-radius: 999px; padding: 1px 9px; }
-.cad-redirect { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-.cad-redirect p { margin: 0; flex: 1; min-width: 240px; font-size: 13px; color: #334155; line-height: 1.5; }
-.cad-redirect .btn { text-decoration: none; }
-.mode-old { color: #b45309; font-weight: 700; font-size: 12px; }
 .cad-form { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 9px; align-items: center; }
 .cad-form select, .cad-form input { font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
 .cad-form select { max-width: 250px; }
@@ -1177,7 +1053,6 @@ button.link.danger { color: #b91c1c; }
 .cadfill-chip { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 700; color: #0f766e; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 7px; padding: 4px 9px; cursor: pointer; }
 .cadfill-chip:hover { background: #0f766e; color: #fff; }
 .cad-unite-in { width: 90px; }
-.cad-scroll { overflow-x: auto; }
 .ref-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .ref-table th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; padding: 5px 7px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
 .ref-table td { padding: 3px 7px; border-bottom: 1px solid #eef2f6; }
