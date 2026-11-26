@@ -80,7 +80,7 @@ const liste = computed(() => audit.value.filter(e => !(masquerInactifs.value && 
 const nb = (s) => audit.value.filter(e => e.statut === s).length
 const aRegler = computed(() => nb('manquant') + nb('cycle') + nb('partiel') + nb('mixte'))
 
-function lienCadence(e) { return { path: '/cadences', query: { vue: 'matrice', phase: e.phase || undefined } } }
+function lienCadence(e) { return { path: '/cadences', query: { vue: 'matrice', phase: e.phase || undefined, eq: e.id } } }
 const modeLbl = (m) => m === 'temps' ? 'Temps (min/lot)' : (m === 'cycle' ? 'Temps écoulé (ancien)' : (m === 'debit' ? 'Débit (kg/h · bts/h)' : '—'))
 </script>
 

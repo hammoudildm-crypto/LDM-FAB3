@@ -23,14 +23,14 @@
     </div>
 
 <template v-if="vueMode === 'matrice'">
-      <section class="card mat-card">
+      <section class="card mat-card" ref="matCardRef">
         <div class="mat-head">
           <input type="search" v-model="filtre" class="prod-search-big" placeholder="Filtrer les produits (code ou désignation)…" />
           <select v-model="filtreEq" class="eq-select">
             <option value="">Tous les équipements</option>
             <option v-for="g in groupesPhase" :key="g.key" :value="g.nom">{{ g.nom }}</option>
           </select>
-          <label v-if="phaseSel && !filtreEq" class="cad-tous"><input type="checkbox" v-model="tousProduits" /> Afficher aussi les produits sans cadence dans cette phase (pour en ajouter)</label>
+          <label v-if="phaseSel || filtreEq" class="cad-tous"><input type="checkbox" v-model="tousProduits" /> Afficher aussi les produits sans cadence (pour en ajouter)</label>
           <span v-if="filtreEq" class="eq-count">{{ produitsMatrice.length }} produit(s) avec cadence</span>
           <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupesAffiches.length }} équipement(s){{ phaseSel ? ' — ' + (PHASE_LBL[phaseSel] || phaseSel) : '' }} — saisissez la cadence dans les cases. Bouton d'en-tête : basculer un équipement en <b>temps par lot (min/lot)</b> — converti automatiquement depuis le kg/h via la taille de lot.</span>
           <span v-if="msgMat" class="mat-msg">{{ msgMat }}</span>
@@ -40,7 +40,7 @@
             <thead>
               <tr>
                 <th class="mat-corner">Produit</th>
-                <th v-for="g in groupesAffiches" :key="g.key" class="mat-col" :class="'ph-' + (g.phase || 'x')">
+                <th v-for="g in groupesAffiches" :key="g.key" class="mat-col" :class="['ph-' + (g.phase || 'x'), { 'col-cible': highlightKey === g.key }]">
                   {{ g.nom }}<div class="mat-unit">{{ uniteGroupe(g) }}</div>
                   <button type="button" class="mode-tg" :class="{ temps: modeGroupe(g) === 'temps' }" @click="toggleModeGroupe(g)" :title="modeGroupe(g) === 'temps' ? 'Cadence en temps par lot (h/lot) — cliquer pour revenir au débit' : 'Cadence en débit — cliquer pour passer en temps par lot (h/lot)'">{{ modeGroupe(g) === 'temps' ? '⏱ min/lot' : '⇄ kg/h' }}</button>
                 </th>
@@ -114,7 +114,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 
@@ -124,6 +124,8 @@ const routerCad = useRouter()
 const produits = ref([]), equipements = ref([]), ateliers = ref([]), cadences = ref([])
 const chargement = ref(true), sauvegarde = ref(false), sauvegardeP = ref(false)
 const selGroupe = ref(''), filtre = ref(''), filtreEq = ref('')
+const highlightKey = ref('')   // colonne équipement à surligner (arrivée depuis « Contrôle cadences »)
+const matCardRef = ref(null)
 const message = ref(''), messageErr = ref(false), messageP = ref(''), messagePErr = ref(false)
 
 const cadEdit = reactive({})
@@ -149,7 +151,23 @@ onMounted(async () => {
   await chargerCadences()
   chargement.value = false
   chargerDurees()
+  if (routeCad.query.eq) ciblerEquipement(routeCad.query.eq)
 })
+
+// Arrivée depuis « Contrôle cadences » (?eq=<id>) : filtrer la matrice sur l'équipement
+// visé, afficher tous ses produits (pour pouvoir en ajouter), surligner et défiler jusqu'à lui.
+function ciblerEquipement(eqId) {
+  const id = Number(eqId)
+  const g = groupes.value.find(grp => grp.equips.some(e => Number(e.id) === id))
+  if (!g) return
+  vueMode.value = 'matrice'
+  phaseSel.value = g.phase || ''
+  filtreEq.value = g.nom
+  tousProduits.value = true
+  highlightKey.value = g.key
+  nextTick(() => { try { matCardRef.value && matCardRef.value.scrollIntoView({ behavior: 'smooth', block: 'start' }) } catch (e) {} })
+  setTimeout(() => { highlightKey.value = '' }, 2800)
+}
 
 // --- Durée réelle moyenne par phase (onglet 'duree'), d'après suivi_phases ---
 const phasesSuivi = ref([])
@@ -262,7 +280,7 @@ const produitsMatrice = computed(() => {
   let list = produitsTries.value
   if (q) list = list.filter(p => String(p.code_pf || '').toLowerCase().includes(q) || String(p.designation || '').toLowerCase().includes(q))
   const gs = groupeFiltreEq.value
-  if (gs) list = list.filter(p => cadenceCell(p.id, gs) > 0)
+  if (gs) { if (!tousProduits.value) list = list.filter(p => cadenceCell(p.id, gs) > 0) }
   // sous-page d'une phase : seulement les produits qui y ont une cadence (sauf option)
   else if (phaseSel.value && !tousProduits.value && !q) list = list.filter(p => groupesPhase.value.some(g => cadenceCell(p.id, g) > 0))
   return list
@@ -534,6 +552,8 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 .mat-corner { position: sticky; left: 0; top: 0; z-index: 4; background: #f1f5f9; text-align: left; font-weight: 700; }
 .mat-col { position: sticky; top: 0; z-index: 2; background: #f1f5f9; cursor: default; text-align: center; font-weight: 700; color: #334155; min-width: 92px; }
 .mat-col:hover { background: #ccfbf1; }
+.mat-col.col-cible { animation: colpulse 1.3s ease-in-out 0s 2; box-shadow: inset 0 -3px 0 #f59e0b; }
+@keyframes colpulse { 0%, 100% { background: #f1f5f9; } 50% { background: #fde68a; } }
 .mat-col2 { position: sticky; top: 0; z-index: 2; background: #f1f5f9; text-align: center; font-weight: 700; color: #334155; min-width: 84px; }
 .mat-unit { font-size: 10px; font-weight: 500; color: #94a3b8; margin-top: 1px; }
 .mode-tg { display: inline-block; margin-top: 3px; border: 1px solid #cbd5e1; background: #fff; color: #64748b; font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
