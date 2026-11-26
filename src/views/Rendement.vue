@@ -531,6 +531,59 @@ const donutSegments = computed(() => {
   })
 })
 
+// --- Classement des produits par rendement (visuel façon « Rendement du personnel ») ---
+// Barres colorées par niveau + fiche détail au clic (KPIs, rendement mensuel, rendement par phase).
+const prodMetric = ref('cond')   // 'fab' | 'cond' — base du classement
+const detailProd = ref('')       // code produit dont la fiche est ouverte
+const rechercheProd = ref('')
+// Niveau pour le rendement quantitatif : vert ≥ 95 %, orange 85–95 %, rouge < 85 %
+const nivP = (v) => (v == null ? 'none' : (v >= 95 ? 'vert' : (v >= 85 ? 'orange' : 'rouge')))
+
+const produitsStats = computed(() => {
+  const m = {}
+  const get = (p) => {
+    const code = p ? p.code_pf : '—'
+    if (!m[code]) m[code] = {
+      code, nom: p ? p.designation : '—', fabProd: 0, fabTheo: 0, condProd: 0, condTheo: 0, nbFab: 0, nbCond: 0,
+      moisFab: Array.from({ length: 12 }, () => ({ prod: 0, theo: 0 })),
+      moisCond: Array.from({ length: 12 }, () => ({ prod: 0, theo: 0 })),
+      phase: PHASES.map(() => ({ wy: 0, w: 0 }))
+    }
+    return m[code]
+  }
+  for (const r of lotsValidesFab.value) { const x = get(r.of.produits); x.fabProd += r.prod; x.fabTheo += r.theo; x.nbFab++; x.moisFab[r.mois].prod += r.prod; x.moisFab[r.mois].theo += r.theo }
+  for (const r of lotsValides.value) {
+    const x = get(r.of.produits); x.condProd += r.prod; x.condTheo += r.theo; x.nbCond++
+    x.moisCond[r.mois].prod += r.prod; x.moisCond[r.mois].theo += r.theo
+    PHASES.forEach((ph, i) => { const y = Number(r.of[ph.key]); if (y > 0 && y <= 1.5) { x.phase[i].wy += y * r.theo; x.phase[i].w += r.theo } })
+  }
+  return Object.values(m).map(x => {
+    const rdtFab = x.fabTheo > 0 ? x.fabProd / x.fabTheo * 100 : null
+    const rdtCond = x.condTheo > 0 ? x.condProd / x.condTheo * 100 : null
+    return {
+      ...x, rdtFab, rdtCond,
+      avarieFab: rdtFab == null ? null : Math.max(0, 100 - rdtFab),
+      avarieCond: rdtCond == null ? null : Math.max(0, 100 - rdtCond),
+      phases: PHASES.map((ph, i) => ({ nom: ph.nom, couleur: PHASE_COLORS[i], rdt: x.phase[i].w > 0 ? x.phase[i].wy / x.phase[i].w * 100 : null }))
+    }
+  })
+})
+const scoreProd = (p) => prodMetric.value === 'fab' ? p.rdtFab : p.rdtCond
+const autreProd = (p) => prodMetric.value === 'fab' ? p.rdtCond : p.rdtFab
+const prodScoreLabel = computed(() => prodMetric.value === 'fab' ? 'Rendement fabrication' : 'Rendement conditionnement')
+const classementProduits = computed(() => {
+  const q = rechercheProd.value.trim().toLowerCase()
+  let arr = produitsStats.value.filter(p => scoreProd(p) != null)
+  if (q) arr = arr.filter(p => (p.code || '').toLowerCase().includes(q) || (p.nom || '').toLowerCase().includes(q))
+  return arr.slice().sort((a, b) => (scoreProd(b) ?? -1) - (scoreProd(a) ?? -1))
+})
+const ficheProdDe = computed(() => detailProd.value ? produitsStats.value.find(p => p.code === detailProd.value) : null)
+const trendProd = computed(() => {
+  const p = ficheProdDe.value; if (!p) return []
+  const src = prodMetric.value === 'fab' ? p.moisFab : p.moisCond
+  return src.map(m => m.theo > 0 ? +((m.prod / m.theo) * 100).toFixed(1) : null)
+})
+
 // Géométrie des graphiques en courbes (SVG)
 const CHART = { W: 680, H: 200, padL: 16, padR: 16, padT: 26, padB: 22 }
 function segmentsFromPoints(pts, baseY) {
@@ -594,7 +647,7 @@ function fmt(n) { return n == null ? '—' : Math.round(Number(n)).toLocaleStrin
 function pct2(n) { return n == null ? '—' : Number(n).toFixed(2).replace('.', ',') + ' %' }
 function pct1(n) { return n == null ? '—' : Number(n).toFixed(1).replace('.', ',') + ' %' }
 
-watch(anneeSel, () => { produitSel.value = ''; rechercheCmp.value = ''; tendanceCmp.value = '' })
+watch(anneeSel, () => { produitSel.value = ''; rechercheCmp.value = ''; tendanceCmp.value = ''; detailProd.value = ''; rechercheProd.value = '' })
 
 onMounted(chargerTout)
 </script>
@@ -860,65 +913,83 @@ onMounted(chargerTout)
         <p class="hint">Rendement = boîtes produites ÷ théoriques (lots anormaux exclus). Barres : échelle zoomée 90 → 100 %.</p>
       </section>
 
-      <!-- Rendement par produit -->
+      <!-- Classement des produits par rendement (visuel façon « Rendement du personnel ») -->
       <section class="card">
         <div class="card-head">
-          <h2 class="card-title">Rendement par produit — {{ anneeSel }}</h2>
+          <h2 class="card-title">Classement des produits — {{ anneeSel }} <span class="cl-sub">{{ prodScoreLabel.toLowerCase() }} décroissant</span></h2>
           <div class="head-tools">
-            <select v-model="produitSel" class="filtre">
-              <option value="">Tous les produits ({{ produitsListe.length }})</option>
-              <option v-for="p in produitsListe" :key="p.code" :value="p.code">{{ p.code }} — {{ p.nom }}</option>
-            </select>
-            <span class="count">{{ parProduitCombineFiltre.length }}</span>
-          </div>
-        </div>
-
-        <div v-if="produitSel && produitMois" class="prod-detail">
-          <div class="pd-title">Détail mensuel — <strong>{{ produitNomSel }}</strong> ({{ produitSel }})</div>
-          <div class="months compact">
-            <div v-for="(m, i) in produitMois" :key="i" class="mcol">
-              <div class="mavarie" :class="{ none: m.rdt == null }">{{ m.rdt == null ? '—' : pct2(m.avarie) }}</div>
-              <div class="mbar">
-                <div class="seg av" :style="{ height: segAvarie(m) + '%' }"></div>
-                <div class="seg rdt" :style="{ height: segRdt(m) + '%' }"></div>
-              </div>
-              <div class="mname">{{ MOIS[i] }}</div>
+            <div class="cl-tabs">
+              <button :class="{ on: prodMetric === 'cond' }" @click="prodMetric = 'cond'">Conditionnement</button>
+              <button :class="{ on: prodMetric === 'fab' }" @click="prodMetric = 'fab'">Fabrication</button>
             </div>
+            <input v-model="rechercheProd" type="search" class="filtre" placeholder="Rechercher un produit…" />
+            <span class="count">{{ classementProduits.length }}</span>
           </div>
         </div>
-
         <div class="table-scroll">
           <table class="grid">
             <thead>
               <tr>
-                <th>Produit</th>
-                <th class="ta-r">Boîtes fab.</th>
-                <th>Rendement fab.</th>
-                <th class="ta-r">Boîtes cond.</th>
-                <th>Rendement cond.</th>
+                <th>#</th><th>Produit</th><th class="ta-r">Lots</th>
+                <th class="cl-score-col">{{ prodScoreLabel }}</th>
+                <th class="ta-r">{{ prodMetric === 'fab' ? 'Rdt cond.' : 'Rdt fab.' }}</th>
+                <th class="ta-r">Boîtes</th><th class="ta-r">Avarie</th><th></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="p in parProduitCombineFiltre" :key="p.code">
-                <td><span class="mono">{{ p.code }}</span> <span class="desig">{{ p.nom }}</span></td>
-                <td class="ta-r">{{ p.fabProd ? fmt(p.fabProd) : '—' }}</td>
+              <tr v-for="(p, i) in classementProduits" :key="p.code">
+                <td class="cl-rang">{{ i + 1 }}</td>
+                <td class="cl-nom"><span class="mono">{{ p.code }}</span> <span class="desig">{{ p.nom }}</span></td>
+                <td class="ta-r">{{ prodMetric === 'fab' ? p.nbFab : p.nbCond }}</td>
                 <td>
-                  <div class="rdt-cell">
-                    <div class="rdt-track"><div class="rdt-fill fab" :class="{ bas: p.rdtFab != null && p.rdtFab < 95 }" :style="{ width: Math.min(100, p.rdtFab || 0) + '%' }"></div></div>
-                    <span class="rdt-num">{{ pct2(p.rdtFab) }}</span>
+                  <div class="cl-cell">
+                    <div class="cl-bar"><span class="cl-f" :class="nivP(scoreProd(p))" :style="{ width: Math.min(100, scoreProd(p) || 0) + '%' }"></span></div>
+                    <b :class="nivP(scoreProd(p))">{{ pct2(scoreProd(p)) }}</b>
                   </div>
                 </td>
-                <td class="ta-r">{{ p.condProd ? fmt(p.condProd) : '—' }}</td>
-                <td>
-                  <div class="rdt-cell">
-                    <div class="rdt-track"><div class="rdt-fill cond" :class="{ bas: p.rdtCond != null && p.rdtCond < 95 }" :style="{ width: Math.min(100, p.rdtCond || 0) + '%' }"></div></div>
-                    <span class="rdt-num">{{ pct2(p.rdtCond) }}</span>
-                  </div>
-                </td>
+                <td class="ta-r" :class="nivP(autreProd(p))">{{ pct2(autreProd(p)) }}</td>
+                <td class="ta-r vol">{{ fmt(prodMetric === 'fab' ? p.fabProd : p.condProd) }}</td>
+                <td class="ta-r" :class="{ warnq: (prodMetric === 'fab' ? p.avarieFab : p.avarieCond) > 5 }">{{ pct2(prodMetric === 'fab' ? p.avarieFab : p.avarieCond) }}</td>
+                <td class="ta-r"><button class="icon-b" @click="detailProd = detailProd === p.code ? '' : p.code">{{ detailProd === p.code ? '▲' : 'Détail' }}</button></td>
               </tr>
-              <tr v-if="!parProduitCombineFiltre.length"><td colspan="5" class="empty">Aucune donnée en {{ anneeSel }}.</td></tr>
+              <tr v-if="!classementProduits.length"><td colspan="8" class="empty">Aucune donnée en {{ anneeSel }}.</td></tr>
             </tbody>
           </table>
+        </div>
+        <p class="hint">Classement sur le <strong>{{ prodScoreLabel.toLowerCase() }}</strong> (boîtes produites ÷ théoriques). Niveau : vert ≥ 95 %, orange 85–95 %, rouge &lt; 85 %. Clique « Détail » pour ouvrir la fiche produit.</p>
+      </section>
+
+      <!-- Fiche produit (ouverte au clic sur « Détail ») -->
+      <section v-if="ficheProdDe" class="card fiche">
+        <div class="cl-tb">
+          <h2 class="card-title"><span class="mono">{{ ficheProdDe.code }}</span> — {{ ficheProdDe.nom }}</h2>
+          <button class="icon-b" @click="detailProd = ''">Fermer ✕</button>
+        </div>
+        <div class="fiche-kpis">
+          <div class="fk"><span class="fk-l">Rendement fabrication</span><b :class="nivP(ficheProdDe.rdtFab)">{{ pct2(ficheProdDe.rdtFab) }}</b></div>
+          <div class="fk"><span class="fk-l">Rendement conditionnement</span><b :class="nivP(ficheProdDe.rdtCond)">{{ pct2(ficheProdDe.rdtCond) }}</b></div>
+          <div class="fk"><span class="fk-l">Avarie conditionnement</span><b>{{ pct2(ficheProdDe.avarieCond) }}</b></div>
+          <div class="fk"><span class="fk-l">Boîtes fabriquées</span><b>{{ fmt(ficheProdDe.fabProd) }}</b></div>
+          <div class="fk"><span class="fk-l">Boîtes conditionnées</span><b>{{ fmt(ficheProdDe.condProd) }}</b></div>
+          <div class="fk"><span class="fk-l">Boîtes théoriques</span><b>{{ fmt(prodMetric === 'fab' ? ficheProdDe.fabTheo : ficheProdDe.condTheo) }}</b></div>
+          <div class="fk"><span class="fk-l">Lots ({{ prodMetric === 'fab' ? 'fab.' : 'cond.' }})</span><b>{{ prodMetric === 'fab' ? ficheProdDe.nbFab : ficheProdDe.nbCond }}</b></div>
+        </div>
+        <div class="fiche-grid">
+          <div class="fg-card">
+            <h3 class="fg-t">{{ prodScoreLabel }} mensuel</h3>
+            <MiniChart :labels="MOIS" :format="pct2" show-values :value-format="v => v ? Math.round(v) + '%' : ''" :max="100" :series="[{ label: prodScoreLabel, color: prodMetric === 'fab' ? '#0f766e' : '#2563eb', data: trendProd }]" />
+          </div>
+          <div class="fg-card">
+            <h3 class="fg-t">Rendement par phase</h3>
+            <div class="phase-bars">
+              <div v-for="ph in ficheProdDe.phases" :key="ph.nom" class="phase-row">
+                <span class="phase-nom">{{ ph.nom }}</span>
+                <div class="phase-track"><div class="phase-fill" :style="{ width: (ph.rdt == null ? 0 : Math.max(2, Math.min(100, (ph.rdt - 90) / 10 * 100))) + '%', background: ph.couleur }"></div></div>
+                <span class="phase-val">{{ pct2(ph.rdt) }}</span>
+              </div>
+              <p v-if="!ficheProdDe.phases.some(x => x.rdt != null)" class="hint" style="margin-top:6px">Aucun rendement de phase saisi pour ce produit.</p>
+            </div>
+          </div>
         </div>
       </section>
     </template>
@@ -1117,4 +1188,34 @@ table.grid td { padding: 9px 10px; border-bottom: 1px solid #eef2f6; white-space
 .md-list td.num, .md-list th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .md-list .pf { font-weight: 700; color: #0f766e; white-space: nowrap; }
 .md-list td.av { color: #b91c1c; font-weight: 600; }
+
+/* Classement produits + fiche détail (visuel façon « Rendement du personnel ») */
+.cl-sub { font-size: 12px; font-weight: 600; color: #94a3b8; }
+.cl-tabs { display: inline-flex; gap: 2px; background: #f1f5f9; border-radius: 9px; padding: 3px; }
+.cl-tabs button { border: 0; background: none; font-size: 12.5px; font-weight: 700; color: #64748b; padding: 6px 12px; border-radius: 7px; cursor: pointer; }
+.cl-tabs button.on { background: #fff; color: #0f766e; box-shadow: 0 1px 2px rgba(16,24,40,.1); }
+.cl-rang { font-weight: 800; color: #94a3b8; width: 28px; }
+.cl-nom .mono { color: #0f172a; }
+.cl-score-col { min-width: 180px; }
+.cl-cell { display: flex; align-items: center; gap: 10px; min-width: 160px; }
+.cl-bar { flex: 1; height: 11px; background: #f1f5f9; border-radius: 6px; overflow: hidden; min-width: 70px; }
+.cl-f { display: block; height: 100%; border-radius: 6px; }
+.cl-f.vert { background: #16a34a; } .cl-f.orange { background: #d97706; } .cl-f.rouge { background: #dc2626; } .cl-f.none { background: #cbd5e1; }
+.cl-cell b { font-variant-numeric: tabular-nums; min-width: 58px; text-align: right; }
+b.vert, td.vert { color: #15803d; } b.orange, td.orange { color: #b45309; } b.rouge, td.rouge { color: #dc2626; } b.none, td.none { color: #94a3b8; }
+.vol { font-weight: 700; font-variant-numeric: tabular-nums; }
+.warnq { color: #b45309; font-weight: 700; }
+.icon-b { border: 1px solid #e2e8f0; background: #fff; color: #475569; font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 7px; cursor: pointer; }
+.icon-b:hover { background: #f8fafc; }
+.fiche { border-color: #99f6e4; }
+.cl-tb { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.cl-tb .card-title { margin: 0; }
+.fiche-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.fk { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 9px 12px; display: flex; flex-direction: column; gap: 2px; }
+.fk-l { font-size: 11px; color: #64748b; font-weight: 600; }
+.fk b { font-size: 17px; color: #0f172a; font-variant-numeric: tabular-nums; }
+.fiche-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.fg-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; }
+.fg-t { margin: 0 0 10px; font-size: 13px; font-weight: 800; color: #0f172a; }
+@media (max-width: 760px) { .fiche-grid { grid-template-columns: 1fr; } }
 </style>
