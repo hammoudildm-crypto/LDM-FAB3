@@ -195,7 +195,7 @@ const parEquip = computed(() => {
     const k = s.equipement_id
     if (!m[k]) m[k] = {
       id: k, code: s.equipements ? s.equipements.code : '?', nom: s.equipements ? s.equipements.nom : '',
-      ouverture: 0, fonct: 0, theo: 0, prodPerf: 0, ecoule: 0, fonctPerf: 0, prodQual: 0, rebutsQual: 0, nbPostes: 0,
+      ouverture: 0, fonct: 0, theo: 0, prodPerf: 0, ecoule: 0, fonctPerf: 0, prodQual: 0, rebutsQual: 0, nbPostes: 0, prodTot: 0,
       arrets: Object.fromEntries(MOTIFS.map(mo => [mo[0], 0]))
     }
     const e = m[k]
@@ -203,7 +203,7 @@ const parEquip = computed(() => {
     let arr = 0
     for (const mo of MOTIFS) { const v = s[mo[1]] || 0; e.arrets[mo[0]] += v; arr += v }
     const tf = Math.max(0, to - arr)
-    e.ouverture += to; e.fonct += tf; e.nbPostes++
+    e.ouverture += to; e.fonct += tf; e.nbPostes++; e.prodTot += Number(s.production_realisee) || 0
     const cd = cadenceDe(s.equipement_id, s.produit_id)
     if (cd.mode === 'cycle') {
       e.ecoule += Number(s.production_realisee) || 0
@@ -224,7 +224,7 @@ const parEquip = computed(() => {
     const dispoTech = requis ? e.fonct / requis : 0
     const trs = dispo * perf * qualite
     const objectif = objectifDe(e.id)
-    return { ...e, dispo, perf, qualite, trs, objectif, sousObjectif: trs < objectif, ecartObj: trs - objectif, arrPlan, requis, dispoTech, trsTech: dispoTech * perf * qualite, pctNettoyage: e.ouverture ? e.arrets.nettoyage / e.ouverture : 0 }
+    return { ...e, dispo, perf, qualite, trs, objectif, sousObjectif: trs < objectif, ecartObj: trs - objectif, arrPlan, requis, dispoTech, trsTech: dispoTech * perf * qualite, perfCalc: (e.theo > 0 || e.fonctPerf > 0), pctNettoyage: e.ouverture ? e.arrets.nettoyage / e.ouverture : 0 }
   }).sort((a, b) => b.trs - a.trs)
 })
 
@@ -240,9 +240,18 @@ const totalArrets = computed(() => MOTIFS.reduce((s, mo) => s + pertes.value[mo[
 
 // TRS global (pondéré)
 const global = computed(() => {
-  let ouv = 0, sTrs = 0, sDispo = 0, sPerf = 0, sQual = 0, sTrsTech = 0, sDispoTech = 0
-  for (const e of parEquip.value) { ouv += e.ouverture; sTrs += e.trs * e.ouverture; sDispo += e.dispo * e.ouverture; sPerf += e.perf * e.ouverture; sQual += e.qualite * e.ouverture; sTrsTech += e.trsTech * e.ouverture; sDispoTech += e.dispoTech * e.ouverture }
-  return ouv ? { dispo: sDispo / ouv, perf: sPerf / ouv, qualite: sQual / ouv, trs: sTrs / ouv, dispoTech: sDispoTech / ouv, trsTech: sTrsTech / ouv } : { dispo: 0, perf: 0, qualite: 0, trs: 0, dispoTech: 0, trsTech: 0 }
+  let ouv = 0, sTrs = 0, sDispo = 0, sPerf = 0, sQual = 0, sTrsTech = 0, sDispoTech = 0, prodTot = 0, perfCalc = false
+  for (const e of parEquip.value) { ouv += e.ouverture; sTrs += e.trs * e.ouverture; sDispo += e.dispo * e.ouverture; sPerf += e.perf * e.ouverture; sQual += e.qualite * e.ouverture; sTrsTech += e.trsTech * e.ouverture; sDispoTech += e.dispoTech * e.ouverture; prodTot += e.prodTot || 0; if (e.perfCalc) perfCalc = true }
+  return ouv ? { dispo: sDispo / ouv, perf: sPerf / ouv, qualite: sQual / ouv, trs: sTrs / ouv, dispoTech: sDispoTech / ouv, trsTech: sTrsTech / ouv, prodTot, perfCalc } : { dispo: 0, perf: 0, qualite: 0, trs: 0, dispoTech: 0, trsTech: 0, prodTot: 0, perfCalc: false }
+})
+
+// Pourquoi la Performance est à 0 : cadence manquante (non calculable) ou production non saisie.
+const diagPerf = computed(() => {
+  const g = global.value
+  if (!postes.value.length || g.perf > 0.005) return null
+  if (!g.perfCalc) return 'cadence'
+  if ((g.prodTot || 0) === 0) return 'production'
+  return null
 })
 
 const trsParEquipChart = computed(() => [{ label: 'TRS %', color: '#4338ca', data: parEquip.value.map(e => +(e.trs * 100).toFixed(1)) }])
@@ -421,6 +430,8 @@ function exporterPDF() {
           <span class="int-ic">💡</span>
           <span class="int-tx">TRS global <b :style="{ color: NIV_COL[niv(global.trs)] }">{{ pctNum(global.trs) }} %</b> · TRS technique <b :style="{ color: NIV_COL[niv(global.trsTech)] }">{{ pctNum(global.trsTech) }} %</b> <span class="int-note">(arrêts planifiés exclus)</span> — facteur limitant : <b>{{ facteurLimitant.nom }}</b> ({{ pctNum(facteurLimitant.val) }} %)<template v-if="topPerte">. Principal poste d'arrêt : <b>{{ topPerte.label }}</b> ({{ heures(topPerte.min) }}).</template></span>
         </div>
+        <p v-if="diagPerf === 'cadence'" class="diag-perf">⚠️ <b>Performance non calculable</b> : aucune <b>cadence</b> n'est définie pour {{ equipFiltre ? 'cet équipement' : 'ces équipements' }} sur la période — le TRS ne peut pas être calculé. Renseigne la cadence dans <b>Référentiel › Cadences &amp; paramètres</b>, puis les chiffres s'afficheront.</p>
+        <p v-else-if="diagPerf === 'production'" class="diag-perf">⚠️ <b>Performance à 0</b> : la cadence est définie mais <b>aucune quantité produite</b> n'a été saisie sur la période. Renseigne la production dans <b>Saisie TRS</b> pour obtenir la Performance et le TRS.</p>
 
         <div class="strs-grid">
           <!-- Héro : anneau TRS + chaîne Disponibilité × Performance × Qualité -->
@@ -429,16 +440,16 @@ function exporterPDF() {
               <svg viewBox="0 0 42 42" class="donut" role="img" :aria-label="'TRS ' + pctNum(global.trs) + ' %'">
                 <circle class="donut-bg" cx="21" cy="21" r="15.915" />
                 <circle class="donut-seg" cx="21" cy="21" r="15.915" :stroke="NIV_COL[niv(global.trs)]" :stroke-dasharray="pctNum(global.trs) + ' ' + (100 - pctNum(global.trs))" stroke-dashoffset="25" />
-                <text x="21" y="20.5" class="donut-val" :style="{ fill: NIV_COL[niv(global.trs)] }">{{ pctNum(global.trs) }}%</text>
+                <text x="21" y="20.5" class="donut-val" :style="{ fill: global.perfCalc ? NIV_COL[niv(global.trs)] : '#94a3b8' }">{{ global.perfCalc ? pctNum(global.trs) + '%' : 'n/d' }}</text>
                 <text x="21" y="27" class="donut-sub">TRS</text>
               </svg>
-              <div class="hero-tech">TRS technique<br><b :style="{ color: NIV_COL[niv(global.trsTech)] }">{{ pctNum(global.trsTech) }} %</b></div>
+              <div class="hero-tech">TRS technique<br><b :style="{ color: global.perfCalc ? NIV_COL[niv(global.trsTech)] : '#94a3b8' }">{{ global.perfCalc ? pctNum(global.trsTech) + ' %' : 'n/d' }}</b></div>
             </div>
             <div class="hero-chain">
               <div class="hc-row" v-for="f in [['Disponibilité', global.dispo], ['Performance', global.perf], ['Qualité', global.qualite]]" :key="f[0]">
                 <span class="hc-lbl">{{ f[0] }}</span>
                 <span class="hc-bar"><span class="hc-bar-f" :style="{ width: pctNum(f[1]) + '%', background: NIV_COL[niv(f[1])] }"></span></span>
-                <span class="hc-val" :style="{ color: NIV_COL[niv(f[1])] }">{{ pctNum(f[1]) }} %</span>
+                <span class="hc-val" :style="{ color: (f[0] === 'Performance' && !global.perfCalc) ? '#94a3b8' : NIV_COL[niv(f[1])] }">{{ (f[0] === 'Performance' && !global.perfCalc) ? 'n/d' : pctNum(f[1]) + ' %' }}</span>
               </div>
               <div class="hc-formula">Disponibilité <span>×</span> Performance <span>×</span> Qualité <span>=</span> <b>TRS</b></div>
             </div>
@@ -615,6 +626,8 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .flt-chip { font-size: 12px; color: #64748b; font-weight: 600; margin-right: auto; }
 .flt-chip b { color: #4338ca; background: #eef2ff; border-radius: 999px; padding: 2px 9px; margin-left: 6px; }
 .interpret { display: flex; align-items: flex-start; gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #4338ca; border-radius: 10px; padding: 11px 14px; margin-bottom: 16px; font-size: 14px; color: #334155; }
+.diag-perf { background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 10px; padding: 10px 14px; margin: -6px 0 16px; font-size: 13.5px; color: #92400e; line-height: 1.5; }
+.diag-perf b { color: #78350f; }
 .interpret.in-ok { border-left-color: #16a34a; } .interpret.in-mid { border-left-color: #d97706; } .interpret.in-ko { border-left-color: #dc2626; }
 .int-ic { font-size: 16px; line-height: 1.3; }
 /* Grille 2×2 homogène : 4 cartes de même largeur et même hauteur */
