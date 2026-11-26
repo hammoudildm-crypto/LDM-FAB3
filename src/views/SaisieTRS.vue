@@ -574,6 +574,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
               </select>
             </label>
           </div>
+          <p v-if="!colSignat" class="sig-warn">⚠ « Fait par » et « Vérifié par » ne seront <b>pas enregistrés</b> : ces colonnes sont absentes de la base. Exécute la migration <b>011</b> dans Supabase pour les activer. (Le superviseur de shift, lui, fonctionne.)</p>
           <button v-if="peutEditer" class="btn" @click="enregistrer">Enregistrer le poste</button>
         </div>
       </div>
@@ -665,6 +666,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <tr class="jdpq"><td>Qualité</td><td v-for="pk in postesActifs" :key="pk">{{ pct(qualiteDe(jour[pk])) }}</td></tr>
             <tr class="jtrs"><td>TRS global</td><td v-for="pk in postesActifs" :key="pk" :style="{ color: trsCol(trsDe(jour[pk])) }"><b>{{ pct(trsDe(jour[pk])) }}</b></td></tr>
             <tr class="jtrs jtrs-tech"><td>TRS technique <small>(planifiés exclus)</small></td><td v-for="pk in postesActifs" :key="pk" :style="{ color: trsCol(trsTechDe(jour[pk])) }">{{ pct(trsTechDe(jour[pk])) }}</td></tr>
+            <tr v-if="!colSignat" class="jsig-warn"><td :colspan="postesActifs.length + 1">⚠ « Fait par » / « Vérifié par » ne seront pas enregistrés tant que la migration <b>011</b> n'est pas exécutée dans Supabase (colonnes absentes). Le superviseur de shift fonctionne.</td></tr>
             <tr class="jsig">
               <td>Fait par</td>
               <td v-for="pk in postesActifs" :key="pk">
@@ -859,6 +861,8 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .ds-edit:hover { backgroun
 .jtable .jcom input, .jtable .jsig input { text-align: left; }
 .sig-duo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 0 12px; }
 @media (max-width: 640px) { .sig-duo { grid-template-columns: 1fr; } }
+.sig-warn { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; border-radius: 8px; padding: 8px 11px; font-size: 12.5px; line-height: 1.5; margin: 0 0 12px; }
+.jtable .jsig-warn td { background: #fffbeb; color: #92400e; font-size: 12px; font-weight: 600; padding: 7px 10px; }
 /* Combobox produit (recherche + liste) dans la grille 3×8 */
 .jcombo { position: relative; }
 .jcombo-in { width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 22px 5px 7px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; }
