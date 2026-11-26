@@ -448,6 +448,65 @@ async function enregistrerCad(c) {
   editCadId.value = null
   await chargerTout()
 }
+
+// --- Vue matrice des cadences (produits × équipements d'un atelier) ---
+const vueCad = ref('matrice')            // 'matrice' | 'liste'
+const cadMatAtelier = ref('')
+const cadMatRecherche = ref('')
+const cadMatTous = ref(false)
+const cadIndex = computed(() => {
+  const m = {}
+  for (const c of cadList.value) m[c.equipement_id + '_' + c.produit_id] = c
+  return m
+})
+const equipsMatAtelier = computed(() => {
+  if (!cadMatAtelier.value) return []
+  return equipements.value
+    .filter(e => e.atelier_id === cadMatAtelier.value && e.actif !== false)
+    .sort((a, b) => String(a.code).localeCompare(String(b.code), undefined, { numeric: true }))
+})
+const produitsMat = computed(() => {
+  const q = cadMatRecherche.value.trim().toLowerCase()
+  const list = produits.value
+  if (q) return list.filter(p => (String(p.code_pf || '') + ' ' + String(p.designation || '')).toLowerCase().includes(q))
+  if (cadMatTous.value) return list
+  const eqIds = new Set(equipsMatAtelier.value.map(e => e.id))
+  return list.filter(p => cadList.value.some(c => c.produit_id === p.id && eqIds.has(c.equipement_id)))
+})
+function valCadMat(eqId, prodId) {
+  const c = cadIndex.value[eqId + '_' + prodId]
+  return c && c.cadence_nominale != null ? c.cadence_nominale : ''
+}
+function uniteEquipMat(eqId) {
+  const c = cadList.value.find(x => x.equipement_id === eqId && x.unite_cadence && x.unite_cadence !== 'temps écoulé')
+  return c ? c.unite_cadence : 'unités/h'
+}
+const CAD_MAT_SELECT = 'id, cadence_nominale, unite_cadence, mode, equipement_id, produit_id, equipements(code), produits(code_pf, designation)'
+async function saveCadMat(eqId, prodId, raw) {
+  const existing = cadIndex.value[eqId + '_' + prodId]
+  const txt = String(raw == null ? '' : raw).trim()
+  if (txt === '') {                        // cellule vidée -> supprimer la cadence
+    if (existing) {
+      const r = await supabase.from('cadences_produit').delete().eq('id', existing.id)
+      if (r.error) { erreur.value = r.error.message; return }
+      const i = cadList.value.findIndex(c => c.id === existing.id)
+      if (i >= 0) cadList.value.splice(i, 1)
+    }
+    return
+  }
+  const v = Number(txt.replace(',', '.'))
+  if (isNaN(v)) { erreur.value = 'Valeur invalide : ' + txt; return }
+  const unite = uniteEquipMat(eqId)
+  const r = await supabase.from('cadences_produit')
+    .upsert({ equipement_id: eqId, produit_id: prodId, cadence_nominale: v, unite_cadence: unite, mode: 'debit' }, { onConflict: 'equipement_id,produit_id' })
+    .select(CAD_MAT_SELECT).maybeSingle()
+  if (r.error) { erreur.value = r.error.message; return }
+  if (r.data) {
+    const i = cadList.value.findIndex(c => c.equipement_id === eqId && c.produit_id === prodId)
+    if (i >= 0) cadList.value[i] = r.data; else cadList.value.push(r.data)
+    erreur.value = ''
+  }
+}
 // --- Actions Donneur d'ordre ---
 async function enregistrerDO() {
   erreur.value = ''
@@ -983,6 +1042,46 @@ onMounted(async () => {
         <span class="chevron">{{ ouvert.cadences ? '▾' : '▸' }}</span>
       </div>
       <div v-show="ouvert.cadences">
+        <div class="cad-vue-toggle">
+          <button type="button" :class="{ on: vueCad === 'matrice' }" @click="vueCad = 'matrice'">▦ Matrice</button>
+          <button type="button" :class="{ on: vueCad === 'liste' }" @click="vueCad = 'liste'">☰ Liste</button>
+        </div>
+
+        <!-- VUE MATRICE : produits × équipements d'un atelier, cellules éditables -->
+        <div v-if="vueCad === 'matrice'" class="cadmat">
+          <div class="cadmat-head">
+            <select v-model="cadMatAtelier"><option value="">Choisir un atelier…</option><option v-for="a in ateliers" :key="a.id" :value="a.id">{{ a.code }} — {{ a.nom }}</option></select>
+            <input v-model="cadMatRecherche" placeholder="Rechercher un produit…" class="cadmat-search" />
+            <label class="cadmat-tous"><input type="checkbox" v-model="cadMatTous" /> Tous les produits</label>
+          </div>
+          <p v-if="!cadMatAtelier" class="cadmat-hint">Choisis un atelier pour afficher la grille produits × équipements. Chaque case = la cadence (vide = non définie). Tape une valeur pour créer/modifier, efface pour supprimer.</p>
+          <p v-else-if="!equipsMatAtelier.length" class="cadmat-hint">Aucun équipement actif pour cet atelier.</p>
+          <template v-else>
+            <div class="cadmat-scroll">
+              <table class="cadmat-table">
+                <thead>
+                  <tr>
+                    <th class="cadmat-corner">Produit</th>
+                    <th v-for="e in equipsMatAtelier" :key="e.id" class="cadmat-col" :title="e.nom">{{ e.code }}<div class="cadmat-unit">{{ uniteEquipMat(e.id) }}</div></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="p in produitsMat" :key="p.id">
+                    <td class="cadmat-prod"><span class="cadmat-pcode">{{ p.code_pf }}</span><span class="cadmat-pdes">{{ p.designation }}</span></td>
+                    <td v-for="e in equipsMatAtelier" :key="e.id" class="cadmat-cell" :class="{ filled: valCadMat(e.id, p.id) !== '' }">
+                      <input type="number" step="any" inputmode="decimal" :value="valCadMat(e.id, p.id)" @change="saveCadMat(e.id, p.id, $event.target.value)" :disabled="!peutEditer" class="cadmat-in" />
+                    </td>
+                  </tr>
+                  <tr v-if="!produitsMat.length"><td :colspan="equipsMatAtelier.length + 1" class="cadmat-empty">Aucun produit à afficher. {{ cadMatTous ? '' : 'Coche « Tous les produits » pour en ajouter.' }}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="cadmat-count">{{ produitsMat.length }} produit(s) × {{ equipsMatAtelier.length }} équipement(s). L'unité de chaque colonne reprend les cadences existantes de l'équipement (défaut : unités/h).</p>
+          </template>
+        </div>
+
+        <!-- VUE LISTE (existante) -->
+        <div v-if="vueCad === 'liste'">
         <div class="cad-form" v-if="peutEditer">
           <select v-model="cadEquip"><option value="">Équipement…</option><option v-for="e in equipements" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option></select>
           <input v-model="rechercheProdCad" placeholder="Rechercher produit…" class="cad-prod-search" />
@@ -1034,6 +1133,7 @@ onMounted(async () => {
               </tr>
             </tbody>
           </table>
+        </div>
         </div>
       </div>
     </section>
@@ -1207,6 +1307,33 @@ button.link.danger { color: #b91c1c; }
 .cadfill-chip:hover { background: #0f766e; color: #fff; }
 .cad-unite-in { width: 90px; }
 .cad-scroll { overflow-x: auto; }
+/* --- Vue matrice des cadences --- */
+.cad-vue-toggle { display: inline-flex; gap: 0; margin: 8px 0 14px; border: 1px solid #cbd5e1; border-radius: 9px; overflow: hidden; }
+.cad-vue-toggle button { border: 0; background: #fff; color: #475569; font-size: 13px; font-weight: 700; padding: 7px 16px; cursor: pointer; }
+.cad-vue-toggle button + button { border-left: 1px solid #cbd5e1; }
+.cad-vue-toggle button.on { background: #0f766e; color: #fff; }
+.cadmat-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.cadmat-head select, .cadmat-search { font-size: 14px; padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; }
+.cadmat-search { min-width: 220px; }
+.cadmat-tous { font-size: 13px; color: #475569; display: inline-flex; align-items: center; gap: 6px; }
+.cadmat-hint { color: #64748b; font-size: 13px; line-height: 1.6; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; }
+.cadmat-scroll { overflow: auto; max-height: 66vh; border: 1px solid #e2e8f0; border-radius: 10px; }
+.cadmat-table { border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.cadmat-table th, .cadmat-table td { border-bottom: 1px solid #eef2f6; border-right: 1px solid #eef2f6; }
+.cadmat-corner { position: sticky; left: 0; top: 0; z-index: 4; background: #0f766e; color: #fff; text-align: left; font-weight: 700; padding: 9px 12px; min-width: 230px; }
+.cadmat-col { position: sticky; top: 0; z-index: 2; background: #f1f5f9; color: #334155; font-weight: 700; text-align: center; padding: 7px 10px; min-width: 96px; white-space: nowrap; }
+.cadmat-unit { font-size: 10px; font-weight: 500; color: #94a3b8; margin-top: 2px; }
+.cadmat-prod { position: sticky; left: 0; z-index: 1; background: #fff; padding: 6px 12px; min-width: 230px; }
+.cadmat-pcode { font-family: ui-monospace, monospace; font-weight: 700; color: #0f766e; display: block; }
+.cadmat-pdes { font-size: 11px; color: #64748b; display: block; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cadmat-cell { padding: 3px 4px; text-align: center; }
+.cadmat-cell.filled { background: #f0fdfa; }
+.cadmat-in { width: 84px; padding: 6px 7px; border: 1px solid transparent; border-radius: 6px; font-size: 13px; text-align: right; background: transparent; }
+.cadmat-in:hover:not(:disabled) { border-color: #cbd5e1; background: #fff; }
+.cadmat-in:focus { border-color: #0f766e; background: #fff; outline: none; box-shadow: 0 0 0 2px rgba(15,118,110,.15); }
+.cadmat-in:disabled { color: #334155; }
+.cadmat-empty { padding: 20px; text-align: center; color: #94a3b8; }
+.cadmat-count { font-size: 12px; color: #94a3b8; margin: 8px 2px 0; }
 .ref-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .ref-table th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .02em; color: #64748b; padding: 5px 7px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
 .ref-table td { padding: 3px 7px; border-bottom: 1px solid #eef2f6; }
