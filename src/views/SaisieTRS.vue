@@ -179,8 +179,6 @@ if (lotPartage) watch(() => lotPartage.value && lotPartage.value.produitId, (pid
 const cadence = computed(() => cadenceObj.value && cadenceObj.value.cadence_nominale != null ? Number(cadenceObj.value.cadence_nominale) : 0)
 const cadenceMode = computed(() => cadenceObj.value ? (cadenceObj.value.mode || 'debit') : 'debit')
 const uniteCad = computed(() => cadenceObj.value && cadenceObj.value.unite_cadence ? cadenceObj.value.unite_cadence : 'unités/h')
-// Débit effectif : en mode 'temps' la cadence est en min/lot -> débit équivalent (lots/h = 60 / temps) ; la production saisie est alors un nombre de lots.
-const cadenceEff = computed(() => cadenceMode.value === 'temps' ? (cadence.value > 0 ? 60 / cadence.value : 0) : cadence.value)
 
 // Enregistrer la cadence directement depuis la Saisie TRS (évite l'aller-retour
 // vers Référentiels et recharge la liste sur place -> plus de discordance).
@@ -241,7 +239,7 @@ const dispo = computed(() => { const to = Number(form.temps_ouverture_min) || 0;
 const perf = computed(() => {
   const prod = Number(form.production_realisee) || 0
   if (cadenceMode.value === 'cycle') return tempsFonct.value ? Math.min(1, prod / tempsFonct.value) : 0
-  const theo = (tempsFonct.value / 60) * cadenceEff.value
+  const theo = (tempsFonct.value / 60) * cadence.value
   return theo ? Math.min(1, prod / theo) : 0
 })
 const qualite = computed(() => {
@@ -260,14 +258,14 @@ const trsTech = computed(() => dispoTech.value * perf.value * qualite.value)
 const tempsUtile = computed(() => {
   const prod = Number(form.production_realisee) || 0
   if (cadenceMode.value === 'cycle') return Math.min(tempsFonct.value, prod)
-  const c = cadenceEff.value
+  const c = cadence.value
   return c > 0 ? Math.min(tempsFonct.value, prod / c * 60) : 0
 })
 const ecartTemps = computed(() => Math.max(0, tempsFonct.value - tempsUtile.value))
 const surDeclare = computed(() => {
   const prod = Number(form.production_realisee) || 0
   if (cadenceMode.value === 'cycle') return prod > tempsFonct.value + 0.5
-  const c = cadenceEff.value
+  const c = cadence.value
   return c > 0 && (prod / c * 60) > tempsFonct.value + 0.5
 })
 const pct = (x) => (x * 100).toFixed(1) + ' %'
@@ -290,14 +288,13 @@ const jour = reactive({ 1: blankPoste(), 2: blankPoste(), 3: blankPoste() })
 const cadenceDe = (p) => (p.cadenceObj && p.cadenceObj.cadence_nominale != null ? Number(p.cadenceObj.cadence_nominale) : 0)
 const modeDe = (p) => (p.cadenceObj ? (p.cadenceObj.mode || 'debit') : 'debit')
 const uniteDe = (p) => (p.cadenceObj && p.cadenceObj.unite_cadence ? p.cadenceObj.unite_cadence : 'unités/h')
-const cadenceEffDe = (p) => modeDe(p) === 'temps' ? (cadenceDe(p) > 0 ? 60 / cadenceDe(p) : 0) : cadenceDe(p)
 const sommeArretsDe = (p) => MOTIFS.reduce((s, m) => s + (Number(p[m[0]]) || 0), 0)
 const fonctDe = (p) => Math.max(0, (Number(p.temps_ouverture_min) || 0) - sommeArretsDe(p))
 const dispoDe = (p) => { const to = Number(p.temps_ouverture_min) || 0; return to ? fonctDe(p) / to : 0 }
 const perfDe = (p) => {
   const prod = Number(p.production_realisee) || 0
   if (modeDe(p) === 'cycle') return fonctDe(p) ? Math.min(1, prod / fonctDe(p)) : 0
-  const theo = (fonctDe(p) / 60) * cadenceEffDe(p)
+  const theo = (fonctDe(p) / 60) * cadenceDe(p)
   return theo ? Math.min(1, prod / theo) : 0
 }
 const qualiteDe = (p) => {
@@ -309,7 +306,7 @@ const trsDe = (p) => dispoDe(p) * perfDe(p) * qualiteDe(p)
 const tempsUtileDe = (p) => {
   const prod = Number(p.production_realisee) || 0
   if (modeDe(p) === 'cycle') return Math.min(fonctDe(p), prod)
-  const c = cadenceEffDe(p)
+  const c = cadenceDe(p)
   return c > 0 ? Math.min(fonctDe(p), prod / c * 60) : 0
 }
 const ecartTempsDe = (p) => Math.max(0, fonctDe(p) - tempsUtileDe(p))
@@ -370,7 +367,7 @@ async function enregistrerJour() {
   if (!aEnreg.length) { msg.value = 'Renseigne au moins un poste (le produit est requis).'; return }
   for (const pk of aEnreg) {
     const p = jour[pk]
-    if (!p.cadenceObj) { msg.value = 'Poste ' + pk + ' : ce produit n\'a pas de cadence définie (Configuration › Cadences).'; return }
+    if (!p.cadenceObj) { msg.value = 'Poste ' + pk + ' : ce produit n\'a pas de cadence définie (Référentiels › Cadences).'; return }
     if (modeDe(p) === 'debit' && !cadenceDe(p)) { msg.value = 'Poste ' + pk + ' : cadence (débit) manquante.'; return }
   }
   let n = 0
@@ -402,8 +399,8 @@ async function enregistrer() {
   msg.value = ''
   if (!equipId.value) { msg.value = 'Choisir un équipement.'; return }
   if (!produitId.value) { msg.value = 'Choisir le produit qui tournait sur ce poste.'; return }
-  if (!cadenceObj.value) { msg.value = "Ce produit sur cet équipement n'a pas de mode/cadence défini — renseigne-le dans Configuration › Cadences."; return }
-  if (cadenceMode.value === 'debit' && !cadence.value) { msg.value = "Renseigner la cadence (débit) dans Configuration › Cadences."; return }
+  if (!cadenceObj.value) { msg.value = "Ce produit sur cet équipement n'a pas de mode/cadence défini — renseigne-le dans Référentiels › Cadences."; return }
+  if (cadenceMode.value === 'debit' && !cadence.value) { msg.value = "Renseigner la cadence (débit) dans Référentiels › Cadences."; return }
   const payload = {
     equipement_id: equipId.value, produit_id: produitId.value, date: dateSel.value, poste: Number(poste.value),
     temps_ouverture_min: Number(form.temps_ouverture_min) || 0,
@@ -536,11 +533,11 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
           </div>
 
           <label class="fl">Commentaire<input type="text" v-model="form.commentaire" placeholder="Optionnel" /></label>
-          <div class="sub">Σ planifiés : <b>{{ sommePlanifies }}</b> · Σ subis : <b>{{ sommeSubis }}</b> · Temps de fonctionnement : <b>{{ tempsFonct }}</b> · Temps requis : <b>{{ tempsRequis }}</b> min</div>
+          <div class="sub">Σ planifiés : <b>{{ sommePlanifies }}</b> · Σ subis : <b>{{ sommeSubis }}</b> · Fonct. : <b>{{ tempsFonct }}</b> · Requis : <b>{{ tempsRequis }}</b> min</div>
         </div>
         <div>
           <h3 class="card-title">Production</h3>
-          <label class="fl">{{ cadenceMode === 'cycle' ? 'Temps écoulé (min)' : (cadenceMode === 'temps' ? 'Nombre de lots' : 'Production réalisée (' + uniteCad.replace('/h','') + ')') }}<input type="number" min="0" step="any" v-model.number="form.production_realisee" /></label>
+          <label class="fl">{{ cadenceMode === 'cycle' ? 'Temps écoulé (min)' : 'Production réalisée (' + uniteCad.replace('/h','') + ')' }}<input type="number" min="0" v-model.number="form.production_realisee" /></label>
           <label v-if="cadenceMode !== 'cycle'" class="fl">Rebuts<input type="number" min="0" v-model.number="form.rebuts" /></label>
           <label v-if="colRetouche && cadenceMode !== 'cycle'" class="fl">Retouches<input type="number" min="0" v-model.number="form.retouches" title="Unités reprises / retouchées — alimente le taux de retouche (Qualité), sans impact sur le TRS." /></label>
 
@@ -574,7 +571,6 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
               </select>
             </label>
           </div>
-          <p v-if="!colSignat" class="sig-warn">⚠ « Fait par » et « Vérifié par » ne seront <b>pas enregistrés</b> : ces colonnes sont absentes de la base. Exécute la migration <b>011</b> dans Supabase pour les activer. (Le superviseur de shift, lui, fonctionne.)</p>
           <button v-if="peutEditer" class="btn" @click="enregistrer">Enregistrer le poste</button>
         </div>
       </div>
@@ -642,20 +638,12 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
               <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" v-model.number="jour[pk][m[0]]" /></td>
             </tr>
             <tr class="jcalc">
-              <td>Σ Arrêts (min)</td>
-              <td v-for="pk in postesActifs" :key="pk">{{ sommeArretsDe(jour[pk]) }}</td>
-            </tr>
-            <tr class="jcalc jfonct">
-              <td>Temps de fonctionnement (min)</td>
-              <td v-for="pk in postesActifs" :key="pk"><b>{{ fonctDe(jour[pk]) }}</b></td>
-            </tr>
-            <tr class="jcalc jmini">
-              <td>Temps requis <small>(hors arrêts planifiés — base du TRS technique)</small></td>
-              <td v-for="pk in postesActifs" :key="pk">{{ tempsRequisDe(jour[pk]) }}</td>
+              <td>Σ Arrêts · Fonct. · Requis (min)</td>
+              <td v-for="pk in postesActifs" :key="pk">{{ sommeArretsDe(jour[pk]) }} · <b>{{ fonctDe(jour[pk]) }}</b> · {{ tempsRequisDe(jour[pk]) }}</td>
             </tr>
             <tr>
-              <td>{{ postesActifs.some(pk => modeDe(jour[pk]) === 'temps') ? 'Nombre de lots' : 'Production réalisée' }}</td>
-              <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" step="any" v-model.number="jour[pk].production_realisee" /></td>
+              <td>Production réalisée</td>
+              <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" v-model.number="jour[pk].production_realisee" /></td>
             </tr>
             <tr>
               <td>Rebuts</td>
@@ -674,7 +662,6 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <tr class="jdpq"><td>Qualité</td><td v-for="pk in postesActifs" :key="pk">{{ pct(qualiteDe(jour[pk])) }}</td></tr>
             <tr class="jtrs"><td>TRS global</td><td v-for="pk in postesActifs" :key="pk" :style="{ color: trsCol(trsDe(jour[pk])) }"><b>{{ pct(trsDe(jour[pk])) }}</b></td></tr>
             <tr class="jtrs jtrs-tech"><td>TRS technique <small>(planifiés exclus)</small></td><td v-for="pk in postesActifs" :key="pk" :style="{ color: trsCol(trsTechDe(jour[pk])) }">{{ pct(trsTechDe(jour[pk])) }}</td></tr>
-            <tr v-if="!colSignat" class="jsig-warn"><td :colspan="postesActifs.length + 1">⚠ « Fait par » / « Vérifié par » ne seront pas enregistrés tant que la migration <b>011</b> n'est pas exécutée dans Supabase (colonnes absentes). Le superviseur de shift fonctionne.</td></tr>
             <tr class="jsig">
               <td>Fait par</td>
               <td v-for="pk in postesActifs" :key="pk">
@@ -726,7 +713,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
       <div v-if="!saisiesAffichees.length" class="empty">{{ filtreSaisiesEquip && equipId ? 'Aucune saisie pour cet équipement.' : "Aucune saisie pour l\'instant." }}</div>
       <div v-else class="table-scroll">
         <table class="mini">
-          <thead><tr><th>Date</th><th>Poste</th><th>Équip.</th><th>Produit</th><th class="right">Ouv.</th><th class="right">Arrêts</th><th class="right">Fonct.</th><th class="right">Nettoyage</th><th>Fait par</th><th>Vérifié par</th><th>Superviseur de shift</th><th class="right">Action</th></tr></thead>
+          <thead><tr><th>Date</th><th>Poste</th><th>Équip.</th><th>Produit</th><th class="right">Ouv.</th><th class="right">Arrêts</th><th class="right">Fonct.</th><th class="right">Nettoyage</th><th class="right">Action</th></tr></thead>
           <tbody>
             <tr v-for="s in saisiesAffichees" :key="s.id">
               <td class="nowrap">{{ s.date }}</td>
@@ -737,9 +724,6 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
               <td class="right">{{ fmt(trsSaisie(s).arr) }}</td>
               <td class="right">{{ fmt(trsSaisie(s).tf) }}</td>
               <td class="right">{{ fmt(s.arret_nettoyage_min) }}</td>
-              <td class="sig-col">{{ s.fait_par || '—' }}</td>
-              <td class="sig-col">{{ s.verifie_par || '—' }}</td>
-              <td class="sig-col">{{ s.superviseur || '—' }}</td>
               <td class="right"><button type="button" class="ds-edit" @click="modifierSaisie(s)" title="Recharger cette saisie dans le formulaire pour la modifier">✎ Modifier</button></td>
             </tr>
           </tbody>
@@ -831,7 +815,6 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .ds-filtre { font-size: 13px; color: #475569; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
 .ds-filtre input { cursor: pointer; }
 .dt-nom { color: #94a3b8; font-weight: 400; }
-.sig-col { white-space: nowrap; color: #334155; font-size: 13px; }
 /* Interrupteur de mode */
 .mode-switch { display: inline-flex; gap: 3px; background: #eef2ff; border-radius: 10px; padding: 4px; margin: 0 0 8px; }
 .rg-hint { margin: 0 0 14px; font-size: 12.5px; color: #475569; }
@@ -857,10 +840,6 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .ds-edit:hover { backgroun
 .jtable .jmuted { color: #cbd5e1; }
 .jtable .jvdl input { border-color: #6366f1; background: #eef2ff; }
 .jtable .jcalc { background: #f1f5f9; color: #475569; font-weight: 600; }
-.jtable .jfonct td { background: #eef2ff; color: #3730a3; }
-.jtable .jfonct td b { color: #312e81; }
-.jtable .jmini td { font-weight: 500; color: #94a3b8; font-size: 12px; }
-.jtable .jmini td small { color: #cbd5e1; font-weight: 400; }
 .jtable .jdpq td:not(:first-child) { font-weight: 600; color: #334155; }
 .jtable .jgrp td { background: #f1f5f9; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; text-align: left; padding: 5px 8px; }
 .jtable .jgrp-plan td { color: #4338ca; border-left: 3px solid #6366f1; }
@@ -873,8 +852,6 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .ds-edit:hover { backgroun
 .jtable .jcom input, .jtable .jsig input { text-align: left; }
 .sig-duo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 0 12px; }
 @media (max-width: 640px) { .sig-duo { grid-template-columns: 1fr; } }
-.sig-warn { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; border-radius: 8px; padding: 8px 11px; font-size: 12.5px; line-height: 1.5; margin: 0 0 12px; }
-.jtable .jsig-warn td { background: #fffbeb; color: #92400e; font-size: 12px; font-weight: 600; padding: 7px 10px; }
 /* Combobox produit (recherche + liste) dans la grille 3×8 */
 .jcombo { position: relative; }
 .jcombo-in { width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 22px 5px 7px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1b2733; }

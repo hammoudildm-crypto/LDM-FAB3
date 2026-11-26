@@ -23,16 +23,16 @@
     </div>
 
 <template v-if="vueMode === 'matrice'">
-      <section class="card mat-card" ref="matCardRef">
+      <section class="card mat-card">
         <div class="mat-head">
           <input type="search" v-model="filtre" class="prod-search-big" placeholder="Filtrer les produits (code ou désignation)…" />
           <select v-model="filtreEq" class="eq-select">
             <option value="">Tous les équipements</option>
             <option v-for="g in groupesPhase" :key="g.key" :value="g.nom">{{ g.nom }}</option>
           </select>
-          <label v-if="phaseSel || filtreEq" class="cad-tous"><input type="checkbox" v-model="tousProduits" /> Afficher aussi les produits sans cadence (pour en ajouter)</label>
+          <label v-if="phaseSel && !filtreEq" class="cad-tous"><input type="checkbox" v-model="tousProduits" /> Afficher aussi les produits sans cadence dans cette phase (pour en ajouter)</label>
           <span v-if="filtreEq" class="eq-count">{{ produitsMatrice.length }} produit(s) avec cadence</span>
-          <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupesAffiches.length }} équipement(s){{ phaseSel ? ' — ' + (PHASE_LBL[phaseSel] || phaseSel) : '' }} — saisissez la cadence dans les cases. Bouton d'en-tête : basculer un équipement en <b>temps par lot (min/lot)</b> — converti automatiquement depuis le kg/h via le poids du lot (kg).</span>
+          <span class="mat-count">{{ produitsMatrice.length }} produit(s) × {{ groupesAffiches.length }} équipement(s){{ phaseSel ? ' — ' + (PHASE_LBL[phaseSel] || phaseSel) : '' }} — saisissez la cadence directement dans les cases</span>
           <span v-if="msgMat" class="mat-msg">{{ msgMat }}</span>
         </div>
         <div class="mat-scroll">
@@ -40,9 +40,8 @@
             <thead>
               <tr>
                 <th class="mat-corner">Produit</th>
-                <th v-for="g in groupesAffiches" :key="g.key" class="mat-col" :class="['ph-' + (g.phase || 'x'), { 'col-cible': highlightKey === g.key }]">
+                <th v-for="g in groupesAffiches" :key="g.key" class="mat-col" :class="'ph-' + (g.phase || 'x')">
                   {{ g.nom }}<div class="mat-unit">{{ uniteGroupe(g) }}</div>
-                  <button type="button" class="mode-tg" :class="{ temps: modeGroupe(g) === 'temps' }" @click="toggleModeGroupe(g)" :title="modeGroupe(g) === 'temps' ? 'Cadence en temps par lot (h/lot) — cliquer pour revenir au débit' : 'Cadence en débit — cliquer pour passer en temps par lot (h/lot)'">{{ modeGroupe(g) === 'temps' ? '⏱ min/lot' : '⇄ kg/h' }}</button>
                 </th>
               </tr>
             </thead>
@@ -114,7 +113,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../supabase'
 
@@ -124,8 +123,6 @@ const routerCad = useRouter()
 const produits = ref([]), equipements = ref([]), ateliers = ref([]), cadences = ref([])
 const chargement = ref(true), sauvegarde = ref(false), sauvegardeP = ref(false)
 const selGroupe = ref(''), filtre = ref(''), filtreEq = ref('')
-const highlightKey = ref('')   // colonne équipement à surligner (arrivée depuis « Contrôle cadences »)
-const matCardRef = ref(null)
 const message = ref(''), messageErr = ref(false), messageP = ref(''), messagePErr = ref(false)
 
 const cadEdit = reactive({})
@@ -145,29 +142,13 @@ async function chargerEquip() { equipements.value = await fetchAllPaged(() => su
 
 onMounted(() => { if (routeCad.query.produit) filtre.value = String(routeCad.query.produit) })
 onMounted(async () => {
-  produits.value = await fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, poids_lot_kg').eq('actif', true))
+  produits.value = await fetchAllPaged(() => supabase.from('produits').select('id, code_pf, designation, taille_lot').eq('actif', true))
   ateliers.value = await fetchAllPaged(() => supabase.from('ateliers').select('id, code, nom').eq('actif', true))
   await chargerEquip()
   await chargerCadences()
   chargement.value = false
   chargerDurees()
-  if (routeCad.query.eq) ciblerEquipement(routeCad.query.eq)
 })
-
-// Arrivée depuis « Contrôle cadences » (?eq=<id>) : filtrer la matrice sur l'équipement
-// visé, afficher tous ses produits (pour pouvoir en ajouter), surligner et défiler jusqu'à lui.
-function ciblerEquipement(eqId) {
-  const id = Number(eqId)
-  const g = groupes.value.find(grp => grp.equips.some(e => Number(e.id) === id))
-  if (!g) return
-  vueMode.value = 'matrice'
-  phaseSel.value = g.phase || ''
-  filtreEq.value = g.nom
-  tousProduits.value = true
-  highlightKey.value = g.key
-  nextTick(() => { try { matCardRef.value && matCardRef.value.scrollIntoView({ behavior: 'smooth', block: 'start' }) } catch (e) {} })
-  setTimeout(() => { highlightKey.value = '' }, 2800)
-}
 
 // --- Durée réelle moyenne par phase (onglet 'duree'), d'après suivi_phases ---
 const phasesSuivi = ref([])
@@ -238,42 +219,7 @@ function cadenceCell(pid, grp) {
   for (const e of grp.equips) { const x = idx.get(e.id + '#' + pid); if (x && x > v) v = x }
   return v
 }
-// Mode de cadence par équipement : 'debit' (kg/h ou bts/h) ou 'temps' (h par lot).
-const modesGroupe = reactive({})   // override UI par groupe ; sinon dérivé des cadences existantes
-function modeGroupe(grp) {
-  if (modesGroupe[grp.key]) return modesGroupe[grp.key]
-  const ids = new Set(grp.equips.map(e => e.id))
-  return cadences.value.some(c => ids.has(c.equipement_id) && c.mode === 'temps') ? 'temps' : 'debit'
-}
-function uniteGroupe(grp) { return modeGroupe(grp) === 'temps' ? 'min/lot' : (grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h') }
-// Masse d'un lot en kg = colonne « Poids du lot (kg) » du produit (PAS « Taille de lot »,
-// qui est un nombre de comprimés/boîtes). C'est cette masse qui sert à la conversion.
-const poidsLotDe = (pid) => { const p = produits.value.find(p => p.id === pid); const t = p ? Number(p.poids_lot_kg) : 0; return t > 0 ? t : 0 }
-// Bascule kg/h <-> min/lot avec conversion automatique via le poids du lot (kg) :
-//   min/lot = (poids_lot_kg / cadence_kgh) x 60   |   kg/h = 60 x poids_lot_kg / min_lot
-async function toggleModeGroupe(grp) {
-  const nouveau = modeGroupe(grp) === 'temps' ? 'debit' : 'temps'
-  modesGroupe[grp.key] = nouveau
-  const unite = nouveau === 'temps' ? 'min/lot' : (grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h')
-  let convertis = 0, sansTaille = 0
-  try {
-    const ids = new Set(grp.equips.map(e => e.id))
-    for (const c of cadences.value) {
-      if (!ids.has(c.equipement_id)) continue
-      const poids = poidsLotDe(c.produit_id)
-      const v = Number(c.cadence_nominale) || 0
-      let nv = v
-      if (poids > 0 && v > 0) {
-        nv = nouveau === 'temps' ? Math.round((poids / v) * 60 * 10) / 10 : Math.round((60 * poids / v) * 10) / 10
-        convertis++
-      } else if (v > 0) sansTaille++
-      const r = await supabase.from('cadences_produit').update({ cadence_nominale: nv, mode: nouveau, unite_cadence: unite }).eq('id', c.id)
-      if (!r.error) { c.cadence_nominale = nv; c.mode = nouveau; c.unite_cadence = unite }
-    }
-    msgMat.value = (nouveau === 'temps' ? 'Converti en min/lot' : 'Converti en kg/h') + ' — ' + convertis + ' valeur(s)' + (sansTaille ? ' · ' + sansTaille + ' sans poids de lot (kg) (à saisir dans Référentiels › Produits)' : '') + ' ✓'
-    setTimeout(() => { msgMat.value = '' }, 3500)
-  } catch (err) { msgMat.value = 'Erreur : ' + (err.message || err) }
-}
+function uniteGroupe(grp) { return grp.phase === 'conditionnement' ? 'bts/h' : 'kg/h' }
 const fmtCad = (v) => Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 })
 function ouvrirGroupe(g) { selGroupe.value = g.key; chargerEditeur(); vueMode.value = 'editeur' }
 const groupeFiltreEq = computed(() => filtreEq.value ? (groupes.value.find(g => g.nom === filtreEq.value) || null) : null)
@@ -282,7 +228,7 @@ const produitsMatrice = computed(() => {
   let list = produitsTries.value
   if (q) list = list.filter(p => String(p.code_pf || '').toLowerCase().includes(q) || String(p.designation || '').toLowerCase().includes(q))
   const gs = groupeFiltreEq.value
-  if (gs) { if (!tousProduits.value) list = list.filter(p => cadenceCell(p.id, gs) > 0) }
+  if (gs) list = list.filter(p => cadenceCell(p.id, gs) > 0)
   // sous-page d'une phase : seulement les produits qui y ont une cadence (sauf option)
   else if (phaseSel.value && !tousProduits.value && !q) list = list.filter(p => groupesPhase.value.some(g => cadenceCell(p.id, g) > 0))
   return list
@@ -295,11 +241,10 @@ async function sauverCellule(pid, grp, valeur) {
   try {
     for (const e of grp.equips) {
       const existing = cadences.value.find(c => c.equipement_id === e.id && c.produit_id === pid)
-      // la matrice enregistre l'unité qu'elle affiche (kg/h ou bts/h en débit, h/lot en temps) + le mode
+      // la matrice enregistre l'unité qu'elle affiche (kg/h en fabrication, bts/h en conditionnement)
       const unite = uniteGroupe(grp)
-      const md = modeGroupe(grp)
-      if (nv > 0 && existing) { const r = await supabase.from('cadences_produit').update({ cadence_nominale: nv, unite_cadence: unite, mode: md }).eq('id', existing.id); if (r.error) throw r.error; existing.cadence_nominale = nv; existing.unite_cadence = unite; existing.mode = md }
-      else if (nv > 0) { const r = await supabase.from('cadences_produit').insert({ equipement_id: e.id, produit_id: pid, cadence_nominale: nv, unite_cadence: unite, mode: md }).select('id').single(); if (r.error) throw r.error; if (r.data) cadences.value.push({ id: r.data.id, equipement_id: e.id, produit_id: pid, cadence_nominale: nv, unite_cadence: unite, mode: md }) }
+      if (nv > 0 && existing) { const r = await supabase.from('cadences_produit').update({ cadence_nominale: nv, unite_cadence: unite }).eq('id', existing.id); if (r.error) throw r.error; existing.cadence_nominale = nv; existing.unite_cadence = unite }
+      else if (nv > 0) { const r = await supabase.from('cadences_produit').insert({ equipement_id: e.id, produit_id: pid, cadence_nominale: nv, unite_cadence: unite }).select('id').single(); if (r.error) throw r.error; if (r.data) cadences.value.push({ id: r.data.id, equipement_id: e.id, produit_id: pid, cadence_nominale: nv, unite_cadence: unite }) }
       else if (nv === 0 && existing) { const r = await supabase.from('cadences_produit').delete().eq('id', existing.id); if (r.error) throw r.error; const i = cadences.value.indexOf(existing); if (i >= 0) cadences.value.splice(i, 1) }
     }
     msgMat.value = 'Enregistré ✓'; setTimeout(() => { msgMat.value = '' }, 1800)
@@ -462,11 +407,7 @@ const trsReel = ref(null)
 const trsChargementReel = ref(false)
 function cadenceDe(eq, pr) {
   const c = cadences.value.find(c => c.equipement_id === eq && c.produit_id === pr)
-  if (!c || c.cadence_nominale == null) return { value: 0, mode: 'debit' }
-  const v = Number(c.cadence_nominale)
-  // mode 'temps' = cadence en temps par lot (h/lot) -> débit équivalent (lots/h = 1 / temps)
-  if (c.mode === 'temps') return { value: v > 0 ? 60 / v : 0, mode: 'debit' }   // v = min/lot -> débit (lots/h = 60 / temps)
-  return { value: v, mode: c.mode || 'debit' }
+  return { value: c && c.cadence_nominale != null ? Number(c.cadence_nominale) : 0, mode: c ? (c.mode || 'debit') : 'debit' }
 }
 async function chargerTRSReel(equipIds) {
   trsReel.value = null
@@ -554,14 +495,8 @@ const recapGroupes = computed(() => groupes.value.map(g => {
 .mat-corner { position: sticky; left: 0; top: 0; z-index: 4; background: #f1f5f9; text-align: left; font-weight: 700; }
 .mat-col { position: sticky; top: 0; z-index: 2; background: #f1f5f9; cursor: default; text-align: center; font-weight: 700; color: #334155; min-width: 92px; }
 .mat-col:hover { background: #ccfbf1; }
-.mat-col.col-cible { animation: colpulse 1.3s ease-in-out 0s 2; box-shadow: inset 0 -3px 0 #f59e0b; }
-@keyframes colpulse { 0%, 100% { background: #f1f5f9; } 50% { background: #fde68a; } }
 .mat-col2 { position: sticky; top: 0; z-index: 2; background: #f1f5f9; text-align: center; font-weight: 700; color: #334155; min-width: 84px; }
 .mat-unit { font-size: 10px; font-weight: 500; color: #94a3b8; margin-top: 1px; }
-.mode-tg { display: inline-block; margin-top: 3px; border: 1px solid #cbd5e1; background: #fff; color: #64748b; font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
-.mode-tg.temps { background: #0f766e; border-color: #0f766e; color: #fff; }
-.mode-tg:hover { border-color: #0f766e; color: #0f766e; }
-.mode-tg.temps:hover { background: #115e59; color: #fff; }
 .mat-prod { position: sticky; left: 0; z-index: 1; background: #fff; }
 .mat-code { font-family: ui-monospace, monospace; font-weight: 700; color: #0f766e; display: block; }
 .mat-des { font-size: 11px; color: #64748b; display: block; }

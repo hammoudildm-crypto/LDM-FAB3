@@ -9,7 +9,7 @@ const S = 'fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="
 export const MODULES = [
   { key: 'config', label: 'Configuration', c: '#64748b', admin: true,
     icon: `<g ${S}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></g>`,
-    links: [['/referentiels', 'Référentiels'], ['/cadences', 'Cadences'], ['/controle-cadences', 'Contrôle cadences (TRS)'], ['/habilitations', 'Habilitations']] },
+    links: [['/referentiels', 'Référentiels'], ['/cadences', 'Cadences'], ['/habilitations', 'Habilitations']] },
   { key: 'ordo', label: 'Ordonnancement & OF', c: '#6366f1',
     icon: `<g ${S}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></g>`,
     links: [['/ordonnancement', 'Ordonnancement'], ['/plan', 'Plan directeur'], ['/ordres', 'Ordres de fabrication'], ['/planning-equipements', 'Planning équipements']] },

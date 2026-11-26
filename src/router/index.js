@@ -45,7 +45,6 @@ import SuiviCapacite from '../views/SuiviCapacite.vue'
 import EquipementDetail from '../views/EquipementDetail.vue'
 import IndicateursQSE from '../views/IndicateursQSE.vue'
 import Cadences from '../views/Cadences.vue'
-import ControleCadences from '../views/ControleCadences.vue'
 import PassationConsigne from '../views/PassationConsigne.vue'
 import HistoriquePhases from '../views/HistoriquePhases.vue'
 import PqrParametres from '../views/PqrParametres.vue'
@@ -119,7 +118,6 @@ const routes = [
   { path: '/equipement', name: 'equipement', component: EquipementDetail },
   { path: '/qse', name: 'qse', component: IndicateursQSE },
   { path: '/cadences', name: 'cadences', component: Cadences , meta: { role: 'admin' } },
-  { path: '/controle-cadences', name: 'controle-cadences', component: ControleCadences, meta: { role: 'admin' } },
   { path: '/passation', name: 'passation', component: PassationConsigne },
   { path: '/consommables', name: 'consommables', component: Consommables },
   { path: '/consommables-tdb', name: 'consommables-tdb', component: ConsommablesTableauBord },
