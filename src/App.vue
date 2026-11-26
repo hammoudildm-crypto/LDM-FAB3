@@ -22,6 +22,14 @@ const sidebarMasquee = ref(false)
 watch(sidebarMasquee, v => { try { localStorage.setItem('ldmfab-sidebar-masquee', v ? '1' : '0') } catch (e) { /* ignore */ } })
 const refreshTick = ref(0)
 const presenceOuverte = ref(false)
+// Mode présentation : met en pause l'actualisation automatique (interval, focus, temps réel)
+// pour que l'affichage ne soit pas interrompu pendant une démo/présentation.
+const livePause = ref(false)
+function toggleLivePause() {
+  livePause.value = !livePause.value
+  try { localStorage.setItem('ldmfab-live-pause', livePause.value ? '1' : '0') } catch (e) { /* ignore */ }
+  if (!livePause.value) refreshTick.value++   // en réactivant, on rafraîchit une fois pour rattraper
+}
 // --- Synchronisation périodique automatique (recharge les pages de consultation) ---
 const AUTO_REFRESH_MS = 300000 // 5 minutes (filet de sécurité ; le temps réel gère l'instantané)
 // Écrans où l'on saisit : jamais de rechargement automatique, il effacerait le travail en cours.
@@ -48,10 +56,11 @@ function enSaisie() {
 }
 function surFinSaisie() {
   setTimeout(() => {
-    if (refreshEnAttente.value && !enSaisie() && verrousEdition.value === 0 && ROUTES_AVEC_AUTO.includes(route.path)) { refreshEnAttente.value = false; refreshTick.value++ }
+    if (refreshEnAttente.value && !livePause.value && !enSaisie() && verrousEdition.value === 0 && ROUTES_AVEC_AUTO.includes(route.path)) { refreshEnAttente.value = false; refreshTick.value++ }
   }, 500)
 }
 function autoRefresh() {
+  if (livePause.value) return  // mode présentation : pas d'actualisation auto
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
   if (verrousEdition.value > 0) return  // modifications non enregistrées à l'écran
   if (!ROUTES_AVEC_AUTO.includes(route.path)) return  // par défaut on protège la saisie ; seuls les tableaux de bord se rafraîchissent
@@ -60,6 +69,7 @@ function autoRefresh() {
 }
 let canalSync = null
 function onDbChange() {
+  if (livePause.value) return  // mode présentation : pas d'actualisation auto
   if (verrousEdition.value > 0) return  // modifications non enregistrées à l'écran
   if (!ROUTES_AVEC_AUTO.includes(route.path)) return  // par défaut on protège la saisie
   if (enSaisie()) { refreshEnAttente.value = true; return }  // opérateur en train de saisir : on diffère
@@ -233,6 +243,7 @@ onMounted(async () => {
     else { const sz = parseInt(localStorage.getItem('ldmfab-zoom') || '', 10); if (sz) zoom.value = Math.max(20, Math.min(200, sz)) }
     if (window.innerWidth < 820) zoom.value = 143  // mobile/tablette : plein écran (143 % x 0,7 = 100 % réel)
     if (localStorage.getItem('ldmfab-sidebar-masquee') === '1') sidebarMasquee.value = true
+    if (localStorage.getItem('ldmfab-live-pause') === '1') livePause.value = true
   } catch (e) { /* ignore */ }
   document.addEventListener('click', onDocClick)
   const res = await supabase.auth.getSession()
@@ -336,7 +347,8 @@ async function signOut() {
           <button class="zoom-val" @click="setZoom(100)" title="Réinitialiser à 100 %">{{ zoom }}%</button>
           <button class="zoom-btn" @click="changeZoom(5)" :disabled="zoom >= 200" title="Agrandir">+</button>
         </div>
-        <button class="zoom-btn solo" @click="refreshTick++" title="Actualiser les données">⟳</button>
+        <button class="zoom-btn solo pz" :class="{ on: livePause }" @click="toggleLivePause" :title="livePause ? 'Présentation : actualisation auto EN PAUSE — cliquer pour réactiver' : 'Mode présentation : mettre en pause l\'actualisation auto (évite les interruptions)'">{{ livePause ? '▶' : '⏸' }}</button>
+        <button class="zoom-btn solo" @click="refreshTick++" title="Actualiser les données maintenant">⟳</button>
         <button class="zoom-btn solo cloche" @click.stop="alertesOuvertes = !alertesOuvertes" :title="(alertes.length || 'Aucune') + ' alerte(s) de validité'">🔔<span v-if="alertes.length" class="cloche-badge">{{ alertes.length }}</span></button>
         <div class="tb-item">
           <button class="tb-icon" :class="{ actif: lanceurOuvert }" @click.stop="lanceurOuvert = !lanceurOuvert" title="Ouvrir une page en fenêtre flottante">⊞</button>
@@ -450,6 +462,9 @@ body { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif; -
 .theme-dot.sel { outline: 2px solid var(--accent-bright); outline-offset: 1px; }
 .foot-row { display: flex; align-items: center; gap: 8px; }
 .zoom-btn.solo { border: 1px solid var(--topbar-border); border-radius: 8px; width: 30px; height: 30px; }
+.zoom-btn.pz { font-size: 13px; }
+.zoom-btn.pz.on { background: #f59e0b; border-color: #f59e0b; color: #fff; }
+.zoom-btn.pz.on:hover:not(:disabled) { background: #d97706; color: #fff; }
 
 /* ===== Zone principale & mobile ===== */
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
