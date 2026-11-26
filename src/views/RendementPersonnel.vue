@@ -285,12 +285,11 @@ function exporterPDF() {
       <section v-if="ficheDe" class="card fiche">
         <div class="tb"><h2 class="card-title">{{ ficheDe.nom }}<span v-if="ficheDe.fonction" class="ct-sub"> · {{ ficheDe.fonction }}</span></h2><button class="icon-b" @click="detail = null">Fermer ✕</button></div>
         <div class="fiche-kpis">
-          <div class="fk"><span class="fk-l">Rendement</span><b :class="niv(ficheDe.rendement)">{{ pctR(ficheDe.rendement) }}</b></div>
           <div class="fk"><span class="fk-l">TRS global</span><b :class="niv(ficheDe.trsGlobal)">{{ pctR(ficheDe.trsGlobal) }}</b></div>
           <div class="fk"><span class="fk-l">TRS technique</span><b :class="niv(ficheDe.trsTech)">{{ pctR(ficheDe.trsTech) }}</b></div>
           <div class="fk"><span class="fk-l">Quantité produite</span><b>{{ fmtInt(ficheDe.prodTot) }}</b></div>
           <div class="fk"><span class="fk-l">Disponibilité</span><b>{{ pctR(ficheDe.dispo) }}</b></div>
-          <div class="fk"><span class="fk-l">Performance</span><b>{{ pctR(ficheDe.rendement) }}</b></div>
+          <div class="fk"><span class="fk-l">Performance (rendement)</span><b :class="niv(ficheDe.rendement)">{{ pctR(ficheDe.rendement) }}</b></div>
           <div class="fk"><span class="fk-l">Qualité</span><b>{{ pctR(ficheDe.qualite) }}</b></div>
           <div class="fk"><span class="fk-l">Postes</span><b>{{ ficheDe.nbPostes }}</b></div>
           <div class="fk"><span class="fk-l">Rebuts</span><b>{{ pct1(ficheDe.rebutRate) }}</b></div>
