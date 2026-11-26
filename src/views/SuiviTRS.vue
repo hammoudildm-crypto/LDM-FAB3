@@ -189,7 +189,7 @@ const trsParPoste = computed(() => {
     const dispo = a.ouverture ? a.fonct / a.ouverture : 0
     const perf = a.theo ? Math.min(1, a.prodPerf / a.theo) : (a.fonctPerf ? Math.min(1, a.ecoule / a.fonctPerf) : 0)
     const qualite = a.prodQual ? Math.max(0, (a.prodQual - a.rebutsQual) / a.prodQual) : 1
-    return { poste: p, lib: POSTE_LIB[p], nb: a.nb, dispo, perf, qualite, trs: dispo * perf * qualite, vide: false }
+    return { poste: p, lib: POSTE_LIB[p], nb: a.nb, dispo, perf, qualite, trs: dispo * perf * qualite, vide: false, perfCalc: (a.theo > 0 || a.fonctPerf > 0) }
   })
 })
 
@@ -315,16 +315,19 @@ function exporterPDF() {
   const nivC = (x) => NIV_COL[niv(x)]
   const p0 = (x) => Math.round((x || 0) * 100)
   const ce = ';-webkit-print-color-adjust:exact;print-color-adjust:exact'
-  const donut = '<svg viewBox="0 0 42 42" width="104" height="104"><circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f6" stroke-width="3.6"/><circle cx="21" cy="21" r="15.915" fill="none" stroke="' + nivC(g.trs) + '" stroke-width="3.6" stroke-linecap="round" stroke-dasharray="' + p0(g.trs) + ' ' + (100 - p0(g.trs)) + '" stroke-dashoffset="25" style="' + ce + '"/><text x="21" y="20.5" text-anchor="middle" font-size="9" font-weight="800" fill="' + nivC(g.trs) + '">' + p0(g.trs) + '%</text><text x="21" y="27" text-anchor="middle" font-size="3.4" font-weight="700" fill="#94a3b8" letter-spacing="0.15em">TRS</text></svg>'
-  const chainRow = (lbl, v) => '<div class="hcr"><span class="hcl">' + lbl + '</span><span class="hct"><span class="hcf" style="width:' + p0(v) + '%;background:' + nivC(v) + ce + '"></span></span><span class="hcv" style="color:' + nivC(v) + '">' + p0(v) + ' %</span></div>'
-  const heroTech = '<div class="herotech">TRS technique<br><b style="color:' + nivC(g.trsTech) + '">' + p0(g.trsTech) + ' %</b><br><small>arrêts planifiés exclus</small></div>'
-  const hero = '<div class="hero"><div style="text-align:center">' + donut + heroTech + '</div><div class="chain">' + chainRow('Disponibilité', g.dispo) + chainRow('Performance', g.perf) + chainRow('Qualité', g.qualite) + '<div class="formula">Disponibilité × Performance × Qualité = <b>TRS global</b></div></div></div>'
+  const nd = !g.perfCalc   // pas de cadence -> Performance/TRS non calculables
+  const donut = '<svg viewBox="0 0 42 42" width="104" height="104"><circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f6" stroke-width="3.6"/>' + (nd ? '' : '<circle cx="21" cy="21" r="15.915" fill="none" stroke="' + nivC(g.trs) + '" stroke-width="3.6" stroke-linecap="round" stroke-dasharray="' + p0(g.trs) + ' ' + (100 - p0(g.trs)) + '" stroke-dashoffset="25" style="' + ce + '"/>') + '<text x="21" y="20.5" text-anchor="middle" font-size="' + (nd ? '6' : '9') + '" font-weight="800" fill="' + (nd ? '#94a3b8' : nivC(g.trs)) + '">' + (nd ? 'n/d' : p0(g.trs) + '%') + '</text><text x="21" y="27" text-anchor="middle" font-size="3.4" font-weight="700" fill="#94a3b8" letter-spacing="0.15em">TRS</text></svg>'
+  const chainRow = (lbl, v, ndr) => '<div class="hcr"><span class="hcl">' + lbl + '</span><span class="hct"><span class="hcf" style="width:' + (ndr ? 0 : p0(v)) + '%;background:' + (ndr ? '#cbd5e1' : nivC(v)) + ce + '"></span></span><span class="hcv" style="color:' + (ndr ? '#94a3b8' : nivC(v)) + '">' + (ndr ? 'n/d' : p0(v) + ' %') + '</span></div>'
+  const heroTech = '<div class="herotech">TRS technique<br><b style="color:' + (nd ? '#94a3b8' : nivC(g.trsTech)) + '">' + (nd ? 'n/d' : p0(g.trsTech) + ' %') + '</b><br><small>arrêts planifiés exclus</small></div>'
+  const hero = '<div class="hero"><div style="text-align:center">' + donut + heroTech + '</div><div class="chain">' + chainRow('Disponibilité', g.dispo) + chainRow('Performance', g.perf, nd) + chainRow('Qualité', g.qualite) + '<div class="formula">Disponibilité × Performance × Qualité = <b>TRS global</b></div></div></div>'
   const fl = facteurLimitant.value, tp = topPerte.value
-  const interpret = '<div class="interp">💡 TRS global <b style="color:' + nivC(g.trs) + '">' + p0(g.trs) + ' %</b> · TRS technique <b style="color:' + nivC(g.trsTech) + '">' + p0(g.trsTech) + ' %</b> (arrêts planifiés exclus) — facteur limitant : <b>' + esc(fl.nom) + '</b> (' + p0(fl.val) + ' %)' + (tp ? '. Principal poste d\'arrêt : <b>' + esc(tp.label) + '</b> (' + heures(tp.min) + ').' : '') + '</div>'
+  const interpret = nd
+    ? '<div class="interp">💡 TRS <b style="color:#64748b">n/d</b> — Performance non calculable (cadence manquante). Disponibilité <b style="color:' + nivC(g.dispo) + '">' + p0(g.dispo) + ' %</b> · Qualité <b style="color:' + nivC(g.qualite) + '">' + p0(g.qualite) + ' %</b>' + (tp ? '. Principal poste d\'arrêt : <b>' + esc(tp.label) + '</b> (' + heures(tp.min) + ').' : '') + '</div>'
+    : '<div class="interp">💡 TRS global <b style="color:' + nivC(g.trs) + '">' + p0(g.trs) + ' %</b> · TRS technique <b style="color:' + nivC(g.trsTech) + '">' + p0(g.trsTech) + ' %</b> (arrêts planifiés exclus) — facteur limitant : <b>' + esc(fl.nom) + '</b> (' + p0(fl.val) + ' %)' + (tp ? '. Principal poste d\'arrêt : <b>' + esc(tp.label) + '</b> (' + heures(tp.min) + ').' : '') + '</div>'
 
   // TRS par poste (3×8) — mini-anneaux Matin / Après-midi / Nuit
-  const posteDonut = (trs, vide) => '<svg viewBox="0 0 42 42" width="62" height="62"><circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f6" stroke-width="4"/>' + (vide ? '' : '<circle cx="21" cy="21" r="15.915" fill="none" stroke="' + nivC(trs) + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + p0(trs) + ' ' + (100 - p0(trs)) + '" stroke-dashoffset="25" style="' + ce + '"/>') + '<text x="21" y="24" text-anchor="middle" font-size="10" font-weight="800" fill="' + (vide ? '#cbd5e1' : nivC(trs)) + '">' + (vide ? '—' : p0(trs) + '%') + '</text></svg>'
-  const posteCells = trsParPoste.value.map(p => '<div class="pcell"><div>' + posteDonut(p.trs, p.vide) + '</div><div class="pm"><div class="plib">' + esc(p.lib) + ' <span class="pn">Poste ' + p.poste + '</span></div>' + (p.vide ? '<div class="pv">Aucune saisie</div>' : '<div class="pdpq"><b style="color:' + nivC(p.dispo) + '">D ' + p0(p.dispo) + '%</b> · <b style="color:' + nivC(p.perf) + '">P ' + p0(p.perf) + '%</b> · <b style="color:' + nivC(p.qualite) + '">Q ' + p0(p.qualite) + '%</b></div><div class="pnp">' + p.nb + ' poste' + (p.nb > 1 ? 's' : '') + ' saisi' + (p.nb > 1 ? 's' : '') + '</div>') + '</div></div>').join('')
+  const posteDonut = (trs, vide, ndp) => '<svg viewBox="0 0 42 42" width="62" height="62"><circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f6" stroke-width="4"/>' + (vide || ndp ? '' : '<circle cx="21" cy="21" r="15.915" fill="none" stroke="' + nivC(trs) + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + p0(trs) + ' ' + (100 - p0(trs)) + '" stroke-dashoffset="25" style="' + ce + '"/>') + '<text x="21" y="24" text-anchor="middle" font-size="' + (ndp ? '7' : '10') + '" font-weight="800" fill="' + (vide || ndp ? '#94a3b8' : nivC(trs)) + '">' + (vide ? '—' : (ndp ? 'n/d' : p0(trs) + '%')) + '</text></svg>'
+  const posteCells = trsParPoste.value.map(p => { const ndp = !p.vide && !p.perfCalc; return '<div class="pcell"><div>' + posteDonut(p.trs, p.vide, ndp) + '</div><div class="pm"><div class="plib">' + esc(p.lib) + ' <span class="pn">Poste ' + p.poste + '</span></div>' + (p.vide ? '<div class="pv">Aucune saisie</div>' : '<div class="pdpq"><b style="color:' + nivC(p.dispo) + '">D ' + p0(p.dispo) + '%</b> · <b style="color:' + (ndp ? '#94a3b8' : nivC(p.perf)) + '">P ' + (ndp ? 'n/d' : p0(p.perf) + '%') + '</b> · <b style="color:' + nivC(p.qualite) + '">Q ' + p0(p.qualite) + '%</b></div><div class="pnp">' + p.nb + ' poste' + (p.nb > 1 ? 's' : '') + ' saisi' + (p.nb > 1 ? 's' : '') + '</div>') + '</div></div>' }).join('')
   const posteBlock = '<h2>TRS par poste (3×8)</h2><div class="pgrid">' + posteCells + '</div>'
 
   const maxTrs = Math.max(1, ...parEquip.value.map(e => e.trs * 100))
@@ -430,9 +433,10 @@ function exporterPDF() {
         </div>
 
         <!-- Interprétation automatique -->
-        <div class="interpret" :class="'in-' + niv(global.trs)">
+        <div class="interpret" :class="global.perfCalc ? ('in-' + niv(global.trs)) : 'in-nd'">
           <span class="int-ic">💡</span>
-          <span class="int-tx">TRS global <b :style="{ color: NIV_COL[niv(global.trs)] }">{{ pctNum(global.trs) }} %</b> · TRS technique <b :style="{ color: NIV_COL[niv(global.trsTech)] }">{{ pctNum(global.trsTech) }} %</b> <span class="int-note">(arrêts planifiés exclus)</span> — facteur limitant : <b>{{ facteurLimitant.nom }}</b> ({{ pctNum(facteurLimitant.val) }} %)<template v-if="topPerte">. Principal poste d'arrêt : <b>{{ topPerte.label }}</b> ({{ heures(topPerte.min) }}).</template></span>
+          <span v-if="global.perfCalc" class="int-tx">TRS global <b :style="{ color: NIV_COL[niv(global.trs)] }">{{ pctNum(global.trs) }} %</b> · TRS technique <b :style="{ color: NIV_COL[niv(global.trsTech)] }">{{ pctNum(global.trsTech) }} %</b> <span class="int-note">(arrêts planifiés exclus)</span> — facteur limitant : <b>{{ facteurLimitant.nom }}</b> ({{ pctNum(facteurLimitant.val) }} %)<template v-if="topPerte">. Principal poste d'arrêt : <b>{{ topPerte.label }}</b> ({{ heures(topPerte.min) }}).</template></span>
+          <span v-else class="int-tx">TRS <b style="color:#64748b">n/d</b> — Performance non calculable (cadence manquante). Disponibilité <b :style="{ color: NIV_COL[niv(global.dispo)] }">{{ pctNum(global.dispo) }} %</b> · Qualité <b :style="{ color: NIV_COL[niv(global.qualite)] }">{{ pctNum(global.qualite) }} %</b><template v-if="topPerte">. Principal poste d'arrêt : <b>{{ topPerte.label }}</b> ({{ heures(topPerte.min) }}).</template></span>
         </div>
         <p v-if="diagPerf === 'cadence'" class="diag-perf">⚠️ <b>Performance non calculable</b> : aucune <b>cadence</b> n'est définie pour {{ equipFiltre ? 'cet équipement' : 'ces équipements' }} sur la période — le TRS ne peut pas être calculé. Renseigne la cadence dans <b>Référentiel › Cadences &amp; paramètres</b>, puis les chiffres s'afficheront.</p>
         <p v-else-if="diagPerf === 'production'" class="diag-perf">⚠️ <b>Performance à 0</b> : la cadence est définie mais <b>aucune quantité produite</b> n'a été saisie sur la période. Renseigne la production dans <b>Saisie TRS</b> pour obtenir la Performance et le TRS.</p>
@@ -500,14 +504,14 @@ function exporterPDF() {
             <h3 class="card-title">TRS par poste <span class="ct-sub">(3×8)</span></h3>
             <div class="poste-grid">
               <div v-for="p in trsParPoste" :key="p.poste" class="poste-cell" :class="{ vide: p.vide }">
-                <svg class="poste-ring" viewBox="0 0 42 42" :aria-label="p.lib + ' ' + pctNum(p.trs) + ' %'">
+                <svg class="poste-ring" viewBox="0 0 42 42" :aria-label="p.lib + ' ' + (p.vide || !p.perfCalc ? 'n/d' : pctNum(p.trs) + ' %')">
                   <circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f6" stroke-width="4" />
-                  <circle v-if="!p.vide" cx="21" cy="21" r="15.915" fill="none" :stroke="NIV_COL[niv(p.trs)]" stroke-width="4" stroke-linecap="round" :stroke-dasharray="pctNum(p.trs) + ' ' + (100 - pctNum(p.trs))" stroke-dashoffset="25" />
-                  <text x="21" y="23.5" text-anchor="middle" font-size="10" font-weight="800" :fill="p.vide ? '#cbd5e1' : NIV_COL[niv(p.trs)]">{{ p.vide ? '—' : pctNum(p.trs) + '%' }}</text>
+                  <circle v-if="!p.vide && p.perfCalc" cx="21" cy="21" r="15.915" fill="none" :stroke="NIV_COL[niv(p.trs)]" stroke-width="4" stroke-linecap="round" :stroke-dasharray="pctNum(p.trs) + ' ' + (100 - pctNum(p.trs))" stroke-dashoffset="25" />
+                  <text x="21" y="23.5" text-anchor="middle" :font-size="(!p.vide && !p.perfCalc) ? 8 : 10" font-weight="800" :fill="(p.vide || !p.perfCalc) ? '#94a3b8' : NIV_COL[niv(p.trs)]">{{ p.vide ? '—' : (p.perfCalc ? pctNum(p.trs) + '%' : 'n/d') }}</text>
                 </svg>
                 <div class="poste-info">
                   <div class="poste-lib">{{ p.lib }} <span class="poste-n">Poste {{ p.poste }}</span></div>
-                  <div v-if="!p.vide" class="poste-dpq"><b :style="{ color: NIV_COL[niv(p.dispo)] }">D {{ pctNum(p.dispo) }}%</b> · <b :style="{ color: NIV_COL[niv(p.perf)] }">P {{ pctNum(p.perf) }}%</b> · <b :style="{ color: NIV_COL[niv(p.qualite)] }">Q {{ pctNum(p.qualite) }}%</b></div>
+                  <div v-if="!p.vide" class="poste-dpq"><b :style="{ color: NIV_COL[niv(p.dispo)] }">D {{ pctNum(p.dispo) }}%</b> · <b :style="{ color: p.perfCalc ? NIV_COL[niv(p.perf)] : '#94a3b8' }">P {{ p.perfCalc ? pctNum(p.perf) + '%' : 'n/d' }}</b> · <b :style="{ color: NIV_COL[niv(p.qualite)] }">Q {{ pctNum(p.qualite) }}%</b></div>
                   <div v-else class="poste-vide-tx">Aucune saisie sur la période</div>
                   <div v-if="!p.vide" class="poste-np">{{ p.nb }} poste{{ p.nb > 1 ? 's' : '' }} saisi{{ p.nb > 1 ? 's' : '' }}</div>
                 </div>
@@ -633,6 +637,7 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .diag-perf { background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 10px; padding: 10px 14px; margin: -6px 0 16px; font-size: 13.5px; color: #92400e; line-height: 1.5; }
 .diag-perf b { color: #78350f; }
 .interpret.in-ok { border-left-color: #16a34a; } .interpret.in-mid { border-left-color: #d97706; } .interpret.in-ko { border-left-color: #dc2626; }
+.interpret.in-nd { border-left-color: #94a3b8; background: #f8fafc; }
 .int-ic { font-size: 16px; line-height: 1.3; }
 /* Grille 2×2 homogène : 4 cartes de même largeur et même hauteur */
 .strs-grid { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 14px; margin-bottom: 16px; align-items: stretch; }
