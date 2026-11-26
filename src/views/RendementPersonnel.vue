@@ -398,7 +398,7 @@ function exporterPDF() {
 </template>
 
 <style scoped>
-.perf { max-width: 1320px; margin: 0 auto; padding: 6px 4px 24px; }
+.perf { max-width: 1760px; margin: 0 auto; padding: 6px 4px 24px; }
 .alert { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 10px; padding: 10px 14px; font-size: 13px; }
 .pf-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 10px; }
 .pf-bar2 { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 0 0 16px; }
