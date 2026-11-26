@@ -198,6 +198,12 @@ const classement = computed(() => {
   if (q) arr = arr.filter(p => p.nom.toLowerCase().includes(q) || (p.fonction || '').toLowerCase().includes(q))
   return arr.slice().sort((a, b) => (Number(b.suffisant) - Number(a.suffisant)) || ((b.score ?? -1) - (a.score ?? -1)))
 })
+// Classement affiché : top 5 par défaut ; les autres sont pliés (bouton) ou révélés par la recherche.
+const TOP_N = 5
+const voirTous = ref(false)
+const enRecherche = computed(() => recherche.value.trim() !== '')
+const classementAffiche = computed(() => (enRecherche.value || voirTous.value) ? classement.value : classement.value.slice(0, TOP_N))
+const nbMasques = computed(() => Math.max(0, classement.value.length - TOP_N))
 const evalues = computed(() => parPersonne.value.filter(p => p.suffisant))
 const scoreMoyen = computed(() => { const a = evalues.value; const tot = a.reduce((s, p) => s + p.fonct, 0); return tot ? a.reduce((s, p) => s + (p.score || 0) * p.fonct, 0) / tot : null })
 const meilleur = computed(() => evalues.value.slice().sort((a, b) => (b.score || 0) - (a.score || 0))[0] || null)
@@ -215,7 +221,7 @@ const pct1 = (v) => (v == null ? '—' : (v * 100).toFixed(1).replace('.', ',') 
 const niv = (v) => (v == null ? 'none' : (v >= 0.85 ? 'vert' : (v >= 0.65 ? 'orange' : 'rouge')))
 const fmtInt = (v) => Math.round(Number(v) || 0).toLocaleString('fr-FR')
 function appliquer() { detail.value = null; charger() }
-function choisirRole(r) { role.value = r; detail.value = null }
+function choisirRole(r) { role.value = r; detail.value = null; voirTous.value = false }
 
 function exporterPDF() {
   const list = classement.value
@@ -315,7 +321,7 @@ function exporterPDF() {
           <table class="tbl">
             <thead><tr><th>#</th><th>Personne</th><th class="r">Postes</th><th class="rdt-col">{{ scoreLabel }}</th><th class="r">{{ scoreMetric === 'rendement' ? 'TRS tech.' : 'Rendement' }}</th><th class="r">Quantité</th><th class="r">Boîtes</th><th class="r">Rebuts</th><th class="r">Retouches</th><th class="r">{{ roleCol.lbl }}</th><th class="r">Polyv.</th><th></th></tr></thead>
             <tbody>
-              <tr v-for="(p, i) in classement" :key="p.nom" :class="{ insuff: !p.suffisant }">
+              <tr v-for="(p, i) in classementAffiche" :key="p.nom" :class="{ insuff: !p.suffisant }">
                 <td class="rang">{{ p.suffisant ? i + 1 : '·' }}</td>
                 <td class="nom">{{ p.nom }}<span v-if="p.fonction" class="sub2"> · {{ p.fonction }}</span></td>
                 <td class="r">{{ p.nbPostes }}</td>
@@ -334,10 +340,14 @@ function exporterPDF() {
                 <td class="r">{{ p.nbEquip }}</td>
                 <td class="r"><button class="icon-b" @click="detail = detail === p.nom ? null : p.nom">{{ detail === p.nom ? '▲' : 'Détail' }}</button></td>
               </tr>
-              <tr v-if="!classement.length"><td colspan="12" class="vide">Aucune donnée sur la période.</td></tr>
+              <tr v-if="!classementAffiche.length"><td colspan="12" class="vide">Aucune donnée sur la période.</td></tr>
             </tbody>
           </table>
         </div>
+        <div v-if="!enRecherche && classement.length > TOP_N" class="voir-plus">
+          <button class="vp-btn" @click="voirTous = !voirTous">{{ voirTous ? '▴ Réduire au top ' + TOP_N : '▾ Voir les ' + nbMasques + ' autre' + (nbMasques > 1 ? 's' : '') }}</button>
+        </div>
+        <p v-else-if="enRecherche" class="vp-hint">{{ classement.length }} résultat{{ classement.length > 1 ? 's' : '' }} pour « {{ recherche }} »</p>
         <p class="pf-note">Comparer <b>à iso-équipement</b> (le rendement est normalisé, mais les habitudes diffèrent selon la machine). Le <b>TRS technique</b> exclut les arrêts planifiés et les pannes — ce qui échappe à l'opérateur — d'où son usage pour le classement. Pour les chefs, « Taux vérif. » = part des postes de leurs lignes qu'ils ont vérifiés ; pour les superviseurs, « Ratio planifié » = part planifiée des arrêts de leurs shifts. Outil de coaching, pas de sanction. Moins de {{ MIN_POSTES }} postes (ou sans cadence) : en gris, hors classement. Un poste tenu <b>en binôme</b> (2 opérateurs dans « Fait par ») est crédité aux <b>deux</b>.</p>
       </section>
 
@@ -431,6 +441,10 @@ td.vert, b.vert { color: #15803d; } td.orange, b.orange { color: #b45309; } td.r
 .vide { text-align: center; color: #94a3b8; padding: 22px; }
 .icon-b { border: 1px solid #e2e8f0; background: #fff; color: #475569; font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 7px; cursor: pointer; }
 .icon-b:hover { background: #f8fafc; }
+.voir-plus { display: flex; justify-content: center; margin-top: 12px; }
+.vp-btn { border: 1px solid #99f6e4; background: #f0fdfa; color: #0f766e; border-radius: 9px; padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.vp-btn:hover { background: #0d9488; border-color: #0d9488; color: #fff; }
+.vp-hint { margin: 12px 2px 0; font-size: 12px; color: #94a3b8; text-align: center; }
 .pf-note { margin: 12px 2px 0; font-size: 12px; color: #94a3b8; line-height: 1.6; }
 .pf-note b { color: #64748b; }
 .fiche { border-color: #99f6e4; }
