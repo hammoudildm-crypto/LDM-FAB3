@@ -370,7 +370,7 @@ async function enregistrerJour() {
   if (!aEnreg.length) { msg.value = 'Renseigne au moins un poste (le produit est requis).'; return }
   for (const pk of aEnreg) {
     const p = jour[pk]
-    if (!p.cadenceObj) { msg.value = 'Poste ' + pk + ' : ce produit n\'a pas de cadence définie (Référentiels › Cadences).'; return }
+    if (!p.cadenceObj) { msg.value = 'Poste ' + pk + ' : ce produit n\'a pas de cadence définie (Configuration › Cadences).'; return }
     if (modeDe(p) === 'debit' && !cadenceDe(p)) { msg.value = 'Poste ' + pk + ' : cadence (débit) manquante.'; return }
   }
   let n = 0
@@ -402,8 +402,8 @@ async function enregistrer() {
   msg.value = ''
   if (!equipId.value) { msg.value = 'Choisir un équipement.'; return }
   if (!produitId.value) { msg.value = 'Choisir le produit qui tournait sur ce poste.'; return }
-  if (!cadenceObj.value) { msg.value = "Ce produit sur cet équipement n'a pas de mode/cadence défini — renseigne-le dans Référentiels › Cadences."; return }
-  if (cadenceMode.value === 'debit' && !cadence.value) { msg.value = "Renseigner la cadence (débit) dans Référentiels › Cadences."; return }
+  if (!cadenceObj.value) { msg.value = "Ce produit sur cet équipement n'a pas de mode/cadence défini — renseigne-le dans Configuration › Cadences."; return }
+  if (cadenceMode.value === 'debit' && !cadence.value) { msg.value = "Renseigner la cadence (débit) dans Configuration › Cadences."; return }
   const payload = {
     equipement_id: equipId.value, produit_id: produitId.value, date: dateSel.value, poste: Number(poste.value),
     temps_ouverture_min: Number(form.temps_ouverture_min) || 0,
