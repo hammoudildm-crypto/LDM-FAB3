@@ -485,9 +485,25 @@ function valCadMat(eqId, prodId) {
   const c = cadIndex.value[eqId + '_' + prodId]
   return c && c.cadence_nominale != null ? c.cadence_nominale : ''
 }
+// Unités de cadence proposées (modifiables par colonne / équipement)
+const UNITES_CAD = ['unités/h', 'kg/h', 'comprimés/h', 'gélules/h', 'flacons/h', 'bouteilles/h', 'blisters/h', 'boîtes/h', 'sachets/h', 'L/h']
+const uniteOverride = reactive({})   // choix d'unité par équipement (persiste aussi sur les cadences existantes)
 function uniteEquipMat(eqId) {
-  const c = cadList.value.find(x => x.equipement_id === eqId && x.unite_cadence && x.unite_cadence !== 'temps écoulé')
+  if (uniteOverride[eqId]) return uniteOverride[eqId]
+  const c = cadList.value.find(x => x.equipement_id === eqId && x.unite_cadence && !['temps écoulé', 'min/lot'].includes(x.unite_cadence))
   return c ? c.unite_cadence : 'unités/h'
+}
+function unitesPourEquip(eqId) {
+  const cur = uniteEquipMat(eqId)
+  return UNITES_CAD.includes(cur) ? UNITES_CAD : [cur, ...UNITES_CAD]
+}
+async function changerUniteEquip(eqId, unite) {
+  uniteOverride[eqId] = unite
+  // applique l'unité à toutes les cadences « débit » existantes de cet équipement
+  const r = await supabase.from('cadences_produit').update({ unite_cadence: unite }).eq('equipement_id', eqId).eq('mode', 'debit')
+  if (r.error) { erreur.value = r.error.message; return }
+  for (const c of cadList.value) if (c.equipement_id === eqId && c.mode === 'debit') c.unite_cadence = unite
+  erreur.value = ''
 }
 const CAD_MAT_SELECT = 'id, cadence_nominale, unite_cadence, mode, equipement_id, produit_id, equipements(code), produits(code_pf, designation)'
 async function saveCadMat(eqId, prodId, raw) {
@@ -1073,7 +1089,7 @@ onMounted(async () => {
                     <th v-for="g in ateliersMat" :key="g.atelier.id" class="cadmat-atelier" :colspan="g.equips.length" :title="g.atelier.nom">{{ g.atelier.code }} — {{ g.atelier.nom }}</th>
                   </tr>
                   <tr>
-                    <th v-for="e in equipsMat" :key="e.id" class="cadmat-col" :class="{ 'cadmat-sep': equipsMatSep.has(e.id) }" :title="e.nom">{{ e.code }}<div class="cadmat-unit">{{ uniteEquipMat(e.id) }}</div></th>
+                    <th v-for="e in equipsMat" :key="e.id" class="cadmat-col" :class="{ 'cadmat-sep': equipsMatSep.has(e.id) }" :title="e.nom">{{ e.code }}<select class="cadmat-unit-sel" :value="uniteEquipMat(e.id)" @change="changerUniteEquip(e.id, $event.target.value)" :disabled="!peutEditer" title="Unité de mesure de cet équipement"><option v-for="u in unitesPourEquip(e.id)" :key="u" :value="u">{{ u }}</option></select></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1336,6 +1352,9 @@ button.link.danger { color: #b91c1c; }
 .cadmat-atelier { position: sticky; top: 0; z-index: 3; height: 32px; box-sizing: border-box; background: #0f766e; color: #fff; font-size: 12px; font-weight: 700; text-align: center; padding: 6px 10px; white-space: nowrap; border-right: 2px solid #fff; }
 .cadmat-col { position: sticky; top: 32px; z-index: 2; background: #f1f5f9; color: #334155; font-weight: 700; text-align: center; padding: 7px 10px; min-width: 96px; white-space: nowrap; }
 .cadmat-unit { font-size: 10px; font-weight: 500; color: #94a3b8; margin-top: 2px; }
+.cadmat-unit-sel { display: block; margin: 3px auto 0; font-size: 11px; font-weight: 600; color: #0f766e; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 2px 4px; max-width: 92px; cursor: pointer; }
+.cadmat-unit-sel:hover:not(:disabled) { border-color: #0f766e; }
+.cadmat-unit-sel:disabled { color: #94a3b8; background: transparent; border-color: transparent; cursor: default; -webkit-appearance: none; appearance: none; text-align: center; }
 .cadmat-col.cadmat-sep, .cadmat-cell.cadmat-sep { border-left: 2px solid #99f6e4; }
 .cadmat-prod { position: sticky; left: 0; z-index: 1; background: #fff; padding: 6px 12px; min-width: 230px; }
 .cadmat-pcode { font-family: ui-monospace, monospace; font-weight: 700; color: #0f766e; display: block; }
