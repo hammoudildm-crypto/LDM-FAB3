@@ -678,6 +678,7 @@ async function exporterPPTX() {
           </div>
           <div v-if="joursAvecData" class="jour-chart">
             <div v-for="j in joursMois" :key="j.jour" class="jc-col" :title="j.nb ? ('Jour ' + j.jour + ' — TRS ' + Math.round(j.trs * 100) + '% · TRS tech. ' + Math.round(j.trsTech * 100) + '% · ' + j.nb + ' poste' + (j.nb > 1 ? 's' : '')) : ('Jour ' + j.jour + ' — aucune saisie')">
+              <div class="jc-val" :style="j.nb ? { color: NIV_COL[niv(j.trs)] } : null">{{ j.nb ? Math.round(j.trs * 100) : '' }}</div>
               <div class="jc-bar-wrap"><div class="jc-bar" :style="{ height: (j.nb ? Math.max(3, j.trs * 100) : 0) + '%', background: j.nb ? NIV_COL[niv(j.trs)] : 'transparent' }"></div></div>
               <div class="jc-lbl">{{ j.jour }}</div>
             </div>
@@ -885,6 +886,7 @@ async function exporterPPTX() {
 .jour-moy { font-size: 12.5px; font-weight: 700; color: #475569; background: #f1f5f9; border-radius: 8px; padding: 4px 11px; white-space: nowrap; }
 .jour-chart { display: flex; align-items: flex-end; gap: 3px; }
 .jc-col { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.jc-val { font-size: 9.5px; font-weight: 800; height: 13px; line-height: 13px; font-variant-numeric: tabular-nums; }
 .jc-bar-wrap { height: 96px; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
 .jc-bar { width: 70%; max-width: 20px; border-radius: 3px 3px 0 0; min-height: 0; transition: height .2s; }
 .jc-col:hover .jc-bar { filter: brightness(1.08); }
