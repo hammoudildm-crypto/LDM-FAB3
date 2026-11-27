@@ -75,8 +75,15 @@ async function charger() {
   if (!rpe.error) personnel.value = rpe.data || []
   const rs = await supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf)').eq('actif', true).order('date', { ascending: false }).order('poste').limit(80)
   if (!rs.error) saisies.value = rs.data || []
-  const rca = await supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, unite_cadence, mode')
-  if (!rca.error) cadencesAll.value = rca.data || []
+  // Cadences des seuls couples (équipement, produit) présents dans les dernières saisies.
+  // Filtre ciblé car cadences_produit peut dépasser la limite de 1000 lignes de Supabase
+  // (un select global tronquerait et ferait apparaître des « n/d » à tort).
+  const eqIds = [...new Set(saisies.value.map(s => s.equipement_id).filter(Boolean))]
+  const prIds = [...new Set(saisies.value.map(s => s.produit_id).filter(Boolean))]
+  if (eqIds.length && prIds.length) {
+    const rca = await supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, unite_cadence, mode').in('equipement_id', eqIds).in('produit_id', prIds)
+    cadencesAll.value = rca.error ? [] : (rca.data || [])
+  } else cadencesAll.value = []
   const pr = await supabase.from('trs_postes').select('retouches').limit(1)
   colRetouche.value = !pr.error
   const pv = await supabase.from('trs_postes').select('arret_vdlg_min').limit(1)
