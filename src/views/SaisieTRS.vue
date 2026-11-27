@@ -66,6 +66,7 @@ const ARRETS_SUBIS = [
 ]
 const MOTIFS = [...ARRETS_PLANIFIES, ...ARRETS_SUBIS]
 
+async function fetchAllPaged(make) { const page = 1000; let from = 0, all = []; while (true) { const { data, error } = await make().range(from, from + page - 1); if (error || !data || !data.length) break; all = all.concat(data); if (data.length < page) break; from += page } return all }
 async function charger() {
   const re = await supabase.from('equipements').select('*').eq('actif', true).order('code')
   if (!re.error) equipements.value = re.data || []
@@ -75,15 +76,9 @@ async function charger() {
   if (!rpe.error) personnel.value = rpe.data || []
   const rs = await supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf)').eq('actif', true).order('date', { ascending: false }).order('poste').limit(80)
   if (!rs.error) saisies.value = rs.data || []
-  // Cadences des seuls couples (équipement, produit) présents dans les dernières saisies.
-  // Filtre ciblé car cadences_produit peut dépasser la limite de 1000 lignes de Supabase
-  // (un select global tronquerait et ferait apparaître des « n/d » à tort).
-  const eqIds = [...new Set(saisies.value.map(s => s.equipement_id).filter(Boolean))]
-  const prIds = [...new Set(saisies.value.map(s => s.produit_id).filter(Boolean))]
-  if (eqIds.length && prIds.length) {
-    const rca = await supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, unite_cadence, mode').in('equipement_id', eqIds).in('produit_id', prIds)
-    cadencesAll.value = rca.error ? [] : (rca.data || [])
-  } else cadencesAll.value = []
+  // Toutes les cadences en pagination (cadences_produit peut dépasser 1000 lignes).
+  // Le filtre ciblé .in/.in tronquait quand le cumul des couples dépassait 1000 -> « n/d » à tort.
+  cadencesAll.value = await fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, unite_cadence, mode'))
   const pr = await supabase.from('trs_postes').select('retouches').limit(1)
   colRetouche.value = !pr.error
   const pv = await supabase.from('trs_postes').select('arret_vdlg_min').limit(1)

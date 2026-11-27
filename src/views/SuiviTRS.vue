@@ -34,16 +34,13 @@ const MOTIFS = [
 ]
 const CLES_PLAN = MOTIFS.filter(m => m[4] === 'plan').map(m => m[0])
 
+async function fetchAllPaged(make) { const page = 1000; let from = 0, all = []; while (true) { const { data, error } = await make().range(from, from + page - 1); if (error || !data || !data.length) break; all = all.concat(data); if (data.length < page) break; from += page } return all }
 async function charger() {
   chargement.value = true; msg.value = ''
-  const r = await supabase.from('trs_postes')
-    .select('*, equipements(code, nom), produits(code_pf, designation)')
-    .eq('actif', true).gte('date', du.value).lte('date', au.value)
-  if (r.error) { msg.value = r.error.message; chargement.value = false; return }
-  postes.value = r.data || []
-  // Chargement paginé : cadences_produit peut dépasser la limite de 1000 lignes de Supabase
-  // (un select simple tronque et fait apparaître des TRS/Performance à 0 % à tort).
-  { let all = []; for (let from = 0; from < 20000; from += 1000) { const rc = await supabase.from('cadences_produit').select('*').range(from, from + 999); if (rc.error) break; all = all.concat(rc.data || []); if (!rc.data || rc.data.length < 1000) break } cadences.value = all }
+  // Chargements paginés : trs_postes (période) ET cadences_produit peuvent dépasser 1000 lignes.
+  // Sans pagination -> postes tronqués et/ou cadences manquantes -> Performance/TRS à 0 % à tort.
+  postes.value = await fetchAllPaged(() => supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf, designation)').eq('actif', true).gte('date', du.value).lte('date', au.value))
+  cadences.value = await fetchAllPaged(() => supabase.from('cadences_produit').select('*'))
   const ro = await supabase.from('equipements').select('id, objectif_trs').eq('actif', true)
   if (!ro.error) { colObjectif.value = true; const m = {}; for (const e of ro.data || []) m[e.id] = e.objectif_trs; objectifs.value = m }
   else colObjectif.value = false

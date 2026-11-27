@@ -43,15 +43,12 @@ const COL_PLAN = MOTIFS.filter(m => m[2] === 'plan').map(m => m[1])
 const CHAMP = { operateur: 'fait_par', chef: 'verifie_par', superviseur: 'superviseur' }
 const ROLE_LBL = { operateur: 'Opérateur', chef: 'Chef de ligne', superviseur: 'Superviseur de shift' }
 
+async function fetchAllPaged(make) { const page = 1000; let from = 0, all = []; while (true) { const { data, error } = await make().range(from, from + page - 1); if (error || !data || !data.length) break; all = all.concat(data); if (data.length < page) break; from += page } return all }
 async function charger() {
   chargement.value = true; msg.value = ''
-  const r = await supabase.from('trs_postes')
-    .select('*, equipements(code, nom)')
-    .eq('actif', true).gte('date', du.value).lte('date', au.value)
-  if (r.error) { msg.value = r.error.message; chargement.value = false; return }
-  postes.value = r.data || []
-  // Chargement paginé : cadences_produit peut dépasser la limite de 1000 lignes de Supabase.
-  { let all = []; for (let from = 0; from < 20000; from += 1000) { const rc = await supabase.from('cadences_produit').select('*').range(from, from + 999); if (rc.error) break; all = all.concat(rc.data || []); if (!rc.data || rc.data.length < 1000) break } cadences.value = all }
+  // Chargements paginés : trs_postes (période) ET cadences_produit peuvent dépasser 1000 lignes.
+  postes.value = await fetchAllPaged(() => supabase.from('trs_postes').select('*, equipements(code, nom)').eq('actif', true).gte('date', du.value).lte('date', au.value))
+  cadences.value = await fetchAllPaged(() => supabase.from('cadences_produit').select('*'))
   const ro = await supabase.from('organigramme').select('*'); if (!ro.error) personnel.value = ro.data || []
   const ra = await supabase.from('ateliers').select('id, code, nom').order('nom'); if (!ra.error) ateliers.value = ra.data || []
   const rp = await supabase.from('produits').select('id, unites_par_boite, poids_unitaire_mg, taille_lot'); if (!rp.error) produits.value = rp.data || []
