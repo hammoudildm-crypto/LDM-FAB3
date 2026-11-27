@@ -258,6 +258,8 @@ const labelsMotifs = computed(() => MOTIFS.map(mo => mo[2]))
 const pct = (x) => (x * 100).toFixed(1) + ' %'
 const fmt = (n) => n == null ? '0' : Math.round(Number(n)).toLocaleString('fr-FR')
 const heures = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' h'
+// Logo de type de fichier (page + bandeau coloré + format) pour les boutons d'export compacts.
+const fileIco = (txt, col) => '<svg width="22" height="22" viewBox="0 0 28 28" aria-hidden="true"><path d="M6 3h9l7 7v15.5a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 5 25.5V4.5A1.5 1.5 0 0 1 6 3z" fill="#fff" stroke="#cbd5e1" stroke-width="1.1"/><path d="M15 3l7 7h-5.5A1.5 1.5 0 0 1 15 8.5V3z" fill="#e2e8f0"/><rect x="2.5" y="15" width="23" height="9" rx="2" fill="' + col + '"/><text x="14" y="21.7" text-anchor="middle" font-size="6.6" font-weight="800" fill="#fff" font-family="Arial, sans-serif">' + txt + '</text></svg>'
 // Niveau OEE : vert ≥ 85 %, orange 65–85 %, rouge < 65 %
 const niv = (x) => x >= 0.85 ? 'ok' : (x >= 0.65 ? 'mid' : 'ko')
 const NIV_COL = { ok: '#16a34a', mid: '#d97706', ko: '#dc2626' }
@@ -648,8 +650,8 @@ async function exporterPPTX() {
         <label>Au <input type="date" v-model="au" @change="charger" /></label>
       </div>
       <div class="dl-group">
-        <a class="dl-btn" :href="urlFicheA4" download target="_blank" rel="noopener" title="Fiche de relevé vierge, format A4 (PDF)">⬇ Fiche A4 (PDF)</a>
-        <a class="dl-btn" :href="urlModeleXlsx" download title="Classeur Excel : fiche, registre, référentiel, guide">⬇ Modèle Excel</a>
+        <a class="xbtn" :href="urlFicheA4" download target="_blank" rel="noopener" title="Fiche de relevé vierge A4 (PDF)" v-html="fileIco('PDF', '#dc2626')"></a>
+        <a class="xbtn" :href="urlModeleXlsx" download title="Modèle Excel (fiche, registre, référentiel, guide)" v-html="fileIco('XLS', '#217346')"></a>
       </div>
     </PageHeader>
 
@@ -666,8 +668,8 @@ async function exporterPPTX() {
           <label class="obj-ctl" title="Cible de TRS par défaut (mémorisée sur ce poste de travail)">🎯 Objectif TRS <input type="number" min="0" max="100" step="1" :value="Math.round(objectifDefaut * 100)" @change="setObjectifDefaut($event.target.value)" /> %</label>
           <span v-if="sousObjectifCount" class="obj-chip">⚠ {{ sousObjectifCount }} équip. sous objectif</span>
           <span v-else class="obj-chip ok">✓ Tous au-dessus de l'objectif</span>
-          <button type="button" class="btn-pdf" @click="exporterPDF">⬇ Télécharger en PDF</button>
-          <button type="button" class="btn-ppt" @click="exporterPPTX" :disabled="busyPPT" title="Analyse TRS par jour, semaine et mois (PowerPoint)">{{ busyPPT ? '⏳ Génération…' : '⬇ PowerPoint' }}</button>
+          <button type="button" class="xbtn" @click="exporterPDF" title="Télécharger l'analyse TRS en PDF" v-html="fileIco('PDF', '#dc2626')"></button>
+          <button type="button" class="xbtn" :class="{ busy: busyPPT }" @click="exporterPPTX" :disabled="busyPPT" :title="busyPPT ? 'Génération du PowerPoint…' : 'Télécharger l\'analyse TRS (jour / semaine / mois) en PowerPoint'" v-html="fileIco('PPT', '#c43e1c')"></button>
         </div>
 
         <!-- TRS journalier du mois en cours -->
@@ -882,6 +884,12 @@ async function exporterPPTX() {
 .btn-ppt { display: inline-flex; align-items: center; gap: 6px; background: #c43e1c; color: #fff; border: none; border-radius: 9px; padding: 9px 16px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
 .btn-ppt:hover { background: #a3330f; }
 .btn-ppt:disabled { opacity: .6; cursor: default; }
+.xbtn { height: 34px; width: 36px; display: inline-flex; align-items: center; justify-content: center; padding: 0; background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; cursor: pointer; text-decoration: none; transition: background .15s, border-color .15s, box-shadow .15s; }
+.xbtn:hover { background: #f8fafc; border-color: #cbd5e1; box-shadow: 0 1px 3px rgba(16,24,40,.08); }
+.xbtn:disabled { cursor: default; }
+.xbtn :deep(svg) { display: block; }
+.xbtn.busy { opacity: .55; animation: xpulse 1s ease-in-out infinite; }
+@keyframes xpulse { 50% { opacity: .9; } }
 .jour-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px 15px; margin-bottom: 10px; }
 .jour-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .jour-moy { font-size: 12.5px; font-weight: 700; color: #475569; background: #f1f5f9; border-radius: 8px; padding: 4px 11px; white-space: nowrap; }
