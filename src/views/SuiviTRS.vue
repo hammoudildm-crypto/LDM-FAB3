@@ -478,6 +478,46 @@ async function exporterPPTX() {
     s1.addText('TRS = Disponibilité × Performance × Qualité.   TRS technique : arrêts planifiés (format, VDL, nettoyage, maintenance) exclus du temps requis.', { x: 0.6, y: 5.9, w: 12, h: 0.5, fontSize: 11, italic: true, color: MUT })
     s1.addText('Généré le ' + new Date().toLocaleDateString('fr-FR') + ' · ProdTrack', { x: 0.6, y: 6.95, w: 12, h: 0.3, fontSize: 10, color: MUT })
 
+    // Slide — Analyse sur l'ensemble des équipements (classement TRS)
+    {
+      const rows = parEquip.value   // déjà trié par TRS décroissant
+      const se = pptx.addSlide(); se.background = { color: 'FFFFFF' }
+      se.addShape('rect', { x: 0, y: 0, w: '100%', h: 0.14, fill: { color: TEAL } })
+      se.addText('TRS par équipement', { x: 0.5, y: 0.32, w: 12.3, h: 0.5, fontSize: 24, bold: true, color: INK })
+      se.addText('Ensemble des équipements — ' + periode + (equipFiltre.value ? '  ·  filtre : ' + equipTxt : '') + (produitFiltre.value ? '  ·  ' + prodTxt : ''), { x: 0.5, y: 0.86, w: 12.3, h: 0.35, fontSize: 12, color: MUT })
+      if (!rows.length) { se.addText('Aucune donnée sur la période.', { x: 0.5, y: 3, w: 12.3, h: 1, align: 'center', color: MUT, fontSize: 16 }) }
+      else {
+        const labels = rows.map(e => e.code)
+        const data = [
+          { name: 'TRS global', labels, values: rows.map(e => p0(e.trs)) },
+          { name: 'TRS technique', labels, values: rows.map(e => p0(e.trsTech)) }
+        ]
+        const withTable = rows.length <= 12
+        se.addChart('bar', data, {
+          x: 0.4, y: 1.3, w: 12.5, h: withTable ? 2.75 : 5.6,
+          barDir: 'col', barGrouping: 'clustered', chartColors: [TEAL, INDIGO],
+          valAxisMinVal: 0, valAxisMaxVal: 100, valAxisMajorUnit: 20,
+          showLegend: true, legendPos: 'b', legendFontSize: 11,
+          showValue: withTable, dataLabelFontSize: 8, dataLabelColor: '334155', dataLabelPosition: 'outEnd',
+          catAxisLabelFontSize: rows.length > 14 ? 7 : 9, valAxisLabelFontSize: 9, showTitle: false
+        })
+        if (withTable) {
+          const head = ['Équipement', 'Postes', 'Dispo', 'Perf', 'Qualité', 'TRS', 'TRS tech.', 'Objectif'].map(t => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: TEAL }, align: 'center', fontSize: 10, valign: 'middle' } }))
+          const body = rows.map(e => ([
+            { text: e.nom ? e.code + ' — ' + e.nom : e.code, options: { align: 'left', fontSize: 10, color: INK } },
+            { text: String(e.nbPostes), options: { align: 'center', fontSize: 10, color: MUT } },
+            { text: p0(e.dispo) + '%', options: { align: 'center', fontSize: 10, color: INK } },
+            { text: p0(e.perf) + '%', options: { align: 'center', fontSize: 10, color: INK } },
+            { text: p0(e.qualite) + '%', options: { align: 'center', fontSize: 10, color: INK } },
+            { text: p0(e.trs) + '%', options: { align: 'center', fontSize: 10, bold: true, color: nivHex(e.trs) } },
+            { text: p0(e.trsTech) + '%', options: { align: 'center', fontSize: 10, bold: true, color: nivHex(e.trsTech) } },
+            { text: p0(e.objectif) + '%', options: { align: 'center', fontSize: 10, color: e.sousObjectif ? 'DC2626' : MUT } }
+          ]))
+          se.addTable([head, ...body], { x: 0.5, y: 4.25, w: 12.3, colW: [3.5, 1.0, 1.3, 1.3, 1.3, 1.3, 1.3, 1.3], border: { type: 'solid', color: GRID, pt: 0.5 }, valign: 'middle', autoPage: false })
+        }
+      }
+    }
+
     // Slides de décomposition (jour / semaine / mois)
     const addBreakdown = (titre, sstitre, rows) => {
       const sl = pptx.addSlide(); sl.background = { color: 'FFFFFF' }
