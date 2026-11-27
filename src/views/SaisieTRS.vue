@@ -248,6 +248,8 @@ function modifierSaisie(s) {
 
 const sommeArrets = computed(() => MOTIFS.reduce((s, m) => s + (Number(form[m[0]]) || 0), 0))
 const tempsFonct = computed(() => Math.max(0, (Number(form.temps_ouverture_min) || 0) - sommeArrets.value))
+// Incohérence : arrêts déclarés > temps d'ouverture -> fonctionnement 0 -> D/P/TRS = 0 %
+const arretsExcedent = computed(() => { const to = Number(form.temps_ouverture_min) || 0; return sommeArrets.value > to && sommeArrets.value > 0 })
 const dispo = computed(() => { const to = Number(form.temps_ouverture_min) || 0; return to ? tempsFonct.value / to : 0 })
 const perf = computed(() => {
   const prod = Number(form.production_realisee) || 0
@@ -588,6 +590,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
             <div class="trs-total"><span>TRS global</span><b>{{ pct(trs) }}</b></div>
             <div class="trs-tech"><span>TRS technique <small>arrêts planifiés exclus</small></span><b>{{ pct(trsTech) }}</b></div>
           </div>
+          <div v-if="arretsExcedent" class="trs-warn">⚠ Arrêts déclarés ({{ sommeArrets }} min) supérieurs au temps d'ouverture ({{ Number(form.temps_ouverture_min) || 0 }} min) : le temps de fonctionnement tombe à 0, donc Disponibilité, Performance et TRS = 0 %. Corrige un arrêt ou le temps d'ouverture.</div>
           <div class="sig-duo">
             <label class="fl">Fait par
               <select v-model="form.fait_par">
@@ -909,6 +912,7 @@ html:is([data-theme="sombre"], [data-theme="minuit"]) .ds-edit:hover { backgroun
 .jtable .jtrs-tech td small { color: #94a3b8; font-weight: 400; }
 .jtable .jtrs td:first-child { font-size: 13px; }
 .jtable .jcom input, .jtable .jsig input { text-align: left; }
+.trs-warn { margin-top: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 9px; padding: 9px 12px; font-size: 12.5px; font-weight: 600; line-height: 1.45; }
 .sig-duo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 0 12px; }
 .sig-2nd { margin-top: 5px; font-size: 13px !important; color: #64748b; border-style: dashed !important; }
 @media (max-width: 640px) { .sig-duo { grid-template-columns: 1fr; } }
