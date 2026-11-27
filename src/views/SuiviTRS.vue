@@ -394,6 +394,161 @@ function exporterPDF() {
   w.document.write(html); w.document.close(); w.focus()
   setTimeout(() => { try { w.print() } catch (e) {} }, 350)
 }
+
+// ===== Export PowerPoint : analyse TRS par jour / semaine / mois =====
+const busyPPT = ref(false)
+function isoWeekKey(dateStr) {
+  const d = new Date(dateStr)
+  const dt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const dayNum = (dt.getUTCDay() + 6) % 7
+  dt.setUTCDate(dt.getUTCDate() - dayNum + 3)
+  const firstThu = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4))
+  const week = 1 + Math.round(((dt - firstThu) / 86400000 - 3 + ((firstThu.getUTCDay() + 6) % 7)) / 7)
+  return dt.getUTCFullYear() + '-W' + String(week).padStart(2, '0')
+}
+// Agrège le TRS (global + technique + D/P/Q) sur des buckets définis par keyFn, même math que l'écran.
+function statsParBucket(keyFn) {
+  const by = {}
+  for (const s of postesFiltres.value) {
+    const k = keyFn(s); if (k == null) continue
+    if (!by[k]) by[k] = { key: k, min: s.date, ouverture: 0, fonct: 0, arrPlan: 0, theo: 0, prodPerf: 0, ecoule: 0, fonctPerf: 0, prodQual: 0, rebutsQual: 0, nb: 0 }
+    const a = by[k]
+    if (s.date < a.min) a.min = s.date
+    const to = s.temps_ouverture_min || 0
+    let arr = 0, arrP = 0
+    for (const m of MOTIFS) { const v = s[m[1]] || 0; arr += v; if (m[4] === 'plan') arrP += v }
+    const tf = Math.max(0, to - arr)
+    a.ouverture += to; a.fonct += tf; a.arrPlan += arrP; a.nb++
+    const cd = cadenceDe(s.equipement_id, s.produit_id)
+    if (cd.mode === 'cycle') { a.ecoule += Number(s.production_realisee) || 0; a.fonctPerf += tf }
+    else if (cd.value > 0) { a.theo += (tf / 60) * cd.value; a.prodPerf += Number(s.production_realisee) || 0; a.prodQual += Number(s.production_realisee) || 0; a.rebutsQual += Number(s.rebuts) || 0 }
+  }
+  return Object.values(by).map(a => {
+    const dispo = a.ouverture ? a.fonct / a.ouverture : 0
+    const requis = Math.max(0, a.ouverture - a.arrPlan)
+    const dispoTech = requis ? a.fonct / requis : 0
+    const perf = a.theo ? Math.min(1, a.prodPerf / a.theo) : (a.fonctPerf ? Math.min(1, a.ecoule / a.fonctPerf) : 0)
+    const qualite = a.prodQual ? Math.max(0, (a.prodQual - a.rebutsQual) / a.prodQual) : 1
+    return { key: a.key, min: a.min, nb: a.nb, dispo, dispoTech, perf, qualite, trs: dispo * perf * qualite, trsTech: dispoTech * perf * qualite }
+  }).sort((x, y) => x.key < y.key ? -1 : 1)
+}
+
+async function exporterPPTX() {
+  if (!parEquip.value.length) { msg.value = 'Rien à exporter sur cette période.'; return }
+  if (busyPPT.value) return
+  busyPPT.value = true; msg.value = 'Génération du PowerPoint…'
+  try {
+    const PptxGenJS = (await import('pptxgenjs')).default
+    const pptx = new PptxGenJS()
+    pptx.defineLayout({ name: 'LDMWIDE', width: 13.333, height: 7.5 })
+    pptx.layout = 'LDMWIDE'
+    pptx.author = 'ProdTrack — LDM'; pptx.company = 'LDM Groupe'; pptx.title = 'Analyse TRS'
+
+    const TEAL = '0F766E', INDIGO = '4338CA', INK = '1B2733', MUT = '64748B', GRID = 'E2E8F0', BG = 'F8FAFC'
+    const nivHex = (x) => x >= 0.85 ? '16A34A' : (x >= 0.65 ? 'D97706' : 'DC2626')
+    const p0 = (x) => Math.round((x || 0) * 100)
+    const dFr = (d) => { try { return new Date(d).toLocaleDateString('fr-FR') } catch (e) { return d } }
+    const ddmm = (d) => { const x = new Date(d); return String(x.getDate()).padStart(2, '0') + '/' + String(x.getMonth() + 1).padStart(2, '0') }
+    const g = global.value
+    const eqSel = equipList.value.find(e => e.id === equipFiltre.value)
+    const equipTxt = equipFiltre.value ? (equipFiltreCode.value + (eqSel && eqSel.nom ? ' — ' + eqSel.nom : '')) : 'Tous les équipements'
+    const prodTxt = produitFiltre.value ? produitFiltreLabel.value : 'Tous les produits'
+    const periode = dFr(du.value) + ' → ' + dFr(au.value)
+
+    // Slide 1 — Couverture / synthèse
+    const s1 = pptx.addSlide(); s1.background = { color: 'FFFFFF' }
+    s1.addShape('rect', { x: 0, y: 0, w: '100%', h: 1.6, fill: { color: TEAL } })
+    s1.addText('Analyse TRS', { x: 0.6, y: 0.4, w: 11, h: 0.7, color: 'FFFFFF', fontSize: 36, bold: true })
+    s1.addText('ProdTrack · LDM Groupe — Site El Khroub', { x: 0.6, y: 1.08, w: 11, h: 0.4, color: 'CCFBF1', fontSize: 14 })
+    s1.addText([
+      { text: 'Période   ', options: { bold: true, color: MUT } }, { text: periode, options: { color: INK } }, { text: '\n' },
+      { text: 'Équipement   ', options: { bold: true, color: MUT } }, { text: equipTxt, options: { color: INK } }, { text: '\n' },
+      { text: 'Produit   ', options: { bold: true, color: MUT } }, { text: prodTxt, options: { color: INK } }
+    ], { x: 0.6, y: 1.95, w: 12, h: 1.0, fontSize: 14, lineSpacingMultiple: 1.35 })
+
+    const kpis = [['TRS global', g.trs], ['TRS technique', g.trsTech], ['Disponibilité', g.dispo], ['Performance', g.perf], ['Qualité', g.qualite]]
+    kpis.forEach((k, i) => {
+      const x = 0.6 + i * 2.45
+      s1.addShape('roundRect', { x, y: 3.35, w: 2.25, h: 1.6, fill: { color: BG }, line: { color: GRID, width: 1 }, rectRadius: 0.12 })
+      s1.addText(p0(k[1]) + ' %', { x, y: 3.55, w: 2.25, h: 0.75, align: 'center', fontSize: 30, bold: true, color: nivHex(k[1]) })
+      s1.addText(k[0], { x, y: 4.35, w: 2.25, h: 0.4, align: 'center', fontSize: 12, color: MUT })
+    })
+    const fl = facteurLimitant.value, tp = topPerte.value
+    s1.addText('Facteur limitant : ' + fl.nom + ' (' + p0(fl.val) + ' %)' + (tp ? '    ·    Principal arrêt : ' + tp.label + ' (' + heures(tp.min) + ')' : ''), { x: 0.6, y: 5.4, w: 12, h: 0.4, fontSize: 14, bold: true, color: INK })
+    s1.addText('TRS = Disponibilité × Performance × Qualité.   TRS technique : arrêts planifiés (format, VDL, nettoyage, maintenance) exclus du temps requis.', { x: 0.6, y: 5.9, w: 12, h: 0.5, fontSize: 11, italic: true, color: MUT })
+    s1.addText('Généré le ' + new Date().toLocaleDateString('fr-FR') + ' · ProdTrack', { x: 0.6, y: 6.95, w: 12, h: 0.3, fontSize: 10, color: MUT })
+
+    // Slides de décomposition (jour / semaine / mois)
+    const addBreakdown = (titre, sstitre, rows) => {
+      const sl = pptx.addSlide(); sl.background = { color: 'FFFFFF' }
+      sl.addShape('rect', { x: 0, y: 0, w: '100%', h: 0.14, fill: { color: TEAL } })
+      sl.addText(titre, { x: 0.5, y: 0.32, w: 12.3, h: 0.5, fontSize: 24, bold: true, color: INK })
+      sl.addText(sstitre, { x: 0.5, y: 0.86, w: 12.3, h: 0.35, fontSize: 12, color: MUT })
+      if (!rows.length) { sl.addText('Aucune donnée sur la période.', { x: 0.5, y: 3, w: 12.3, h: 1, align: 'center', color: MUT, fontSize: 16 }); return }
+      const labels = rows.map(r => r.label)
+      const data = [
+        { name: 'TRS global', labels, values: rows.map(r => p0(r.trs)) },
+        { name: 'TRS technique', labels, values: rows.map(r => p0(r.trsTech)) }
+      ]
+      const withTable = rows.length <= 12
+      sl.addChart('bar', data, {
+        x: 0.4, y: 1.3, w: 12.5, h: withTable ? 2.75 : 5.6,
+        barDir: 'col', barGrouping: 'clustered', chartColors: [TEAL, INDIGO],
+        valAxisMinVal: 0, valAxisMaxVal: 100, valAxisMajorUnit: 20,
+        showLegend: true, legendPos: 'b', legendFontSize: 11,
+        showValue: withTable, dataLabelFontSize: 8, dataLabelColor: '334155', dataLabelPosition: 'outEnd',
+        catAxisLabelFontSize: rows.length > 18 ? 7 : 9, valAxisLabelFontSize: 9, showTitle: false
+      })
+      if (withTable) {
+        const head = ['Période', 'Postes', 'Dispo', 'Perf', 'Qualité', 'TRS', 'TRS tech.'].map(t => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: TEAL }, align: 'center', fontSize: 10, valign: 'middle' } }))
+        const body = rows.map(r => ([
+          { text: r.label, options: { align: 'left', fontSize: 10, color: INK } },
+          { text: String(r.nb), options: { align: 'center', fontSize: 10, color: MUT } },
+          { text: p0(r.dispo) + '%', options: { align: 'center', fontSize: 10, color: INK } },
+          { text: p0(r.perf) + '%', options: { align: 'center', fontSize: 10, color: INK } },
+          { text: p0(r.qualite) + '%', options: { align: 'center', fontSize: 10, color: INK } },
+          { text: p0(r.trs) + '%', options: { align: 'center', fontSize: 10, bold: true, color: nivHex(r.trs) } },
+          { text: p0(r.trsTech) + '%', options: { align: 'center', fontSize: 10, bold: true, color: nivHex(r.trsTech) } }
+        ]))
+        sl.addTable([head, ...body], { x: 0.5, y: 4.25, w: 12.3, colW: [3.3, 1.2, 1.56, 1.56, 1.56, 1.56, 1.56], border: { type: 'solid', color: GRID, pt: 0.5 }, valign: 'middle', autoPage: false })
+      }
+    }
+
+    const jours = statsParBucket(s => s.date); jours.forEach(r => { r.label = ddmm(r.min) })
+    const semaines = statsParBucket(s => isoWeekKey(s.date)); semaines.forEach(r => { r.label = 'S' + r.key.split('-W')[1] + ' · ' + ddmm(r.min) })
+    const moisB = statsParBucket(s => s.date.slice(0, 7)); moisB.forEach(r => { r.label = MOIS[+r.key.slice(5, 7) - 1] + ' ' + r.key.slice(0, 4) })
+
+    addBreakdown('TRS par jour', 'Évolution quotidienne — ' + equipTxt + ' · ' + periode, jours)
+    addBreakdown('TRS par semaine', 'Agrégation hebdomadaire (semaines ISO) — ' + equipTxt, semaines)
+    addBreakdown('TRS par mois', 'Agrégation mensuelle — ' + equipTxt, moisB)
+
+    // Slide Pareto des pertes
+    const sP = pptx.addSlide(); sP.background = { color: 'FFFFFF' }
+    sP.addShape('rect', { x: 0, y: 0, w: '100%', h: 0.14, fill: { color: TEAL } })
+    sP.addText('Pertes de temps — Pareto des arrêts', { x: 0.5, y: 0.32, w: 12.3, h: 0.5, fontSize: 24, bold: true, color: INK })
+    const rP = ratioPlanifie.value
+    sP.addText('Planifiés ' + rP.pctPlan + ' %  ·  Subis ' + rP.pctSubi + ' %  —  total ' + heures(rP.total), { x: 0.5, y: 0.86, w: 12.3, h: 0.35, fontSize: 12, color: MUT })
+    const motifs = MOTIFS.map(mo => ({ lib: mo[2], min: pertes.value[mo[0]] || 0 })).filter(m => m.min > 0).sort((a, b) => b.min - a.min)
+    const motifsCh = motifs.slice().reverse()   // barres horizontales : le plus gros en haut
+    if (motifs.length) {
+      sP.addChart('bar', [{ name: 'Minutes d\'arrêt', labels: motifsCh.map(m => m.lib), values: motifsCh.map(m => m.min) }], {
+        x: 0.4, y: 1.35, w: 12.5, h: 5.6, barDir: 'bar', chartColors: [INDIGO],
+        showValue: true, dataLabelFontSize: 10, dataLabelPosition: 'outEnd', dataLabelColor: '334155',
+        catAxisLabelFontSize: 11, valAxisLabelFontSize: 9, showLegend: false, showTitle: false
+      })
+    } else {
+      sP.addText('Aucun arrêt enregistré sur la période.', { x: 0.5, y: 3, w: 12.3, h: 1, align: 'center', color: MUT, fontSize: 16 })
+    }
+
+    const safe = (du.value + '_' + au.value).replace(/[^0-9_-]/g, '')
+    await pptx.writeFile({ fileName: 'Analyse_TRS_' + safe + '.pptx' })
+    msg.value = ''
+  } catch (e) {
+    msg.value = 'Erreur export PowerPoint : ' + (e && e.message ? e.message : e)
+  } finally {
+    busyPPT.value = false
+  }
+}
 </script>
 
 <template>
@@ -434,6 +589,7 @@ function exporterPDF() {
           <span v-if="sousObjectifCount" class="obj-chip">⚠ {{ sousObjectifCount }} équip. sous objectif</span>
           <span v-else class="obj-chip ok">✓ Tous au-dessus de l'objectif</span>
           <button type="button" class="btn-pdf" @click="exporterPDF">⬇ Télécharger en PDF</button>
+          <button type="button" class="btn-ppt" @click="exporterPPTX" :disabled="busyPPT" title="Analyse TRS par jour, semaine et mois (PowerPoint)">{{ busyPPT ? '⏳ Génération…' : '⬇ PowerPoint' }}</button>
         </div>
 
         <!-- Interprétation automatique -->
@@ -628,6 +784,9 @@ function exporterPDF() {
 .obj-chip.ok { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
 .btn-pdf { display: inline-flex; align-items: center; gap: 6px; background: #4338ca; color: #fff; border: none; border-radius: 9px; padding: 9px 16px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
 .btn-pdf:hover { background: #3730a3; }
+.btn-ppt { display: inline-flex; align-items: center; gap: 6px; background: #c43e1c; color: #fff; border: none; border-radius: 9px; padding: 9px 16px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
+.btn-ppt:hover { background: #a3330f; }
+.btn-ppt:disabled { opacity: .6; cursor: default; }
 .dl-group { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
 .dl-btn { height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; border-radius: 9px; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
 .dl-btn:hover { background: #4338ca; border-color: #4338ca; color: #fff; }
