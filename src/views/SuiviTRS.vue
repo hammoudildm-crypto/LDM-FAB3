@@ -282,6 +282,42 @@ const paretoPlan = computed(() => paretoDe('plan'))
 const paretoSubi = computed(() => paretoDe('subi'))
 const aucunArret = computed(() => totalArrets.value === 0)
 
+// TRS journalier du mois en cours (jours 1..aujourd'hui), coloré par niveau. Respecte les filtres.
+const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+const moisEnCoursLabel = computed(() => { const d = new Date(); return MOIS_LONG[d.getMonth()] + ' ' + d.getFullYear() })
+const joursMois = computed(() => {
+  const now = new Date(); const y = now.getFullYear(), mo = now.getMonth(), nb = now.getDate()
+  const acc = {}
+  for (let d = 1; d <= nb; d++) acc[d] = { ouverture: 0, fonct: 0, arrPlan: 0, theo: 0, prodPerf: 0, ecoule: 0, fonctPerf: 0, prodQual: 0, rebutsQual: 0, nb: 0 }
+  for (const s of postesFiltres.value) {
+    const dt = new Date(s.date)
+    if (dt.getFullYear() !== y || dt.getMonth() !== mo) continue
+    const a = acc[dt.getDate()]; if (!a) continue
+    const to = s.temps_ouverture_min || 0
+    let arr = 0, arrP = 0
+    for (const m of MOTIFS) { const v = s[m[1]] || 0; arr += v; if (m[4] === 'plan') arrP += v }
+    const tf = Math.max(0, to - arr)
+    a.ouverture += to; a.fonct += tf; a.arrPlan += arrP; a.nb++
+    const cd = cadenceDe(s.equipement_id, s.produit_id)
+    if (cd.mode === 'cycle') { a.ecoule += Number(s.production_realisee) || 0; a.fonctPerf += tf }
+    else if (cd.value > 0) { a.theo += (tf / 60) * cd.value; a.prodPerf += Number(s.production_realisee) || 0; a.prodQual += Number(s.production_realisee) || 0; a.rebutsQual += Number(s.rebuts) || 0 }
+  }
+  const out = []
+  for (let d = 1; d <= nb; d++) {
+    const a = acc[d]
+    if (!a.nb) { out.push({ jour: d, trs: 0, trsTech: 0, nb: 0 }); continue }
+    const dispo = a.ouverture ? a.fonct / a.ouverture : 0
+    const requis = Math.max(0, a.ouverture - a.arrPlan)
+    const dispoTech = requis ? a.fonct / requis : 0
+    const perf = a.theo ? Math.min(1, a.prodPerf / a.theo) : (a.fonctPerf ? Math.min(1, a.ecoule / a.fonctPerf) : 0)
+    const qualite = a.prodQual ? Math.max(0, (a.prodQual - a.rebutsQual) / a.prodQual) : 1
+    out.push({ jour: d, trs: dispo * perf * qualite, trsTech: dispoTech * perf * qualite, nb: a.nb })
+  }
+  return out
+})
+const joursAvecData = computed(() => joursMois.value.some(j => j.nb > 0))
+const trsMoyenMois = computed(() => { const a = joursMois.value.filter(j => j.nb > 0); return a.length ? a.reduce((s, j) => s + j.trs, 0) / a.length : 0 })
+
 // Drill-down du Pareto : cliquer un motif déplie les postes qui l'ont généré
 const detailMotif = ref('')
 function toggleDetail(cle) { detailMotif.value = detailMotif.value === cle ? '' : cle }
@@ -630,6 +666,21 @@ async function exporterPPTX() {
           <button type="button" class="btn-ppt" @click="exporterPPTX" :disabled="busyPPT" title="Analyse TRS par jour, semaine et mois (PowerPoint)">{{ busyPPT ? '⏳ Génération…' : '⬇ PowerPoint' }}</button>
         </div>
 
+        <!-- TRS journalier du mois en cours -->
+        <section class="jour-card">
+          <div class="jour-head">
+            <h3 class="card-title">TRS journalier — {{ moisEnCoursLabel }}<span v-if="equipFiltre" class="flt"> — {{ equipFiltreCode }}</span><span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span></h3>
+            <span v-if="joursAvecData" class="jour-moy">moyenne {{ Math.round(trsMoyenMois * 100) }} %</span>
+          </div>
+          <div v-if="joursAvecData" class="jour-chart">
+            <div v-for="j in joursMois" :key="j.jour" class="jc-col" :title="j.nb ? ('Jour ' + j.jour + ' — TRS ' + Math.round(j.trs * 100) + '% · TRS tech. ' + Math.round(j.trsTech * 100) + '% · ' + j.nb + ' poste' + (j.nb > 1 ? 's' : '')) : ('Jour ' + j.jour + ' — aucune saisie')">
+              <div class="jc-bar-wrap"><div class="jc-bar" :style="{ height: (j.nb ? Math.max(3, j.trs * 100) : 0) + '%', background: j.nb ? NIV_COL[niv(j.trs)] : 'transparent' }"></div></div>
+              <div class="jc-lbl">{{ j.jour }}</div>
+            </div>
+          </div>
+          <div v-else class="jour-empty">Aucune saisie en {{ moisEnCoursLabel }} sur cette sélection.</div>
+        </section>
+
         <!-- Interprétation automatique -->
         <div class="interpret" :class="'in-' + niv(global.trs)">
           <span class="int-ic">💡</span>
@@ -825,6 +876,16 @@ async function exporterPPTX() {
 .btn-ppt { display: inline-flex; align-items: center; gap: 6px; background: #c43e1c; color: #fff; border: none; border-radius: 9px; padding: 9px 16px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
 .btn-ppt:hover { background: #a3330f; }
 .btn-ppt:disabled { opacity: .6; cursor: default; }
+.jour-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+.jour-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.jour-moy { font-size: 12.5px; font-weight: 700; color: #475569; background: #f1f5f9; border-radius: 8px; padding: 4px 11px; white-space: nowrap; }
+.jour-chart { display: flex; align-items: flex-end; gap: 3px; }
+.jc-col { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.jc-bar-wrap { height: 96px; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.jc-bar { width: 70%; max-width: 20px; border-radius: 3px 3px 0 0; min-height: 0; transition: height .2s; }
+.jc-col:hover .jc-bar { filter: brightness(1.08); }
+.jc-lbl { font-size: 9px; color: #94a3b8; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.jour-empty { font-size: 13px; color: #94a3b8; padding: 14px 0; text-align: center; }
 .dl-group { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
 .dl-btn { height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; border-radius: 9px; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
 .dl-btn:hover { background: #4338ca; border-color: #4338ca; color: #fff; }
