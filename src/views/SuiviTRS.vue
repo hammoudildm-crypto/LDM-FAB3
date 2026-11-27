@@ -631,8 +631,7 @@ async function exporterPPTX() {
 
 <template>
   <div class="strs-page">
-    <PageHeader title="Suivi TRS" tone="indigo"
-      subtitle="TRS par équipement, décomposé Disponibilité / Performance / Qualité, sur la période.">
+    <PageHeader title="Suivi TRS" tone="indigo">
       <div class="periode">
         <label>Équipement <select v-model="equipFiltre"><option value="">Tous</option><option v-for="e in equipList" :key="e.id" :value="e.id">{{ e.code }} — {{ e.nom }}</option></select></label>
         <label class="prod-pick">Produit
@@ -662,6 +661,7 @@ async function exporterPPTX() {
 
       <template v-else>
         <div class="toolbar">
+          <span class="tb-sub">TRS par équipement, décomposé Disponibilité / Performance / Qualité, sur la période.</span>
           <span v-if="equipFiltre || produitFiltre" class="flt-chip">Filtre :<b v-if="equipFiltre">{{ equipFiltreCode }}</b><b v-if="produitFiltre">{{ produitFiltreLabel }}</b></span>
           <label class="obj-ctl" title="Cible de TRS par défaut (mémorisée sur ce poste de travail)">🎯 Objectif TRS <input type="number" min="0" max="100" step="1" :value="Math.round(objectifDefaut * 100)" @change="setObjectifDefaut($event.target.value)" /> %</label>
           <span v-if="sousObjectifCount" class="obj-chip">⚠ {{ sousObjectifCount }} équip. sous objectif</span>
@@ -871,7 +871,8 @@ async function exporterPPTX() {
 .alert { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin: 0 0 12px; }
 .muted { color: #94a3b8; }
 .empty { color: #94a3b8; text-align: center; padding: 30px; font-style: italic; }
-.toolbar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.toolbar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.tb-sub { margin-right: auto; font-size: 13px; color: #64748b; font-weight: 500; max-width: 48%; line-height: 1.3; }
 .obj-ctl { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #475569; }
 .obj-ctl input { width: 56px; font-size: 13px; font-weight: 700; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; text-align: right; color: #1b2733; background: #fff; }
 .obj-chip { font-size: 12.5px; font-weight: 700; padding: 6px 11px; border-radius: 8px; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
@@ -928,7 +929,7 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .perte-min { font-weight: 700; text-align: right; }
 .perte-pct, .perte-pct2 { color: #64748b; font-size: 12.5px; }
 /* ---- Refonte Suivi TRS ---- */
-.flt-chip { font-size: 12px; color: #64748b; font-weight: 600; margin-right: auto; }
+.flt-chip { font-size: 12px; color: #64748b; font-weight: 600; }
 .flt-chip b { color: #4338ca; background: #eef2ff; border-radius: 999px; padding: 2px 9px; margin-left: 6px; }
 .interpret { display: flex; align-items: flex-start; gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #4338ca; border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; font-size: 13.5px; color: #334155; }
 .interpret.in-ok { border-left-color: #16a34a; } .interpret.in-mid { border-left-color: #d97706; } .interpret.in-ko { border-left-color: #dc2626; }
