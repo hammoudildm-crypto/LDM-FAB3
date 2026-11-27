@@ -813,7 +813,7 @@ async function exporterPPTX() {
           <h3 class="card-title">TRS par équipement<span v-if="produitFiltre" class="flt"> — {{ produitFiltreLabel }}</span></h3>
           <div class="eqrank eqrank-full">
             <div v-for="e in parEquip" :key="e.id" class="eqbar" :class="{ 'sous-obj': e.sousObjectif }">
-              <span class="eqbar-code">{{ e.code }} <span class="eqbar-nom">{{ e.nom }}</span></span>
+              <span class="eqbar-code" :title="e.code + (e.nom ? ' ' + e.nom : '')">{{ e.code }} <span class="eqbar-nom">{{ e.nom }}</span></span>
               <span class="eqbar-track"><span class="eqbar-f" :style="{ width: pctNum(e.trs) + '%', background: NIV_COL[niv(e.trs)] }"></span><span class="eqbar-obj" :style="{ left: pctNum(e.objectif) + '%' }" :title="'Objectif ' + pctNum(e.objectif) + ' %'"></span></span>
               <span class="eqbar-val" :style="{ color: NIV_COL[niv(e.trs)] }">{{ pctNum(e.trs) }} %<span v-if="e.sousObjectif" class="obj-flag" :title="'Sous objectif (' + pctNum(e.objectif) + ' %)'">▼</span></span>
             </div>
@@ -1006,8 +1006,8 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .pd-table tr:last-child td { border-bottom: none; }
 .pd-nom { color: #94a3b8; font-weight: 400; }
 .eqrank { display: flex; flex-direction: column; gap: 8px; }
-.eqbar { display: grid; grid-template-columns: 280px 1fr 54px; align-items: center; gap: 12px; }
-.eqbar-code { font-size: 13px; font-weight: 700; color: #1b2733; line-height: 1.25; overflow-wrap: anywhere; }
+.eqbar { display: grid; grid-template-columns: 330px 1fr 54px; align-items: center; gap: 12px; }
+.eqbar-code { font-size: 13px; font-weight: 700; color: #1b2733; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .eqbar-nom { font-weight: 400; color: #94a3b8; }
 .eqbar-track { position: relative; height: 14px; background: #f1f5f9; border-radius: 7px; overflow: hidden; }
 .eqbar-obj { position: absolute; top: 0; bottom: 0; width: 2px; background: #0f172a; z-index: 2; }
