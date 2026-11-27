@@ -42,12 +42,13 @@ const form = reactive({
   arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
   arret_vdlg_min: 0, arret_vdlp_min: 0,
   production_realisee: 0, rebuts: 0, retouches: 0, commentaire: '',
-  fait_par: '', fait_par2: '', verifie_par: '', superviseur: ''
+  numero_lot: '', fait_par: '', fait_par2: '', verifie_par: '', superviseur: ''
 })
 const colRetouche = ref(false)   // vrai une fois la migration 003 exécutée (colonne trs_postes.retouches)
 const colVdl = ref(false)        // vrai une fois la migration 009 exécutée (colonnes arret_vdlg_min / arret_vdlp_min)
 const colSignat = ref(false)     // vrai une fois la migration 011 exécutée (colonnes fait_par / verifie_par)
 const colSuperviseur = ref(false) // vrai une fois la migration 015 exécutée (colonne superviseur)
+const colLot = ref(false)        // vrai une fois la migration 016 exécutée (colonne numero_lot)
 
 // Motifs d'arrêt regroupés MECE (un arrêt = un seul motif) :
 // Planifié (organisationnel) vs Subi (non planifié). [colonne, libellé, définition]
@@ -87,6 +88,8 @@ async function charger() {
   colSignat.value = !psg.error
   const pss = await supabase.from('trs_postes').select('superviseur').limit(1)
   colSuperviseur.value = !pss.error
+  const pll = await supabase.from('trs_postes').select('numero_lot').limit(1)
+  colLot.value = !pll.error
 }
 onMounted(charger)
 
@@ -220,6 +223,7 @@ function chargerContexte() {
     form.fait_par2 = secondOp(ex.fait_par)
     form.verifie_par = ex.verifie_par || ''
     form.superviseur = ex.superviseur || ''
+    form.numero_lot = ex.numero_lot || ''
   }
 }
 
@@ -293,7 +297,7 @@ function blankPoste() {
     arret_reglage_min: 0, arret_maintenance_min: 0, arret_attente_min: 0, arret_autre_min: 0,
     arret_vdlg_min: 0, arret_vdlp_min: 0,
     production_realisee: 0, rebuts: 0, retouches: 0, commentaire: '',
-    fait_par: '', fait_par2: '', verifie_par: '', superviseur: ''
+    numero_lot: '', fait_par: '', fait_par2: '', verifie_par: '', superviseur: ''
   }
 }
 // « Fait par » peut comporter 2 opérateurs (atelier tenu en binôme) : stockés « A, B » dans la même colonne.
@@ -367,6 +371,7 @@ function chargerJour() {
       base.fait_par2 = secondOp(ex.fait_par)
       base.verifie_par = ex.verifie_par || ''
       base.superviseur = ex.superviseur || ''
+      base.numero_lot = ex.numero_lot || ''
     }
     Object.assign(jour[pk], base)
     prodUI[pk].q = prodLabel(jour[pk].produitId)
@@ -400,6 +405,7 @@ async function enregistrerJour() {
     if (colRetouche.value) payload.retouches = Number(p.retouches) || 0
     if (colSignat.value) { payload.fait_par = joindreOp(p.fait_par, p.fait_par2); payload.verifie_par = p.verifie_par || null }
     if (colSuperviseur.value) payload.superviseur = p.superviseur || null
+    if (colLot.value) payload.numero_lot = p.numero_lot || null
     for (const m of MOTIFS) {
       if (!colVdl.value && (m[0] === 'arret_vdlg_min' || m[0] === 'arret_vdlp_min')) continue
       payload[m[0]] = Number(p[m[0]]) || 0
@@ -428,6 +434,7 @@ async function enregistrer() {
   if (colRetouche.value) payload.retouches = Number(form.retouches) || 0
   if (colSignat.value) { payload.fait_par = joindreOp(form.fait_par, form.fait_par2); payload.verifie_par = form.verifie_par || null }
   if (colSuperviseur.value) payload.superviseur = form.superviseur || null
+  if (colLot.value) payload.numero_lot = form.numero_lot || null
   for (const m of MOTIFS) {
     // Tant que la migration 009 n'est pas exécutée, on n'envoie pas VDLG/VDLP
     // (colonnes absentes) pour ne pas casser l'enregistrement.
@@ -450,6 +457,7 @@ async function enregistrer() {
   form.fait_par2 = ''
   form.verifie_par = ''
   form.superviseur = ''
+  form.numero_lot = ''
 }
 
 // Cadence d'un couple (équipement, produit) parmi toutes les cadences chargées.
@@ -477,6 +485,35 @@ function trsSaisie(s) {
   return { arr, tf, dispo, perf, qualite, trs, perfOk, qualOk }
 }
 const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
+// Opérations par lot : regroupe les postes d'un même n° de lot (sur un équipement),
+// pour le temps cumulé d'une opération à cheval sur plusieurs shifts.
+const ddmm = (d) => { try { const x = new Date(d); return String(x.getDate()).padStart(2, '0') + '/' + String(x.getMonth() + 1).padStart(2, '0') } catch (e) { return d } }
+const fmtH = (min) => (min / 60).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' h'
+const operations = computed(() => {
+  if (!colLot.value) return []
+  const by = {}
+  for (const s of saisies.value) {
+    const lot = String(s.numero_lot || '').trim()
+    if (!lot) continue
+    const key = lot + '|' + s.equipement_id + '|' + s.produit_id
+    if (!by[key]) by[key] = { key, lot, equip: s.equipements ? s.equipements.code : '?', prod: s.produits ? s.produits.code_pf : '', postes: [], ouv: 0, fonct: 0, prodTot: 0 }
+    const o = by[key]
+    o.postes.push({ date: s.date, poste: Number(s.poste) || 0 })
+    o.ouv += Number(s.temps_ouverture_min) || 0
+    o.fonct += trsSaisie(s).tf
+    o.prodTot += Number(s.production_realisee) || 0
+  }
+  return Object.values(by).map(o => {
+    o.postes.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.poste - b.poste)
+    const f = o.postes[0], l = o.postes[o.postes.length - 1]
+    o.nbShifts = o.postes.length
+    o.multi = o.nbShifts > 1
+    o.debutLbl = ddmm(f.date) + ' ' + (POSTE_NOM[f.poste] || ('P' + f.poste))
+    o.finLbl = ddmm(l.date) + ' ' + (POSTE_NOM[l.poste] || ('P' + l.poste))
+    o.finDate = l.date
+    return o
+  }).sort((a, b) => a.finDate < b.finDate ? 1 : (a.finDate > b.finDate ? -1 : 0))
+})
 </script>
 
 <template>
@@ -526,6 +563,9 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
           <select v-model.number="poste" @change="chargerContexte">
             <option v-for="pk in postesSelectables" :key="pk" :value="pk">Poste {{ pk }} · {{ POSTE_NOM[pk] }}{{ pk > nbPostes ? ' (hors régime)' : '' }}</option>
           </select>
+        </label>
+        <label v-if="modeSaisie === 'poste' && colLot">N° de lot / opération
+          <input type="text" v-model="form.numero_lot" placeholder="Facultatif — ex. L2411-07" />
         </label>
       </div>
 
@@ -666,6 +706,10 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
                 <span v-else class="jmuted">—</span>
               </td>
             </tr>
+            <tr v-if="colLot" class="jlot">
+              <td>N° de lot / opération</td>
+              <td v-for="pk in postesActifs" :key="pk"><input type="text" v-model="jour[pk].numero_lot" placeholder="opt." /></td>
+            </tr>
             <tr>
               <td>Temps d'ouverture (min)</td>
               <td v-for="pk in postesActifs" :key="pk"><input type="number" min="0" v-model.number="jour[pk].temps_ouverture_min" /></td>
@@ -785,6 +829,28 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
         </table>
       </div>
     </section>
+
+    <section v-if="colLot && operations.length" class="card">
+      <h3 class="card-title">Opérations par lot <span class="op-sub">· temps cumulé, à cheval sur plusieurs shifts</span></h3>
+      <div class="table-scroll">
+        <table class="mini">
+          <thead><tr><th>Lot</th><th>Produit</th><th>Équip.</th><th>Début → Fin</th><th class="right">Shifts</th><th class="right">Fonct. cumulé</th><th class="right">Durée totale</th><th class="right">Production</th></tr></thead>
+          <tbody>
+            <tr v-for="o in operations" :key="o.key" :class="{ 'op-multi': o.multi }">
+              <td class="nowrap"><b>{{ o.lot }}</b></td>
+              <td>{{ o.prod || '—' }}</td>
+              <td>{{ o.equip }}</td>
+              <td class="nowrap">{{ o.debutLbl }} <span class="op-arr">→</span> {{ o.finLbl }}</td>
+              <td class="right"><span v-if="o.multi" class="op-badge">⇄ {{ o.nbShifts }}</span><span v-else class="op-mono">{{ o.nbShifts }}</span></td>
+              <td class="right op-strong">{{ fmtH(o.fonct) }}</td>
+              <td class="right">{{ fmtH(o.ouv) }}</td>
+              <td class="right">{{ fmt(o.prodTot) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="op-note">Une opération = un même <b>n° de lot</b> sur un équipement. <b style="color:#6d28d9">⇄</b> = à cheval sur plusieurs shifts. <b>Fonct. cumulé</b> = Σ des temps de marche des postes ; <b>Durée totale</b> = Σ des temps d'ouverture.</p>
+    </section>
   </div>
 </template>
 
@@ -872,6 +938,13 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .ds-filtre input { cursor: pointer; }
 .dt-nom { color: #94a3b8; font-weight: 400; }
 .sig-col { white-space: nowrap; color: #334155; font-size: 13px; }
+.op-sub { font-size: 12px; font-weight: 600; color: #94a3b8; }
+.op-badge { display: inline-block; background: #ede9fe; color: #6d28d9; font-weight: 800; font-size: 12px; padding: 1px 8px; border-radius: 999px; }
+.op-mono { color: #64748b; font-variant-numeric: tabular-nums; }
+.op-strong { font-weight: 800; color: #1b2733; font-variant-numeric: tabular-nums; }
+.op-arr { color: #94a3b8; }
+.op-multi td { background: #faf5ff; }
+.op-note { font-size: 12px; color: #94a3b8; margin: 12px 2px 0; line-height: 1.5; }
 /* Interrupteur de mode */
 .mode-switch { display: inline-flex; gap: 3px; background: #eef2ff; border-radius: 10px; padding: 4px; margin: 0 0 8px; }
 .rg-hint { margin: 0 0 14px; font-size: 12.5px; color: #475569; }
