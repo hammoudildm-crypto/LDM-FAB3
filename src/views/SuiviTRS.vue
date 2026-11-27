@@ -190,12 +190,16 @@ const trsParPoste = computed(() => {
   })
 })
 
+// Équipements fusionnés en une seule ligne (mêmes unités physiques d'un même ensemble).
+const GROUPES_EQUIP = [{ codes: ['PR034', 'PR035'], code: 'PR034/PR035', nom: 'Granulation & Séchage COMASA' }]
 const parEquip = computed(() => {
   const m = {}
   for (const s of postesFiltres.value) {
-    const k = s.equipement_id
+    const code = s.equipements ? s.equipements.code : '?'
+    const grp = GROUPES_EQUIP.find(x => x.codes.includes(code))
+    const k = grp ? ('grp:' + grp.code) : String(s.equipement_id)
     if (!m[k]) m[k] = {
-      id: k, code: s.equipements ? s.equipements.code : '?', nom: s.equipements ? s.equipements.nom : '',
+      id: s.equipement_id, code: grp ? grp.code : code, nom: grp ? grp.nom : (s.equipements ? s.equipements.nom : ''),
       ouverture: 0, fonct: 0, theo: 0, prodPerf: 0, ecoule: 0, fonctPerf: 0, prodQual: 0, rebutsQual: 0, nbPostes: 0,
       arrets: Object.fromEntries(MOTIFS.map(mo => [mo[0], 0]))
     }
