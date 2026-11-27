@@ -19,10 +19,11 @@ const cadIn = ref('')
 const cadUniteIn = ref('kg/h')
 const cadMsg = ref('')
 const saisies = ref([])
+const cadencesAll = ref([])   // toutes les cadences, pour calculer D/P/Q/TRS des dernières saisies
 const filtreSaisiesEquip = ref(true)
 const saisiesAffichees = computed(() => {
-  if (filtreSaisiesEquip.value && equipId.value) return saisies.value.filter(s => String(s.equipement_id) === String(equipId.value))
-  return saisies.value
+  const base = (filtreSaisiesEquip.value && equipId.value) ? saisies.value.filter(s => String(s.equipement_id) === String(equipId.value)) : saisies.value
+  return base.map(s => ({ ...s, m: trsSaisie(s) }))
 })
 const msg = ref('')
 const ok = ref('')
@@ -74,6 +75,8 @@ async function charger() {
   if (!rpe.error) personnel.value = rpe.data || []
   const rs = await supabase.from('trs_postes').select('*, equipements(code, nom), produits(code_pf)').eq('actif', true).order('date', { ascending: false }).order('poste').limit(80)
   if (!rs.error) saisies.value = rs.data || []
+  const rca = await supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, unite_cadence, mode')
+  if (!rca.error) cadencesAll.value = rca.data || []
   const pr = await supabase.from('trs_postes').select('retouches').limit(1)
   colRetouche.value = !pr.error
   const pv = await supabase.from('trs_postes').select('arret_vdlg_min').limit(1)
@@ -445,11 +448,29 @@ async function enregistrer() {
   form.superviseur = ''
 }
 
+// Cadence d'un couple (équipement, produit) parmi toutes les cadences chargées.
+function cadRow(eq, pr) {
+  const c = cadencesAll.value.find(x => String(x.equipement_id) === String(eq) && String(x.produit_id) === String(pr))
+  if (!c || c.cadence_nominale == null) return { value: 0, mode: 'debit' }
+  const v = Number(c.cadence_nominale)
+  if (c.mode === 'temps') return { value: v > 0 ? 60 / v : 0, mode: 'debit' }   // min/lot -> lots/h
+  return { value: v, mode: c.mode || 'debit' }
+}
+// TRS d'une saisie enregistrée : mêmes formules que Suivi TRS. perfOk/qualOk = calculable ou « n/d ».
 function trsSaisie(s) {
   const arr = MOTIFS.reduce((t, m) => t + (s[m[0]] || 0), 0)
   const to = s.temps_ouverture_min || 0
   const tf = Math.max(0, to - arr)
-  return { arr, tf }
+  const dispo = to ? tf / to : 0
+  const prod = Number(s.production_realisee) || 0
+  const cd = cadRow(s.equipement_id, s.produit_id)
+  let perf = 0, perfOk = false
+  if (cd.mode === 'cycle') { if (tf > 0) { perf = Math.min(1, prod / tf); perfOk = true } }
+  else if (cd.value > 0) { const theo = (tf / 60) * cd.value; if (theo > 0) { perf = Math.min(1, prod / theo); perfOk = true } }
+  const qualOk = prod > 0 && cd.mode !== 'cycle'
+  const qualite = qualOk ? Math.max(0, (prod - (Number(s.rebuts) || 0)) / prod) : 1
+  const trs = perfOk ? dispo * perf * qualite : 0
+  return { arr, tf, dispo, perf, qualite, trs, perfOk, qualOk }
 }
 const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
 </script>
@@ -735,7 +756,7 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
       <div v-if="!saisiesAffichees.length" class="empty">{{ filtreSaisiesEquip && equipId ? 'Aucune saisie pour cet équipement.' : "Aucune saisie pour l\'instant." }}</div>
       <div v-else class="table-scroll">
         <table class="mini">
-          <thead><tr><th>Date</th><th>Poste</th><th>Équip.</th><th>Produit</th><th class="right">Ouv.</th><th class="right">Arrêts</th><th class="right">Fonct.</th><th class="right">Nettoyage</th><th>Fait par</th><th>Vérifié par</th><th>Superviseur de shift</th><th class="right">Action</th></tr></thead>
+          <thead><tr><th>Date</th><th>Poste</th><th>Équip.</th><th>Produit</th><th class="right">Ouv.</th><th class="right">Arrêts</th><th class="right">Fonct.</th><th class="right">Nettoyage</th><th class="right">TRS</th><th class="right">Dispo</th><th class="right">Perf</th><th class="right">Qualité</th><th>Fait par</th><th>Vérifié par</th><th>Superviseur de shift</th><th class="right">Action</th></tr></thead>
           <tbody>
             <tr v-for="s in saisiesAffichees" :key="s.id">
               <td class="nowrap">{{ s.date }}</td>
@@ -743,9 +764,13 @@ const fmt = (n) => n == null ? '—' : Number(n).toLocaleString('fr-FR')
               <td>{{ s.equipements ? s.equipements.code : '—' }}<span v-if="s.equipements && s.equipements.nom" class="dt-nom"> — {{ s.equipements.nom }}</span></td>
               <td>{{ s.produits ? s.produits.code_pf : '—' }}</td>
               <td class="right">{{ fmt(s.temps_ouverture_min) }}</td>
-              <td class="right">{{ fmt(trsSaisie(s).arr) }}</td>
-              <td class="right">{{ fmt(trsSaisie(s).tf) }}</td>
+              <td class="right">{{ fmt(s.m.arr) }}</td>
+              <td class="right">{{ fmt(s.m.tf) }}</td>
               <td class="right">{{ fmt(s.arret_nettoyage_min) }}</td>
+              <td class="right" :style="s.m.perfOk ? { color: trsCol(s.m.trs), fontWeight: 700 } : { color: '#94a3b8' }">{{ s.m.perfOk ? pct(s.m.trs) : 'n/d' }}</td>
+              <td class="right" :style="{ color: trsCol(s.m.dispo) }">{{ pct(s.m.dispo) }}</td>
+              <td class="right" :style="s.m.perfOk ? { color: trsCol(s.m.perf) } : { color: '#94a3b8' }">{{ s.m.perfOk ? pct(s.m.perf) : 'n/d' }}</td>
+              <td class="right" :style="s.m.qualOk ? { color: trsCol(s.m.qualite) } : { color: '#94a3b8' }">{{ s.m.qualOk ? pct(s.m.qualite) : 'n/d' }}</td>
               <td class="sig-col">{{ s.fait_par || '—' }}</td>
               <td class="sig-col">{{ s.verifie_par || '—' }}</td>
               <td class="sig-col">{{ s.superviseur || '—' }}</td>
