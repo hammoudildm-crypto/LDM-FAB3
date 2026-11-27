@@ -41,8 +41,9 @@ async function charger() {
     .eq('actif', true).gte('date', du.value).lte('date', au.value)
   if (r.error) { msg.value = r.error.message; chargement.value = false; return }
   postes.value = r.data || []
-  const rc = await supabase.from('cadences_produit').select('*')
-  if (!rc.error) cadences.value = rc.data || []
+  // Chargement paginé : cadences_produit peut dépasser la limite de 1000 lignes de Supabase
+  // (un select simple tronque et fait apparaître des TRS/Performance à 0 % à tort).
+  { let all = []; for (let from = 0; from < 20000; from += 1000) { const rc = await supabase.from('cadences_produit').select('*').range(from, from + 999); if (rc.error) break; all = all.concat(rc.data || []); if (!rc.data || rc.data.length < 1000) break } cadences.value = all }
   const ro = await supabase.from('equipements').select('id, objectif_trs').eq('actif', true)
   if (!ro.error) { colObjectif.value = true; const m = {}; for (const e of ro.data || []) m[e.id] = e.objectif_trs; objectifs.value = m }
   else colObjectif.value = false

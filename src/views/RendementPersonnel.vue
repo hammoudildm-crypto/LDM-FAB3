@@ -50,7 +50,8 @@ async function charger() {
     .eq('actif', true).gte('date', du.value).lte('date', au.value)
   if (r.error) { msg.value = r.error.message; chargement.value = false; return }
   postes.value = r.data || []
-  const rc = await supabase.from('cadences_produit').select('*'); if (!rc.error) cadences.value = rc.data || []
+  // Chargement paginé : cadences_produit peut dépasser la limite de 1000 lignes de Supabase.
+  { let all = []; for (let from = 0; from < 20000; from += 1000) { const rc = await supabase.from('cadences_produit').select('*').range(from, from + 999); if (rc.error) break; all = all.concat(rc.data || []); if (!rc.data || rc.data.length < 1000) break } cadences.value = all }
   const ro = await supabase.from('organigramme').select('*'); if (!ro.error) personnel.value = ro.data || []
   const ra = await supabase.from('ateliers').select('id, code, nom').order('nom'); if (!ra.error) ateliers.value = ra.data || []
   const rp = await supabase.from('produits').select('id, unites_par_boite, poids_unitaire_mg, taille_lot'); if (!rp.error) produits.value = rp.data || []
