@@ -27,6 +27,7 @@ onMounted(charger)
 const fmt = (n) => Number(n || 0).toLocaleString('fr-FR')
 const fmtDA = (n) => Number(Math.round(n) || 0).toLocaleString('fr-FR') + ' DA'
 const fmtDAc = (n) => { const v = Number(n) || 0; return v >= 1e6 ? (v / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' M DA' : v >= 1e3 ? Math.round(v / 1e3).toLocaleString('fr-FR') + ' k DA' : Math.round(v) + ' DA' }
+const fmtCompact = (n) => { const v = Number(n) || 0; return v >= 1e6 ? (v / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' M' : v >= 1e3 ? Math.round(v / 1e3).toLocaleString('fr-FR') + ' k' : String(Math.round(v)) }
 const consoById = computed(() => { const m = {}; for (const c of consommables.value) m[c.id] = c; return m })
 const prixDe = (id) => Number(consoById.value[id]?.prix_unitaire) || 0
 // Deux emplacements : Stock MP (magasin) + Stock Fab (fabrication).
@@ -279,6 +280,7 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
       </div>
       <div class="trend">
         <div v-for="(m, i) in trend12.arr" :key="i" class="tcol" :title="m.label + ' ' + m.an + ' — Conso : ' + fmtDA(m.val) + ' · Entrées : ' + fmtDA(m.ent)">
+          <span class="tval">{{ m.val ? fmtCompact(m.val) : '' }}</span>
           <div class="tbars">
             <div class="tbar sortie" :style="{ height: Math.max(m.val ? 2 : 0, Math.round(m.val / trend12.max * 100)) + '%' }"></div>
             <div class="tbar entree" :style="{ height: Math.max(m.ent ? 2 : 0, Math.round(m.ent / trend12.max * 100)) + '%' }"></div>
@@ -341,7 +343,8 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
       <div v-else class="daybars">
         <div v-for="d in consoJour.jours" :key="d.jour" class="daybar" :class="{ auj: d.auj }"
              :title="d.jour + ' ' + moisLabel(moisSel) + ' : ' + fmtDA(d.val)">
-          <div class="db-fill" :style="{ height: (consoJour.max > 0 ? Math.max(2, Math.round(d.val / consoJour.max * 100)) : 0) + '%' }"></div>
+          <span class="db-val">{{ d.val ? fmtCompact(d.val) : '' }}</span>
+          <div class="db-bars"><div class="db-fill" :style="{ height: (consoJour.max > 0 ? Math.max(2, Math.round(d.val / consoJour.max * 100)) : 0) + '%' }"></div></div>
           <span class="db-lbl">{{ d.jour }}</span>
         </div>
       </div>
@@ -511,7 +514,8 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
 .sw.sortie { background: #f59e0b; } .sw.entree { background: #0d9488; }
 .trend { display: flex; align-items: flex-end; gap: 10px; height: 170px; padding: 6px 2px 0; }
 .tcol { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 5px; }
-.tbars { display: flex; align-items: flex-end; justify-content: center; gap: 3px; width: 100%; height: 100%; }
+.tval { min-height: 13px; line-height: 13px; font-size: 9.5px; font-weight: 800; color: #b45309; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -.2px; }
+.tbars { display: flex; align-items: flex-end; justify-content: center; gap: 3px; width: 100%; flex: 1; min-height: 0; }
 .tbar { width: 38%; min-height: 0; border-radius: 3px 3px 0 0; transition: height .2s; }
 .tbar.sortie { background: #f59e0b; } .tcol:hover .tbar.sortie { background: #b45309; }
 .tbar.entree { background: #0d9488; } .tcol:hover .tbar.entree { background: #0f766e; }
@@ -539,6 +543,8 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
 .conso-sub { margin: 18px 0 10px; font-size: 12px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: .04em; }
 .daybars { display: flex; align-items: flex-end; gap: 3px; height: 130px; padding: 6px 2px 0; overflow-x: auto; border-bottom: 1px solid #f1f5f9; }
 .daybar { flex: 1 0 15px; min-width: 15px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
+.db-val { min-height: 32px; font-size: 8.5px; font-weight: 800; color: #b45309; font-variant-numeric: tabular-nums; white-space: nowrap; line-height: 1; writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: -.2px; }
+.db-bars { flex: 1; min-height: 0; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
 .db-fill { width: 68%; min-height: 2px; background: #f59e0b; border-radius: 3px 3px 0 0; transition: height .2s; }
 .daybar:hover .db-fill { background: #b45309; }
 .daybar.auj .db-fill { background: #0d9488; }
