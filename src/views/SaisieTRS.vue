@@ -12,6 +12,8 @@ const urlModeleXlsx = MODELES_BASE + 'Template_TRS_par_poste_LDM.xlsx'
 const urlFicheA4 = MODELES_BASE + 'Fiche_releve_TRS_poste_A4.pdf'
 
 const equipements = ref([])
+const etatMoisPostes = ref([])   // postes du mois en cours (suivi de complétude)
+const etatOuvert = ref(true)
 const produits = ref([])
 const personnel = ref([])        // organigramme (volet formation) pour « Fait par » / « Vérifié par »
 const cadenceObj = ref(null)
@@ -80,6 +82,9 @@ async function charger() {
   // Toutes les cadences en pagination (cadences_produit peut dépasser 1000 lignes).
   // Le filtre ciblé .in/.in tronquait quand le cumul des couples dépassait 1000 -> « n/d » à tort.
   cadencesAll.value = await fetchAllPaged(() => supabase.from('cadences_produit').select('equipement_id, produit_id, cadence_nominale, unite_cadence, mode'))
+  // État des enregistrements : tous les postes du mois en cours (jusqu'à aujourd'hui).
+  { const now = new Date(), pad = (n) => String(n).padStart(2, '0'); const m1 = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-01'; const m2 = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate())
+    etatMoisPostes.value = await fetchAllPaged(() => supabase.from('trs_postes').select('equipement_id, date, poste').eq('actif', true).gte('date', m1).lte('date', m2)) }
   const pr = await supabase.from('trs_postes').select('retouches').limit(1)
   colRetouche.value = !pr.error
   const pv = await supabase.from('trs_postes').select('arret_vdlg_min').limit(1)
@@ -514,6 +519,33 @@ const operations = computed(() => {
     return o
   }).sort((a, b) => a.finDate < b.finDate ? 1 : (a.finDate > b.finDate ? -1 : 0))
 })
+
+// --- État des enregistrements du mois en cours (prévu vs réel, global + par équipement) ---
+const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+const moisEnCoursLabel = computed(() => { const d = new Date(); return MOIS_LONG[d.getMonth()] + ' ' + d.getFullYear() })
+// 3 shifts en semaine, 2 le week-end (ven+sam) -> nombre de shifts écoulés ce mois.
+const shiftsEcoulesMois = computed(() => {
+  const now = new Date(), y = now.getFullYear(), mo = now.getMonth(), nbJ = now.getDate()
+  let n = 0
+  for (let d = 1; d <= nbJ; d++) { const dow = new Date(y, mo, d).getDay(); n += (dow === 5 || dow === 6) ? 2 : 3 }
+  return n
+})
+const tauxCol = (t) => t >= 0.9 ? '#16a34a' : (t >= 0.6 ? '#d97706' : '#dc2626')
+const etatParEquip = computed(() => {
+  const prevu = shiftsEcoulesMois.value
+  const slots = {}
+  for (const p of etatMoisPostes.value) { (slots[p.equipement_id] = slots[p.equipement_id] || new Set()).add(p.date + '|' + p.poste) }
+  return equipements.value.map(e => {
+    const reel = slots[e.id] ? slots[e.id].size : 0
+    return { id: e.id, code: e.code, nom: e.nom, prevu, reel, taux: prevu ? Math.min(1, reel / prevu) : 0, manque: Math.max(0, prevu - reel) }
+  }).sort((a, b) => a.taux - b.taux || String(a.code).localeCompare(String(b.code), 'fr'))
+})
+const etatGlobal = computed(() => {
+  const rows = etatParEquip.value
+  const prevu = rows.reduce((s, r) => s + r.prevu, 0)
+  const reel = rows.reduce((s, r) => s + r.reel, 0)
+  return { nbEquip: rows.length, shifts: shiftsEcoulesMois.value, prevu, reel, taux: prevu ? reel / prevu : 0 }
+})
 </script>
 
 <template>
@@ -797,6 +829,43 @@ const operations = computed(() => {
       </div>
     </section>
 
+    <section class="card etat-card">
+      <div class="etat-head">
+        <h3 class="card-title">État des enregistrements — {{ moisEnCoursLabel }}</h3>
+        <button type="button" class="etat-toggle" @click="etatOuvert = !etatOuvert">{{ etatOuvert ? 'Masquer le détail' : 'Afficher le détail' }}</button>
+      </div>
+      <div class="etat-sum">
+        <div class="es"><span class="es-l">Shifts écoulés</span><b>{{ etatGlobal.shifts }}</b></div>
+        <div class="es"><span class="es-l">Équipements actifs</span><b>{{ etatGlobal.nbEquip }}</b></div>
+        <div class="es"><span class="es-l">Prévu</span><b>{{ fmt(etatGlobal.prevu) }}</b></div>
+        <div class="es"><span class="es-l">Réel (shifts saisis)</span><b>{{ fmt(etatGlobal.reel) }}</b></div>
+        <div class="es es-wide"><span class="es-l">Complétude globale</span>
+          <div class="es-bar"><span :style="{ width: Math.round(etatGlobal.taux * 100) + '%', background: tauxCol(etatGlobal.taux) }"></span></div>
+          <b :style="{ color: tauxCol(etatGlobal.taux) }">{{ Math.round(etatGlobal.taux * 100) }} % · reste {{ fmt(Math.max(0, etatGlobal.prevu - etatGlobal.reel)) }} à saisir</b>
+        </div>
+      </div>
+      <div v-if="etatOuvert" class="table-scroll">
+        <table class="mini">
+          <thead><tr><th>Équipement</th><th class="right">Prévu</th><th class="right">Réel</th><th class="right">Manque</th><th>Complétude</th></tr></thead>
+          <tbody>
+            <tr v-for="e in etatParEquip" :key="e.id">
+              <td><b>{{ e.code }}</b><span v-if="e.nom" class="dt-nom"> — {{ e.nom }}</span></td>
+              <td class="right">{{ e.prevu }}</td>
+              <td class="right">{{ e.reel }}</td>
+              <td class="right" :style="{ color: e.manque ? '#b45309' : '#94a3b8', fontWeight: e.manque ? 700 : 400 }">{{ e.manque || '—' }}</td>
+              <td>
+                <div class="etat-cell">
+                  <div class="etat-bar"><span :style="{ width: Math.round(e.taux * 100) + '%', background: tauxCol(e.taux) }"></span></div>
+                  <b :style="{ color: tauxCol(e.taux) }">{{ Math.round(e.taux * 100) }} %</b>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="etat-note">Prévu = 1 enregistrement par équipement actif et par shift (3 en semaine, 2 le week-end). Réel = shifts du mois ayant au moins une saisie. Un taux faible = l'équipement n'a pas tourné, ou des saisies manquent.</p>
+    </section>
+
     <section class="card">
       <div class="ds-head">
         <h3 class="card-title">Dernières saisies</h3>
@@ -937,6 +1006,21 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .ds-filtre { font-size: 13px; color: #475569; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
 .ds-filtre input { cursor: pointer; }
 .dt-nom { color: #94a3b8; font-weight: 400; }
+.etat-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.etat-toggle { border: 1px solid #e2e8f0; background: #fff; color: #475569; font-size: 12.5px; font-weight: 700; padding: 4px 11px; border-radius: 8px; cursor: pointer; }
+.etat-sum { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.es { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; min-width: 110px; display: flex; flex-direction: column; gap: 2px; }
+.es-l { font-size: 11px; color: #64748b; font-weight: 600; }
+.es b { font-size: 17px; color: #0f172a; font-variant-numeric: tabular-nums; }
+.es-wide { flex: 1; min-width: 240px; }
+.es-wide b { font-size: 13px; }
+.es-bar { height: 10px; background: #e2e8f0; border-radius: 6px; overflow: hidden; margin: 4px 0 2px; }
+.es-bar span { display: block; height: 100%; border-radius: 6px; }
+.etat-cell { display: flex; align-items: center; gap: 10px; min-width: 150px; }
+.etat-bar { flex: 1; height: 10px; background: #f1f5f9; border-radius: 6px; overflow: hidden; min-width: 70px; }
+.etat-bar span { display: block; height: 100%; border-radius: 6px; }
+.etat-cell b { font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; }
+.etat-note { font-size: 12px; color: #94a3b8; margin: 10px 2px 0; line-height: 1.5; }
 .sig-col { white-space: nowrap; color: #334155; font-size: 13px; }
 .op-sub { font-size: 12px; font-weight: 600; color: #94a3b8; }
 .op-badge { display: inline-block; background: #ede9fe; color: #6d28d9; font-weight: 800; font-size: 12px; padding: 1px 8px; border-radius: 999px; }
