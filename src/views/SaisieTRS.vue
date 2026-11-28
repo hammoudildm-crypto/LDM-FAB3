@@ -14,6 +14,7 @@ const urlFicheA4 = MODELES_BASE + 'Fiche_releve_TRS_poste_A4.pdf'
 const equipements = ref([])
 const etatMoisPostes = ref([])   // postes du mois en cours (suivi de complétude)
 const etatOuvert = ref(true)
+const etatDetailEquip = ref('')   // équipement dont on déplie les shifts manquants
 const produits = ref([])
 const personnel = ref([])        // organigramme (volet formation) pour « Fait par » / « Vérifié par »
 const cadenceObj = ref(null)
@@ -523,23 +524,47 @@ const operations = computed(() => {
 // --- État des enregistrements du mois en cours (prévu vs réel, global + par équipement) ---
 const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const moisEnCoursLabel = computed(() => { const d = new Date(); return MOIS_LONG[d.getMonth()] + ' ' + d.getFullYear() })
-// 3 shifts en semaine, 2 le week-end (ven+sam) -> nombre de shifts écoulés ce mois.
-const shiftsEcoulesMois = computed(() => {
-  const now = new Date(), y = now.getFullYear(), mo = now.getMonth(), nbJ = now.getDate()
-  let n = 0
-  for (let d = 1; d <= nbJ; d++) { const dow = new Date(y, mo, d).getDay(); n += (dow === 5 || dow === 6) ? 2 : 3 }
-  return n
+// Créneaux attendus du mois : 3 shifts en semaine (M/A/N), 2 le week-end ven+sam (Matin + Après-midi).
+const JOURS_SEM = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
+const slotsAttendus = computed(() => {
+  const now = new Date(), y = now.getFullYear(), mo = now.getMonth(), nbJ = now.getDate(), pad = (n) => String(n).padStart(2, '0')
+  const out = []
+  for (let d = 1; d <= nbJ; d++) {
+    const dow = new Date(y, mo, d).getDay()
+    const postes = (dow === 5 || dow === 6) ? [1, 2] : [1, 2, 3]
+    const dateStr = y + '-' + pad(mo + 1) + '-' + pad(d)
+    for (const pk of postes) out.push({ date: dateStr, jour: d, dow, poste: pk, key: dateStr + '|' + pk })
+  }
+  return out
 })
+const shiftsEcoulesMois = computed(() => slotsAttendus.value.length)
 const tauxCol = (t) => t >= 0.9 ? '#16a34a' : (t >= 0.6 ? '#d97706' : '#dc2626')
+const recByEquip = computed(() => {
+  const m = {}
+  for (const p of etatMoisPostes.value) { (m[p.equipement_id] = m[p.equipement_id] || new Set()).add(p.date + '|' + Number(p.poste)) }
+  return m
+})
 const etatParEquip = computed(() => {
-  const prevu = shiftsEcoulesMois.value
-  const slots = {}
-  for (const p of etatMoisPostes.value) { (slots[p.equipement_id] = slots[p.equipement_id] || new Set()).add(p.date + '|' + p.poste) }
+  const attendus = slotsAttendus.value, prevu = attendus.length
   return equipements.value.map(e => {
-    const reel = slots[e.id] ? slots[e.id].size : 0
-    return { id: e.id, code: e.code, nom: e.nom, prevu, reel, taux: prevu ? Math.min(1, reel / prevu) : 0, manque: Math.max(0, prevu - reel) }
+    const rec = recByEquip.value[e.id] || new Set()
+    let reel = 0
+    for (const a of attendus) if (rec.has(a.key)) reel++
+    return { id: e.id, code: e.code, nom: e.nom, prevu, reel, taux: prevu ? reel / prevu : 0, manque: prevu - reel }
   }).sort((a, b) => a.taux - b.taux || String(a.code).localeCompare(String(b.code), 'fr'))
 })
+const etatManquants = computed(() => {
+  const id = etatDetailEquip.value
+  if (!id) return []
+  const rec = recByEquip.value[id] || new Set()
+  return slotsAttendus.value.filter(a => !rec.has(a.key))
+})
+const etatManquantsGroupes = computed(() => {
+  const by = {}
+  for (const m of etatManquants.value) { (by[m.date] = by[m.date] || { date: m.date, jour: m.jour, dow: m.dow, postes: [] }).postes.push(m.poste) }
+  return Object.values(by).sort((a, b) => a.date < b.date ? 1 : -1)
+})
+function toggleEtatDetail(id) { etatDetailEquip.value = etatDetailEquip.value === id ? '' : id }
 const etatGlobal = computed(() => {
   const rows = etatParEquip.value
   const prevu = rows.reduce((s, r) => s + r.prevu, 0)
@@ -848,22 +873,35 @@ const etatGlobal = computed(() => {
         <table class="mini">
           <thead><tr><th>Équipement</th><th class="right">Prévu</th><th class="right">Réel</th><th class="right">Manque</th><th>Complétude</th></tr></thead>
           <tbody>
-            <tr v-for="e in etatParEquip" :key="e.id">
-              <td><b>{{ e.code }}</b><span v-if="e.nom" class="dt-nom"> — {{ e.nom }}</span></td>
-              <td class="right">{{ e.prevu }}</td>
-              <td class="right">{{ e.reel }}</td>
-              <td class="right" :style="{ color: e.manque ? '#b45309' : '#94a3b8', fontWeight: e.manque ? 700 : 400 }">{{ e.manque || '—' }}</td>
-              <td>
-                <div class="etat-cell">
-                  <div class="etat-bar"><span :style="{ width: Math.round(e.taux * 100) + '%', background: tauxCol(e.taux) }"></span></div>
-                  <b :style="{ color: tauxCol(e.taux) }">{{ Math.round(e.taux * 100) }} %</b>
-                </div>
-              </td>
-            </tr>
+            <template v-for="e in etatParEquip" :key="e.id">
+              <tr class="etat-row" :class="{ open: etatDetailEquip === e.id }" @click="toggleEtatDetail(e.id)" :title="'Voir les shifts non enregistrés — ' + e.code">
+                <td><span class="etat-caret">{{ etatDetailEquip === e.id ? '▾' : '▸' }}</span><b>{{ e.code }}</b><span v-if="e.nom" class="dt-nom"> — {{ e.nom }}</span></td>
+                <td class="right">{{ e.prevu }}</td>
+                <td class="right">{{ e.reel }}</td>
+                <td class="right" :style="{ color: e.manque ? '#b45309' : '#94a3b8', fontWeight: e.manque ? 700 : 400 }">{{ e.manque || '—' }}</td>
+                <td>
+                  <div class="etat-cell">
+                    <div class="etat-bar"><span :style="{ width: Math.round(e.taux * 100) + '%', background: tauxCol(e.taux) }"></span></div>
+                    <b :style="{ color: tauxCol(e.taux) }">{{ Math.round(e.taux * 100) }} %</b>
+                  </div>
+                </td>
+              </tr>
+              <tr v-if="etatDetailEquip === e.id" class="etat-detail-row">
+                <td colspan="5">
+                  <div v-if="!etatManquants.length" class="etat-ok">✓ Tous les shifts attendus de {{ moisEnCoursLabel }} sont enregistrés pour cet équipement.</div>
+                  <div v-else class="etat-detail">
+                    <div class="etat-detail-head">{{ etatManquants.length }} shift(s) non enregistré(s) :</div>
+                    <div class="etat-miss-list">
+                      <span v-for="g in etatManquantsGroupes" :key="g.date" class="etat-miss"><b>{{ JOURS_SEM[g.dow] }} {{ ddmm(g.date) }}</b> — {{ g.postes.map(p => POSTE_NOM[p]).join(', ') }}</span>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
-      <p class="etat-note">Prévu = 1 enregistrement par équipement actif et par shift (3 en semaine, 2 le week-end). Réel = shifts du mois ayant au moins une saisie. Un taux faible = l'équipement n'a pas tourné, ou des saisies manquent.</p>
+      <p class="etat-note">Prévu = 1 enregistrement par équipement actif et par shift (3 en semaine, 2 le week-end). Réel = créneaux attendus ayant au moins une saisie. <b>Cliquez sur un équipement</b> pour voir les dates et shifts non enregistrés. Un taux faible = l'équipement n'a pas tourné, ou des saisies manquent.</p>
     </section>
 
     <section class="card">
@@ -1021,6 +1059,16 @@ table.mini td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
 .etat-bar span { display: block; height: 100%; border-radius: 6px; }
 .etat-cell b { font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; }
 .etat-note { font-size: 12px; color: #94a3b8; margin: 10px 2px 0; line-height: 1.5; }
+.etat-row { cursor: pointer; }
+.etat-row:hover td { background: #f8fafc; }
+.etat-row.open td { background: #f1f5f9; }
+.etat-caret { display: inline-block; width: 13px; color: #94a3b8; font-size: 10px; }
+.etat-detail-row td { padding: 2px 9px 11px !important; background: #fafbfc; }
+.etat-detail-head { font-size: 12px; color: #b45309; font-weight: 700; margin: 2px 0 7px; }
+.etat-miss-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.etat-miss { font-size: 12px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; border-radius: 7px; padding: 3px 9px; white-space: nowrap; }
+.etat-miss b { color: #7c2d12; }
+.etat-ok { font-size: 12.5px; color: #15803d; font-weight: 600; padding: 2px 0 6px; }
 .sig-col { white-space: nowrap; color: #334155; font-size: 13px; }
 .op-sub { font-size: 12px; font-weight: 600; color: #94a3b8; }
 .op-badge { display: inline-block; background: #ede9fe; color: #6d28d9; font-weight: 800; font-size: 12px; padding: 1px 8px; border-radius: 999px; }
