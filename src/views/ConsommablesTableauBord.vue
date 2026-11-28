@@ -206,6 +206,15 @@ const reappro = computed(() => consommables.value
   .sort((a, b) => (a.couv === null ? 1e9 : a.couv) - (b.couv === null ? 1e9 : b.couv)))
 
 const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].val || 1 : 1)
+
+// ---- Onglets ----
+const tab = ref('apercu')
+const tabs = computed(() => [
+  { id: 'apercu', ico: '📊', label: "Vue d'ensemble" },
+  { id: 'conso', ico: '📈', label: 'Consommation' },
+  { id: 'stock', ico: '📦', label: 'Stock & rotation' },
+  { id: 'reappro', ico: '🛒', label: 'Réappro.', badge: reappro.value.length || 0, danger: nbRupture.value > 0 }
+])
 </script>
 
 <template>
@@ -226,7 +235,16 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
       <div class="kpi crit"><div class="kpi-v">{{ nbCouvCrit }}</div><div class="kpi-l">Couverture critique (&lt; 7 j)</div></div>
     </div>
 
-    <div class="kpi-row">
+    <!-- Onglets -->
+    <nav class="ctab-bar" role="tablist" aria-label="Sections du tableau de bord">
+      <button v-for="t in tabs" :key="t.id" class="ctab" :class="{ on: tab === t.id }" @click="tab = t.id" role="tab" :aria-selected="tab === t.id">
+        <span class="ctab-ico">{{ t.ico }}</span>{{ t.label }}
+        <span v-if="t.badge" class="ctab-badge" :class="{ danger: t.danger }">{{ t.badge }}</span>
+      </button>
+    </nav>
+
+    <!-- Consommation : indicateurs -->
+    <div class="kpi-row" v-show="tab === 'conso'">
       <div class="kpi conso">
         <div class="kpi-v">{{ fmtDA(consoMois) }}
           <span v-if="variationMois !== null" class="pill" :class="variationMois > 0 ? 'up' : 'down'">{{ variationMois > 0 ? '▲' : '▼' }} {{ Math.abs(Math.round(variationMois)) }} %</span>
@@ -241,8 +259,8 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
       <div class="kpi dormant"><div class="kpi-v">{{ fmtDA(dormantVal) }}</div><div class="kpi-l">Stock dormant ({{ dormants.length }} art.)</div></div>
     </div>
 
-    <!-- État du stock + Valeur par catégorie -->
-    <div class="grid2">
+    <!-- Vue d'ensemble : état du stock + valeur par catégorie -->
+    <div class="grid2" v-show="tab === 'apercu'">
       <section class="card">
         <h2 class="card-title">État du stock</h2>
         <div class="donut-wrap">
@@ -272,8 +290,8 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
       </section>
     </div>
 
-    <!-- Tendance 12 mois -->
-    <section class="card">
+    <!-- Consommation : tendance 12 mois -->
+    <section class="card" v-show="tab === 'conso'">
       <div class="conso-head">
         <h2 class="card-title">Consommation mensuelle — 12 derniers mois</h2>
         <div class="leg-inline"><span><i class="sw sortie"></i>Sorties (conso.)</span><span><i class="sw entree"></i>Entrées</span></div>
@@ -290,8 +308,8 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
       </div>
     </section>
 
-    <!-- Top consommateurs + Stock dormant -->
-    <div class="grid2">
+    <!-- Stock & rotation : top consommables + stock dormant -->
+    <div class="grid2" v-show="tab === 'stock'">
       <section class="card">
         <h2 class="card-title">Top consommables (12 mois)</h2>
         <p v-if="!conso12.top.length" class="vide-p">Aucune consommation enregistrée.</p>
@@ -322,7 +340,7 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
       </section>
     </div>
 
-    <div class="grid2">
+    <div class="grid2" v-show="tab === 'conso'">
     <!-- Consommation du mois -->
     <section class="card">
       <div class="conso-head">
@@ -418,8 +436,8 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
     </section>
     </div>
 
-    <!-- À réapprovisionner -->
-    <section class="card">
+    <!-- Réapprovisionnement -->
+    <section class="card" v-show="tab === 'reappro'">
       <h2 class="card-title">À réapprovisionner <span class="sub-count" v-if="reappro.length">— {{ reappro.length }} article{{ reappro.length > 1 ? 's' : '' }}</span></h2>
       <p class="vide-p" v-if="!reappro.length">Aucun réapprovisionnement urgent. Tous les stocks sont au-dessus du seuil et couvrent plus de 21 jours. 👍</p>
       <div v-else class="tbl-scroll">
@@ -456,6 +474,15 @@ const topMax = computed(() => conso12.value.top.length ? conso12.value.top[0].va
 .muted { color: #94a3b8; font-weight: 600; }
 .vide-p { color: #94a3b8; font-size: 13px; margin: 6px 0 0; }
 .hint { margin: 12px 0 0; font-size: 11.5px; color: #94a3b8; }
+
+/* Onglets */
+.ctab-bar { display: flex; gap: 2px; border-bottom: 2px solid #e2e8f0; margin: 0 0 18px; overflow-x: auto; }
+.ctab { position: relative; border: 0; background: none; font: inherit; font-size: 14px; font-weight: 700; color: #64748b; padding: 11px 16px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color .15s; }
+.ctab:hover { color: #b45309; }
+.ctab.on { color: #b45309; border-bottom-color: #b45309; }
+.ctab-ico { font-size: 15px; line-height: 1; }
+.ctab-badge { font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: #fef3c7; color: #b45309; font-variant-numeric: tabular-nums; }
+.ctab-badge.danger { background: #fee2e2; color: #b91c1c; }
 
 .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 14px; }
 .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; border-left: 4px solid #b45309; }
